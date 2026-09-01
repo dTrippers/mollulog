@@ -13,6 +13,8 @@ import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard, Sub
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
+  getEquipmentMaxLevel,
+  getEquipmentSlotUnlockLevel,
   renderStudentSkillDescriptionParts,
   resolveStudentCalculatorState,
   type StudentCalculatorCatalog,
@@ -105,7 +107,7 @@ export default function StudentBasicInfo({
     () => (currentUserId === null ? null : createStudentGrowthDraftStorageKey(currentUserId, stateStudentUid)),
     [currentUserId, stateStudentUid],
   );
-  const resolved = useMemo(() => resolveStudentCalculatorState(student, state), [student, state]);
+  const resolved = useMemo(() => resolveStudentCalculatorState(student, state, catalog), [student, state, catalog]);
   const relatedFavorStates = useMemo(
     () =>
       student.character.studentVariants.flatMap((variant) => {
@@ -207,6 +209,9 @@ export default function StudentBasicInfo({
         equip1: state.equip1,
         equip2: state.equip2,
         equip3: state.equip3,
+        equip1Level: resolved.equip1Level,
+        equip2Level: resolved.equip2Level,
+        equip3Level: resolved.equip3Level,
         equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
         weaponLevel: state.weaponLevel,
         abilityHp: state.abilityHp,
@@ -274,7 +279,7 @@ export default function StudentBasicInfo({
                     value={resolved.abilityHp}
                     min={0}
                     max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier)}
+                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
                     onChange={(value) => updateState("abilityHp", value)}
                   />
                   <CompactNumber
@@ -282,7 +287,7 @@ export default function StudentBasicInfo({
                     value={resolved.abilityAtk}
                     min={0}
                     max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier)}
+                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
                     onChange={(value) => updateState("abilityAtk", value)}
                   />
                   <CompactNumber
@@ -290,7 +295,7 @@ export default function StudentBasicInfo({
                     value={resolved.abilityHeal}
                     min={0}
                     max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier)}
+                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
                     onChange={(value) => updateState("abilityHeal", value)}
                   />
                 </div>
@@ -434,6 +439,7 @@ export default function StudentBasicInfo({
           <SectionCard className="mt-3 grid flex-1 grid-cols-3 gap-3 space-y-0 p-3 md:mt-4 md:p-5">
             {student.equipments.map((category, index) => {
               const key = ["equip1", "equip2", "equip3"][index] as "equip1" | "equip2" | "equip3";
+              const levelKey = `${key}Level` as "equip1Level" | "equip2Level" | "equip3Level";
               const maxTier = Math.max(
                 1,
                 ...catalog.equipment
@@ -444,6 +450,8 @@ export default function StudentBasicInfo({
                 (equipment) => equipment.category === category && equipment.tier === resolved[key],
               );
               const equipmentLabel = EQUIPMENT_TYPE_LABELS[category] ?? "장비";
+              const unlockLevel = getEquipmentSlotUnlockLevel(index);
+              const locked = resolved.level < unlockLevel;
               return (
                 <div key={key} className="min-w-0">
                   <div className="relative mb-2 flex h-16 items-center justify-center overflow-hidden rounded-lg bg-muted/50">
@@ -465,35 +473,74 @@ export default function StudentBasicInfo({
                       </strong>
                     </div>
                   </div>
-                  <LevelSlider
-                    label={equipmentLabel}
-                    value={resolved[key]}
-                    valuePrefix="T"
-                    min={1}
-                    max={maxTier}
-                    showHeader={false}
-                    onChange={(value) => updateState(key, value)}
-                  />
+                  <div className="space-y-1.5">
+                    <LevelSlider
+                      label={equipmentLabel}
+                      value={resolved[key]}
+                      valuePrefix="T"
+                      min={1}
+                      max={maxTier}
+                      showHeader={false}
+                      disabled={locked}
+                      onChange={(value) => {
+                        const equipmentLevelMax = getEquipmentMaxLevel(catalog, category, value);
+                        setSaved(false);
+                        setState((current) => ({
+                          ...current,
+                          [key]: value,
+                          [levelKey]: equipmentLevelMax,
+                        }));
+                      }}
+                    />
+                    <LevelSlider
+                      label={`${equipmentLabel} 레벨`}
+                      value={resolved[levelKey]}
+                      valuePrefix="Lv."
+                      min={1}
+                      max={selectedEquipment?.maxLevel ?? 1}
+                      showHeader
+                      disabled={locked || selectedEquipment === undefined}
+                      onChange={(value) => updateState(levelKey, value)}
+                    />
+                    {locked ? (
+                      <span className="block text-center text-[10px] font-medium text-muted-foreground">
+                        학생 Lv.{unlockLevel}부터 적용
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               );
             })}
-            {student.catalog?.gear ? (
-              <div className="col-span-3 flex items-center gap-3">
-                <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
-                  <SparklesIcon className="size-5 text-muted-foreground" aria-hidden="true" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <LevelSlider
-                    label={student.catalog.gear.name}
-                    value={resolved.equipSpecial}
-                    valuePrefix="T"
-                    min={0}
-                    max={2}
-                    onChange={(value) => updateState("equipSpecial", value)}
-                  />
-                </div>
-              </div>
-            ) : null}
+            {student.catalog?.gear
+              ? (() => {
+                  const selectedGearTier = student.catalog.gear?.tiers.find(
+                    (tier) => tier.tier === resolved.equipSpecial,
+                  );
+                  const gearLocked = selectedGearTier != null && resolved.bond < selectedGearTier.openFavorLevel;
+                  return (
+                    <div className="col-span-3 flex items-center gap-3">
+                      <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
+                        <SparklesIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <LevelSlider
+                          label={student.catalog.gear.name}
+                          value={resolved.equipSpecial}
+                          valuePrefix="T"
+                          min={0}
+                          max={2}
+                          onChange={(value) => updateState("equipSpecial", value)}
+                        />
+                        {gearLocked ? (
+                          <span className="block text-[10px] font-medium text-muted-foreground">
+                            인연 Lv.{selectedGearTier?.openFavorLevel}부터 적용
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })()
+              : null}
           </SectionCard>
         </section>
       </div>
@@ -569,9 +616,12 @@ function CompactNumber({
   );
 }
 
-export function getAbilityReleaseDisabledReason(tier: number): string | null {
+export function getAbilityReleaseDisabledReason(tier: number, level = 90): string | null {
   if (tier <= 5) {
     return "고유무기 1성부터 능력 개방을 설정할 수 있어요";
+  }
+  if (level < 90) {
+    return "학생 레벨 90부터 능력 개방을 설정할 수 있어요";
   }
   return null;
 }
