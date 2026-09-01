@@ -653,7 +653,10 @@ describe("student calculator", () => {
     expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(414);
   });
 
-  it("does not apply passive-skill modifiers before the two-star unlock", () => {
+  it.each([
+    StudentSkillModifierActivation.Conditional,
+    StudentSkillModifierActivation.Unconditional,
+  ])("does not apply %s passive-skill modifiers before the two-star unlock", (activation) => {
     const student = createStudent();
     student.initialTier = 1;
     if (!student.catalog) throw new Error("student catalog fixture is required");
@@ -667,7 +670,7 @@ describe("student calculator", () => {
         stat: StudentCatalogStat.AttackPower,
         kind: StudentCatalogStatModifierKind.Coefficient,
         value: 2_660,
-        activation: StudentSkillModifierActivation.Conditional,
+        activation,
         persistence: StudentSkillModifierPersistence.Permanent,
       },
     ]);
@@ -679,6 +682,42 @@ describe("student calculator", () => {
     ).toBe(100);
     expect(
       calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(127);
+  });
+
+  it("does not apply extra-passive modifiers before the three-star unlock", () => {
+    const student = createStudent();
+    student.initialTier = 1;
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    addSelectedPassiveSkill(
+      student,
+      [
+        {
+          stat: StudentCatalogStat.AttackPower,
+          kind: StudentCatalogStatModifierKind.Coefficient,
+          value: 2_660,
+          activation: StudentSkillModifierActivation.Unconditional,
+          persistence: StudentSkillModifierPersistence.Permanent,
+        },
+      ],
+      1,
+      StudentSkillTypeEnum.ExtraPassive,
+    );
+
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(100);
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 3 }).find(
         ({ stat }) => stat === StudentCatalogStat.AttackPower,
       )?.value,
     ).toBe(127);
@@ -867,15 +906,17 @@ function addSelectedPassiveSkill(
   student: StudentCalculatorSource,
   statModifiers: StudentCalculatorSource["skills"][number]["levels"][number]["statModifiers"],
   level = 1,
+  slot: StudentSkillTypeEnum = StudentSkillTypeEnum.Passive,
 ) {
   if (!student.catalog) throw new Error("student catalog fixture is required");
+  const skillUid = slot === StudentSkillTypeEnum.ExtraPassive ? "extra-passive" : "passive";
   student.catalog.skillConfigurations[0].slots.push({
-    slot: StudentSkillTypeEnum.Passive,
-    skills: [{ position: 0, skillUid: "passive" }],
+    slot,
+    skills: [{ position: 0, skillUid }],
   });
   student.skills.push({
-    uid: "passive",
-    skillType: StudentSkillTypeEnum.Passive,
+    uid: skillUid,
+    skillType: slot,
     name: "강화 스킬",
     iconUrl: null,
     maxLevel: 10,

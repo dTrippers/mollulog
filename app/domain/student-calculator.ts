@@ -262,12 +262,15 @@ export function calculateStudentStats(
 
   const permanentSkillModifiers = selectStudentSkills(student, input).flatMap((skill) =>
     (skill.levels.find((level) => level.level === skill.selectedLevel)?.statModifiers ?? [])
-      .filter(
-        (modifier) =>
+      .filter((modifier) => {
+        const unlocked =
+          skill.slot === "passive" ? state.tier >= 2 : skill.slot === "extra_passive" ? state.tier >= 3 : true;
+        return (
           modifier.persistence === StudentSkillModifierPersistence.Permanent &&
-          ((skill.slot === "passive" && state.tier >= 2) ||
-            modifier.activation === StudentSkillModifierActivation.Unconditional),
-      )
+          unlocked &&
+          (skill.slot === "passive" || modifier.activation === StudentSkillModifierActivation.Unconditional)
+        );
+      })
       .map((modifier) => ({ stat: modifier.stat, kind: modifier.kind, value: modifier.value })),
   );
   applyModifiers(stats, coefficientRates, permanentSkillModifiers);
