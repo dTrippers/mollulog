@@ -56,7 +56,7 @@ const ticketSelection = {
 
 type UserFeedbackTicketRow = Omit<
   typeof pgFeedbackTicketsTable.$inferSelect,
-  "additional" | "operatorNotificationSentAt"
+  "additional" | "operatorNotificationSentAt" | "tag" | "linearIssueUrl"
 >;
 
 function toUtcIso(value: Date | string): UtcIsoString {

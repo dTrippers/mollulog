@@ -610,6 +610,8 @@ export const pgFeedbackTicketsTable = pgTable(
     content: text().notNull(),
     additional: jsonb().$type<FeedbackAdditional>(),
     status: text().notNull().default("waiting"),
+    tag: text(),
+    linearIssueUrl: text("linear_issue_url"),
     replyEmail: text("reply_email"),
     lastSeenAdminReplyId: integer("last_seen_admin_reply_id").notNull().default(0),
     operatorNotificationSentAt: timestamptz("operator_notification_sent_at"),
@@ -619,9 +621,6 @@ export const pgFeedbackTicketsTable = pgTable(
   (table) => [
     uniqueIndex("feedback_tickets_uid_uidx").on(table.uid),
     index("feedback_tickets_user_updated_at_idx").on(table.userId, table.updatedAt.desc(), table.id.desc()),
-    index("feedback_tickets_operator_notification_pending_idx")
-      .on(table.id)
-      .where(sql`${table.operatorNotificationSentAt} is null`),
   ],
 );
 
@@ -644,9 +643,6 @@ export const pgFeedbackRepliesTable = pgTable(
     uniqueIndex("feedback_replies_uid_uidx").on(table.uid),
     index("feedback_replies_ticket_created_at_idx").on(table.ticketId, table.createdAt, table.id),
     index("feedback_replies_ticket_admin_id_idx").on(table.ticketId, table.isAdmin, table.id),
-    index("feedback_replies_operator_notification_pending_idx")
-      .on(table.id)
-      .where(sql`${table.operatorNotificationSentAt} is null and ${table.isAdmin} = false`),
   ],
 );
 

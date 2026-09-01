@@ -16,13 +16,8 @@ UPDATE feedback_replies
    SET operator_notification_sent_at = now()
  WHERE operator_notification_sent_at IS NULL;
 
-CREATE INDEX feedback_tickets_operator_notification_pending_idx
-  ON feedback_tickets (id)
-  WHERE operator_notification_sent_at IS NULL;
-
-CREATE INDEX feedback_replies_operator_notification_pending_idx
-  ON feedback_replies (id)
-  WHERE operator_notification_sent_at IS NULL
-    AND is_admin = false;
+ALTER TABLE feedback_tickets
+  ADD COLUMN tag text,
+  ADD COLUMN linear_issue_url text;
 
 COMMIT;
