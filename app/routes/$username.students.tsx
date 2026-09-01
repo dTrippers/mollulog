@@ -11,11 +11,11 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
-  createStudentFilterState,
   getFilteredStudentUids,
   StudentCards,
   StudentFilter,
   TierSelector,
+  usePersistentStudentFilterState,
 } from "~/components/features/students";
 import { Button, SubTitle, Toggle } from "~/components/primitives";
 import { captureServerError, getLogger } from "~/lib/observability.server";
@@ -30,6 +30,9 @@ import {
 } from "~/models/recruited-student";
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
+
+const USER_STUDENT_FILTER_STORAGE_KEY = "mollulog::user-students::view-settings";
+const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -257,7 +260,11 @@ export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
   const { me, noRecruited, students } = loaderData;
 
-  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const [filterState, setFilterState] = usePersistentStudentFilterState({
+    storageKey: USER_STUDENT_FILTER_STORAGE_KEY,
+    defaultSort: "recent",
+    allowedSorts: USER_STUDENT_FILTER_SORTS,
+  });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
@@ -292,7 +299,7 @@ export default function UserPage() {
         />
       ),
     });
-  }, [filterState, students, setPanel]);
+  }, [filterState, students, setPanel, setFilterState]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

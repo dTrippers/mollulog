@@ -1,11 +1,14 @@
 import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
-import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
+import { getFilteredStudentUids, StudentFilter, usePersistentStudentFilterState } from "~/components/features/students";
 import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
+
+const STUDENT_FILTER_STORAGE_KEY = "mollulog::students::view-settings";
+const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -44,7 +47,11 @@ export default function StudentsLayout() {
   const { pathname } = useLocation();
   const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
-  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const [filterState, setFilterState] = usePersistentStudentFilterState({
+    storageKey: STUDENT_FILTER_STORAGE_KEY,
+    defaultSort: "recent",
+    allowedSorts: STUDENT_FILTER_SORTS,
+  });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const filteredStudents = useMemo(() => {
     return filteredUids.flatMap((uid) => {

@@ -72,6 +72,14 @@ const tacticRoleFilterOptions = [
   { text: "T.S.", value: "tactical_support" as const },
 ];
 
+export const STUDENT_FILTER_OPTION_VALUES = {
+  attackTypes: attackFilterOptions.map(({ value }) => value),
+  defenseTypes: defenseFilterOptions.map(({ value }) => value),
+  roles: roleFilterOptions.map(({ value }) => value),
+  positions: positionFilterOptions.map(({ value }) => value),
+  tacticRoles: tacticRoleFilterOptions.map(({ value }) => value),
+} as const;
+
 const sortFilterOptions: Record<SortBy, string> = {
   recent: "최신순",
   old: "과거순",
@@ -121,7 +129,13 @@ export default function StudentFilter({
     [controlledState, onStateChange, state],
   );
 
-  const [localSearch, setLocalSearch] = useState("");
+  const controlledSearch = controlledState?.search;
+  const isControlled = controlledState !== undefined;
+  const [localSearch, setLocalSearch] = useState(() => controlledSearch ?? "");
+
+  useEffect(() => {
+    setLocalSearch(isControlled ? (controlledSearch ?? "") : "");
+  }, [controlledSearch, isControlled]);
 
   useEffect(() => {
     const timer = setTimeout(() => {

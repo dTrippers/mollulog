@@ -42,4 +42,17 @@ describe("student filter", () => {
 
     expect(getFilteredStudentUids(updatedStudents, filterState)).toEqual(["explosive-student"]);
   });
+
+  it("applies a restored search value to the filtered student list", () => {
+    const filterState: StudentFilterState = {
+      ...createStudentFilterState("recent"),
+      search: "아루",
+    };
+    const students = [
+      student({ uid: "aru", name: "아루", attackType: Attack.Explosive, order: 2 }),
+      student({ uid: "shiroko", name: "시로코", attackType: Attack.Explosive, order: 1 }),
+    ];
+
+    expect(getFilteredStudentUids(students, filterState)).toEqual(["aru"]);
+  });
 });
