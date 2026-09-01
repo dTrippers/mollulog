@@ -7,6 +7,7 @@ export const DISCORD_NOTIFICATION_DEFAULTS = {
   eventEndEnabled: false,
   rewardExchangeEndEnabled: false,
   recruitmentStartEnabled: false,
+  shopResetEnabled: false,
   leadHours: 24,
 };
 
@@ -40,6 +41,7 @@ export type DiscordNotificationSettingsInput = {
   eventEndEnabled: boolean;
   rewardExchangeEndEnabled: boolean;
   recruitmentStartEnabled: boolean;
+  shopResetEnabled: boolean;
   leadHours: number;
 };
 
@@ -145,6 +147,8 @@ export function formatDiscordNotificationMessage({
     return `${at}, ${names.map((name) => `"${name}"`).join(", ")} 학생의 모집이 시작됩니다.`;
   }
 
+  if (trigger === "shop-reset") return `${at}, 상점이 초기화됩니다.`;
+
   const name = requireName(contentName);
   switch (trigger) {
     case "event-start":
@@ -162,5 +166,6 @@ export function getEnabledTriggers(settings: DiscordNotificationSettingsInput): 
     settings.eventEndEnabled ? "event-end" : null,
     settings.rewardExchangeEndEnabled ? "reward-exchange-end" : null,
     settings.recruitmentStartEnabled ? "recruitment-start" : null,
+    settings.shopResetEnabled ? "shop-reset" : null,
   ].filter((trigger): trigger is DiscordNotificationTrigger => trigger !== null);
 }

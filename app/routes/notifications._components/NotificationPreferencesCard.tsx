@@ -47,10 +47,7 @@ export default function NotificationPreferencesCard({
   };
 
   return (
-    <SectionCard
-      title="받을 알림"
-      description="알림은 수 분 정도 지연이 발생할 수 있어요"
-    >
+    <SectionCard title="받을 알림" description="알림은 수 분 정도 지연이 발생할 수 있어요">
       {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
       <Form method="post" onChange={markDirty}>
         <input type="hidden" name="intent" value="save" />
@@ -108,6 +105,18 @@ export default function NotificationPreferencesCard({
                 <Toggle
                   name="recruitmentStartEnabled"
                   initialState={settings.recruitmentStartEnabled}
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="min-w-0">
+                  <p className="text-sm">상점 초기화 알림</p>
+                  <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
+                </div>
+                <Toggle
+                  name="shopResetEnabled"
+                  initialState={settings.shopResetEnabled}
                   className="my-0 shrink-0"
                   onChange={markDirty}
                 />

@@ -20,7 +20,8 @@ type DiscordNotificationSettingsKey =
   | "eventStartEnabled"
   | "eventEndEnabled"
   | "rewardExchangeEndEnabled"
-  | "recruitmentStartEnabled";
+  | "recruitmentStartEnabled"
+  | "shopResetEnabled";
 
 const PREFERENCE_KEYS: ReadonlyArray<{
   type: DiscordNotificationTrigger;
@@ -30,6 +31,7 @@ const PREFERENCE_KEYS: ReadonlyArray<{
   { type: "event-end", key: "eventEndEnabled" },
   { type: "reward-exchange-end", key: "rewardExchangeEndEnabled" },
   { type: "recruitment-start", key: "recruitmentStartEnabled" },
+  { type: "shop-reset", key: "shopResetEnabled" },
 ];
 
 export type DiscordConnection = {
@@ -132,6 +134,7 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
     eventEndEnabled: byType.get("event-end")?.enabled ?? false,
     rewardExchangeEndEnabled: byType.get("reward-exchange-end")?.enabled ?? false,
     recruitmentStartEnabled: byType.get("recruitment-start")?.enabled ?? false,
+    shopResetEnabled: byType.get("shop-reset")?.enabled ?? false,
     leadHours: resolvedLeadHours,
     effectiveAt: (effectiveAt ?? now).toISOString(),
   };
@@ -149,6 +152,7 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
     eventEndEnabled: booleanValue("eventEndEnabled"),
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
     recruitmentStartEnabled: booleanValue("recruitmentStartEnabled"),
+    shopResetEnabled: booleanValue("shopResetEnabled"),
     leadHours: Number(leadHoursValue ?? Number.NaN),
   };
   return validateDiscordNotificationSettings(input);
