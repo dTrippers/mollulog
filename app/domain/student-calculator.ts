@@ -1,3 +1,4 @@
+import { EQUIPMENT_LEVEL_MAX_LEVEL } from "~/domain/student-growth-state";
 import type {
   StudentCatalogStat,
   StudentCatalogStatGrowthType,
@@ -13,6 +14,8 @@ export type StudentCalculatorSource = Pick<
 >;
 export type StudentCalculatorCatalog = NonNullable<StudentDetailQuery["studentCatalog"]>;
 
+export const EQUIPMENT_SLOT_UNLOCK_LEVELS = [1, 10, 20] as const;
+
 export type StudentCalculatorState = {
   level: number | null;
   tier: number | null;
@@ -24,6 +27,9 @@ export type StudentCalculatorState = {
   equip1: number | null;
   equip2: number | null;
   equip3: number | null;
+  equip1Level: number | null;
+  equip2Level: number | null;
+  equip3Level: number | null;
   equipSpecial: number | null;
   weaponLevel: number | null;
   abilityHp: number | null;
@@ -42,6 +48,9 @@ export type ResolvedStudentCalculatorState = {
   equip1: number;
   equip2: number;
   equip3: number;
+  equip1Level: number;
+  equip2Level: number;
+  equip3Level: number;
   equipSpecial: number;
   weaponStar: number;
   weaponLevel: number;
@@ -84,12 +93,25 @@ export function roundAwayFromZero(value: number): number {
 }
 
 export function resolveStudentCalculatorState(
-  student: Pick<StudentCalculatorSource, "initialTier">,
+  student: Pick<StudentCalculatorSource, "initialTier"> & Partial<Pick<StudentCalculatorSource, "equipments">>,
   state: StudentCalculatorState,
+  catalog?: StudentCalculatorCatalog,
 ): ResolvedStudentCalculatorState {
   const tier = clampInteger(state.tier ?? student.initialTier, student.initialTier, 9);
   const weaponStar = Math.max(0, tier - 5);
   const weaponLevelMax = weaponStar === 0 ? 0 : 20 + weaponStar * 10;
+  const equipmentTiers = [
+    clampInteger(state.equip1 ?? 1, 1, 10),
+    clampInteger(state.equip2 ?? 1, 1, 10),
+    clampInteger(state.equip3 ?? 1, 1, 10),
+  ] as const;
+  const equipmentLevelMaxes =
+    student.equipments && catalog
+      ? equipmentTiers.map((equipmentTier, index) => {
+          const category = student.equipments?.[index];
+          return category == null ? null : getEquipmentMaxLevel(catalog, category, equipmentTier);
+        })
+      : [];
 
   return {
     level: clampInteger(state.level ?? 1, 1, 90),
@@ -99,9 +121,12 @@ export function resolveStudentCalculatorState(
     skillNormal: clampInteger(state.skillNormal ?? 1, 1, 10),
     skillEnhanced: clampInteger(state.skillEnhanced ?? 1, 1, 10),
     skillSub: clampInteger(state.skillSub ?? 1, 1, 10),
-    equip1: clampInteger(state.equip1 ?? 1, 1, 10),
-    equip2: clampInteger(state.equip2 ?? 1, 1, 10),
-    equip3: clampInteger(state.equip3 ?? 1, 1, 10),
+    equip1: equipmentTiers[0],
+    equip2: equipmentTiers[1],
+    equip3: equipmentTiers[2],
+    equip1Level: resolveEquipmentLevel(state.equip1Level, equipmentLevelMaxes[0]),
+    equip2Level: resolveEquipmentLevel(state.equip2Level, equipmentLevelMaxes[1]),
+    equip3Level: resolveEquipmentLevel(state.equip3Level, equipmentLevelMaxes[2]),
     equipSpecial: clampInteger(state.equipSpecial ?? 0, 0, 2),
     weaponStar,
     weaponLevel: weaponLevelMax === 0 ? 0 : clampInteger(state.weaponLevel ?? 1, 1, weaponLevelMax),
@@ -119,7 +144,7 @@ export function calculateStudentStats(
 ): StudentCalculatedStat[] {
   if (!student.catalog) return [];
 
-  const state = resolveStudentCalculatorState(student, input);
+  const state = resolveStudentCalculatorState(student, input, catalog);
   const stats = new Map<StudentCatalogStat, number>();
   const coefficientRates = new Map<StudentCatalogStat, number>();
   const growthType = student.catalog.statProfile.growthType;
@@ -145,7 +170,7 @@ export function calculateStudentStats(
       .flatMap((bonus) => bonus.modifiers)
       .filter((modifier) => modifier.stat === stat)
       .reduce((sum, modifier) => sum + modifier.value, 0);
-    const selectedPotentialLevel = potentialLevels.get(stat) ?? 0;
+    const selectedPotentialLevel = state.level >= 90 && state.weaponStar > 0 ? (potentialLevels.get(stat) ?? 0) : 0;
     const potential = student.catalog.potentialBonuses.find((bonus) => bonus.stat === stat);
     const potentialRate = potential?.levels.find((level) => level.level === selectedPotentialLevel)?.rate ?? 0;
     if (starRate !== 0 || potentialRate !== 0) {
@@ -154,7 +179,9 @@ export function calculateStudentStats(
   }
 
   const equipmentTiers = [state.equip1, state.equip2, state.equip3];
+  const equipmentLevels = [state.equip1Level, state.equip2Level, state.equip3Level];
   student.equipments.forEach((category, index) => {
+    if (state.level < getEquipmentSlotUnlockLevel(index)) return;
     const selectedTier = equipmentTiers[index];
     const equipment = catalog.equipment.find(
       (candidate) => candidate.category === category && candidate.tier === selectedTier,
@@ -166,21 +193,34 @@ export function calculateStudentStats(
       equipment.modifiers.map((modifier) => ({
         stat: modifier.stat,
         kind: modifier.kind,
-        value: modifier.levelMax,
+        value: interpolateEquipmentModifier(
+          modifier.level1,
+          modifier.levelMax,
+          equipment.maxLevel,
+          equipmentLevels[index] ?? equipment.maxLevel,
+          equipment.growthType,
+          catalog,
+        ),
       })),
     );
   });
 
   if (student.catalog.gear && state.equipSpecial > 0) {
-    const selectedGearTier = student.catalog.gear.tiers.find((tier) => tier.tier === state.equipSpecial);
-    if (selectedGearTier) {
+    for (const gearTier of getActiveGearTiers(student.catalog.gear, state.equipSpecial, state.bond)) {
       applyModifiers(
         stats,
         coefficientRates,
-        selectedGearTier.modifiers.map((modifier) => ({
+        gearTier.modifiers.map((modifier) => ({
           stat: modifier.stat,
           kind: modifier.kind,
-          value: modifier.levelMax,
+          value: interpolateEquipmentModifier(
+            modifier.level1,
+            modifier.levelMax,
+            gearTier.maxLevel,
+            gearTier.maxLevel,
+            gearTier.growthType,
+            catalog,
+          ),
         })),
       );
     }
@@ -222,11 +262,15 @@ export function calculateStudentStats(
 
   const permanentSkillModifiers = selectStudentSkills(student, input).flatMap((skill) =>
     (skill.levels.find((level) => level.level === skill.selectedLevel)?.statModifiers ?? [])
-      .filter(
-        (modifier) =>
-          modifier.activation === StudentSkillModifierActivation.Unconditional &&
-          modifier.persistence === StudentSkillModifierPersistence.Permanent,
-      )
+      .filter((modifier) => {
+        const unlocked =
+          skill.slot === "passive" ? state.tier >= 2 : skill.slot === "extra_passive" ? state.tier >= 3 : true;
+        return (
+          modifier.persistence === StudentSkillModifierPersistence.Permanent &&
+          unlocked &&
+          (skill.slot === "passive" || modifier.activation === StudentSkillModifierActivation.Unconditional)
+        );
+      })
       .map((modifier) => ({ stat: modifier.stat, kind: modifier.kind, value: modifier.value })),
   );
   applyModifiers(stats, coefficientRates, permanentSkillModifiers);
@@ -242,11 +286,14 @@ export function selectStudentSkills(
 ): SelectedStudentSkill[] {
   if (!student.catalog) return [];
   const state = resolveStudentCalculatorState(student, input);
+  const gearTier = student.catalog.gear
+    ? Math.max(0, ...getActiveGearTiers(student.catalog.gear, state.equipSpecial, state.bond).map((tier) => tier.tier))
+    : state.equipSpecial;
   const candidates = student.catalog.skillConfigurations.filter(
     (configuration) =>
       configuration.formIndex === formIndex &&
       configuration.minimumWeaponStar <= state.weaponStar &&
-      configuration.minimumGearTier <= state.equipSpecial,
+      configuration.minimumGearTier <= gearTier,
   );
   const maximal = candidates.filter(
     (candidate) =>
@@ -335,10 +382,103 @@ function interpolateLevelStat(
   catalog: StudentCalculatorCatalog,
 ): number {
   if (level <= 1) return level1;
+  const ratio = getGrowthRatio(catalog, growthType, level);
+  return level1 + roundAwayFromZero((level100 - level1) * ratio);
+}
+
+function getGrowthRatio(
+  catalog: StudentCalculatorCatalog,
+  growthType: StudentCatalogStatGrowthType,
+  level: number,
+): number {
   const interpolation = catalog.statLevelInterpolations.find((row) => row.level === level);
-  const ratio = interpolation?.ratios.find((candidate) => candidate.growthType === growthType)?.value;
-  if (ratio == null) return level1;
-  return level1 + roundAwayFromZero(((level100 - level1) * ratio) / 10_000);
+  if (!interpolation) {
+    throw new Error(`능력치 보간 데이터가 레벨 ${level}에 없어요`);
+  }
+
+  const endLevel = catalog.statLevelInterpolationEndLevel;
+  const endInterpolation = catalog.statLevelInterpolations.find((row) => row.level === endLevel);
+  if (!endInterpolation) {
+    throw new Error(`능력치 보간 종료 데이터가 레벨 ${endLevel}에 없어요`);
+  }
+
+  const ratio = interpolation.ratios.find((candidate) => candidate.growthType === growthType)?.value;
+  if (ratio == null) {
+    throw new Error(`능력치 보간 데이터의 성장 타입 값이 레벨 ${level}에 없어요`);
+  }
+
+  const endRatio = endInterpolation.ratios.find((candidate) => candidate.growthType === growthType)?.value;
+  if (endRatio == null) {
+    throw new Error(`능력치 보간 종료 데이터의 성장 타입 값이 레벨 ${endLevel}에 없어요`);
+  }
+  if (endRatio === 0) {
+    throw new Error(`능력치 보간 종료 데이터의 성장 타입 값이 0이에요`);
+  }
+
+  return ratio / endRatio;
+}
+
+export function getEquipmentMaxLevel(catalog: StudentCalculatorCatalog, category: string, tier: number): number | null {
+  return (
+    catalog.equipment.find((equipment) => equipment.category === category && equipment.tier === tier)?.maxLevel ?? null
+  );
+}
+
+export function getEquipmentSlotUnlockLevel(index: number): number {
+  return EQUIPMENT_SLOT_UNLOCK_LEVELS[index] ?? 1;
+}
+
+export function validateStudentEquipmentLevels(
+  student: Pick<StudentCalculatorSource, "equipments">,
+  catalog: StudentCalculatorCatalog | null | undefined,
+  state: Pick<StudentCalculatorState, "equip1" | "equip2" | "equip3"> &
+    Partial<Pick<StudentCalculatorState, "equip1Level" | "equip2Level" | "equip3Level">>,
+) {
+  const equipmentTiers = [state.equip1 ?? 1, state.equip2 ?? 1, state.equip3 ?? 1];
+  const equipmentLevels = [state.equip1Level, state.equip2Level, state.equip3Level];
+
+  equipmentLevels.forEach((level, index) => {
+    if (level == null) return;
+
+    const category = student.equipments[index];
+    const selectedEquipment =
+      category == null
+        ? undefined
+        : catalog?.equipment.find(
+            (equipment) => equipment.category === category && equipment.tier === equipmentTiers[index],
+          );
+    if (!selectedEquipment) {
+      throw new Error(`장비 ${index + 1} 정보를 확인하지 못했어요`);
+    }
+    if (!Number.isInteger(level)) {
+      throw new Error(`장비 ${index + 1} 레벨은(는) 숫자만 입력할 수 있어요`);
+    }
+    if (level < 1 || level > selectedEquipment.maxLevel) {
+      throw new Error(`장비 ${index + 1} 레벨은(는) 1부터 ${selectedEquipment.maxLevel} 사이만 입력할 수 있어요`);
+    }
+  });
+}
+
+export function interpolateEquipmentModifier(
+  level1: number,
+  levelMax: number,
+  maxLevel: number,
+  level: number,
+  growthType: StudentCatalogStatGrowthType,
+  catalog: StudentCalculatorCatalog,
+): number {
+  if (level <= 1 || maxLevel <= 1) return roundAwayFromZero(level1);
+  const interpolationLevel = roundAwayFromZero((catalog.statLevelInterpolationEndLevel * level) / maxLevel);
+  const ratio = getGrowthRatio(catalog, growthType, interpolationLevel);
+  return level1 + roundAwayFromZero((levelMax - level1) * ratio);
+}
+
+function getActiveGearTiers(
+  gear: NonNullable<NonNullable<StudentCalculatorSource["catalog"]>["gear"]>,
+  selectedTier: number,
+  bond: number,
+) {
+  return gear.tiers.filter((tier) => tier.tier <= selectedTier && tier.openFavorLevel <= bond);
 }
 
 function applyModifiers(
@@ -362,8 +502,13 @@ function applyCoefficientModifiers(
 ) {
   for (const [stat, rate] of coefficientRates) {
     const current = stats.get(stat) ?? 0;
-    stats.set(stat, current + Math.ceil((current * rate) / 10_000));
+    stats.set(stat, current + Math.round((current * rate) / 10_000));
   }
+}
+
+function resolveEquipmentLevel(value: number | null, maxLevel: number | null | undefined): number {
+  if (maxLevel == null) return clampInteger(value ?? 1, 1, EQUIPMENT_LEVEL_MAX_LEVEL);
+  return clampInteger(value ?? maxLevel, 1, Math.max(1, maxLevel));
 }
 
 function clampInteger(value: number, min: number, max: number): number {

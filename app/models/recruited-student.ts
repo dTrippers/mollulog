@@ -6,6 +6,7 @@ import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
+  EQUIPMENT_LEVEL_MAX_LEVEL,
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
@@ -34,13 +35,20 @@ export type RecruitedStudentCurrentState = {
   abilityHeal: number | null;
 };
 
-export type RecruitedStudentCurrentStateInput = RecruitedStudentCurrentState;
-
-export type RecruitedStudent = RecruitedStudentCurrentState & {
-  uid: string;
-  studentUid: string;
-  tier: number;
+type RecruitedStudentEquipmentLevelFields = {
+  equip1Level?: number | null;
+  equip2Level?: number | null;
+  equip3Level?: number | null;
 };
+
+export type RecruitedStudentCurrentStateInput = RecruitedStudentCurrentState & RecruitedStudentEquipmentLevelFields;
+
+export type RecruitedStudent = RecruitedStudentCurrentState &
+  RecruitedStudentEquipmentLevelFields & {
+    uid: string;
+    studentUid: string;
+    tier: number;
+  };
 
 export type RecruitedStudentBatchInput = {
   studentUid: string;
@@ -63,6 +71,9 @@ const currentStateRanges = {
   equip1: { label: "장비 1", min: 1, max: 10 },
   equip2: { label: "장비 2", min: 1, max: 10 },
   equip3: { label: "장비 3", min: 1, max: 10 },
+  equip1Level: { label: "장비 1 레벨", min: 1, max: EQUIPMENT_LEVEL_MAX_LEVEL },
+  equip2Level: { label: "장비 2 레벨", min: 1, max: EQUIPMENT_LEVEL_MAX_LEVEL },
+  equip3Level: { label: "장비 3 레벨", min: 1, max: EQUIPMENT_LEVEL_MAX_LEVEL },
   equipSpecial: { label: "애용품", min: 1, max: 2 },
   weaponLevel: { label: "고유무기 레벨", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
   abilityHp: { label: "능력 개방 체력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
@@ -85,6 +96,9 @@ function toModel(recruitedStudent: RecruitedStudentRow): RecruitedStudent {
     equip1: recruitedStudent.equip1,
     equip2: recruitedStudent.equip2,
     equip3: recruitedStudent.equip3,
+    equip1Level: recruitedStudent.equip1Level,
+    equip2Level: recruitedStudent.equip2Level,
+    equip3Level: recruitedStudent.equip3Level,
     equipSpecial: recruitedStudent.equipSpecial,
     weaponLevel: recruitedStudent.weaponLevel,
     abilityHp: recruitedStudent.abilityHp,

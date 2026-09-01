@@ -1,4 +1,5 @@
 export const ABILITY_RELEASE_MAX_LEVEL = 25;
+export const EQUIPMENT_LEVEL_MAX_LEVEL = 70;
 export const WEAPON_LEVEL_MAX_LEVEL = 60;
 
 export const ABILITY_RELEASE_WB_UIDS = {

@@ -28,6 +28,9 @@ type RecruitedStudentRow = {
   equip1: number | null;
   equip2: number | null;
   equip3: number | null;
+  equip1Level: number | null;
+  equip2Level: number | null;
+  equip3Level: number | null;
   equipSpecial: number | null;
   weaponLevel: number | null;
   abilityHp: number | null;
@@ -52,6 +55,9 @@ function createRecruitedStudentRow(overrides: Partial<RecruitedStudentRow>): Rec
     equip1: null,
     equip2: null,
     equip3: null,
+    equip1Level: null,
+    equip2Level: null,
+    equip3Level: null,
     equipSpecial: null,
     weaponLevel: null,
     abilityHp: null,
@@ -188,6 +194,64 @@ describe("recruited-student current state", () => {
       equip1: 10,
       equip2: null,
     });
+  });
+
+  it("stores and restores the nullable equipment levels with current state", async () => {
+    const { db, env } = createEnv();
+
+    await upsertRecruitedStudentState(env, 1, "student-a", 6, {
+      level: 80,
+      weaponLevel: 20,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
+      skillEx: null,
+      skillNormal: null,
+      skillEnhanced: null,
+      skillSub: null,
+      equip1: 10,
+      equip2: 9,
+      equip3: 8,
+      equip1Level: 70,
+      equip2Level: 45,
+      equip3Level: 30,
+      equipSpecial: null,
+    });
+
+    expect(db.rows[0]).toMatchObject({ equip1Level: 70, equip2Level: 45, equip3Level: 30 });
+    await expect(getRecruitedStudents(env, 1)).resolves.toEqual([
+      expect.objectContaining({ equip1Level: 70, equip2Level: 45, equip3Level: 30 }),
+    ]);
+  });
+
+  it("preserves equipment levels when a growth-table update omits those fields", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(
+      createRecruitedStudentRow({
+        tier: 6,
+        equip1Level: 70,
+        equip2Level: 45,
+        equip3Level: 30,
+      }),
+    );
+
+    await updateRecruitedStudentCurrentState(env, 1, "student-a", {
+      level: 80,
+      weaponLevel: 20,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
+      skillEx: 5,
+      skillNormal: 10,
+      skillEnhanced: 9,
+      skillSub: 8,
+      equip1: 10,
+      equip2: 9,
+      equip3: 8,
+      equipSpecial: 2,
+    });
+
+    expect(db.rows[0]).toMatchObject({ equip1Level: 70, equip2Level: 45, equip3Level: 30, level: 80 });
   });
 
   it("keeps current fields when tier is updated", async () => {

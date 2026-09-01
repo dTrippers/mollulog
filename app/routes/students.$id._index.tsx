@@ -5,6 +5,7 @@ import { data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
+import { validateStudentEquipmentLevels } from "~/domain/student-calculator";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
@@ -17,7 +18,7 @@ import {
   upsertRecruitedStudentState,
 } from "~/models/recruited-student";
 import { getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
-import { getStudentDetailData, getStudentVariantIdentity } from "~/models/student";
+import { getStudentDetailData } from "~/models/student";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
 import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
@@ -35,12 +36,22 @@ const currentStateFieldKeys = [
   "equip1",
   "equip2",
   "equip3",
+  "equip1Level",
+  "equip2Level",
+  "equip3Level",
   "equipSpecial",
   "weaponLevel",
   "abilityHp",
   "abilityAtk",
   "abilityHeal",
 ] as const satisfies (keyof RecruitedStudentCurrentStateInput)[];
+
+const equipmentLevelFieldKeys = ["equip1Level", "equip2Level", "equip3Level"] as const;
+type EquipmentLevelField = (typeof equipmentLevelFieldKeys)[number];
+
+function isEquipmentLevelField(field: (typeof currentStateFieldKeys)[number]): field is EquipmentLevelField {
+  return equipmentLevelFieldKeys.includes(field as EquipmentLevelField);
+}
 
 type StudentBasicInfoActionData =
   | { ok: true }
@@ -54,6 +65,18 @@ function parseNullableInteger(value: unknown): number | null {
   if (typeof value === "number" && Number.isInteger(value)) return value;
   if (typeof value === "string" && /^\d+$/.test(value.trim())) return Number(value);
   throw new Error("숫자 형식이 올바르지 않아요");
+}
+
+export function toStudentBasicInfoCurrentStateInput(
+  payload: Record<string, unknown>,
+): RecruitedStudentCurrentStateInput {
+  return currentStateFieldKeys.reduce((result, field) => {
+    if (isEquipmentLevelField(field) && !Object.hasOwn(payload, field)) {
+      return result;
+    }
+    result[field] = parseNullableInteger(payload[field]);
+    return result;
+  }, {} as RecruitedStudentCurrentStateInput);
 }
 
 function parseRelatedBonds(value: unknown): Record<string, number> {
@@ -191,7 +214,8 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
 
   try {
     const payload = await request.json<Record<string, unknown>>();
-    const student = await getStudentVariantIdentity(env, studentUid);
+    const studentDetailData = await getStudentDetailData(env, studentUid);
+    const student = studentDetailData?.student;
     if (!student) {
       return data<StudentBasicInfoActionData>({ ok: false, error: "존재하지 않는 학생이에요" }, { status: 400 });
     }
@@ -203,10 +227,8 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     if (tier < student.initialTier) {
       throw new Error(`성급은 최초 성급인 ${student.initialTier}성보다 낮게 설정할 수 없어요`);
     }
-    const currentState = currentStateFieldKeys.reduce((result, field) => {
-      result[field] = parseNullableInteger(payload[field]);
-      return result;
-    }, {} as RecruitedStudentCurrentStateInput);
+    const currentState = toStudentBasicInfoCurrentStateInput(payload);
+    validateStudentEquipmentLevels(student, studentDetailData?.studentCatalog, currentState);
     const bond = parseNullableInteger(payload.bond);
     if (bond != null && (bond < 1 || bond > 100)) {
       throw new Error("인연 랭크는 1부터 100 사이만 입력할 수 있어요");
@@ -329,6 +351,9 @@ export default function StudentDetail() {
               equip1: myStudentState?.equip1 ?? null,
               equip2: myStudentState?.equip2 ?? null,
               equip3: myStudentState?.equip3 ?? null,
+              equip1Level: myStudentState?.equip1Level ?? null,
+              equip2Level: myStudentState?.equip2Level ?? null,
+              equip3Level: myStudentState?.equip3Level ?? null,
               equipSpecial: myStudentState?.equipSpecial ?? null,
               weaponLevel: myStudentState?.weaponLevel ?? null,
               abilityHp: myStudentState?.abilityHp ?? null,

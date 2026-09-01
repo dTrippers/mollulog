@@ -1,12 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   calculateStudentStats,
+  interpolateEquipmentModifier,
   renderStudentSkillDescription,
   renderStudentSkillDescriptionParts,
   resolveStudentCalculatorState,
   type StudentCalculatorCatalog,
   type StudentCalculatorSource,
   selectStudentSkills,
+  validateStudentEquipmentLevels,
 } from "~/domain/student-calculator";
 import {
   StudentCatalogStat,
@@ -28,6 +30,9 @@ const emptyState = {
   equip1: null,
   equip2: null,
   equip3: null,
+  equip1Level: null,
+  equip2Level: null,
+  equip3Level: null,
   equipSpecial: null,
   weaponLevel: null,
   abilityHp: null,
@@ -71,8 +76,504 @@ describe("student calculator", () => {
       abilityHp: 25,
     });
 
-    expect(stats.find(({ stat }) => stat === "MAX_HP")?.value).toBe(1_289);
+    expect(stats.find(({ stat }) => stat === "MAX_HP")?.value).toBe(1_198);
     expect(stats.find(({ stat }) => stat === "DEFENSE_POWER")?.value).toBe(50);
+  });
+
+  it("defaults missing equipment levels to the selected tier maximum", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+
+    expect(resolveStudentCalculatorState(student, emptyState, catalog)).toMatchObject({
+      equip1: 1,
+      equip1Level: 10,
+      equip2Level: 1,
+      equip3Level: 1,
+    });
+  });
+
+  it("rejects an equipment level outside the selected catalog maximum", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+
+    expect(() =>
+      validateStudentEquipmentLevels(student, catalog, {
+        equip1: 1,
+        equip2: null,
+        equip3: null,
+        equip1Level: 11,
+      }),
+    ).toThrow("장비 1 레벨은(는) 1부터 10 사이만 입력할 수 있어요");
+  });
+
+  it("accepts an equipment level at the selected catalog maximum", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+
+    expect(() =>
+      validateStudentEquipmentLevels(student, catalog, {
+        equip1: 1,
+        equip2: null,
+        equip3: null,
+        equip1Level: 10,
+      }),
+    ).not.toThrow();
+  });
+
+  it("rejects a non-null level when the selected equipment is missing", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    student.equipments = ["missing"];
+
+    expect(() =>
+      validateStudentEquipmentLevels(student, catalog, {
+        equip1: 1,
+        equip2: null,
+        equip3: null,
+        equip1Level: 1,
+      }),
+    ).toThrow("장비 1 정보를 확인하지 못했어요");
+  });
+
+  it("interpolates equipment modifiers using the catalog growth table", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = ["hat"];
+    catalog.statLevelInterpolations = [
+      {
+        level: 50,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 4_949 }],
+      },
+      {
+        level: 90,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 9_000 }],
+      },
+      {
+        level: 100,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 }],
+      },
+    ];
+    catalog.equipment = [
+      {
+        uid: "hat-1",
+        category: "hat",
+        tier: 1,
+        maxLevel: 10,
+        growthType: StudentCatalogStatGrowthType.Standard,
+        name: "모자",
+        modifiers: [
+          {
+            stat: StudentCatalogStat.MaxHp,
+            kind: StudentCatalogStatModifierKind.Base,
+            level1: 100,
+            levelMax: 999,
+          },
+        ],
+      },
+    ];
+
+    const stats = calculateStudentStats(student, catalog, {
+      ...emptyState,
+      level: 90,
+      tier: 3,
+      equip1: 1,
+      equip1Level: 5,
+    });
+
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(645);
+  });
+
+  it.each([
+    {
+      label: "Aru Standard",
+      growthType: StudentCatalogStatGrowthType.Standard,
+      level1: 162,
+      level100: 1_621,
+      expected: 1_032,
+    },
+    {
+      label: "Yuzu Late Bloom",
+      growthType: StudentCatalogStatGrowthType.LateBloom,
+      level1: 227,
+      level100: 2_272,
+      expected: 1_446,
+    },
+    {
+      label: "Iori Premature opposite growth",
+      growthType: StudentCatalogStatGrowthType.Premature,
+      level1: 77,
+      level100: 774,
+      expected: 492,
+    },
+  ])("normalizes exclusive-weapon growth for $label", ({ label, growthType, level1, level100, expected }) => {
+    const student = createStudent();
+    const catalog = createGrowthCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.growthType = StudentCatalogStatGrowthType.Standard;
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 0, level100: 0 }];
+    student.catalog.statProfile.fixedStats = [];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.catalog.gear = null;
+    student.catalog.weapon = {
+      name: label,
+      description: null,
+      imageUrl: null,
+      growthType,
+      levelStats: [{ stat: StudentCatalogStat.AttackPower, level1, level100 }],
+      stages: [],
+    };
+    student.equipments = [];
+
+    const stats = calculateStudentStats(student, catalog, {
+      ...emptyState,
+      level: 1,
+      tier: 9,
+      weaponLevel: 60,
+    });
+
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(expected);
+  });
+
+  it("normalizes equipment modifiers by the selected growth type endpoint", () => {
+    const catalog = createGrowthCatalog();
+
+    expect(interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Premature, catalog)).toBe(495);
+    expect(interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.LateBloom, catalog)).toBe(495);
+  });
+
+  it.each([
+    StudentCatalogStatGrowthType.Standard,
+    StudentCatalogStatGrowthType.Premature,
+    StudentCatalogStatGrowthType.LateBloom,
+  ])("keeps level-one and end-level equipment values exact for %s", (growthType) => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 100,
+        ratios: [
+          { growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 },
+          { growthType: StudentCatalogStatGrowthType.Premature, value: 5_000 },
+          { growthType: StudentCatalogStatGrowthType.LateBloom, value: 15_000 },
+        ],
+      },
+    ];
+
+    expect(interpolateEquipmentModifier(11, 77, 100, 1, growthType, catalog)).toBe(11);
+    expect(interpolateEquipmentModifier(11, 77, 100, 100, growthType, catalog)).toBe(77);
+  });
+
+  it("fails when the current interpolation row is missing", () => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 100,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 }],
+      },
+    ];
+
+    expect(() => interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Standard, catalog)).toThrow(
+      "능력치 보간 데이터가 레벨 50에 없어요",
+    );
+  });
+
+  it("fails when the end interpolation row is missing", () => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 50,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 4_949 }],
+      },
+    ];
+
+    expect(() => interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Standard, catalog)).toThrow(
+      "능력치 보간 종료 데이터가 레벨 100에 없어요",
+    );
+  });
+
+  it("fails when the current growth type value is missing", () => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 50,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 4_949 }],
+      },
+      {
+        level: 100,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 }],
+      },
+    ];
+
+    expect(() =>
+      interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Premature, catalog),
+    ).toThrow("능력치 보간 데이터의 성장 타입 값이 레벨 50에 없어요");
+  });
+
+  it("fails when the end growth type value is missing", () => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 50,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Premature, value: 2_475 }],
+      },
+      {
+        level: 100,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 }],
+      },
+    ];
+
+    expect(() =>
+      interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Premature, catalog),
+    ).toThrow("능력치 보간 종료 데이터의 성장 타입 값이 레벨 100에 없어요");
+  });
+
+  it("fails when the end growth type value is zero", () => {
+    const catalog = createGrowthCatalog();
+    catalog.statLevelInterpolations = [
+      {
+        level: 50,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Premature, value: 2_475 }],
+      },
+      {
+        level: 100,
+        ratios: [{ growthType: StudentCatalogStatGrowthType.Premature, value: 0 }],
+      },
+    ];
+
+    expect(() =>
+      interpolateEquipmentModifier(0, 1_000, 10, 5, StudentCatalogStatGrowthType.Premature, catalog),
+    ).toThrow("능력치 보간 종료 데이터의 성장 타입 값이 0이에요");
+  });
+
+  it("uses level-one equipment values when the equipment max level is one", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    catalog.equipment = [
+      {
+        uid: "hat-1",
+        category: "hat",
+        tier: 1,
+        maxLevel: 1,
+        growthType: StudentCatalogStatGrowthType.Standard,
+        name: "모자",
+        modifiers: [
+          {
+            stat: StudentCatalogStat.MaxHp,
+            kind: StudentCatalogStatModifierKind.Base,
+            level1: 123,
+            levelMax: 456,
+          },
+        ],
+      },
+    ];
+
+    const stats = calculateStudentStats(student, catalog, {
+      ...emptyState,
+      level: 90,
+      tier: 3,
+      equip1: 1,
+    });
+
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(223);
+  });
+
+  it("applies equipment slots only after their student-level unlocks", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = ["hat", "bag", "shoes"];
+    catalog.equipment = student.equipments.map((category) => ({
+      uid: `${category}-1`,
+      category,
+      tier: 1,
+      maxLevel: 1,
+      growthType: StudentCatalogStatGrowthType.Standard,
+      name: category,
+      modifiers: [
+        {
+          stat: StudentCatalogStat.MaxHp,
+          kind: StudentCatalogStatModifierKind.Base,
+          level1: 10,
+          levelMax: 10,
+        },
+      ],
+    }));
+
+    const state = { ...emptyState, tier: 3, equip1: 1, equip2: 1, equip3: 1 };
+    expect(
+      calculateStudentStats(student, catalog, { ...state, level: 9 }).find(({ stat }) => stat === "MAX_HP")?.value,
+    ).toBe(110);
+    expect(
+      calculateStudentStats(student, catalog, { ...state, level: 10 }).find(({ stat }) => stat === "MAX_HP")?.value,
+    ).toBe(120);
+    expect(
+      calculateStudentStats(student, catalog, { ...state, level: 19 }).find(({ stat }) => stat === "MAX_HP")?.value,
+    ).toBe(120);
+    expect(
+      calculateStudentStats(student, catalog, { ...state, level: 20 }).find(({ stat }) => stat === "MAX_HP")?.value,
+    ).toBe(130);
+  });
+
+  it("rounds final coefficient modifiers to the nearest integer", () => {
+    const student = createStudent();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = ["hat"];
+    const catalog = createCatalog();
+    catalog.equipment = [
+      {
+        uid: "hat-1",
+        category: "hat",
+        tier: 1,
+        maxLevel: 1,
+        growthType: StudentCatalogStatGrowthType.Standard,
+        name: "모자",
+        modifiers: [
+          {
+            stat: StudentCatalogStat.MaxHp,
+            kind: StudentCatalogStatModifierKind.Coefficient,
+            level1: 110,
+            levelMax: 110,
+          },
+        ],
+      },
+    ];
+
+    const stats = calculateStudentStats(student, catalog, { ...emptyState, level: 90, tier: 3 });
+
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(101);
+  });
+
+  it("applies ability release only at student level 90 with a unique weapon", () => {
+    const student = createStudent();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [{ stat: StudentCatalogStat.MaxHp, levels: [{ level: 25, rate: 1_000 }] }];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+
+    const state = { ...emptyState, tier: 6, abilityHp: 25 };
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...state, level: 89 }).find(({ stat }) => stat === "MAX_HP")
+        ?.value,
+    ).toBe(100);
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...state, level: 90 }).find(({ stat }) => stat === "MAX_HP")
+        ?.value,
+    ).toBe(110);
+  });
+
+  it("applies favorite-item modifiers only after the required bond rank", () => {
+    const student = createStudent();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.MaxHp, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    student.catalog.gear = {
+      name: "애용품",
+      description: null,
+      tiers: [
+        {
+          tier: 1,
+          openFavorLevel: 15,
+          maxLevel: 1,
+          growthType: StudentCatalogStatGrowthType.Standard,
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [
+            {
+              stat: StudentCatalogStat.MaxHp,
+              kind: StudentCatalogStatModifierKind.Base,
+              level1: 20,
+              levelMax: 20,
+            },
+          ],
+        },
+      ],
+    };
+
+    const state = { ...emptyState, level: 90, tier: 3, equipSpecial: 1 };
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...state, bond: 14 }).find(({ stat }) => stat === "MAX_HP")
+        ?.value,
+    ).toBe(100);
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...state, bond: 15 }).find(({ stat }) => stat === "MAX_HP")
+        ?.value,
+    ).toBe(120);
+  });
+
+  it("accumulates favorite-item modifiers through the selected tier", () => {
+    const student = createStudent();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.DefensePower, level1: 100, level100: 100 }];
+    student.catalog.statProfile.fixedStats = [];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    student.catalog.gear = {
+      name: "애용품",
+      description: null,
+      tiers: [
+        {
+          tier: 1,
+          openFavorLevel: 15,
+          maxLevel: 1,
+          growthType: StudentCatalogStatGrowthType.Standard,
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [
+            {
+              stat: StudentCatalogStat.DefensePower,
+              kind: StudentCatalogStatModifierKind.Base,
+              level1: 500,
+              levelMax: 500,
+            },
+          ],
+        },
+        {
+          tier: 2,
+          openFavorLevel: 20,
+          maxLevel: 1,
+          growthType: StudentCatalogStatGrowthType.Standard,
+          learnSkillSlot: StudentSkillTypeEnum.Public,
+          learnSkillPosition: 0,
+          modifiers: [],
+        },
+      ],
+    };
+
+    expect(
+      calculateStudentStats(student, createCatalog(), {
+        ...emptyState,
+        level: 90,
+        tier: 3,
+        bond: 20,
+        equipSpecial: 2,
+      }).find(({ stat }) => stat === StudentCatalogStat.DefensePower)?.value,
+    ).toBe(600);
   });
 
   it("adds favor bonuses from related outfits", () => {
@@ -92,7 +593,7 @@ describe("student calculator", () => {
     expect(stats.find(({ stat }) => stat === "MAX_HP")?.value).toBe(1_218);
   });
 
-  it("applies only unconditional permanent modifiers from the selected skill level", () => {
+  it("applies permanent passive-skill modifiers regardless of activation metadata", () => {
     const student = createStudent();
     if (!student.catalog) throw new Error("student catalog fixture is required");
     student.catalog.statProfile.levelStats = [
@@ -148,8 +649,78 @@ describe("student calculator", () => {
 
     const stats = calculateStudentStats(student, createCatalog(), emptyState);
 
-    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(12_664);
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(13_774);
     expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(414);
+  });
+
+  it.each([
+    StudentSkillModifierActivation.Conditional,
+    StudentSkillModifierActivation.Unconditional,
+  ])("does not apply %s passive-skill modifiers before the two-star unlock", (activation) => {
+    const student = createStudent();
+    student.initialTier = 1;
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    addSelectedPassiveSkill(student, [
+      {
+        stat: StudentCatalogStat.AttackPower,
+        kind: StudentCatalogStatModifierKind.Coefficient,
+        value: 2_660,
+        activation,
+        persistence: StudentSkillModifierPersistence.Permanent,
+      },
+    ]);
+
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 1 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(100);
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(127);
+  });
+
+  it("does not apply extra-passive modifiers before the three-star unlock", () => {
+    const student = createStudent();
+    student.initialTier = 1;
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.potentialBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    addSelectedPassiveSkill(
+      student,
+      [
+        {
+          stat: StudentCatalogStat.AttackPower,
+          kind: StudentCatalogStatModifierKind.Coefficient,
+          value: 2_660,
+          activation: StudentSkillModifierActivation.Unconditional,
+          persistence: StudentSkillModifierPersistence.Permanent,
+        },
+      ],
+      1,
+      StudentSkillTypeEnum.ExtraPassive,
+    );
+
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(100);
+    expect(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 3 }).find(
+        ({ stat }) => stat === StudentCatalogStat.AttackPower,
+      )?.value,
+    ).toBe(127);
   });
 
   it("matches SchaleDB's flat-then-coefficient stat breakdown", () => {
@@ -244,7 +815,7 @@ describe("student calculator", () => {
     });
 
     expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(7_221);
-    expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(353);
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(330);
   });
 
   it("selects the component-wise maximal skill configuration and renders its level", () => {
@@ -265,7 +836,7 @@ function createCatalog(): StudentCalculatorCatalog {
   return {
     version: "test",
     statLevelInterpolationEndLevel: 100,
-    statLevelInterpolations: [{ level: 90, ratios: [{ growthType: "STANDARD", value: 9_000 }] }],
+    statLevelInterpolations: createStandardInterpolationRows(),
     equipment: [
       {
         uid: "hat-1",
@@ -280,19 +851,72 @@ function createCatalog(): StudentCalculatorCatalog {
   } as unknown as StudentCalculatorCatalog;
 }
 
+function createStandardInterpolationRows() {
+  return Array.from({ length: 99 }, (_, index) => {
+    const level = index + 2;
+    return {
+      level,
+      ratios: [
+        {
+          growthType: StudentCatalogStatGrowthType.Standard,
+          value: level === 90 ? 9_000 : Math.round(((level - 1) * 10_000) / 99),
+        },
+      ],
+    };
+  });
+}
+
+function createGrowthRatios({
+  standard,
+  premature,
+  lateBloom,
+}: {
+  standard: number;
+  premature: number;
+  lateBloom: number;
+}) {
+  return [
+    { growthType: StudentCatalogStatGrowthType.Standard, value: standard },
+    { growthType: StudentCatalogStatGrowthType.Premature, value: premature },
+    { growthType: StudentCatalogStatGrowthType.LateBloom, value: lateBloom },
+  ];
+}
+
+function createGrowthCatalog(): StudentCalculatorCatalog {
+  return {
+    ...createCatalog(),
+    statLevelInterpolations: [
+      {
+        level: 50,
+        ratios: createGrowthRatios({ standard: 4_949, premature: 2_475, lateBloom: 7_425 }),
+      },
+      {
+        level: 60,
+        ratios: createGrowthRatios({ standard: 5_960, premature: 2_980, lateBloom: 8_939 }),
+      },
+      {
+        level: 100,
+        ratios: createGrowthRatios({ standard: 10_000, premature: 5_000, lateBloom: 15_000 }),
+      },
+    ],
+  } as unknown as StudentCalculatorCatalog;
+}
+
 function addSelectedPassiveSkill(
   student: StudentCalculatorSource,
   statModifiers: StudentCalculatorSource["skills"][number]["levels"][number]["statModifiers"],
   level = 1,
+  slot: StudentSkillTypeEnum = StudentSkillTypeEnum.Passive,
 ) {
   if (!student.catalog) throw new Error("student catalog fixture is required");
+  const skillUid = slot === StudentSkillTypeEnum.ExtraPassive ? "extra-passive" : "passive";
   student.catalog.skillConfigurations[0].slots.push({
-    slot: StudentSkillTypeEnum.Passive,
-    skills: [{ position: 0, skillUid: "passive" }],
+    slot,
+    skills: [{ position: 0, skillUid }],
   });
   student.skills.push({
-    uid: "passive",
-    skillType: StudentSkillTypeEnum.Passive,
+    uid: skillUid,
+    skillType: slot,
     name: "강화 스킬",
     iconUrl: null,
     maxLevel: 10,
