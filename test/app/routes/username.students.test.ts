@@ -39,11 +39,21 @@ jest.mock("~/models/student", () => ({
 }));
 
 jest.mock("~/components/features/students", () => ({
-  createStudentFilterState: jest.fn(),
   getFilteredStudentUids: jest.fn(),
   StudentCards: jest.fn(() => null),
   StudentFilter: jest.fn(() => null),
   TierSelector: jest.fn(() => null),
+  usePersistentStudentFilterState: jest.fn(() => [
+    {
+      attackTypes: [],
+      defenseTypes: [],
+      roles: [],
+      tacticRoles: [],
+      positions: [],
+      sort: "recent",
+    },
+    jest.fn(),
+  ]),
 }));
 
 jest.mock("~/components/primitives", () => ({

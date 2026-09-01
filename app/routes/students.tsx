@@ -80,7 +80,7 @@ export default function StudentsLayout() {
                     students={students}
                     state={filterState}
                     onStateChange={setFilterState}
-                    sortBy={["recent", "old", "name"]}
+                    sortBy={[...STUDENT_FILTER_SORTS]}
                     useFilter
                     useSearch
                   />

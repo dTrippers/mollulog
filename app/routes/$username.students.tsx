@@ -295,7 +295,7 @@ export default function UserPage() {
           onStateChange={setFilterState}
           useFilter
           useSearch
-          sortBy={["recent", "old", "name", "tier"]}
+          sortBy={[...USER_STUDENT_FILTER_SORTS]}
         />
       ),
     });
