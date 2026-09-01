@@ -1,3 +1,4 @@
+import { EQUIPMENT_LEVEL_MAX_LEVEL } from "~/domain/student-growth-state";
 import type {
   StudentCatalogStat,
   StudentCatalogStatGrowthType,
@@ -13,7 +14,6 @@ export type StudentCalculatorSource = Pick<
 >;
 export type StudentCalculatorCatalog = NonNullable<StudentDetailQuery["studentCatalog"]>;
 
-export const EQUIPMENT_LEVEL_MAX_LEVEL = 70;
 export const EQUIPMENT_SLOT_UNLOCK_LEVELS = [1, 15, 35] as const;
 
 export type StudentCalculatorState = {

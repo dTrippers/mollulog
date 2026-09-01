@@ -1,9 +1,8 @@
 import type { StudentCalculatorState } from "./student-calculator";
+import { EQUIPMENT_LEVEL_MAX_LEVEL } from "./student-growth-state";
 
 const STUDENT_GROWTH_DRAFT_VERSION = 1;
 const STUDENT_GROWTH_DRAFT_STORAGE_PREFIX = "mollulog:student-growth-draft";
-const EQUIPMENT_LEVEL_MAX_LEVEL = 70;
-
 const stateRanges = {
   level: { min: 1, max: 90 },
   tier: { min: 1, max: 9 },

@@ -6,6 +6,7 @@ import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
+  EQUIPMENT_LEVEL_MAX_LEVEL,
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
@@ -13,7 +14,6 @@ import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_IN_QUERY_CHUNK_SIZE = 500;
 export const MAX_RECRUITED_STUDENT_BATCH_SIZE = 500;
-const EQUIPMENT_LEVEL_MAX_LEVEL = 70;
 type RecruitedStudentsDb = NodePgDatabase;
 export type RecruitedStudentsTransaction = Pick<RecruitedStudentsDb, "insert">;
 
