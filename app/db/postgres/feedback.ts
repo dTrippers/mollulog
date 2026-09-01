@@ -54,7 +54,10 @@ const ticketSelection = {
   updatedAt: pgFeedbackTicketsTable.updatedAt,
 };
 
-type UserFeedbackTicketRow = Omit<typeof pgFeedbackTicketsTable.$inferSelect, "additional">;
+type UserFeedbackTicketRow = Omit<
+  typeof pgFeedbackTicketsTable.$inferSelect,
+  "additional" | "operatorNotificationSentAt" | "tag" | "linearIssueUrl"
+>;
 
 function toUtcIso(value: Date | string): UtcIsoString {
   return normalizeInstant(value instanceof Date ? value.toISOString() : value);

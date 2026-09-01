@@ -3,7 +3,6 @@ interface Env {
   KV_SESSION: KVNamespace;
   HYPERDRIVE: Hyperdrive;
   CACHE_REFRESH_WORKFLOW: Workflow<{ requestedBy: number }>;
-  EVENTS?: Queue;
   OCR_TASKS?: Queue<OcrTaskMessage>;
   DISCORD_NOTIFICATIONS_QUEUE?: Queue<DiscordConnectionRequestQueueMessage>;
   OCR_UPLOADS: R2Bucket;
