@@ -17,6 +17,7 @@ import {
   TierSelector,
   usePersistentStudentFilterState,
 } from "~/components/features/students";
+import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { Button, SubTitle, Toggle } from "~/components/primitives";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
@@ -31,8 +32,16 @@ import {
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 
-const USER_STUDENT_FILTER_STORAGE_KEY = "mollulog::user-students::view-settings";
-const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
+export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
+export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+const userStudentFilterCookieOptions = {
+  cookieName: USER_STUDENT_FILTER_COOKIE_NAME,
+  cookiePath: USER_STUDENT_FILTER_COOKIE_PATH,
+  defaultSort: "recent",
+  allowedSorts: USER_STUDENT_FILTER_SORTS,
+} as const;
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -52,6 +61,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     me: currentUser?.username === sensei.username,
     noRecruited: recruitedStudents.length === 0,
+    filterState: readStudentFilterStateFromCookie(request.headers.get("Cookie"), userStudentFilterCookieOptions),
     students: allStudents.map((student) => ({
       uid: student.uid,
       name: student.name,
@@ -258,12 +268,11 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const { me, noRecruited, students } = loaderData;
+  const { filterState: initialFilterState, me, noRecruited, students } = loaderData;
 
   const [filterState, setFilterState] = usePersistentStudentFilterState({
-    storageKey: USER_STUDENT_FILTER_STORAGE_KEY,
-    defaultSort: "recent",
-    allowedSorts: USER_STUDENT_FILTER_SORTS,
+    ...userStudentFilterCookieOptions,
+    initialState: initialFilterState,
   });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);

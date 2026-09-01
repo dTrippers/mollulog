@@ -1,58 +1,76 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
 import { createStudentFilterState, type StudentFilterState } from "~/components/features/students/StudentFilter";
 import {
+  MAX_STUDENT_FILTER_COOKIE_SIZE,
   normalizeStudentFilterState,
-  type PersistentStudentFilterStateOptions,
-  readStudentFilterState,
-  writeStudentFilterState,
-} from "~/components/features/students/usePersistentStudentFilterState";
+  readStudentFilterStateFromCookie,
+  STUDENT_FILTER_COOKIE_MAX_AGE,
+  serializeStudentFilterStateCookie,
+  writeStudentFilterStateCookie,
+} from "~/components/features/students/student-filter-cookie";
+import type { PersistentStudentFilterStateOptions } from "~/components/features/students/usePersistentStudentFilterState";
 import { Attack, Defense } from "~/graphql/graphql";
 
 const generalOptions: PersistentStudentFilterStateOptions = {
-  storageKey: "mollulog::students::view-settings",
+  cookieName: "mollulog_students_filter",
+  cookiePath: "/students",
   defaultSort: "recent",
   allowedSorts: ["recent", "old", "name"],
 };
 
 const userOptions: PersistentStudentFilterStateOptions = {
-  storageKey: "mollulog::user-students::view-settings",
+  cookieName: "mollulog_user_students_filter",
+  cookiePath: "/",
   defaultSort: "recent",
   allowedSorts: ["recent", "old", "name", "tier"],
 };
 
-function createStorage(initial: Record<string, string> = {}) {
-  const values = new Map(Object.entries(initial));
-  const getItem = jest.fn((key: string) => values.get(key) ?? null);
-  const setItem = jest.fn((key: string, value: string) => {
-    values.set(key, value);
-  });
-
-  return {
-    storage: { getItem, setItem } as unknown as Storage,
-    getItem,
-    setItem,
-  };
+function cookieHeader(options: PersistentStudentFilterStateOptions, state: StudentFilterState): string {
+  const value = serializeStudentFilterStateCookie(options, state);
+  expect(value).not.toBeNull();
+  return `${options.cookieName}=${value}`;
 }
 
-let localStorageDescriptor: PropertyDescriptor | undefined;
+let documentDescriptor: PropertyDescriptor | undefined;
+let locationDescriptor: PropertyDescriptor | undefined;
 
 beforeEach(() => {
-  localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  documentDescriptor = Object.getOwnPropertyDescriptor(globalThis, "document");
+  locationDescriptor = Object.getOwnPropertyDescriptor(globalThis, "location");
 });
 
 afterEach(() => {
-  if (localStorageDescriptor) {
-    Object.defineProperty(globalThis, "localStorage", localStorageDescriptor);
+  if (documentDescriptor) {
+    Object.defineProperty(globalThis, "document", documentDescriptor);
   } else {
-    Reflect.deleteProperty(globalThis, "localStorage");
+    Reflect.deleteProperty(globalThis, "document");
+  }
+
+  if (locationDescriptor) {
+    Object.defineProperty(globalThis, "location", locationDescriptor);
+  } else {
+    Reflect.deleteProperty(globalThis, "location");
   }
 });
 
-function installStorage(storage: Storage) {
-  Object.defineProperty(globalThis, "localStorage", {
+function installBrowser(protocol = "http:") {
+  let cookie = "";
+  Object.defineProperty(globalThis, "document", {
     configurable: true,
-    value: storage,
+    value: {
+      get cookie() {
+        return cookie;
+      },
+      set cookie(value: string) {
+        cookie = value;
+      },
+    },
   });
+  Object.defineProperty(globalThis, "location", {
+    configurable: true,
+    value: { protocol },
+  });
+  return () => cookie;
 }
 
 describe("persistent student filter state", () => {
@@ -79,22 +97,17 @@ describe("persistent student filter state", () => {
     });
   });
 
-  it("falls back to the screen default for an unsupported sort", () => {
+  it("falls back to the screen default for an unsupported sort and ignores search", () => {
     const normalized = normalizeStudentFilterState({ sort: "tier", search: "아루" }, generalOptions);
 
-    expect(normalized).toEqual({
-      ...createStudentFilterState("recent"),
-      search: "아루",
-    });
+    expect(normalized).toEqual(createStudentFilterState("recent"));
   });
 
   it("accepts tier sorting on the user student screen", () => {
     expect(normalizeStudentFilterState({ sort: "tier" }, userOptions)).toEqual(createStudentFilterState("tier"));
   });
 
-  it("keeps general and user student preferences under independent keys", () => {
-    const storage = createStorage();
-    installStorage(storage.storage);
+  it("keeps general and user student preferences in independent cookies", () => {
     const generalState: StudentFilterState = {
       ...createStudentFilterState("name"),
       attackTypes: [Attack.Explosive],
@@ -106,42 +119,73 @@ describe("persistent student filter state", () => {
       search: "시로코",
     };
 
-    writeStudentFilterState(generalOptions, generalState);
-    writeStudentFilterState(userOptions, userState);
-
-    expect(readStudentFilterState(generalOptions)).toEqual(generalState);
-    expect(readStudentFilterState(userOptions)).toEqual(userState);
-    expect(storage.setItem).toHaveBeenCalledTimes(2);
+    expect(readStudentFilterStateFromCookie(cookieHeader(generalOptions, generalState), generalOptions)).toEqual({
+      ...createStudentFilterState("name"),
+      attackTypes: [Attack.Explosive],
+    });
+    expect(readStudentFilterStateFromCookie(cookieHeader(userOptions, userState), userOptions)).toEqual({
+      ...createStudentFilterState("tier"),
+      defenseTypes: [Defense.Heavy],
+    });
+    expect(readStudentFilterStateFromCookie(cookieHeader(generalOptions, generalState), userOptions)).toEqual(
+      createStudentFilterState("recent"),
+    );
   });
 
-  it("does not persist route-local batch state", () => {
-    const storage = createStorage();
-    installStorage(storage.storage);
+  it("serializes only supported filters and sort, excluding search and route-local state", () => {
     const state = {
       ...createStudentFilterState("recent"),
+      search: "아루",
       batchAddMode: true,
       batchAddStudentUids: ["student-1"],
     } as StudentFilterState & { batchAddMode: boolean; batchAddStudentUids: string[] };
+    const serialized = serializeStudentFilterStateCookie(generalOptions, state);
 
-    writeStudentFilterState(generalOptions, state);
-
-    expect(JSON.parse(storage.setItem.mock.calls[0]?.[1] ?? "{}")).toEqual(createStudentFilterState("recent"));
+    expect(serialized).not.toBeNull();
+    expect(JSON.parse(decodeURIComponent(serialized as string))).toEqual(createStudentFilterState("recent"));
   });
 
-  it("falls back to defaults and keeps working when storage is malformed or unavailable", () => {
-    const storage = createStorage({ [generalOptions.storageKey]: "not-json" });
-    installStorage(storage.storage);
+  it("falls back to defaults for malformed, unknown, oversized, missing, or unavailable cookies", () => {
+    const defaults = createStudentFilterState("recent");
+    const unknownState = encodeURIComponent(JSON.stringify({ unknown: "value" }));
+    const oversizedValue = "x".repeat(MAX_STUDENT_FILTER_COOKIE_SIZE + 1);
 
-    expect(readStudentFilterState(generalOptions)).toEqual(createStudentFilterState("recent"));
+    expect(readStudentFilterStateFromCookie(`${generalOptions.cookieName}=not-json`, generalOptions)).toEqual(defaults);
+    expect(readStudentFilterStateFromCookie(`${generalOptions.cookieName}=%`, generalOptions)).toEqual(defaults);
+    expect(readStudentFilterStateFromCookie(`${generalOptions.cookieName}=${unknownState}`, generalOptions)).toEqual(
+      defaults,
+    );
+    expect(readStudentFilterStateFromCookie(`${generalOptions.cookieName}=${oversizedValue}`, generalOptions)).toEqual(
+      defaults,
+    );
+    expect(readStudentFilterStateFromCookie(null, generalOptions)).toEqual(defaults);
+    expect(() => writeStudentFilterStateCookie(generalOptions, defaults)).not.toThrow();
 
-    Object.defineProperty(globalThis, "localStorage", {
+    Object.defineProperty(globalThis, "document", {
       configurable: true,
       get() {
-        throw new Error("storage unavailable");
+        throw new Error("cookies unavailable");
       },
     });
+    expect(() => writeStudentFilterStateCookie(generalOptions, defaults)).not.toThrow();
+  });
 
-    expect(readStudentFilterState(generalOptions)).toEqual(createStudentFilterState("recent"));
-    expect(() => writeStudentFilterState(generalOptions, createStudentFilterState("recent"))).not.toThrow();
+  it("writes the cookie synchronously with local-development-safe attributes", () => {
+    const getCookie = installBrowser();
+    writeStudentFilterStateCookie(generalOptions, createStudentFilterState("old"));
+
+    expect(getCookie()).toContain(`${generalOptions.cookieName}=`);
+    expect(getCookie()).toContain("Path=/students");
+    expect(getCookie()).toContain(`Max-Age=${STUDENT_FILTER_COOKIE_MAX_AGE}`);
+    expect(getCookie()).toContain("SameSite=Lax");
+    expect(getCookie()).not.toContain("Secure");
+  });
+
+  it("adds Secure only when the browser is using HTTPS", () => {
+    const getCookie = installBrowser("https:");
+    writeStudentFilterStateCookie(userOptions, createStudentFilterState("tier"));
+
+    expect(getCookie()).toContain("Path=/");
+    expect(getCookie()).toContain("SameSite=Lax; Secure");
   });
 });

@@ -43,7 +43,7 @@ describe("student filter", () => {
     expect(getFilteredStudentUids(updatedStudents, filterState)).toEqual(["explosive-student"]);
   });
 
-  it("applies a restored search value to the filtered student list", () => {
+  it("filters the student list by search value", () => {
     const filterState: StudentFilterState = {
       ...createStudentFilterState("recent"),
       search: "아루",

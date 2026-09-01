@@ -4,20 +4,31 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
 import { getFilteredStudentUids, StudentFilter, usePersistentStudentFilterState } from "~/components/features/students";
+import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
 
-const STUDENT_FILTER_STORAGE_KEY = "mollulog::students::view-settings";
-const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
+export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
+export const STUDENT_FILTER_COOKIE_PATH = "/students";
+export const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
+
+const studentFilterCookieOptions = {
+  cookieName: STUDENT_FILTER_COOKIE_NAME,
+  cookiePath: STUDENT_FILTER_COOKIE_PATH,
+  defaultSort: "recent",
+  allowedSorts: STUDENT_FILTER_SORTS,
+} as const;
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
   const needsStudentList = pathname === "/students";
+  const filterState = readStudentFilterStateFromCookie(request.headers.get("Cookie"), studentFilterCookieOptions);
 
   if (!needsStudentList) {
     return {
       students: [],
+      filterState,
     };
   }
 
@@ -25,6 +36,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const allStudents = await getAllStudents(env, true);
   return {
     students: allStudents.sort((a, b) => b.order - a.order),
+    filterState,
   };
 };
 
@@ -43,14 +55,13 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export default function StudentsLayout() {
-  const { students } = useLoaderData<typeof loader>();
+  const { filterState: initialFilterState, students } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [filterState, setFilterState] = usePersistentStudentFilterState({
-    storageKey: STUDENT_FILTER_STORAGE_KEY,
-    defaultSort: "recent",
-    allowedSorts: STUDENT_FILTER_SORTS,
+    ...studentFilterCookieOptions,
+    initialState: initialFilterState,
   });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const filteredStudents = useMemo(() => {
