@@ -2,6 +2,7 @@ import {
   ArrowTopRightOnSquareIcon,
   ArrowTrendingUpIcon,
   HeartIcon,
+  LockClosedIcon,
   SparklesIcon,
   StarIcon,
 } from "@heroicons/react/24/outline";
@@ -464,50 +465,62 @@ export default function StudentBasicInfo({
                     ) : (
                       <div className="size-11" aria-hidden="true" />
                     )}
-                    <div className="pointer-events-none absolute inset-x-1.5 bottom-1 flex min-w-0 items-center justify-between gap-1">
-                      <span className="truncate rounded-sm bg-card/90 px-1.5 py-0.5 text-[10px] font-medium shadow-sm ring-1 ring-border/40">
+                    {locked ? (
+                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/50 pb-3 text-foreground/80">
+                        <LockClosedIcon className="size-4" aria-hidden="true" />
+                      </div>
+                    ) : null}
+                    <div className="pointer-events-none absolute bottom-1 left-1.5 z-20">
+                      <span className="shrink-0 whitespace-nowrap rounded-sm bg-card/90 px-1.5 py-0.5 text-[10px] font-medium shadow-sm ring-1 ring-border/40">
                         {equipmentLabel}
                       </span>
-                      <strong className="shrink-0 rounded-sm bg-primary px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-primary-foreground shadow-sm">
-                        T{resolved[key]}
-                      </strong>
                     </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <LevelSlider
-                      label={equipmentLabel}
-                      value={resolved[key]}
-                      valuePrefix="T"
-                      min={1}
-                      max={maxTier}
-                      showHeader={false}
-                      disabled={locked}
-                      onChange={(value) => {
-                        const equipmentLevelMax = getEquipmentMaxLevel(catalog, category, value);
-                        setSaved(false);
-                        setState((current) => ({
-                          ...current,
-                          [key]: value,
-                          [levelKey]: equipmentLevelMax,
-                        }));
-                      }}
-                    />
-                    <LevelSlider
-                      label={`${equipmentLabel} 레벨`}
-                      value={resolved[levelKey]}
-                      valuePrefix="Lv."
-                      min={1}
-                      max={selectedEquipment?.maxLevel ?? 1}
-                      showHeader
-                      disabled={locked || selectedEquipment === undefined}
-                      onChange={(value) => updateState(levelKey, value)}
-                    />
-                    {locked ? (
-                      <span className="block text-center text-[10px] font-medium text-muted-foreground">
-                        학생 Lv.{unlockLevel}부터 적용
-                      </span>
+                    {!locked ? (
+                      <strong className="pointer-events-none absolute right-1 bottom-1 z-20 flex shrink-0 flex-col items-center rounded-sm bg-primary px-1 py-0.5 text-[9px] leading-2.5 font-semibold tabular-nums text-primary-foreground shadow-sm">
+                        <span>T{resolved[key]}</span>
+                        <span>Lv.{resolved[levelKey]}</span>
+                      </strong>
                     ) : null}
                   </div>
+                  {locked ? (
+                    <span className="mt-2 block text-center text-[10px] leading-3 font-medium text-muted-foreground">
+                      학생 Lv.{unlockLevel} 필요
+                    </span>
+                  ) : (
+                    <div className="space-y-1">
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-0.5">
+                        <span className="text-[10px] font-medium text-muted-foreground">티어</span>
+                        <LevelSlider
+                          label={`${equipmentLabel} 티어`}
+                          value={resolved[key]}
+                          min={1}
+                          max={maxTier}
+                          showHeader={false}
+                          onChange={(value) => {
+                            const equipmentLevelMax = getEquipmentMaxLevel(catalog, category, value);
+                            setSaved(false);
+                            setState((current) => ({
+                              ...current,
+                              [key]: value,
+                              [levelKey]: equipmentLevelMax,
+                            }));
+                          }}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-0.5">
+                        <span className="text-[10px] font-medium text-muted-foreground">레벨</span>
+                        <LevelSlider
+                          label={`${equipmentLabel} 레벨`}
+                          value={resolved[levelKey]}
+                          min={1}
+                          max={selectedEquipment?.maxLevel ?? 1}
+                          showHeader={false}
+                          disabled={selectedEquipment === undefined}
+                          onChange={(value) => updateState(levelKey, value)}
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

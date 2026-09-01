@@ -14,7 +14,7 @@ export type StudentCalculatorSource = Pick<
 >;
 export type StudentCalculatorCatalog = NonNullable<StudentDetailQuery["studentCatalog"]>;
 
-export const EQUIPMENT_SLOT_UNLOCK_LEVELS = [1, 15, 35] as const;
+export const EQUIPMENT_SLOT_UNLOCK_LEVELS = [1, 10, 20] as const;
 
 export type StudentCalculatorState = {
   level: number | null;

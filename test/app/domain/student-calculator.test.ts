@@ -416,16 +416,16 @@ describe("student calculator", () => {
 
     const state = { ...emptyState, tier: 3, equip1: 1, equip2: 1, equip3: 1 };
     expect(
-      calculateStudentStats(student, catalog, { ...state, level: 14 }).find(({ stat }) => stat === "MAX_HP")?.value,
+      calculateStudentStats(student, catalog, { ...state, level: 9 }).find(({ stat }) => stat === "MAX_HP")?.value,
     ).toBe(110);
     expect(
-      calculateStudentStats(student, catalog, { ...state, level: 15 }).find(({ stat }) => stat === "MAX_HP")?.value,
+      calculateStudentStats(student, catalog, { ...state, level: 10 }).find(({ stat }) => stat === "MAX_HP")?.value,
     ).toBe(120);
     expect(
-      calculateStudentStats(student, catalog, { ...state, level: 34 }).find(({ stat }) => stat === "MAX_HP")?.value,
+      calculateStudentStats(student, catalog, { ...state, level: 19 }).find(({ stat }) => stat === "MAX_HP")?.value,
     ).toBe(120);
     expect(
-      calculateStudentStats(student, catalog, { ...state, level: 35 }).find(({ stat }) => stat === "MAX_HP")?.value,
+      calculateStudentStats(student, catalog, { ...state, level: 20 }).find(({ stat }) => stat === "MAX_HP")?.value,
     ).toBe(130);
   });
 
