@@ -198,25 +198,28 @@ export function calculateStudentStats(
           modifier.levelMax,
           equipment.maxLevel,
           equipmentLevels[index] ?? equipment.maxLevel,
+          equipment.growthType,
+          catalog,
         ),
       })),
     );
   });
 
   if (student.catalog.gear && state.equipSpecial > 0) {
-    const selectedGearTier = student.catalog.gear.tiers.find((tier) => tier.tier === state.equipSpecial);
-    if (selectedGearTier && state.bond >= selectedGearTier.openFavorLevel) {
+    for (const gearTier of getActiveGearTiers(student.catalog.gear, state.equipSpecial, state.bond)) {
       applyModifiers(
         stats,
         coefficientRates,
-        selectedGearTier.modifiers.map((modifier) => ({
+        gearTier.modifiers.map((modifier) => ({
           stat: modifier.stat,
           kind: modifier.kind,
           value: interpolateEquipmentModifier(
             modifier.level1,
             modifier.levelMax,
-            selectedGearTier.maxLevel,
-            selectedGearTier.maxLevel,
+            gearTier.maxLevel,
+            gearTier.maxLevel,
+            gearTier.growthType,
+            catalog,
           ),
         })),
       );
@@ -261,8 +264,9 @@ export function calculateStudentStats(
     (skill.levels.find((level) => level.level === skill.selectedLevel)?.statModifiers ?? [])
       .filter(
         (modifier) =>
-          modifier.activation === StudentSkillModifierActivation.Unconditional &&
-          modifier.persistence === StudentSkillModifierPersistence.Permanent,
+          modifier.persistence === StudentSkillModifierPersistence.Permanent &&
+          ((skill.slot === "passive" && state.tier >= 2) ||
+            modifier.activation === StudentSkillModifierActivation.Unconditional),
       )
       .map((modifier) => ({ stat: modifier.stat, kind: modifier.kind, value: modifier.value })),
   );
@@ -279,11 +283,9 @@ export function selectStudentSkills(
 ): SelectedStudentSkill[] {
   if (!student.catalog) return [];
   const state = resolveStudentCalculatorState(student, input);
-  const selectedGearTier = student.catalog.gear?.tiers.find((tier) => tier.tier === state.equipSpecial);
-  const gearTier =
-    !student.catalog.gear || (selectedGearTier && state.bond >= selectedGearTier.openFavorLevel)
-      ? state.equipSpecial
-      : 0;
+  const gearTier = student.catalog.gear
+    ? Math.max(0, ...getActiveGearTiers(student.catalog.gear, state.equipSpecial, state.bond).map((tier) => tier.tier))
+    : state.equipSpecial;
   const candidates = student.catalog.skillConfigurations.filter(
     (configuration) =>
       configuration.formIndex === formIndex &&
@@ -377,10 +379,40 @@ function interpolateLevelStat(
   catalog: StudentCalculatorCatalog,
 ): number {
   if (level <= 1) return level1;
+  const ratio = getGrowthRatio(catalog, growthType, level);
+  return level1 + roundAwayFromZero((level100 - level1) * ratio);
+}
+
+function getGrowthRatio(
+  catalog: StudentCalculatorCatalog,
+  growthType: StudentCatalogStatGrowthType,
+  level: number,
+): number {
   const interpolation = catalog.statLevelInterpolations.find((row) => row.level === level);
-  const ratio = interpolation?.ratios.find((candidate) => candidate.growthType === growthType)?.value;
-  if (ratio == null) return level1;
-  return level1 + roundAwayFromZero(((level100 - level1) * ratio) / 10_000);
+  if (!interpolation) {
+    throw new Error(`능력치 보간 데이터가 레벨 ${level}에 없어요`);
+  }
+
+  const endLevel = catalog.statLevelInterpolationEndLevel;
+  const endInterpolation = catalog.statLevelInterpolations.find((row) => row.level === endLevel);
+  if (!endInterpolation) {
+    throw new Error(`능력치 보간 종료 데이터가 레벨 ${endLevel}에 없어요`);
+  }
+
+  const ratio = interpolation.ratios.find((candidate) => candidate.growthType === growthType)?.value;
+  if (ratio == null) {
+    throw new Error(`능력치 보간 데이터의 성장 타입 값이 레벨 ${level}에 없어요`);
+  }
+
+  const endRatio = endInterpolation.ratios.find((candidate) => candidate.growthType === growthType)?.value;
+  if (endRatio == null) {
+    throw new Error(`능력치 보간 종료 데이터의 성장 타입 값이 레벨 ${endLevel}에 없어요`);
+  }
+  if (endRatio === 0) {
+    throw new Error(`능력치 보간 종료 데이터의 성장 타입 값이 0이에요`);
+  }
+
+  return ratio / endRatio;
 }
 
 export function getEquipmentMaxLevel(catalog: StudentCalculatorCatalog, category: string, tier: number): number | null {
@@ -429,11 +461,21 @@ export function interpolateEquipmentModifier(
   levelMax: number,
   maxLevel: number,
   level: number,
+  growthType: StudentCatalogStatGrowthType,
+  catalog: StudentCalculatorCatalog,
 ): number {
-  if (maxLevel <= 1) return Math.round(Number(level1.toFixed(4)));
-  const ratio = parseFloat(((level - 1) / (maxLevel - 1)).toFixed(4));
-  const raw = Number((level1 + (levelMax - level1) * ratio).toFixed(4));
-  return Math.round(raw);
+  if (level <= 1 || maxLevel <= 1) return roundAwayFromZero(level1);
+  const interpolationLevel = roundAwayFromZero((catalog.statLevelInterpolationEndLevel * level) / maxLevel);
+  const ratio = getGrowthRatio(catalog, growthType, interpolationLevel);
+  return level1 + roundAwayFromZero((levelMax - level1) * ratio);
+}
+
+function getActiveGearTiers(
+  gear: NonNullable<NonNullable<StudentCalculatorSource["catalog"]>["gear"]>,
+  selectedTier: number,
+  bond: number,
+) {
+  return gear.tiers.filter((tier) => tier.tier <= selectedTier && tier.openFavorLevel <= bond);
 }
 
 function applyModifiers(
