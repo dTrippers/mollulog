@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import hangul from "hangul-js";
 import { useCallback, useEffect, useState } from "react";
-import { PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
+import { Button, PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
 import { Attack, Defense } from "~/graphql/graphql";
 import { defenseTypeShortLocale } from "~/locales/ko";
 import type { Position, Role, TacticRole } from "~/models/content.d";
@@ -95,6 +95,24 @@ export function createStudentFilterState(sort: SortBy = "recent"): StudentFilter
     tacticRoles: [],
     positions: [],
     sort,
+  };
+}
+
+export function hasActiveStudentFilters(state: StudentFilterState): boolean {
+  return Boolean(
+    state.search ||
+      state.attackTypes.length ||
+      state.defenseTypes.length ||
+      state.roles.length ||
+      state.tacticRoles.length ||
+      state.positions.length,
+  );
+}
+
+export function clearStudentFilters(state: StudentFilterState): StudentFilterState {
+  return {
+    ...createStudentFilterState(state.sort),
+    search: "",
   };
 }
 
@@ -253,6 +271,16 @@ export default function StudentFilter({
           size="sm"
         />
       )}
+      {hasActiveStudentFilters(state) ? (
+        <div className="flex justify-end pt-1">
+          <Button
+            text="필터 해제"
+            size="xs"
+            variant="danger-subtle"
+            onClick={() => setFilterState(clearStudentFilters)}
+          />
+        </div>
+      ) : null}
     </PanelBody>
   );
 }

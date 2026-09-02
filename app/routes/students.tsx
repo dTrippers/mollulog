@@ -9,7 +9,7 @@ import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
 
 export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
-export const STUDENT_FILTER_COOKIE_PATH = "/students";
+export const STUDENT_FILTER_COOKIE_PATH = "/";
 export const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
 
 const studentFilterCookieOptions = {
@@ -85,6 +85,7 @@ export default function StudentsLayout() {
           ? [
               {
                 title: "필터 및 정렬",
+                description: `${students.length}명 중 ${filteredStudents.length}명 표시 중`,
                 Icon: FunnelIcon,
                 children: (
                   <StudentFilter

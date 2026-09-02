@@ -33,7 +33,7 @@ import { Attack } from "~/graphql/graphql";
 
 const options: PersistentStudentFilterStateOptions = {
   cookieName: "mollulog_students_filter",
-  cookiePath: "/students",
+  cookiePath: "/",
   defaultSort: "recent",
   allowedSorts: ["recent", "old", "name"],
 };

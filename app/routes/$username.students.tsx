@@ -295,7 +295,7 @@ export default function UserPage() {
   useEffect(() => {
     setPanel({
       title: "필터 및 정렬",
-      description: "학생을 필터링하고 정렬할 수 있어요.",
+      description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
       Icon: FunnelIcon,
       children: (
         <StudentFilter
@@ -308,7 +308,7 @@ export default function UserPage() {
         />
       ),
     });
-  }, [filterState, students, setPanel, setFilterState]);
+  }, [filterState, students, setPanel, setFilterState, filteredUids.length]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

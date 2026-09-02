@@ -13,7 +13,7 @@ import { Attack, Defense } from "~/graphql/graphql";
 
 const generalOptions: PersistentStudentFilterStateOptions = {
   cookieName: "mollulog_students_filter",
-  cookiePath: "/students",
+  cookiePath: "/",
   defaultSort: "recent",
   allowedSorts: ["recent", "old", "name"],
 };
@@ -175,7 +175,7 @@ describe("persistent student filter state", () => {
     writeStudentFilterStateCookie(generalOptions, createStudentFilterState("old"));
 
     expect(getCookie()).toContain(`${generalOptions.cookieName}=`);
-    expect(getCookie()).toContain("Path=/students");
+    expect(getCookie()).toContain("Path=/");
     expect(getCookie()).toContain(`Max-Age=${STUDENT_FILTER_COOKIE_MAX_AGE}`);
     expect(getCookie()).toContain("SameSite=Lax");
     expect(getCookie()).not.toContain("Secure");

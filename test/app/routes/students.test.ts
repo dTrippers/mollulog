@@ -3,7 +3,12 @@ import { createStudentFilterState } from "~/components/features/students/Student
 import { serializeStudentFilterStateCookie } from "~/components/features/students/student-filter-cookie";
 import { Attack, Defense } from "~/graphql/graphql";
 import { getAllStudents } from "~/models/student";
-import { loader, STUDENT_FILTER_COOKIE_NAME, STUDENT_FILTER_SORTS } from "~/routes/students";
+import {
+  loader,
+  STUDENT_FILTER_COOKIE_NAME,
+  STUDENT_FILTER_COOKIE_PATH,
+  STUDENT_FILTER_SORTS,
+} from "~/routes/students";
 
 jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
@@ -28,6 +33,10 @@ beforeEach(() => {
 });
 
 describe("students loader", () => {
+  it("scopes the filter cookie to client-navigation data requests", () => {
+    expect(STUDENT_FILTER_COOKIE_PATH).toBe("/");
+  });
+
   it("seeds the first render from the general student filter cookie", async () => {
     const state = {
       ...createStudentFilterState("name"),
