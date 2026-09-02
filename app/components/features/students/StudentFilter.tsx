@@ -8,7 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import hangul from "hangul-js";
 import { useCallback, useEffect, useState } from "react";
-import { PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
+import { Button, PanelBody, PanelFilterButtonRow, PanelSearchField } from "~/components/primitives";
 import { Attack, Defense } from "~/graphql/graphql";
 import { defenseTypeShortLocale } from "~/locales/ko";
 import type { Position, Role, TacticRole } from "~/models/content.d";
@@ -72,6 +72,14 @@ const tacticRoleFilterOptions = [
   { text: "T.S.", value: "tactical_support" as const },
 ];
 
+export const STUDENT_FILTER_OPTION_VALUES = {
+  attackTypes: attackFilterOptions.map(({ value }) => value),
+  defenseTypes: defenseFilterOptions.map(({ value }) => value),
+  roles: roleFilterOptions.map(({ value }) => value),
+  positions: positionFilterOptions.map(({ value }) => value),
+  tacticRoles: tacticRoleFilterOptions.map(({ value }) => value),
+} as const;
+
 const sortFilterOptions: Record<SortBy, string> = {
   recent: "최신순",
   old: "과거순",
@@ -87,6 +95,24 @@ export function createStudentFilterState(sort: SortBy = "recent"): StudentFilter
     tacticRoles: [],
     positions: [],
     sort,
+  };
+}
+
+export function hasActiveStudentFilters(state: StudentFilterState): boolean {
+  return Boolean(
+    state.search ||
+      state.attackTypes.length ||
+      state.defenseTypes.length ||
+      state.roles.length ||
+      state.tacticRoles.length ||
+      state.positions.length,
+  );
+}
+
+export function clearStudentFilters(state: StudentFilterState): StudentFilterState {
+  return {
+    ...createStudentFilterState(state.sort),
+    search: "",
   };
 }
 
@@ -121,7 +147,13 @@ export default function StudentFilter({
     [controlledState, onStateChange, state],
   );
 
-  const [localSearch, setLocalSearch] = useState("");
+  const controlledSearch = controlledState?.search;
+  const isControlled = controlledState !== undefined;
+  const [localSearch, setLocalSearch] = useState(() => controlledSearch ?? "");
+
+  useEffect(() => {
+    setLocalSearch(isControlled ? (controlledSearch ?? "") : "");
+  }, [controlledSearch, isControlled]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -239,6 +271,16 @@ export default function StudentFilter({
           size="sm"
         />
       )}
+      {hasActiveStudentFilters(state) ? (
+        <div className="flex justify-end pt-1">
+          <Button
+            text="필터 해제"
+            size="xs"
+            variant="danger-subtle"
+            onClick={() => setFilterState(clearStudentFilters)}
+          />
+        </div>
+      ) : null}
     </PanelBody>
   );
 }

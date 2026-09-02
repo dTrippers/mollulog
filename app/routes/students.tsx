@@ -1,20 +1,34 @@
 import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
-import { createStudentFilterState, getFilteredStudentUids, StudentFilter } from "~/components/features/students";
+import { getFilteredStudentUids, StudentFilter, usePersistentStudentFilterState } from "~/components/features/students";
+import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { canonicalLink } from "~/lib/seo";
 import { getAllStudents } from "~/models/student";
+
+export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
+export const STUDENT_FILTER_COOKIE_PATH = "/";
+export const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
+
+const studentFilterCookieOptions = {
+  cookieName: STUDENT_FILTER_COOKIE_NAME,
+  cookiePath: STUDENT_FILTER_COOKIE_PATH,
+  defaultSort: "recent",
+  allowedSorts: STUDENT_FILTER_SORTS,
+} as const;
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
   const pathname = url.pathname;
   const needsStudentList = pathname === "/students";
+  const filterState = readStudentFilterStateFromCookie(request.headers.get("Cookie"), studentFilterCookieOptions);
 
   if (!needsStudentList) {
     return {
       students: [],
+      filterState,
     };
   }
 
@@ -22,6 +36,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const allStudents = await getAllStudents(env, true);
   return {
     students: allStudents.sort((a, b) => b.order - a.order),
+    filterState,
   };
 };
 
@@ -40,11 +55,14 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export default function StudentsLayout() {
-  const { students } = useLoaderData<typeof loader>();
+  const { filterState: initialFilterState, students } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
-  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const [filterState, setFilterState] = usePersistentStudentFilterState({
+    ...studentFilterCookieOptions,
+    initialState: initialFilterState,
+  });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const filteredStudents = useMemo(() => {
     return filteredUids.flatMap((uid) => {
@@ -67,13 +85,14 @@ export default function StudentsLayout() {
           ? [
               {
                 title: "필터 및 정렬",
+                description: `${students.length}명 중 ${filteredStudents.length}명 표시 중`,
                 Icon: FunnelIcon,
                 children: (
                   <StudentFilter
                     students={students}
                     state={filterState}
                     onStateChange={setFilterState}
-                    sortBy={["recent", "old", "name"]}
+                    sortBy={[...STUDENT_FILTER_SORTS]}
                     useFilter
                     useSearch
                   />

@@ -11,12 +11,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
-  createStudentFilterState,
   getFilteredStudentUids,
   StudentCards,
   StudentFilter,
   TierSelector,
+  usePersistentStudentFilterState,
 } from "~/components/features/students";
+import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { Button, SubTitle, Toggle } from "~/components/primitives";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
@@ -30,6 +31,17 @@ import {
 } from "~/models/recruited-student";
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
+
+export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
+export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
+export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+const userStudentFilterCookieOptions = {
+  cookieName: USER_STUDENT_FILTER_COOKIE_NAME,
+  cookiePath: USER_STUDENT_FILTER_COOKIE_PATH,
+  defaultSort: "recent",
+  allowedSorts: USER_STUDENT_FILTER_SORTS,
+} as const;
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -49,6 +61,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     me: currentUser?.username === sensei.username,
     noRecruited: recruitedStudents.length === 0,
+    filterState: readStudentFilterStateFromCookie(request.headers.get("Cookie"), userStudentFilterCookieOptions),
     students: allStudents.map((student) => ({
       uid: student.uid,
       name: student.name,
@@ -255,9 +268,12 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const { me, noRecruited, students } = loaderData;
+  const { filterState: initialFilterState, me, noRecruited, students } = loaderData;
 
-  const [filterState, setFilterState] = useState(() => createStudentFilterState("recent"));
+  const [filterState, setFilterState] = usePersistentStudentFilterState({
+    ...userStudentFilterCookieOptions,
+    initialState: initialFilterState,
+  });
   const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
@@ -279,7 +295,7 @@ export default function UserPage() {
   useEffect(() => {
     setPanel({
       title: "필터 및 정렬",
-      description: "학생을 필터링하고 정렬할 수 있어요.",
+      description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
       Icon: FunnelIcon,
       children: (
         <StudentFilter
@@ -288,11 +304,11 @@ export default function UserPage() {
           onStateChange={setFilterState}
           useFilter
           useSearch
-          sortBy={["recent", "old", "name", "tier"]}
+          sortBy={[...USER_STUDENT_FILTER_SORTS]}
         />
       ),
     });
-  }, [filterState, students, setPanel]);
+  }, [filterState, students, setPanel, setFilterState, filteredUids.length]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

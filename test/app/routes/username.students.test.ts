@@ -1,15 +1,24 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { createStudentFilterState } from "~/components/features/students/StudentFilter";
+import { serializeStudentFilterStateCookie } from "~/components/features/students/student-filter-cookie";
+import { Attack, Defense } from "~/graphql/graphql";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
+  getRecruitedStudents,
   RecruitedStudentValidationError,
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
+import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
-import { action } from "~/routes/$username.students";
+import {
+  action,
+  loader,
+  USER_STUDENT_FILTER_COOKIE_NAME,
+  USER_STUDENT_FILTER_SORTS,
+} from "~/routes/$username.students";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -39,11 +48,21 @@ jest.mock("~/models/student", () => ({
 }));
 
 jest.mock("~/components/features/students", () => ({
-  createStudentFilterState: jest.fn(),
   getFilteredStudentUids: jest.fn(),
   StudentCards: jest.fn(() => null),
   StudentFilter: jest.fn(() => null),
   TierSelector: jest.fn(() => null),
+  usePersistentStudentFilterState: jest.fn(() => [
+    {
+      attackTypes: [],
+      defenseTypes: [],
+      roles: [],
+      tacticRoles: [],
+      positions: [],
+      sort: "recent",
+    },
+    jest.fn(),
+  ]),
 }));
 
 jest.mock("~/components/primitives", () => ({
@@ -57,6 +76,8 @@ const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getA
 const mockedCaptureServerError = captureServerError as jest.MockedFunction<typeof captureServerError>;
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedGetRouteSensei = getRouteSensei as jest.MockedFunction<typeof getRouteSensei>;
+const mockedGetRecruitedStudents = getRecruitedStudents as jest.MockedFunction<typeof getRecruitedStudents>;
+const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
 const mockedRemoveRecruitedStudent = removeRecruitedStudent as jest.MockedFunction<typeof removeRecruitedStudent>;
 const mockedUpsertRecruitedStudent = upsertRecruitedStudent as jest.MockedFunction<typeof upsertRecruitedStudent>;
@@ -72,6 +93,16 @@ function createActionArgs(formData: FormData, method = "POST") {
   return {
     context: { cloudflare: { env, ctx: {} as ExecutionContext } },
     request: new Request("https://mollulog.test/@sensei/students", { method, body: formData }),
+    params: { username: "@sensei" },
+  } as never;
+}
+
+function createLoaderArgs(cookie?: string) {
+  return {
+    context: { cloudflare: { env, ctx: {} as ExecutionContext } },
+    request: new Request("https://mollulog.test/@sensei/students", {
+      headers: cookie ? { Cookie: cookie } : undefined,
+    }),
     params: { username: "@sensei" },
   } as never;
 }
@@ -100,6 +131,8 @@ beforeEach(() => {
   mockedGetRouteSensei.mockResolvedValue({ id: 1, uid: "sensei-1", username: "sensei" } as Awaited<
     ReturnType<typeof getRouteSensei>
   >);
+  mockedGetRecruitedStudents.mockResolvedValue([]);
+  mockedGetAllStudents.mockResolvedValue([]);
   mockedGetAllStudentsMap.mockResolvedValue({
     "student-a": { uid: "student-a", released: true, initialTier: 3 },
     "student-b": { uid: "student-b", released: true, initialTier: 5 },
@@ -107,6 +140,41 @@ beforeEach(() => {
   mockedRemoveRecruitedStudent.mockResolvedValue(undefined);
   mockedUpsertRecruitedStudent.mockResolvedValue(undefined);
   mockedAddRecruitedStudents.mockResolvedValue(undefined);
+});
+
+describe("@username students loader", () => {
+  it("seeds the first render from the user student filter cookie", async () => {
+    const state = {
+      ...createStudentFilterState("tier"),
+      attackTypes: [Attack.Explosive],
+      search: "아루",
+    };
+    const cookieValue = serializeStudentFilterStateCookie(
+      { defaultSort: "recent", allowedSorts: USER_STUDENT_FILTER_SORTS },
+      state,
+    );
+    mockedGetRecruitedStudents.mockResolvedValueOnce([{ studentUid: "student-a", tier: 4 }] as never);
+    mockedGetAllStudents.mockResolvedValueOnce([
+      {
+        uid: "student-a",
+        name: "아루",
+        attackType: Attack.Explosive,
+        defenseType: Defense.Light,
+        role: "striker",
+        position: "front",
+        tacticRole: "attacker",
+        order: 1,
+        initialTier: 3,
+      },
+    ] as never);
+
+    const result = await loader(createLoaderArgs(`${USER_STUDENT_FILTER_COOKIE_NAME}=${cookieValue}`));
+
+    expect(result.filterState).toEqual({
+      ...createStudentFilterState("tier"),
+      attackTypes: [Attack.Explosive],
+    });
+  });
 });
 
 describe("@username students action", () => {
