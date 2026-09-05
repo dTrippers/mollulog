@@ -47,6 +47,11 @@ const mockedGetInventory = getUserResourceInventoryMap as jest.MockedFunction<ty
 const mockedUpsertInventory = upsertUserResourceInventories as jest.MockedFunction<
   typeof upsertUserResourceInventories
 >;
+const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
+
+jest.mock("~/lib/observability.server", () => ({
+  getLogger: () => logger,
+}));
 
 const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
 const catalogResources = [
@@ -190,6 +195,48 @@ describe("resource inventory canonical identity", () => {
 
     expect((result as { data: unknown }).data).toEqual({ saved: true, savedAt: expect.any(Number) });
     expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "101001", quantity: 3 }]);
+  });
+
+  it("keeps malformed payloads actionable without logging a server failure", async () => {
+    const result = await action(
+      routeArgs(
+        new Request("https://mollulog.net/utils/resources/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: "not-an-array" }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({ data: { error: "저장할 재화가 필요해요" }, init: { status: 400 } });
+    expect(mockedUpsertInventory).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("returns a safe retryable 500 and logs unexpected inventory write failures", async () => {
+    const internalError = new Error("SQL timeout; password=secret");
+    mockedUpsertInventory.mockRejectedValueOnce(internalError);
+
+    const result = await action(
+      routeArgs(
+        new Request("https://mollulog.net/utils/resources/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: [{ itemUid: "equipment:23", quantity: 10 }] }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      data: { error: "보유 재화를 저장하지 못했어요. 잠시 후 다시 시도해주세요" },
+      init: { status: 500 },
+    });
+    expect(JSON.stringify(result)).not.toContain("password=secret");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Failed to save resource inventory",
+      internalError,
+      expect.objectContaining({ userId: 7, itemCount: 1 }),
+    );
   });
 });
 

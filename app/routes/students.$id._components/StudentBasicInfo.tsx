@@ -323,7 +323,7 @@ export default function StudentBasicInfo({
           ) : null}
         </SectionCard>
         {fetcher.data && !fetcher.data.ok ? (
-          <div className="mt-3">
+          <div className="mt-3" role="alert">
             <Callout tone="destructive" title={fetcher.data.error} />
           </div>
         ) : null}

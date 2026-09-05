@@ -15,6 +15,7 @@ import {
   upsertPostgresCommunityPost,
   upsertPostgresYoutubeCommunityPost,
 } from "~/db/postgres/community";
+import { getPostgresWalkthroughTimelinesByUids } from "~/db/postgres/walkthrough-timelines";
 import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import type {
   CommunityCommentVisibility,
@@ -89,7 +90,39 @@ export async function getCommunityFeedPage(
   env: Env,
   options: CommunityFeedPageOptions = {},
 ): Promise<CommunityFeedPageResult> {
-  return getCommunityFeedPageWithCache(env, options, getPostgresCommunityFeedPage);
+  const page = await getCommunityFeedPageWithCache(env, options, getPostgresCommunityFeedPage);
+  return filterWalkthroughFeedPosts(env, page, options.ctx);
+}
+
+async function filterWalkthroughFeedPosts(
+  env: Env,
+  page: CommunityFeedPageResult,
+  ctx?: ExecutionContext,
+): Promise<CommunityFeedPageResult> {
+  const walkthroughUids = page.items.flatMap((post) =>
+    post.postType === "walkthrough_timeline"
+      ? post.blocks.flatMap((block) => (block.type === "walkthrough_timeline" ? [block.timelineUid] : []))
+      : [],
+  );
+  if (walkthroughUids.length === 0) return page;
+
+  const publicWalkthroughUids = new Set(
+    (await getPostgresWalkthroughTimelinesByUids(env, walkthroughUids, { ctx }))
+      .filter((timeline) => timeline.visibility === "public")
+      .map((timeline) => timeline.uid),
+  );
+  const items = page.items.filter((post) => {
+    if (post.postType !== "walkthrough_timeline") return true;
+    const timelineUid = post.blocks.find((block) => block.type === "walkthrough_timeline")?.timelineUid;
+    return timelineUid !== undefined && publicWalkthroughUids.has(timelineUid);
+  });
+  const totalCount = Math.max(0, page.totalCount - (page.items.length - items.length));
+  return {
+    ...page,
+    items,
+    totalCount,
+    totalPages: Math.max(1, Math.ceil(totalCount / page.pageSize)),
+  };
 }
 
 export async function getCommunityPostByUid(

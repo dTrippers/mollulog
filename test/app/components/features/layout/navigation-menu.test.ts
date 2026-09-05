@@ -191,18 +191,16 @@ describe("navigation surface projections", () => {
     );
   });
 
-  it("keeps red dots only on the resource scanner and uses the v1.2 badge", () => {
+  it("keeps the notification red dot and resource scanner v1.2 badge", () => {
     const catalog = getNavigationCatalog({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
 
-    expect(catalog.filter((item) => item.showRedDot === true).map((item) => item.name)).toEqual([
-      "스크린샷/영상 인식기",
-    ]);
+    expect(catalog.filter((item) => item.showRedDot === true).map((item) => item.name)).toEqual(["알림 설정"]);
     expect(catalog.filter((item) => item.badgeLabel === "v1.2").map((item) => item.name)).toEqual([
       "스크린샷/영상 인식기",
     ]);
     expect(catalog.filter((item) => item.badgeLabel === "베타").map((item) => item.name)).toEqual([
       "공략 타임라인",
-      "외부 데이터 연동",
+      "알림 설정",
     ]);
   });
 

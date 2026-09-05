@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
+import { pgTimelineContentsTable } from "~/db/postgres/schema";
 import {
   getPostgresAllTimelineContentsMeta,
   getPostgresContentUidsByRecruitmentGroup,
@@ -14,32 +15,47 @@ import {
   getPostgresUpcomingEvent,
 } from "~/db/postgres/timeline-contents";
 
-function postgresRow(uid = "future-event"): unknown[] {
-  return [
-    1,
-    uid,
-    new Date("2099-08-25T02:00:00.000Z"),
-    new Date("2099-09-15T02:00:00.000Z"),
-    false,
-    null,
-    [],
-    "event",
-    "first",
-    "event-1",
-    "group-1",
-    true,
-    ["event"],
-    null,
-    null,
-    false,
-    1200,
-    null,
-    { ko: "미래 이벤트" },
-    ["student-a"],
-    new Date("2026-07-13T00:00:00.000Z"),
-    new Date("2026-07-13T00:00:00.000Z"),
-  ];
+type TimelineContentRow = typeof pgTimelineContentsTable.$inferSelect;
+
+const defaultTimelineContentRow = {
+  id: 1,
+  uid: "future-event",
+  startAt: new Date("2099-08-25T02:00:00.000Z"),
+  endAt: new Date("2099-09-15T02:00:00.000Z"),
+  rewardExchangeEndAt: null,
+  endless: false,
+  imageUrl: null,
+  videos: [],
+  contentType: "event",
+  runType: "first",
+  contentUid: "event-1",
+  recruitmentGroupUid: "group-1",
+  confirmed: true,
+  tags: ["event"],
+  occurrence: null,
+  syncedAt: null,
+  isSpoiler: false,
+  earnablePyroxene: 1200,
+  shopContentUid: null,
+  nameI18n: { ko: "미래 이벤트" },
+  recruitmentStudentUids: ["student-a"],
+  createdAt: new Date("2026-07-13T00:00:00.000Z"),
+  updatedAt: new Date("2026-07-13T00:00:00.000Z"),
+} satisfies TimelineContentRow;
+
+function postgresRow(overrides: Partial<TimelineContentRow> = {}): unknown[] {
+  const row: TimelineContentRow = { ...defaultTimelineContentRow, ...overrides };
+  return Object.keys(pgTimelineContentsTable).flatMap((key) => {
+    if (!(key in row)) return [];
+    return [row[key as keyof TimelineContentRow]];
+  });
 }
+
+/*
+ * `rowMode: "array"` follows the schema's column order. Derive the test
+ * driver's array from the typed row so adding a column requires a compile-time
+ * fixture update instead of a silently shifted magic index.
+ */
 
 describe("PostgreSQL timeline contents read", () => {
   it("queries the future window, maps PG-native types, and releases the client", async () => {
@@ -177,8 +193,7 @@ describe("PostgreSQL timeline contents read", () => {
   });
 
   it("rejects a row without a localized name", async () => {
-    const unnamedRow = postgresRow();
-    unnamedRow[18] = {};
+    const unnamedRow = postgresRow({ nameI18n: {} });
     const client = {
       connect: jest.fn(async () => undefined),
       end: jest.fn(async () => undefined),

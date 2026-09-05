@@ -1,6 +1,10 @@
 import { and, desc, eq, exists, inArray, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import {
+  deletePostgresCommunityPostByUidInTransaction,
+  syncPostgresWalkthroughTimelineCommunityPostInTransaction,
+} from "~/db/postgres/community";
 import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderation";
 import { pgWalkthroughTimelineLikesTable, pgWalkthroughTimelinesTable } from "~/db/postgres/schema";
 import {
@@ -12,7 +16,9 @@ import {
   type WalkthroughTimelineTerrain,
   type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
+import { ActionValidationError } from "~/lib/action-errors";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
+import { createWalkthroughTimelineCommunityPostBlocks } from "~/models/community";
 
 type WalkthroughTimelineRow = typeof pgWalkthroughTimelinesTable.$inferSelect;
 
@@ -75,16 +81,128 @@ async function withWalkthroughTimelineDatabase<T>(
 function normalizeWriteInput(input: WalkthroughTimelineWriteInput): WalkthroughTimelineWriteInput {
   const title = input.title.trim();
   const description = input.description.trim();
-  if (!title) throw new Error("타임라인 제목을 입력해주세요.");
+  if (!title) throw new ActionValidationError("타임라인 제목을 입력해주세요.");
   if (
     input.document.context.bossUid !== input.bossUid ||
     input.document.context.terrain !== input.terrain ||
     input.document.context.defenseType !== input.defenseType ||
     input.document.context.maxDifficulty !== input.maxDifficulty
   ) {
-    throw new Error("타임라인 문서와 공략 설정이 일치하지 않아요.");
+    throw new ActionValidationError("타임라인 문서와 공략 설정이 일치하지 않아요.");
   }
   return { ...input, title, description, document: parseWalkthroughTimelineDocument(input.document) };
+}
+
+async function createWalkthroughTimelineAndProjection(
+  db: NodePgDatabase,
+  userId: number,
+  normalized: WalkthroughTimelineWriteInput,
+): Promise<WalkthroughTimelineRecord> {
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const rows = await tx
+      .insert(pgWalkthroughTimelinesTable)
+      .values({
+        uid: nanoid(12),
+        userId,
+        ...normalized,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning();
+    if (!rows[0]) throw new Error("타임라인을 저장하지 못했어요.");
+    const timeline = toDomain(rows[0]);
+    await syncPostgresWalkthroughTimelineCommunityPostInTransaction(
+      tx,
+      timeline,
+      createWalkthroughTimelineCommunityPostBlocks(timeline),
+    );
+    return timeline;
+  });
+}
+
+async function updateWalkthroughTimelineAndProjection(
+  db: NodePgDatabase,
+  uid: string,
+  userId: number,
+  normalized: WalkthroughTimelineWriteInput,
+): Promise<WalkthroughTimelineRecord | null> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .update(pgWalkthroughTimelinesTable)
+      .set({ ...normalized, updatedAt: new Date() })
+      .where(and(eq(pgWalkthroughTimelinesTable.uid, uid), eq(pgWalkthroughTimelinesTable.userId, userId)))
+      .returning();
+    if (!rows[0]) return null;
+    const timeline = toDomain(rows[0]);
+    await syncPostgresWalkthroughTimelineCommunityPostInTransaction(
+      tx,
+      timeline,
+      createWalkthroughTimelineCommunityPostBlocks(timeline),
+    );
+    return timeline;
+  });
+}
+
+async function deleteWalkthroughTimelineAndProjection(
+  db: NodePgDatabase,
+  uid: string,
+  userId: number,
+): Promise<boolean> {
+  return db.transaction(async (tx) => {
+    const rows = await tx
+      .delete(pgWalkthroughTimelinesTable)
+      .where(and(eq(pgWalkthroughTimelinesTable.uid, uid), eq(pgWalkthroughTimelinesTable.userId, userId)))
+      .returning({ uid: pgWalkthroughTimelinesTable.uid });
+    if (rows.length === 0) return false;
+    await deletePostgresCommunityPostByUidInTransaction(tx, uid, userId);
+    return true;
+  });
+}
+
+export async function createPostgresWalkthroughTimelineWithCommunityPost(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  input: WalkthroughTimelineWriteInput,
+  options: PostgresWalkthroughTimelineOptions = {},
+): Promise<WalkthroughTimelineRecord> {
+  const normalized = normalizeWriteInput(input);
+  return withWalkthroughTimelineDatabase(
+    env,
+    "create_with_community",
+    (db) => createWalkthroughTimelineAndProjection(db, userId, normalized),
+    options,
+  );
+}
+
+export async function updatePostgresWalkthroughTimelineWithCommunityPost(
+  env: Pick<Env, "HYPERDRIVE">,
+  uid: string,
+  userId: number,
+  input: WalkthroughTimelineWriteInput,
+  options: PostgresWalkthroughTimelineOptions = {},
+): Promise<WalkthroughTimelineRecord | null> {
+  const normalized = normalizeWriteInput(input);
+  return withWalkthroughTimelineDatabase(
+    env,
+    "update_with_community",
+    (db) => updateWalkthroughTimelineAndProjection(db, uid, userId, normalized),
+    options,
+  );
+}
+
+export async function deletePostgresWalkthroughTimelineWithCommunityPost(
+  env: Pick<Env, "HYPERDRIVE">,
+  uid: string,
+  userId: number,
+  options: PostgresWalkthroughTimelineOptions = {},
+): Promise<boolean> {
+  return withWalkthroughTimelineDatabase(
+    env,
+    "delete_with_community",
+    (db) => deleteWalkthroughTimelineAndProjection(db, uid, userId),
+    options,
+  );
 }
 
 export async function createPostgresWalkthroughTimeline(

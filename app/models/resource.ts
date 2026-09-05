@@ -49,13 +49,16 @@ export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false
     env,
     ALL_STUDENTS_FAVORITE_ITEMS_CACHE_KEY,
     async () => {
-      const { data } = await runQuery(allStudentsFavoriteItemsQuery, {});
-      if (!data?.students) {
-        return [];
+      const result = await runQuery(allStudentsFavoriteItemsQuery, {});
+      if (result.error) {
+        throw result.error;
+      }
+      if (!result.data || !Array.isArray(result.data.students)) {
+        throw new Error("BAQL student favorite item response is missing students");
       }
 
       const items = new Map<string, AllStudentsFavoriteItems>();
-      for (const student of data.students) {
+      for (const student of result.data.students) {
         for (const { item, favoriteLevel, exp, favorited } of student.favoriteItems) {
           if (!favorited && !COMMON_FAVORITE_ITEM_UIDS.includes(item.uid)) {
             continue;
@@ -90,6 +93,7 @@ export async function getAllStudentsFavoriteItems(env: Env, forceRefresh = false
       });
     },
     forceRefresh,
+    { rejectOnForcedRefresh: true },
   );
 }
 

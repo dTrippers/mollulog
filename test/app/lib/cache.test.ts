@@ -4,6 +4,7 @@ import {
   fetchCached,
   fetchLazySourceCachedBatch,
   fetchRouteCached,
+  fetchSourceCached,
   SOURCE_CACHE_EXPIRATION_TTL,
 } from "../../../app/lib/cache";
 
@@ -510,6 +511,51 @@ describe("fetchCached", () => {
     await expect(nonForce).resolves.toEqual(["cached-video"]);
     await expect(forced).resolves.toEqual(["fresh-video"]);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("forced source refresh failures", () => {
+  it("rejects an affected forced refresh while preserving the existing cache", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["cached-students"],
+        cachedAt: now - 1_900_000,
+      }),
+    );
+
+    await expect(
+      fetchSourceCached(
+        env,
+        "source::student::v1::all",
+        async () => {
+          throw new Error("upstream unavailable");
+        },
+        true,
+        { rejectOnForcedRefresh: true },
+      ),
+    ).rejects.toThrow("upstream unavailable");
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("keeps stale fallback behavior for ordinary source requests", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["cached-students"],
+        cachedAt: now - 1_900_000,
+      }),
+    );
+
+    await expect(
+      fetchSourceCached(env, "source::student::v1::all", async () => {
+        throw new Error("upstream unavailable");
+      }),
+    ).resolves.toEqual(["cached-students"]);
   });
 });
 

@@ -1,6 +1,7 @@
 import { ArrowUturnLeftIcon, ArrowUturnRightIcon, PlusIcon, TrashIcon } from "@heroicons/react/24/outline";
+import { useEffect, useRef } from "react";
 import { useNavigation } from "react-router";
-import { Button, PanelBody } from "~/components/primitives";
+import { Button, Callout, PanelBody } from "~/components/primitives";
 import { WALKTHROUGH_TIMELINE_LIMITS, type WalkthroughParty } from "~/domain/walkthrough-timeline";
 import type { ImportStudent } from "~/domain/walkthrough-timeline-import";
 import { cn } from "~/lib/utils";
@@ -19,6 +20,7 @@ type Props = {
   onRedo: () => void;
   canUndo: boolean;
   canRedo: boolean;
+  error?: string;
 };
 
 export default function WalkthroughTimelinePartyPanel({
@@ -34,9 +36,17 @@ export default function WalkthroughTimelinePartyPanel({
   onRedo,
   canUndo,
   canRedo,
+  error,
 }: Props) {
   const navigation = useNavigation();
+  const saveControlRef = useRef<HTMLDivElement>(null);
   const studentsByUid = Object.fromEntries(students.map((student) => [student.uid, student]));
+  const isSaving = navigation.state !== "idle";
+
+  useEffect(() => {
+    if (!error || navigation.state !== "idle") return;
+    saveControlRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [error, navigation.state]);
 
   return (
     <PanelBody>
@@ -111,14 +121,21 @@ export default function WalkthroughTimelinePartyPanel({
             onClick={onRedo}
           />
         </div>
-        <Button
-          text={mode === "create" ? "타임라인 저장" : "변경사항 저장"}
-          size="sm"
-          variant="primary"
-          fullWidth
-          disabled={navigation.state !== "idle"}
-          onClick={onSave}
-        />
+        {error ? (
+          <div role="alert">
+            <Callout tone="destructive" title={error} />
+          </div>
+        ) : null}
+        <div ref={saveControlRef}>
+          <Button
+            text={isSaving ? "저장 중..." : mode === "create" ? "타임라인 저장" : "변경사항 저장"}
+            size="sm"
+            variant="primary"
+            fullWidth
+            disabled={isSaving}
+            onClick={onSave}
+          />
+        </div>
       </div>
     </PanelBody>
   );

@@ -37,6 +37,10 @@ export type PostgresCommunityOptions = {
 type CommunityDb = NodePgDatabase;
 type CommunityPostRow = typeof pgCommunityPostsTable.$inferSelect;
 type CommunityCommentRow = typeof pgCommunityCommentsTable.$inferSelect;
+type CommunityDbExecutor = Pick<CommunityDb, "select" | "insert" | "update" | "delete">;
+
+/** A transaction executor with the same query surface as the community DB. */
+export type PostgresCommunityTransaction = CommunityDbExecutor;
 
 type CommunityAuthor = {
   id: number;
@@ -720,22 +724,28 @@ export async function deletePostgresCommunityPostByUid(
   await withCommunityDatabase(
     env,
     "delete_post",
-    async (db) => {
-      const filters = [eq(pgCommunityPostsTable.uid, postUid)];
-      if (userId !== undefined) filters.push(eq(pgCommunityPostsTable.userId, userId));
-      const [post] = await db
-        .select({ uid: pgCommunityPostsTable.uid })
-        .from(pgCommunityPostsTable)
-        .where(and(...filters))
-        .limit(1);
-      if (!post) return;
-      await db.delete(pgCommunityCommentsTable).where(eq(pgCommunityCommentsTable.postUid, postUid));
-      await db.delete(pgCommunityPostLikesTable).where(eq(pgCommunityPostLikesTable.postUid, postUid));
-      await db.delete(pgCommunityPostTagsTable).where(eq(pgCommunityPostTagsTable.postUid, postUid));
-      await db.delete(pgCommunityPostsTable).where(eq(pgCommunityPostsTable.uid, postUid));
-    },
+    (db) => deletePostgresCommunityPostByUidInTransaction(db, postUid, userId),
     options,
   );
+}
+
+export async function deletePostgresCommunityPostByUidInTransaction(
+  db: PostgresCommunityTransaction,
+  postUid: string,
+  userId?: number,
+): Promise<void> {
+  const filters = [eq(pgCommunityPostsTable.uid, postUid)];
+  if (userId !== undefined) filters.push(eq(pgCommunityPostsTable.userId, userId));
+  const [post] = await db
+    .select({ uid: pgCommunityPostsTable.uid })
+    .from(pgCommunityPostsTable)
+    .where(and(...filters))
+    .limit(1);
+  if (!post) return;
+  await db.delete(pgCommunityCommentsTable).where(eq(pgCommunityCommentsTable.postUid, postUid));
+  await db.delete(pgCommunityPostLikesTable).where(eq(pgCommunityPostLikesTable.postUid, postUid));
+  await db.delete(pgCommunityPostTagsTable).where(eq(pgCommunityPostTagsTable.postUid, postUid));
+  await db.delete(pgCommunityPostsTable).where(eq(pgCommunityPostsTable.uid, postUid));
 }
 
 export async function syncPostgresWalkthroughTimelineCommunityPost(
@@ -747,41 +757,44 @@ export async function syncPostgresWalkthroughTimelineCommunityPost(
   return withCommunityDatabase(
     env,
     "sync_walkthrough",
-    async (db) => {
-      const [existing] = await db
-        .select({ uid: pgCommunityPostsTable.uid })
-        .from(pgCommunityPostsTable)
-        .where(
-          and(
-            eq(pgCommunityPostsTable.sourceType, "raid_walkthrough"),
-            eq(pgCommunityPostsTable.sourceUid, timeline.uid),
-          ),
-        )
-        .limit(1);
-      if (!existing && timeline.visibility !== "public") return null;
-      const now = new Date();
-      const values = {
-        userId: timeline.userId,
-        postType: "walkthrough_timeline" as const,
-        origin: "user" as const,
-        title: timeline.title,
-        visibility: timeline.visibility,
-        pinned: false,
-        blocks,
-        sourceType: "raid_walkthrough",
-        sourceUid: timeline.uid,
-        sourceMetadata: {},
-        updatedAt: timeline.updatedAt,
-      };
-      if (existing) {
-        await db.update(pgCommunityPostsTable).set(values).where(eq(pgCommunityPostsTable.uid, existing.uid));
-        return existing.uid;
-      }
-      await db.insert(pgCommunityPostsTable).values({ ...values, uid: timeline.uid, displayAt: now, createdAt: now });
-      return timeline.uid;
-    },
+    (db) => syncPostgresWalkthroughTimelineCommunityPostInTransaction(db, timeline, blocks),
     options,
   );
+}
+
+export async function syncPostgresWalkthroughTimelineCommunityPostInTransaction(
+  db: PostgresCommunityTransaction,
+  timeline: WalkthroughTimelineRecord,
+  blocks: CommunityPostBlock[],
+): Promise<string | null> {
+  const [existing] = await db
+    .select({ uid: pgCommunityPostsTable.uid })
+    .from(pgCommunityPostsTable)
+    .where(
+      and(eq(pgCommunityPostsTable.sourceType, "raid_walkthrough"), eq(pgCommunityPostsTable.sourceUid, timeline.uid)),
+    )
+    .limit(1);
+  if (!existing && timeline.visibility !== "public") return null;
+  const now = new Date();
+  const values = {
+    userId: timeline.userId,
+    postType: "walkthrough_timeline" as const,
+    origin: "user" as const,
+    title: timeline.title,
+    visibility: timeline.visibility,
+    pinned: false,
+    blocks,
+    sourceType: "raid_walkthrough",
+    sourceUid: timeline.uid,
+    sourceMetadata: {},
+    updatedAt: timeline.updatedAt,
+  };
+  if (existing) {
+    await db.update(pgCommunityPostsTable).set(values).where(eq(pgCommunityPostsTable.uid, existing.uid));
+    return existing.uid;
+  }
+  await db.insert(pgCommunityPostsTable).values({ ...values, uid: timeline.uid, displayAt: now, createdAt: now });
+  return timeline.uid;
 }
 
 export async function upsertPostgresYoutubeCommunityPost(

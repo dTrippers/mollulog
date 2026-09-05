@@ -136,6 +136,8 @@ type FetchCachedOptions<T> = {
   expirationTtl?: number;
   maxStaleTtl?: number | ((data: T) => number);
   mode?: CacheCategory;
+  /** Forced source refreshes must report regeneration failure to their caller. */
+  rejectOnForcedRefresh?: boolean;
   swr?: boolean;
   warnOnRequestRefresh?: boolean;
 };
@@ -521,7 +523,7 @@ async function fetchCachedInternal<T>(
         warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
       }
 
-      if (cached) {
+      if (cached && !(forceRefresh && options.rejectOnForcedRefresh)) {
         return cached.data;
       }
 
@@ -607,11 +609,13 @@ export async function fetchSourceCached<T>(
   dataKey: string,
   fn: () => Promise<T>,
   forceRefresh = false,
+  options: Pick<FetchCachedOptions<T>, "rejectOnForcedRefresh"> = {},
 ): Promise<T> {
   return fetchCached(env, dataKey, fn, SOURCE_CACHE_MAX_STALE_TTL, forceRefresh, {
     expirationTtl: SOURCE_CACHE_EXPIRATION_TTL,
     maxStaleTtl: SOURCE_CACHE_MAX_STALE_TTL,
     mode: "source",
+    ...options,
     warnOnRequestRefresh: true,
   });
 }
