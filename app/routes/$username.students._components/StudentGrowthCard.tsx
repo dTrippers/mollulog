@@ -5,7 +5,6 @@ import { StudentCard, TierSelector } from "~/components/features/students";
 import { Button, Callout, NumberInput, SectionCard } from "~/components/primitives";
 import { useNumberInputGridNavigation } from "~/components/primitives/useNumberInputGridNavigation";
 import type { UserStudent, UserStudentsGrowth } from "~/views/user-students.server";
-import TierStars from "./TierStars";
 
 export const CURRENT_STATE_INTENT = "current-state";
 
@@ -55,15 +54,15 @@ const skillFields = [
 }>;
 
 const equipmentFields = [
-  { key: "equip1", label: "장비 1", index: 0 },
-  { key: "equip2", label: "장비 2", index: 1 },
-  { key: "equip3", label: "장비 3", index: 2 },
+  { key: "equip1", label: "1", index: 0 },
+  { key: "equip2", label: "2", index: 1 },
+  { key: "equip3", label: "3", index: 2 },
 ] as const;
 
 const abilityFields = [
-  { key: "abilityHp", label: "HP 해방" },
-  { key: "abilityAtk", label: "공격력 해방" },
-  { key: "abilityHeal", label: "치유력 해방" },
+  { key: "abilityHp", label: "HP" },
+  { key: "abilityAtk", label: "공격력" },
+  { key: "abilityHeal", label: "치유력" },
 ] as const;
 
 function createDraft(student: GrowthStudent): StudentGrowthDraft {
@@ -92,28 +91,54 @@ export function shouldAutoFocusGrowthEditor(editing: boolean): boolean {
   return editing;
 }
 
-function displayValue(value: number | null, prefix = "") {
-  return value == null ? "미등록" : `${prefix}${value}`;
+function displayValue(value: number | null, prefix = "", maxValue?: number) {
+  if (value == null) return "미등록";
+  if (maxValue !== undefined && value === maxValue) return "MAX";
+  return `${prefix}${value}`;
 }
 
 function Metric({
   label,
   value,
   prefix = "",
+  maxValue,
   unavailable = false,
 }: {
   label: string;
   value: number | null;
   prefix?: string;
+  maxValue?: number;
   unavailable?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-md bg-muted/50 px-1.5 py-2">
-      <span className="block truncate text-xs text-muted-foreground">{label}</span>
-      <strong className="mt-1 block whitespace-nowrap text-xs font-semibold tabular-nums sm:text-sm">
-        {unavailable ? "해당 없음" : displayValue(value, prefix)}
-      </strong>
+    <div className="min-w-0">
+      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
+      <dd className="mt-0.5 whitespace-nowrap text-xs font-semibold tabular-nums">
+        {unavailable ? "해당 없음" : displayValue(value, prefix, maxValue)}
+      </dd>
     </div>
+  );
+}
+
+function MetricGroup({
+  title,
+  children,
+  compact = false,
+}: {
+  title: string;
+  children: React.ReactNode;
+  compact?: boolean;
+}) {
+  const sectionClassName = compact ? "flex items-start gap-1" : "space-y-1.5";
+  const headingClassName = compact
+    ? "w-6 shrink-0 pt-0.5 text-xs font-semibold text-muted-foreground"
+    : "text-xs font-semibold text-muted-foreground";
+
+  return (
+    <section className={sectionClassName}>
+      <h4 className={headingClassName}>{title}</h4>
+      <div className={compact ? "min-w-0 flex-1" : undefined}>{children}</div>
+    </section>
   );
 }
 
@@ -204,22 +229,21 @@ export default function StudentGrowthCard({
 
   if (!editing) {
     return (
-      <SectionCard className="min-w-0 space-y-3 p-3 md:p-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <SectionCard className="min-w-0 space-y-3 p-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <div className="w-11 shrink-0">
-            <StudentCard uid={student.uid} name={student.name} hideName tier={undefined} flush />
+            <StudentCard uid={student.uid} name={student.name} hideName tier={student.tier} flush />
           </div>
           <div className="min-w-0 flex-1">
             <h3 className="break-keep text-base font-semibold">{student.name}</h3>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <TierStars tier={student.tier} size="md" />
+            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
               <span className="whitespace-nowrap">학생 Lv. {displayValue(student.growth.level)}</span>
             </div>
           </div>
           {editable ? (
             <Button
               icon={PencilSquareIcon}
-              text="성장도 편집"
+              text="편집"
               variant="secondary"
               size="xs"
               disabled={editDisabled}
@@ -228,48 +252,54 @@ export default function StudentGrowthCard({
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {skillFields.map((field) => (
-            <Metric key={field.key} label={field.label} value={student.growth[field.key]} />
-          ))}
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {equipmentFields.map((field) => (
-            <Metric
-              key={field.key}
-              label={field.label}
-              value={student.growth[field.key]}
-              prefix="T"
-              unavailable={!student.growth.equipmentAvailable[field.index]}
-            />
-          ))}
-          <Metric
-            label="애용품"
-            value={student.growth.equipSpecial}
-            prefix="T"
-            unavailable={!student.growth.equipSpecialAvailable}
-          />
-        </div>
-        {student.growth.abilityAvailable ? (
-          <div className="grid grid-cols-3 gap-2">
-            {abilityFields.map((field) => (
-              <Metric key={field.key} label={field.label} value={student.growth[field.key]} />
+        <MetricGroup title="스킬" compact>
+          <dl className="grid grid-cols-4 gap-x-1 gap-y-2">
+            {skillFields.map((field) => (
+              <Metric key={field.key} label={field.label} value={student.growth[field.key]} maxValue={field.max} />
             ))}
-          </div>
+          </dl>
+        </MetricGroup>
+        <MetricGroup title="장비" compact>
+          <dl className="grid grid-cols-4 gap-x-1 gap-y-2">
+            {equipmentFields.map((field) => (
+              <Metric
+                key={field.key}
+                label={field.label}
+                value={student.growth[field.key]}
+                prefix="T"
+                unavailable={!student.growth.equipmentAvailable[field.index]}
+              />
+            ))}
+            <Metric
+              label="애용품"
+              value={student.growth.equipSpecial}
+              prefix="T"
+              unavailable={!student.growth.equipSpecialAvailable}
+            />
+          </dl>
+        </MetricGroup>
+        {student.growth.abilityAvailable ? (
+          <MetricGroup title="개방" compact>
+            <dl className="grid grid-cols-3 gap-x-1 gap-y-2">
+              {abilityFields.map((field) => (
+                <Metric key={field.key} label={field.label} value={student.growth[field.key]} />
+              ))}
+            </dl>
+          </MetricGroup>
         ) : null}
       </SectionCard>
     );
   }
 
   return (
-    <SectionCard className="min-w-0 space-y-4 p-3 ring-2 ring-primary/20 md:p-4">
-      <div className="grid min-w-0 grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-x-2 gap-y-2">
+    <SectionCard className="min-w-0 space-y-3 p-3 ring-2 ring-primary/20 md:p-4">
+      <div className="flex min-w-0 flex-wrap items-start gap-2">
         <div className="w-11 shrink-0">
           <StudentCard uid={student.uid} name={student.name} hideName tier={undefined} flush />
         </div>
         <div className="min-w-0 flex-1">
           <h3 className="break-keep text-base font-semibold">{student.name}</h3>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
             <span>성급</span>
             <TierSelector
               initialTier={student.initialTier}
@@ -280,16 +310,13 @@ export default function StudentGrowthCard({
             />
           </div>
         </div>
-      </div>
-
-      <div className="grid grid-cols-1 gap-3">
         <NumberInput
           label="학생 Lv"
           nullable
           value={draft.level}
           minValue={1}
           maxValue={90}
-          fullWidth
+          controlClassName="w-20"
           disabled={saving}
           onChange={(value) => updateDraft("level", value)}
           inputProps={{
@@ -299,36 +326,37 @@ export default function StudentGrowthCard({
           }}
         />
       </div>
-      <div className="grid grid-cols-4 gap-2 sm:gap-3">
-        {skillFields.map((field, index) => (
-          <NumberInput
-            key={field.key}
-            label={field.label}
-            nullable
-            value={draft[field.key]}
-            minValue={field.min}
-            maxValue={field.max}
-            fullWidth
-            showDecrease={false}
-            showIncrease={false}
-            disabled={saving}
-            onChange={(value) => updateDraft(field.key, value)}
-            inputProps={{
-              ...getInputProps({ rowIndex: 1, columnIndex: index, disabled: saving }),
-              "aria-label": `${student.name} ${field.label} 스킬 레벨`,
-            }}
-          />
-        ))}
-      </div>
+      <MetricGroup title="스킬">
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          {skillFields.map((field, index) => (
+            <NumberInput
+              key={field.key}
+              label={field.label}
+              nullable
+              value={draft[field.key]}
+              minValue={field.min}
+              maxValue={field.max}
+              fullWidth
+              showDecrease={false}
+              showIncrease={false}
+              disabled={saving}
+              onChange={(value) => updateDraft(field.key, value)}
+              inputProps={{
+                ...getInputProps({ rowIndex: 1, columnIndex: index, disabled: saving }),
+                "aria-label": `${student.name} ${field.label} 스킬 레벨`,
+              }}
+            />
+          ))}
+        </div>
+      </MetricGroup>
 
-      <div>
-        <p className="mb-2 text-xs font-semibold text-muted-foreground">장비 및 애용품</p>
+      <MetricGroup title="장비">
         <div className="grid grid-cols-4 gap-2 sm:gap-3">
           {equipmentFields.map((field, index) =>
             student.growth.equipmentAvailable[field.index] ? (
               <NumberInput
                 key={field.key}
-                label={`${field.label} 티어`}
+                label={field.label}
                 nullable
                 value={draft[field.key]}
                 minValue={1}
@@ -340,21 +368,18 @@ export default function StudentGrowthCard({
                 onChange={(value) => updateDraft(field.key, value)}
                 inputProps={{
                   ...getInputProps({ rowIndex: 2, columnIndex: index, disabled: saving }),
-                  "aria-label": `${student.name} ${field.label} 티어`,
+                  "aria-label": `${student.name} 장비 ${field.label} 티어`,
                 }}
               />
             ) : (
-              <div
-                key={field.key}
-                className="flex min-h-16 items-center rounded-md bg-muted/50 px-2 text-xs text-muted-foreground"
-              >
-                {field.label}: 해당 없음
+              <div key={field.key} className="min-w-0 py-1 text-xs text-muted-foreground">
+                장비 {field.label}: 해당 없음
               </div>
             ),
           )}
           {student.growth.equipSpecialAvailable ? (
             <NumberInput
-              label="애용품 티어"
+              label="애용품"
               nullable
               value={draft.equipSpecial}
               minValue={1}
@@ -370,16 +395,13 @@ export default function StudentGrowthCard({
               }}
             />
           ) : (
-            <div className="flex min-h-16 items-center rounded-md bg-muted/50 px-2 text-xs text-muted-foreground">
-              애용품: 해당 없음
-            </div>
+            <div className="min-w-0 py-1 text-xs text-muted-foreground">애용품: 해당 없음</div>
           )}
         </div>
-      </div>
+      </MetricGroup>
 
       {abilityAvailable ? (
-        <div>
-          <p className="mb-2 text-xs font-semibold text-muted-foreground">능력 개방</p>
+        <MetricGroup title="개방">
           <div className="grid grid-cols-3 gap-3">
             {abilityFields.map((field, index) => (
               <NumberInput
@@ -401,7 +423,7 @@ export default function StudentGrowthCard({
               />
             ))}
           </div>
-        </div>
+        </MetricGroup>
       ) : null}
 
       {saveError ? <Callout tone="destructive" title={saveError} /> : null}

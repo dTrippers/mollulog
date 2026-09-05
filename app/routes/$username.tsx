@@ -9,7 +9,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import { Outlet, useLocation, useParams, useRouteError } from "react-router";
-import { ErrorPage, Page, ServerErrorPage } from "~/components/features/layout";
+import { ErrorPage, Page, type PagePanelProps, ServerErrorPage } from "~/components/features/layout";
 import { Title } from "~/components/primitives";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 
@@ -71,12 +71,10 @@ export default function User() {
     currentScreen = "parties";
   }
 
-  const [panel, setPanel] = useState<
-    { title: string; description: string; Icon: React.ElementType; children: React.ReactNode } | undefined
-  >(undefined);
+  const [panels, setPanels] = useState<PagePanelProps[]>([]);
   useEffect(() => {
     if (currentScreen !== "students") {
-      setPanel(undefined);
+      setPanels([]);
     }
   }, [currentScreen]);
 
@@ -84,7 +82,7 @@ export default function User() {
     <Page
       title={`@${username}`}
       description="선생님의 정보를 확인해보세요"
-      panels={panel ? [panel] : undefined}
+      panels={panels}
       screens={[
         { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
         { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
@@ -109,7 +107,7 @@ export default function User() {
         },
       ]}
     >
-      <Outlet context={{ setPanel }} />
+      <Outlet context={{ setPanels }} />
     </Page>
   );
 }

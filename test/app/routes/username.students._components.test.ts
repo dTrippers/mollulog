@@ -1,4 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import GrowthVisibilityControl, {
+  type GrowthVisibilityControlProps,
+} from "~/routes/$username.students._components/GrowthVisibilityControl";
 import { shareStudentGrowthUrl } from "~/routes/$username.students._components/ShareStudentGrowthButton";
 import {
   isAbilityEditable,
@@ -103,5 +108,41 @@ describe("student growth sharing", () => {
   it("requests focus only when the growth editor is active", () => {
     expect(shouldAutoFocusGrowthEditor(true)).toBe(true);
     expect(shouldAutoFocusGrowthEditor(false)).toBe(false);
+  });
+});
+
+function renderGrowthVisibilityControl(overrides: Partial<GrowthVisibilityControlProps> = {}) {
+  return renderToStaticMarkup(
+    createElement(GrowthVisibilityControl, {
+      enabled: false,
+      saving: false,
+      status: "idle",
+      onChange: () => undefined,
+      ...overrides,
+    }),
+  );
+}
+
+describe("student growth visibility control", () => {
+  it("gives the switch an accessible name while preserving status feedback", () => {
+    const markup = renderGrowthVisibilityControl({ status: "saved" });
+    const labelMatch = markup.match(/<label[^>]*for="([^"]+)"[^>]*>공개 여부<\/label>/);
+    const switchMarkup = markup.match(/<button[^>]*role="switch"[^>]*>/)?.[0];
+
+    expect(labelMatch?.[1]).toBeDefined();
+    expect(switchMarkup).toContain(`id="${labelMatch?.[1]}"`);
+    expect(switchMarkup).not.toContain("disabled");
+    expect(markup).toContain("공개 설정을 저장했어요.");
+  });
+
+  it("disables the switch while saving and preserves error feedback", () => {
+    const markup = renderGrowthVisibilityControl({ saving: true, status: "saving" });
+    const switchMarkup = markup.match(/<button[^>]*>/)?.[0];
+
+    expect(switchMarkup).toContain("disabled");
+    expect(markup).toContain("저장 중이에요...");
+
+    const errorMarkup = renderGrowthVisibilityControl({ status: "error", error: "저장 오류" });
+    expect(errorMarkup).toContain("저장 오류");
   });
 });
