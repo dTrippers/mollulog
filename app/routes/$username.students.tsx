@@ -1,4 +1,5 @@
 import {
+  EyeIcon,
   FunnelIcon,
   IdentificationIcon,
   MinusCircleIcon,
@@ -10,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, useBlocker, useFetcher, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import type { PagePanelProps } from "~/components/features/layout";
 import {
   getFilteredStudentUids,
   StudentCards,
@@ -18,7 +20,7 @@ import {
   usePersistentStudentFilterState,
 } from "~/components/features/students";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
-import { Button, Callout, SegmentedControl, SubTitle, Toggle } from "~/components/primitives";
+import { Button, Callout, FilterButtons, SubTitle, Toggle } from "~/components/primitives";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
@@ -40,7 +42,6 @@ import { getRouteSensei } from "./$username._components/route-sensei.server";
 import GrowthVisibilityControl from "./$username.students._components/GrowthVisibilityControl";
 import ShareStudentGrowthButton from "./$username.students._components/ShareStudentGrowthButton";
 import StudentGrowthCard, { CURRENT_STATE_INTENT } from "./$username.students._components/StudentGrowthCard";
-import TierStars from "./$username.students._components/TierStars";
 
 export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
 export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
@@ -609,33 +610,9 @@ export default function UserPage() {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, [editingDirty]);
 
-  const { setPanel } = useOutletContext<{
-    setPanel: (panel: {
-      title: string;
-      description: string;
-      Icon: React.ElementType;
-      children: React.ReactNode;
-    }) => void;
+  const { setPanels } = useOutletContext<{
+    setPanels: React.Dispatch<React.SetStateAction<PagePanelProps[]>>;
   }>();
-  useEffect(() => {
-    setPanel({
-      title: "필터 및 정렬",
-      description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
-      Icon: FunnelIcon,
-      children: (
-        <fieldset disabled={editingStudentUid !== null} className="contents">
-          <StudentFilter
-            students={filterStudents}
-            state={filterState}
-            onStateChange={setFilterState}
-            useFilter
-            useSearch
-            sortBy={[...USER_STUDENT_FILTER_SORTS]}
-          />
-        </fieldset>
-      ),
-    });
-  }, [editingStudentUid, filterState, filteredUids.length, filterStudents, setFilterState, setPanel, students]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
@@ -690,16 +667,80 @@ export default function UserPage() {
     }
   }, [growthFetcher.data, growthFetcher.state]);
 
-  const handleGrowthVisibilityChange = (enabled: boolean) => {
-    if (growthSaving) return;
-    const formData = new FormData();
-    formData.set("intent", GROWTH_VISIBILITY_INTENT);
-    formData.set("growthVisibility", enabled ? "on" : "off");
-    growthSubmitRef.current = enabled;
-    setGrowthStatus("saving");
-    setGrowthError(null);
-    growthFetcher.submit(formData, { method: "post" });
-  };
+  const handleGrowthVisibilityChange = useCallback(
+    (enabled: boolean) => {
+      if (growthSaving) return;
+      const formData = new FormData();
+      formData.set("intent", GROWTH_VISIBILITY_INTENT);
+      formData.set("growthVisibility", enabled ? "on" : "off");
+      growthSubmitRef.current = enabled;
+      setGrowthStatus("saving");
+      setGrowthError(null);
+      growthFetcher.submit(formData, { method: "post" });
+    },
+    [growthFetcher, growthSaving],
+  );
+
+  const panels = useMemo<PagePanelProps[]>(() => {
+    const nextPanels: PagePanelProps[] = [
+      {
+        title: "필터 및 정렬",
+        description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
+        Icon: FunnelIcon,
+        children: (
+          <fieldset disabled={editingStudentUid !== null} className="contents">
+            <StudentFilter
+              students={filterStudents}
+              state={filterState}
+              onStateChange={setFilterState}
+              useFilter
+              useSearch
+              sortBy={[...USER_STUDENT_FILTER_SORTS]}
+            />
+          </fieldset>
+        ),
+      },
+    ];
+
+    if (me) {
+      nextPanels.push({
+        title: "성장 상태 공개",
+        Icon: EyeIcon,
+        children: (
+          <GrowthVisibilityControl
+            enabled={growthVisibility}
+            saving={growthSaving}
+            status={growthStatus}
+            error={growthError}
+            onChange={handleGrowthVisibilityChange}
+          />
+        ),
+      });
+    }
+
+    return nextPanels;
+  }, [
+    editingStudentUid,
+    filterState,
+    filteredUids.length,
+    filterStudents,
+    growthError,
+    growthSaving,
+    growthStatus,
+    growthVisibility,
+    handleGrowthVisibilityChange,
+    me,
+    setFilterState,
+    students.length,
+  ]);
+
+  useEffect(() => {
+    setPanels(panels);
+  }, [panels, setPanels]);
+
+  useEffect(() => {
+    return () => setPanels([]);
+  }, [setPanels]);
 
   const handleAddStudent = (studentUid: string, tier: number) => {
     const formData = new FormData();
@@ -762,15 +803,8 @@ export default function UserPage() {
         </div>
       ) : null}
 
-      {me ? (
+      {me && (profileVisibility === "private" || growthVisibility) ? (
         <div className="my-6 space-y-3">
-          <GrowthVisibilityControl
-            enabled={growthVisibility}
-            saving={growthSaving}
-            status={growthStatus}
-            error={growthError}
-            onChange={handleGrowthVisibilityChange}
-          />
           {profileVisibility === "private" ? (
             <Callout
               tone="warning"
@@ -796,22 +830,27 @@ export default function UserPage() {
               : undefined
           }
         />
-        <SegmentedControl
-          ariaLabel="학생부 보기 방식"
-          value={view}
-          options={[
-            { value: "summary", label: "간략히", disabled: editingStudentUid !== null },
-            { value: "growth", label: "성장 상세", disabled: editingStudentUid !== null || !canViewGrowth },
-          ]}
-          onChange={changeView}
-          className="shrink-0 whitespace-nowrap"
-        />
+        <fieldset disabled={editingStudentUid !== null || !canViewGrowth} className="shrink-0">
+          <legend className="sr-only">학생부 보기 방식</legend>
+          <FilterButtons
+            buttonProps={[
+              { text: "간략히", active: view === "summary", onToggle: () => changeView("summary") },
+              { text: "성장 상세", active: view === "growth", onToggle: () => changeView("growth") },
+            ]}
+            exclusive
+            atLeastOne
+            size="sm"
+            surface="page"
+            className="my-0"
+            buttonGroupClassName="justify-end"
+          />
+        </fieldset>
       </div>
 
       {noRecruited ? (
         <div className="my-16 text-center">아직 모집한 학생이 없어요</div>
       ) : view === "growth" ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr))]">
+        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))]">
           {growthStudents.map((student) => (
             <StudentGrowthCard
               key={student.uid}
@@ -845,7 +884,7 @@ export default function UserPage() {
             defenseType,
             role,
             initialTier,
-            label: <TierStars tier={tier} />,
+            tier,
             popups: [
               ...(me
                 ? [
