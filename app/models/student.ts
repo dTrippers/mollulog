@@ -321,6 +321,17 @@ const studentSkillItemsQuery = graphql(`
   }
 `);
 
+const studentWeaponAvailabilityQuery = graphql(`
+  query StudentWeaponAvailability($uids: [String!]) {
+    students(uids: $uids) {
+      uid
+      catalog {
+        weapon { name }
+      }
+    }
+  }
+`);
+
 export type StudentSkillItem = { item: { uid: string; subCategory: string | null; rarity: number } };
 export type StudentSkillItems = { schaleDbId: string | null; skillItems: StudentSkillItem[] };
 
@@ -372,6 +383,39 @@ export async function getStudentSkillItems(env: Env, uid: string): Promise<Stude
     buildStudentSkillItemsCacheKey(uid),
     async () => (await fetchStudentSkillItemsFromBaql([uid])).get(uid) ?? { schaleDbId: null, skillItems: [] },
     STUDENT_SKILL_ITEMS_TTL,
+  );
+}
+
+const STUDENT_WEAPON_AVAILABILITY_TTL = 7 * 24 * 60 * 60;
+
+function buildStudentWeaponAvailabilityCacheKey(uid: string): string {
+  return cacheKey("source", "student-weapon-availability", 1, cacheQuery({ uid }));
+}
+
+async function fetchStudentWeaponAvailabilityFromBaql(studentUids: string[]): Promise<Map<string, boolean>> {
+  const { data, error } = await runQuery(studentWeaponAvailabilityQuery, { uids: studentUids });
+  if (error) {
+    throw error;
+  }
+
+  const availabilityByUid = new Map(
+    (data?.students ?? []).map((student) => [student.uid, student.catalog?.weapon != null]),
+  );
+  return availabilityByUid;
+}
+
+export async function getStudentWeaponAvailability(
+  env: Env,
+  studentUids: string[],
+  forceRefresh = false,
+): Promise<Map<string, boolean>> {
+  const uniqueUids = [...new Set(studentUids)].sort();
+  return fetchLazySourceCachedBatch(
+    env,
+    uniqueUids.map((uid) => ({ key: uid, dataKey: buildStudentWeaponAvailabilityCacheKey(uid) })),
+    fetchStudentWeaponAvailabilityFromBaql,
+    STUDENT_WEAPON_AVAILABILITY_TTL,
+    forceRefresh,
   );
 }
 
