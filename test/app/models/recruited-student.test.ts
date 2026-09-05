@@ -280,7 +280,16 @@ describe("recruited-student current state", () => {
 
   it("loads recruited current fields with the tier", async () => {
     const { db, env } = createEnv();
-    db.rows.push(createRecruitedStudentRow({ level: 80, skillEx: 4, equip1: 7 }));
+    db.rows.push(
+      createRecruitedStudentRow({
+        level: 80,
+        skillEx: 4,
+        equip1: 7,
+        equip1Level: 70,
+        equip2Level: 45,
+        equip3Level: 30,
+      }),
+    );
 
     await expect(getRecruitedStudents(env, 1)).resolves.toEqual([
       expect.objectContaining({
@@ -289,6 +298,9 @@ describe("recruited-student current state", () => {
         level: 80,
         skillEx: 4,
         equip1: 7,
+        equip1Level: 70,
+        equip2Level: 45,
+        equip3Level: 30,
       }),
     ]);
   });
