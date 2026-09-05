@@ -1,5 +1,8 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { formatStudentFullName } from "~/models/student";
+import { runQuery } from "~/lib/baql";
+import { formatStudentFullName, getAllStudents, syncRawStudents } from "~/models/student";
+
+const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -25,5 +28,27 @@ describe("formatStudentFullName", () => {
 
   it("falls back to name when familyName is empty", () => {
     expect(formatStudentFullName({ uid: "10135", name: "케이", familyName: "" })).toBe("케이");
+  });
+});
+
+describe("student catalog source validation", () => {
+  const env = { DISABLE_CACHE: "true" } as unknown as Env;
+
+  it("rejects a GraphQL error instead of returning an empty catalog", async () => {
+    mockedRunQuery.mockResolvedValue({ data: undefined, error: new Error("GraphQL failure") } as never);
+
+    await expect(syncRawStudents(env)).rejects.toThrow("GraphQL failure");
+  });
+
+  it("rejects a response without the required student list", async () => {
+    mockedRunQuery.mockResolvedValue({ data: {}, error: undefined } as never);
+
+    await expect(getAllStudents(env)).rejects.toThrow("missing students");
+  });
+
+  it("accepts a valid empty student list", async () => {
+    mockedRunQuery.mockResolvedValue({ data: { students: [] }, error: undefined } as never);
+
+    await expect(getAllStudents(env)).resolves.toEqual([]);
   });
 });

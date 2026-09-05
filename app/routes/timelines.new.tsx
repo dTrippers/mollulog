@@ -12,14 +12,14 @@ import {
   WalkthroughTimelineFeedbackButton,
   WalkthroughTimelinePartyPanel,
 } from "~/components/features/walkthrough-timeline";
-import { createPostgresWalkthroughTimeline } from "~/db/postgres/walkthrough-timelines";
+import { createPostgresWalkthroughTimelineWithCommunityPost } from "~/db/postgres/walkthrough-timelines";
 import {
   isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
   type WalkthroughParty,
 } from "~/domain/walkthrough-timeline";
+import { ActionValidationError, isActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
-import { syncWalkthroughTimelineCommunityPost } from "~/models/community.server";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };
@@ -53,11 +53,24 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
   const formData = await request.formData();
+  let document: ReturnType<typeof parseWalkthroughTimelineDocument>;
+  let visibility: "private" | "unlisted" | "public";
   try {
-    const document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
-    const visibility = String(formData.get("visibility") ?? "private");
-    if (!isWalkthroughTimelineVisibility(visibility)) throw new Error("공개 범위를 확인해주세요.");
-    const timeline = await createPostgresWalkthroughTimeline(
+    document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
+    const rawVisibility = String(formData.get("visibility") ?? "private");
+    if (!isWalkthroughTimelineVisibility(rawVisibility)) {
+      throw new ActionValidationError("공개 범위를 확인해주세요.");
+    }
+    visibility = rawVisibility;
+  } catch (error) {
+    return data<ActionData>(
+      { error: isActionValidationError(error) ? error.message : "입력값을 확인해주세요." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const timeline = await createPostgresWalkthroughTimelineWithCommunityPost(
       env,
       currentUser.id,
       {
@@ -72,21 +85,16 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       },
       { ctx },
     );
-    try {
-      await syncWalkthroughTimelineCommunityPost(env, timeline);
-    } catch (error) {
-      logger.error("Failed to sync walkthrough timeline community post", error, {
-        timelineUid: timeline.uid,
-        visibility: timeline.visibility,
-        operation: "create",
-      });
-    }
     return redirect(`/timelines/${timeline.uid}`);
   } catch (error) {
-    return data<ActionData>(
-      { error: error instanceof Error ? error.message : "입력값을 확인해주세요." },
-      { status: 400 },
-    );
+    if (isActionValidationError(error)) {
+      return data<ActionData>({ error: error.message }, { status: 400 });
+    }
+    logger.error("Failed to create walkthrough timeline", error, {
+      operation: "create",
+      userId: currentUser.id,
+    });
+    return data<ActionData>({ error: "타임라인을 저장하지 못했어요. 잠시 후 다시 시도해주세요." }, { status: 500 });
   }
 };
 
@@ -130,6 +138,7 @@ export default function NewWalkthroughTimelinePage() {
               onRedo={() => editorRef.current?.redo()}
               canUndo={actionState.canUndo}
               canRedo={actionState.canRedo}
+              error={actionError}
             />
           ),
         },
@@ -162,7 +171,6 @@ export default function NewWalkthroughTimelinePage() {
           onPartiesChange={setParties}
           onActionStateChange={setActionState}
           draftStorageKey="walkthrough-timeline:draft:new"
-          error={actionError}
         />
       </div>
     </Page>

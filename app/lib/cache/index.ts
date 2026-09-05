@@ -109,6 +109,7 @@ type InflightCacheRequest = {
   dataKey: string;
   startedAt: number;
   forceRefresh: boolean;
+  rejectOnForcedRefresh: boolean;
 };
 
 /**
@@ -136,6 +137,8 @@ type FetchCachedOptions<T> = {
   expirationTtl?: number;
   maxStaleTtl?: number | ((data: T) => number);
   mode?: CacheCategory;
+  /** Forced source refreshes must report regeneration failure to their caller. */
+  rejectOnForcedRefresh?: boolean;
   swr?: boolean;
   warnOnRequestRefresh?: boolean;
 };
@@ -378,46 +381,57 @@ function getNamespaceInflightRequests(env: Env): Map<string, InflightCacheReques
  * - the registrant force-drops its own entry after INFLIGHT_MAX_MS even if
  *   `produce()` never settles.
  *
- * A non-timeout rejection from the shared regeneration is propagated to
- * piggybackers (rather than each retrying) so a true upstream failure does not
- * turn into a retry storm; callers with stale data fall back to it upstream.
+ * A non-timeout rejection from a compatible shared regeneration is propagated
+ * to piggybackers (rather than each retrying) so a true upstream failure does
+ * not turn into a retry storm. Forced source entries that must reject are
+ * explicitly non-piggybackable by ordinary callers so their stale fallback is
+ * evaluated independently.
  */
 async function runWithInflightDedup<T>(
   inflightMap: Map<string, InflightCacheRequest>,
   cacheKey: string,
   forceRefresh: boolean,
   produce: () => Promise<T>,
+  rejectOnForcedRefresh = false,
 ): Promise<T> {
   // A forceRefresh caller must start its own request instead of piggybacking on
-  // an in-flight one. Non-force callers can piggyback regardless of force status.
+  // an in-flight one. Non-force callers can piggyback only when the entry's
+  // rejection semantics are compatible with their stale-fallback path.
   if (!forceRefresh) {
     const inflightEntry = inflightMap.get(cacheKey);
     if (inflightEntry) {
-      const inflightAgeMs = Date.now() - inflightEntry.startedAt;
-      if (inflightAgeMs > INFLIGHT_MAX_MS) {
-        if (inflightMap.get(cacheKey) === inflightEntry) {
-          inflightMap.delete(cacheKey);
-          logInflightLifecycle("evicted", inflightEntry);
-        }
+      // A forced source refresh that must reject on regeneration failure cannot
+      // be shared with an ordinary caller: the ordinary caller must run its own
+      // stale-fallback path instead of inheriting the forced rejection.
+      if (inflightEntry.forceRefresh && inflightEntry.rejectOnForcedRefresh) {
+        // Fall through and start an independent request below.
       } else {
-        try {
-          return await watchIo(
-            "cache.inflight",
-            withTimeout(inflightEntry.promise as Promise<T>, INFLIGHT_WAIT_TIMEOUT_MS, "cache.inflight"),
-            {
-              dataKey: cacheKey,
-              inflightAgeMs,
-              inflightForceRefresh: inflightEntry.forceRefresh,
-            },
-          );
-        } catch (error) {
-          if (!isTimeoutError(error)) {
-            throw error;
-          }
-
-          warnIoFailure("cache.inflight", cacheKey, error, INFLIGHT_WAIT_TIMEOUT_MS);
+        const inflightAgeMs = Date.now() - inflightEntry.startedAt;
+        if (inflightAgeMs > INFLIGHT_MAX_MS) {
           if (inflightMap.get(cacheKey) === inflightEntry) {
             inflightMap.delete(cacheKey);
+            logInflightLifecycle("evicted", inflightEntry);
+          }
+        } else {
+          try {
+            return await watchIo(
+              "cache.inflight",
+              withTimeout(inflightEntry.promise as Promise<T>, INFLIGHT_WAIT_TIMEOUT_MS, "cache.inflight"),
+              {
+                dataKey: cacheKey,
+                inflightAgeMs,
+                inflightForceRefresh: inflightEntry.forceRefresh,
+              },
+            );
+          } catch (error) {
+            if (!isTimeoutError(error)) {
+              throw error;
+            }
+
+            warnIoFailure("cache.inflight", cacheKey, error, INFLIGHT_WAIT_TIMEOUT_MS);
+            if (inflightMap.get(cacheKey) === inflightEntry) {
+              inflightMap.delete(cacheKey);
+            }
           }
         }
       }
@@ -446,6 +460,7 @@ async function runWithInflightDedup<T>(
     dataKey: cacheKey,
     startedAt: Date.now(),
     forceRefresh,
+    rejectOnForcedRefresh,
   };
   inflightState.entry = entry;
   // Safety net: if `request` never settles (a hung KV/BAQL/ranks call), drop the
@@ -521,7 +536,7 @@ async function fetchCachedInternal<T>(
         warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
       }
 
-      if (cached) {
+      if (cached && !(forceRefresh && options.rejectOnForcedRefresh)) {
         return cached.data;
       }
 
@@ -592,6 +607,7 @@ function scheduleBackgroundRefresh<T>(
     dataKey: cacheKey,
     startedAt: Date.now(),
     forceRefresh: true,
+    rejectOnForcedRefresh: false,
   };
   inflightMap.set(cacheKey, entry);
   if (options.ctx) {
@@ -607,11 +623,13 @@ export async function fetchSourceCached<T>(
   dataKey: string,
   fn: () => Promise<T>,
   forceRefresh = false,
+  options: Pick<FetchCachedOptions<T>, "rejectOnForcedRefresh"> = {},
 ): Promise<T> {
   return fetchCached(env, dataKey, fn, SOURCE_CACHE_MAX_STALE_TTL, forceRefresh, {
     expirationTtl: SOURCE_CACHE_EXPIRATION_TTL,
     maxStaleTtl: SOURCE_CACHE_MAX_STALE_TTL,
     mode: "source",
+    ...options,
     warnOnRequestRefresh: true,
   });
 }
@@ -794,13 +812,17 @@ export async function fetchCached<T>(
   // synchronous regeneration, after the stale-first decision has been made.
   if (options.swr) {
     return fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options, (produce) =>
-      runWithInflightDedup(inflightMap, cacheKey, forceRefresh, produce),
+      runWithInflightDedup(inflightMap, cacheKey, forceRefresh, produce, options.rejectOnForcedRefresh),
     );
   }
 
   // Non-SWR callers have no stale-first path, so the whole fetch (KV read +
   // regeneration) is coalesced as one in-flight request.
-  return runWithInflightDedup(inflightMap, cacheKey, forceRefresh, () =>
-    fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options),
+  return runWithInflightDedup(
+    inflightMap,
+    cacheKey,
+    forceRefresh,
+    () => fetchCachedInternal(env, dataKey, fn, ttl, forceRefresh, options),
+    options.rejectOnForcedRefresh,
   );
 }

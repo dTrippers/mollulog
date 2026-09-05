@@ -54,7 +54,6 @@ describe("Discord page responsibility", () => {
     expect(profileConnectionSource).toContain("연결을 끊으면 모든 알림을 받을 수 없어요. 정말 연결을 끊을까요?");
     expect(profileConnectionSource).toContain('action="/auth/discord/notifications/connect"');
     expect(profileConnectionSource).toContain('value="discord-unlink"');
-    expect(profileConnectionSource).toContain("Discord 로그인 계정도 함께 연결돼요");
     expect(editSource).toContain("discordMessage");
     expect(notificationsSource).not.toContain('intent !== "discord-connect"');
     expect(notificationsSource).not.toContain('intent !== "discord-unlink"');

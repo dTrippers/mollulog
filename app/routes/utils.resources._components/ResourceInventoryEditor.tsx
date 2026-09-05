@@ -183,11 +183,7 @@ export default function ResourceInventoryEditor({
 
   return (
     <>
-      {submitError ? (
-        <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{submitError}</p>
-      ) : null}
-
-      <div className="space-y-3">
+      <div className={cn("space-y-3", hasChanges && "pb-[calc(var(--mobile-bottom-offset)+4rem)] lg:pb-0")}>
         {hasCreditRequirement ? <CreditRequirementSummary credit={requiredResources.credit} /> : null}
 
         {resourceGroups.length === 0 && (!hasCreditRequirement || hasActiveFilter) ? (
@@ -218,13 +214,18 @@ export default function ResourceInventoryEditor({
       </div>
 
       {hasChanges ? (
-        <div className="fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-layer-navigation px-4 py-3 lg:bottom-0 lg:left-72 xl:left-84">
+        <div className="sticky bottom-[calc(var(--mobile-bottom-offset)+4rem)] z-layer-navigation px-4 py-3 lg:bottom-4 lg:px-0 lg:py-0">
           <FloatingActionBar className="mx-auto flex max-w-4xl flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-            <div>
+            <div className="min-w-0 space-y-1">
               <p className="text-sm font-semibold text-foreground">변경 사항이 있습니다</p>
               <p className="mt-1 text-xs text-muted-foreground">
                 변경된 재화 {changedItems.length.toLocaleString()}개를 저장합니다.
               </p>
+              {submitError ? (
+                <p role="alert" className="text-sm font-medium text-destructive">
+                  {submitError}
+                </p>
+              ) : null}
             </div>
             <div className="flex gap-2">
               <Button type="button" size="sm" variant="secondary" onClick={resetDraft} disabled={isSubmitting}>
@@ -232,7 +233,7 @@ export default function ResourceInventoryEditor({
               </Button>
               <Button type="button" size="sm" variant="primary" onClick={saveChanges} disabled={isSubmitting}>
                 {isSubmitting ? <ArrowPathIcon className="size-4 animate-spin" /> : null}
-                {isSubmitting ? "저장 중..." : "저장"}
+                {isSubmitting ? "저장 중..." : submitError ? "다시 저장" : "저장"}
               </Button>
             </div>
           </FloatingActionBar>
