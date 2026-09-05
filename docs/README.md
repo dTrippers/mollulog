@@ -22,6 +22,7 @@ These documents describe the project's durable structure and conventions — whe
 
 ### Contributing
 
+- [development.md](./development.md) — shared worktree settings, local PostgreSQL commands, and agent execution.
 - [contributing/code-review.md](./contributing/code-review.md) — pull request review checklist.
 
 ## How the layers relate

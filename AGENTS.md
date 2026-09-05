@@ -25,6 +25,7 @@ This project uses the following stack:
 This project has been deployed to Cloudflare Workers.
 
 ## Development Guides
+- For local environment setup, DB access, or schema validation, read `docs/development.md`. Use `mise exec -- pnpm dev:doctor` and `dev:db:migrate <new-file.sql>` instead of manually injecting credentials. Retry sandbox-only DB connection failures with the execution tool's local network permission before asking the user to repair the environment. Never replay untracked historical migrations or reset the shared local DB.
 - Please follow the conventions of the project. Search for the existing code and follow the same style.
 - Before creating or changing database models, schemas, or migrations, read `docs/data/database.md` and follow its modeling and validation rules.
 - For UI layout, use modern and simple design.

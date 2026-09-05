@@ -5,9 +5,9 @@
   "packageManager": "pnpm@11.1.1",
   "scripts": {
     "codegen": "graphql-codegen",
-    "dev": "react-router dev --host",
+    "dev": "node scripts/local-dev.mjs dev",
     "cf-typegen": "wrangler types",
-    "start": "wrangler dev --persist-to ${WRANGLER_PERSIST_TO:-.wrangler/state}",
+    "start": "node scripts/local-dev.mjs start",
     "staging:build": "CLOUDFLARE_ENV=staging react-router build --mode staging",
     "staging:deploy": "pnpm run staging:build && wrangler deploy --config build/server/wrangler.json && wrangler deploy --config dist/cron/wrangler.json",
     "prod:build": "CLOUDFLARE_ENV=production react-router build --mode production",
@@ -22,7 +22,12 @@
     "typecheck": "react-router typegen && tsc",
     "lint": "pnpm run lint:postgres-migrations && biome lint app test && biome check test",
     "lint:fix": "pnpm run lint:postgres-migrations && biome lint --write app test && biome check --write test",
-    "lint:postgres-migrations": "node scripts/lint-postgres-migrations.mjs"
+    "lint:postgres-migrations": "node scripts/lint-postgres-migrations.mjs",
+    "dev:setup": "node scripts/local-dev.mjs setup",
+    "dev:doctor": "node scripts/local-dev.mjs doctor",
+    "dev:db:status": "node scripts/local-dev.mjs db:status",
+    "dev:db:migrate": "node scripts/local-dev.mjs db:migrate",
+    "test:local-dev": "node --test scripts/local-dev.test.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.5.0",
