@@ -6,19 +6,17 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import { validateStudentEquipmentLevels } from "~/domain/student-calculator";
+import { isActionValidationError } from "~/lib/action-errors";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
 import { getAllRaidSchedules } from "~/models/raid";
-import {
-  getRecruitedStudents,
-  type RecruitedStudentCurrentStateInput,
-  upsertRecruitedStudentState,
-} from "~/models/recruited-student";
-import { getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
+import { getRecruitedStudents, type RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import { getStudentDetailData } from "~/models/student";
+import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
 import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
@@ -206,28 +204,50 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return data<StudentBasicInfoActionData>({ ok: false, error: "학생 정보가 필요해요" }, { status: 400 });
   }
 
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "students.$id._index.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<StudentBasicInfoActionData>({ ok: false, error: "로그인이 필요해요" }, { status: 401 });
   }
 
+  let payload: Record<string, unknown>;
   try {
-    const payload = await request.json<Record<string, unknown>>();
-    const studentDetailData = await getStudentDetailData(env, studentUid);
-    const student = studentDetailData?.student;
-    if (!student) {
+    payload = await request.json<Record<string, unknown>>();
+  } catch {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "요청 형식이 올바르지 않아요" }, { status: 400 });
+  }
+
+  let studentDetailData: Awaited<ReturnType<typeof getStudentDetailData>>;
+  try {
+    studentDetailData = await getStudentDetailData(env, studentUid);
+  } catch (error) {
+    if (isStudentNotFoundError(error)) {
       return data<StudentBasicInfoActionData>({ ok: false, error: "존재하지 않는 학생이에요" }, { status: 400 });
     }
-    if (!student.released) {
-      return data<StudentBasicInfoActionData>({ ok: false, error: "출시되지 않은 학생이에요" }, { status: 400 });
-    }
+    logger.error("Failed to load student detail for save", error, { studentUid, userId: currentUser.id });
+    return data<StudentBasicInfoActionData>(
+      { ok: false, error: "학생 정보를 확인하지 못했어요. 잠시 후 다시 시도해주세요" },
+      { status: 500 },
+    );
+  }
+  const student = studentDetailData?.student;
+  if (!student) {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "존재하지 않는 학생이에요" }, { status: 400 });
+  }
+  if (!student.released) {
+    return data<StudentBasicInfoActionData>({ ok: false, error: "출시되지 않은 학생이에요" }, { status: 400 });
+  }
 
-    const tier = parseNullableInteger(payload.tier) ?? student.initialTier;
+  let tier: number;
+  let currentState: RecruitedStudentCurrentStateInput;
+  let relationshipBonds: Record<string, number>;
+  try {
+    tier = parseNullableInteger(payload.tier) ?? student.initialTier;
     if (tier < student.initialTier) {
       throw new Error(`성급은 최초 성급인 ${student.initialTier}성보다 낮게 설정할 수 없어요`);
     }
-    const currentState = toStudentBasicInfoCurrentStateInput(payload);
+    currentState = toStudentBasicInfoCurrentStateInput(payload);
     validateStudentEquipmentLevels(student, studentDetailData?.studentCatalog, currentState);
     const bond = parseNullableInteger(payload.bond);
     if (bond != null && (bond < 1 || bond > 100)) {
@@ -242,33 +262,31 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     }
 
     const stateStudentUid = student.studentVariant.primaryStudent.uid;
-    await upsertRecruitedStudentState(env, currentUser.id, stateStudentUid, tier, currentState);
-
-    const relationshipBonds = new Map(Object.entries(relatedBonds));
-    if (bond != null) relationshipBonds.set(stateStudentUid, bond);
-    const existingRelationships = await getRelationshipLevels(env, currentUser.id, [...relationshipBonds.keys()]);
-    const existingRelationshipsByStudentUid = new Map(
-      existingRelationships.map((relationship) => [relationship.studentId, relationship]),
-    );
-    for (const [relationshipStudentUid, relationshipBond] of relationshipBonds) {
-      const existingRelationship = existingRelationshipsByStudentUid.get(relationshipStudentUid);
-      const targetRelationshipLevel = Math.max(relationshipBond, existingRelationship?.targetLevel ?? relationshipBond);
-      await upsertRelationshipLevel(
-        env,
-        currentUser.id,
-        relationshipStudentUid,
-        relationshipBond,
-        existingRelationship?.currentLevel === relationshipBond ? existingRelationship.currentExp : null,
-        targetRelationshipLevel,
-        existingRelationship?.items ?? {},
-      );
-    }
-
-    return data<StudentBasicInfoActionData>({ ok: true });
+    relationshipBonds = { ...relatedBonds };
+    if (bond != null) relationshipBonds[stateStudentUid] = bond;
   } catch (error) {
     return data<StudentBasicInfoActionData>(
-      { ok: false, error: error instanceof Error ? error.message : "육성 상태를 저장하지 못했어요" },
+      { ok: false, error: error instanceof Error ? error.message : "입력값을 확인해주세요" },
       { status: 400 },
+    );
+  }
+
+  const stateStudentUid = student.studentVariant.primaryStudent.uid;
+  try {
+    await saveStudentBasicInfo(env, currentUser.id, stateStudentUid, { tier, currentState, relationshipBonds });
+    return data<StudentBasicInfoActionData>({ ok: true });
+  } catch (error) {
+    if (isActionValidationError(error)) {
+      return data<StudentBasicInfoActionData>({ ok: false, error: error.message }, { status: 400 });
+    }
+    logger.error("Student basic info save failed", error, {
+      studentUid: stateStudentUid,
+      userId: currentUser.id,
+      operation: "save",
+    });
+    return data<StudentBasicInfoActionData>(
+      { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요" },
+      { status: 500 },
     );
   }
 };

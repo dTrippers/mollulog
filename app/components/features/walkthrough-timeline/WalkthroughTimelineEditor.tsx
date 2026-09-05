@@ -61,7 +61,6 @@ type EditorProps = {
   onPartiesChange: (parties: WalkthroughParty[]) => void;
   onActionStateChange: (state: WalkthroughTimelineEditorActionState) => void;
   draftStorageKey: string;
-  error?: string;
 };
 
 export type WalkthroughTimelineEditorActionState = {
@@ -355,7 +354,6 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
       onPartiesChange,
       onActionStateChange,
       draftStorageKey,
-      error,
     },
     ref,
   ) {
@@ -1277,8 +1275,6 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
             ) : null,
           )}
         </section>
-
-        {error && <p className="text-sm font-medium text-destructive">{error}</p>}
       </Form>
     );
   },

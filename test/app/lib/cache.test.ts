@@ -4,7 +4,9 @@ import {
   fetchCached,
   fetchLazySourceCachedBatch,
   fetchRouteCached,
+  fetchSourceCached,
   SOURCE_CACHE_EXPIRATION_TTL,
+  SOURCE_CACHE_MAX_STALE_TTL,
 } from "../../../app/lib/cache";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
@@ -510,6 +512,86 @@ describe("fetchCached", () => {
     await expect(nonForce).resolves.toEqual(["cached-video"]);
     await expect(forced).resolves.toEqual(["fresh-video"]);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("forced source refresh failures", () => {
+  it("rejects an affected forced refresh while preserving the existing cache", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env, kv } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["cached-students"],
+        cachedAt: now - 1_900_000,
+      }),
+    );
+
+    await expect(
+      fetchSourceCached(
+        env,
+        "source::student::v1::all",
+        async () => {
+          throw new Error("upstream unavailable");
+        },
+        true,
+        { rejectOnForcedRefresh: true },
+      ),
+    ).rejects.toThrow("upstream unavailable");
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("keeps stale fallback behavior for ordinary source requests", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: ["cached-students"],
+        cachedAt: now - 1_900_000,
+      }),
+    );
+
+    await expect(
+      fetchSourceCached(env, "source::student::v1::all", async () => {
+        throw new Error("upstream unavailable");
+      }),
+    ).resolves.toEqual(["cached-students"]);
+  });
+
+  it("keeps stale fallback for an ordinary caller during a failing forced refresh", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const staleData = ["cached-students"];
+    const forcedFailure = new Error("upstream unavailable");
+    const { env } = createEnv(
+      JSON.stringify({
+        _ver: 2,
+        data: staleData,
+        cachedAt: now - (SOURCE_CACHE_MAX_STALE_TTL * 1000 + 1),
+      }),
+    );
+    let rejectForced!: (error: Error) => void;
+    const fn = jest.fn(() => {
+      if (fn.mock.calls.length === 1) {
+        return new Promise<string[]>((_resolve, reject) => {
+          rejectForced = reject;
+        });
+      }
+      return Promise.reject(forcedFailure);
+    });
+
+    const forced = fetchSourceCached(env, "source::student::v1::all", fn, true, { rejectOnForcedRefresh: true });
+    await flushPromises();
+    expect(fn).toHaveBeenCalledTimes(1);
+
+    const ordinary = fetchSourceCached(env, "source::student::v1::all", fn);
+    await flushPromises();
+
+    rejectForced(forcedFailure);
+    await expect(ordinary).resolves.toEqual(staleData);
+    await expect(forced).rejects.toThrow("upstream unavailable");
+    expect(fn).toHaveBeenCalledTimes(2);
   });
 });
 

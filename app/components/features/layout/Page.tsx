@@ -75,15 +75,16 @@ export default function Page({
   const location = useLocation();
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
-  const previousLocationKeyRef = useRef(location.key);
+  const locationSignature = `${location.pathname}${location.search}${location.hash}`;
+  const previousLocationSignatureRef = useRef(locationSignature);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
   const openPanel = openPanelIndex === null ? undefined : panels?.[openPanelIndex];
 
   useEffect(() => {
-    if (previousLocationKeyRef.current === location.key) return;
-    previousLocationKeyRef.current = location.key;
+    if (previousLocationSignatureRef.current === locationSignature) return;
+    previousLocationSignatureRef.current = locationSignature;
     setOpenPanelIndex(null);
-  }, [location.key]);
+  }, [locationSignature]);
 
   useEffect(() => {
     const sentinel = tabBarSentinelRef.current;

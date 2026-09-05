@@ -12,10 +12,14 @@ Check content schedules and statistics for the mobile game "Blue Archive", and k
 ### Quick start
 
 ```bash
-pnpm install
-pnpm dev:db:migrate
-pnpm dev
+mise exec -- pnpm install
+mise exec -- pnpm dev:setup # Once per workstation; shared by worktrees
+mise exec -- pnpm dev:doctor
+mise exec -- pnpm dev
 ```
+
+See [Local development](./docs/development.md) for shared settings, custom ports,
+and applying a selected SQL migration to the existing shared local database.
 
 ### Common commands
 

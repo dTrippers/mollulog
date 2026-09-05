@@ -447,31 +447,6 @@ function validateStoredEquipmentLevels(
   });
 }
 
-export async function upsertRecruitedStudentState(
-  env: Env,
-  senseiId: number,
-  studentUid: string,
-  tier: number,
-  input: RecruitedStudentCurrentStateInput,
-) {
-  if (!Number.isInteger(tier) || tier < 1 || tier > 9) {
-    throw new Error("성급 범위가 올바르지 않아요");
-  }
-  validateRecruitedStudentCurrentStateInput(input);
-  assertWeaponLevelRange(input.weaponLevel, tier, "고유무기 레벨");
-  assertAbilityReleaseAvailable([input.abilityHp, input.abilityAtk, input.abilityHeal], tier, "능력 해방");
-
-  await withDb(env, async (db) => {
-    await db
-      .insert(pgRecruitedStudentsTable)
-      .values({ uid: nanoid(8), userId: senseiId, studentUid, tier, ...input })
-      .onConflictDoUpdate({
-        target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-        set: { tier, ...input, updatedAt: new Date() },
-      });
-  });
-}
-
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
   await withDb(env, (db) =>
     db

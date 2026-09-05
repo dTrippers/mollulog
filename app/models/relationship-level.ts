@@ -31,10 +31,10 @@ function assertValidRelationshipLevelInput(input: RelationshipLevelInput) {
   }
 }
 
-function toItems(value: unknown): Record<string, number> {
+export function normalizeRelationshipItems(value: unknown): Record<string, number> {
   if (typeof value === "string") {
     try {
-      return toItems(JSON.parse(value));
+      return normalizeRelationshipItems(JSON.parse(value));
     } catch {
       return {};
     }
@@ -57,7 +57,7 @@ function toModel(relationshipLevel: typeof relationshipLevelsTable.$inferSelect)
     currentLevel: relationshipLevel.currentLevel,
     currentExp: relationshipLevel.currentExp,
     targetLevel: relationshipLevel.targetLevel,
-    items: toItems(relationshipLevel.items),
+    items: normalizeRelationshipItems(relationshipLevel.items),
   };
 }
 
@@ -167,7 +167,7 @@ export async function updateRelationshipLevel(
           currentLevel: resolved.currentLevel,
           currentExp: resolved.currentExp,
           targetLevel: resolved.targetLevel,
-          items: existing ? toItems(existing.items) : {},
+          items: existing ? normalizeRelationshipItems(existing.items) : {},
         })
         .onConflictDoUpdate({
           target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],

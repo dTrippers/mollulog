@@ -235,13 +235,20 @@ export async function getAllStudentsMap(env: Env, includeUnreleased = false): Pr
 const rawStudentsKey = cacheKey("source", "student", 1, "all");
 
 async function fetchStudentsFromBaql(): Promise<Student[]> {
-  const { data } = await runQuery(allStudentsQuery, {});
-  if (!data?.students) return [];
-  return data.students satisfies Student[];
+  const result = await runQuery(allStudentsQuery, {});
+  if (result.error) {
+    throw result.error;
+  }
+  if (!result.data || !Array.isArray(result.data.students)) {
+    throw new Error("BAQL student catalog response is missing students");
+  }
+  return result.data.students satisfies Student[];
 }
 
 export async function syncRawStudents(env: Env, forceRefresh = true): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh);
+  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh, {
+    rejectOnForcedRefresh: true,
+  });
 }
 
 async function getRawStudents(env: Env): Promise<Student[]> {

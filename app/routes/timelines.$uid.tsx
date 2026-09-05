@@ -10,8 +10,9 @@ import {
 } from "@heroicons/react/24/outline";
 import dayjs from "dayjs";
 import { QRCodeSVG } from "qrcode.react";
+import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Form, Link, redirect, useLoaderData, useNavigation } from "react-router";
+import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
@@ -29,7 +30,7 @@ import {
 } from "~/db/postgres/walkthrough-timeline-likes";
 import {
   clonePostgresWalkthroughTimeline,
-  deletePostgresWalkthroughTimeline,
+  deletePostgresWalkthroughTimelineWithCommunityPost,
   getPostgresWalkthroughTimeline,
 } from "~/db/postgres/walkthrough-timelines";
 import {
@@ -42,7 +43,6 @@ import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
-import { deleteCommunityPostByUid } from "~/models/community.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
@@ -52,6 +52,8 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
   ...(data?.timeline.visibility === "public" ? [] : [{ name: "robots", content: "noindex,nofollow" }]),
 ];
 export const ErrorBoundary = RouteErrorBoundary;
+
+type ActionData = { error: string };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -141,17 +143,21 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     return redirect(`/timelines/${cloned.uid}/edit`);
   }
   if (intent === "delete") {
-    const deleted = await deletePostgresWalkthroughTimeline(env, params.uid, currentUser.id, { ctx });
-    if (!deleted) throw routeError(403, "timeline.forbidden", "이 타임라인을 삭제할 수 없어요.");
     try {
-      await deleteCommunityPostByUid(env, params.uid, currentUser.id);
+      const deleted = await deletePostgresWalkthroughTimelineWithCommunityPost(env, params.uid, currentUser.id, {
+        ctx,
+      });
+      if (!deleted) throw routeError(403, "timeline.forbidden", "이 타임라인을 삭제할 수 없어요.");
+      return redirect(`/@${currentUser.username}/timelines`);
     } catch (error) {
-      logger.error("Failed to delete walkthrough timeline community post", error, {
+      if (error instanceof Response) throw error;
+      logger.error("Failed to delete walkthrough timeline", error, {
         timelineUid: params.uid,
         operation: "delete",
+        userId: currentUser.id,
       });
+      return data<ActionData>({ error: "타임라인을 삭제하지 못했어요. 잠시 후 다시 시도해주세요." }, { status: 500 });
     }
-    return redirect(`/@${currentUser.username}/timelines`);
   }
   throw routeError(400, "timeline.invalid_action", "지원하지 않는 요청이에요.");
 };
@@ -171,8 +177,17 @@ export default function WalkthroughTimelineDetailPage() {
     detailUrl,
     viewerUrl,
   } = useLoaderData<typeof loader>();
+  const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
+  const deleteControlRef = useRef<HTMLDivElement>(null);
+  const isDeleteSubmitting = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete";
   const items = flattenTimelineParties(timeline.document.parties);
+
+  useEffect(() => {
+    if (!actionData?.error || navigation.state !== "idle") return;
+    deleteControlRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+  }, [actionData?.error, navigation.state]);
+
   return (
     <Page
       title="공략 타임라인 상세"
@@ -242,6 +257,11 @@ export default function WalkthroughTimelineDetailPage() {
 
               {owner ? (
                 <div className="space-y-2">
+                  {actionData?.error ? (
+                    <div role="alert">
+                      <Callout tone="destructive" title={actionData.error} />
+                    </div>
+                  ) : null}
                   <div className="grid grid-cols-2 gap-2">
                     <Button
                       to={`/timelines/${timeline.uid}/edit`}
@@ -253,20 +273,24 @@ export default function WalkthroughTimelineDetailPage() {
                     <Form
                       method="post"
                       onSubmit={(event) => {
-                        if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
+                        if (!window.confirm("이 타임라인을 삭제할까요?")) {
+                          event.preventDefault();
+                        }
                       }}
                     >
-                      <Button
-                        type="submit"
-                        name="intent"
-                        value="delete"
-                        icon={TrashIcon}
-                        text="삭제"
-                        size="sm"
-                        variant="danger-subtle"
-                        fullWidth
-                        disabled={navigation.state !== "idle"}
-                      />
+                      <div ref={deleteControlRef}>
+                        <Button
+                          type="submit"
+                          name="intent"
+                          value="delete"
+                          icon={TrashIcon}
+                          text={isDeleteSubmitting ? "삭제 중..." : "삭제"}
+                          size="sm"
+                          variant="danger-subtle"
+                          fullWidth
+                          disabled={isDeleteSubmitting}
+                        />
+                      </div>
                     </Form>
                   </div>
                 </div>

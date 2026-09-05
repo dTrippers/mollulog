@@ -172,7 +172,7 @@ describe("student-growth target state", () => {
 
   it("returns the registration timestamp only through the metadata API", async () => {
     const { db, env } = createEnv();
-    db.rows.push(rowFactory({ createdAt: "2026-07-01 12:34:56" }));
+    db.rows.push(rowFactory({ createdAt: "2026-07-01T03:34:56.000Z" }));
 
     await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).resolves.toMatchObject({
       uid: "growth-a",

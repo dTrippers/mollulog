@@ -34,6 +34,11 @@ Database access uses `withPostgresClient` from `app/lib/postgres.server.ts`. A r
 
 ## PostgreSQL migration procedure
 
+For the shared local development DB, follow [Local development](../development.md).
+Run `mise exec -- pnpm dev:db:migrate <new-file.sql>` for the task's selected SQL.
+Existing untracked files have unknown application history and must not be replayed.
+This local command is separate from the production procedure below.
+
 Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repository's approved PostgreSQL migration process. Apply and verify every required migration before deploying code that depends on the new schema. Runtime deploy commands never apply schema migrations automatically.
 
 The runtime does not provide D1 migration commands, D1 bindings, or a live D1 fallback. `db/migrations` remains historical source/archive material and must not be used for new runtime persistence.

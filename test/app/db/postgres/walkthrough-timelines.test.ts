@@ -2,13 +2,15 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import {
   createPostgresWalkthroughTimeline,
-  deletePostgresWalkthroughTimeline,
+  createPostgresWalkthroughTimelineWithCommunityPost,
+  deletePostgresWalkthroughTimelineWithCommunityPost,
   getPostgresWalkthroughTimeline,
+  getPostgresWalkthroughTimelineVisibilitiesByUids,
   listPostgresPublicWalkthroughTimelines,
   listPostgresPublicWalkthroughTimelinesByBoss,
   listPostgresVisibleWalkthroughTimelines,
   listPostgresWalkthroughTimelinesByUser,
-  updatePostgresWalkthroughTimeline,
+  updatePostgresWalkthroughTimelineWithCommunityPost,
 } from "~/db/postgres/walkthrough-timelines";
 import type { WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline";
 
@@ -20,14 +22,14 @@ const document: WalkthroughTimelineDocument = {
   parties: [],
 };
 
-function postgresRow(uid = "timeline-1"): unknown[] {
+function postgresRow(uid = "timeline-1", visibility: "private" | "unlisted" | "public" = "public"): unknown[] {
   return [
     1,
     uid,
     10,
     "공략",
     "공략 설명",
-    "public",
+    visibility,
     "boss-1",
     "indoor",
     "heavy",
@@ -38,9 +40,17 @@ function postgresRow(uid = "timeline-1"): unknown[] {
   ];
 }
 
-function createClient(rowsFor: (sql: string) => unknown[][]) {
-  const query = jest.fn(async (config: { text: string }, _values?: unknown[]) => ({
-    rows: rowsFor(config.text),
+function createClient(rowsFor: (sql: string) => unknown[], options: { failOn?: string; failOnlyOnce?: boolean } = {}) {
+  let injectedFailure = false;
+  const query = jest.fn(async (config: { text: string } | string, _values?: unknown[]) => ({
+    rows: (() => {
+      const text = typeof config === "string" ? config : config.text;
+      if (options.failOn && text.includes(options.failOn) && (!options.failOnlyOnce || !injectedFailure)) {
+        injectedFailure = true;
+        throw new Error(`projection failed: ${options.failOn}`);
+      }
+      return rowsFor(text);
+    })(),
     rowCount: 1,
   }));
   const client = {
@@ -140,18 +150,43 @@ describe("PostgreSQL walkthrough timelines", () => {
     expect(visibleListCall?.[1]).toContain(10);
   });
 
-  it("scopes updates and deletes to the owner", async () => {
-    const { client, query } = createClient((sql) => (sql.includes("returning") ? [postgresRow()] : []));
-    const options = { createClient: () => client };
-    await expect(updatePostgresWalkthroughTimeline(env, "timeline-1", 10, input, options)).resolves.toMatchObject({
-      uid: "timeline-1",
+  it("reads only UID and visibility for the community feed guard", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "raid_walkthroughs"') && sql.includes('"uid"') && sql.includes('"visibility"')) {
+        return [["timeline-1", "public"]];
+      }
+      return [];
     });
-    await expect(deletePostgresWalkthroughTimeline(env, "timeline-1", 10, options)).resolves.toBe(true);
-    for (const call of query.mock.calls) {
-      const sql = (call[0] as { text: string }).text;
-      expect(sql).toContain('"uid" = $');
-      expect(sql).toContain('"user_id" = $');
-    }
+
+    await expect(
+      getPostgresWalkthroughTimelineVisibilitiesByUids(env, ["timeline-1"], { createClient: () => client }),
+    ).resolves.toEqual([{ uid: "timeline-1", visibility: "public" }]);
+
+    const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
+    expect(sql).toContain('select "uid", "visibility"');
+    expect(sql).toContain('from "raid_walkthroughs"');
+    expect(sql).not.toContain('"raid_walkthroughs"."document"');
+  });
+
+  it("scopes transactional updates and deletes to the owner", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('update "raid_walkthroughs"')) return [postgresRow()];
+      if (sql.includes('delete from "raid_walkthroughs"')) return [{ uid: "timeline-1" }];
+      return [];
+    });
+    const options = { createClient: () => client };
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+    ).resolves.toMatchObject({ uid: "timeline-1" });
+    await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).resolves.toBe(
+      true,
+    );
+
+    const timelineQueries = query.mock.calls
+      .map(([call]) => (call as { text: string }).text)
+      .filter((sql) => sql.includes('"raid_walkthroughs"'));
+    expect(timelineQueries.some((sql) => sql.includes('"uid" = $') && sql.includes('"user_id" = $'))).toBe(true);
   });
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {
@@ -161,5 +196,168 @@ describe("PostgreSQL walkthrough timelines", () => {
     await expect(getPostgresWalkthroughTimeline(env, "timeline-1", { createClient: () => client })).rejects.toThrow(
       "schemaVersion",
     );
+  });
+
+  it("writes the canonical timeline and public projection in one transaction", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('insert into "raid_walkthroughs"')) return [postgresRow()];
+      return [];
+    });
+
+    await expect(
+      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, { createClient: () => client }),
+    ).resolves.toMatchObject({ uid: "timeline-1" });
+
+    const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts).toContain("begin");
+    expect(sqlTexts.some((sql) => sql.includes('insert into "raid_walkthroughs"'))).toBe(true);
+    expect(sqlTexts.some((sql) => sql.includes('insert into "community_posts"'))).toBe(true);
+    expect(sqlTexts).toContain("commit");
+  });
+
+  it("rolls back the canonical write when projection creation fails", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('insert into "raid_walkthroughs"')) return [postgresRow()];
+      if (sql.includes('insert into "community_posts"')) throw new Error("projection failed");
+      return [];
+    });
+
+    await expect(
+      createPostgresWalkthroughTimelineWithCommunityPost(env, 10, input, { createClient: () => client }),
+    ).rejects.toThrow('insert into "community_posts"');
+
+    const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts).toContain("rollback");
+    expect(sqlTexts).not.toContain("commit");
+  });
+
+  it("uses the same transaction boundary for update and delete projections", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('update "raid_walkthroughs"')) return [postgresRow()];
+      if (sql.includes('delete from "raid_walkthroughs"')) return [{ uid: "timeline-1" }];
+      return [];
+    });
+    const options = { createClient: () => client };
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+    ).resolves.toMatchObject({
+      uid: "timeline-1",
+    });
+    await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).resolves.toBe(
+      true,
+    );
+
+    const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts.filter((sql) => sql === "begin")).toHaveLength(2);
+    expect(sqlTexts.filter((sql) => sql === "commit")).toHaveLength(2);
+  });
+
+  it("rolls back an update projection failure and succeeds on retry", async () => {
+    const { client, query } = createClient(
+      (sql) => {
+        if (sql.includes('update "raid_walkthroughs"')) return [postgresRow()];
+        return [];
+      },
+      { failOn: 'insert into "community_posts"', failOnlyOnce: true },
+    );
+    const options = { createClient: () => client };
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+    ).rejects.toThrow('insert into "community_posts"');
+    let sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts).toContain("rollback");
+    expect(sqlTexts).not.toContain("commit");
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+    ).resolves.toMatchObject({
+      uid: "timeline-1",
+    });
+    sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts.filter((sql) => sql === "begin")).toHaveLength(2);
+    expect(sqlTexts.filter((sql) => sql === "rollback")).toHaveLength(1);
+    expect(sqlTexts.filter((sql) => sql === "commit")).toHaveLength(1);
+  });
+
+  it.each([
+    "private",
+    "unlisted",
+  ] as const)("rolls back a public-to-%s projection update when the existing projection update fails", async (visibility) => {
+    const { client, query } = createClient(
+      (sql) => {
+        if (sql.includes('update "raid_walkthroughs"')) return [postgresRow("timeline-1", visibility)];
+        if (sql.includes('select "uid" from "community_posts"')) return [{ uid: "timeline-1" }];
+        return [];
+      },
+      { failOn: 'update "community_posts"' },
+    );
+    const options = { createClient: () => client };
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, { ...input, visibility }, options),
+    ).rejects.toThrow('update "community_posts"');
+
+    const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts.some((sql) => sql.includes('update "raid_walkthroughs"'))).toBe(true);
+    expect(sqlTexts.some((sql) => sql.includes('update "community_posts"'))).toBe(true);
+    expect(sqlTexts).toContain("rollback");
+    expect(sqlTexts).not.toContain("commit");
+  });
+
+  it("rolls back a delete projection failure and succeeds on retry", async () => {
+    const { client, query } = createClient(
+      (sql) => {
+        if (sql.includes('delete from "raid_walkthroughs"')) return [{ uid: "timeline-1" }];
+        if (sql.includes('select "uid" from "community_posts"')) return [{ uid: "timeline-1" }];
+        return [];
+      },
+      { failOn: 'delete from "community_posts"', failOnlyOnce: true },
+    );
+    const options = { createClient: () => client };
+
+    await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).rejects.toThrow(
+      'delete from "community_posts"',
+    );
+    let sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts).toContain("rollback");
+    expect(sqlTexts).not.toContain("commit");
+
+    await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).resolves.toBe(
+      true,
+    );
+    sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+    expect(sqlTexts.filter((sql) => sql === "begin")).toHaveLength(2);
+    expect(sqlTexts.filter((sql) => sql === "rollback")).toHaveLength(1);
+    expect(sqlTexts.filter((sql) => sql === "commit")).toHaveLength(1);
+  });
+
+  it("keeps concurrent edits inside independent atomic transaction boundaries", async () => {
+    const clients = [
+      createClient((sql) => (sql.includes('update "raid_walkthroughs"') ? [postgresRow()] : [])),
+      createClient((sql) => (sql.includes('update "raid_walkthroughs"') ? [postgresRow()] : [])),
+    ];
+    await expect(
+      Promise.all(
+        clients.map(({ client }) =>
+          updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, {
+            createClient: () => client,
+          }),
+        ),
+      ),
+    ).resolves.toHaveLength(2);
+
+    for (const { query } of clients) {
+      const sqlTexts = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text));
+      const beginIndex = sqlTexts.indexOf("begin");
+      const updateIndex = sqlTexts.findIndex((sql) => sql.includes('update "raid_walkthroughs"'));
+      const projectionIndex = sqlTexts.findIndex((sql) => sql.includes('insert into "community_posts"'));
+      const commitIndex = sqlTexts.indexOf("commit");
+      expect(beginIndex).toBeGreaterThanOrEqual(0);
+      expect(beginIndex).toBeLessThan(updateIndex);
+      expect(updateIndex).toBeLessThan(projectionIndex);
+      expect(projectionIndex).toBeLessThan(commitIndex);
+    }
   });
 });

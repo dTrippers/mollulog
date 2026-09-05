@@ -4,14 +4,17 @@ import type { RecruitedStudentCurrentStateInput } from "~/models/recruited-stude
 const mockGetActiveSensei = jest.fn<(env: Env, request: Request) => Promise<{ id: number } | null>>();
 const mockGetStudentDetailData = jest.fn<(env: Env, uid: string) => Promise<unknown>>();
 const mockGetRecruitedStudents = jest.fn<(env: Env, senseiId: number) => Promise<unknown[]>>();
-const mockUpsertRecruitedStudentState =
+const mockSaveStudentBasicInfo =
   jest.fn<
     (
       env: Env,
       senseiId: number,
       studentUid: string,
-      tier: number,
-      input: RecruitedStudentCurrentStateInput,
+      input: {
+        tier: number;
+        currentState: RecruitedStudentCurrentStateInput;
+        relationshipBonds: Record<string, number>;
+      },
     ) => Promise<void>
   >();
 const mockGetRelationshipLevels =
@@ -30,19 +33,7 @@ const mockGetRelationshipLevels =
       }>
     >
   >();
-const mockUpsertRelationshipLevel =
-  jest.fn<
-    (
-      env: Env,
-      senseiId: number,
-      studentId: string,
-      currentLevel: number,
-      currentExp: number | null,
-      targetLevel: number,
-      items: Record<string, number>,
-    ) => Promise<void>
-  >();
-
+const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: mockGetActiveSensei,
 }));
@@ -53,12 +44,18 @@ jest.mock("~/models/student", () => ({
 
 jest.mock("~/models/recruited-student", () => ({
   getRecruitedStudents: mockGetRecruitedStudents,
-  upsertRecruitedStudentState: mockUpsertRecruitedStudentState,
 }));
 
 jest.mock("~/models/relationship-level", () => ({
   getRelationshipLevels: mockGetRelationshipLevels,
-  upsertRelationshipLevel: mockUpsertRelationshipLevel,
+}));
+
+jest.mock("~/models/student-basic-info", () => ({
+  saveStudentBasicInfo: mockSaveStudentBasicInfo,
+}));
+
+jest.mock("~/lib/observability.server", () => ({
+  getLogger: () => logger,
 }));
 
 import { StudentSkillSelectionCondition } from "~/graphql/graphql";
@@ -91,8 +88,7 @@ beforeEach(() => {
     },
   });
   mockGetRelationshipLevels.mockResolvedValue([]);
-  mockUpsertRecruitedStudentState.mockResolvedValue(undefined);
-  mockUpsertRelationshipLevel.mockResolvedValue(undefined);
+  mockSaveStudentBasicInfo.mockResolvedValue(undefined);
 });
 
 describe("student basic info ability release", () => {
@@ -131,7 +127,7 @@ describe("student basic info equipment-level action", () => {
       data: { ok: false, error: "장비 1 레벨은(는) 1부터 10 사이만 입력할 수 있어요" },
       init: { status: 400 },
     });
-    expect(mockUpsertRecruitedStudentState).not.toHaveBeenCalled();
+    expect(mockSaveStudentBasicInfo).not.toHaveBeenCalled();
   });
 
   it("rejects an equipment level when the selected catalog equipment is missing", async () => {
@@ -161,7 +157,7 @@ describe("student basic info equipment-level action", () => {
       data: { ok: false, error: "장비 1 정보를 확인하지 못했어요" },
       init: { status: 400 },
     });
-    expect(mockUpsertRecruitedStudentState).not.toHaveBeenCalled();
+    expect(mockSaveStudentBasicInfo).not.toHaveBeenCalled();
   });
 
   it("accepts an equipment level at the selected catalog maximum", async () => {
@@ -176,12 +172,41 @@ describe("student basic info equipment-level action", () => {
     } as never);
 
     expect(response).toMatchObject({ data: { ok: true } });
-    expect(mockUpsertRecruitedStudentState).toHaveBeenCalledWith(
+    expect(mockSaveStudentBasicInfo).toHaveBeenCalledWith(
       env,
       1,
       "student-a",
-      3,
-      expect.objectContaining({ equip1Level: 10 }),
+      expect.objectContaining({
+        tier: 3,
+        currentState: expect.objectContaining({ equip1Level: 10 }),
+        relationshipBonds: {},
+      }),
+    );
+  });
+
+  it("returns a safe retryable 500 and logs unexpected save failures", async () => {
+    const internalError = new Error("SQL timeout; password=secret");
+    mockSaveStudentBasicInfo.mockRejectedValueOnce(internalError);
+
+    const response = await action({
+      params: { id: "student-a" },
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.test/students/student-a", {
+        method: "POST",
+        body: JSON.stringify({ tier: 3, equip1: 1, equip1Level: 10 }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({
+      data: { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요" },
+      init: { status: 500 },
+    });
+    expect(JSON.stringify(response)).not.toContain("password=secret");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Student basic info save failed",
+      internalError,
+      expect.objectContaining({ operation: "save", studentUid: "student-a", userId: 1 }),
     );
   });
 });

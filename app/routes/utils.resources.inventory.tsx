@@ -7,6 +7,7 @@ import {
   getEquipmentTypeKey,
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
+import { getLogger } from "~/lib/observability.server";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import {
@@ -56,7 +57,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "utils.resources.inventory.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -66,35 +68,57 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     return data<ActionData>({ error: "지원하지 않는 요청 방식이에요" }, { status: 405 });
   }
 
+  let payload: ResourceInventorySavePayload;
   try {
-    const payload = await request.json<ResourceInventorySavePayload>();
-    if (!Array.isArray(payload.items)) {
-      return data<ActionData>({ error: "저장할 재화가 필요해요" }, { status: 400 });
-    }
+    payload = await request.json<ResourceInventorySavePayload>();
+  } catch {
+    return data<ActionData>({ error: "요청 형식이 올바르지 않아요" }, { status: 400 });
+  }
+  if (!Array.isArray(payload.items)) {
+    return data<ActionData>({ error: "저장할 재화가 필요해요" }, { status: 400 });
+  }
 
-    const resourceUidSet = new Set(
-      buildOcrInventoryCatalogResources(await getItemCatalogResources(env)).map((resource) => resource.inventoryUid),
-    );
-    const ownedQuantities = await getUserResourceInventoryMap(env, currentUser.id);
-    const parsedItems = payload.items.map((item) => parseDraftItem(item));
+  let catalogResources: Awaited<ReturnType<typeof getItemCatalogResources>>;
+  let ownedQuantities: Awaited<ReturnType<typeof getUserResourceInventoryMap>>;
+  try {
+    [catalogResources, ownedQuantities] = await Promise.all([
+      getItemCatalogResources(env),
+      getUserResourceInventoryMap(env, currentUser.id),
+    ]);
+  } catch (error) {
+    logger.error("Failed to load resource inventory save dependencies", error, { userId: currentUser.id });
+    return data<ActionData>({ error: "보유 재화를 확인하지 못했어요. 잠시 후 다시 시도해주세요" }, { status: 500 });
+  }
 
-    const items = parsedItems
-      .filter((item) => isKnownResourceUid(resourceUidSet, item.itemUid))
-      .filter((item) => item.quantity !== (ownedQuantities[item.itemUid] ?? 0));
-
-    if (items.length === 0) {
-      return data<ActionData>({ error: "변경된 보유 재화가 없어요" }, { status: 400 });
-    }
-
-    await upsertUserResourceInventories(env, currentUser.id, items);
-
-    return data<ActionData>({ saved: true, savedAt: Date.now() });
+  let parsedItems: Array<{ itemUid: string; quantity: number }>;
+  try {
+    parsedItems = payload.items.map((item) => parseDraftItem(item));
   } catch (error) {
     return data<ActionData>(
-      { error: error instanceof Error ? error.message : "보유 재화를 저장하지 못했어요" },
+      { error: error instanceof Error ? error.message : "저장할 재화를 확인해주세요" },
       { status: 400 },
     );
   }
+
+  const resourceUidSet = new Set(
+    buildOcrInventoryCatalogResources(catalogResources).map((resource) => resource.inventoryUid),
+  );
+  const items = parsedItems
+    .filter((item) => isKnownResourceUid(resourceUidSet, item.itemUid))
+    .filter((item) => item.quantity !== (ownedQuantities[item.itemUid] ?? 0));
+
+  if (items.length === 0) {
+    return data<ActionData>({ error: "변경된 보유 재화가 없어요" }, { status: 400 });
+  }
+
+  try {
+    await upsertUserResourceInventories(env, currentUser.id, items);
+  } catch (error) {
+    logger.error("Failed to save resource inventory", error, { userId: currentUser.id, itemCount: items.length });
+    return data<ActionData>({ error: "보유 재화를 저장하지 못했어요. 잠시 후 다시 시도해주세요" }, { status: 500 });
+  }
+
+  return data<ActionData>({ saved: true, savedAt: Date.now() });
 };
 
 export default function ResourceInventoryPage() {
