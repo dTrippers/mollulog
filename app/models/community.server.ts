@@ -2,7 +2,6 @@ import {
   createPostgresCommunityComment,
   createPostgresCommunityPost,
   deletePostgresCommunityComment,
-  deletePostgresCommunityPostByUid,
   getPostgresCommunityFeedPage,
   getPostgresCommunityLikeCountsByPostUids,
   getPostgresCommunityPostByUid,
@@ -10,13 +9,11 @@ import {
   getPostgresNestedCommunityComments,
   getPostgresNestedCommunityCommentsByPostUids,
   setPostgresCommunityPostLike,
-  syncPostgresWalkthroughTimelineCommunityPost,
   updatePostgresCommunityComment,
   upsertPostgresCommunityPost,
   upsertPostgresYoutubeCommunityPost,
 } from "~/db/postgres/community";
-import { getPostgresWalkthroughTimelinesByUids } from "~/db/postgres/walkthrough-timelines";
-import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
+import { getPostgresWalkthroughTimelineVisibilitiesByUids } from "~/db/postgres/walkthrough-timelines";
 import type {
   CommunityCommentVisibility,
   CommunityFeedPageOptions,
@@ -25,11 +22,7 @@ import type {
   NestedCommunityComment,
   YoutubeVideoCommunityPostInput,
 } from "./community";
-import {
-  createPlaintextCommunityPostBlocks,
-  createWalkthroughTimelineCommunityPostBlocks,
-  getCommunityFeedPageWithCache,
-} from "./community";
+import { createPlaintextCommunityPostBlocks, getCommunityFeedPageWithCache } from "./community";
 
 export type {
   CommunityCommentVisibility,
@@ -107,7 +100,7 @@ async function filterWalkthroughFeedPosts(
   if (walkthroughUids.length === 0) return page;
 
   const publicWalkthroughUids = new Set(
-    (await getPostgresWalkthroughTimelinesByUids(env, walkthroughUids, { ctx }))
+    (await getPostgresWalkthroughTimelineVisibilitiesByUids(env, walkthroughUids, { ctx }))
       .filter((timeline) => timeline.visibility === "public")
       .map((timeline) => timeline.uid),
   );
@@ -162,17 +155,6 @@ export async function setCommunityPostLike(env: Env, userId: number, postUid: st
   return setPostgresCommunityPostLike(env, userId, postUid, liked);
 }
 
-export async function syncWalkthroughTimelineCommunityPost(
-  env: Env,
-  timeline: WalkthroughTimelineRecord,
-): Promise<string | null> {
-  return syncPostgresWalkthroughTimelineCommunityPost(
-    env,
-    timeline,
-    createWalkthroughTimelineCommunityPostBlocks(timeline),
-  );
-}
-
 export async function upsertYoutubeVideoCommunityPost(env: Env, video: YoutubeVideoCommunityPostInput): Promise<void> {
   return upsertPostgresYoutubeCommunityPost(env, video, [{ type: "youtube", youtubeId: video.id }]);
 }
@@ -223,8 +205,4 @@ export async function upsertRecruitmentResultCommunityPost(
     sourceType: "recruitment_result",
     sourceUid: input.recruitmentResultUid,
   });
-}
-
-export async function deleteCommunityPostByUid(env: Env, postUid: string, userId?: number): Promise<void> {
-  return deletePostgresCommunityPostByUid(env, postUid, userId);
 }

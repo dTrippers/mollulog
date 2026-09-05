@@ -2,13 +2,14 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { CommunityFeedPageResult } from "~/models/community";
 
 const mockGetPostgresCommunityFeedPage = jest.fn<(...args: unknown[]) => Promise<CommunityFeedPageResult>>();
-const mockGetPostgresWalkthroughTimelinesByUids = jest.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const mockGetPostgresWalkthroughTimelineVisibilitiesByUids = jest.fn<(...args: unknown[]) => Promise<unknown[]>>();
 
 jest.mock("~/db/postgres/community", () => ({
   getPostgresCommunityFeedPage: (...args: unknown[]) => mockGetPostgresCommunityFeedPage(...args),
 }));
 jest.mock("~/db/postgres/walkthrough-timelines", () => ({
-  getPostgresWalkthroughTimelinesByUids: (...args: unknown[]) => mockGetPostgresWalkthroughTimelinesByUids(...args),
+  getPostgresWalkthroughTimelineVisibilitiesByUids: (...args: unknown[]) =>
+    mockGetPostgresWalkthroughTimelineVisibilitiesByUids(...args),
 }));
 
 import { getCommunityFeedPage } from "~/models/community.server";
@@ -68,7 +69,7 @@ describe("community feed canonical walkthrough guard", () => {
       totalCount: 1,
       totalPages: 1,
     });
-    mockGetPostgresWalkthroughTimelinesByUids.mockResolvedValue([...rows]);
+    mockGetPostgresWalkthroughTimelineVisibilitiesByUids.mockResolvedValue([...rows]);
 
     await expect(
       getCommunityFeedPage({ DISABLE_CACHE: "true" } as unknown as Env, {
@@ -76,7 +77,7 @@ describe("community feed canonical walkthrough guard", () => {
         ...(viewer === "signed-in" ? { currentUserId: 7 } : {}),
       }),
     ).resolves.toMatchObject({ items: [], totalCount: 0, totalPages: 1 });
-    expect(mockGetPostgresWalkthroughTimelinesByUids).toHaveBeenCalledWith(
+    expect(mockGetPostgresWalkthroughTimelineVisibilitiesByUids).toHaveBeenCalledWith(
       expect.anything(),
       ["timeline-1"],
       expect.objectContaining({ ctx: undefined }),
@@ -91,7 +92,9 @@ describe("community feed canonical walkthrough guard", () => {
       totalCount: 1,
       totalPages: 1,
     });
-    mockGetPostgresWalkthroughTimelinesByUids.mockResolvedValue([{ uid: "timeline-1", visibility: "public" }]);
+    mockGetPostgresWalkthroughTimelineVisibilitiesByUids.mockResolvedValue([
+      { uid: "timeline-1", visibility: "public" },
+    ]);
 
     await expect(
       getCommunityFeedPage({ DISABLE_CACHE: "true" } as unknown as Env, { pageSize: 20 }),

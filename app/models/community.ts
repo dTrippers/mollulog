@@ -1,10 +1,7 @@
-import type {
-  WalkthroughTimelineDefenseType,
-  WalkthroughTimelineDifficulty,
-  WalkthroughTimelineDocument,
-  WalkthroughTimelineRecord,
-  WalkthroughTimelineTerrain,
-} from "~/domain/walkthrough-timeline";
+import {
+  createWalkthroughTimelineCommunityPostBlocks,
+  type WalkthroughTimelineCommunityPostBlock,
+} from "~/domain/walkthrough-timeline-community";
 import { cacheKey, cacheQuery, fetchCached } from "~/lib/cache";
 import { normalizeUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 
@@ -44,24 +41,14 @@ export type PartyInfoCommunityPostBlock = {
   units: (string | null)[][];
 };
 
-export type WalkthroughTimelineCommunityPostBlock = {
-  type: "walkthrough_timeline";
-  timelineUid: string;
-  bossUid: string;
-  terrain: WalkthroughTimelineTerrain;
-  defenseType: WalkthroughTimelineDefenseType;
-  maxDifficulty: WalkthroughTimelineDifficulty;
-  partySize?: WalkthroughTimelineDocument["partySize"];
-  partyCount: number;
-  usedStudentUids: string[];
-};
-
 export type CommunityPostBlock =
   | PlaintextCommunityPostBlock
   | MarkdownCommunityPostBlock
   | YoutubeCommunityPostBlock
   | PartyInfoCommunityPostBlock
   | WalkthroughTimelineCommunityPostBlock;
+
+export type { WalkthroughTimelineCommunityPostBlock } from "~/domain/walkthrough-timeline-community";
 
 export type NestedCommunityComment = {
   uid: string;
@@ -219,43 +206,4 @@ export type YoutubeVideoCommunityPostInput = {
   channelUrl: string;
 };
 
-export function createWalkthroughTimelineCommunityPostBlocks({
-  uid,
-  description,
-  bossUid,
-  terrain,
-  defenseType,
-  maxDifficulty,
-  document,
-}: {
-  uid: string;
-  description: string;
-  bossUid: string;
-  terrain: WalkthroughTimelineTerrain;
-  defenseType: WalkthroughTimelineDefenseType;
-  maxDifficulty: WalkthroughTimelineDifficulty;
-  document: WalkthroughTimelineDocument;
-}): CommunityPostBlock[] {
-  const usedStudentUids = [
-    ...new Set(document.parties[0]?.units.flatMap((unit) => (unit.studentUid ? [unit.studentUid] : [])) ?? []),
-  ];
-
-  return [
-    ...createPlaintextCommunityPostBlocks(description),
-    {
-      type: "walkthrough_timeline",
-      timelineUid: uid,
-      bossUid,
-      terrain,
-      defenseType,
-      maxDifficulty,
-      partySize: document.partySize,
-      partyCount: document.parties.length,
-      usedStudentUids,
-    },
-  ];
-}
-
-// Keep this type import reachable for consumers that used to infer timeline
-// projections from this module without introducing a storage dependency.
-export type { WalkthroughTimelineRecord };
+export { createWalkthroughTimelineCommunityPostBlocks };

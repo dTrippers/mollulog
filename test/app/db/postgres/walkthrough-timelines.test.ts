@@ -3,14 +3,13 @@ import type { Client } from "pg";
 import {
   createPostgresWalkthroughTimeline,
   createPostgresWalkthroughTimelineWithCommunityPost,
-  deletePostgresWalkthroughTimeline,
   deletePostgresWalkthroughTimelineWithCommunityPost,
   getPostgresWalkthroughTimeline,
+  getPostgresWalkthroughTimelineVisibilitiesByUids,
   listPostgresPublicWalkthroughTimelines,
   listPostgresPublicWalkthroughTimelinesByBoss,
   listPostgresVisibleWalkthroughTimelines,
   listPostgresWalkthroughTimelinesByUser,
-  updatePostgresWalkthroughTimeline,
   updatePostgresWalkthroughTimelineWithCommunityPost,
 } from "~/db/postgres/walkthrough-timelines";
 import type { WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline";
@@ -151,18 +150,43 @@ describe("PostgreSQL walkthrough timelines", () => {
     expect(visibleListCall?.[1]).toContain(10);
   });
 
-  it("scopes updates and deletes to the owner", async () => {
-    const { client, query } = createClient((sql) => (sql.includes("returning") ? [postgresRow()] : []));
-    const options = { createClient: () => client };
-    await expect(updatePostgresWalkthroughTimeline(env, "timeline-1", 10, input, options)).resolves.toMatchObject({
-      uid: "timeline-1",
+  it("reads only UID and visibility for the community feed guard", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('from "raid_walkthroughs"') && sql.includes('"uid"') && sql.includes('"visibility"')) {
+        return [["timeline-1", "public"]];
+      }
+      return [];
     });
-    await expect(deletePostgresWalkthroughTimeline(env, "timeline-1", 10, options)).resolves.toBe(true);
-    for (const call of query.mock.calls) {
-      const sql = (call[0] as { text: string }).text;
-      expect(sql).toContain('"uid" = $');
-      expect(sql).toContain('"user_id" = $');
-    }
+
+    await expect(
+      getPostgresWalkthroughTimelineVisibilitiesByUids(env, ["timeline-1"], { createClient: () => client }),
+    ).resolves.toEqual([{ uid: "timeline-1", visibility: "public" }]);
+
+    const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
+    expect(sql).toContain('select "uid", "visibility"');
+    expect(sql).toContain('from "raid_walkthroughs"');
+    expect(sql).not.toContain('"raid_walkthroughs"."document"');
+  });
+
+  it("scopes transactional updates and deletes to the owner", async () => {
+    const { client, query } = createClient((sql) => {
+      if (sql.includes('update "raid_walkthroughs"')) return [postgresRow()];
+      if (sql.includes('delete from "raid_walkthroughs"')) return [{ uid: "timeline-1" }];
+      return [];
+    });
+    const options = { createClient: () => client };
+
+    await expect(
+      updatePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, input, options),
+    ).resolves.toMatchObject({ uid: "timeline-1" });
+    await expect(deletePostgresWalkthroughTimelineWithCommunityPost(env, "timeline-1", 10, options)).resolves.toBe(
+      true,
+    );
+
+    const timelineQueries = query.mock.calls
+      .map(([call]) => (call as { text: string }).text)
+      .filter((sql) => sql.includes('"raid_walkthroughs"'));
+    expect(timelineQueries.some((sql) => sql.includes('"uid" = $') && sql.includes('"user_id" = $'))).toBe(true);
   });
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {

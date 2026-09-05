@@ -748,20 +748,6 @@ export async function deletePostgresCommunityPostByUidInTransaction(
   await db.delete(pgCommunityPostsTable).where(eq(pgCommunityPostsTable.uid, postUid));
 }
 
-export async function syncPostgresWalkthroughTimelineCommunityPost(
-  env: Env,
-  timeline: WalkthroughTimelineRecord,
-  blocks: CommunityPostBlock[],
-  options: PostgresCommunityOptions = {},
-): Promise<string | null> {
-  return withCommunityDatabase(
-    env,
-    "sync_walkthrough",
-    (db) => syncPostgresWalkthroughTimelineCommunityPostInTransaction(db, timeline, blocks),
-    options,
-  );
-}
-
 export async function syncPostgresWalkthroughTimelineCommunityPostInTransaction(
   db: PostgresCommunityTransaction,
   timeline: WalkthroughTimelineRecord,

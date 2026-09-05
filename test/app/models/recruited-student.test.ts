@@ -5,7 +5,6 @@ import {
   RecruitedStudentValidationError,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
-  upsertRecruitedStudentState,
 } from "~/models/recruited-student";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
 
@@ -160,68 +159,6 @@ describe("recruited-student current state", () => {
     const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
     expect(lockIndex).toBeGreaterThanOrEqual(0);
     expect(lockIndex).toBeLessThan(writeIndex);
-  });
-
-  it("creates a recruited student with its nullable current state", async () => {
-    const { db, env } = createEnv();
-
-    await upsertRecruitedStudentState(env, 1, "student-a", 6, {
-      level: 80,
-      weaponLevel: 20,
-      abilityHp: null,
-      abilityAtk: 10,
-      abilityHeal: null,
-      skillEx: 5,
-      skillNormal: null,
-      skillEnhanced: 8,
-      skillSub: null,
-      equip1: 10,
-      equip2: null,
-      equip3: 8,
-      equipSpecial: null,
-    });
-
-    expect(db.rows).toHaveLength(1);
-    expect(db.rows[0]).toMatchObject({
-      studentUid: "student-a",
-      tier: 6,
-      level: 80,
-      weaponLevel: 20,
-      abilityHp: null,
-      abilityAtk: 10,
-      skillEx: 5,
-      skillNormal: null,
-      equip1: 10,
-      equip2: null,
-    });
-  });
-
-  it("stores and restores the nullable equipment levels with current state", async () => {
-    const { db, env } = createEnv();
-
-    await upsertRecruitedStudentState(env, 1, "student-a", 6, {
-      level: 80,
-      weaponLevel: 20,
-      abilityHp: null,
-      abilityAtk: null,
-      abilityHeal: null,
-      skillEx: null,
-      skillNormal: null,
-      skillEnhanced: null,
-      skillSub: null,
-      equip1: 10,
-      equip2: 9,
-      equip3: 8,
-      equip1Level: 70,
-      equip2Level: 45,
-      equip3Level: 30,
-      equipSpecial: null,
-    });
-
-    expect(db.rows[0]).toMatchObject({ equip1Level: 70, equip2Level: 45, equip3Level: 30 });
-    await expect(getRecruitedStudents(env, 1)).resolves.toEqual([
-      expect.objectContaining({ equip1Level: 70, equip2Level: 45, equip3Level: 30 }),
-    ]);
   });
 
   it("preserves equipment levels when a growth-table update omits those fields", async () => {

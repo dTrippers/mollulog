@@ -16,9 +16,9 @@ import {
   type WalkthroughTimelineTerrain,
   type WalkthroughTimelineVisibility,
 } from "~/domain/walkthrough-timeline";
+import { createWalkthroughTimelineCommunityPostBlocks } from "~/domain/walkthrough-timeline-community";
 import { ActionValidationError } from "~/lib/action-errors";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
-import { createWalkthroughTimelineCommunityPostBlocks } from "~/models/community";
 
 type WalkthroughTimelineRow = typeof pgWalkthroughTimelinesTable.$inferSelect;
 
@@ -363,52 +363,6 @@ export async function listPostgresVisibleWalkthroughTimelines(
   );
 }
 
-export async function updatePostgresWalkthroughTimeline(
-  env: Pick<Env, "HYPERDRIVE">,
-  uid: string,
-  userId: number,
-  input: WalkthroughTimelineWriteInput,
-  options: PostgresWalkthroughTimelineOptions = {},
-): Promise<WalkthroughTimelineRecord | null> {
-  const normalized = normalizeWriteInput(input);
-  return withWalkthroughTimelineDatabase(
-    env,
-    "update",
-    async (db) => {
-      const rows = await db
-        .update(pgWalkthroughTimelinesTable)
-        .set({
-          ...normalized,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(pgWalkthroughTimelinesTable.uid, uid), eq(pgWalkthroughTimelinesTable.userId, userId)))
-        .returning();
-      return rows[0] ? toDomain(rows[0]) : null;
-    },
-    options,
-  );
-}
-
-export async function deletePostgresWalkthroughTimeline(
-  env: Pick<Env, "HYPERDRIVE">,
-  uid: string,
-  userId: number,
-  options: PostgresWalkthroughTimelineOptions = {},
-): Promise<boolean> {
-  return withWalkthroughTimelineDatabase(
-    env,
-    "delete",
-    async (db) => {
-      const rows = await db
-        .delete(pgWalkthroughTimelinesTable)
-        .where(and(eq(pgWalkthroughTimelinesTable.uid, uid), eq(pgWalkthroughTimelinesTable.userId, userId)))
-        .returning({ uid: pgWalkthroughTimelinesTable.uid });
-      return rows.length > 0;
-    },
-    options,
-  );
-}
-
 export async function clonePostgresWalkthroughTimeline(
   env: Pick<Env, "HYPERDRIVE">,
   sourceUid: string,
@@ -434,23 +388,21 @@ export async function clonePostgresWalkthroughTimeline(
   );
 }
 
-export async function getPostgresWalkthroughTimelinesByUids(
+export async function getPostgresWalkthroughTimelineVisibilitiesByUids(
   env: Pick<Env, "HYPERDRIVE">,
   uids: string[],
   options: PostgresWalkthroughTimelineOptions = {},
-): Promise<WalkthroughTimelineRecord[]> {
+): Promise<Array<Pick<WalkthroughTimelineRecord, "uid" | "visibility">>> {
   const uniqueUids = [...new Set(uids)];
   if (uniqueUids.length === 0) return [];
   return withWalkthroughTimelineDatabase(
     env,
-    "get_by_uids",
-    async (db) => {
-      const rows = await db
-        .select()
+    "get_visibility_by_uids",
+    async (db) =>
+      db
+        .select({ uid: pgWalkthroughTimelinesTable.uid, visibility: pgWalkthroughTimelinesTable.visibility })
         .from(pgWalkthroughTimelinesTable)
-        .where(inArray(pgWalkthroughTimelinesTable.uid, uniqueUids));
-      return rows.map(toDomain);
-    },
+        .where(inArray(pgWalkthroughTimelinesTable.uid, uniqueUids)),
     options,
   );
 }
