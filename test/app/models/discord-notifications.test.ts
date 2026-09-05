@@ -17,6 +17,15 @@ jest.mock("~/lib/postgres.server", () => ({
 
 const existingEffectiveAt = new Date("2026-08-01T00:00:00.000Z");
 const laterEffectiveAt = new Date("2026-09-02T00:00:00.000Z");
+const PREFERENCE_KEYS_FOR_TEST = [
+  "event-start",
+  "event-end",
+  "reward-exchange-end",
+  "recruitment-start",
+  "shop-reset",
+  "feedback-reply",
+  "event-opinion-reply",
+] as const;
 
 function preferenceRows(leadHours = 24, effectiveAt = existingEffectiveAt) {
   return [
@@ -25,17 +34,21 @@ function preferenceRows(leadHours = 24, effectiveAt = existingEffectiveAt) {
     { notification_type: "reward-exchange-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "recruitment-start", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "shop-reset", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "feedback-reply", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "event-opinion-reply", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
   ];
 }
 
 describe("Discord notification settings boundary", () => {
-  it("validates explicit settings and all five independent trigger values", () => {
+  it("validates explicit settings and all seven independent trigger values", () => {
     const form = new FormData();
     form.set("eventStartEnabled", "true");
     form.set("eventEndEnabled", "false");
     form.set("rewardExchangeEndEnabled", "true");
     form.set("recruitmentStartEnabled", "false");
     form.set("shopResetEnabled", "true");
+    form.set("feedbackReplyEnabled", "false");
+    form.set("eventOpinionReplyEnabled", "true");
     form.set("leadHours", "23");
     expect(parseDiscordNotificationSettingsForm(form)).toEqual({
       eventStartEnabled: true,
@@ -43,6 +56,8 @@ describe("Discord notification settings boundary", () => {
       rewardExchangeEndEnabled: true,
       recruitmentStartEnabled: false,
       shopResetEnabled: true,
+      feedbackReplyEnabled: false,
+      eventOpinionReplyEnabled: true,
       leadHours: 23,
     });
   });
@@ -84,7 +99,7 @@ describe("Discord notification settings boundary", () => {
     expect(statements.some((statement) => statement.startsWith("delete from notification_preferences"))).toBe(false);
   });
 
-  it("writes the shared lead time to all five preference rows transactionally", async () => {
+  it("writes the shared lead time to all seven preference rows transactionally", async () => {
     const statements: string[] = [];
     const insertValues: unknown[][] = [];
     const client = {
@@ -95,7 +110,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows(), rowCount: 5 };
+          return { rows: preferenceRows(), rowCount: 7 };
         }
         if (normalized.startsWith("insert into notification_preferences")) {
           insertValues.push([...values]);
@@ -114,6 +129,8 @@ describe("Discord notification settings boundary", () => {
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
+        feedbackReplyEnabled: true,
+        eventOpinionReplyEnabled: false,
         leadHours: 12,
       },
       { now: () => laterEffectiveAt },
@@ -131,8 +148,65 @@ describe("Discord notification settings boundary", () => {
         "reward-exchange-end",
         "recruitment-start",
         "shop-reset",
+        "feedback-reply",
+        "event-opinion-reply",
         12,
       ]),
+    );
+  });
+
+  it("preserves reactive effective times on a lead-hours-only save while resetting schedule times", async () => {
+    const insertValues: unknown[][] = [];
+    const storedPreferences = preferenceRows().map((row) =>
+      row.notification_type === "feedback-reply" || row.notification_type === "event-opinion-reply"
+        ? { ...row, enabled: true }
+        : row,
+    );
+    const client = {
+      async query(text: string, values: readonly unknown[] = []) {
+        const normalized = text.replace(/\s+/g, " ").trim();
+        if (normalized.startsWith("select status from notification_channels")) {
+          return { rows: [{ status: "active" }], rowCount: 1 };
+        }
+        if (normalized.startsWith("select notification_type")) {
+          return { rows: storedPreferences, rowCount: storedPreferences.length };
+        }
+        if (normalized.startsWith("insert into notification_preferences")) {
+          insertValues.push([...values]);
+        }
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    const env = { __pgClient: client } as unknown as Env;
+
+    await saveDiscordNotificationSettings(
+      env,
+      7,
+      {
+        eventStartEnabled: true,
+        eventEndEnabled: false,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        shopResetEnabled: false,
+        feedbackReplyEnabled: true,
+        eventOpinionReplyEnabled: true,
+        leadHours: 12,
+      },
+      { now: () => laterEffectiveAt },
+    );
+
+    const values = insertValues[0];
+    expect(insertValues).toHaveLength(1);
+    expect(PREFERENCE_KEYS_FOR_TEST.map((type, index) => [type, values[4 + index * 5], values[3 + index * 5]])).toEqual(
+      [
+        ["event-start", laterEffectiveAt, 12],
+        ["event-end", laterEffectiveAt, 12],
+        ["reward-exchange-end", laterEffectiveAt, 12],
+        ["recruitment-start", laterEffectiveAt, 12],
+        ["shop-reset", laterEffectiveAt, 12],
+        ["feedback-reply", existingEffectiveAt, 12],
+        ["event-opinion-reply", existingEffectiveAt, 12],
+      ],
     );
   });
 
@@ -158,6 +232,8 @@ describe("Discord notification settings boundary", () => {
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
+        feedbackReplyEnabled: false,
+        eventOpinionReplyEnabled: false,
         leadHours: 24,
       }),
     ).rejects.toThrow(DiscordNotificationSettingsInconsistentError);
@@ -191,6 +267,8 @@ describe("Discord notification settings boundary", () => {
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: true,
+        feedbackReplyEnabled: false,
+        eventOpinionReplyEnabled: false,
         leadHours: 24,
       },
       { now: () => laterEffectiveAt },
@@ -321,7 +399,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active", recipient_key: "1234567890" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows(), rowCount: 5 };
+          return { rows: preferenceRows(), rowCount: 7 };
         }
         return { rows: [], rowCount: 0 };
       },

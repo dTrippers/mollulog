@@ -1,6 +1,8 @@
 import type { DiscordNotificationTrigger } from "~/db/postgres/schema";
 
 export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연결이 완료되었습니다.";
+export const DISCORD_NOTIFICATION_FEEDBACK_REPLY_MESSAGE = "작성한 제안/문의에 운영팀 답변이 등록되었습니다.";
+export const DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE = "작성한 이벤트 의견에 새 답글이 등록되었습니다.";
 
 export const DISCORD_NOTIFICATION_DEFAULTS = {
   eventStartEnabled: false,
@@ -8,6 +10,8 @@ export const DISCORD_NOTIFICATION_DEFAULTS = {
   rewardExchangeEndEnabled: false,
   recruitmentStartEnabled: false,
   shopResetEnabled: false,
+  feedbackReplyEnabled: false,
+  eventOpinionReplyEnabled: false,
   leadHours: 24,
 };
 
@@ -42,6 +46,8 @@ export type DiscordNotificationSettingsInput = {
   rewardExchangeEndEnabled: boolean;
   recruitmentStartEnabled: boolean;
   shopResetEnabled: boolean;
+  feedbackReplyEnabled: boolean;
+  eventOpinionReplyEnabled: boolean;
   leadHours: number;
 };
 
@@ -140,6 +146,9 @@ export function formatDiscordNotificationMessage({
   contentName?: string | null;
   studentNames?: readonly (string | null | undefined)[];
 }): string {
+  if (trigger === "feedback-reply") return DISCORD_NOTIFICATION_FEEDBACK_REPLY_MESSAGE;
+  if (trigger === "event-opinion-reply") return DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE;
+
   const at = formatKstNotificationTime(sourceAnchor);
   if (trigger === "recruitment-start") {
     const names = studentNames.map(requireName);
@@ -167,5 +176,7 @@ export function getEnabledTriggers(settings: DiscordNotificationSettingsInput): 
     settings.rewardExchangeEndEnabled ? "reward-exchange-end" : null,
     settings.recruitmentStartEnabled ? "recruitment-start" : null,
     settings.shopResetEnabled ? "shop-reset" : null,
+    settings.feedbackReplyEnabled ? "feedback-reply" : null,
+    settings.eventOpinionReplyEnabled ? "event-opinion-reply" : null,
   ].filter((trigger): trigger is DiscordNotificationTrigger => trigger !== null);
 }

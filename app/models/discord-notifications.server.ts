@@ -21,7 +21,9 @@ type DiscordNotificationSettingsKey =
   | "eventEndEnabled"
   | "rewardExchangeEndEnabled"
   | "recruitmentStartEnabled"
-  | "shopResetEnabled";
+  | "shopResetEnabled"
+  | "feedbackReplyEnabled"
+  | "eventOpinionReplyEnabled";
 
 const PREFERENCE_KEYS: ReadonlyArray<{
   type: DiscordNotificationTrigger;
@@ -32,6 +34,8 @@ const PREFERENCE_KEYS: ReadonlyArray<{
   { type: "reward-exchange-end", key: "rewardExchangeEndEnabled" },
   { type: "recruitment-start", key: "recruitmentStartEnabled" },
   { type: "shop-reset", key: "shopResetEnabled" },
+  { type: "feedback-reply", key: "feedbackReplyEnabled" },
+  { type: "event-opinion-reply", key: "eventOpinionReplyEnabled" },
 ];
 
 export type DiscordConnection = {
@@ -135,6 +139,8 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
     rewardExchangeEndEnabled: byType.get("reward-exchange-end")?.enabled ?? false,
     recruitmentStartEnabled: byType.get("recruitment-start")?.enabled ?? false,
     shopResetEnabled: byType.get("shop-reset")?.enabled ?? false,
+    feedbackReplyEnabled: byType.get("feedback-reply")?.enabled ?? false,
+    eventOpinionReplyEnabled: byType.get("event-opinion-reply")?.enabled ?? false,
     leadHours: resolvedLeadHours,
     effectiveAt: (effectiveAt ?? now).toISOString(),
   };
@@ -153,6 +159,8 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
     recruitmentStartEnabled: booleanValue("recruitmentStartEnabled"),
     shopResetEnabled: booleanValue("shopResetEnabled"),
+    feedbackReplyEnabled: booleanValue("feedbackReplyEnabled"),
+    eventOpinionReplyEnabled: booleanValue("eventOpinionReplyEnabled"),
     leadHours: Number(leadHoursValue ?? Number.NaN),
   };
   return validateDiscordNotificationSettings(input);
@@ -244,10 +252,14 @@ export async function saveDiscordNotificationSettings(
       const effectiveTimes = PREFERENCE_KEYS.map(({ type, key }) => {
         const stored = existing.byType.get(type);
         const enabled = validated[key];
+        const preserveEffectiveAt =
+          stored &&
+          stored.enabled === enabled &&
+          (!leadHoursChanged || type === "feedback-reply" || type === "event-opinion-reply");
         return {
           type,
           enabled,
-          effectiveAt: stored && !leadHoursChanged && stored.enabled === enabled ? stored.effectiveAt : now,
+          effectiveAt: preserveEffectiveAt ? stored.effectiveAt : now,
         };
       });
 

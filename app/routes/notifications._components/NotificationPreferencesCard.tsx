@@ -48,7 +48,16 @@ export default function NotificationPreferencesCard({
 
   return (
     <SectionCard title="받을 알림" description="알림은 수 분 정도 지연이 발생할 수 있어요">
-      {error ? <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      {isSaved ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          알림 설정이 저장됐어요.
+        </p>
+      ) : null}
       <Form method="post" onChange={markDirty}>
         <input type="hidden" name="intent" value="save" />
         <div className="relative">
@@ -60,81 +69,133 @@ export default function NotificationPreferencesCard({
             </div>
           ) : null}
           <fieldset disabled={!isAvailable} className={cn("min-w-0 space-y-6", !isAvailable && "opacity-40")}>
-            <div>
-              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm">이벤트 시작</p>
-                  <p className="text-xs text-muted-foreground">새로운 이벤트 시작 알림</p>
+            <section aria-labelledby="notification-game-content-heading" className="space-y-4">
+              <h3 id="notification-game-content-heading" className="text-sm font-semibold text-foreground">
+                게임 컨텐츠 알림
+              </h3>
+              <div className="space-y-1">
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">이벤트 시작</p>
+                    <p className="text-xs text-muted-foreground">새로운 이벤트 시작 알림</p>
+                  </div>
+                  <Toggle
+                    name="eventStartEnabled"
+                    initialState={settings.eventStartEnabled}
+                    disabled={isSaving}
+                    aria-label="이벤트 시작"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
                 </div>
-                <Toggle
-                  name="eventStartEnabled"
-                  initialState={settings.eventStartEnabled}
-                  className="my-0 shrink-0"
-                  onChange={markDirty}
-                />
-              </div>
-              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm">이벤트 종료</p>
-                  <p className="text-xs text-muted-foreground">이벤트 플레이 종료 시점 알림</p>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">이벤트 종료</p>
+                    <p className="text-xs text-muted-foreground">이벤트 플레이 종료 시점 알림</p>
+                  </div>
+                  <Toggle
+                    name="eventEndEnabled"
+                    initialState={settings.eventEndEnabled}
+                    disabled={isSaving}
+                    aria-label="이벤트 종료"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
                 </div>
-                <Toggle
-                  name="eventEndEnabled"
-                  initialState={settings.eventEndEnabled}
-                  className="my-0 shrink-0"
-                  onChange={markDirty}
-                />
-              </div>
-              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm">이벤트 보상 교환 종료</p>
-                  <p className="text-xs text-muted-foreground">상점, 미션 등 이벤트 보상 획득 종료 시점 알림</p>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">이벤트 보상 교환 종료</p>
+                    <p className="text-xs text-muted-foreground">상점, 미션 등 이벤트 보상 획득 종료 시점 알림</p>
+                  </div>
+                  <Toggle
+                    name="rewardExchangeEndEnabled"
+                    initialState={settings.rewardExchangeEndEnabled}
+                    disabled={isSaving}
+                    aria-label="이벤트 보상 교환 종료"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
                 </div>
-                <Toggle
-                  name="rewardExchangeEndEnabled"
-                  initialState={settings.rewardExchangeEndEnabled}
-                  className="my-0 shrink-0"
-                  onChange={markDirty}
-                />
-              </div>
-              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm">학생 모집 시작</p>
-                  <p className="text-xs text-muted-foreground">관심 학생의 모집 시작 시점 알림</p>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">학생 모집 시작</p>
+                    <p className="text-xs text-muted-foreground">관심 학생의 모집 시작 시점 알림</p>
+                  </div>
+                  <Toggle
+                    name="recruitmentStartEnabled"
+                    initialState={settings.recruitmentStartEnabled}
+                    disabled={isSaving}
+                    aria-label="학생 모집 시작"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
                 </div>
-                <Toggle
-                  name="recruitmentStartEnabled"
-                  initialState={settings.recruitmentStartEnabled}
-                  className="my-0 shrink-0"
-                  onChange={markDirty}
-                />
-              </div>
-              <div className="flex min-h-14 items-center justify-between gap-4 py-1">
-                <div className="min-w-0">
-                  <p className="text-sm">상점 초기화 알림</p>
-                  <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">상점 초기화 알림</p>
+                    <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
+                  </div>
+                  <Toggle
+                    name="shopResetEnabled"
+                    initialState={settings.shopResetEnabled}
+                    disabled={isSaving}
+                    aria-label="상점 초기화 알림"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
                 </div>
-                <Toggle
-                  name="shopResetEnabled"
-                  initialState={settings.shopResetEnabled}
-                  className="my-0 shrink-0"
-                  onChange={markDirty}
-                />
               </div>
-            </div>
+              <Field label="알림 시점" htmlFor="notification-lead-hours" containerClassName="space-y-3">
+                <Dropdown
+                  id="notification-lead-hours"
+                  value={leadHours}
+                  options={LEAD_HOUR_OPTIONS}
+                  size="md"
+                  fullWidth
+                  disabled={!isAvailable || isSaving}
+                  onChange={(value) => {
+                    setLeadHours(value);
+                    markDirty();
+                  }}
+                />
+              </Field>
+            </section>
 
-            <Field label="알림 시점" containerClassName="space-y-3">
-              <Dropdown
-                value={leadHours}
-                options={LEAD_HOUR_OPTIONS}
-                size="md"
-                fullWidth
-                onChange={(value) => {
-                  setLeadHours(value);
-                  markDirty();
-                }}
-              />
-            </Field>
+            <section aria-labelledby="notification-mollulog-heading" className="space-y-4">
+              <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">
+                몰루로그 알림
+              </h3>
+              <div className="space-y-1">
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">제안/문의 답글</p>
+                    <p className="text-xs text-muted-foreground">내 제안/문의에 등록된 운영팀 답변 알림</p>
+                  </div>
+                  <Toggle
+                    name="feedbackReplyEnabled"
+                    initialState={settings.feedbackReplyEnabled}
+                    disabled={isSaving}
+                    aria-label="제안/문의 답글"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
+                </div>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                  <div className="min-w-0">
+                    <p className="text-sm">이벤트 의견 답글</p>
+                    <p className="text-xs text-muted-foreground">내 이벤트 의견에 달린 새 답글 알림</p>
+                  </div>
+                  <Toggle
+                    name="eventOpinionReplyEnabled"
+                    initialState={settings.eventOpinionReplyEnabled}
+                    disabled={isSaving}
+                    aria-label="이벤트 의견 답글"
+                    className="my-0 shrink-0"
+                    onChange={markDirty}
+                  />
+                </div>
+              </div>
+            </section>
             <input type="hidden" name="leadHours" value={leadHours} />
 
             <div className="flex justify-end">

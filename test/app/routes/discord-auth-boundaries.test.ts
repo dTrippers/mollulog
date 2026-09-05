@@ -68,6 +68,18 @@ describe("Discord page responsibility", () => {
     expect(notificationPreferencesSource).toContain("하나 이상의 알림 수단을 등록해주세요");
     expect(notificationPreferencesSource).toContain("disabled={!isAvailable}");
     expect(notificationPreferencesSource).toContain('!isAvailable && "opacity-40"');
+    expect(notificationPreferencesSource).toContain("게임 컨텐츠 알림");
+    expect(notificationPreferencesSource).toContain("몰루로그 알림");
+    expect(notificationPreferencesSource).toContain('id="notification-game-content-heading"');
+    expect(notificationPreferencesSource).toContain('aria-labelledby="notification-game-content-heading"');
+    expect(notificationPreferencesSource).toContain('id="notification-mollulog-heading"');
+    expect(notificationPreferencesSource).toContain('aria-labelledby="notification-mollulog-heading"');
+    expect(notificationPreferencesSource).toContain('label="알림 시점" htmlFor="notification-lead-hours"');
+    expect(notificationPreferencesSource).not.toContain("게임 컨텐츠 알림에 공통으로 적용돼요.");
+    expect(notificationPreferencesSource).toContain("내 제안/문의에 등록된 운영팀 답변 알림");
+    expect(notificationPreferencesSource).toContain("내 이벤트 의견에 달린 새 답글 알림");
+    expect(notificationPreferencesSource).toContain('role="alert"');
+    expect(notificationPreferencesSource).toContain('aria-live="polite"');
     expect(notificationChannelSource).not.toContain("<Form");
     expect(notificationsSource).not.toContain("/notifications/discord");
   });

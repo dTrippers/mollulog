@@ -207,7 +207,9 @@ export type DiscordNotificationTrigger =
   | "event-end"
   | "reward-exchange-end"
   | "recruitment-start"
-  | "shop-reset";
+  | "shop-reset"
+  | "feedback-reply"
+  | "event-opinion-reply";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
 
 export type NotificationChannelType = "discord";
