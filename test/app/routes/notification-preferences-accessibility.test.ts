@@ -25,4 +25,19 @@ describe("notification preference accessibility", () => {
     expect(toggleSource).not.toContain('"aria-labelledby"?: string');
     expect(toggleSource).not.toContain('"aria-describedby"?: string');
   });
+
+  it("keeps preference groups and feedback states semantically connected", () => {
+    expect(preferencesSource).toContain("게임 컨텐츠 알림");
+    expect(preferencesSource).toContain("몰루로그 알림");
+    expect(preferencesSource).toContain('id="notification-game-content-heading"');
+    expect(preferencesSource).toContain('aria-labelledby="notification-game-content-heading"');
+    expect(preferencesSource).toContain('id="notification-mollulog-heading"');
+    expect(preferencesSource).toContain('aria-labelledby="notification-mollulog-heading"');
+    expect(preferencesSource).toContain('label="알림 시점" htmlFor="notification-lead-hours"');
+    expect(preferencesSource).not.toContain("게임 컨텐츠 알림에 공통으로 적용돼요.");
+    expect(preferencesSource).toContain("내 제안/문의에 등록된 운영팀 답변 알림");
+    expect(preferencesSource).toContain("내 이벤트 의견에 달린 새 답글 알림");
+    expect(preferencesSource).toContain('role="alert"');
+    expect(preferencesSource).toContain('aria-live="polite"');
+  });
 });
