@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import {
   addRecruitedStudents,
   getRecruitedStudents,
+  patchRecruitedStudentCurrentState,
   RecruitedStudentValidationError,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
@@ -275,6 +276,96 @@ describe("recruited-student current state", () => {
     const writeIndex = db.statements.findIndex((statement) => statement.toLowerCase().startsWith("insert"));
     expect(lockIndex).toBeGreaterThanOrEqual(0);
     expect(lockIndex).toBeLessThan(writeIndex);
+  });
+
+  it("patches only the requested fields for the requested owner", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(
+      createRecruitedStudentRow({
+        userId: 1,
+        tier: 6,
+        level: 70,
+        skillEx: 3,
+        equip1: 5,
+        equip1Level: 70,
+        weaponLevel: 20,
+        abilityHp: 10,
+      }),
+      createRecruitedStudentRow({ id: 2, uid: "recruited-other", userId: 2, tier: 5, level: 80, skillEx: 5 }),
+    );
+
+    await patchRecruitedStudentCurrentState(
+      env,
+      1,
+      "student-a",
+      { level: 80 },
+      { equipmentMaxLevelsByTier: [new Map([[5, 70]]), new Map(), new Map()] },
+    );
+
+    expect(db.rows).toEqual([
+      expect.objectContaining({
+        userId: 1,
+        tier: 6,
+        level: 80,
+        skillEx: 3,
+        equip1: 5,
+        equip1Level: 70,
+        weaponLevel: 20,
+        abilityHp: 10,
+      }),
+      expect.objectContaining({ userId: 2, tier: 5, level: 80, skillEx: 5 }),
+    ]);
+    const updateStatement = db.statements.find((statement) => statement.toLowerCase().startsWith("update"));
+    expect(updateStatement).toContain('"level"');
+    expect(updateStatement).not.toContain('"tier"');
+  });
+
+  it("rejects a hidden weapon conflict before writing when lowering tier", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(createRecruitedStudentRow({ tier: 6, level: 80, weaponLevel: 30 }));
+
+    await expect(patchRecruitedStudentCurrentState(env, 1, "student-a", { tier: 5, level: 81 })).rejects.toEqual(
+      expect.objectContaining({
+        name: "RecruitedStudentValidationError",
+        message: "고유무기 레벨은(는) 현재 성급 기준 0부터 0 사이만 입력할 수 있어요",
+      }),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 6, level: 80, weaponLevel: 30 });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("update"))).toBe(false);
+  });
+
+  it("rejects hidden equipment level conflicts before writing", async () => {
+    const { db, env } = createEnv();
+    db.rows.push(createRecruitedStudentRow({ tier: 3, equip1: 5, equip1Level: 70, level: 80 }));
+
+    await expect(
+      patchRecruitedStudentCurrentState(
+        env,
+        1,
+        "student-a",
+        { level: 81 },
+        { equipmentMaxLevelsByTier: [new Map([[5, 60]]), new Map(), new Map()] },
+      ),
+    ).rejects.toEqual(
+      expect.objectContaining({
+        name: "RecruitedStudentValidationError",
+        message: "장비 1 레벨은(는) 1부터 60 사이만 입력할 수 있어요",
+      }),
+    );
+    expect(db.rows[0]).toMatchObject({ tier: 3, level: 80, equip1: 5, equip1Level: 70 });
+    expect(db.statements.some((statement) => statement.toLowerCase().startsWith("update"))).toBe(false);
+  });
+
+  it("rejects out-of-range patch values before opening a transaction", async () => {
+    const { db, env } = createEnv();
+
+    await expect(patchRecruitedStudentCurrentState(env, 1, "student-a", { level: 91 })).rejects.toEqual(
+      expect.objectContaining({
+        name: "RecruitedStudentValidationError",
+        message: "레벨은(는) 1부터 90 사이만 입력할 수 있어요",
+      }),
+    );
+    expect(db.statements).toEqual([]);
   });
 
   it("rejects tier updates that would leave ability release levels without a unique weapon", async () => {

@@ -23,6 +23,7 @@ const row: typeof pgSenseisTable.$inferSelect = {
   bio: "bio",
   role: "guest",
   profileVisibility: "private",
+  growthVisibility: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),
 };
@@ -51,6 +52,7 @@ describe("identity PostgreSQL repository contract", () => {
       active: true,
       role: "guest",
       profileVisibility: "private",
+      growthVisibility: false,
     });
     expect(Object.keys(toSenseiModel(row))).toEqual([
       "id",
@@ -62,6 +64,7 @@ describe("identity PostgreSQL repository contract", () => {
       "active",
       "role",
       "profileVisibility",
+      "growthVisibility",
     ]);
   });
 
@@ -118,6 +121,7 @@ describe("identity PostgreSQL repository contract", () => {
         profileStudentId: "student-7",
         bio: "updated bio",
         profileVisibility: "public",
+        growthVisibility: true,
       }),
     ).resolves.toEqual({});
     expect(set).toHaveBeenCalledWith(
@@ -127,7 +131,28 @@ describe("identity PostgreSQL repository contract", () => {
         profileStudentId: "student-7",
         bio: "updated bio",
         profileVisibility: "public",
+        growthVisibility: true,
       }),
+    );
+  });
+
+  it("writes only explicitly supplied fields and preserves explicit false", async () => {
+    const set = jest.fn((values: unknown) => ({ where: jest.fn(async () => undefined), values }));
+    const db = {
+      update: jest.fn(() => ({ set })),
+    };
+    mockWithIdentityDatabase.mockImplementation(async (_env, queryName, operation) => {
+      expect(queryName).toBe("update_sensei");
+      return (operation as (database: typeof db) => unknown)(db);
+    });
+
+    await expect(updateSensei(env, 7, { bio: "profile-only" })).resolves.toEqual({});
+    expect(set).toHaveBeenLastCalledWith(expect.objectContaining({ bio: "profile-only", updatedAt: expect.any(Date) }));
+    expect(set.mock.lastCall?.[0]).not.toHaveProperty("growthVisibility");
+
+    await expect(updateSensei(env, 7, { growthVisibility: false })).resolves.toEqual({});
+    expect(set).toHaveBeenLastCalledWith(
+      expect.objectContaining({ growthVisibility: false, updatedAt: expect.any(Date) }),
     );
   });
 

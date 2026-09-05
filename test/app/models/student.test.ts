@@ -1,9 +1,12 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { formatStudentFullName } from "~/models/student";
+import { runQuery } from "~/lib/baql";
+import { formatStudentFullName, getStudentWeaponAvailability } from "~/models/student";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
 }));
+
+const mockedRunQuery = runQuery as jest.MockedFunction<typeof runQuery>;
 
 describe("formatStudentFullName", () => {
   it("prefixes a regular student name with familyName", () => {
@@ -25,5 +28,33 @@ describe("formatStudentFullName", () => {
 
   it("falls back to name when familyName is empty", () => {
     expect(formatStudentFullName({ uid: "10135", name: "케이", familyName: "" })).toBe("케이");
+  });
+});
+
+describe("student weapon availability", () => {
+  it("maps returned students without a weapon to false and keeps omitted requested students absent", async () => {
+    mockedRunQuery.mockResolvedValueOnce({
+      data: {
+        students: [
+          { uid: "with-weapon", catalog: { weapon: { name: "Weapon" } } },
+          { uid: "without-weapon", catalog: null },
+        ],
+      },
+      error: undefined,
+    } as never);
+
+    const result = await getStudentWeaponAvailability({ DISABLE_CACHE: "true" } as unknown as Env, [
+      "with-weapon",
+      "without-weapon",
+      "omitted",
+    ]);
+
+    expect(result).toEqual(
+      new Map([
+        ["with-weapon", true],
+        ["without-weapon", false],
+      ]),
+    );
+    expect(result.has("omitted")).toBe(false);
   });
 });
