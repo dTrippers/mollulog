@@ -165,10 +165,7 @@ export default function NotificationPreferencesCard({
               </Field>
             </section>
 
-            <section
-              className="space-y-4 border-t border-border pt-4"
-              aria-labelledby="notification-mollulog-heading"
-            >
+            <section className="space-y-4 border-t border-border pt-4" aria-labelledby="notification-mollulog-heading">
               <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">
                 몰루로그 알림
               </h3>
