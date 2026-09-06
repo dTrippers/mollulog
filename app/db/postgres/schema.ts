@@ -45,6 +45,7 @@ export const pgSenseisTable = pgTable(
     bio: text(),
     role: text().$type<SenseiRole>().notNull().default("guest"),
     profileVisibility: text("profile_visibility").$type<ProfileVisibility>().notNull().default("public"),
+    growthVisibility: boolean("growth_visibility").notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
