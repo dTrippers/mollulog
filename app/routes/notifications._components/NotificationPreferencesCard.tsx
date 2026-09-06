@@ -47,7 +47,7 @@ export default function NotificationPreferencesCard({
   };
 
   return (
-    <SectionCard title="받을 알림" description="알림은 수 분 정도 지연이 발생할 수 있어요">
+    <SectionCard title="받을 알림">
       {error ? (
         <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
@@ -73,8 +73,8 @@ export default function NotificationPreferencesCard({
               <h3 id="notification-game-content-heading" className="text-sm font-semibold text-foreground">
                 게임 컨텐츠 알림
               </h3>
-              <div className="space-y-1">
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+              <div>
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">이벤트 시작</p>
                     <p className="text-xs text-muted-foreground">새로운 이벤트 시작 알림</p>
@@ -88,7 +88,7 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">이벤트 종료</p>
                     <p className="text-xs text-muted-foreground">이벤트 플레이 종료 시점 알림</p>
@@ -102,7 +102,7 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">이벤트 보상 교환 종료</p>
                     <p className="text-xs text-muted-foreground">상점, 미션 등 이벤트 보상 획득 종료 시점 알림</p>
@@ -116,7 +116,7 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">학생 모집 시작</p>
                     <p className="text-xs text-muted-foreground">관심 학생의 모집 시작 시점 알림</p>
@@ -130,7 +130,7 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">상점 초기화 알림</p>
                     <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
@@ -145,7 +145,11 @@ export default function NotificationPreferencesCard({
                   />
                 </div>
               </div>
-              <Field label="알림 시점" htmlFor="notification-lead-hours" containerClassName="space-y-3">
+              <Field
+                label="알림 시점"
+                htmlFor="notification-lead-hours"
+                description="알림은 기준 시점부터 수 분 정도 걸릴 수 있어요"
+              >
                 <Dropdown
                   id="notification-lead-hours"
                   value={leadHours}
@@ -161,15 +165,18 @@ export default function NotificationPreferencesCard({
               </Field>
             </section>
 
-            <section aria-labelledby="notification-mollulog-heading" className="space-y-4">
+            <section
+              className="space-y-4 border-t border-border pt-4"
+              aria-labelledby="notification-mollulog-heading"
+            >
               <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">
                 몰루로그 알림
               </h3>
-              <div className="space-y-1">
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+              <div>
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">제안/문의 답글</p>
-                    <p className="text-xs text-muted-foreground">내 제안/문의에 등록된 운영팀 답변 알림</p>
+                    <p className="text-xs text-muted-foreground">제안/문의에 답변이 작성되면 알림</p>
                   </div>
                   <Toggle
                     name="feedbackReplyEnabled"
@@ -180,10 +187,10 @@ export default function NotificationPreferencesCard({
                     onChange={markDirty}
                   />
                 </div>
-                <div className="flex min-h-14 items-center justify-between gap-4 py-1">
+                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
                   <div className="min-w-0">
                     <p className="text-sm">이벤트 의견 답글</p>
-                    <p className="text-xs text-muted-foreground">내 이벤트 의견에 달린 새 답글 알림</p>
+                    <p className="text-xs text-muted-foreground">내 이벤트 의견에 답글이 작성되면 알림</p>
                   </div>
                   <Toggle
                     name="eventOpinionReplyEnabled"

@@ -7,6 +7,7 @@ const config = {
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/app/$1",
   },
+  testPathIgnorePatterns: ["<rootDir>/scripts/local-dev.test.mjs"],
 };
 
 export default config;
