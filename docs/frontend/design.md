@@ -29,6 +29,11 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - For spacing between major blocks inside a card, use `gap-4`–`gap-6`. If a functionally necessary divider is unavoidable, keep at least `pt-4` after it so the content does not feel cramped.
 - `rounded-full` is mostly for small elements like pills, chips, and avatars.
 - Do not force every control to full width; size to content and context.
+- Prefer the existing Tailwind spacing, typography, radius, and color scale and
+  semantic tokens. Avoid arbitrary values such as `text-[10px]`, `h-[37px]`,
+  `mt-[3px]`, or custom grid sizes unless a concrete layout constraint cannot be
+  expressed with the existing scale. Isolate a necessary arbitrary value in the
+  smallest relevant component and explain it in the implementation note.
 
 ### Surface hierarchy
 
@@ -38,7 +43,6 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Elevated popovers and sheets use `bg-popover` with a shadow when separation is needed.
 - Supporting areas and hover states use `bg-muted` or a translucent muted value.
 - `bg-muted` is not the default surface for a stand-alone inactive control on the light page canvas. Use a white `bg-card` control with a small subdued shadow in light mode, and switch back to `bg-muted` in dark mode.
-- `FilterButtons` defaults to the nested Panel/Container treatment (`surface="panel"`): inactive buttons use `bg-muted` without a shadow. Only direct page placement opts into `surface="page"`, which uses a white control and a small light-mode shadow.
 - In light mode, white cards sit subtly above the neutral-50 canvas. In dark mode, cards are moderately darker than the neutral-800 page without reaching neutral-900.
 - New shared primitives and structural surfaces use semantic tokens. Existing feature-specific `neutral-*` colors are migrated file by file in the separate token-migration track; image overlays, fixed inverse surfaces, status colors, and data visualizations may keep explicit colors.
 
@@ -51,15 +55,9 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Default and wide pages share the same `max-w-7xl` outer canvas. Route-specific widths are applied to an inner wrapper anchored to the left, so titles and primary panels do not move horizontally when navigating between page widths.
 - Page side rails distinguish navigation roles: the active screen selector uses a full subtle primary tint, while destination links use a neutral card with a tinted icon and directional arrow. Both use the same small light-mode shadow and occupy the full rail width.
 - Consecutive Page Panels use a consistent `space-y-3` gap. Link groups add extra separation only when a Panel group actually precedes them.
-- Expanded Page Panels use consistent spacing between the icon/title header and body without a default divider. Add a divider only when the content structure requires an explicit boundary.
-- Controls embedded directly in a Page Panel should not create a second default card. Use a Panel-specific composition such as `PanelEventSelector`, or remove the reusable form control's resting border/background while keeping focus, open-popover, hover, and selected-state feedback.
-- Panel body anatomy is composed from `PanelBody`, `PanelBodySection`, and the internal `PanelBodyRow`: section labels are `text-xs font-semibold text-muted-foreground`; repeated row titles are `text-sm font-normal text-foreground/85`; supporting text is `text-xs text-muted-foreground`.
-- Routes use purpose-specific compositions instead of constructing anatomy or selecting a large style variant directly: `PanelActionRow`, `PanelIconToggleRow`, `PanelSwitchRow`, `PanelFilterButtonRow`, `PanelFilterButtonsSection`, and `PanelSearchField`. Add a new composition when a genuinely new control type appears.
-- Dense filter rows use `PanelFilterButtonRow` with the standard `FilterButtons` padding and gap. Keep short groups on one line and allow long labels such as defense types to wrap naturally rather than compressing spacing or introducing horizontal scrolling.
-- Inactive `FilterButtons` use `hover:bg-foreground/10` so hover remains recognizable on both light card and dark muted surfaces without adding a border.
-- Colored `FilterButtons` use the same full-height left color rail as `AttributeBadge` in raid selectors. The rail is painted as a pseudo-element instead of a separate flex item, preserving the semantic color while reducing horizontal pressure in dense one-line filter rows.
-- Panel option controls use `bg-muted` with a small light-mode shadow when inactive. Repeated options default to a subtle primary tint when active; reserve the solid `strong` emphasis for a single state that must remain immediately recognizable. They should not mimic a stand-alone white page control inside a white Panel.
-- Do not paint a second hover surface across a non-interactive row around a Panel option. Keep hover feedback on the actual button so its boundary does not merge into its parent.
+
+Panel, FilterButtons, and option composition rules are collected in
+[frontend patterns](./patterns.md), alongside the verified source anchors.
 
 ## Typography and copy
 
@@ -68,7 +66,10 @@ MolluLog's UI prioritizes keeping the established visual language consistent ove
 - Section title: `text-lg font-semibold`.
 - Card or subsection title: `text-base font-semibold`.
 - Supporting descriptions: `text-sm text-muted-foreground`.
-- `text-xs` is reserved for metadata, captions, and compact badges.
+- `text-xs` is reserved for metadata, captions, and compact badges. Panel section
+  labels and deliberately compact Panel option, search, and supporting text are
+  an explicit structural exception; they are not a default size for body copy or
+  primary actions.
 - Description text is opt-in, not a default part of a title or control. Add it only when the user needs information that is not already clear from the title, label, value, or surrounding context to make a decision.
 - Do not restate the title, label, current state, interaction source, or obvious behavior in a description. Remove redundant descriptions instead of filling empty space with explanatory copy.
 - Do not add decorative English phrases or meaningless filler text.

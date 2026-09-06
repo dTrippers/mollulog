@@ -20,37 +20,44 @@ This is a short guide to help first-time contributors set up a development envir
 3. Update code and docs together when needed.
 4. In the PR, describe why you made the change and how you verified it.
 
-### Helpful commands
+### Verification
 
-Not every command is always required, but please check the following when you can.
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-```
-
-To run only the Biome check separately:
+Use the [verification guide](./docs/contributing/verification.md) to choose checks
+for the change. Runtime commands use `mise exec --`:
 
 ```bash
-pnpm exec biome check
+mise exec -- pnpm typecheck
+mise exec -- pnpm lint
+mise exec -- pnpm test
 ```
+
+When a full-tree, generated-inclusive Biome check is specifically relevant:
+
+```bash
+mise exec -- pnpm exec biome check .
+```
+
+Documentation-only changes need link/content consistency and `git diff --check`;
+application lint, typecheck, and tests are not mandatory for those changes.
 
 ### Project conventions
 
 #### UI work
 
-Before adding or changing UI, please read these documents first.
+Read only the frontend guidance relevant to the task. Use these documents for
+visual rules, component placement, proven compositions, and UI evidence:
 
 - [docs/frontend/design.md](./docs/frontend/design.md)
 - [docs/frontend/components.md](./docs/frontend/components.md)
+- [docs/frontend/patterns.md](./docs/frontend/patterns.md)
+- [docs/frontend/ui-quality.md](./docs/frontend/ui-quality.md)
 - [docs/frontend/routing.md](./docs/frontend/routing.md)
 
 #### GraphQL work
 
 - GraphQL data uses the [BAQL](https://github.com/hellodhlyn/baql) project.
 - Define queries with `graphql(...)` inside `app/**/*.{ts,tsx}`.
-- After adding or changing a query, run `pnpm codegen`.
+- After adding or changing a query, run `mise exec -- pnpm codegen`.
 - Do not edit generated files under `app/graphql/` by hand.
 
 #### Code style
@@ -75,11 +82,18 @@ Please include the following in the PR description.
 - What you changed
 - Why this change is needed
 - How you verified it
-- A screenshot or short description if there is a UI change
+- For a visual or layout change, include an actual-render capture or accessible
+  actual-render reference with its route, viewport, theme, and state. A
+  description must summarize evidence that was obtained, not replace the QA.
+  For a behavior or state-transition change, record the scenario, action, and
+  observed result; a screenshot alone does not prove the transition. Mark
+  missing applicable evidence `UNVERIFIED`; invisible logic changes do not need
+  a screenshot.
 
 ### Review references
 
 - [docs/contributing/code-review.md](./docs/contributing/code-review.md)
+- [docs/contributing/verification.md](./docs/contributing/verification.md)
 
 ### License
 
@@ -105,37 +119,44 @@ MolluLog에 관심을 가져주셔서 감사합니다.
 3. 필요한 경우 코드와 문서를 함께 업데이트해 주세요.
 4. PR에는 변경 이유와 테스트 방법을 함께 적어 주세요.
 
-### 확인하면 좋은 명령
+### 확인 방법
 
-변경 전부에 항상 모든 명령이 필요한 것은 아니지만, 가능하면 아래 항목을 확인해 주세요.
-
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-```
-
-Biome 검사만 별도로 보고 싶다면 아래 명령도 사용할 수 있습니다.
+[검증 안내](./docs/contributing/verification.md)를 참고해 작업 범위에 맞는
+검사를 선택해 주세요. Runtime 명령은 `mise exec --`로 실행합니다.
 
 ```bash
-pnpm exec biome check
+mise exec -- pnpm typecheck
+mise exec -- pnpm lint
+mise exec -- pnpm test
 ```
+
+생성 파일을 포함한 전체 파일 Biome 검사가 필요할 때 아래 명령을 사용하세요.
+
+```bash
+mise exec -- pnpm exec biome check .
+```
+
+문서만 변경한 경우에는 링크·내용 일관성과 `git diff --check`를 확인하면
+되며, 앱 lint·typecheck·test는 필수가 아닙니다.
 
 ### 프로젝트 규칙
 
 #### UI 작업
 
-UI를 추가하거나 변경할 때는 아래 문서를 먼저 읽어 주세요.
+작업에 필요한 프론트엔드 지침만 읽어 주세요. 시각 규칙, 컴포넌트 위치,
+재사용 가능한 조합, UI 증거 기준은 아래 문서에서 확인할 수 있습니다.
 
 - [docs/frontend/design.md](./docs/frontend/design.md)
 - [docs/frontend/components.md](./docs/frontend/components.md)
+- [docs/frontend/patterns.md](./docs/frontend/patterns.md)
+- [docs/frontend/ui-quality.md](./docs/frontend/ui-quality.md)
 - [docs/frontend/routing.md](./docs/frontend/routing.md)
 
 #### GraphQL 작업
 
 - GraphQL 데이터는 [BAQL](https://github.com/hellodhlyn/baql) 프로젝트를 사용하고 있습니다.
 - 쿼리는 `app/**/*.{ts,tsx}` 안에서 `graphql(...)` 로 정의해 주세요.
-- 쿼리를 추가하거나 수정했다면 `pnpm codegen` 을 실행해 주세요.
+- 쿼리를 추가하거나 수정했다면 `mise exec -- pnpm codegen` 을 실행해 주세요.
 - `app/graphql/` 아래 생성 파일은 직접 수정하지 말아 주세요.
 
 #### 코드 스타일
@@ -160,11 +181,17 @@ PR 설명에는 아래 내용을 포함해 주세요.
 - 무엇을 변경했는지
 - 왜 이 변경이 필요한지
 - 어떻게 확인했는지
-- UI 변경이 있다면 스크린샷 또는 짧은 설명
+- 시각 또는 layout 변경이라면 route·viewport·theme·state를 포함한 실제
+  렌더링 캡처나 확인 가능한 실제 렌더링 참조를 첨부해 주세요. 설명은 실제로
+  확보한 증거를 요약해야 하며 QA를 대신할 수 없습니다. 동작 또는 상태 전이
+  변경이라면 시나리오·동작·관찰한 결과를 기록해 주세요. 스크린샷만으로는
+  전이를 증명할 수 없습니다. 관련 증거가 없으면 `UNVERIFIED`로 표시해
+  주세요. 보이지 않는 로직 변경에는 스크린샷이 필요하지 않습니다.
 
 ### 리뷰 참고 문서
 
 - [docs/contributing/code-review.md](./docs/contributing/code-review.md)
+- [docs/contributing/verification.md](./docs/contributing/verification.md)
 
 ### 라이선스
 

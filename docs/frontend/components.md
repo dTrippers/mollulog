@@ -2,6 +2,9 @@
 
 This document is the basis for deciding where new UI code lives. Instead of keeping a component list, it captures the durable layer rules and promotion criteria.
 
+Use [frontend patterns](./patterns.md) for verified composition references and
+[UI quality](./ui-quality.md) for task briefs and render/interaction evidence.
+
 ## Source of truth
 
 The UI is organized into these layers:
@@ -70,10 +73,11 @@ The default stance is "route-local first, promote once reuse is confirmed."
 When building new UI, decide in this order:
 
 1. Can existing `primitives` or `features/forms` solve it?
-2. Can a low-level shared variant solve it?
+2. Can a route-local wrapper or composition solve it?
 3. Is it reused across multiple screens of the same domain?
 4. If so, put it in `features/<domain>`.
-5. If not, keep it route-local.
+5. If a low-level shared variant is needed by more than one domain, put it in
+   `primitives`; otherwise keep it route-local.
 
 Prefer promoting after reuse is confirmed over premature sharing.
 
@@ -113,7 +117,8 @@ Good examples:
 - Avoid two visual patterns for the same interaction.
 - Do not tighten form density ad hoc at the route level; use an explicit variant when needed.
 
-See [Design](./design.md) for detailed visual rules.
+See [Design](./design.md) for visual rules, [Patterns](./patterns.md) for proven
+compositions, and [UI quality](./ui-quality.md) for scope-proportional evidence.
 
 ## Checklist
 

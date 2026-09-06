@@ -1,6 +1,10 @@
 # MolluLog Documentation
 
-These documents describe the project's durable structure and conventions — where code lives, how data flows, and the rules new code follows. They intentionally avoid listing files or screens, which change often. For the exact current state, read the source directories the documents point to.
+These documents describe the project's durable structure and conventions — where
+code lives, how data flows, and the rules new code follows. Most pages avoid
+listing files or screens, which change often. The frontend patterns page keeps a
+small set of verified source anchors and an evidence process for reuse; it is not
+an exhaustive screen catalogue or an approval set of screenshots.
 
 ## Map
 
@@ -13,6 +17,8 @@ These documents describe the project's durable structure and conventions — whe
 - [frontend/routing.md](./frontend/routing.md) — route file naming, route responsibilities, and route-local composition.
 - [frontend/components.md](./frontend/components.md) — component layers (`primitives`, `features`, route-local) and promotion criteria.
 - [frontend/design.md](./frontend/design.md) — visual language, layout, forms, and interaction rules.
+- [frontend/patterns.md](./frontend/patterns.md) — verified Panel, filter, and student-screen reuse references.
+- [frontend/ui-quality.md](./frontend/ui-quality.md) — task briefs and actual visual/interaction evidence.
 
 ### Data
 
@@ -24,6 +30,7 @@ These documents describe the project's durable structure and conventions — whe
 
 - [development.md](./development.md) — shared worktree settings, local PostgreSQL commands, and agent execution.
 - [contributing/code-review.md](./contributing/code-review.md) — pull request review checklist.
+- [contributing/verification.md](./contributing/verification.md) — scope-proportional commands and evidence.
 
 ## How the layers relate
 

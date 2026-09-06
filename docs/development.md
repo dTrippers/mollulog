@@ -3,6 +3,10 @@
 All worktrees use one existing local PostgreSQL database. Authentication behavior
 and OAuth configuration are unchanged by this setup.
 
+Use the [verification guide](./contributing/verification.md) for checks chosen by
+change scope. Runtime commands in this document and that guide are run through
+`mise exec --`.
+
 ## Shared configuration
 
 Run once on the workstation:
@@ -76,8 +80,9 @@ explicitly planned procedure. Never reset the shared DB to fix a branch mismatch
 
 ## Agent execution
 
-Start with `mise exec -- pnpm dev:doctor`. A sandbox network denial or timeout does
-not prove PostgreSQL is down. Retry the same command with the tool's local network
+For local DB or runtime-environment troubleshooting, start with
+`mise exec -- pnpm dev:doctor`. A sandbox network denial or timeout does not prove
+PostgreSQL is down. Retry the same command with the tool's local network
 permission/escalation mechanism before asking the user to repair settings. Do not
 change credentials or launch another DB on a sandbox-only failure. If permission
 is denied, report that precise limitation. The script cannot grant sandbox access.

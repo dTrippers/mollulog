@@ -1,51 +1,56 @@
 # MolluLog
-This project is a service that provides information about the game "Blue Archive", developed by Nexon Games.
 
-## About Game
-In "Blue Archive", players are called "Sensei" which means "teacher" in Japanese.
-Players can collect various characters called "Students".
-Students have various attributes such as "Attack Type", "Defense Type", "Role", "Equipment", etc.
+MolluLog helps Sensei browse Blue Archive student and event data, record game
+activities, and plan events.
 
-There are various events in the game, and players can participate in these events to get various rewards.
-For some events, there are some pickups to get students.
+## Task router
 
-## About MolluLog
-This project provides information about the schedule of events and the students that can be picked up.
-Users can check the schedule and pickups, and plan their activities.
-Also, users can record their game activities such as collected students, participated events, etc.
+- System boundaries and data flow: [architecture](docs/architecture.md).
+- Local setup, the shared PostgreSQL database, and environment diagnosis:
+  [development](docs/development.md).
+- PostgreSQL models, schemas, and migrations: [database](docs/data/database.md).
+- BAQL queries, codegen, and timestamps: [BAQL](docs/data/baql.md) and
+  [date and time](docs/data/date-time.md).
+- User-visible UI: read only the relevant [design](docs/frontend/design.md),
+  [components](docs/frontend/components.md), [patterns](docs/frontend/patterns.md),
+  and [UI quality](docs/frontend/ui-quality.md) guidance. For route restructuring,
+  also read [routing](docs/frontend/routing.md).
+- Review and scope-proportional checks: [code review](docs/contributing/code-review.md)
+  and [verification](docs/contributing/verification.md).
 
-## Technology
-This project uses the following stack:
-- React Router v7 as a framework
-- TypeScript
-- Tailwind CSS for styling
-- PNPM for package manager
-- Drizzle ORM and PostgreSQL through Cloudflare Hyperdrive for database
+## Non-negotiable rules
 
-This project has been deployed to Cloudflare Workers.
-
-## Development Guides
-- For local environment setup, DB access, or schema validation, read `docs/development.md`. Use `mise exec -- pnpm dev:doctor` and `dev:db:migrate <new-file.sql>` instead of manually injecting credentials. Retry sandbox-only DB connection failures with the execution tool's local network permission before asking the user to repair the environment. Never replay untracked historical migrations or reset the shared local DB.
-- Please follow the conventions of the project. Search for the existing code and follow the same style.
-- Before creating or changing database models, schemas, or migrations, read `docs/data/database.md` and follow its modeling and validation rules.
-- For UI layout, use modern and simple design.
-- Before creating or changing UI components, read `docs/frontend/design.md` and follow its component structure, naming, reuse, layout, and performance rules.
-- Before adding, moving, or refactoring components, read `docs/frontend/components.md` and follow its final structure rules for `primitives`, `features`, and route-local components.
-- Before restructuring route files or extracting screen-only UI, read `docs/frontend/routing.md` and follow its route-local composition rules.
-- Avoid Tailwind arbitrary values such as `text-[10px]`, `h-[37px]`, `mt-[3px]`, or custom grid sizes unless there is a concrete layout constraint that cannot be expressed with the existing scale.
-- Prefer the project's existing spacing, typography, radius, and color tokens such as `text-xs`, `text-sm`, `gap-1`, `rounded-md`, and semantic color classes.
-- If an arbitrary value is necessary, keep it isolated inside the smallest relevant component and explain why it is necessary in the implementation note.
-- Do not start or stop development servers unless the user explicitly asks for it.
-- Before stopping any server or long-running process, identify the exact PID, working directory, and command, then ask for confirmation.
-- Never assume a process belongs to the current task based only on its command name or port. Multiple MolluLog worktrees may run similar React Router or PNPM commands at the same time.
-- For BAQL GraphQL work, follow these rules:
-  - Define queries with `graphql(...)` in `app/**/*.{ts,tsx}` so GraphQL codegen can pick them up.
-  - After adding or changing a query, run `pnpm codegen`. Do not manually edit generated files under `app/graphql/`.
-  - Prefer codegen-inferred query/result/variables types. Do not duplicate GraphQL result or variables types locally unless there is a clear reason.
-  - Prefer domain-level return types only at the boundary where GraphQL data is transformed into app-specific models.
-  - Shared BAQL read logic, source caching, and upstream→domain normalization live in `app/models/` (data access only). Keep pure calculation/transformation in `app/domain/`, and route-presentation composition with route caching (SWR) in `app/views/`. See `docs/architecture.md` for the architecture.
-  - Routes own authentication, parameter parsing, and response/screen assembly. A route may call one model directly for a simple single-source read or mutation when no route-cache or composition policy is needed. Use a view for multi-source screen composition or route-cache/SWR policy, and never call cache, BAQL, or database infrastructure helpers directly from a route.
-  - PostgreSQL access is operation-scoped: create and release a client inside each model operation with `withPostgresClient`. Never keep a client in module or request-global state, or share one client across independent operations.
-  - Use the `.server.ts` suffix only for modules that must stay out of the browser bundle because they use Node-only runtimes, secrets, PostgreSQL clients, or another server-only dependency. A loader/action-only call path by itself does not require the suffix; never import `.server.ts` modules from client components or shared client code.
-  - Avoid `TypedDocumentNode` casts or manual GraphQL shape annotations unless codegen is temporarily unavailable or inference is blocked by an existing project issue.
-- This project uses Biome for code formatting and linting. Always follow the Biome conventions when creating or modifying code. You can run `pnpm run lint` to check formatting issues.
+- Preserve the distinction between a real failure and absent data. Never hide a
+  required failure as fake data or a successful empty result, or expose a raw
+  internal error. Use the appropriate explicit error or empty state; do not
+  invent fallback content.
+- Keep boundaries clear: routes own auth, parameter parsing, meta, and screen
+  assembly; views own multi-source composition and route-cache/SWR policy; models
+  own PostgreSQL, BAQL, source cache, and normalization; domain code is pure.
+  A route may call one model for a simple single-source operation. See
+  [architecture](docs/architecture.md) and [routing](docs/frontend/routing.md).
+- Use `.server.ts` only for modules that must stay out of the browser bundle
+  because they use secrets, Node runtimes, PostgreSQL clients, or other
+  server-only dependencies; never import them into browser-reachable code.
+- Create and release PostgreSQL clients per model operation with
+  `withPostgresClient`; never keep a client in module or request-global state.
+- Define BAQL queries with `graphql(...)`, run `mise exec -- pnpm codegen` after
+  query changes, and never edit generated files under `app/graphql/` by hand.
+- Treat the local PostgreSQL database as shared. `untracked` migration history is
+  unknown, not permission to replay old files; never reset the database or mark
+  historical migrations applied merely because a table exists.
+- For local DB or runtime-environment troubleshooting, start with
+  `mise exec -- pnpm dev:doctor`. A sandbox denial or timeout is not proof that
+  PostgreSQL is unavailable: retry the same read-only check with the execution
+  tool's local network permission, then report the exact limitation. Do not change
+  credentials or launch another database to mask the failure.
+- Do not start or stop a development server without explicit authorization.
+  Before stopping any server or long-running process, identify its exact PID,
+  working directory, and command, then ask for confirmation; never infer
+  ownership from a port or process name.
+- Each applicable outcome needs current evidence. Missing required visual or
+  interaction evidence remains `UNVERIFIED`; do not impose a universal
+  result-approval workflow on ordinary work.
+- Keep repository edits, commits, pushes, deploys, and other external mutations
+  within the authorization actually given. Do not invent approval gates or
+  model-specific assumptions. Use `mise exec` for runtime commands.
