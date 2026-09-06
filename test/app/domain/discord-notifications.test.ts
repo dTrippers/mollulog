@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   formatDiscordNotificationMessage,
+  getEnabledTriggers,
   getKstDateParts,
   isDiscordOAuthStateValid,
   isPastEffectiveAt,
@@ -8,6 +9,37 @@ import {
 } from "~/domain/discord-notifications";
 
 describe("Discord notification timing and copy", () => {
+  it("formats fixed messages for reactive reply triggers without source content", () => {
+    expect(
+      formatDiscordNotificationMessage({
+        trigger: "feedback-reply",
+        sourceAnchor: "2026-09-01T02:00:00.000Z",
+        contentName: "should not be included",
+      }),
+    ).toBe("작성한 제안/문의에 운영팀 답변이 등록되었습니다.");
+    expect(
+      formatDiscordNotificationMessage({
+        trigger: "event-opinion-reply",
+        sourceAnchor: "2026-09-01T02:00:00.000Z",
+      }),
+    ).toBe("작성한 이벤트 의견에 새 답글이 등록되었습니다.");
+  });
+
+  it("maps all seven settings to their notification triggers", () => {
+    expect(
+      getEnabledTriggers({
+        eventStartEnabled: true,
+        eventEndEnabled: false,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        shopResetEnabled: false,
+        feedbackReplyEnabled: true,
+        eventOpinionReplyEnabled: true,
+        leadHours: 24,
+      }),
+    ).toEqual(["event-start", "feedback-reply", "event-opinion-reply"]);
+  });
+
   it("formats KST across a day boundary with the exact event copy", () => {
     const anchor = new Date("2026-08-31T15:00:00.000Z");
     expect(getKstDateParts(anchor)).toMatchObject({ year: 2026, month: 9, day: 1, hour: 0 });

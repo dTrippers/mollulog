@@ -7,6 +7,9 @@ type ToggleProps = {
   label?: string;
   initialState?: boolean;
   disabled?: boolean;
+  id?: string;
+  "aria-label"?: string;
+  "aria-invalid"?: boolean | "false" | "true";
   className?: string;
   trackClassName?: string;
   onChange?: (value: boolean) => void;
@@ -17,6 +20,9 @@ export default function Toggle({
   label,
   initialState,
   disabled,
+  id,
+  "aria-label": ariaLabel,
+  "aria-invalid": ariaInvalid,
   className,
   trackClassName,
   onChange,
@@ -31,11 +37,15 @@ export default function Toggle({
     <>
       <Field className={`${className ?? "my-4"} flex items-center`}>
         <Switch
+          id={id}
           disabled={disabled}
+          aria-label={ariaLabel}
+          aria-invalid={ariaInvalid}
           className={cn(
             `
-            h-5 w-10 p-0.5 group relative flex rounded-full transition-colors duration-200 ease-in-out
+            h-5 w-10 p-0.5 group relative flex rounded-full outline-none transition-colors duration-200 ease-in-out
             bg-input data-checked:bg-primary
+            focus-visible:ring-2 focus-visible:ring-ring/30
             ${disabled ? "opacity-50 cursor-not-allowed" : "cursor-pointer"}
           `,
             trackClassName,

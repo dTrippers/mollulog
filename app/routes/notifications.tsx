@@ -32,6 +32,13 @@ type ActionData = {
   error?: string;
 };
 
+export function isNotificationSaveInFlight(navigation: {
+  state: "idle" | "loading" | "submitting";
+  formData?: FormData;
+}): boolean {
+  return navigation.state !== "idle" && navigation.formData?.get("intent") === "save";
+}
+
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const sensei = await getActiveSensei(env, request, ctx);
@@ -65,8 +72,7 @@ export default function Notifications() {
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
-  const submittingIntent = navigation.formData?.get("intent");
-  const isSaving = navigation.state === "submitting" && submittingIntent === "save";
+  const isSaving = isNotificationSaveInFlight(navigation);
   const settingsActionData = actionData?.intent === "save" ? actionData : undefined;
   const globalError = actionData?.intent ? undefined : actionData?.error;
   const connectionStatus = state.connection?.status;
@@ -81,12 +87,11 @@ export default function Notifications() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <Title
-        text="알림 설정"
-        description="컨텐츠 일정을 잊지 않도록 알림으로 받아보세요"
-      />
+      <Title text="알림 설정" description="컨텐츠 일정을 잊지 않도록 알림으로 받아보세요" />
       {globalError ? (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{globalError}</p>
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {globalError}
+        </p>
       ) : null}
       <NotificationChannelCard connection={state.connection} />
       <NotificationPreferencesCard
