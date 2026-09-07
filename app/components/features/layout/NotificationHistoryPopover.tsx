@@ -222,8 +222,9 @@ export default function NotificationHistoryPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          "relative inline-flex items-center justify-center rounded-md bg-background transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
           "size-9",
+          placement === "desktop" ? "text-muted-foreground" : "text-foreground/75",
         )}
         onClick={() => setIsOpen(!isOpen)}
         aria-label={triggerLabel}
@@ -231,7 +232,11 @@ export default function NotificationHistoryPopover({
         aria-haspopup="dialog"
         aria-controls={isOpen ? popoverId : undefined}
       >
-        <BellAlertIcon className="size-5" strokeWidth={2} aria-hidden="true" />
+        <BellAlertIcon
+          className={placement === "desktop" ? "size-[18px]" : "size-5"}
+          strokeWidth={placement === "desktop" ? 1.75 : 2}
+          aria-hidden="true"
+        />
         {unreadCount > 0 ? (
           <span
             className="absolute -top-1 -right-1 min-w-4 rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-primary-foreground"
@@ -380,7 +385,7 @@ function NotificationHistoryRow({
         <Button
           to={notification.action.to}
           size="sm"
-          className="mt-2 border-transparent bg-transparent text-primary shadow-none hover:bg-primary/10 hover:text-primary"
+          className="-ml-3 mt-2 border-transparent bg-transparent text-primary shadow-none hover:bg-primary/10 hover:text-primary"
           onClick={onAction}
         >
           {notification.action.label}

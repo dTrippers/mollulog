@@ -12,6 +12,9 @@ describe("notification history popover composition", () => {
     expect(popoverSource).toContain("읽지 않은 알림 $" + "{unreadCount}개");
     expect(popoverSource).toContain("key={notification.uid}");
     expect(popoverSource).toContain('"size-9"');
+    expect(popoverSource).toContain('placement === "desktop" ? "text-muted-foreground" : "text-foreground/75"');
+    expect(popoverSource).toContain('placement === "desktop" ? "size-[18px]" : "size-5"');
+    expect(popoverSource).toContain('strokeWidth={placement === "desktop" ? 1.75 : 2}');
     expect(popoverSource).toContain("Math.min(420");
   });
 
@@ -41,6 +44,7 @@ describe("notification history popover composition", () => {
     expect(popoverSource).toContain("truncate text-foreground");
     expect(popoverSource).toContain('notification.action?.state === "available"');
     expect(popoverSource).toContain('size="sm"');
+    expect(popoverSource).toContain('className="-ml-3 mt-2');
     expect(popoverSource).toContain("bg-primary/10");
     expect(popoverSource).toContain("notification.action.text");
   });
