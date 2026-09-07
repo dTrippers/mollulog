@@ -13,6 +13,7 @@ import {
   pgNotificationChannelsTable,
   pgNotificationJobsTable,
   pgNotificationPreferencesTable,
+  pgNotificationReadStatesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
   pgSenseiPrivaciesTable,
@@ -118,6 +119,7 @@ export async function leaveAccount(
         );
       await db.delete(pgNotificationChannelsTable).where(eq(pgNotificationChannelsTable.userId, sensei.id));
       await db.delete(pgNotificationPreferencesTable).where(eq(pgNotificationPreferencesTable.userId, sensei.id));
+      await db.delete(pgNotificationReadStatesTable).where(eq(pgNotificationReadStatesTable.userId, sensei.id));
       await db.delete(pgPasskeysTable).where(eq(pgPasskeysTable.userId, sensei.id));
       await db.delete(pgSenseiPrivaciesTable).where(eq(pgSenseiPrivaciesTable.userId, sensei.id));
       await db

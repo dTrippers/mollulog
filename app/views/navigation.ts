@@ -25,6 +25,7 @@ export type NavigationBarContents = {
   hasActiveCoupons: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
+  unreadNotificationCount: number;
 };
 
 export type NavigationBarContentsRaw = {
@@ -103,7 +104,7 @@ export async function getNavigationBarContents(
     getNavigationBarContentsRaw(publicReadEnv, forceRefresh, ctx),
     userId
       ? getPersonalNavigationState(env, userId, { ctx })
-      : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false }),
+      : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false, unreadNotificationCount: 0 }),
   ]);
   const shopCandidates = raw.eventCandidates.filter(
     (content) =>
@@ -145,5 +146,6 @@ export async function getNavigationBarContents(
     ),
     hasUnconsumedCoupons: personalNavigation.hasUnconsumedCoupons,
     hasUnreadFeedbackReplies: personalNavigation.hasUnreadFeedbackReplies,
+    unreadNotificationCount: personalNavigation.unreadNotificationCount,
   };
 }

@@ -3,6 +3,7 @@ import { createPostgresClient, type PostgresClientFactory, withPostgresClient } 
 export type PersonalNavigationState = {
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
+  unreadNotificationCount: number;
 };
 
 export type PostgresPersonalNavigationOptions = {
@@ -13,6 +14,7 @@ export type PostgresPersonalNavigationOptions = {
 type PersonalNavigationRow = {
   has_unconsumed_coupons: boolean;
   has_unread_feedback_replies: boolean;
+  unread_notification_count: string | number;
 };
 
 export async function getPostgresPersonalNavigationState(
@@ -49,13 +51,29 @@ export async function getPostgresPersonalNavigationState(
                 and fr.is_admin = true
                 and fr.id > ft.last_seen_admin_reply_id
                where ft.user_id = $1
-             ) as has_unread_feedback_replies`,
+             ) as has_unread_feedback_replies,
+             (
+               select count(*)::text
+               from notification_jobs nj
+               left join notification_read_states nrs
+                 on nrs.user_id = nj.user_id
+               where nj.user_id = $1
+                 and nj.status = 'sent'
+                 and nj.delivered_at is not null
+                 and nj.trigger <> 'connection-verification'
+                 and (nrs.last_read_delivered_at is null or nj.delivered_at > nrs.last_read_delivered_at)
+             ) as unread_notification_count`,
           [userId],
         );
         const row = result.rows[0];
+        const unreadNotificationCount = Number(row?.unread_notification_count ?? 0);
+        if (!Number.isSafeInteger(unreadNotificationCount) || unreadNotificationCount < 0) {
+          throw new Error("Invalid notification unread count");
+        }
         return {
           hasUnconsumedCoupons: row?.has_unconsumed_coupons ?? false,
           hasUnreadFeedbackReplies: row?.has_unread_feedback_replies ?? false,
+          unreadNotificationCount,
         };
       };
       return ctx ? ctx.tracing.enterSpan("postgres.navigation.get_personal_state", execute) : execute();

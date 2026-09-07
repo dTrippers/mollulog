@@ -19,6 +19,7 @@ import {
   pgNotificationChannelsTable,
   pgNotificationJobsTable,
   pgNotificationPreferencesTable,
+  pgNotificationReadStatesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
   pgSenseiPrivaciesTable,
@@ -121,13 +122,14 @@ describe("account-security PostgreSQL repository", () => {
       status: "left",
     });
     expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
-    expect(deletes).toHaveLength(8);
+    expect(deletes).toHaveLength(9);
     expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
         pgNotificationChannelsTable,
         pgNotificationPreferencesTable,
+        pgNotificationReadStatesTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
@@ -139,6 +141,7 @@ describe("account-security PostgreSQL repository", () => {
       pgAuthIdentitiesTable,
       pgNotificationChannelsTable,
       pgNotificationPreferencesTable,
+      pgNotificationReadStatesTable,
       pgPasskeysTable,
       pgSenseiPrivaciesTable,
       pgConnectApiKeysTable,
