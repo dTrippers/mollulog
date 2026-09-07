@@ -4,6 +4,7 @@ import {
   getMobileNavigationItems,
   getMobileNavigationOptions,
   getMoreNavigationItems,
+  getMoreNavigationSections,
   getNavigationCatalog,
   getNavigationSections,
   getSearchableMenuItems,
@@ -143,6 +144,8 @@ describe("navigation surface projections", () => {
       "/utils/relationship",
       "/timelines",
       "/utils/raidscore",
+      "/news",
+      "/contact",
     ]);
 
     expect(guestItems.map((item) => item.name)).toEqual([
@@ -158,13 +161,16 @@ describe("navigation surface projections", () => {
       "인연 랭크 계산기",
       "공략 타임라인",
       "총력전 점수 계산기",
+      "업데이트 소식",
+      "제안/문의",
     ]);
 
     expect(signedInItems.map((item) => item.name)).toEqual([
-      ...guestItems.map((item) => item.name),
+      ...guestItems.slice(0, -2).map((item) => item.name),
       "스크린샷/영상 인식기",
       "외부 데이터 연동",
       "알림 설정",
+      ...guestItems.slice(-2).map((item) => item.name),
     ]);
   });
 
@@ -172,6 +178,21 @@ describe("navigation surface projections", () => {
     expect(getMoreNavigationItems(navigationOptions)).toEqual(
       expect.arrayContaining([expect.objectContaining({ name: "인연 랭크 계산기", to: "/utils/relationship" })]),
     );
+  });
+
+  it("projects service links into the More service section with their red dots", () => {
+    const sections = getMoreNavigationSections({
+      ...navigationOptions,
+      hasRecentNews: true,
+      hasUnreadFeedbackReplies: true,
+    });
+    expect(sections.at(-1)).toMatchObject({
+      name: "서비스",
+      items: [
+        expect.objectContaining({ to: "/news", name: "업데이트 소식", showRedDot: true }),
+        expect.objectContaining({ to: "/contact", name: "제안/문의", showRedDot: true }),
+      ],
+    });
   });
 
   it("exposes auth-gated links and the unavailable event-shop entry to search", () => {

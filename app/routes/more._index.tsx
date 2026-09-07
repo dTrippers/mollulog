@@ -1,9 +1,9 @@
-import { ChevronRightIcon, HeartIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon, HeartIcon, MoonIcon, SunIcon } from "@heroicons/react/16/solid";
 import { PlusIcon, StarIcon as StarIconOutline, UserCircleIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useOutletContext } from "react-router";
+import { Link, useLoaderData, useOutletContext, useSubmit } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getMoreNavigationSections, type NavigationItem } from "~/components/features/layout/navigation-menu";
 import { BottomSheet, ProfileImage, SubTitle } from "~/components/primitives";
@@ -16,6 +16,7 @@ import {
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
+import { submitPreference } from "~/routes/api.preference";
 import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
@@ -55,7 +56,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 export default function MoreIndexPage() {
   const { currentUser, upcomingEvent, hasOngoingRaid, hasUnconsumedCoupons, hasRecentNews, hasUnreadFeedbackReplies } =
     useLoaderData<typeof loader>();
-  const { mobileNavigationIds, setMobileNavigationIds } = useOutletContext<RootOutletContext>();
+  const { darkMode, setDarkMode, mobileNavigationIds, setMobileNavigationIds } = useOutletContext<RootOutletContext>();
+  const submit = useSubmit();
   const { showSignIn } = useSignIn();
 
   const navigationOptions = {
@@ -71,6 +73,11 @@ export default function MoreIndexPage() {
     name: section.name,
     items: section.items.map(toMoreActionItem),
   }));
+  const toggleDarkMode = () => {
+    const nextDarkMode = !darkMode;
+    submitPreference(submit, { darkMode: nextDarkMode });
+    setDarkMode(() => nextDarkMode);
+  };
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 pt-4 pb-6 lg:pt-2">
       <h1 className="sr-only">더보기</h1>
@@ -85,6 +92,8 @@ export default function MoreIndexPage() {
           sections={menuSections}
           mobileNavigationIds={mobileNavigationIds}
           onApply={setMobileNavigationIds}
+          darkMode={darkMode}
+          onToggleDarkMode={toggleDarkMode}
         />
       )}
     </div>
@@ -352,10 +361,14 @@ function MoreMenuSections({
   sections,
   mobileNavigationIds,
   onApply,
+  darkMode,
+  onToggleDarkMode,
 }: {
   sections: { name: string; items: MoreActionItem[] }[];
   mobileNavigationIds: MobileNavigationPair;
   onApply: (ids: MobileNavigationPair) => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
 }) {
   const [pendingItem, setPendingItem] = useState<MoreActionItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -425,6 +438,9 @@ function MoreMenuSections({
                     onPin={openReplacementSheet}
                   />
                 ))}
+                {section.name === "서비스" ? (
+                  <MoreThemeMenuItem darkMode={darkMode} onToggle={onToggleDarkMode} />
+                ) : null}
               </div>
             </div>
           ))}
@@ -536,7 +552,7 @@ function MoreMenuItem({
       <Link
         to={item.to}
         className="absolute inset-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-label={item.name}
+        aria-label={getMoreMenuItemAriaLabel(item)}
       />
       <div
         className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-3 pr-11"
@@ -568,6 +584,39 @@ function MoreMenuItem({
         )
       ) : null}
     </div>
+  );
+}
+
+function getMoreMenuItemAriaLabel(item: MoreActionItem): string {
+  if (!item.showRedDot) {
+    return item.name;
+  }
+
+  if (item.to === "/news") {
+    return "업데이트 소식, 새 소식 있음";
+  }
+
+  if (item.to === "/contact") {
+    return "제안/문의, 읽지 않은 답변 있음";
+  }
+
+  return item.name;
+}
+
+function MoreThemeMenuItem({ darkMode, onToggle }: { darkMode: boolean; onToggle: () => void }) {
+  const ModeIcon = darkMode ? SunIcon : MoonIcon;
+  return (
+    <button
+      type="button"
+      className="relative flex min-h-11 w-full items-center gap-3 rounded-md px-2.5 py-2 text-base font-normal text-foreground/85 transition-colors hover:bg-neutral-200 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:hover:bg-neutral-700"
+      onClick={onToggle}
+      aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+    >
+      <span className="flex size-6 shrink-0 items-center justify-center">
+        <ModeIcon className="size-5 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
+      </span>
+      <span className="min-w-0 break-keep text-left">{darkMode ? "라이트 모드" : "다크 모드"}</span>
+    </button>
   );
 }
 

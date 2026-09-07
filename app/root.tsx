@@ -289,6 +289,7 @@ export default function App() {
             hasOngoingRaid={navigationBarContents.hasOngoingRaid}
             hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
+            unreadNotificationCount={navigationBarContents.unreadNotificationCount}
             siteBanner={siteBanner}
           />
           <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
