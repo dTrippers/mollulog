@@ -12,16 +12,18 @@ export function reportDatabaseError(error) {
   if (["ECONNREFUSED", "ETIMEDOUT", "ENETUNREACH"].includes(code) || /timeout/i.test(error.message || "")) {
     return "Local DB is unreachable. Run dev:doctor with local network permission first; if it still fails, check the existing PostgreSQL service. Do not create another DB.";
   }
-  if (code === "28P01" || code === "28000") return "Local DB authentication failed. Check the shared local.env credentials; no production credentials are needed.";
-  if (code === "3D000") return "The configured local database does not exist. Check the shared local.env database name.";
+  if (code === "28P01" || code === "28000") return "Local DB authentication failed. Check the selected environment file's PGUSER and PGPASSWORD values.";
+  if (code === "3D000") return "The configured local database does not exist. Check the selected environment file's PGDATABASE value.";
   if (code === "42501") return "The local PostgreSQL role lacks permission for this operation.";
   return `Local development operation failed${/^[A-Z0-9]{5}$/.test(code || "") ? ` (SQLSTATE ${code})` : ""}. No raw connection details are logged.`;
 }
 
 export async function connectLocalDatabase(env) {
-  assertLocalConnection(env[connectionKey]);
+  const connection = assertLocalConnection(env[connectionKey]);
+  const sslMode = env.PGSSLMODE ?? connection.searchParams.get("sslmode");
+  const ssl = !sslMode || sslMode === "disable" ? false : sslMode === "no-verify" ? { rejectUnauthorized: false } : true;
   const client = new pg.Client({
-    connectionString: env[connectionKey], connectionTimeoutMillis: 3000,
+    connectionString: env[connectionKey], ssl, connectionTimeoutMillis: 3000,
     application_name: "mollulog-local-dev", statement_timeout: 60000, lock_timeout: 5000,
   });
   try {

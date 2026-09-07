@@ -13,13 +13,14 @@ Check content schedules and statistics for the mobile game "Blue Archive", and k
 
 ```bash
 mise exec -- pnpm install
-mise exec -- pnpm dev:setup # Once per workstation; shared by worktrees
+# Inject one complete environment file with your external secret manager first.
 mise exec -- pnpm dev:doctor
 mise exec -- pnpm dev
 ```
 
-See [Local development](./docs/development.md) for shared settings, custom ports,
-and applying a selected SQL migration to the existing shared local database.
+See [Local development](./docs/development.md) for the environment contract,
+custom ports, and applying a selected SQL migration to the existing shared
+local database.
 
 ### Common commands
 

@@ -65,11 +65,6 @@
       }
     ]
   },
-  "vars": {
-    "CONNECT_API_URL": "http://localhost:8787",
-    "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-dev"
-  },
-
   // Secrets configuration
   // - SESSION_SECRET
   // - CONNECT_INTERNAL_TOKEN

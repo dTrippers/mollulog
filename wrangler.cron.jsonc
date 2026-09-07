@@ -39,10 +39,6 @@
       { "binding": "OCR_TASKS", "queue": "mollulog-aoi-tasks-dev" }
     ]
   },
-  "vars": {
-    "STAGE": "local"
-  },
-
   // Secrets configuration
   // - SERVER_BETTER_STACK_SOURCE_TOKEN
   // - SERVER_SENTRY_DSN
