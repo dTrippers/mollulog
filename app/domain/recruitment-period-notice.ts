@@ -23,7 +23,13 @@ export function getRecruitmentPeriodNotice(
   recruitmentPeriod: RecruitmentPeriod | null | undefined,
   now: UtcIsoString,
 ): string | null {
-  if (!content.recruitmentGroupUid || !recruitmentPeriod || content.endless || content.endAt === null) {
+  if (
+    !content.recruitmentGroupUid ||
+    !recruitmentPeriod ||
+    recruitmentPeriod.endAt === null ||
+    content.endless ||
+    content.endAt === null
+  ) {
     return null;
   }
 
@@ -36,7 +42,7 @@ export function getRecruitmentPeriodNotice(
     return null;
   }
 
-  if (recruitmentPeriod.endAt !== null && getInstantTime(now) >= getInstantTime(recruitmentPeriod.endAt)) {
+  if (getInstantTime(now) >= getInstantTime(recruitmentPeriod.endAt)) {
     return "학생 모집은 종료되었어요";
   }
 

@@ -195,6 +195,7 @@ describe("event recruitment period notice presentation", () => {
     expect(headerIndex).toBeGreaterThanOrEqual(0);
     expect(noticeIndex).toBeGreaterThan(headerIndex);
     expect(siblingIndex).toBeGreaterThan(noticeIndex);
+    expect(markup).toContain("모집은 2030-01-11 ~ 2030-01-21 동안 진행돼요");
     expect(markup).toContain("bg-amber-500/10");
     expect(markup).not.toContain('role="alert"');
   });

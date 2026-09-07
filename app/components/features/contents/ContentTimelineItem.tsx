@@ -17,7 +17,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { type ReactNode, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
@@ -196,6 +196,7 @@ export function ContentTimelineItem({
   signedIn,
   recruitmentStudentMobileGrid,
 }: ContentTimelineItemProps) {
+  const navigate = useNavigate();
   const displayTimeZone = useDisplayTimeZone();
   const { setActivePopupId } = useStudentCardPopup();
   const showComments =
@@ -302,7 +303,16 @@ export function ContentTimelineItem({
           studentMobileGrid={recruitmentStudentMobileGrid}
         />
       )}
-      {recruitmentPeriodNotice && <TimelineItemBanner message={recruitmentPeriodNotice} color="amber" />}
+      {recruitmentPeriodNotice && (
+        <TimelineItemBanner
+          message={recruitmentPeriodNotice}
+          color="amber"
+          icon="clock"
+          onLinkClick={() => navigate(link)}
+          linkText="자세히"
+          actionVariant="button"
+        />
+      )}
       {completedStudentUids.length > 0 && recruitmentResultEditLink && (
         <div className="my-2">
           <Button

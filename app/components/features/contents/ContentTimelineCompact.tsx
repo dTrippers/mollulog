@@ -1,4 +1,4 @@
-import { CheckCircleIcon, HeartIcon as EmptyHeartIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ClockIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
@@ -223,7 +223,7 @@ function CompactContentItem({
       )}
       {spoilerVisible && recruitmentPeriodNotice && (
         <p className="mt-1 flex min-w-0 items-start gap-1 text-xs text-amber-600 dark:text-amber-400">
-          <ExclamationTriangleIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <ClockIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
           <span className="min-w-0">{recruitmentPeriodNotice}</span>
         </p>
       )}

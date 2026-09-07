@@ -72,7 +72,7 @@ function compactContent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("recruitment period notices in timeline views", () => {
-  it("renders the period warning before existing feature banners without a dismiss action", () => {
+  it("renders the period warning with a detail button before existing feature banners and without a dismiss action", () => {
     const markup = renderItem({ showStudentAnalysisFeatureBanner: true });
 
     const periodNoticeIndex = markup.indexOf("이벤트 기간과 모집 개최 기간이 달라요");
@@ -82,6 +82,9 @@ describe("recruitment period notices in timeline views", () => {
     expect(featureBannerIndex).toBeGreaterThan(periodNoticeIndex);
     expect(markup).toContain("from-amber-50");
     expect(markup).toContain("from-green-50");
+    expect(markup).toContain("<button");
+    expect(markup).toContain(">자세히</button>");
+    expect(markup).toContain("bg-amber-600/10");
     expect(markup).not.toContain("배너 닫기");
   });
 

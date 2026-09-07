@@ -64,19 +64,10 @@ describe("getRecruitmentPeriodNotice", () => {
     );
   });
 
-  it("uses the mismatch wording for a recruitment without an end", () => {
-    expect(
-      getRecruitmentPeriodNotice(
-        content({ contentType: "mini_story", startAt: "2026-09-11T00:00:00.000Z" }),
-        period({ endAt: null }),
-        now,
-      ),
-    ).toBe("컨텐츠 기간과 모집 개최 기간이 달라요");
-  });
-
   it.each([
     ["no recruitment group uid", content({ recruitmentGroupUid: null }), period()],
     ["missing recruitment group", content(), null],
+    ["recruitment without an end", content({ startAt: "2026-09-11T00:00:00.000Z" }), period({ endAt: null })],
     ["content without an end", content({ endAt: null }), period({ endAt: null })],
     ["endless content", content({ endless: true }), period({ startAt: "2026-09-11T00:00:00.000Z" })],
     ["matching period", content(), period()],

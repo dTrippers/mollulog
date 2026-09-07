@@ -1,12 +1,13 @@
-import { ExclamationTriangleIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import { ClockIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
 import { Callout, MarkdownText, SectionCard } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
-import { nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content.server";
 import {
@@ -148,6 +149,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
 export default function EventIndex() {
   const { eventContent, signedIn, allComments, me, eventUid, siblingEvents, livePost } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const displayTimeZone = useDisplayTimeZone();
   const isLive = eventContent.type === "live";
   const recruitmentPeriodNotice = getRecruitmentPeriodNotice(
     {
@@ -160,6 +162,9 @@ export default function EventIndex() {
     eventContent.recruitmentPeriod,
     nowUtcIso(),
   );
+  const recruitmentPeriodDescription = eventContent.recruitmentPeriod?.endAt
+    ? `모집은 ${formatInstant(eventContent.recruitmentPeriod.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~ ${formatInstant(eventContent.recruitmentPeriod.endAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} 동안 진행돼요`
+    : null;
 
   return (
     <div className="w-full">
@@ -177,9 +182,13 @@ export default function EventIndex() {
       </div>
 
       {recruitmentPeriodNotice && (
-        <Callout tone="warning" Icon={ExclamationTriangleIcon} className="my-4 md:my-6">
-          {recruitmentPeriodNotice}
-        </Callout>
+        <Callout
+          tone="warning"
+          Icon={ClockIcon}
+          title="이벤트 기간과 모집 개최 기간이 달라요"
+          description={recruitmentPeriodDescription}
+          className="my-4 md:my-6"
+        />
       )}
 
       {siblingEvents.map((sibling) => (
