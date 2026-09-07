@@ -63,6 +63,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       runType: content.runType,
       contentUid: content.contentUid,
       recruitmentGroupUid: content.recruitmentGroupUid,
+      recruitmentPeriod: content.recruitmentPeriod,
       imageUrl: content.imageUrl,
       confirmed: content.confirmed,
       isSpoiler: content.isSpoiler,
@@ -168,6 +169,7 @@ type FutureContentForView = Pick<
   | "isSpoiler"
   | "tags"
   | "recruitments"
+  | "recruitmentPeriod"
   | "raidInfo"
 >;
 type FutureContentsLoaderContent = FutureContentForView & Pick<FutureContent, "contentUid" | "recruitmentGroupUid">;
@@ -595,6 +597,7 @@ export default function FutureContents() {
           name: common.raidInfo ? common.raidInfo.name : content.name,
           imageUrl: content.imageUrl,
           recruitmentGroupUid: content.recruitmentGroupUid,
+          recruitmentPeriod: content.recruitmentPeriod,
           recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,
           showStudentAnalysisFeatureBanner: content.uid === studentAnalysisFeatureBannerContentUid,
           showPendingStudentFavoriteFeatureBanner: hasPendingStudentRecruitment(content),
@@ -693,6 +696,7 @@ export default function FutureContents() {
             signedIn={signedIn}
             recruitmentStudentMobileGrid={5}
             showFeatureBanners={view === "timeline"}
+            showRecruitmentPeriodNotice={view === "timeline"}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onRevealSpoiler={revealSpoiler}
             onHideSpoiler={hideSpoiler}

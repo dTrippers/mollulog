@@ -148,4 +148,41 @@ describe("futures loader data source routing", () => {
     });
     expect(span.setAttribute).toHaveBeenCalledWith("commentSummariesAvailable", false);
   });
+
+  it("passes the normalized recruitment period through the loader without caching a notice", async () => {
+    mockedGetActiveSensei.mockResolvedValue(null);
+    mockedGetFutureContents.mockResolvedValue([
+      {
+        uid: "future-event",
+        name: "미래 이벤트",
+        startAt: "2030-01-10T00:00:00.000Z",
+        endAt: "2030-01-20T00:00:00.000Z",
+        endless: false,
+        contentType: "event",
+        runType: "first",
+        contentUid: "event-1",
+        recruitmentGroupUid: "group-a",
+        recruitmentPeriod: {
+          startAt: "2030-01-11T00:00:00.000Z",
+          endAt: "2030-01-21T00:00:00.000Z",
+        },
+        imageUrl: null,
+        confirmed: true,
+        isSpoiler: false,
+        tags: [],
+        recruitments: [],
+      },
+    ] as never);
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result.contents[0]).toMatchObject({
+      recruitmentGroupUid: "group-a",
+      recruitmentPeriod: {
+        startAt: "2030-01-11T00:00:00.000Z",
+        endAt: "2030-01-21T00:00:00.000Z",
+      },
+    });
+    expect(result.contents[0]).not.toHaveProperty("recruitmentPeriodNotice");
+  });
 });
