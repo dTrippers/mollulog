@@ -59,6 +59,7 @@ describe("notification history model", () => {
     expect(statement).toContain("j.status = 'sent'");
     expect(statement).toContain("j.delivered_at is not null");
     expect(statement).toContain("j.trigger <> 'connection-verification'");
+    expect(statement).toContain("order by j.delivered_at desc, j.id desc");
     expect(statement).toContain("limit 20");
     expect(values).toEqual([42]);
   });

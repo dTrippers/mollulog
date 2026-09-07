@@ -31,7 +31,6 @@ export type NotificationHistoryItem = {
 export type NotificationHistoryResponse = {
   notifications: NotificationHistoryItem[];
   snapshotMaxDeliveredAt: string | null;
-  unreadCount?: number;
   error?: string;
 };
 

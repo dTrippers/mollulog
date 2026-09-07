@@ -25,6 +25,9 @@ describe("personal navigation query shape", () => {
     });
     expect(query).toHaveBeenCalledTimes(1);
     const [statement, values] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(statement).toContain("nj.status = 'sent'");
+    expect(statement).toContain("nj.delivered_at is not null");
+    expect(statement).toContain("nrs.last_read_delivered_at is null or nj.delivered_at > nrs.last_read_delivered_at");
     expect(statement).toContain("nj.trigger <> 'connection-verification'");
     expect(values).toEqual([42]);
     expect(client.end).toHaveBeenCalledTimes(1);

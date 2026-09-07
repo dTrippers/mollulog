@@ -28,6 +28,13 @@ type ReadResponse = {
 const LOAD_ERROR_MESSAGE = "알림을 불러오지 못했어요";
 const READ_ERROR_MESSAGE = "읽음 처리하지 못했어요. 새 알림 표시를 유지하고 있어요.";
 
+export function shouldCloseNotificationPopoverOnFocusOut(
+  root: Pick<Node, "contains">,
+  relatedTarget: EventTarget | null,
+): boolean {
+  return relatedTarget === null || !root.contains(relatedTarget as Node);
+}
+
 export default function NotificationHistoryPopover({
   placement,
   unreadCount,
@@ -114,12 +121,23 @@ export default function NotificationHistoryPopover({
       setIsOpen(false);
       triggerRef.current?.focus();
     };
+    const closeOnFocusOut = (event: FocusEvent) => {
+      const root = rootRef.current;
+      if (!root?.contains(event.target as Node)) {
+        return;
+      }
+      if (shouldCloseNotificationPopoverOnFocusOut(root, event.relatedTarget)) {
+        setIsOpen(false);
+      }
+    };
 
     window.addEventListener("mousedown", closeOnOutsideClick);
     window.addEventListener("keydown", closeOnEscape);
+    window.addEventListener("focusout", closeOnFocusOut);
     return () => {
       window.removeEventListener("mousedown", closeOnOutsideClick);
       window.removeEventListener("keydown", closeOnEscape);
+      window.removeEventListener("focusout", closeOnFocusOut);
     };
   }, [isOpen, setIsOpen]);
 

@@ -48,6 +48,7 @@ describe("notification history popover composition", () => {
   it("closes on outside click, Escape, route changes, and actions", () => {
     expect(popoverSource).toContain("closeOnOutsideClick");
     expect(popoverSource).toContain('event.key !== "Escape"');
+    expect(popoverSource).toContain("closeOnFocusOut");
     expect(popoverSource).toContain("previousLocationKeyRef");
     expect(popoverSource).toContain("onAction={() => setIsOpen(false)}");
     expect(popoverSource).toContain("triggerRef.current?.focus()");

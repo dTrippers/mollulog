@@ -587,26 +587,6 @@ export function getMoreNavigationSections(options: NavigationCatalogOptions): Mo
   ].filter((section) => section.items.length > 0);
 }
 
-export function getServiceNavigationItems({
-  pathname,
-  hasRecentNews = false,
-  hasUnreadFeedbackReplies = false,
-}: {
-  pathname: string;
-  hasRecentNews?: boolean;
-  hasUnreadFeedbackReplies?: boolean;
-}): NavigationItem[] {
-  return getNavigationCatalog({
-    pathname,
-    upcomingEvent: null,
-    hasOngoingRaid: false,
-    hasUnconsumedCoupons: false,
-    isSignedIn: false,
-    hasRecentNews,
-    hasUnreadFeedbackReplies,
-  }).filter((item) => item.group === "service");
-}
-
 export function getSearchableMenuItems({
   currentUsername = null,
 }: {
