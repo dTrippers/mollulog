@@ -1,7 +1,6 @@
 import { MoonIcon, SunIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import {
   CalendarIcon as CalendarIconOutline,
-  Cog6ToothIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
   StarIcon as StarIconOutline,
@@ -26,11 +25,11 @@ import { studentImageUrl } from "~/models/assets";
 import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
+import NotificationHistoryPopover from "./NotificationHistoryPopover";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
   getNavigationSectionStates,
-  getServiceNavigationItems,
   type NavigationItem,
   type NavigationSection,
   type NavigationSectionStates,
@@ -49,6 +48,7 @@ type NavigationBarProps = {
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
+  unreadNotificationCount: number;
   siteBanner: SiteBannerData | null;
 };
 
@@ -299,6 +299,7 @@ export default function NavigationBar({
   hasOngoingRaid,
   hasUnconsumedCoupons,
   hasUnreadFeedbackReplies,
+  unreadNotificationCount,
   siteBanner,
 }: NavigationBarProps) {
   const matches = useMatches();
@@ -308,6 +309,11 @@ export default function NavigationBar({
   const { showSignIn } = useSignIn();
   const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
   const [localFavoriteNavigationIds, onFavoriteToggle] = useNavigationFavorites(favoriteNavigationIds);
+  const [localUnreadNotificationCount, setLocalUnreadNotificationCount] = useState(unreadNotificationCount);
+
+  useEffect(() => {
+    setLocalUnreadNotificationCount(unreadNotificationCount);
+  }, [unreadNotificationCount]);
 
   return (
     <>
@@ -326,13 +332,20 @@ export default function NavigationBar({
             alt="몰루로그 로고"
             className="h-10 object-cover"
           />
-          <h1 className="pt-2 font-ingame font-light text-sm text-foreground">
-            몰루로그
-          </h1>
+          <h1 className="pt-2 font-ingame font-light text-sm text-foreground">몰루로그</h1>
         </Link>
 
-        <div className="px-3 pt-3 pb-2">
-          <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
+          <div className="min-w-0 flex-1">
+            <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+          </div>
+          {currentUsername ? (
+            <NotificationHistoryPopover
+              placement="desktop"
+              unreadCount={localUnreadNotificationCount}
+              onUnreadCountChange={setLocalUnreadNotificationCount}
+            />
+          ) : null}
         </div>
 
         {siteBanner && shouldRenderGlobalSiteBanner(siteBanner, "desktop_navigation", pathname) ? (
@@ -366,10 +379,9 @@ export default function NavigationBar({
       </aside>
 
       <MobileBrandHeader
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        hasRecentNews={hasRecentNews}
-        hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
+        currentUsername={currentUsername}
+        unreadNotificationCount={localUnreadNotificationCount}
+        onUnreadCountChange={setLocalUnreadNotificationCount}
         searchResetKey={searchResetKey}
         pathname={pathname}
         siteBanner={siteBanner}
@@ -503,25 +515,22 @@ function markMobileNavigationTutorialAsSeen() {
 }
 
 function MobileBrandHeader({
-  darkMode,
-  setDarkMode,
-  hasRecentNews,
-  hasUnreadFeedbackReplies,
+  currentUsername,
+  unreadNotificationCount,
+  onUnreadCountChange,
   searchResetKey,
   pathname,
   siteBanner,
 }: {
-  darkMode: boolean;
-  setDarkMode: NavigationBarProps["setDarkMode"];
-  hasRecentNews: boolean;
-  hasUnreadFeedbackReplies: boolean;
+  currentUsername: string | null;
+  unreadNotificationCount: number;
+  onUnreadCountChange: (count: number) => void;
   searchResetKey: string;
   pathname: string;
   siteBanner: SiteBannerData | null;
 }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const submit = useSubmit();
+  const [isNotificationOpen, setIsNotificationOpen] = useState(false);
   const bannerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -554,34 +563,8 @@ function MobileBrandHeader({
   useEffect(() => {
     void searchResetKey;
     setIsSearchOpen(false);
-    setIsMenuOpen(false);
+    setIsNotificationOpen(false);
   }, [searchResetKey]);
-
-  useEffect(() => {
-    if (!isMenuOpen) {
-      return;
-    }
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setIsMenuOpen(false);
-      }
-    };
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [isMenuOpen]);
-
-  const toggleDarkMode = () => {
-    const nextDarkMode = !darkMode;
-    submitPreference(submit, { darkMode: nextDarkMode });
-    setDarkMode(() => nextDarkMode);
-    setIsMenuOpen(false);
-  };
-  const ModeIcon = darkMode ? SunIcon : MoonIcon;
-  const serviceItems = getServiceNavigationItems({ pathname, hasRecentNews, hasUnreadFeedbackReplies });
-  const newsItem = serviceItems.find((item) => item.to === "/news");
-  const contactItem = serviceItems.find((item) => item.to === "/contact");
 
   return (
     <header
@@ -594,12 +577,10 @@ function MobileBrandHeader({
         <Link
           to="/"
           className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          aria-label="몰루로그 홈으로 이동"
         >
-          <img
-            src={darkMode ? "/mollulog-full-dark.png" : "/mollulog-full-light.png"}
-            alt="몰루로그 로고"
-            className="mr-1 h-7"
-          />
+          <img src="/mollulog-full-light.png" alt="몰루로그 로고" className="mr-1 h-7 dark:hidden" />
+          <img src="/mollulog-full-dark.png" alt="" aria-hidden="true" className="mr-1 hidden h-7 dark:block" />
         </Link>
 
         <div className="-mr-1 flex items-center gap-1">
@@ -611,31 +592,27 @@ function MobileBrandHeader({
             "
             onClick={() => {
               setIsSearchOpen((prev) => !prev);
-              setIsMenuOpen(false);
+              setIsNotificationOpen(false);
             }}
             aria-label={isSearchOpen ? "검색 닫기" : "검색 열기"}
             aria-expanded={isSearchOpen}
           >
             <MagnifyingGlassIcon className="size-5" strokeWidth={2} />
           </button>
-          <button
-            type="button"
-            className="
-              relative inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
-              transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-            "
-            onClick={() => {
-              setIsMenuOpen((prev) => !prev);
-              setIsSearchOpen(false);
-            }}
-            aria-label="설정 메뉴 열기"
-            aria-expanded={isMenuOpen}
-          >
-            <Cog6ToothIcon className="size-5" strokeWidth={2} />
-            {hasRecentNews && (
-              <span className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-red-500" aria-hidden="true" />
-            )}
-          </button>
+          {currentUsername ? (
+            <NotificationHistoryPopover
+              placement="mobile"
+              unreadCount={unreadNotificationCount}
+              onUnreadCountChange={onUnreadCountChange}
+              isOpen={isNotificationOpen}
+              onOpenChange={(nextIsOpen) => {
+                setIsNotificationOpen(nextIsOpen);
+                if (nextIsOpen) {
+                  setIsSearchOpen(false);
+                }
+              }}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -650,109 +627,7 @@ function MobileBrandHeader({
           <SiteBanner banner={siteBanner} slot="mobile_header" />
         </div>
       ) : null}
-
-      {isMenuOpen && (
-        <>
-          <button
-            type="button"
-            className="fixed inset-0 z-layer-navigation cursor-default bg-transparent"
-            onClick={() => setIsMenuOpen(false)}
-            aria-label="설정 메뉴 닫기"
-          />
-          <div
-            className="
-              absolute right-3 top-full z-layer-navigation-menu mt-2 flex w-56 flex-col gap-1 rounded-lg border border-border/70 bg-card p-2 text-card-foreground shadow-lg
-            "
-          >
-            <MobileHeaderMenuButton
-              as="button"
-              Icon={ModeIcon}
-              label={darkMode ? "라이트 모드" : "다크 모드"}
-              tone="theme"
-              onClick={toggleDarkMode}
-            />
-            {contactItem && (
-              <MobileHeaderMenuButton
-                as="link"
-                to={contactItem.to}
-                Icon={contactItem.OutlineIcon}
-                label={contactItem.name}
-                showRedDot={contactItem.showRedDot}
-                onClick={() => setIsMenuOpen(false)}
-              />
-            )}
-            {newsItem && (
-              <MobileHeaderMenuButton
-                as="link"
-                to={newsItem.to}
-                Icon={newsItem.OutlineIcon}
-                label={newsItem.name}
-                showRedDot={newsItem.showRedDot}
-                onClick={() => setIsMenuOpen(false)}
-              />
-            )}
-          </div>
-        </>
-      )}
     </header>
-  );
-}
-
-type MobileHeaderMenuButtonProps = {
-  Icon: React.ComponentType<React.ComponentProps<"svg">>;
-  label: string;
-  showRedDot?: boolean;
-  tone?: "default" | "theme";
-  onClick: () => void;
-} & (
-  | {
-      as: "button";
-      to?: never;
-    }
-  | {
-      as: "link";
-      to: string;
-    }
-);
-
-function MobileHeaderMenuButton({
-  as,
-  to,
-  Icon,
-  label,
-  showRedDot = false,
-  tone = "default",
-  onClick,
-}: MobileHeaderMenuButtonProps) {
-  const className = cn(`
-    relative flex min-h-10 w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-semibold transition-colors
-    hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground"}
-  `);
-  const iconClassName = cn(`
-    size-4 shrink-0
-    ${tone === "theme" ? "text-yellow-600 dark:text-yellow-400" : "text-foreground/70"}
-  `);
-  const content = (
-    <>
-      <Icon className={iconClassName} />
-      <span className="min-w-0 flex-1 text-left">{label}</span>
-      {showRedDot && <span className="size-1.5 rounded-full bg-red-500" aria-hidden="true" />}
-    </>
-  );
-
-  if (as === "link") {
-    return (
-      <Link to={to} className={className} onClick={onClick}>
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button type="button" className={className} onClick={onClick}>
-      {content}
-    </button>
   );
 }
 

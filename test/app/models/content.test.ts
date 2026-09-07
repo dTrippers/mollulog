@@ -107,6 +107,7 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     mockedGetPersonalNavigationState.mockResolvedValue({
       hasUnconsumedCoupons: false,
       hasUnreadFeedbackReplies: false,
+      unreadNotificationCount: 0,
     });
   });
 
@@ -276,16 +277,19 @@ describe("getNavigationBarContents (raw + request-time filter)", () => {
     mockedGetPersonalNavigationState.mockResolvedValue({
       hasUnconsumedCoupons: true,
       hasUnreadFeedbackReplies: true,
+      unreadNotificationCount: 4,
     });
 
     const anonymousResult = await getNavigationBarContents(env);
     expect(anonymousResult.hasUnconsumedCoupons).toBe(false);
     expect(anonymousResult.hasUnreadFeedbackReplies).toBe(false);
+    expect(anonymousResult.unreadNotificationCount).toBe(0);
     expect(mockedGetPersonalNavigationState).not.toHaveBeenCalled();
 
     const authenticatedResult = await getNavigationBarContents(env, false, 42);
     expect(authenticatedResult.hasUnconsumedCoupons).toBe(true);
     expect(authenticatedResult.hasUnreadFeedbackReplies).toBe(true);
+    expect(authenticatedResult.unreadNotificationCount).toBe(4);
     expect(mockedGetPersonalNavigationState).toHaveBeenCalledWith(env, 42, { ctx: undefined });
   });
 });

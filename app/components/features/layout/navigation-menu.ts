@@ -436,7 +436,7 @@ export function getNavigationCatalog({
     },
     {
       group: "service",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/news",
       name: "업데이트 소식",
       favoriteId: "news",
@@ -446,7 +446,7 @@ export function getNavigationCatalog({
     },
     {
       group: "service",
-      surfaces: ["desktop", "search"],
+      surfaces: ["desktop", "more", "search"],
       to: "/contact",
       name: "제안/문의",
       favoriteId: "contact",
@@ -580,27 +580,11 @@ export function getMoreNavigationSections(options: NavigationCatalogOptions): Mo
       name: "내 정보",
       items: items.filter((item) => item.group === "profile"),
     },
+    {
+      name: "서비스",
+      items: items.filter((item) => item.group === "service"),
+    },
   ].filter((section) => section.items.length > 0);
-}
-
-export function getServiceNavigationItems({
-  pathname,
-  hasRecentNews = false,
-  hasUnreadFeedbackReplies = false,
-}: {
-  pathname: string;
-  hasRecentNews?: boolean;
-  hasUnreadFeedbackReplies?: boolean;
-}): NavigationItem[] {
-  return getNavigationCatalog({
-    pathname,
-    upcomingEvent: null,
-    hasOngoingRaid: false,
-    hasUnconsumedCoupons: false,
-    isSignedIn: false,
-    hasRecentNews,
-    hasUnreadFeedbackReplies,
-  }).filter((item) => item.group === "service");
 }
 
 export function getSearchableMenuItems({

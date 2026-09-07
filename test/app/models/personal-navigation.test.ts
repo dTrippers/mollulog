@@ -5,7 +5,7 @@ import { getPersonalNavigationState } from "~/models/personal-navigation";
 describe("personal navigation query shape", () => {
   it("loads both personal red dots in one PostgreSQL query", async () => {
     const query = jest.fn(async () => ({
-      rows: [{ has_unconsumed_coupons: true, has_unread_feedback_replies: true }],
+      rows: [{ has_unconsumed_coupons: true, has_unread_feedback_replies: true, unread_notification_count: "3" }],
       rowCount: 1,
     }));
     const client = {
@@ -21,9 +21,15 @@ describe("personal navigation query shape", () => {
     ).resolves.toEqual({
       hasUnconsumedCoupons: true,
       hasUnreadFeedbackReplies: true,
+      unreadNotificationCount: 3,
     });
     expect(query).toHaveBeenCalledTimes(1);
-    expect((query.mock.calls[0] as unknown as [string, unknown[]])[1]).toEqual([42]);
+    const [statement, values] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(statement).toContain("nj.status = 'sent'");
+    expect(statement).toContain("nj.delivered_at is not null");
+    expect(statement).toContain("nrs.last_read_delivered_at is null or nj.delivered_at > nrs.last_read_delivered_at");
+    expect(statement).toContain("nj.trigger <> 'connection-verification'");
+    expect(values).toEqual([42]);
     expect(client.end).toHaveBeenCalledTimes(1);
   });
 });

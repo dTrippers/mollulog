@@ -289,6 +289,18 @@ export const pgNotificationJobsTable = pgTable(
   ],
 );
 
+export const pgNotificationReadStatesTable = pgTable(
+  "notification_read_states",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    lastReadDeliveredAt: timestamptz("last_read_delivered_at"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [uniqueIndex("notification_read_states_user_id_uidx").on(table.userId)],
+);
+
 export const pgPostsTable = pgTable(
   "posts",
   {
