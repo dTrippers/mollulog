@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import { formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import type { EventType, RaidType } from "~/models/content.d";
 import { COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES } from "~/models/content-rules";
@@ -37,6 +38,7 @@ export type ContentTimelineProps = {
     runType: "first" | "rerun" | "permanent";
     uid: string;
     recruitmentGroupUid?: string | null;
+    recruitmentPeriod?: RecruitmentPeriod | null;
     link: string;
     contentType: EventType | RaidType;
     confirmed?: boolean;
@@ -61,6 +63,7 @@ export type ContentTimelineProps = {
   signedIn: boolean;
   recruitmentStudentMobileGrid?: 5 | 6;
   showFeatureBanners?: boolean;
+  showRecruitmentPeriodNotice?: boolean;
   revealedSpoilerContentUids?: string[];
   onRevealSpoiler?: (contentUid: string) => void;
   onHideSpoiler?: (contentUid: string) => void;
@@ -108,6 +111,7 @@ export default function ContentTimeline({
   isSubmittingComment,
   signedIn,
   showFeatureBanners = false,
+  showRecruitmentPeriodNotice = true,
   recruitmentStudentMobileGrid,
 }: ContentTimelineProps) {
   const displayTimeZone = useDisplayTimeZone();
@@ -195,6 +199,7 @@ export default function ContentTimeline({
                       key={content.uid}
                       confirmed={content.confirmed}
                       {...content}
+                      recruitmentPeriod={showRecruitmentPeriodNotice ? content.recruitmentPeriod : null}
                       spoilerVisible={spoilerVisible}
                       onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}

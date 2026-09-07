@@ -1,7 +1,9 @@
+import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import { graphql } from "~/graphql";
 import type { RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
+import { toUtcIso } from "~/lib/date-time";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "endAfterDays=7");
 const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "all");
@@ -106,6 +108,19 @@ export async function getRecruitmentGroupByUid(
   return groups.find((group) => group.uid === uid) ?? null;
 }
 
+export async function getRecruitmentGroupByUidStrict(
+  env: Env,
+  uid: string,
+  forceRefresh = false,
+): Promise<RecruitmentGroup> {
+  const group = (await fetchAllHistoricalRecruitmentGroups(env, forceRefresh)).find((item) => item.uid === uid);
+  if (!group) {
+    throw new Error(`recruitment group not found: ${uid}`);
+  }
+
+  return group;
+}
+
 export async function getActiveRecruitmentGroups(
   env: Env,
   now: Date,
@@ -132,6 +147,39 @@ export async function getRecruitmentGroupsByUids(
   const uidSet = new Set(uids);
   const groups = await getAllHistoricalRecruitmentGroups(env, forceRefresh);
   return groups.filter((group) => uidSet.has(group.uid));
+}
+
+export async function getRecruitmentGroupsByUidsStrict(
+  env: Env,
+  uids: string[],
+  forceRefresh = false,
+): Promise<RecruitmentGroup[]> {
+  const uniqueUids = [...new Set(uids)];
+  if (uniqueUids.length === 0) {
+    return [];
+  }
+
+  const groups = await fetchAllHistoricalRecruitmentGroups(env, forceRefresh);
+  const groupsByUid = new Map(groups.map((group) => [group.uid, group]));
+  const missingUids = uniqueUids.filter((uid) => !groupsByUid.has(uid));
+  if (missingUids.length > 0) {
+    throw new Error(`recruitment groups not found: ${missingUids.join(", ")}`);
+  }
+
+  return uniqueUids.map((uid) => {
+    const group = groupsByUid.get(uid);
+    if (!group) {
+      throw new Error(`recruitment group not found: ${uid}`);
+    }
+    return group;
+  });
+}
+
+export function normalizeRecruitmentGroupPeriod(group: Pick<RecruitmentGroup, "startAt" | "endAt">): RecruitmentPeriod {
+  return {
+    startAt: toUtcIso(group.startAt),
+    endAt: group.endAt ? toUtcIso(group.endAt) : null,
+  };
 }
 
 export async function getRecruitmentPoolStudents(

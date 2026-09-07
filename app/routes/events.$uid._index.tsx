@@ -1,11 +1,13 @@
-import { SparklesIcon } from "@heroicons/react/24/outline";
+import { ClockIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { redirect, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/events";
-import { MarkdownText, SectionCard } from "~/components/primitives";
+import { Callout, MarkdownText, SectionCard } from "~/components/primitives";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { toUtcIso } from "~/lib/date-time";
+import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
+import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content.server";
 import {
@@ -15,7 +17,7 @@ import {
   unfavoriteStudent,
 } from "~/models/favorite-students";
 import { getPostByTimelineContentUid } from "~/models/post";
-import { getRecruitmentGroupByUid } from "~/models/recruitment";
+import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import EventComment from "./events.$uid._components/EventComment";
 
@@ -32,7 +34,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   }
 
   const recruitmentGroup = content.recruitmentGroupUid
-    ? await getRecruitmentGroupByUid(env, content.recruitmentGroupUid)
+    ? await getRecruitmentGroupByUidStrict(env, content.recruitmentGroupUid)
     : null;
   const recruitments = filterRecruitmentsByStudentUids(
     recruitmentGroup?.recruitments ?? [],
@@ -52,6 +54,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     runType: content.runType,
     endless: content.endless,
     videos: content.videos,
+    recruitmentGroupUid: content.recruitmentGroupUid,
+    recruitmentPeriod: recruitmentGroup ? normalizeRecruitmentGroupPeriod(recruitmentGroup) : null,
     recruitments,
   };
 
@@ -145,7 +149,22 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
 export default function EventIndex() {
   const { eventContent, signedIn, allComments, me, eventUid, siblingEvents, livePost } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  const displayTimeZone = useDisplayTimeZone();
   const isLive = eventContent.type === "live";
+  const recruitmentPeriodNotice = getRecruitmentPeriodNotice(
+    {
+      recruitmentGroupUid: eventContent.recruitmentGroupUid,
+      contentType: eventContent.type,
+      startAt: eventContent.since,
+      endAt: eventContent.until,
+      endless: eventContent.endless,
+    },
+    eventContent.recruitmentPeriod,
+    nowUtcIso(),
+  );
+  const recruitmentPeriodDescription = eventContent.recruitmentPeriod?.endAt
+    ? `모집은 ${formatInstant(eventContent.recruitmentPeriod.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~ ${formatInstant(eventContent.recruitmentPeriod.endAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} 동안 진행돼요`
+    : null;
 
   return (
     <div className="w-full">
@@ -161,6 +180,16 @@ export default function EventIndex() {
           videos={eventContent.videos}
         />
       </div>
+
+      {recruitmentPeriodNotice && (
+        <Callout
+          tone="warning"
+          Icon={ClockIcon}
+          title="이벤트 기간과 모집 개최 기간이 달라요"
+          description={recruitmentPeriodDescription}
+          className="my-4 md:my-6"
+        />
+      )}
 
       {siblingEvents.map((sibling) => (
         <EventInfoCard

@@ -3,7 +3,10 @@ import { runQuery } from "~/lib/baql";
 import {
   getAllHistoricalRecruitmentGroups,
   getRecruitmentGroupByUid,
+  getRecruitmentGroupByUidStrict,
   getRecruitmentGroupsByUids,
+  getRecruitmentGroupsByUidsStrict,
+  normalizeRecruitmentGroupPeriod,
   warmRecruitmentCache,
 } from "../../../app/models/recruitment";
 
@@ -15,6 +18,7 @@ type ModelEnv = Env;
 const mockedRunQuery = runQuery as unknown as {
   mockReset: () => void;
   mockResolvedValueOnce: (value: unknown) => unknown;
+  mockRejectedValueOnce: (value: unknown) => unknown;
   mockImplementation: (fn: () => Promise<unknown>) => unknown;
 };
 
@@ -227,5 +231,81 @@ describe("recruitment historical lookups", () => {
       endAfter: null,
       uids: null,
     });
+  });
+
+  it("normalizes recruitment group periods to UTC ISO strings", () => {
+    expect(
+      normalizeRecruitmentGroupPeriod({
+        startAt: "2026-03-10T11:00:00+09:00" as never,
+        endAt: "2026-03-24T11:00:00+09:00" as never,
+      }),
+    ).toEqual({
+      startAt: "2026-03-10T02:00:00.000Z",
+      endAt: "2026-03-24T02:00:00.000Z",
+    });
+  });
+
+  it("throws when a strict single-group lookup cannot resolve the requested uid", async () => {
+    mockedRunQuery.mockResolvedValueOnce(createResult([]));
+
+    await expect(getRecruitmentGroupByUidStrict(createEnv(), "missing-group")).rejects.toThrow(
+      "recruitment group not found: missing-group",
+    );
+  });
+
+  it("propagates BAQL failures from a strict single-group lookup", async () => {
+    const error = new Error("BAQL unavailable");
+    mockedRunQuery.mockRejectedValueOnce(error);
+
+    await expect(getRecruitmentGroupByUidStrict(createEnv(), "group-a")).rejects.toBe(error);
+  });
+
+  it("throws when a strict multi-group lookup has a missing uid", async () => {
+    mockedRunQuery.mockResolvedValueOnce(
+      createResult([
+        {
+          uid: "present-group",
+          startAt: "2026-03-10T00:00:00Z",
+          endAt: null,
+          contentType: "event",
+          contentUid: null,
+          recruitmentType: "usual",
+          recruitments: [],
+        },
+      ]),
+    );
+
+    await expect(getRecruitmentGroupsByUidsStrict(createEnv(), ["present-group", "missing-group"])).rejects.toThrow(
+      "recruitment groups not found: missing-group",
+    );
+  });
+
+  it("returns strict groups in requested uid order", async () => {
+    const groups = [
+      {
+        uid: "group-b",
+        startAt: "2026-03-11T00:00:00Z",
+        endAt: null,
+        contentType: "event",
+        contentUid: null,
+        recruitmentType: "usual",
+        recruitments: [],
+      },
+      {
+        uid: "group-a",
+        startAt: "2026-03-10T00:00:00Z",
+        endAt: null,
+        contentType: "event",
+        contentUid: null,
+        recruitmentType: "usual",
+        recruitments: [],
+      },
+    ];
+    mockedRunQuery.mockResolvedValueOnce(createResult(groups));
+
+    await expect(getRecruitmentGroupsByUidsStrict(createEnv(), ["group-a", "group-b", "group-a"])).resolves.toEqual([
+      groups[1],
+      groups[0],
+    ]);
   });
 });

@@ -1,9 +1,10 @@
-import { CheckCircleIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ClockIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { StudentCard } from "~/components/features/students";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp } from "~/lib/date-time";
 import { contentTypeLocale } from "~/locales/ko";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
@@ -165,6 +166,17 @@ function CompactContentItem({
   });
   const title = hiddenSpoiler ? "???" : content.name.split("\n").join(" ");
   const label = getContentTypeLabel(content);
+  const recruitmentPeriodNotice = getRecruitmentPeriodNotice(
+    {
+      recruitmentGroupUid: content.recruitmentGroupUid,
+      contentType: content.contentType,
+      startAt: content.since,
+      endAt: content.until,
+      endless: content.endless,
+    },
+    content.recruitmentPeriod,
+    nowUtcIso(),
+  );
   const lineContent = (
     <span className="flex min-w-0 items-baseline gap-2">
       <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
@@ -208,6 +220,12 @@ function CompactContentItem({
           onFavorite={onFavorite}
           onRecruitmentComplete={onRecruitmentComplete}
         />
+      )}
+      {spoilerVisible && recruitmentPeriodNotice && (
+        <p className="mt-1 flex min-w-0 items-start gap-1 text-xs text-amber-600 dark:text-amber-400">
+          <ClockIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+          <span className="min-w-0">{recruitmentPeriodNotice}</span>
+        </p>
       )}
     </div>
   );

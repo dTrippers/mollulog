@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { ExclamationTriangleIcon, SparklesIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/16/solid";
+import { ClockIcon, ExclamationTriangleIcon, SparklesIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 
 type TimelineItemBannerProps = {
@@ -8,9 +8,10 @@ type TimelineItemBannerProps = {
   link?: string;
   linkText?: string;
   onLinkClick?: () => void;
+  actionVariant?: "link" | "button";
   onDismiss?: () => void;
   dismissLabel?: string;
-  icon?: "exclamation" | "info" | "menu";
+  icon?: "clock" | "exclamation" | "info" | "menu";
   color?: "amber" | "green" | "neutral";
 };
 
@@ -53,17 +54,26 @@ export function TimelineItemBanner({
   link,
   linkText = "자세히 보기",
   onLinkClick,
+  actionVariant = "link",
   onDismiss,
   dismissLabel = "배너 닫기",
   icon = "exclamation",
   color = "amber",
 }: TimelineItemBannerProps) {
-  const IconComponent = icon === "info" ? SparklesIcon : icon === "menu" ? Squares2X2Icon : ExclamationTriangleIcon;
+  const IconComponent =
+    icon === "clock"
+      ? ClockIcon
+      : icon === "info"
+        ? SparklesIcon
+        : icon === "menu"
+          ? Squares2X2Icon
+          : ExclamationTriangleIcon;
   const classes = colorClasses[color];
   const structured = Boolean(title || onDismiss);
-  const linkClassName = structured
-    ? `inline-flex items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 transition ${classes.action}`
-    : `inline-flex flex-shrink-0 items-center underline cursor-pointer ${classes.link}`;
+  const linkClassName =
+    structured || actionVariant === "button"
+      ? `inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-xs font-semibold leading-4 transition ${classes.action}`
+      : `inline-flex flex-shrink-0 items-center underline cursor-pointer ${classes.link}`;
   const renderAction = (className = "") => {
     const actionClassName = className ? `${linkClassName} ${className}` : linkClassName;
     if (link) {

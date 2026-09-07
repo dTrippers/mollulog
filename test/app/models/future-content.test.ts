@@ -4,6 +4,8 @@ import { type FutureContent, normalizeFutureContentDates, toRecruitmentInfos } f
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupByUid: jest.fn(),
   getRecruitmentGroupsByUids: jest.fn(),
+  getRecruitmentGroupsByUidsStrict: jest.fn(),
+  normalizeRecruitmentGroupPeriod: jest.fn(),
 }));
 
 jest.mock("~/domain/recruitment-identity", () => ({
@@ -35,7 +37,11 @@ describe("normalizeFutureContentDates", () => {
       runType: "first",
       occurrence: null,
       contentUid: "202604-hieronymus",
-      recruitmentGroupUid: null,
+      recruitmentGroupUid: "group-a",
+      recruitmentPeriod: {
+        startAt: "2026-03-31T11:00:00+09:00",
+        endAt: "2026-04-07T11:00:00+09:00",
+      },
       confirmed: true,
       isSpoiler: false,
       tags: [],
@@ -68,6 +74,10 @@ describe("normalizeFutureContentDates", () => {
     expect(normalized.startAt).toBe("2026-03-31T02:00:00.000Z");
     expect(normalized.endAt).toBe("2026-04-06T19:00:00.000Z");
     expect(normalized.syncedAt).toBe("2026-03-29T09:20:22.385Z");
+    expect(normalized.recruitmentPeriod).toEqual({
+      startAt: "2026-03-31T02:00:00.000Z",
+      endAt: "2026-04-07T02:00:00.000Z",
+    });
     expect(normalized.recruitments[0].since).toBe("2026-03-31T02:00:00.000Z");
     expect(normalized.recruitments[0].until).toBe("2026-04-07T02:00:00.000Z");
   });

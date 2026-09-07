@@ -17,12 +17,13 @@ import {
 } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { type ReactNode, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { getRecruitmentPeriodNotice, type RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
 import {
@@ -61,6 +62,8 @@ export type ContentTimelineItemProps = {
   isSpoiler?: boolean;
   spoilerVisible?: boolean;
   tags: string[];
+  recruitmentGroupUid?: string | null;
+  recruitmentPeriod?: RecruitmentPeriod | null;
 
   allComments?: {
     uid: string;
@@ -163,6 +166,8 @@ export function ContentTimelineItem({
   isSpoiler = false,
   spoilerVisible = true,
   tags,
+  recruitmentGroupUid,
+  recruitmentPeriod,
   raidInfo,
   recruitments,
   allComments,
@@ -191,6 +196,7 @@ export function ContentTimelineItem({
   signedIn,
   recruitmentStudentMobileGrid,
 }: ContentTimelineItemProps) {
+  const navigate = useNavigate();
   const displayTimeZone = useDisplayTimeZone();
   const { setActivePopupId } = useStudentCardPopup();
   const showComments =
@@ -199,6 +205,13 @@ export function ContentTimelineItem({
 
   let daysLabel = null;
   const now = nowUtcIso();
+  const recruitmentPeriodNotice = since
+    ? getRecruitmentPeriodNotice(
+        { recruitmentGroupUid, contentType, startAt: since, endAt: until, endless },
+        recruitmentPeriod,
+        now,
+      )
+    : null;
 
   let finishSoon = false;
   if (since && until && isInstantBefore(since, now)) {
@@ -288,6 +301,16 @@ export function ContentTimelineItem({
           eventUntil={until ?? null}
           timeZone={displayTimeZone}
           studentMobileGrid={recruitmentStudentMobileGrid}
+        />
+      )}
+      {recruitmentPeriodNotice && (
+        <TimelineItemBanner
+          message={recruitmentPeriodNotice}
+          color="amber"
+          icon="clock"
+          onLinkClick={() => navigate(link)}
+          linkText="자세히"
+          actionVariant="button"
         />
       )}
       {completedStudentUids.length > 0 && recruitmentResultEditLink && (
