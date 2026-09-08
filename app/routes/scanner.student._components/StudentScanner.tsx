@@ -1,5 +1,5 @@
 import { CheckCircleIcon, ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
@@ -235,6 +235,7 @@ type ReviewStudent = {
 };
 
 export type ReviewState = Record<string, ReviewStudent>;
+type PendingFocusTarget = { kind: "student"; studentUid: string } | { kind: "action-bar" };
 type FieldComparison = "same" | "decreased" | null;
 
 const STUDENT_UPLOAD_HASH_ERROR = "파일 정보를 계산하지 못했어요";
@@ -513,19 +514,23 @@ export default function StudentScanner() {
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [partialFailure, setPartialFailure] = useState<StudentUploadPartialFailure | null>(null);
   const [review, setReview] = useState<ReviewState>({});
+  const [excludedStudentUids, setExcludedStudentUids] = useState<Set<string>>(() => new Set());
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const handleJob = useCallback((next: StudentVideoJob) => {
     if (next.status === "review_ready" && next.result) {
       setReview(next.application?.status === "applied" ? {} : createReviewState(next.result));
+      setExcludedStudentUids(new Set());
       return;
     }
     setReview({});
+    setExcludedStudentUids(new Set());
   }, []);
 
   const handleReset = useCallback(() => {
     setSelectedFiles([]);
     setReview({});
+    setExcludedStudentUids(new Set());
     setHashProgress(0);
     setUploadProgress(0);
     setAllowsTrainingDataUse(false);
@@ -619,7 +624,7 @@ export default function StudentScanner() {
     }
   }
 
-  async function applyReview(remainingReviewStudentCount: number) {
+  async function applyReview(remainingReviewStudentCount: number, excludedStudentUids: ReadonlySet<string>) {
     if (!job?.result) return;
     if (remainingReviewStudentCount > 0 && !window.confirm("검토가 필요한 데이터가 남아있어요. 정말 저장할까요?")) {
       return;
@@ -631,6 +636,7 @@ export default function StudentScanner() {
         job.result,
         review,
         new Set(Object.keys(job.studentCatalog ?? {})),
+        excludedStudentUids,
       );
       if (students.length === 0) {
         setError("저장할 수 있는 학생 데이터가 없어요.");
@@ -785,8 +791,16 @@ export default function StudentScanner() {
         key={job.uid}
         job={{ ...job, result: job.result }}
         review={review}
+        excludedStudentUids={excludedStudentUids}
         phase={phase}
         onReviewChange={setReview}
+        onExcludeStudent={(studentUid) =>
+          setExcludedStudentUids((current) => {
+            const next = new Set(current);
+            next.add(studentUid);
+            return next;
+          })
+        }
         onApply={applyReview}
         onCancel={cancelResult}
         onStartNew={() => resetForNewUpload()}
@@ -869,8 +883,10 @@ export default function StudentScanner() {
 function ReviewPanel({
   job,
   review,
+  excludedStudentUids,
   phase,
   onReviewChange,
+  onExcludeStudent,
   onApply,
   onCancel,
   onStartNew,
@@ -880,9 +896,11 @@ function ReviewPanel({
 }: {
   job: StudentVideoJob & { result: StudentGrowthResult };
   review: ReviewState;
+  excludedStudentUids: ReadonlySet<string>;
   phase: ScannerPhase;
   onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
-  onApply: (remainingReviewStudentCount: number) => void;
+  onExcludeStudent: (studentUid: string) => void;
+  onApply: (remainingReviewStudentCount: number, excludedStudentUids: ReadonlySet<string>) => void;
   onCancel: () => void;
   onStartNew: () => void;
   isCancelling: boolean;
@@ -890,22 +908,46 @@ function ReviewPanel({
   partialFailure: string | null;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
+  const [pendingFocusTarget, setPendingFocusTarget] = useState<PendingFocusTarget | null>(null);
+  const [exclusionAnnouncement, setExclusionAnnouncement] = useState("");
   const [selectedPreview, setSelectedPreview] = useState<{
     artifact: StudentVideoJob["artifacts"][number];
     studentName: string;
   } | null>(null);
-  const unresolvedStudents = job.result.students.filter(({ studentUid }) => !job.studentCatalog?.[studentUid]);
+  const excludeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const activeStudents = job.result.students.filter(({ studentUid }) => !excludedStudentUids.has(studentUid));
+  const unresolvedStudents = activeStudents.filter(({ studentUid }) => !job.studentCatalog?.[studentUid]);
   const failedImages = job.images.filter((image) => image.status === "failed");
   const artifactsByStudentUid = new Map(job.artifacts.map((artifact) => [artifact.studentUid, artifact]));
   const numberInputNavigation = useNumberInputFlowNavigation();
-  const remainingReviewStudents = job.result.students.filter((student) => {
+  const remainingReviewStudents = activeStudents.filter((student) => {
     const state = review[student.studentUid];
     return state ? studentNeedsReview(student, state, job.currentStudentStates?.[student.studentUid]) : false;
   });
+  const validStudentUids = new Set(Object.keys(job.studentCatalog ?? {}));
+  const saveableStudentCount = activeStudents.filter(
+    (student) => review[student.studentUid]?.confirmed.tier && validStudentUids.has(student.studentUid),
+  ).length;
   const showReviewRequiredOnly = reviewFilterStudentUids !== null;
   const visibleStudents = showReviewRequiredOnly
-    ? job.result.students.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
-    : job.result.students;
+    ? activeStudents.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
+    : activeStudents;
+
+  useEffect(() => {
+    if (!pendingFocusTarget) return;
+    if (pendingFocusTarget.kind === "student") {
+      const nextButton = excludeButtonRefs.current.get(pendingFocusTarget.studentUid);
+      if (nextButton && !nextButton.disabled) {
+        nextButton.focus();
+      } else {
+        actionBarRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+      }
+    } else {
+      actionBarRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    }
+    setPendingFocusTarget(null);
+  }, [pendingFocusTarget]);
 
   const updateStudent = (studentUid: string, update: (current: ReviewStudent) => ReviewStudent) => {
     onReviewChange((current) => {
@@ -915,8 +957,24 @@ function ReviewPanel({
     });
   };
 
+  const excludeStudent = (studentUid: string, studentName: string) => {
+    const currentIndex = visibleStudents.findIndex((student) => student.studentUid === studentUid);
+    const nextFocusStudentUid =
+      visibleStudents[currentIndex + 1]?.studentUid ?? visibleStudents[currentIndex - 1]?.studentUid ?? null;
+    setPendingFocusTarget(
+      nextFocusStudentUid === null ? { kind: "action-bar" } : { kind: "student", studentUid: nextFocusStudentUid },
+    );
+    setExclusionAnnouncement(`${studentName} 학생을 저장 대상에서 제외했어요.`);
+    onExcludeStudent(studentUid);
+  };
+
   return (
     <section className="space-y-4">
+      {exclusionAnnouncement ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          {exclusionAnnouncement}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
           <SubTitle
@@ -1025,7 +1083,6 @@ function ReviewPanel({
               return (
                 <tr
                   key={student.studentUid}
-                  aria-disabled={!catalogStudent || undefined}
                   className={cn(
                     "border-b border-border align-middle last:border-b-0",
                     !catalogStudent && "bg-muted/30",
@@ -1076,6 +1133,31 @@ function ReviewPanel({
                       {!catalogStudent ? (
                         <span className="text-xs font-semibold text-destructive">반영 불가</span>
                       ) : null}
+                      <span
+                        className="inline-flex"
+                        ref={(element) => {
+                          if (!element) {
+                            excludeButtonRefs.current.delete(student.studentUid);
+                            return;
+                          }
+                          const button = element.querySelector<HTMLButtonElement>("button");
+                          if (button) excludeButtonRefs.current.set(student.studentUid, button);
+                        }}
+                      >
+                        <Button
+                          size="xs"
+                          variant="danger-subtle"
+                          disabled={phase === "applying" || isCancelling}
+                          onClick={() =>
+                            excludeStudent(student.studentUid, catalogStudent?.name ?? student.studentName)
+                          }
+                        >
+                          <span aria-hidden="true">제외</span>
+                          <span className="sr-only">
+                            {catalogStudent?.name ?? student.studentName} 학생을 저장 대상에서 제외
+                          </span>
+                        </Button>
+                      </span>
                     </div>
                   </th>
                   <td className="border-l border-border px-1 py-1.5 align-top">
@@ -1126,14 +1208,14 @@ function ReviewPanel({
             {visibleStudents.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  검토가 필요한 데이터가 없습니다.
+                  {showReviewRequiredOnly ? "검토가 필요한 데이터가 없습니다." : "저장할 학생이 없습니다."}
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
-      <div className="sticky bottom-[var(--mobile-bottom-offset)] z-layer-navigation lg:bottom-4">
+      <div ref={actionBarRef} className="sticky bottom-[var(--mobile-bottom-offset)] z-layer-navigation lg:bottom-4">
         <FloatingActionBar className="mx-3 flex items-center justify-between gap-4 p-4 md:mx-5">
           {remainingReviewStudents.length > 0 ? (
             <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
@@ -1152,8 +1234,8 @@ function ReviewPanel({
             </Button>
             <Button
               variant="primary"
-              disabled={phase === "applying" || isCancelling}
-              onClick={() => onApply(remainingReviewStudents.length)}
+              disabled={phase === "applying" || isCancelling || saveableStudentCount === 0}
+              onClick={() => onApply(remainingReviewStudents.length, excludedStudentUids)}
             >
               {phase === "applying" ? "반영 중..." : "성장도 저장"}
             </Button>
@@ -1599,6 +1681,7 @@ export function buildStudentVideoApplyRequest(
   result: StudentGrowthResult,
   review: ReviewState,
   validStudentUids?: ReadonlySet<string>,
+  excludedStudentUids?: ReadonlySet<string>,
 ): {
   students: Array<{
     studentUid: string;
@@ -1609,7 +1692,13 @@ export function buildStudentVideoApplyRequest(
   return {
     students: result.students.flatMap((student) => {
       const state = review[student.studentUid];
-      if (!state?.confirmed.tier || (validStudentUids && !validStudentUids.has(student.studentUid))) return [];
+      if (
+        !state?.confirmed.tier ||
+        (validStudentUids && !validStudentUids.has(student.studentUid)) ||
+        excludedStudentUids?.has(student.studentUid)
+      ) {
+        return [];
+      }
       const confirmedFields = fields.flatMap(({ applyKey }) => (state.confirmed[applyKey] ? [applyKey] : []));
       const current = Object.fromEntries(
         confirmedFields.map((field) => {

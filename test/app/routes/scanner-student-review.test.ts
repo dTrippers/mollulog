@@ -69,6 +69,47 @@ describe("student scanner review", () => {
     expect(buildStudentVideoApplyRequest(result, createReviewState(result), new Set())).toEqual({ students: [] });
   });
 
+  it("excludes only the selected student while preserving the remaining payload", () => {
+    const twoStudentResult = {
+      ...result,
+      students: [result.students[0], { ...result.students[0], studentUid: "10001", studentName: "두 번째 학생" }],
+    };
+    const review = createReviewState(twoStudentResult);
+    review["10001"].confirmed.level = false;
+
+    expect(buildStudentVideoApplyRequest(twoStudentResult, review, undefined, new Set(["10000"]))).toEqual({
+      students: [
+        {
+          studentUid: "10001",
+          current: {
+            tier: 7,
+            weaponLevel: 0,
+            abilityHp: 0,
+            abilityAtk: 0,
+            abilityHeal: 0,
+            skillEx: 5,
+            skillNormal: 10,
+            equip1: 10,
+            equip2: 9,
+            bond: 32,
+          },
+          confirmedFields: [
+            "tier",
+            "weaponLevel",
+            "abilityHp",
+            "abilityAtk",
+            "abilityHeal",
+            "skillEx",
+            "skillNormal",
+            "equip1",
+            "equip2",
+            "bond",
+          ],
+        },
+      ],
+    });
+  });
+
   it("excludes a student until a failed tier has been corrected", () => {
     const review = createReviewState(result);
     review["10000"].confirmed.tier = false;
