@@ -1,5 +1,4 @@
 import {
-  EyeIcon,
   FunnelIcon,
   IdentificationIcon,
   MinusCircleIcon,
@@ -7,9 +6,9 @@ import {
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, useBlocker, useFetcher, useLoaderData, useOutletContext, useSearchParams } from "react-router";
+import { data, Link, useFetcher, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { PagePanelProps } from "~/components/features/layout";
 import {
@@ -21,31 +20,38 @@ import {
 } from "~/components/features/students";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { Button, Callout, FilterButtons, SubTitle, Toggle } from "~/components/primitives";
-import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
-  getRecruitedStudents,
   MAX_RECRUITED_STUDENT_BATCH_SIZE,
-  patchRecruitedStudentCurrentState,
   type RecruitedStudentBatchInput,
-  type RecruitedStudentCurrentStatePatch,
-  type RecruitedStudentCurrentStatePatchOptions,
   RecruitedStudentValidationError,
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { updateSensei } from "~/models/sensei";
-import { getAllStudentsMap, getStudentDetailData } from "~/models/student";
+import { getAllStudentsMap } from "~/models/student";
 import { getUserStudentsView, type UserStudentsViewMode } from "~/views/user-students.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
-import GrowthVisibilityControl from "./$username.students._components/GrowthVisibilityControl";
 import ShareStudentGrowthButton from "./$username.students._components/ShareStudentGrowthButton";
-import StudentGrowthCard, { CURRENT_STATE_INTENT } from "./$username.students._components/StudentGrowthCard";
+import StudentGrowthCard, { type GrowthStudent } from "./$username.students._components/StudentGrowthCard";
 
 export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
 export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
 export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+export const growthPrivateCalloutDismissalStorageKey = "mollulog::dismissed-growth-private-callout";
+const growthPrivateCalloutId = "student-growth-private";
+
+export function parseGrowthPrivateCalloutDismissal(value: string | null): boolean {
+  if (!value) return false;
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.includes(growthPrivateCalloutId);
+  } catch {
+    return false;
+  }
+}
 
 const userStudentFilterCookieOptions = {
   cookieName: USER_STUDENT_FILTER_COOKIE_NAME,
@@ -95,49 +101,6 @@ const STUDENT_CATALOG_ERROR = "학생 목록을 확인하지 못했어요. 잠�
 const STUDENT_WRITE_ERROR = "학생 등록에 실패했어요. 잠시 후 다시 시도해 주세요";
 const SINGLE_TIER_INVALID_ERROR = "성급 범위가 올바르지 않아요";
 const METHOD_NOT_ALLOWED_ERROR = "지원하지 않는 요청 방식이에요";
-const GROWTH_VISIBILITY_INTENT = "growth-visibility";
-const GROWTH_VISIBILITY_INVALID_ERROR = "성장 공개 설정이 올바르지 않아요";
-const GROWTH_VISIBILITY_WRITE_ERROR = "성장 공개 설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요";
-const CURRENT_STATE_INVALID_ERROR = "학생 성장 상태 입력이 올바르지 않아요";
-const CURRENT_STATE_CATALOG_ERROR = "학생 성장 정보를 확인하지 못했어요. 잠시 후 다시 시도해 주세요";
-const CURRENT_STATE_WRITE_ERROR = "학생 성장 상태를 저장하지 못했어요. 잠시 후 다시 시도해 주세요";
-
-const currentStateFieldKeys = [
-  "level",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equipSpecial",
-  "abilityHp",
-  "abilityAtk",
-  "abilityHeal",
-] as const satisfies (keyof RecruitedStudentCurrentStatePatch)[];
-
-type CurrentStateActionData =
-  | { intent: typeof CURRENT_STATE_INTENT; success: true }
-  | { intent: typeof CURRENT_STATE_INTENT; error: string }
-  | { intent: typeof GROWTH_VISIBILITY_INTENT; success: true; growthVisibility: boolean }
-  | { intent: typeof GROWTH_VISIBILITY_INTENT; error: string }
-  | { success: true }
-  | { error: string };
-type GrowthVisibilityActionData =
-  | { intent: typeof GROWTH_VISIBILITY_INTENT; success: true; growthVisibility: boolean }
-  | { intent: typeof GROWTH_VISIBILITY_INTENT; error: string };
-
-type GrowthVisibilityFetcherState = "idle" | "submitting" | "loading";
-
-export function resolveGrowthVisibility(
-  loaderGrowthVisibility: boolean,
-  fetcherState: GrowthVisibilityFetcherState,
-  activeRequestValue?: boolean,
-): boolean {
-  return fetcherState !== "idle" && activeRequestValue !== undefined ? activeRequestValue : loaderGrowthVisibility;
-}
-
 type BatchActionResult = { success: true } | { error: string };
 
 function parseBatchAddPayload(formData: FormData): { items: RecruitedStudentBatchInput[] } | { error: string } {
@@ -176,71 +139,6 @@ function parseBatchAddPayload(formData: FormData): { items: RecruitedStudentBatc
     return { error: BATCH_INVALID_ERROR };
   }
   return { items };
-}
-
-function parseNullableCurrentStateValue(value: FormDataEntryValue | null): number | null {
-  if (value == null || value === "") return null;
-  if (typeof value !== "string" || !/^\d+$/.test(value.trim())) {
-    throw new RecruitedStudentValidationError(CURRENT_STATE_INVALID_ERROR);
-  }
-  return Number(value.trim());
-}
-
-function parseCurrentStatePayload(
-  formData: FormData,
-): { studentUid: string; patch: RecruitedStudentCurrentStatePatch } | { error: string } {
-  const rawStudentUid = formData.get("studentUid");
-  const rawTier = formData.get("tier");
-  if (typeof rawStudentUid !== "string" || rawStudentUid.trim() === "") {
-    return { error: CURRENT_STATE_INVALID_ERROR };
-  }
-
-  const hiddenFields = ["weaponLevel", "equip1Level", "equip2Level", "equip3Level"];
-  if (hiddenFields.some((field) => formData.has(field))) {
-    return { error: CURRENT_STATE_INVALID_ERROR };
-  }
-  if (rawTier != null) {
-    if (typeof rawTier !== "string" || !/^\d+$/.test(rawTier.trim())) {
-      return { error: CURRENT_STATE_INVALID_ERROR };
-    }
-    const tier = Number(rawTier.trim());
-    if (!Number.isInteger(tier) || tier < 1 || tier > 9) {
-      return { error: CURRENT_STATE_INVALID_ERROR };
-    }
-  }
-
-  const patch: RecruitedStudentCurrentStatePatch = {};
-  if (rawTier != null) patch.tier = Number(rawTier.trim());
-  try {
-    for (const field of currentStateFieldKeys) {
-      if (formData.has(field)) {
-        patch[field] = parseNullableCurrentStateValue(formData.get(field));
-      }
-    }
-  } catch (error) {
-    if (error instanceof RecruitedStudentValidationError) return { error: error.message };
-    return { error: CURRENT_STATE_INVALID_ERROR };
-  }
-
-  if (Object.keys(patch).length === 0) return { error: CURRENT_STATE_INVALID_ERROR };
-  return { studentUid: rawStudentUid.trim(), patch };
-}
-
-type StudentDetailData = NonNullable<Awaited<ReturnType<typeof getStudentDetailData>>>;
-
-function getCurrentStateEquipmentMaxLevels(
-  student: NonNullable<StudentDetailData["student"]>,
-  studentCatalog: NonNullable<StudentDetailData["studentCatalog"]>,
-): RecruitedStudentCurrentStatePatchOptions["equipmentMaxLevelsByTier"] {
-  if (!studentCatalog) return [new Map(), new Map(), new Map()];
-  return [0, 1, 2].map((index) => {
-    const category = student.equipments[index];
-    return new Map(
-      studentCatalog.equipment
-        .filter((equipment) => equipment.category === category)
-        .map((equipment) => [equipment.tier, equipment.maxLevel] as const),
-    );
-  }) as [Map<number, number>, Map<number, number>, Map<number, number>];
 }
 
 function isSuccessfulBatchResult(value: unknown): value is BatchActionResult & { success: true } {
@@ -288,183 +186,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
   const formData = await request.formData();
   const intent = formData.get("intent");
-  if (request.method === "POST" && intent === GROWTH_VISIBILITY_INTENT) {
-    const rawVisibility = formData.get("growthVisibility");
-    const growthVisibility =
-      rawVisibility === "on" || rawVisibility === "true"
-        ? true
-        : rawVisibility === "off" || rawVisibility === "false"
-          ? false
-          : null;
-    if (growthVisibility === null) {
-      return data<CurrentStateActionData>(
-        { intent: GROWTH_VISIBILITY_INTENT, error: GROWTH_VISIBILITY_INVALID_ERROR },
-        { status: 400 },
-      );
-    }
-
-    try {
-      const result = await updateSensei(env, sensei.id, { growthVisibility }, { ctx });
-      if (result.error) {
-        return data<CurrentStateActionData>(
-          { intent: GROWTH_VISIBILITY_INTENT, error: GROWTH_VISIBILITY_WRITE_ERROR },
-          { status: 500 },
-        );
-      }
-      return data<CurrentStateActionData>({ intent: GROWTH_VISIBILITY_INTENT, success: true, growthVisibility });
-    } catch (error) {
-      reportStudentActionError(logger, error, "growth-visibility-write");
-      return data<CurrentStateActionData>(
-        { intent: GROWTH_VISIBILITY_INTENT, error: GROWTH_VISIBILITY_WRITE_ERROR },
-        { status: 500 },
-      );
-    }
-  }
-
-  if (request.method === "POST" && intent === CURRENT_STATE_INTENT) {
-    const currentStatePayload = parseCurrentStatePayload(formData);
-    if ("error" in currentStatePayload) {
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: currentStatePayload.error },
-        { status: 400 },
-      );
-    }
-
-    let releasedStudents: Awaited<ReturnType<typeof getAllStudentsMap>>;
-    try {
-      releasedStudents = await getAllStudentsMap(env, true);
-    } catch (error) {
-      reportStudentActionError(logger, error, "current-state-catalog");
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: CURRENT_STATE_CATALOG_ERROR },
-        { status: 500 },
-      );
-    }
-    if (Object.keys(releasedStudents).length === 0) {
-      reportStudentActionError(logger, new Error("Released student catalog is empty"), "current-state-catalog", {
-        catalogSize: 0,
-      });
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: CURRENT_STATE_CATALOG_ERROR },
-        { status: 500 },
-      );
-    }
-
-    const student = releasedStudents[currentStatePayload.studentUid];
-    if (!student) {
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: STUDENT_NOT_FOUND_ERROR },
-        { status: 400 },
-      );
-    }
-    if (!student.released) {
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: "출시되지 않은 학생이에요" },
-        { status: 400 },
-      );
-    }
-
-    let recruitedStudent: Awaited<ReturnType<typeof getRecruitedStudents>>[number] | undefined;
-    let studentDetailData: Awaited<ReturnType<typeof getStudentDetailData>>;
-    try {
-      recruitedStudent = (await getRecruitedStudents(env, sensei.id, [currentStatePayload.studentUid]))[0];
-      if (!recruitedStudent) {
-        return data<CurrentStateActionData>(
-          { intent: CURRENT_STATE_INTENT, error: "모집한 학생만 성장 상태를 저장할 수 있어요" },
-          { status: 400 },
-        );
-      }
-      studentDetailData = await getStudentDetailData(env, currentStatePayload.studentUid);
-    } catch (error) {
-      reportStudentActionError(logger, error, "current-state-catalog");
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: CURRENT_STATE_CATALOG_ERROR },
-        { status: 500 },
-      );
-    }
-
-    if (!studentDetailData?.student || !studentDetailData.studentCatalog) {
-      reportStudentActionError(logger, new Error("Student detail catalog is unavailable"), "current-state-catalog");
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: CURRENT_STATE_CATALOG_ERROR },
-        { status: 500 },
-      );
-    }
-
-    const tier = currentStatePayload.patch.tier ?? recruitedStudent.tier;
-    if (tier < student.initialTier) {
-      return data<CurrentStateActionData>(
-        {
-          intent: CURRENT_STATE_INTENT,
-          error: `성급은 최초 성급인 ${student.initialTier}성보다 낮게 설정할 수 없어요`,
-        },
-        { status: 400 },
-      );
-    }
-
-    const detailStudent = studentDetailData.student;
-    const gearAvailable = detailStudent.catalog?.gear != null;
-    if (Object.hasOwn(currentStatePayload.patch, "equipSpecial") && !gearAvailable) {
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: "애용품 정보를 확인하지 못했어요" },
-        { status: 400 },
-      );
-    }
-
-    for (const [index, key] of ["equip1", "equip2", "equip3"].entries()) {
-      if (!Object.hasOwn(currentStatePayload.patch, key)) continue;
-      const equipmentTier = currentStatePayload.patch[key as "equip1" | "equip2" | "equip3"];
-      if (equipmentTier == null) continue;
-      const category = detailStudent.equipments[index];
-      const equipment = studentDetailData.studentCatalog.equipment.find(
-        (candidate) => candidate.category === category && candidate.tier === equipmentTier,
-      );
-      if (!equipment) {
-        return data<CurrentStateActionData>(
-          { intent: CURRENT_STATE_INTENT, error: `장비 ${index + 1} 정보를 확인하지 못했어요` },
-          { status: 400 },
-        );
-      }
-    }
-
-    const abilityAvailable = getWeaponLevelMaxByTier(tier) > 0 && detailStudent.catalog?.weapon != null;
-    const abilityFields = ["abilityHp", "abilityAtk", "abilityHeal"] as const;
-    if (!abilityAvailable && abilityFields.some((field) => Object.hasOwn(currentStatePayload.patch, field))) {
-      const hasValue = abilityFields.some(
-        (field) => currentStatePayload.patch[field] != null && currentStatePayload.patch[field] > 0,
-      );
-      if (hasValue) {
-        return data<CurrentStateActionData>(
-          { intent: CURRENT_STATE_INTENT, error: "능력 개방 정보를 확인하지 못했어요" },
-          { status: 400 },
-        );
-      }
-    }
-
-    const equipmentMaxLevelsByTier = getCurrentStateEquipmentMaxLevels(detailStudent, studentDetailData.studentCatalog);
-    try {
-      await patchRecruitedStudentCurrentState(
-        env,
-        sensei.id,
-        currentStatePayload.studentUid,
-        currentStatePayload.patch,
-        {
-          equipmentMaxLevelsByTier,
-        },
-      );
-      return data<CurrentStateActionData>({ intent: CURRENT_STATE_INTENT, success: true });
-    } catch (error) {
-      if (error instanceof RecruitedStudentValidationError) {
-        return data<CurrentStateActionData>({ intent: CURRENT_STATE_INTENT, error: error.message }, { status: 400 });
-      }
-      reportStudentActionError(logger, error, "current-state-write");
-      return data<CurrentStateActionData>(
-        { intent: CURRENT_STATE_INTENT, error: CURRENT_STATE_WRITE_ERROR },
-        { status: 500 },
-      );
-    }
-  }
-
   if (request.method === "POST" && intent === BATCH_ADD_INTENT) {
     const batchPayload = parseBatchAddPayload(formData);
     if ("error" in batchPayload) {
@@ -557,7 +278,7 @@ export default function UserPage() {
     noRecruited,
     students,
     view,
-    growthVisibility: loaderGrowthVisibility,
+    growthVisibility,
     canViewGrowth,
     profileVisibility,
     username,
@@ -584,32 +305,6 @@ export default function UserPage() {
     return [filteredStudents.filter(({ tier }) => tier !== null), filteredStudents.filter(({ tier }) => tier === null)];
   }, [studentMap, filteredUids]);
 
-  const [editingStudentUid, setEditingStudentUid] = useState<string | null>(null);
-  const [editingDirty, setEditingDirty] = useState(false);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => {
-    if (!editingDirty) return false;
-    return currentLocation.pathname !== nextLocation.pathname || currentLocation.search !== nextLocation.search;
-  });
-
-  useEffect(() => {
-    if (blocker.state !== "blocked") return;
-    if (window.confirm("저장하지 않은 성장 상태가 있어요. 페이지를 벗어나시겠어요?")) {
-      blocker.proceed();
-    } else {
-      blocker.reset();
-    }
-  }, [blocker]);
-
-  useEffect(() => {
-    if (!editingDirty) return;
-    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-  }, [editingDirty]);
-
   const { setPanels } = useOutletContext<{
     setPanels: React.Dispatch<React.SetStateAction<PagePanelProps[]>>;
   }>();
@@ -619,6 +314,28 @@ export default function UserPage() {
   const [batchError, setBatchError] = useState<string | null>(null);
   const batchSubmittingRef = useRef(false);
   const batchDataAtSubmitRef = useRef<BatchActionResult | undefined>(undefined);
+  const [growthPrivateCalloutDismissed, setGrowthPrivateCalloutDismissed] = useState(false);
+  const [growthPrivateCalloutDismissalLoaded, setGrowthPrivateCalloutDismissalLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      setGrowthPrivateCalloutDismissed(
+        parseGrowthPrivateCalloutDismissal(localStorage.getItem(growthPrivateCalloutDismissalStorageKey)),
+      );
+    } catch {
+      setGrowthPrivateCalloutDismissed(false);
+    }
+    setGrowthPrivateCalloutDismissalLoaded(true);
+  }, []);
+
+  const dismissGrowthPrivateCallout = () => {
+    setGrowthPrivateCalloutDismissed(true);
+    try {
+      localStorage.setItem(growthPrivateCalloutDismissalStorageKey, JSON.stringify([growthPrivateCalloutId]));
+    } catch {
+      // Keep the notice dismissed for the current visit when browser storage is unavailable.
+    }
+  };
 
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const batchFetcher = useFetcher<BatchActionResult>();
@@ -637,102 +354,26 @@ export default function UserPage() {
     setBatchError(getBatchFailureMessage(batchFetcher.data));
   }, [batchFetcher.data, batchFetcher.state]);
 
-  const growthFetcher = useFetcher<GrowthVisibilityActionData>();
-  const growthSubmitRef = useRef<boolean | null>(null);
-  const [growthStatus, setGrowthStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [growthError, setGrowthError] = useState<string | null>(null);
-  const growthSaving = growthFetcher.state !== "idle";
-  const growthVisibility = resolveGrowthVisibility(
-    loaderGrowthVisibility,
-    growthFetcher.state,
-    growthSubmitRef.current ?? undefined,
-  );
-
-  useEffect(() => {
-    if (growthSubmitRef.current === null || growthFetcher.state !== "idle") return;
-    growthSubmitRef.current = null;
-    if (!growthFetcher.data) {
-      setGrowthStatus("error");
-      setGrowthError(GROWTH_VISIBILITY_WRITE_ERROR);
-    } else if (growthFetcher.data.intent === GROWTH_VISIBILITY_INTENT && "growthVisibility" in growthFetcher.data) {
-      setGrowthStatus("saved");
-      setGrowthError(null);
-    } else {
-      setGrowthStatus("error");
-      setGrowthError(
-        growthFetcher.data.intent === GROWTH_VISIBILITY_INTENT && "error" in growthFetcher.data
-          ? growthFetcher.data.error
-          : GROWTH_VISIBILITY_WRITE_ERROR,
-      );
-    }
-  }, [growthFetcher.data, growthFetcher.state]);
-
-  const handleGrowthVisibilityChange = useCallback(
-    (enabled: boolean) => {
-      if (growthSaving) return;
-      const formData = new FormData();
-      formData.set("intent", GROWTH_VISIBILITY_INTENT);
-      formData.set("growthVisibility", enabled ? "on" : "off");
-      growthSubmitRef.current = enabled;
-      setGrowthStatus("saving");
-      setGrowthError(null);
-      growthFetcher.submit(formData, { method: "post" });
-    },
-    [growthFetcher, growthSaving],
-  );
-
-  const panels = useMemo<PagePanelProps[]>(() => {
-    const nextPanels: PagePanelProps[] = [
+  const panels = useMemo<PagePanelProps[]>(
+    () => [
       {
         title: "필터 및 정렬",
         description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
         Icon: FunnelIcon,
         children: (
-          <fieldset disabled={editingStudentUid !== null} className="contents">
-            <StudentFilter
-              students={filterStudents}
-              state={filterState}
-              onStateChange={setFilterState}
-              useFilter
-              useSearch
-              sortBy={[...USER_STUDENT_FILTER_SORTS]}
-            />
-          </fieldset>
-        ),
-      },
-    ];
-
-    if (me) {
-      nextPanels.push({
-        title: "성장 상태 공개",
-        Icon: EyeIcon,
-        children: (
-          <GrowthVisibilityControl
-            enabled={growthVisibility}
-            saving={growthSaving}
-            status={growthStatus}
-            error={growthError}
-            onChange={handleGrowthVisibilityChange}
+          <StudentFilter
+            students={filterStudents}
+            state={filterState}
+            onStateChange={setFilterState}
+            useFilter
+            useSearch
+            sortBy={[...USER_STUDENT_FILTER_SORTS]}
           />
         ),
-      });
-    }
-
-    return nextPanels;
-  }, [
-    editingStudentUid,
-    filterState,
-    filteredUids.length,
-    filterStudents,
-    growthError,
-    growthSaving,
-    growthStatus,
-    growthVisibility,
-    handleGrowthVisibilityChange,
-    me,
-    setFilterState,
-    students.length,
-  ]);
+      },
+    ],
+    [filterState, filteredUids.length, filterStudents, setFilterState, students.length],
+  );
 
   useEffect(() => {
     setPanels(panels);
@@ -756,7 +397,7 @@ export default function UserPage() {
   };
 
   const changeView = (nextView: UserStudentsViewMode) => {
-    if (editingStudentUid !== null || nextView === view) return;
+    if (nextView === view) return;
     setSearchParams(nextView === "growth" ? { view: "growth" } : {});
   };
 
@@ -769,16 +410,11 @@ export default function UserPage() {
   }, [username]);
 
   const growthStudents = recruitedStudents.filter(
-    (student): student is typeof student & { growth: NonNullable<typeof student.growth>; tier: number } =>
-      student.growth !== undefined && student.tier !== null,
+    (student): student is GrowthStudent =>
+      student.growth?.skillVisuals !== undefined &&
+      student.growth.equipmentVisuals !== undefined &&
+      student.tier !== null,
   );
-  const handleEditingDirtyChange = useCallback(
-    (studentUid: string, dirty: boolean) => {
-      if (editingStudentUid === studentUid) setEditingDirty(dirty);
-    },
-    [editingStudentUid],
-  );
-
   return (
     <>
       {batchSubmitting ? (
@@ -803,9 +439,51 @@ export default function UserPage() {
         </div>
       ) : null}
 
-      {me && (profileVisibility === "private" || growthVisibility) ? (
+      {me ? (
         <div className="my-6 space-y-3">
-          {profileVisibility === "private" ? (
+          {!growthVisibility ? (
+            growthPrivateCalloutDismissalLoaded ? (
+              growthPrivateCalloutDismissed ? (
+                profileVisibility === "private" ? (
+                  <Callout
+                    tone="warning"
+                    title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
+                    description="프로필 설정에서 공개로 바꾸면 공유 링크를 만들 수 있어요."
+                  >
+                    <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
+                  </Callout>
+                ) : null
+              ) : (
+                <div className="relative">
+                  <Callout
+                    className="pr-12"
+                    tone="info"
+                    title="성장도는 나만 확인할 수 있어요"
+                    description={
+                      <>
+                        다른 사람에게 성장도를 공개하려면 프로필 정보 &gt;{" "}
+                        <Link
+                          to="/edit"
+                          className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                        >
+                          프로필 관리
+                        </Link>{" "}
+                        페이지에서 "학생 성장도 공개"를 활성화해주세요.
+                      </>
+                    }
+                  />
+                  <button
+                    type="button"
+                    aria-label="성장도 비공개 안내 닫기"
+                    className="absolute top-3 right-3 inline-flex items-center justify-center rounded-md p-1 text-muted-foreground/70 transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                    onClick={dismissGrowthPrivateCallout}
+                  >
+                    <XMarkIcon className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )
+            ) : null
+          ) : profileVisibility === "private" ? (
             <Callout
               tone="warning"
               title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
@@ -813,66 +491,54 @@ export default function UserPage() {
             >
               <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
             </Callout>
-          ) : growthVisibility ? (
-            <ShareStudentGrowthButton url={shareUrl} disabled={editingStudentUid !== null} />
-          ) : null}
+          ) : (
+            <ShareStudentGrowthButton url={shareUrl} />
+          )}
         </div>
       ) : null}
 
-      <div className="my-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="my-6 space-y-3">
         <SubTitle
           text="모집한 학생"
           description={
             me && !noRecruited
               ? view === "growth"
-                ? "한 번에 한 학생의 현재 성장 상태를 편집할 수 있어요."
+                ? "모집한 학생의 현재 성장 상태를 확인할 수 있어요."
                 : "학생을 선택해 성장 등급을 수정할 수 있어요."
               : undefined
           }
         />
-        <fieldset disabled={editingStudentUid !== null || !canViewGrowth} className="shrink-0">
-          <legend className="sr-only">학생부 보기 방식</legend>
-          <FilterButtons
-            buttonProps={[
-              { text: "간략히", active: view === "summary", onToggle: () => changeView("summary") },
-              { text: "성장 상세", active: view === "growth", onToggle: () => changeView("growth") },
-            ]}
-            exclusive
-            atLeastOne
-            size="sm"
-            surface="page"
-            className="my-0"
-            buttonGroupClassName="justify-end"
-          />
-        </fieldset>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <fieldset disabled={!canViewGrowth} className="shrink-0">
+            <legend className="sr-only">학생부 보기 방식</legend>
+            <FilterButtons
+              buttonProps={[
+                { text: "간략히", active: view === "summary", onToggle: () => changeView("summary") },
+                { text: "자세히", active: view === "growth", onToggle: () => changeView("growth") },
+              ]}
+              exclusive
+              atLeastOne
+              size="sm"
+              surface="page"
+              className="my-0"
+              buttonGroupClassName="justify-start"
+            />
+          </fieldset>
+        </div>
       </div>
 
       {noRecruited ? (
         <div className="my-16 text-center">아직 모집한 학생이 없어요</div>
       ) : view === "growth" ? (
-        <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(min(100%,16rem),1fr))]">
-          {growthStudents.map((student) => (
-            <StudentGrowthCard
-              key={student.uid}
-              student={student}
-              editable={me}
-              editDisabled={editingStudentUid !== null && editingStudentUid !== student.uid}
-              editing={editingStudentUid === student.uid}
-              onEdit={() => {
-                if (editingStudentUid === null) setEditingStudentUid(student.uid);
-              }}
-              onCancel={() => {
-                setEditingDirty(false);
-                setEditingStudentUid(null);
-              }}
-              onSaved={() => {
-                setEditingDirty(false);
-                setEditingStudentUid(null);
-              }}
-              onDirtyChange={handleEditingDirtyChange}
-            />
-          ))}
-        </div>
+        growthStudents.length > 0 ? (
+          <div className="grid grid-cols-1 justify-start gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,14.5rem),14.5rem))]">
+            {growthStudents.map((student) => (
+              <StudentGrowthCard key={student.uid} student={student} editable={me} />
+            ))}
+          </div>
+        ) : (
+          <div className="my-16 text-center text-muted-foreground">현재 조건에 맞는 모집한 학생이 없어요</div>
+        )
       ) : (
         <StudentCards
           layout="responsive-wrap"
@@ -914,12 +580,6 @@ export default function UserPage() {
         />
       )}
 
-      {editingStudentUid !== null ? (
-        <p className="mt-3 text-xs text-muted-foreground">
-          현재 카드를 저장하거나 취소하면 다른 학생을 편집할 수 있어요.
-        </p>
-      ) : null}
-
       <div className="my-8">
         <SubTitle text="미모집 학생" description={me ? "학생을 선택해 모집 정보를 등록할 수 있어요." : undefined} />
         {me && (
@@ -927,7 +587,7 @@ export default function UserPage() {
             <Toggle
               label="모집한 학생 일괄 등록"
               initialState={batchAddMode}
-              disabled={batchSubmitting || editingStudentUid !== null}
+              disabled={batchSubmitting}
               onChange={setBatchAddMode}
             />
             {batchAddMode && (
@@ -1007,7 +667,7 @@ export default function UserPage() {
                 ],
           }))}
           onSelect={
-            batchAddMode && !batchSubmitting && editingStudentUid === null
+            batchAddMode && !batchSubmitting
               ? (uid: string) => {
                   setBatchAddStudentUids((prev) => {
                     if (prev.includes(uid)) {

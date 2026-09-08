@@ -1,5 +1,5 @@
 import { graphql } from "~/graphql";
-import type { Attack, Defense } from "~/graphql/graphql";
+import type { Attack, Defense, StudentGrowthVisualsQuery, StudentSkillTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import {
   cacheKey,
@@ -147,6 +147,46 @@ const studentDetailQuery = graphql(`
   }
 `);
 
+const studentGrowthVisualsQuery = graphql(`
+  query StudentGrowthVisuals($uids: [String!]) {
+    students(uids: $uids) {
+      uid
+      catalog {
+        gear {
+          name
+        }
+        skillConfigurations {
+          formIndex
+          minimumWeaponStar
+          minimumGearTier
+          slots {
+            slot
+            skills { position skillUid }
+          }
+        }
+      }
+      skills(includeVariants: true) {
+        uid
+        skillType
+        iconUrl
+        maxLevel
+      }
+    }
+  }
+`);
+
+const studentGrowthEquipmentQuery = graphql(`
+  query StudentGrowthEquipment {
+    studentCatalog {
+      equipment {
+        uid
+        category
+        tier
+      }
+    }
+  }
+`);
+
 const studentHeaderQuery = graphql(`
   query StudentHeader($uid: String!) {
     student(uid: $uid) {
@@ -268,6 +308,84 @@ export async function getStudentDetailData(_env: Env, uid: string) {
   return data;
 }
 
+export type StudentGrowthVisuals = {
+  skillConfigurations: NonNullable<
+    NonNullable<StudentGrowthVisualsQuery["students"][number]["catalog"]>
+  >["skillConfigurations"];
+  gearAvailable: boolean;
+  skills: Array<{ uid: string; skillType: StudentSkillTypeEnum; iconUrl: string | null; maxLevel: number }>;
+};
+
+export type StudentGrowthEquipment = Array<{ uid: string; category: string; tier: number }>;
+
+const STUDENT_GROWTH_VISUALS_TTL = 7 * 24 * 60 * 60;
+
+function buildStudentGrowthVisualsCacheKey(uid: string): string {
+  return cacheKey("source", "student-growth-visuals", 2, cacheQuery({ uid }));
+}
+
+async function fetchStudentGrowthVisualsFromBaql(studentUids: string[]): Promise<Map<string, StudentGrowthVisuals>> {
+  const { data, error } = await runQuery(studentGrowthVisualsQuery, { uids: studentUids });
+  if (error) throw error;
+  if (!data) throw new Error("학생 성장 시각 자료의 스킬 설정을 확인하지 못했어요");
+  const studentsByUid = new Map(data.students.map((student) => [student.uid, student]));
+  const result = new Map<string, StudentGrowthVisuals>();
+  for (const uid of studentUids) {
+    const student = studentsByUid.get(uid);
+    if (!student?.catalog) throw new Error("학생 성장 시각 자료의 스킬 설정을 확인하지 못했어요");
+    result.set(uid, {
+      skillConfigurations: student.catalog.skillConfigurations,
+      gearAvailable: student.catalog.gear !== null,
+      skills: student.skills.map((skill) => ({
+        uid: skill.uid,
+        skillType: skill.skillType,
+        iconUrl: skill.iconUrl ?? null,
+        maxLevel: skill.maxLevel,
+      })),
+    });
+  }
+  return result;
+}
+
+export async function getStudentGrowthVisualsBatch(
+  env: Env,
+  studentUids: string[],
+  forceRefresh = false,
+): Promise<Map<string, StudentGrowthVisuals>> {
+  const uniqueUids = [...new Set(studentUids)].sort();
+  if (uniqueUids.length === 0) return new Map();
+
+  return fetchLazySourceCachedBatch(
+    env,
+    uniqueUids.map((uid) => ({ key: uid, dataKey: buildStudentGrowthVisualsCacheKey(uid) })),
+    fetchStudentGrowthVisualsFromBaql,
+    STUDENT_GROWTH_VISUALS_TTL,
+    forceRefresh,
+  );
+}
+
+const studentGrowthEquipmentKey = cacheKey("source", "student-growth-equipment", 1, "all");
+
+async function fetchStudentGrowthEquipmentFromBaql(): Promise<StudentGrowthEquipment> {
+  const { data, error } = await runQuery(studentGrowthEquipmentQuery, {});
+  if (error) throw error;
+  if (!data?.studentCatalog) throw new Error("학생 성장 시각 자료의 장비 카탈로그를 확인하지 못했어요");
+  return data.studentCatalog.equipment;
+}
+
+export async function getStudentGrowthEquipmentCatalog(
+  env: Env,
+  forceRefresh = false,
+): Promise<StudentGrowthEquipment> {
+  return fetchLazySourceCached(
+    env,
+    studentGrowthEquipmentKey,
+    fetchStudentGrowthEquipmentFromBaql,
+    STUDENT_GROWTH_VISUALS_TTL,
+    forceRefresh,
+  );
+}
+
 export async function getStudentHeader(_env: Env, uid: string) {
   const { data, error } = await runQuery(studentHeaderQuery, { uid });
   if (error) {
@@ -284,7 +402,7 @@ export async function getStudentVariantIdentity(_env: Env, uid: string) {
   return data?.student;
 }
 
-export async function getStudentGradeDetail(env: Env, uid: string) {
+export async function getStudentGradeDetail(_env: Env, uid: string) {
   const { data, error } = await runQuery(studentGradeDetailQuery, { uid });
   if (error) {
     throw error;

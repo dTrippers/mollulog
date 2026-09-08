@@ -1,27 +1,50 @@
-import { getStudentGearData } from "~/models/growth-resource";
+import { selectUniqueMaximalSkillConfiguration } from "~/domain/student-skill-configuration";
+import { StudentSkillTypeEnum } from "~/graphql/graphql";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import type { Sensei } from "~/models/sensei";
-import { getAllStudents, getStudentWeaponAvailability } from "~/models/student";
+import {
+  getAllStudents,
+  getStudentGrowthEquipmentCatalog,
+  getStudentGrowthVisualsBatch,
+  getStudentWeaponAvailability,
+  type StudentGrowthEquipment,
+  type StudentGrowthVisuals,
+} from "~/models/student";
 
 export type UserStudentsViewMode = "summary" | "growth";
 
 export type UserStudentsGrowth = {
   level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
   equipSpecial: number | null;
   equipSpecialAvailable: boolean;
-  equipmentAvailable: [boolean, boolean, boolean];
   abilityHp: number | null;
   abilityAtk: number | null;
   abilityHeal: number | null;
-  abilityCatalogAvailable: boolean;
   abilityAvailable: boolean;
+  skillVisuals?: {
+    ex: UserStudentsSkillVisual;
+    normal: UserStudentsSkillVisual;
+    enhanced: UserStudentsSkillVisual;
+    sub: UserStudentsSkillVisual;
+  };
+  equipmentVisuals?: [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual];
+};
+
+export type UserStudentsGrowthWithVisuals = UserStudentsGrowth & {
+  skillVisuals: NonNullable<UserStudentsGrowth["skillVisuals"]>;
+  equipmentVisuals: NonNullable<UserStudentsGrowth["equipmentVisuals"]>;
+};
+
+export type UserStudentsSkillVisual = {
+  iconUrl: string;
+  level: number | null;
+  maxLevel: number;
+};
+
+export type UserStudentsEquipmentVisual = {
+  available: boolean;
+  uid: string | null;
+  tier: number | null;
 };
 
 export type UserStudent = {
@@ -46,7 +69,10 @@ export type UserStudentsView = {
   students: UserStudent[];
 };
 
-type GrowthApplicability = Pick<UserStudentsGrowth, "equipSpecialAvailable" | "equipmentAvailable">;
+type GrowthApplicability = {
+  equipSpecialAvailable: boolean;
+  equipmentAvailable: [boolean, boolean, boolean];
+};
 
 export function canViewUserStudentGrowth(sensei: Sensei, viewerUserId?: number): boolean {
   if (sensei.id === viewerUserId) return true;
@@ -56,26 +82,110 @@ export function canViewUserStudentGrowth(sensei: Sensei, viewerUserId?: number):
 export function toUserStudentsGrowth(
   recruitedStudent: RecruitedStudent,
   applicability: GrowthApplicability & { abilityAvailable: boolean },
+  visuals?: StudentGrowthVisuals,
+  equipmentCatalog?: StudentGrowthEquipment,
+  equipmentCategories: string[] = [],
 ): UserStudentsGrowth {
   const abilityAvailable = applicability.abilityAvailable && recruitedStudent.tier > 5;
-  return {
+  const baseGrowth: UserStudentsGrowth = {
     level: recruitedStudent.level,
-    skillEx: recruitedStudent.skillEx,
-    skillNormal: recruitedStudent.skillNormal,
-    skillEnhanced: recruitedStudent.skillEnhanced,
-    skillSub: recruitedStudent.skillSub,
-    equip1: recruitedStudent.equip1,
-    equip2: recruitedStudent.equip2,
-    equip3: recruitedStudent.equip3,
     equipSpecial: applicability.equipSpecialAvailable ? recruitedStudent.equipSpecial : null,
     equipSpecialAvailable: applicability.equipSpecialAvailable,
-    equipmentAvailable: applicability.equipmentAvailable,
     abilityHp: abilityAvailable ? recruitedStudent.abilityHp : null,
     abilityAtk: abilityAvailable ? recruitedStudent.abilityAtk : null,
     abilityHeal: abilityAvailable ? recruitedStudent.abilityHeal : null,
-    abilityCatalogAvailable: applicability.abilityAvailable,
     abilityAvailable,
   };
+  if (visuals === undefined && equipmentCatalog === undefined) return baseGrowth;
+  if (visuals === undefined || equipmentCatalog === undefined) {
+    throw new Error("학생 성장 시각 자료를 함께 확인하지 못했어요");
+  }
+  const selectedSkills = selectGrowthSkills(recruitedStudent, visuals);
+  const equipmentVisuals = selectEquipmentVisuals(
+    recruitedStudent,
+    equipmentCatalog,
+    applicability.equipmentAvailable,
+    equipmentCategories,
+  );
+  return {
+    ...baseGrowth,
+    skillVisuals: {
+      ex: selectedSkills.ex,
+      normal: selectedSkills.public,
+      enhanced: selectedSkills.passive,
+      sub: selectedSkills.extra_passive,
+    },
+    equipmentVisuals,
+  };
+}
+
+type GrowthSkillVisuals = Record<StudentSkillTypeEnum, UserStudentsSkillVisual>;
+
+const growthSkillFields: Array<{
+  slot: StudentSkillTypeEnum;
+  levelKey: keyof Pick<RecruitedStudent, "skillEx" | "skillNormal" | "skillEnhanced" | "skillSub">;
+}> = [
+  { slot: StudentSkillTypeEnum.Ex, levelKey: "skillEx" },
+  { slot: StudentSkillTypeEnum.Public, levelKey: "skillNormal" },
+  { slot: StudentSkillTypeEnum.Passive, levelKey: "skillEnhanced" },
+  { slot: StudentSkillTypeEnum.ExtraPassive, levelKey: "skillSub" },
+];
+
+function selectGrowthSkills(recruitedStudent: RecruitedStudent, visuals: StudentGrowthVisuals): GrowthSkillVisuals {
+  const weaponStar = recruitedStudent.tier > 5 ? recruitedStudent.tier - 5 : 0;
+  const gearTier = recruitedStudent.equipSpecial ?? 0;
+  const configuration = selectUniqueMaximalSkillConfiguration(visuals.skillConfigurations, 0, weaponStar, gearTier);
+  if (!configuration) {
+    throw new Error("학생 성장 시각 자료의 스킬 설정을 선택하지 못했어요");
+  }
+
+  const skillByUid = new Map(visuals.skills.map((skill) => [skill.uid, skill]));
+  const selected: Partial<GrowthSkillVisuals> = {};
+  for (const { slot, levelKey } of growthSkillFields) {
+    const slotData = configuration.slots.find((candidate) => candidate.slot === slot);
+    if (!slotData) {
+      throw new Error("학생 성장 시각 자료의 스킬 슬롯을 확인하지 못했어요");
+    }
+    const reference = slotData.skills.find((candidate) => candidate.position === 0);
+    if (!reference?.skillUid) {
+      throw new Error("학생 성장 시각 자료의 스킬 참조를 확인하지 못했어요");
+    }
+    const skill = skillByUid.get(reference.skillUid);
+    if (!skill || skill.skillType !== slot) {
+      throw new Error("학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요");
+    }
+    const iconUrl = skill.iconUrl?.trim();
+    if (!iconUrl) {
+      throw new Error("학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요");
+    }
+    selected[slot] = {
+      iconUrl,
+      level: recruitedStudent[levelKey],
+      maxLevel: skill.maxLevel,
+    };
+  }
+  return selected as GrowthSkillVisuals;
+}
+
+function selectEquipmentVisuals(
+  recruitedStudent: RecruitedStudent,
+  equipmentCatalog: StudentGrowthEquipment,
+  equipmentAvailable: [boolean, boolean, boolean],
+  equipmentCategories: string[],
+): [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual] {
+  return [0, 1, 2].map((index) => {
+    const tier = [recruitedStudent.equip1, recruitedStudent.equip2, recruitedStudent.equip3][index];
+    if (!equipmentAvailable[index]) return { available: false, uid: null, tier: null };
+    const category = equipmentCategories[index];
+    if (!category) {
+      throw new Error("학생 성장 시각 자료의 장비 카테고리를 확인하지 못했어요");
+    }
+    const equipment = equipmentCatalog.find((candidate) => candidate.category === category && candidate.tier === tier);
+    if (tier !== null && !equipment) {
+      throw new Error("학생 성장 시각 자료의 장비 티어를 확인하지 못했어요");
+    }
+    return { available: true, uid: equipment?.uid ?? null, tier };
+  }) as [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual];
 }
 
 export async function getUserStudentsView(
@@ -95,25 +205,31 @@ export async function getUserStudentsView(
   const studentsByUid = new Map(allStudents.map((student) => [student.uid, student]));
 
   const applicabilityByStudentUid = new Map<string, GrowthApplicability & { abilityAvailable: boolean }>();
+  let growthVisualsByStudentUid: Map<string, StudentGrowthVisuals> | undefined;
+  let equipmentCatalog: StudentGrowthEquipment | undefined;
   if (view === "growth") {
     const recruitedStudentUids = recruitedStudents.map((recruitedStudent) => recruitedStudent.studentUid);
-    const [gearDataByStudentUid, weaponAvailabilityByStudentUid] = await Promise.all([
-      getStudentGearData(env, recruitedStudentUids),
+    const [weaponAvailabilityByStudentUid, growthVisuals, equipment] = await Promise.all([
       getStudentWeaponAvailability(env, recruitedStudentUids),
+      getStudentGrowthVisualsBatch(env, recruitedStudentUids),
+      recruitedStudentUids.length > 0 ? getStudentGrowthEquipmentCatalog(env) : Promise.resolve([]),
     ]);
+    growthVisualsByStudentUid = growthVisuals;
+    equipmentCatalog = equipment;
     for (const recruitedStudent of recruitedStudents) {
       const student = studentsByUid.get(recruitedStudent.studentUid);
       if (!student) {
         throw new Error("보유 학생 정보를 확인하지 못했어요");
       }
-      if (!gearDataByStudentUid.has(recruitedStudent.studentUid)) {
-        throw new Error("학생 애용품 정보를 확인하지 못했어요");
-      }
       if (!weaponAvailabilityByStudentUid.has(recruitedStudent.studentUid)) {
         throw new Error("학생 고유무기 정보를 확인하지 못했어요");
       }
+      const growthVisual = growthVisualsByStudentUid?.get(recruitedStudent.studentUid);
+      if (!growthVisual) {
+        throw new Error("학생 성장 시각 자료를 확인하지 못했어요");
+      }
       applicabilityByStudentUid.set(recruitedStudent.studentUid, {
-        equipSpecialAvailable: gearDataByStudentUid.get(recruitedStudent.studentUid) !== null,
+        equipSpecialAvailable: growthVisual.gearAvailable,
         equipmentAvailable: [0, 1, 2].map((index) => Boolean(student.equipments[index])) as [boolean, boolean, boolean],
         abilityAvailable: weaponAvailabilityByStudentUid.get(recruitedStudent.studentUid) === true,
       });
@@ -146,6 +262,9 @@ export async function getUserStudentsView(
         growth: toUserStudentsGrowth(
           recruitedStudent,
           applicabilityByStudentUid.get(student.uid) as GrowthApplicability & { abilityAvailable: boolean },
+          growthVisualsByStudentUid?.get(student.uid),
+          equipmentCatalog,
+          student.equipments,
         ),
       };
     }),

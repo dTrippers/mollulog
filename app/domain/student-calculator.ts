@@ -1,4 +1,5 @@
 import { EQUIPMENT_LEVEL_MAX_LEVEL } from "~/domain/student-growth-state";
+import { selectUniqueMaximalSkillConfiguration } from "~/domain/student-skill-configuration";
 import type {
   StudentCatalogStat,
   StudentCatalogStatGrowthType,
@@ -289,23 +290,13 @@ export function selectStudentSkills(
   const gearTier = student.catalog.gear
     ? Math.max(0, ...getActiveGearTiers(student.catalog.gear, state.equipSpecial, state.bond).map((tier) => tier.tier))
     : state.equipSpecial;
-  const candidates = student.catalog.skillConfigurations.filter(
-    (configuration) =>
-      configuration.formIndex === formIndex &&
-      configuration.minimumWeaponStar <= state.weaponStar &&
-      configuration.minimumGearTier <= gearTier,
+  const configuration = selectUniqueMaximalSkillConfiguration(
+    student.catalog.skillConfigurations,
+    formIndex,
+    state.weaponStar,
+    gearTier,
   );
-  const maximal = candidates.filter(
-    (candidate) =>
-      !candidates.some(
-        (other) =>
-          other !== candidate &&
-          other.minimumWeaponStar >= candidate.minimumWeaponStar &&
-          other.minimumGearTier >= candidate.minimumGearTier &&
-          (other.minimumWeaponStar > candidate.minimumWeaponStar || other.minimumGearTier > candidate.minimumGearTier),
-      ),
-  );
-  if (maximal.length !== 1) return [];
+  if (!configuration) return [];
 
   const levelBySlot: Record<StudentSkillTypeEnum, number> = {
     ex: state.skillEx,
@@ -314,7 +305,7 @@ export function selectStudentSkills(
     extra_passive: state.skillSub,
   };
   const skillByUid = new Map(student.skills.map((skill) => [skill.uid, skill]));
-  return maximal[0].slots.flatMap((slot) =>
+  return configuration.slots.flatMap((slot) =>
     slot.skills.flatMap((reference) => {
       const skill = reference.skillUid ? skillByUid.get(reference.skillUid) : undefined;
       if (!skill) return [];

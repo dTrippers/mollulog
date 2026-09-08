@@ -1,62 +1,33 @@
-import { PencilSquareIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useFetcher } from "react-router";
-import { StudentCard, TierSelector } from "~/components/features/students";
-import { Button, Callout, NumberInput, SectionCard } from "~/components/primitives";
-import { useNumberInputGridNavigation } from "~/components/primitives/useNumberInputGridNavigation";
-import type { UserStudent, UserStudentsGrowth } from "~/views/user-students.server";
+import { PencilSquareIcon } from "@heroicons/react/20/solid";
+import { Link } from "react-router";
+import { StudentCard, StudentSkillIcon } from "~/components/features/students";
+import { SectionCard } from "~/components/primitives";
+import { equipmentImageUrl } from "~/models/assets";
+import type {
+  UserStudent,
+  UserStudentsEquipmentVisual,
+  UserStudentsGrowthWithVisuals,
+  UserStudentsSkillVisual,
+} from "~/views/user-students.server";
 
-export const CURRENT_STATE_INTENT = "current-state";
-
-type CurrentStateActionResult =
-  | { intent: typeof CURRENT_STATE_INTENT; success: true }
-  | { intent: typeof CURRENT_STATE_INTENT; error: string };
-
-type GrowthStudent = UserStudent & { growth: UserStudentsGrowth; tier: number };
-
-type StudentGrowthDraft = {
-  tier: number;
-  level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
-  equipSpecial: number | null;
-  abilityHp: number | null;
-  abilityAtk: number | null;
-  abilityHeal: number | null;
-};
+type GrowthStudent = UserStudent & { growth: UserStudentsGrowthWithVisuals; tier: number };
 
 type StudentGrowthCardProps = {
   student: GrowthStudent;
-  editable: boolean;
-  editDisabled?: boolean;
-  editing: boolean;
-  onEdit: () => void;
-  onCancel: () => void;
-  onSaved: () => void;
-  onDirtyChange: (studentUid: string, dirty: boolean) => void;
+  editable?: boolean;
 };
 
 const skillFields = [
-  { key: "skillEx", label: "EX", min: 1, max: 5 },
-  { key: "skillNormal", label: "기본", min: 1, max: 10 },
-  { key: "skillEnhanced", label: "강화", min: 1, max: 10 },
-  { key: "skillSub", label: "서브", min: 1, max: 10 },
-] as const satisfies ReadonlyArray<{
-  key: keyof Pick<StudentGrowthDraft, "skillEx" | "skillNormal" | "skillEnhanced" | "skillSub">;
-  label: string;
-  min: number;
-  max: number;
-}>;
+  { key: "ex", label: "EX" },
+  { key: "normal", label: "기본" },
+  { key: "enhanced", label: "강화" },
+  { key: "sub", label: "서브" },
+] as const;
 
 const equipmentFields = [
-  { key: "equip1", label: "1", index: 0 },
-  { key: "equip2", label: "2", index: 1 },
-  { key: "equip3", label: "3", index: 2 },
+  { key: "equip1", label: "1" },
+  { key: "equip2", label: "2" },
+  { key: "equip3", label: "3" },
 ] as const;
 
 const abilityFields = [
@@ -65,45 +36,39 @@ const abilityFields = [
   { key: "abilityHeal", label: "치유력" },
 ] as const;
 
-function createDraft(student: GrowthStudent): StudentGrowthDraft {
-  return {
-    tier: student.tier,
-    level: student.growth.level,
-    skillEx: student.growth.skillEx,
-    skillNormal: student.growth.skillNormal,
-    skillEnhanced: student.growth.skillEnhanced,
-    skillSub: student.growth.skillSub,
-    equip1: student.growth.equip1,
-    equip2: student.growth.equip2,
-    equip3: student.growth.equip3,
-    equipSpecial: student.growth.equipSpecial,
-    abilityHp: student.growth.abilityHp,
-    abilityAtk: student.growth.abilityAtk,
-    abilityHeal: student.growth.abilityHeal,
-  };
-}
-
-export function isAbilityEditable(abilityCatalogAvailable: boolean, tier: number): boolean {
-  return abilityCatalogAvailable && tier > 5;
-}
-
-export function shouldAutoFocusGrowthEditor(editing: boolean): boolean {
-  return editing;
-}
-
 function displayValue(value: number | null, prefix = "", maxValue?: number) {
-  if (value == null) return "미등록";
+  if (value == null) return "-";
   if (maxValue !== undefined && value === maxValue) return "MAX";
   return `${prefix}${value}`;
 }
 
+function valueDescription(value: number | null, prefix = "", maxValue?: number, unavailable = false) {
+  if (unavailable) return "해당 없음";
+  if (value == null) return "미등록";
+  return displayValue(value, prefix, maxValue);
+}
+
+function equipmentDisplayValue(visual: UserStudentsEquipmentVisual): string {
+  if (!visual.available) return "-";
+  if (visual.tier == null) return "미장착";
+  return displayValue(visual.tier, "T");
+}
+
+function equipmentValueDescription(visual: UserStudentsEquipmentVisual): string {
+  if (!visual.available) return "해당 없음";
+  if (visual.tier == null) return "미장착";
+  return displayValue(visual.tier, "T");
+}
+
 function Metric({
+  studentName,
   label,
   value,
   prefix = "",
   maxValue,
   unavailable = false,
 }: {
+  studentName: string;
   label: string;
   value: number | null;
   prefix?: string;
@@ -111,337 +76,194 @@ function Metric({
   unavailable?: boolean;
 }) {
   return (
-    <div className="min-w-0">
-      <dt className="truncate text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-0.5 whitespace-nowrap text-xs font-semibold tabular-nums">
-        {unavailable ? "해당 없음" : displayValue(value, prefix, maxValue)}
+    <div
+      className="min-w-0"
+      role="img"
+      aria-label={`${studentName} ${label} ${valueDescription(value, prefix, maxValue, unavailable)}`}
+      aria-disabled={unavailable}
+    >
+      <dt className="truncate text-xs text-muted-foreground" aria-hidden="true">
+        {label}
+      </dt>
+      <dd className="mt-0.5 whitespace-nowrap text-xs font-semibold tabular-nums" aria-hidden="true">
+        {unavailable ? "-" : displayValue(value, prefix, maxValue)}
       </dd>
     </div>
   );
 }
 
-function MetricGroup({
-  title,
-  children,
-  compact = false,
-}: {
-  title: string;
-  children: React.ReactNode;
-  compact?: boolean;
-}) {
-  const sectionClassName = compact ? "flex items-start gap-1" : "space-y-1.5";
-  const headingClassName = compact
-    ? "w-6 shrink-0 pt-0.5 text-xs font-semibold text-muted-foreground"
-    : "text-xs font-semibold text-muted-foreground";
-
+function MetricGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className={sectionClassName}>
-      <h4 className={headingClassName}>{title}</h4>
-      <div className={compact ? "min-w-0 flex-1" : undefined}>{children}</div>
+    <section className="flex min-w-0 items-start gap-1">
+      <h4 className="w-6 shrink-0 pt-0.5 text-xs font-semibold text-muted-foreground">{title}</h4>
+      <div className="min-w-0 flex-1">{children}</div>
     </section>
   );
 }
 
-export default function StudentGrowthCard({
-  student,
-  editable,
-  editDisabled = false,
-  editing,
-  onEdit,
-  onCancel,
-  onSaved,
-  onDirtyChange,
-}: StudentGrowthCardProps) {
-  const fetcher = useFetcher<CurrentStateActionResult>();
-  const [draft, setDraft] = useState<StudentGrowthDraft>(() => createDraft(student));
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const saveRequestedRef = useRef(false);
-  const savedDraft = useMemo(() => createDraft(student), [student]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft);
-  const saving = fetcher.state !== "idle";
-  const abilityAvailable = isAbilityEditable(student.growth.abilityCatalogAvailable, draft.tier);
-  const { getInputProps } = useNumberInputGridNavigation({ tabNavigation: true });
-
-  useEffect(() => {
-    if (!editing) {
-      setDraft(savedDraft);
-    }
-  }, [editing, savedDraft]);
-
-  useEffect(() => {
-    if (editing) onDirtyChange(student.uid, dirty);
-  }, [dirty, editing, onDirtyChange, student.uid]);
-
-  useEffect(() => {
-    if (!saveRequestedRef.current || fetcher.state !== "idle" || !fetcher.data) return;
-    saveRequestedRef.current = false;
-    if ("success" in fetcher.data && fetcher.data.success) {
-      onDirtyChange(student.uid, false);
-      onSaved();
-    } else if ("error" in fetcher.data) {
-      setSaveError(fetcher.data.error);
-    }
-  }, [fetcher.data, fetcher.state, onDirtyChange, onSaved, student.uid]);
-
-  const updateDraft = <K extends keyof StudentGrowthDraft>(key: K, value: StudentGrowthDraft[K]) => {
-    setDraft((current) => ({ ...current, [key]: value }));
-  };
-
-  const handleSave = () => {
-    if (!dirty || saving) return;
-    const formData = new FormData();
-    formData.set("intent", CURRENT_STATE_INTENT);
-    formData.set("studentUid", student.uid);
-    if (draft.tier !== savedDraft.tier) {
-      formData.set("tier", String(draft.tier));
-    }
-    setSaveError(null);
-    for (const key of ["level", "skillEx", "skillNormal", "skillEnhanced", "skillSub"] as const) {
-      if (draft[key] !== savedDraft[key]) {
-        formData.set(key, draft[key] == null ? "" : String(draft[key]));
-      }
-    }
-    for (const field of equipmentFields) {
-      if (student.growth.equipmentAvailable[field.index] && draft[field.key] !== savedDraft[field.key]) {
-        formData.set(field.key, draft[field.key] == null ? "" : String(draft[field.key]));
-      }
-    }
-    if (student.growth.equipSpecialAvailable && draft.equipSpecial !== savedDraft.equipSpecial) {
-      formData.set("equipSpecial", draft.equipSpecial == null ? "" : String(draft.equipSpecial));
-    }
-    if (abilityAvailable) {
-      for (const field of abilityFields) {
-        if (draft[field.key] !== savedDraft[field.key]) {
-          formData.set(field.key, draft[field.key] == null ? "" : String(draft[field.key]));
-        }
-      }
-    }
-    saveRequestedRef.current = true;
-    fetcher.submit(formData, { method: "post" });
-  };
-
-  const handleCancel = () => {
-    if (saving) return;
-    setDraft(savedDraft);
-    onDirtyChange(student.uid, false);
-    onCancel();
-  };
-
-  if (!editing) {
-    return (
-      <SectionCard className="min-w-0 space-y-3 p-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <div className="w-11 shrink-0">
-            <StudentCard uid={student.uid} name={student.name} hideName tier={student.tier} flush />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h3 className="break-keep text-base font-semibold">{student.name}</h3>
-            <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-              <span className="whitespace-nowrap">학생 Lv. {displayValue(student.growth.level)}</span>
-            </div>
-          </div>
-          {editable ? (
-            <Button
-              icon={PencilSquareIcon}
-              text="편집"
-              variant="secondary"
-              size="xs"
-              disabled={editDisabled}
-              onClick={onEdit}
-            />
-          ) : null}
-        </div>
-
-        <MetricGroup title="스킬" compact>
-          <dl className="grid grid-cols-4 gap-x-1 gap-y-2">
-            {skillFields.map((field) => (
-              <Metric key={field.key} label={field.label} value={student.growth[field.key]} maxValue={field.max} />
-            ))}
-          </dl>
-        </MetricGroup>
-        <MetricGroup title="장비" compact>
-          <dl className="grid grid-cols-4 gap-x-1 gap-y-2">
-            {equipmentFields.map((field) => (
-              <Metric
-                key={field.key}
-                label={field.label}
-                value={student.growth[field.key]}
-                prefix="T"
-                unavailable={!student.growth.equipmentAvailable[field.index]}
-              />
-            ))}
-            <Metric
-              label="애용품"
-              value={student.growth.equipSpecial}
-              prefix="T"
-              unavailable={!student.growth.equipSpecialAvailable}
-            />
-          </dl>
-        </MetricGroup>
-        {student.growth.abilityAvailable ? (
-          <MetricGroup title="개방" compact>
-            <dl className="grid grid-cols-3 gap-x-1 gap-y-2">
-              {abilityFields.map((field) => (
-                <Metric key={field.key} label={field.label} value={student.growth[field.key]} />
-              ))}
-            </dl>
-          </MetricGroup>
-        ) : null}
-      </SectionCard>
-    );
-  }
-
+function SkillTile({
+  attackType,
+  studentName,
+  label,
+  visual,
+}: {
+  attackType: GrowthStudent["attackType"];
+  studentName: string;
+  label: string;
+  visual: UserStudentsSkillVisual;
+}) {
+  const level = displayValue(visual.level, "Lv.", visual.maxLevel);
   return (
-    <SectionCard className="min-w-0 space-y-3 p-3 ring-2 ring-primary/20 md:p-4">
-      <div className="flex min-w-0 flex-wrap items-start gap-2">
+    <div
+      className="relative flex h-12 min-w-0 items-center justify-center overflow-hidden"
+      role="img"
+      aria-label={`${studentName} ${label} 스킬 ${valueDescription(visual.level, "Lv.", visual.maxLevel)}`}
+    >
+      <StudentSkillIcon attackType={attackType} iconUrl={visual.iconUrl} muted size="sm" />
+      <span className="absolute right-1 bottom-1 z-20 rounded-sm bg-card px-1 text-xs font-semibold leading-4 tabular-nums">
+        {level}
+      </span>
+    </div>
+  );
+}
+
+function EquipmentTile({
+  studentName,
+  label,
+  visual,
+}: {
+  studentName: string;
+  label: string;
+  visual: UserStudentsEquipmentVisual;
+}) {
+  const value = equipmentDisplayValue(visual);
+  return (
+    <div
+      className="relative flex h-12 min-w-0 items-center justify-center overflow-hidden rounded-md bg-muted/20 sm:aspect-square sm:h-auto"
+      role="img"
+      aria-label={`${studentName} 장비 ${label} ${equipmentValueDescription(visual)}`}
+      aria-disabled={!visual.available}
+    >
+      {visual.uid ? (
+        <img src={equipmentImageUrl(visual.uid)} alt="" className="size-10 shrink-0 object-contain" />
+      ) : null}
+      <span className="absolute right-1 bottom-1 whitespace-nowrap rounded-sm bg-card px-0.5 text-[10px] font-semibold leading-4 tabular-nums">
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function SpecialEquipmentTile({
+  studentName,
+  visual,
+  value,
+}: {
+  studentName: string;
+  visual: UserStudentsEquipmentVisual;
+  value: number | null;
+}) {
+  const displayValueText = visual.available ? (value == null ? "미장착" : displayValue(value, "T")) : "-";
+  const accessibleValue = visual.available ? (value == null ? "미장착" : displayValue(value, "T")) : "해당 없음";
+  return (
+    <div
+      className="relative flex h-12 min-w-0 flex-col justify-between rounded-md bg-muted/20 p-1 sm:aspect-square sm:h-auto"
+      role="img"
+      aria-label={`${studentName} 애용품 ${accessibleValue}`}
+      aria-disabled={!visual.available}
+    >
+      <span className="whitespace-nowrap text-[10px] font-semibold leading-4 text-muted-foreground">애용품</span>
+      <span className="self-end whitespace-nowrap text-[10px] font-semibold tabular-nums">{displayValueText}</span>
+    </div>
+  );
+}
+
+export default function StudentGrowthCard({ student, editable = false }: StudentGrowthCardProps) {
+  return (
+    <SectionCard className="min-w-0 space-y-2.5 p-3 md:p-3">
+      <div className="flex min-w-0 items-center gap-2">
         <div className="w-11 shrink-0">
-          <StudentCard uid={student.uid} name={student.name} hideName tier={undefined} flush />
+          <StudentCard uid={student.uid} name={student.name} hideName tier={student.tier} flush />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="break-keep text-base font-semibold">{student.name}</h3>
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
-            <span>성급</span>
-            <TierSelector
-              initialTier={student.initialTier}
-              currentTier={draft.tier}
-              iconSize="sm"
-              disabled={saving}
-              onTierChange={(tier) => updateDraft("tier", tier)}
-            />
-          </div>
+          <h3 className="break-keep text-sm font-semibold">{student.name}</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            <span role="img" aria-label={`${student.name} 학생 레벨 ${valueDescription(student.growth.level)}`}>
+              학생 Lv. <span aria-hidden="true">{displayValue(student.growth.level)}</span>
+            </span>
+          </p>
         </div>
-        <NumberInput
-          label="학생 Lv"
-          nullable
-          value={draft.level}
-          minValue={1}
-          maxValue={90}
-          controlClassName="w-20"
-          disabled={saving}
-          onChange={(value) => updateDraft("level", value)}
-          inputProps={{
-            ...getInputProps({ rowIndex: 0, columnIndex: 0, disabled: saving }),
-            "aria-label": `${student.name} 학생 레벨`,
-            autoFocus: shouldAutoFocusGrowthEditor(editing),
-          }}
-        />
+        {editable ? (
+          <Link
+            to={`/students/${encodeURIComponent(student.uid)}#student-basic-info`}
+            aria-label={`${student.name} 성장 상태 편집`}
+            className="ml-auto inline-flex shrink-0 self-start rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          >
+            <PencilSquareIcon className="size-4" aria-hidden="true" />
+          </Link>
+        ) : null}
       </div>
+
       <MetricGroup title="스킬">
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
-          {skillFields.map((field, index) => (
-            <NumberInput
-              key={field.key}
-              label={field.label}
-              nullable
-              value={draft[field.key]}
-              minValue={field.min}
-              maxValue={field.max}
-              fullWidth
-              showDecrease={false}
-              showIncrease={false}
-              disabled={saving}
-              onChange={(value) => updateDraft(field.key, value)}
-              inputProps={{
-                ...getInputProps({ rowIndex: 1, columnIndex: index, disabled: saving }),
-                "aria-label": `${student.name} ${field.label} 스킬 레벨`,
-              }}
-            />
-          ))}
+        <div className="space-y-0">
+          <div
+            className="grid h-4 grid-cols-4 gap-1 text-center text-[10px] font-semibold leading-4 text-muted-foreground"
+            aria-hidden="true"
+          >
+            {skillFields.map((field) => (
+              <span key={field.key}>{field.label}</span>
+            ))}
+          </div>
+          <div className="grid grid-cols-4 gap-1">
+            {skillFields.map((field) => (
+              <SkillTile
+                key={field.key}
+                attackType={student.attackType}
+                studentName={student.name}
+                label={field.label}
+                visual={student.growth.skillVisuals[field.key]}
+              />
+            ))}
+          </div>
         </div>
       </MetricGroup>
 
       <MetricGroup title="장비">
-        <div className="grid grid-cols-4 gap-2 sm:gap-3">
-          {equipmentFields.map((field, index) =>
-            student.growth.equipmentAvailable[field.index] ? (
-              <NumberInput
-                key={field.key}
-                label={field.label}
-                nullable
-                value={draft[field.key]}
-                minValue={1}
-                maxValue={10}
-                fullWidth
-                showDecrease={false}
-                showIncrease={false}
-                disabled={saving}
-                onChange={(value) => updateDraft(field.key, value)}
-                inputProps={{
-                  ...getInputProps({ rowIndex: 2, columnIndex: index, disabled: saving }),
-                  "aria-label": `${student.name} 장비 ${field.label} 티어`,
-                }}
-              />
-            ) : (
-              <div key={field.key} className="min-w-0 py-1 text-xs text-muted-foreground">
-                장비 {field.label}: 해당 없음
-              </div>
-            ),
-          )}
-          {student.growth.equipSpecialAvailable ? (
-            <NumberInput
-              label="애용품"
-              nullable
-              value={draft.equipSpecial}
-              minValue={1}
-              maxValue={2}
-              fullWidth
-              showDecrease={false}
-              showIncrease={false}
-              disabled={saving}
-              onChange={(value) => updateDraft("equipSpecial", value)}
-              inputProps={{
-                ...getInputProps({ rowIndex: 2, columnIndex: 3, disabled: saving }),
-                "aria-label": `${student.name} 애용품 티어`,
-              }}
+        <div className="grid grid-cols-4 gap-1">
+          {equipmentFields.map((field, index) => (
+            <EquipmentTile
+              key={field.key}
+              studentName={student.name}
+              label={field.label}
+              visual={student.growth.equipmentVisuals[index]}
             />
-          ) : (
-            <div className="min-w-0 py-1 text-xs text-muted-foreground">애용품: 해당 없음</div>
-          )}
+          ))}
+          {student.growth.equipSpecialAvailable ? (
+            <SpecialEquipmentTile
+              studentName={student.name}
+              visual={{ available: true, uid: null, tier: student.growth.equipSpecial }}
+              value={student.growth.equipSpecial}
+            />
+          ) : null}
         </div>
       </MetricGroup>
 
-      {abilityAvailable ? (
+      {student.growth.abilityAvailable ? (
         <MetricGroup title="개방">
-          <div className="grid grid-cols-3 gap-3">
-            {abilityFields.map((field, index) => (
-              <NumberInput
+          <dl className="grid grid-cols-3 gap-x-1 gap-y-1.5">
+            {abilityFields.map((field) => (
+              <Metric
                 key={field.key}
+                studentName={student.name}
                 label={field.label}
-                nullable
-                value={draft[field.key]}
-                minValue={0}
-                maxValue={25}
-                fullWidth
-                showDecrease={false}
-                showIncrease={false}
-                disabled={saving}
-                onChange={(value) => updateDraft(field.key, value)}
-                inputProps={{
-                  ...getInputProps({ rowIndex: 3, columnIndex: index, disabled: saving }),
-                  "aria-label": `${student.name} ${field.label} 단계`,
-                }}
+                value={student.growth[field.key]}
               />
             ))}
-          </div>
+          </dl>
         </MetricGroup>
       ) : null}
-
-      {saveError ? <Callout tone="destructive" title={saveError} /> : null}
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        <span className="mr-auto text-xs text-muted-foreground" aria-live="polite">
-          {saving ? "저장 중이에요..." : dirty ? "변경 사항이 있어요" : "변경 사항 없음"}
-        </span>
-        <Button text="취소" variant="secondary" size="sm" disabled={saving} onClick={handleCancel} />
-        <Button
-          text={saving ? "저장 중" : "저장"}
-          variant="primary"
-          size="sm"
-          disabled={!dirty || saving}
-          onClick={handleSave}
-        />
-      </div>
     </SectionCard>
   );
 }
 
-export type { CurrentStateActionResult, GrowthStudent, StudentGrowthCardProps, StudentGrowthDraft };
+export type { GrowthStudent, StudentGrowthCardProps };

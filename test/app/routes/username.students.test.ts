@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createStudentFilterState } from "~/components/features/students/StudentFilter";
@@ -7,18 +8,17 @@ import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
   getRecruitedStudents,
-  patchRecruitedStudentCurrentState,
   RecruitedStudentValidationError,
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { updateSensei } from "~/models/sensei";
-import { getAllStudents, getAllStudentsMap, getStudentDetailData } from "~/models/student";
+import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import {
   action,
+  growthPrivateCalloutDismissalStorageKey,
   loader,
-  resolveGrowthVisibility,
+  parseGrowthPrivateCalloutDismissal,
   USER_STUDENT_FILTER_COOKIE_NAME,
   USER_STUDENT_FILTER_SORTS,
 } from "~/routes/$username.students";
@@ -42,19 +42,13 @@ jest.mock("~/models/recruited-student", () => ({
   removeRecruitedStudent: jest.fn(),
   upsertRecruitedStudent: jest.fn(),
   addRecruitedStudents: jest.fn(),
-  patchRecruitedStudentCurrentState: jest.fn(),
   RecruitedStudentValidationError: class RecruitedStudentValidationError extends Error {},
 }));
 
 jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
   getAllStudentsMap: jest.fn(),
-  getStudentDetailData: jest.fn(),
   getStudentWeaponAvailability: jest.fn(),
-}));
-
-jest.mock("~/models/sensei", () => ({
-  updateSensei: jest.fn(),
 }));
 
 jest.mock("~/components/features/students", () => ({
@@ -92,11 +86,6 @@ const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof 
 const mockedRemoveRecruitedStudent = removeRecruitedStudent as jest.MockedFunction<typeof removeRecruitedStudent>;
 const mockedUpsertRecruitedStudent = upsertRecruitedStudent as jest.MockedFunction<typeof upsertRecruitedStudent>;
 const mockedAddRecruitedStudents = addRecruitedStudents as jest.MockedFunction<typeof addRecruitedStudents>;
-const mockedPatchRecruitedStudentCurrentState = patchRecruitedStudentCurrentState as jest.MockedFunction<
-  typeof patchRecruitedStudentCurrentState
->;
-const mockedGetStudentDetailData = getStudentDetailData as jest.MockedFunction<typeof getStudentDetailData>;
-const mockedUpdateSensei = updateSensei as jest.MockedFunction<typeof updateSensei>;
 const logger = {
   debug: jest.fn(),
   info: jest.fn(),
@@ -155,15 +144,37 @@ beforeEach(() => {
   mockedRemoveRecruitedStudent.mockResolvedValue(undefined);
   mockedUpsertRecruitedStudent.mockResolvedValue(undefined);
   mockedAddRecruitedStudents.mockResolvedValue(undefined);
-  mockedPatchRecruitedStudentCurrentState.mockResolvedValue({} as never);
-  mockedGetStudentDetailData.mockResolvedValue(undefined);
-  mockedUpdateSensei.mockResolvedValue({});
 });
 
 describe("@username students loader", () => {
-  it("uses loader visibility after a fetcher request settles even when its response is retained", () => {
-    expect(resolveGrowthVisibility(true, "idle", false)).toBe(true);
-    expect(resolveGrowthVisibility(false, "loading", true)).toBe(true);
+  it("keeps owner growth callout priority and public sharing states in the students route", () => {
+    const source = readFileSync("app/routes/$username.students.tsx", "utf8");
+
+    expect(source).toContain('title="성장도는 나만 확인할 수 있어요"');
+    expect(source).toContain('aria-label="성장도 비공개 안내 닫기"');
+    expect(source).toContain("growthPrivateCalloutDismissalLoaded");
+    expect(source).toContain("growthPrivateCalloutDismissalStorageKey");
+    expect(source).toContain("JSON.stringify([growthPrivateCalloutId])");
+    expect(source).toContain('to="/edit"');
+    expect(source).toContain("프로필 관리");
+    expect(source).toContain('profileVisibility === "private"');
+    expect(source).toContain("ShareStudentGrowthButton");
+    expect(source).toContain('text: "자세히"');
+    expect(source).toContain(
+      'className="grid grid-cols-1 justify-start gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,14.5rem),14.5rem))]"',
+    );
+    expect(source).not.toContain("repeat(auto-fit,minmax(min(100%,16rem),1fr))");
+    expect(source).not.toContain("GrowthVisibilityControl");
+    expect(source).not.toContain("성장 상태 편집");
+  });
+
+  it("parses only the own growth callout dismissal from browser storage", () => {
+    expect(growthPrivateCalloutDismissalStorageKey).toBe("mollulog::dismissed-growth-private-callout");
+    expect(parseGrowthPrivateCalloutDismissal(null)).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal("[]")).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["other-notice"]))).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["student-growth-private"]))).toBe(true);
+    expect(parseGrowthPrivateCalloutDismissal("invalid")).toBe(false);
   });
 
   it("seeds the first render from the user student filter cookie", async () => {
@@ -367,33 +378,6 @@ describe("@username students action", () => {
     expect(forbidden.data.error).toBe("본인 학생부만 수정할 수 있어요");
   });
 
-  it("authorizes mutations by immutable sensei ID instead of username", async () => {
-    const formData = new FormData();
-    formData.append("intent", "growth-visibility");
-    formData.append("growthVisibility", "on");
-
-    mockedGetActiveSensei.mockResolvedValueOnce({ id: 1, uid: "sensei-1", username: "same-name" } as Awaited<
-      ReturnType<typeof getActiveSensei>
-    >);
-    mockedGetRouteSensei.mockResolvedValueOnce({ id: 2, uid: "sensei-2", username: "same-name" } as Awaited<
-      ReturnType<typeof getRouteSensei>
-    >);
-    const forbidden = expectDataResult<{ error: string }>(await action(createActionArgs(formData)));
-    expect(forbidden.init?.status).toBe(403);
-    expect(mockedUpdateSensei).not.toHaveBeenCalled();
-
-    mockedGetActiveSensei.mockResolvedValueOnce({ id: 1, uid: "sensei-1", username: "old-name" } as Awaited<
-      ReturnType<typeof getActiveSensei>
-    >);
-    mockedGetRouteSensei.mockResolvedValueOnce({ id: 1, uid: "sensei-1", username: "new-name" } as Awaited<
-      ReturnType<typeof getRouteSensei>
-    >);
-    await expect(action(createActionArgs(formData))).resolves.toMatchObject({
-      data: { intent: "growth-visibility", success: true },
-    });
-    expect(mockedUpdateSensei).toHaveBeenCalledTimes(1);
-  });
-
   it("keeps single add and delete dispatch unchanged", async () => {
     const addFormData = new FormData();
     addFormData.append("studentUid", "student-a");
@@ -466,107 +450,5 @@ describe("@username students action", () => {
       writeError,
       expect.objectContaining({ route: "username.students.action", operation: "single-write" }),
     );
-  });
-
-  it("saves the separate growth visibility setting", async () => {
-    const formData = new FormData();
-    formData.append("intent", "growth-visibility");
-    formData.append("growthVisibility", "on");
-
-    const response = expectDataResult<{ intent: string; success: true; growthVisibility: boolean }>(
-      await action(createActionArgs(formData)),
-    );
-
-    expect(response.data).toEqual({ intent: "growth-visibility", success: true, growthVisibility: true });
-    expect(mockedUpdateSensei).toHaveBeenCalledWith(env, 1, { growthVisibility: true }, expect.any(Object));
-  });
-
-  it("patches only visible current fields and permits an omitted tier", async () => {
-    mockedGetAllStudentsMap.mockResolvedValueOnce({
-      "student-a": { uid: "student-a", released: true, initialTier: 3 },
-    } as never);
-    mockedGetRecruitedStudents.mockResolvedValueOnce([{ studentUid: "student-a", tier: 6 }] as never);
-    mockedGetStudentDetailData.mockResolvedValueOnce({
-      student: { equipments: ["hat", "bag", "watch"], catalog: { gear: {}, weapon: {} } },
-      studentCatalog: {
-        equipment: [
-          { category: "hat", tier: 7, maxLevel: 70 },
-          { category: "bag", tier: 7, maxLevel: 70 },
-          { category: "watch", tier: 7, maxLevel: 70 },
-        ],
-      },
-    } as never);
-    const formData = new FormData();
-    formData.append("intent", "current-state");
-    formData.append("studentUid", "student-a");
-    formData.append("level", "81");
-
-    const response = expectDataResult<{ intent: string; success: true }>(await action(createActionArgs(formData)));
-
-    expect(response.data).toEqual({ intent: "current-state", success: true });
-    expect(mockedPatchRecruitedStudentCurrentState).toHaveBeenCalledWith(
-      env,
-      1,
-      "student-a",
-      { level: 81 },
-      expect.objectContaining({ equipmentMaxLevelsByTier: expect.any(Array) }),
-    );
-  });
-
-  it("rejects an unreleased student before reading or writing current state", async () => {
-    mockedGetAllStudentsMap.mockResolvedValueOnce({
-      "student-a": { uid: "student-a", released: false, initialTier: 3 },
-    } as never);
-    const formData = new FormData();
-    formData.append("intent", "current-state");
-    formData.append("studentUid", "student-a");
-    formData.append("level", "81");
-
-    const response = expectDataResult<{ intent: string; error: string }>(await action(createActionArgs(formData)));
-
-    expect(response.init?.status).toBe(400);
-    expect(response.data.error).toBe("출시되지 않은 학생이에요");
-    expect(mockedGetRecruitedStudents).not.toHaveBeenCalled();
-    expect(mockedPatchRecruitedStudentCurrentState).not.toHaveBeenCalled();
-  });
-
-  it("rejects hidden fields before any current-state write", async () => {
-    const formData = new FormData();
-    formData.append("intent", "current-state");
-    formData.append("studentUid", "student-a");
-    formData.append("weaponLevel", "20");
-
-    const response = expectDataResult<{ intent: string; error: string }>(await action(createActionArgs(formData)));
-
-    expect(response.init?.status).toBe(400);
-    expect(response.data).toEqual({ intent: "current-state", error: "학생 성장 상태 입력이 올바르지 않아요" });
-    expect(mockedPatchRecruitedStudentCurrentState).not.toHaveBeenCalled();
-    expect(mockedGetAllStudentsMap).not.toHaveBeenCalled();
-  });
-
-  it("maps hidden-state tier conflicts to a validation response without writing", async () => {
-    mockedGetAllStudentsMap.mockResolvedValueOnce({
-      "student-a": { uid: "student-a", released: true, initialTier: 3 },
-    } as never);
-    mockedGetRecruitedStudents.mockResolvedValueOnce([{ studentUid: "student-a", tier: 6 }] as never);
-    mockedGetStudentDetailData.mockResolvedValueOnce({
-      student: { equipments: ["hat", "bag", "watch"], catalog: { gear: {}, weapon: {} } },
-      studentCatalog: { equipment: [] },
-    } as never);
-    mockedPatchRecruitedStudentCurrentState.mockRejectedValueOnce(
-      new RecruitedStudentValidationError("고유무기 레벨은(는) 현재 성급 기준 0부터 0 사이만 입력할 수 있어요"),
-    );
-    const formData = new FormData();
-    formData.append("intent", "current-state");
-    formData.append("studentUid", "student-a");
-    formData.append("tier", "5");
-    formData.append("level", "81");
-
-    const response = expectDataResult<{ intent: string; error: string }>(await action(createActionArgs(formData)));
-
-    expect(response.init?.status).toBe(400);
-    expect(response.data.error).toBe("고유무기 레벨은(는) 현재 성급 기준 0부터 0 사이만 입력할 수 있어요");
-    expect(mockedPatchRecruitedStudentCurrentState).toHaveBeenCalledTimes(1);
-    expect(mockedUpsertRecruitedStudent).not.toHaveBeenCalled();
   });
 });

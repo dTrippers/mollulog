@@ -43,18 +43,6 @@ type RecruitedStudentEquipmentLevelFields = {
 
 export type RecruitedStudentCurrentStateInput = RecruitedStudentCurrentState & RecruitedStudentEquipmentLevelFields;
 
-export type RecruitedStudentCurrentStatePatch = Partial<RecruitedStudentCurrentStateInput> & {
-  tier?: number;
-};
-
-export type RecruitedStudentCurrentStatePatchOptions = {
-  equipmentMaxLevelsByTier?: readonly [
-    ReadonlyMap<number, number>,
-    ReadonlyMap<number, number>,
-    ReadonlyMap<number, number>,
-  ];
-};
-
 export type RecruitedStudent = RecruitedStudentCurrentState &
   RecruitedStudentEquipmentLevelFields & {
     uid: string;
@@ -336,114 +324,6 @@ export async function updateRecruitedStudentCurrentState(
         .set({ ...input, updatedAt: new Date() })
         .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
     });
-  });
-}
-
-/**
- * Applies only the supplied current-state fields to an existing recruited row.
- * The row lock and all cross-field validation happen before the update so a
- * rejected tier change cannot leave a partially updated student behind.
- */
-export async function patchRecruitedStudentCurrentState(
-  env: Env,
-  senseiId: number,
-  studentUid: string,
-  patch: RecruitedStudentCurrentStatePatch,
-  options: RecruitedStudentCurrentStatePatchOptions = {},
-): Promise<RecruitedStudent> {
-  const { tier, ...currentStatePatch } = patch;
-  if (tier !== undefined && (!Number.isInteger(tier) || tier < 1 || tier > 9)) {
-    throw new RecruitedStudentValidationError("성급 범위가 올바르지 않아요");
-  }
-  try {
-    validateRecruitedStudentCurrentStateInput(currentStatePatch as RecruitedStudentCurrentStateInput);
-  } catch (error) {
-    if (error instanceof Error) {
-      throw new RecruitedStudentValidationError(error.message);
-    }
-    throw error;
-  }
-
-  return withDb(env, async (db) => {
-    return db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(pgRecruitedStudentsTable)
-        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
-        .limit(1)
-        .for("update");
-      if (!existing) {
-        throw new RecruitedStudentValidationError("모집한 학생만 성장 상태를 저장할 수 있어요");
-      }
-
-      const nextTier = tier ?? existing.tier;
-      const nextWeaponLevel =
-        currentStatePatch.weaponLevel !== undefined ? currentStatePatch.weaponLevel : existing.weaponLevel;
-      const nextAbilityValues = [
-        currentStatePatch.abilityHp !== undefined ? currentStatePatch.abilityHp : existing.abilityHp,
-        currentStatePatch.abilityAtk !== undefined ? currentStatePatch.abilityAtk : existing.abilityAtk,
-        currentStatePatch.abilityHeal !== undefined ? currentStatePatch.abilityHeal : existing.abilityHeal,
-      ];
-      try {
-        assertWeaponLevelRange(nextWeaponLevel, nextTier, "고유무기 레벨");
-        assertAbilityReleaseAvailable(nextAbilityValues, nextTier, "능력 해방");
-      } catch (error) {
-        if (error instanceof Error) {
-          throw new RecruitedStudentValidationError(error.message);
-        }
-        throw error;
-      }
-      validateStoredEquipmentLevels(existing, currentStatePatch, options.equipmentMaxLevelsByTier);
-
-      await tx
-        .update(pgRecruitedStudentsTable)
-        .set(
-          tier === undefined
-            ? { ...currentStatePatch, updatedAt: new Date() }
-            : { ...currentStatePatch, tier: nextTier, updatedAt: new Date() },
-        )
-        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
-
-      const [updated] = await tx
-        .select()
-        .from(pgRecruitedStudentsTable)
-        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
-        .limit(1);
-      if (!updated) {
-        throw new RecruitedStudentValidationError("학생 성장 상태를 확인하지 못했어요");
-      }
-      return toModel(updated);
-    });
-  });
-}
-
-function validateStoredEquipmentLevels(
-  existing: RecruitedStudentRow,
-  patch: Omit<RecruitedStudentCurrentStatePatch, "tier">,
-  equipmentMaxLevelsByTier:
-    | readonly [ReadonlyMap<number, number>, ReadonlyMap<number, number>, ReadonlyMap<number, number>]
-    | undefined,
-) {
-  if (!equipmentMaxLevelsByTier) return;
-
-  const equipmentTiers = [
-    patch.equip1 !== undefined ? patch.equip1 : existing.equip1,
-    patch.equip2 !== undefined ? patch.equip2 : existing.equip2,
-    patch.equip3 !== undefined ? patch.equip3 : existing.equip3,
-  ];
-  const equipmentLevels = [existing.equip1Level, existing.equip2Level, existing.equip3Level];
-  equipmentLevels.forEach((level, index) => {
-    if (level == null) return;
-    const tier = equipmentTiers[index];
-    const maxLevel = tier == null ? undefined : equipmentMaxLevelsByTier[index]?.get(tier);
-    if (maxLevel == null || tier == null) {
-      throw new RecruitedStudentValidationError(`장비 ${index + 1} 정보를 확인하지 못했어요`);
-    }
-    if (level < 1 || level > maxLevel) {
-      throw new RecruitedStudentValidationError(
-        `장비 ${index + 1} 레벨은(는) 1부터 ${maxLevel} 사이만 입력할 수 있어요`,
-      );
-    }
   });
 }
 
