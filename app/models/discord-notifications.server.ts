@@ -13,6 +13,7 @@ import {
   validateDiscordNotificationSettings,
 } from "~/domain/discord-notifications";
 import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
+import type { WebPushNotificationState } from "~/models/web-push-notifications.server";
 
 export { DiscordNotificationValidationError };
 
@@ -55,6 +56,7 @@ export type DiscordNotificationSettings = DiscordNotificationSettingsInput & {
 export type DiscordNotificationState = {
   connection: DiscordConnection | null;
   settings: DiscordNotificationSettings;
+  webPush: WebPushNotificationState;
 };
 
 export type DiscordNotificationRepositoryOptions = {
@@ -182,7 +184,7 @@ async function readPreferences(client: Pick<Client, "query">, userId: number): P
 }
 
 export async function getDiscordNotificationState(
-  env: Pick<Env, "HYPERDRIVE">,
+  env: Pick<Env, "HYPERDRIVE" | "WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY" | "WEB_PUSH_VAPID_PUBLIC_KEY">,
   userId: number,
   options: DiscordNotificationRepositoryOptions = {},
 ): Promise<DiscordNotificationState> {
@@ -197,10 +199,31 @@ export async function getDiscordNotificationState(
           limit 1`,
         [userId],
       );
+      const webPushChannelResult = await client.query(
+        `select status from notification_channels where user_id = $1 and channel_type = 'web-push' limit 1`,
+        [userId],
+      );
+      const webPushSubscriptionResult = await client.query(
+        `select status from notification_push_subscriptions where user_id = $1 and status = 'active' limit 1`,
+        [userId],
+      );
       const preferences = await readPreferences(client, userId);
       return {
         connection: mapConnection(channelResult.rows[0]),
         settings: mapPreferences(preferences, now).settings,
+        webPush: {
+          configured: Boolean(env.WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY),
+          vapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? null,
+          channelStatus:
+            webPushChannelResult.rows[0]?.status === "active"
+              ? "active"
+              : webPushChannelResult.rows[0]?.status === "failed"
+                ? "failed"
+                : webPushChannelResult.rows[0]?.status === "disabled"
+                  ? "disabled"
+                  : null,
+          currentSubscriptionStatus: webPushSubscriptionResult.rows[0]?.status === "active" ? "active" : null,
+        },
       };
     },
     options.createClient,
@@ -235,17 +258,6 @@ export async function saveDiscordNotificationSettings(
     "save_discord_notification_settings",
     userId,
     async (_db, client) => {
-      const channel = await client.query(
-        `select status
-           from notification_channels
-          where user_id = $1 and channel_type = 'discord'
-          for update`,
-        [userId],
-      );
-      if (channel.rows[0]?.status !== "active") {
-        throw new DiscordSettingsUnavailableError();
-      }
-
       const preferences = await readPreferences(client, userId);
       const existing = mapPreferences(preferences, now);
       const leadHoursChanged = existing.settings.leadHours !== validated.leadHours;
@@ -323,6 +335,11 @@ export async function unlinkDiscordConnection(
   );
 }
 
+/** Channel-neutral aliases retained alongside the Discord integration names. */
+export const getNotificationState = getDiscordNotificationState;
+export const parseNotificationSettingsForm = parseDiscordNotificationSettingsForm;
+export const saveNotificationSettings = saveDiscordNotificationSettings;
+
 /**
  * Creates the Discord login identity and pending notification channel
  * together, or resets the existing channel in the same ownership transaction.
@@ -361,12 +378,12 @@ export async function upsertPendingDiscordConnection(
         );
         await client.query(
           `insert into notification_channels
-           (uid, user_id, channel_type, recipient_key, status, failure_reason, verified_at, last_verification_at,
+           (uid, user_id, channel_type, recipient_key, status, failure_reason, activated_at, verified_at, last_verification_at,
             created_at, updated_at)
-         values ($1, $2, 'discord', $3, 'pending', null, null, null, $4, $4)
+         values ($1, $2, 'discord', $3, 'pending', null, null, null, null, $4, $4)
          on conflict (user_id, channel_type) do update set
            uid = excluded.uid, recipient_key = excluded.recipient_key, status = 'pending',
-           failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
+           failure_reason = null, activated_at = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
           [uid, userId, normalizedDiscordUserId, now],
         );
         return {

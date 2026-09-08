@@ -11,6 +11,7 @@ import {
   Link,
   redirect,
   useActionData,
+  useFetcher,
   useLoaderData,
   useLocation,
   useNavigation,
@@ -270,6 +271,34 @@ function SettingsLink({
   );
 }
 
+function SignoutRow() {
+  const fetcher = useFetcher<{ error?: string }>();
+  const isSubmitting = fetcher.state !== "idle";
+
+  return (
+    <div>
+      <fetcher.Form method="post" action="/signout">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="flex w-full items-center gap-3 rounded-md bg-background px-4 py-3 text-left text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          <ArrowRightStartOnRectangleIcon className="size-4 shrink-0 text-muted-foreground" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">로그아웃</p>
+          </div>
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </button>
+      </fetcher.Form>
+      {fetcher.data?.error ? (
+        <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
+          {fetcher.data.error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function AuthIdentityLinkForm({
   provider,
   label,
@@ -324,9 +353,17 @@ export default function EditProfile() {
   const [isAccountSaved, setIsAccountSaved] = useState(false);
 
   useEffect(() => {
-    if (location.hash !== "#discord-notifications") return;
+    const targetId =
+      location.hash === "#discord-notifications"
+        ? "discord-notifications"
+        : location.hash === "#notification-channels"
+          ? "notification-channels"
+          : null;
+    if (!targetId) return;
     const frameId = window.requestAnimationFrame(() => {
-      document.getElementById("discord-notifications")?.scrollIntoView({ block: "start" });
+      const target = document.getElementById(targetId);
+      target?.scrollIntoView({ block: "start" });
+      target?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frameId);
   }, [location.hash]);
@@ -458,6 +495,7 @@ export default function EditProfile() {
 
       <DiscordNotificationConnection
         connection={discordState.connection}
+        webPush={discordState.webPush}
         notice={discordMessage}
         error={discordActionData?.error?.form}
         isSubmitting={isDiscordSubmitting}
@@ -471,7 +509,7 @@ export default function EditProfile() {
             description={`${passkeyCount}개 등록됨`}
             Icon={KeyIcon}
           />
-          <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} />
+          <SignoutRow />
         </div>
       </SectionCard>
 

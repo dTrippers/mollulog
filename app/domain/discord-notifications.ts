@@ -1,5 +1,13 @@
 import type { DiscordNotificationTrigger } from "~/db/postgres/schema";
 
+export type { NotificationSettingsInput, NotificationTrigger } from "./notifications";
+export {
+  getEnabledNotificationTriggers,
+  NOTIFICATION_DEFAULTS,
+  NotificationValidationError,
+  validateNotificationSettings,
+} from "./notifications";
+
 export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연결이 완료되었습니다.";
 export const DISCORD_NOTIFICATION_FEEDBACK_REPLY_MESSAGE = "작성한 제안/문의에 운영팀 답변이 등록되었습니다.";
 export const DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE = "작성한 이벤트 의견에 새 답글이 등록되었습니다.";

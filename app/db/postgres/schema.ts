@@ -201,8 +201,9 @@ export const pgTimelineContentsTable = pgTable(
   ],
 );
 
-export type DiscordConnectionStatus = "pending" | "active" | "failed";
-export type DiscordNotificationTrigger =
+export type NotificationChannelStatus = "pending" | "active" | "failed" | "disabled";
+export type DiscordConnectionStatus = Extract<NotificationChannelStatus, "pending" | "active" | "failed">;
+export type NotificationTrigger =
   | "event-start"
   | "event-end"
   | "reward-exchange-end"
@@ -210,9 +211,11 @@ export type DiscordNotificationTrigger =
   | "shop-reset"
   | "feedback-reply"
   | "event-opinion-reply";
-export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
+export type DiscordNotificationTrigger = NotificationTrigger;
+export type NotificationJobTrigger = NotificationTrigger | "connection-verification";
+export type DiscordNotificationJobTrigger = NotificationJobTrigger;
 
-export type NotificationChannelType = "discord";
+export type NotificationChannelType = "discord" | "web-push";
 
 export const pgNotificationChannelsTable = pgTable(
   "notification_channels",
@@ -222,8 +225,9 @@ export const pgNotificationChannelsTable = pgTable(
     userId: integer("user_id").notNull(),
     channelType: text("channel_type").$type<NotificationChannelType>().notNull(),
     recipientKey: text("recipient_key").notNull(),
-    status: text().$type<DiscordConnectionStatus>().notNull(),
+    status: text().$type<NotificationChannelStatus>().notNull(),
     failureReason: text("failure_reason"),
+    activatedAt: timestamptz("activated_at"),
     verifiedAt: timestamptz("verified_at"),
     lastVerificationAt: timestamptz("last_verification_at"),
     createdAt: timestamptz("created_at").notNull(),
@@ -260,8 +264,9 @@ export const pgNotificationJobsTable = pgTable(
     id: integer().primaryKey().generatedByDefaultAsIdentity(),
     uid: text().notNull(),
     userId: integer("user_id").notNull(),
-    channelUid: text("channel_uid").notNull(),
-    trigger: text().$type<DiscordNotificationJobTrigger>().notNull(),
+    logicalUid: text("logical_uid").notNull(),
+    channelUid: text("channel_uid"),
+    trigger: text().$type<NotificationJobTrigger>().notNull(),
     sourceUid: text("source_uid").notNull(),
     sourceAnchor: timestamptz("source_anchor").notNull(),
     plannedSendAt: timestamptz("planned_send_at").notNull(),
@@ -272,6 +277,7 @@ export const pgNotificationJobsTable = pgTable(
     publishAttempts: integer("publish_attempts").notNull(),
     deliveryAttempts: integer("delivery_attempts").notNull(),
     availableAt: timestamptz("available_at").notNull(),
+    deliverySnapshotAt: timestamptz("delivery_snapshot_at"),
     publishingAt: timestamptz("publishing_at"),
     publishedAt: timestamptz("published_at"),
     deliveredAt: timestamptz("delivered_at"),
@@ -286,6 +292,105 @@ export const pgNotificationJobsTable = pgTable(
     index("notification_jobs_publish_idx").on(table.status, table.availableAt),
     index("notification_jobs_channel_uid_idx").on(table.channelUid),
     index("notification_jobs_user_id_idx").on(table.userId),
+  ],
+);
+
+/**
+ * Database-level reservation for the notification natural key.  This keeps
+ * legacy channel-shaped inserts and account-level logical inserts from
+ * crossing over during a rolling Ayumu deployment.
+ */
+export const pgNotificationJobDedupKeysTable = pgTable(
+  "notification_job_dedup_keys",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    trigger: text().$type<NotificationJobTrigger>().notNull(),
+    sourceUid: text("source_uid").notNull(),
+    generation: integer().notNull(),
+    ownerChannelUid: text("owner_channel_uid"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_job_dedup_keys_natural_uidx").on(
+      table.userId,
+      table.trigger,
+      table.sourceUid,
+      table.generation,
+    ),
+    index("notification_job_dedup_keys_owner_channel_idx").on(table.ownerChannelUid),
+  ],
+);
+
+export type NotificationDeliveryTargetType = "discord" | "web-push";
+export type NotificationDeliveryStatus =
+  | "pending"
+  | "sending"
+  | "accepted"
+  | "ambiguous"
+  | "failed"
+  | "expired"
+  | "cancelled"
+  | "clicked";
+
+export const pgNotificationPushSubscriptionsTable = pgTable(
+  "notification_push_subscriptions",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    channelUid: text("channel_uid").notNull(),
+    userId: integer("user_id").notNull(),
+    endpointCiphertext: text("endpoint_ciphertext").notNull(),
+    p256dhCiphertext: text("p256dh_ciphertext").notNull(),
+    authCiphertext: text("auth_ciphertext").notNull(),
+    endpointFingerprint: text("endpoint_fingerprint").notNull(),
+    status: text().notNull().default("active"),
+    activatedAt: timestamptz("activated_at"),
+    expiresAt: timestamptz("expires_at"),
+    lastError: text("last_error"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_push_subscriptions_uid_uidx").on(table.uid),
+    uniqueIndex("notification_push_subscriptions_fingerprint_uidx").on(table.endpointFingerprint),
+    index("notification_push_subscriptions_user_status_idx").on(table.userId, table.status),
+    index("notification_push_subscriptions_channel_uid_idx").on(table.channelUid),
+  ],
+);
+
+export const pgNotificationDeliveriesTable = pgTable(
+  "notification_deliveries",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    notificationJobUid: text("notification_job_uid").notNull(),
+    userId: integer("user_id").notNull(),
+    targetType: text("target_type").$type<NotificationDeliveryTargetType>().notNull(),
+    targetUid: text("target_uid").notNull(),
+    channelUid: text("channel_uid"),
+    subscriptionUid: text("subscription_uid"),
+    status: text().$type<NotificationDeliveryStatus>().notNull(),
+    attempts: integer().notNull().default(0),
+    providerAcceptedAt: timestamptz("provider_accepted_at"),
+    ambiguousAt: timestamptz("ambiguous_at"),
+    clickedAt: timestamptz("clicked_at"),
+    deliveredAt: timestamptz("delivered_at"),
+    availableAt: timestamptz("available_at").notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("notification_deliveries_uid_uidx").on(table.uid),
+    uniqueIndex("notification_deliveries_job_target_uidx").on(
+      table.notificationJobUid,
+      table.targetType,
+      table.targetUid,
+    ),
+    index("notification_deliveries_job_status_idx").on(table.notificationJobUid, table.status),
+    index("notification_deliveries_user_id_idx").on(table.userId),
   ],
 );
 

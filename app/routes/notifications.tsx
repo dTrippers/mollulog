@@ -93,12 +93,12 @@ export default function Notifications() {
           {globalError}
         </p>
       ) : null}
-      <NotificationChannelCard connection={state.connection} />
+      <NotificationChannelCard connection={state.connection} webPush={state.webPush} />
       <NotificationPreferencesCard
         settings={state.settings}
         error={settingsActionData?.error}
         isSaving={isSaving}
-        isAvailable={connectionStatus === "active"}
+        hasActiveChannel={connectionStatus === "active" || state.webPush.channelStatus === "active"}
         savedAt={settingsActionData?.savedAt}
       />
     </div>
