@@ -37,6 +37,8 @@ describe("Discord page responsibility", () => {
       "app/routes/edit._components/DiscordNotificationConnection.tsx",
       "utf8",
     );
+    const notificationDomainSource = readFileSync("app/domain/discord-notifications.ts", "utf8");
+    const notificationModelSource = readFileSync("app/models/discord-notifications.server.ts", "utf8");
     const notificationChannelSource = readFileSync(
       "app/routes/notifications._components/NotificationChannelCard.tsx",
       "utf8",
@@ -48,13 +50,26 @@ describe("Discord page responsibility", () => {
     expect(editSource).toContain('title="연결된 서비스"');
     expect(editSource).toContain('id="connected-services"');
     expect(editSource).toContain("DiscordNotificationConnection");
-    expect(editSource).toContain('location.hash !== "#discord-notifications"');
+    expect(notificationDomainSource).not.toContain("getEnabledNotificationTriggers");
+    expect(notificationDomainSource).not.toContain("DiscordNotificationSettingsInput");
+    expect(notificationDomainSource).not.toContain("DISCORD_NOTIFICATION_DEFAULTS");
+    expect(notificationModelSource).toContain("getNotificationState");
+    expect(notificationModelSource).toContain("saveNotificationSettings");
+    expect(notificationModelSource).not.toContain("getDiscordNotificationState");
+    expect(notificationModelSource).not.toContain("saveDiscordNotificationSettings");
+    expect(editSource).toContain('location.hash === "#discord-notifications"');
+    expect(editSource).toContain('location.hash === "#notification-channels"');
     expect(editSource).toContain("scrollIntoView");
+    expect(profileConnectionSource).toContain('id="notification-channels"');
     expect(profileConnectionSource).toContain('id="discord-notifications"');
+    expect(profileConnectionSource).toContain('className="flex items-center gap-3 rounded-md bg-background px-4 py-3"');
+    expect(profileConnectionSource).toContain('<BellAlertIcon className="size-5 shrink-0 text-primary"');
+    expect(profileConnectionSource).not.toContain("grid size-9 shrink-0 rounded-md bg-muted");
     expect(profileConnectionSource).toContain("연결을 끊으면 모든 알림을 받을 수 없어요. 정말 연결을 끊을까요?");
     expect(profileConnectionSource).toContain('action="/auth/discord/notifications/connect"');
     expect(profileConnectionSource).toContain('value="discord-unlink"');
     expect(editSource).toContain("discordMessage");
+    expect(editSource).toContain("webPush={notificationState.webPush}");
     expect(notificationsSource).not.toContain('intent !== "discord-connect"');
     expect(notificationsSource).not.toContain('intent !== "discord-unlink"');
     expect(notificationsSource).not.toContain("upsertPendingDiscordConnection");
@@ -62,12 +77,39 @@ describe("Discord page responsibility", () => {
     expect(notificationsSource).toContain("NotificationChannelCard");
     expect(notificationsSource).toContain('connectionStatus === "active"');
     expect(editSource).toContain('status !== "pending"');
-    expect(notificationChannelSource).toContain("/edit#discord-notifications");
-    expect(notificationsSource).toContain('isAvailable={connectionStatus === "active"}');
+    expect(notificationChannelSource).toContain('title="알림 수단"');
+    expect(notificationChannelSource).toContain(
+      'description="프로필 관리 페이지에서 알림 수단을 연결/해제할 수 있어요"',
+    );
+    expect(notificationChannelSource).toContain("/edit#notification-channels");
+    expect(notificationChannelSource).toContain("sm:grid-cols-2");
+    expect(notificationChannelSource).toContain("연결됨");
+    expect(notificationChannelSource).toContain("연결 안 됨");
+    expect(notificationChannelSource).not.toContain("/edit#discord-notifications");
+    expect(notificationChannelSource).not.toContain("연결 확인 중");
+    expect(notificationChannelSource).not.toContain("이 브라우저에서 켜기");
+    expect(notificationsSource).toContain("hasActiveChannel");
     expect(notificationsSource).toContain("NotificationPreferencesCard");
-    expect(notificationPreferencesSource).toContain("하나 이상의 알림 수단을 등록해주세요");
-    expect(notificationPreferencesSource).toContain("disabled={!isAvailable}");
-    expect(notificationPreferencesSource).toContain('!isAvailable && "opacity-40"');
+    expect(notificationPreferencesSource).toContain("현재 외부 발송 수단이 없지만 설정은 저장해둘 수 있어요");
+    expect(notificationPreferencesSource).not.toContain("disabled={!isAvailable}");
+    expect(notificationPreferencesSource).not.toContain('!isAvailable && "opacity-40"');
+    expect(profileConnectionSource).toContain("브라우저 알림");
+    expect(profileConnectionSource).toContain("이 브라우저에서 켜기");
+    expect(profileConnectionSource).toContain("이 브라우저에서 끄기");
+    expect(profileConnectionSource).toContain('"unsubscribing"');
+    expect(profileConnectionSource).toContain("statusRef.current?.focus()");
+    expect(profileConnectionSource).toContain('status === "unsubscribing"');
+    expect(profileConnectionSource).toContain('role="alert"');
+    expect(profileConnectionSource).toContain("상태 다시 확인");
+    expect(profileConnectionSource).toContain("Safari에서 공유 버튼을 누르고");
+    expect(profileConnectionSource).toContain("브라우저 알림을 켰어요.");
+    expect(profileConnectionSource).toContain("브라우저 알림을 껐어요.");
+    expect(profileConnectionSource).toContain('aria-label="알림 수단"');
+    expect(profileConnectionSource).toContain('aria-label="Discord 알림 설정"');
+    expect(profileConnectionSource).toContain("tabIndex={-1}");
+    expect(editSource).toContain("target?.focus({ preventScroll: true })");
+    expect(editSource).toContain('<fetcher.Form method="post" action="/signout"');
+    expect(notificationChannelSource).not.toContain("border-t");
     expect(notificationChannelSource).not.toContain("<Form");
     expect(notificationsSource).not.toContain("/notifications/discord");
   });

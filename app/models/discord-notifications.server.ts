@@ -5,18 +5,20 @@ import {
   withDiscordOwnershipTransaction,
   withDiscordUserTransaction,
 } from "~/db/postgres/identity";
-import type { DiscordConnectionStatus, DiscordNotificationTrigger } from "~/db/postgres/schema";
+import type { DiscordConnectionStatus } from "~/db/postgres/schema";
 import {
-  DISCORD_NOTIFICATION_DEFAULTS,
-  type DiscordNotificationSettingsInput,
-  DiscordNotificationValidationError,
-  validateDiscordNotificationSettings,
-} from "~/domain/discord-notifications";
+  NOTIFICATION_DEFAULTS,
+  type NotificationSettingsInput,
+  type NotificationTrigger,
+  NotificationValidationError,
+  validateNotificationSettings,
+} from "~/domain/notifications";
 import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
+import type { WebPushNotificationSummary } from "~/models/web-push-notifications.server";
 
-export { DiscordNotificationValidationError };
+export { NotificationValidationError };
 
-type DiscordNotificationSettingsKey =
+type NotificationSettingsKey =
   | "eventStartEnabled"
   | "eventEndEnabled"
   | "rewardExchangeEndEnabled"
@@ -26,8 +28,8 @@ type DiscordNotificationSettingsKey =
   | "eventOpinionReplyEnabled";
 
 const PREFERENCE_KEYS: ReadonlyArray<{
-  type: DiscordNotificationTrigger;
-  key: DiscordNotificationSettingsKey;
+  type: NotificationTrigger;
+  key: NotificationSettingsKey;
 }> = [
   { type: "event-start", key: "eventStartEnabled" },
   { type: "event-end", key: "eventEndEnabled" },
@@ -48,13 +50,14 @@ export type PendingDiscordConnection = {
   connectionVersion: number;
 };
 
-export type DiscordNotificationSettings = DiscordNotificationSettingsInput & {
+export type NotificationSettings = NotificationSettingsInput & {
   effectiveAt: string;
 };
 
-export type DiscordNotificationState = {
+export type NotificationState = {
   connection: DiscordConnection | null;
-  settings: DiscordNotificationSettings;
+  settings: NotificationSettings;
+  webPush: WebPushNotificationSummary;
 };
 
 export type DiscordNotificationRepositoryOptions = {
@@ -71,15 +74,15 @@ type StoredPreference = {
 };
 
 type MappedPreferences = {
-  settings: DiscordNotificationSettings;
-  byType: Map<DiscordNotificationTrigger, StoredPreference>;
+  settings: NotificationSettings;
+  byType: Map<NotificationTrigger, StoredPreference>;
 };
 
 function requiredDate(row: QueryRow, key: string): Date {
   const value = row[key];
-  if (value === null || value === undefined) throw new Error(`Missing Discord notification setting: ${key}`);
+  if (value === null || value === undefined) throw new Error(`Missing notification setting: ${key}`);
   const date = value instanceof Date ? value : new Date(String(value));
-  if (Number.isNaN(date.getTime())) throw new Error(`Invalid Discord notification setting: ${key}`);
+  if (Number.isNaN(date.getTime())) throw new Error(`Invalid notification setting: ${key}`);
   return date;
 }
 
@@ -98,19 +101,19 @@ function mapConnection(row: QueryRow | undefined): DiscordConnection | null {
   return { status: status as DiscordConnectionStatus };
 }
 
-export class DiscordNotificationSettingsInconsistentError extends Error {
+export class NotificationSettingsInconsistentError extends Error {
   constructor() {
     super("알림 설정의 공통 알림 시점을 확인할 수 없어요.");
-    this.name = "DiscordNotificationSettingsInconsistentError";
+    this.name = "NotificationSettingsInconsistentError";
   }
 }
 
-function isNotificationType(value: unknown): value is DiscordNotificationTrigger {
+function isNotificationType(value: unknown): value is NotificationTrigger {
   return typeof value === "string" && PREFERENCE_KEYS.some(({ type }) => type === value);
 }
 
 function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences {
-  const byType = new Map<DiscordNotificationTrigger, StoredPreference>();
+  const byType = new Map<NotificationTrigger, StoredPreference>();
   let leadHours: number | undefined;
   let effectiveAt: Date | undefined;
 
@@ -118,10 +121,10 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
     if (!isNotificationType(row.notification_type)) continue;
     const rowLeadHours = Number(row.lead_hours);
     if (!Number.isInteger(rowLeadHours) || rowLeadHours < 1 || rowLeadHours > 24) {
-      throw new DiscordNotificationSettingsInconsistentError();
+      throw new NotificationSettingsInconsistentError();
     }
     if (leadHours !== undefined && leadHours !== rowLeadHours) {
-      throw new DiscordNotificationSettingsInconsistentError();
+      throw new NotificationSettingsInconsistentError();
     }
     leadHours = rowLeadHours;
     const rowEffectiveAt = requiredDate(row, "effective_at");
@@ -132,7 +135,7 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
     });
   }
 
-  const resolvedLeadHours = leadHours ?? DISCORD_NOTIFICATION_DEFAULTS.leadHours;
+  const resolvedLeadHours = leadHours ?? NOTIFICATION_DEFAULTS.leadHours;
   const settings = {
     eventStartEnabled: byType.get("event-start")?.enabled ?? false,
     eventEndEnabled: byType.get("event-end")?.enabled ?? false,
@@ -147,13 +150,13 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
   return { settings, byType };
 }
 
-export function parseDiscordNotificationSettingsForm(formData: FormData): DiscordNotificationSettingsInput {
+export function parseNotificationSettingsForm(formData: FormData): NotificationSettingsInput {
   const booleanValue = (name: string) => {
     const value = formData.get(name);
     return value === "true" || value === "on" || value === "1";
   };
   const leadHoursValue = formData.get("leadHours");
-  const input: DiscordNotificationSettingsInput = {
+  const input: NotificationSettingsInput = {
     eventStartEnabled: booleanValue("eventStartEnabled"),
     eventEndEnabled: booleanValue("eventEndEnabled"),
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
@@ -163,7 +166,7 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
     eventOpinionReplyEnabled: booleanValue("eventOpinionReplyEnabled"),
     leadHours: Number(leadHoursValue ?? Number.NaN),
   };
-  return validateDiscordNotificationSettings(input);
+  return validateNotificationSettings(input);
 }
 
 function preferenceTypeListSql(): string {
@@ -181,11 +184,11 @@ async function readPreferences(client: Pick<Client, "query">, userId: number): P
   return result.rows;
 }
 
-export async function getDiscordNotificationState(
-  env: Pick<Env, "HYPERDRIVE">,
+export async function getNotificationState(
+  env: Pick<Env, "HYPERDRIVE" | "WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY" | "WEB_PUSH_VAPID_PUBLIC_KEY">,
   userId: number,
   options: DiscordNotificationRepositoryOptions = {},
-): Promise<DiscordNotificationState> {
+): Promise<NotificationState> {
   const now = options.now?.() ?? new Date();
   return withPostgresClient(
     env,
@@ -197,10 +200,31 @@ export async function getDiscordNotificationState(
           limit 1`,
         [userId],
       );
+      const webPushChannelResult = await client.query(
+        `select status from notification_channels where user_id = $1 and channel_type = 'web-push' limit 1`,
+        [userId],
+      );
+      const webPushSubscriptionResult = await client.query(
+        `select status from notification_push_subscriptions where user_id = $1 and status = 'active' limit 1`,
+        [userId],
+      );
       const preferences = await readPreferences(client, userId);
       return {
         connection: mapConnection(channelResult.rows[0]),
         settings: mapPreferences(preferences, now).settings,
+        webPush: {
+          configured: Boolean(env.WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY),
+          vapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? null,
+          channelStatus:
+            webPushChannelResult.rows[0]?.status === "active"
+              ? "active"
+              : webPushChannelResult.rows[0]?.status === "failed"
+                ? "failed"
+                : webPushChannelResult.rows[0]?.status === "disabled"
+                  ? "disabled"
+                  : null,
+          hasActiveSubscription: webPushSubscriptionResult.rows.some((row) => row.status === "active"),
+        },
       };
     },
     options.createClient,
@@ -215,37 +239,26 @@ export class DiscordIdentityAlreadyLinkedError extends Error {
   }
 }
 
-export class DiscordSettingsUnavailableError extends Error {
-  constructor() {
-    super("Discord 연결을 완료한 뒤 알림 설정을 저장해주세요.");
-    this.name = "DiscordSettingsUnavailableError";
+export class DiscordConnectionValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "DiscordConnectionValidationError";
   }
 }
 
-export async function saveDiscordNotificationSettings(
+export async function saveNotificationSettings(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
-  input: DiscordNotificationSettingsInput,
+  input: NotificationSettingsInput,
   options: DiscordNotificationRepositoryOptions = {},
-): Promise<DiscordNotificationSettings> {
-  const validated = validateDiscordNotificationSettings(input);
+): Promise<NotificationSettings> {
+  const validated = validateNotificationSettings(input);
   const now = options.now?.() ?? new Date();
   return withDiscordUserTransaction(
     env,
-    "save_discord_notification_settings",
+    "save_notification_settings",
     userId,
     async (_db, client) => {
-      const channel = await client.query(
-        `select status
-           from notification_channels
-          where user_id = $1 and channel_type = 'discord'
-          for update`,
-        [userId],
-      );
-      if (channel.rows[0]?.status !== "active") {
-        throw new DiscordSettingsUnavailableError();
-      }
-
       const preferences = await readPreferences(client, userId);
       const existing = mapPreferences(preferences, now);
       const leadHoursChanged = existing.settings.leadHours !== validated.leadHours;
@@ -336,7 +349,7 @@ export async function upsertPendingDiscordConnection(
 ): Promise<PendingDiscordConnection> {
   const normalizedDiscordUserId = discordUserId.trim();
   if (!/^\d{2,32}$/.test(normalizedDiscordUserId)) {
-    throw new DiscordNotificationValidationError("Discord 사용자 정보를 확인할 수 없어요.");
+    throw new DiscordConnectionValidationError("Discord 사용자 정보를 확인할 수 없어요.");
   }
   const now = options.now?.() ?? new Date();
   try {
@@ -361,12 +374,12 @@ export async function upsertPendingDiscordConnection(
         );
         await client.query(
           `insert into notification_channels
-           (uid, user_id, channel_type, recipient_key, status, failure_reason, verified_at, last_verification_at,
+           (uid, user_id, channel_type, recipient_key, status, failure_reason, activated_at, verified_at, last_verification_at,
             created_at, updated_at)
-         values ($1, $2, 'discord', $3, 'pending', null, null, null, $4, $4)
+         values ($1, $2, 'discord', $3, 'pending', null, null, null, null, $4, $4)
          on conflict (user_id, channel_type) do update set
            uid = excluded.uid, recipient_key = excluded.recipient_key, status = 'pending',
-           failure_reason = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
+           failure_reason = null, activated_at = null, verified_at = null, last_verification_at = null, updated_at = excluded.updated_at`,
           [uid, userId, normalizedDiscordUserId, now],
         );
         return {

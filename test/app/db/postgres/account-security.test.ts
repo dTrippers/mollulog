@@ -17,8 +17,11 @@ import {
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgNotificationChannelsTable,
+  pgNotificationDeliveriesTable,
+  pgNotificationJobDedupKeysTable,
   pgNotificationJobsTable,
   pgNotificationPreferencesTable,
+  pgNotificationPushSubscriptionsTable,
   pgNotificationReadStatesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
@@ -122,13 +125,16 @@ describe("account-security PostgreSQL repository", () => {
       status: "left",
     });
     expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
-    expect(deletes).toHaveLength(9);
+    expect(deletes).toHaveLength(12);
     expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
         pgAuthIdentitiesTable,
         pgNotificationChannelsTable,
+        pgNotificationDeliveriesTable,
+        pgNotificationJobDedupKeysTable,
         pgNotificationPreferencesTable,
+        pgNotificationPushSubscriptionsTable,
         pgNotificationReadStatesTable,
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
@@ -140,7 +146,10 @@ describe("account-security PostgreSQL repository", () => {
     for (const table of [
       pgAuthIdentitiesTable,
       pgNotificationChannelsTable,
+      pgNotificationDeliveriesTable,
+      pgNotificationJobDedupKeysTable,
       pgNotificationPreferencesTable,
+      pgNotificationPushSubscriptionsTable,
       pgNotificationReadStatesTable,
       pgPasskeysTable,
       pgSenseiPrivaciesTable,
@@ -167,7 +176,7 @@ describe("account-security PostgreSQL repository", () => {
 
     expect(updates[0]).toMatchObject({
       table: pgNotificationJobsTable,
-      values: { status: "cancelled", lastError: "Discord connection unlinked" },
+      values: { status: "cancelled", lastError: "Account deleted" },
     });
     expect(whereQuery(updates[0]?.where).params).toEqual([
       7,

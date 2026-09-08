@@ -1,11 +1,11 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { NotificationValidationError } from "~/domain/notifications";
 import {
   DiscordIdentityAlreadyLinkedError,
-  DiscordNotificationSettingsInconsistentError,
-  DiscordNotificationValidationError,
-  getDiscordNotificationState,
-  parseDiscordNotificationSettingsForm,
-  saveDiscordNotificationSettings,
+  getNotificationState,
+  NotificationSettingsInconsistentError,
+  parseNotificationSettingsForm,
+  saveNotificationSettings,
   unlinkDiscordConnection,
   upsertPendingDiscordConnection,
 } from "~/models/discord-notifications.server";
@@ -50,7 +50,7 @@ describe("Discord notification settings boundary", () => {
     form.set("feedbackReplyEnabled", "false");
     form.set("eventOpinionReplyEnabled", "true");
     form.set("leadHours", "23");
-    expect(parseDiscordNotificationSettingsForm(form)).toEqual({
+    expect(parseNotificationSettingsForm(form)).toEqual({
       eventStartEnabled: true,
       eventEndEnabled: false,
       rewardExchangeEndEnabled: true,
@@ -69,7 +69,7 @@ describe("Discord notification settings boundary", () => {
   it("rejects a lead time outside the supported range", () => {
     const form = new FormData();
     form.set("leadHours", "25");
-    expect(() => parseDiscordNotificationSettingsForm(form)).toThrow(DiscordNotificationValidationError);
+    expect(() => parseNotificationSettingsForm(form)).toThrow(NotificationValidationError);
   });
 
   it("frees only the Discord channel while cancelling that channel's unfinished jobs", async () => {
@@ -120,7 +120,7 @@ describe("Discord notification settings boundary", () => {
     };
     const env = { __pgClient: client } as unknown as Env;
 
-    const saved = await saveDiscordNotificationSettings(
+    const saved = await saveNotificationSettings(
       env,
       7,
       {
@@ -179,7 +179,7 @@ describe("Discord notification settings boundary", () => {
     };
     const env = { __pgClient: client } as unknown as Env;
 
-    await saveDiscordNotificationSettings(
+    await saveNotificationSettings(
       env,
       7,
       {
@@ -226,7 +226,7 @@ describe("Discord notification settings boundary", () => {
     const env = { __pgClient: client } as unknown as Env;
 
     await expect(
-      saveDiscordNotificationSettings(env, 7, {
+      saveNotificationSettings(env, 7, {
         eventStartEnabled: true,
         eventEndEnabled: false,
         rewardExchangeEndEnabled: false,
@@ -236,7 +236,7 @@ describe("Discord notification settings boundary", () => {
         eventOpinionReplyEnabled: false,
         leadHours: 24,
       }),
-    ).rejects.toThrow(DiscordNotificationSettingsInconsistentError);
+    ).rejects.toThrow(NotificationSettingsInconsistentError);
   });
 
   it("creates a missing shop reset row on the next explicit save", async () => {
@@ -258,7 +258,7 @@ describe("Discord notification settings boundary", () => {
     };
     const env = { __pgClient: client } as unknown as Env;
 
-    await saveDiscordNotificationSettings(
+    await saveNotificationSettings(
       env,
       7,
       {
@@ -362,7 +362,7 @@ describe("Discord notification settings boundary", () => {
       },
     };
     const env = { __pgClient: client } as unknown as Env;
-    const { connection } = await getDiscordNotificationState(env, 7, {
+    const { connection } = await getNotificationState(env, 7, {
       now: () => new Date("2026-09-01T00:00:00.000Z"),
     });
     expect(connection).toBeNull();
@@ -383,7 +383,7 @@ describe("Discord notification settings boundary", () => {
     };
     const env = { __pgClient: client } as unknown as Env;
 
-    const state = await getDiscordNotificationState(env, 7, {
+    const state = await getNotificationState(env, 7, {
       now: () => new Date("2026-09-01T00:00:00.000Z"),
     });
 
@@ -405,8 +405,15 @@ describe("Discord notification settings boundary", () => {
       },
     };
     const env = { __pgClient: client } as unknown as Env;
-    const state = await getDiscordNotificationState(env, 7);
+    const state = await getNotificationState(env, 7);
     expect(state.connection).toEqual({ status: "active" });
+    expect(state.webPush).toEqual({
+      configured: false,
+      vapidPublicKey: null,
+      channelStatus: "active",
+      hasActiveSubscription: false,
+    });
+    expect(state.webPush).not.toHaveProperty("currentSubscriptionStatus");
     expect(state).not.toHaveProperty("recipientKey");
   });
 });

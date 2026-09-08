@@ -3,12 +3,11 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Title } from "~/components/primitives";
+import { NotificationValidationError } from "~/domain/notifications";
 import {
-  DiscordNotificationValidationError,
-  DiscordSettingsUnavailableError,
-  getDiscordNotificationState,
-  parseDiscordNotificationSettingsForm,
-  saveDiscordNotificationSettings,
+  getNotificationState,
+  parseNotificationSettingsForm,
+  saveNotificationSettings,
 } from "~/models/discord-notifications.server";
 import NotificationChannelCard from "./notifications._components/NotificationChannelCard";
 import NotificationPreferencesCard from "./notifications._components/NotificationPreferencesCard";
@@ -20,7 +19,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const sensei = await getActiveSensei(env, request, ctx);
   if (!sensei) return redirect("/unauthorized");
 
-  const state = await getDiscordNotificationState(env, sensei.id, { ctx });
+  const state = await getNotificationState(env, sensei.id, { ctx });
   return { state };
 };
 
@@ -51,12 +50,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 
   try {
-    const settings = parseDiscordNotificationSettingsForm(formData);
-    await saveDiscordNotificationSettings(env, sensei.id, settings, { ctx });
+    const settings = parseNotificationSettingsForm(formData);
+    await saveNotificationSettings(env, sensei.id, settings, { ctx });
     return data<ActionData>({ intent, success: true, savedAt: new Date().toISOString() });
   } catch (error) {
-    const expectedError =
-      error instanceof DiscordSettingsUnavailableError || error instanceof DiscordNotificationValidationError;
+    const expectedError = error instanceof NotificationValidationError;
     if (!expectedError) {
       console.error("[notifications] failed to save Discord notification settings", error);
     }
@@ -93,12 +91,12 @@ export default function Notifications() {
           {globalError}
         </p>
       ) : null}
-      <NotificationChannelCard connection={state.connection} />
+      <NotificationChannelCard connection={state.connection} webPush={state.webPush} />
       <NotificationPreferencesCard
         settings={state.settings}
         error={settingsActionData?.error}
         isSaving={isSaving}
-        isAvailable={connectionStatus === "active"}
+        hasActiveChannel={connectionStatus === "active" || state.webPush.channelStatus === "active"}
         savedAt={settingsActionData?.savedAt}
       />
     </div>

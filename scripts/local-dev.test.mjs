@@ -87,6 +87,9 @@ test("worker bindings expose only the explicit Worker allowlist", () => {
   const bindings = workerBindingsFromEnvironment({
     ...fixtureEnv(),
     CONNECT_API_URL: "http://127.0.0.1:8788",
+    WEB_PUSH_VAPID_PUBLIC_KEY: "public-vapid-key",
+    WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY: "push-storage-key",
+    WEB_PUSH_VAPID_PRIVATE_KEY: "must-not-be-bound",
     PGHOST: "127.0.0.1",
     PGPASSWORD: "secret-must-not-be-bound",
     OP_SERVICE_ACCOUNT_TOKEN: "token-must-not-be-bound",
@@ -96,6 +99,9 @@ test("worker bindings expose only the explicit Worker allowlist", () => {
   assert.equal(bindings.PGPASSWORD, undefined);
   assert.equal(bindings.OP_SERVICE_ACCOUNT_TOKEN, undefined);
   assert.equal(bindings.UNRELATED_SECRET, undefined);
+  assert.equal(bindings.WEB_PUSH_VAPID_PUBLIC_KEY, "public-vapid-key");
+  assert.equal(bindings.WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY, "push-storage-key");
+  assert.equal(bindings.WEB_PUSH_VAPID_PRIVATE_KEY, undefined);
 });
 
 test("Vite config uses inherited Worker values only during development", async (t) => {
@@ -108,6 +114,9 @@ test("Vite config uses inherited Worker values only during development", async (
     const inherited = {
       HOST: "http://127.0.0.1:8787",
       SESSION_SECRET: "vite-sentinel-secret",
+      WEB_PUSH_VAPID_PUBLIC_KEY: "public-vapid-key",
+      WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY: "push-storage-key",
+      WEB_PUSH_VAPID_PRIVATE_KEY: "must-not-be-bound",
       PGPASSWORD: "must-not-be-bound",
       OP_SERVICE_ACCOUNT_TOKEN: "must-not-be-bound",
     };
@@ -115,6 +124,9 @@ test("Vite config uses inherited Worker values only during development", async (
     assert.equal(serveWorkerConfig.vars, undefined);
     assert.ok(serveWorkerConfig.secrets.required.includes("SESSION_SECRET"));
     assert.ok(serveWorkerConfig.secrets.required.includes("HOST"));
+    assert.ok(serveWorkerConfig.secrets.required.includes("WEB_PUSH_VAPID_PUBLIC_KEY"));
+    assert.ok(serveWorkerConfig.secrets.required.includes("WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY"));
+    assert.equal(serveWorkerConfig.secrets.required.includes("WEB_PUSH_VAPID_PRIVATE_KEY"), false);
     assert.equal(serveWorkerConfig.secrets.required.includes("PGPASSWORD"), false);
     assert.equal(serveWorkerConfig.secrets.required.includes("OP_SERVICE_ACCOUNT_TOKEN"), false);
     assert.equal(viteConfig.workerConfigForCommand("build", inherited), undefined);

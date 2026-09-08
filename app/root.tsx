@@ -202,6 +202,13 @@ export default function App() {
   const submittedTimeZoneRef = useRef<string | null>(null);
   const preferenceFetcher = useFetcher();
 
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+    void navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {
+      // Push is opt-in; an unavailable service worker must not block the app.
+    });
+  }, []);
+
   const navigate = useNavigation();
   useEffect(() => {
     if (navigate.state === "loading") {

@@ -11,8 +11,11 @@ import {
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgNotificationChannelsTable,
+  pgNotificationDeliveriesTable,
+  pgNotificationJobDedupKeysTable,
   pgNotificationJobsTable,
   pgNotificationPreferencesTable,
+  pgNotificationPushSubscriptionsTable,
   pgNotificationReadStatesTable,
   pgPasskeysTable,
   pgPendingSenseiRegistrationsTable,
@@ -108,7 +111,7 @@ export async function leaveAccount(
         .update(pgNotificationJobsTable)
         .set({
           status: "cancelled",
-          lastError: "Discord connection unlinked",
+          lastError: "Account deleted",
           updatedAt: cleanupAt,
         })
         .where(
@@ -117,6 +120,11 @@ export async function leaveAccount(
             inArray(pgNotificationJobsTable.status, ["materialized", "publishing", "queued", "sending", "blocked"]),
           ),
         );
+      await db.delete(pgNotificationDeliveriesTable).where(eq(pgNotificationDeliveriesTable.userId, sensei.id));
+      await db.delete(pgNotificationJobDedupKeysTable).where(eq(pgNotificationJobDedupKeysTable.userId, sensei.id));
+      await db
+        .delete(pgNotificationPushSubscriptionsTable)
+        .where(eq(pgNotificationPushSubscriptionsTable.userId, sensei.id));
       await db.delete(pgNotificationChannelsTable).where(eq(pgNotificationChannelsTable.userId, sensei.id));
       await db.delete(pgNotificationPreferencesTable).where(eq(pgNotificationPreferencesTable.userId, sensei.id));
       await db.delete(pgNotificationReadStatesTable).where(eq(pgNotificationReadStatesTable.userId, sensei.id));

@@ -2,8 +2,7 @@ import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import { useEffect, useState } from "react";
 import { Form } from "react-router";
 import { Button, Dropdown, Field, SectionCard, Toggle } from "~/components/primitives";
-import type { DiscordNotificationSettingsInput } from "~/domain/discord-notifications";
-import { cn } from "~/lib/utils";
+import type { NotificationSettingsInput } from "~/domain/notifications";
 
 const LEAD_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => ({
   value: String(index + 1),
@@ -11,10 +10,10 @@ const LEAD_HOUR_OPTIONS = Array.from({ length: 24 }, (_, index) => ({
 }));
 
 type NotificationPreferencesCardProps = {
-  settings: DiscordNotificationSettingsInput;
+  settings: NotificationSettingsInput;
   error?: string;
   isSaving: boolean;
-  isAvailable: boolean;
+  hasActiveChannel: boolean;
   savedAt?: string;
 };
 
@@ -22,7 +21,7 @@ export default function NotificationPreferencesCard({
   settings,
   error,
   isSaving,
-  isAvailable,
+  hasActiveChannel,
   savedAt,
 }: NotificationPreferencesCardProps) {
   const [leadHours, setLeadHours] = useState(String(settings.leadHours));
@@ -47,7 +46,7 @@ export default function NotificationPreferencesCard({
   };
 
   return (
-    <SectionCard title="받을 알림">
+    <SectionCard title="받을 알림" description="설정한 알림은 활성화된 모든 알림 수단으로 보내드려요.">
       {error ? (
         <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
@@ -60,163 +59,153 @@ export default function NotificationPreferencesCard({
       ) : null}
       <Form method="post" onChange={markDirty}>
         <input type="hidden" name="intent" value="save" />
-        <div className="relative">
-          {!isAvailable ? (
-            <div className="absolute inset-0 z-10 grid place-items-center" role="status">
-              <p className="rounded-md bg-card/95 px-4 py-3 text-center text-sm font-medium shadow-sm">
-                하나 이상의 알림 수단을 등록해주세요
-              </p>
-            </div>
-          ) : null}
-          <fieldset disabled={!isAvailable} className={cn("min-w-0 space-y-6", !isAvailable && "opacity-40")}>
-            <section aria-labelledby="notification-game-content-heading" className="space-y-4">
-              <h3 id="notification-game-content-heading" className="text-sm font-semibold text-foreground">
-                게임 컨텐츠 알림
-              </h3>
-              <div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">이벤트 시작</p>
-                    <p className="text-xs text-muted-foreground">새로운 이벤트 시작 알림</p>
-                  </div>
-                  <Toggle
-                    name="eventStartEnabled"
-                    initialState={settings.eventStartEnabled}
-                    disabled={isSaving}
-                    aria-label="이벤트 시작"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
+        {!hasActiveChannel ? (
+          <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            현재 외부 발송 수단이 없지만 설정은 저장해둘 수 있어요. 알림 수단을 켜면 이후 알림부터 적용돼요.
+          </p>
+        ) : null}
+        <fieldset className="min-w-0 space-y-6">
+          <section aria-labelledby="notification-game-content-heading" className="space-y-4">
+            <h3 id="notification-game-content-heading" className="text-sm font-semibold text-foreground">
+              게임 컨텐츠 알림
+            </h3>
+            <div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">이벤트 시작</p>
+                  <p className="text-xs text-muted-foreground">새로운 이벤트 시작 알림</p>
                 </div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">이벤트 종료</p>
-                    <p className="text-xs text-muted-foreground">이벤트 플레이 종료 시점 알림</p>
-                  </div>
-                  <Toggle
-                    name="eventEndEnabled"
-                    initialState={settings.eventEndEnabled}
-                    disabled={isSaving}
-                    aria-label="이벤트 종료"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">이벤트 보상 교환 종료</p>
-                    <p className="text-xs text-muted-foreground">상점, 미션 등 이벤트 보상 획득 종료 시점 알림</p>
-                  </div>
-                  <Toggle
-                    name="rewardExchangeEndEnabled"
-                    initialState={settings.rewardExchangeEndEnabled}
-                    disabled={isSaving}
-                    aria-label="이벤트 보상 교환 종료"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">학생 모집 시작</p>
-                    <p className="text-xs text-muted-foreground">관심 학생의 모집 시작 시점 알림</p>
-                  </div>
-                  <Toggle
-                    name="recruitmentStartEnabled"
-                    initialState={settings.recruitmentStartEnabled}
-                    disabled={isSaving}
-                    aria-label="학생 모집 시작"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">상점 초기화 알림</p>
-                    <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
-                  </div>
-                  <Toggle
-                    name="shopResetEnabled"
-                    initialState={settings.shopResetEnabled}
-                    disabled={isSaving}
-                    aria-label="상점 초기화 알림"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
-              </div>
-              <Field
-                label="알림 시점"
-                htmlFor="notification-lead-hours"
-                description="알림은 기준 시점부터 수 분 정도 걸릴 수 있어요"
-              >
-                <Dropdown
-                  id="notification-lead-hours"
-                  value={leadHours}
-                  options={LEAD_HOUR_OPTIONS}
-                  size="md"
-                  fullWidth
-                  disabled={!isAvailable || isSaving}
-                  onChange={(value) => {
-                    setLeadHours(value);
-                    markDirty();
-                  }}
+                <Toggle
+                  name="eventStartEnabled"
+                  initialState={settings.eventStartEnabled}
+                  disabled={isSaving}
+                  aria-label="이벤트 시작"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
                 />
-              </Field>
-            </section>
-
-            <section className="space-y-4 border-t border-border pt-4" aria-labelledby="notification-mollulog-heading">
-              <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">
-                몰루로그 알림
-              </h3>
-              <div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">제안/문의 답글</p>
-                    <p className="text-xs text-muted-foreground">제안/문의에 답변이 작성되면 알림</p>
-                  </div>
-                  <Toggle
-                    name="feedbackReplyEnabled"
-                    initialState={settings.feedbackReplyEnabled}
-                    disabled={isSaving}
-                    aria-label="제안/문의 답글"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
-                <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
-                  <div className="min-w-0">
-                    <p className="text-sm">이벤트 의견 답글</p>
-                    <p className="text-xs text-muted-foreground">내 이벤트 의견에 답글이 작성되면 알림</p>
-                  </div>
-                  <Toggle
-                    name="eventOpinionReplyEnabled"
-                    initialState={settings.eventOpinionReplyEnabled}
-                    disabled={isSaving}
-                    aria-label="이벤트 의견 답글"
-                    className="my-0 shrink-0"
-                    onChange={markDirty}
-                  />
-                </div>
               </div>
-            </section>
-            <input type="hidden" name="leadHours" value={leadHours} />
-
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                size="sm"
-                variant="primary"
-                disabled={!isAvailable || !isDirty || isSaving}
-                className="min-w-24"
-              >
-                {isSaving ? <ArrowPathIcon className="size-4 animate-spin" aria-hidden="true" /> : null}
-                {isSaved && !isDirty && !isSaving ? <CheckCircleIcon className="size-4" aria-hidden="true" /> : null}
-                {isSaving ? "저장 중..." : isSaved && !isDirty ? "저장 완료" : "저장"}
-              </Button>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">이벤트 종료</p>
+                  <p className="text-xs text-muted-foreground">이벤트 플레이 종료 시점 알림</p>
+                </div>
+                <Toggle
+                  name="eventEndEnabled"
+                  initialState={settings.eventEndEnabled}
+                  disabled={isSaving}
+                  aria-label="이벤트 종료"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">이벤트 보상 교환 종료</p>
+                  <p className="text-xs text-muted-foreground">상점, 미션 등 이벤트 보상 획득 종료 시점 알림</p>
+                </div>
+                <Toggle
+                  name="rewardExchangeEndEnabled"
+                  initialState={settings.rewardExchangeEndEnabled}
+                  disabled={isSaving}
+                  aria-label="이벤트 보상 교환 종료"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">학생 모집 시작</p>
+                  <p className="text-xs text-muted-foreground">관심 학생의 모집 시작 시점 알림</p>
+                </div>
+                <Toggle
+                  name="recruitmentStartEnabled"
+                  initialState={settings.recruitmentStartEnabled}
+                  disabled={isSaving}
+                  aria-label="학생 모집 시작"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">상점 초기화 알림</p>
+                  <p className="text-xs text-muted-foreground">매월 1일 상점 초기화 알림</p>
+                </div>
+                <Toggle
+                  name="shopResetEnabled"
+                  initialState={settings.shopResetEnabled}
+                  disabled={isSaving}
+                  aria-label="상점 초기화 알림"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
             </div>
-          </fieldset>
-        </div>
+            <Field
+              label="알림 시점"
+              htmlFor="notification-lead-hours"
+              description="알림은 기준 시점부터 수 분 정도 걸릴 수 있어요"
+            >
+              <Dropdown
+                id="notification-lead-hours"
+                value={leadHours}
+                options={LEAD_HOUR_OPTIONS}
+                size="md"
+                fullWidth
+                disabled={isSaving}
+                onChange={(value) => {
+                  setLeadHours(value);
+                  markDirty();
+                }}
+              />
+            </Field>
+          </section>
+
+          <section className="space-y-4 border-t border-border pt-4" aria-labelledby="notification-mollulog-heading">
+            <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">
+              몰루로그 알림
+            </h3>
+            <div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">제안/문의 답글</p>
+                  <p className="text-xs text-muted-foreground">제안/문의에 답변이 작성되면 알림</p>
+                </div>
+                <Toggle
+                  name="feedbackReplyEnabled"
+                  initialState={settings.feedbackReplyEnabled}
+                  disabled={isSaving}
+                  aria-label="제안/문의 답글"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">이벤트 의견 답글</p>
+                  <p className="text-xs text-muted-foreground">내 이벤트 의견에 답글이 작성되면 알림</p>
+                </div>
+                <Toggle
+                  name="eventOpinionReplyEnabled"
+                  initialState={settings.eventOpinionReplyEnabled}
+                  disabled={isSaving}
+                  aria-label="이벤트 의견 답글"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+            </div>
+          </section>
+          <input type="hidden" name="leadHours" value={leadHours} />
+
+          <div className="flex justify-end">
+            <Button type="submit" size="sm" variant="primary" disabled={!isDirty || isSaving} className="min-w-24">
+              {isSaving ? <ArrowPathIcon className="size-4 animate-spin" aria-hidden="true" /> : null}
+              {isSaved && !isDirty && !isSaving ? <CheckCircleIcon className="size-4" aria-hidden="true" /> : null}
+              {isSaving ? "저장 중..." : isSaved && !isDirty ? "저장 완료" : "저장"}
+            </Button>
+          </div>
+        </fieldset>
       </Form>
     </SectionCard>
   );
