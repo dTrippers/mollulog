@@ -4,6 +4,7 @@ import { type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.s
 import {
   encryptWebPushSecret,
   fingerprintWebPushEndpoint,
+  validateWebPushEndpoint,
   validateWebPushSubscription,
   WebPushConfigurationError,
   type WebPushSubscriptionInput,
@@ -15,10 +16,14 @@ export { WebPushConfigurationError, WebPushSubscriptionValidationError };
 export type WebPushSubscriptionStatus = "active" | "disabled" | "expired" | "failed";
 export type WebPushChannelStatus = "active" | "disabled" | "failed";
 
-export type WebPushNotificationState = {
+export type WebPushNotificationSummary = {
   configured: boolean;
   vapidPublicKey: string | null;
   channelStatus: WebPushChannelStatus | null;
+  hasActiveSubscription: boolean;
+};
+
+export type WebPushNotificationState = WebPushNotificationSummary & {
   currentSubscriptionStatus: WebPushSubscriptionStatus | null;
 };
 
@@ -76,6 +81,10 @@ export async function getWebPushNotificationState(
         `select status from notification_channels where user_id = $1 and channel_type = 'web-push' limit 1`,
         [userId],
       );
+      const activeSubscriptionResult = await client.query<QueryRow>(
+        `select 1 from notification_push_subscriptions where user_id = $1 and status = 'active' limit 1`,
+        [userId],
+      );
       let currentSubscriptionStatus: WebPushSubscriptionStatus | null = null;
       if (fingerprint) {
         const subscriptionResult = await client.query<QueryRow>(
@@ -88,6 +97,7 @@ export async function getWebPushNotificationState(
         configured: Boolean(env.WEB_PUSH_SUBSCRIPTION_ENCRYPTION_KEY),
         vapidPublicKey: env.WEB_PUSH_VAPID_PUBLIC_KEY ?? null,
         channelStatus: mapChannelStatus(channelResult.rows[0]?.status),
+        hasActiveSubscription: activeSubscriptionResult.rows.length > 0,
         currentSubscriptionStatus,
       };
     },
@@ -243,4 +253,27 @@ export async function deactivateSubscriptionFromCookie(
   options: WebPushNotificationRepositoryOptions = {},
 ): Promise<void> {
   if (fingerprint) await deactivateWebPushSubscription(env, userId, fingerprint, options);
+}
+
+export async function deactivateSubscriptionsForSignout(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  endpoint: string | null,
+  cookieFingerprint: string | null,
+  options: WebPushNotificationRepositoryOptions = {},
+): Promise<void> {
+  const fingerprints = new Set<string>();
+  if (endpoint !== null) {
+    const validatedEndpoint = validateWebPushEndpoint(endpoint);
+    fingerprints.add(await fingerprintWebPushEndpoint(validatedEndpoint));
+  }
+  if (cookieFingerprint !== null) {
+    if (!/^[A-Za-z0-9_-]{20,128}$/.test(cookieFingerprint)) {
+      throw new WebPushSubscriptionValidationError("브라우저 알림 연결 정보를 확인할 수 없어요.");
+    }
+    fingerprints.add(cookieFingerprint);
+  }
+  for (const fingerprint of fingerprints) {
+    await deactivateWebPushSubscription(env, userId, fingerprint, options);
+  }
 }

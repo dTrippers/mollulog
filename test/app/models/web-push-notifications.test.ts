@@ -4,6 +4,7 @@ import {
   encryptWebPushSecret,
   fingerprintWebPushEndpoint,
   validateWebPushSubscription,
+  WebPushSubscriptionValidationError,
 } from "~/lib/web-push-crypto.server";
 
 const mockWithDiscordUserTransaction = jest.fn();
@@ -17,6 +18,7 @@ jest.mock("~/lib/postgres.server", () => ({
 }));
 
 import {
+  deactivateSubscriptionsForSignout,
   getWebPushNotificationState,
   isSameOriginMutation,
   recordWebPushDeliveryClick,
@@ -66,6 +68,12 @@ describe("Web Push subscription crypto", () => {
     expect(validateWebPushSubscription(subscription)).toEqual(subscription);
     expect(() => validateWebPushSubscription({ ...subscription, endpoint: "http://push.example.test/send" })).toThrow();
     expect(() => validateWebPushSubscription({ ...subscription, keys: { p256dh: "short", auth } })).toThrow();
+  });
+
+  it("converts malformed base64url lengths into typed validation errors", () => {
+    expect(() => validateWebPushSubscription({ ...subscription, keys: { p256dh: "abcde", auth } })).toThrow(
+      WebPushSubscriptionValidationError,
+    );
   });
 });
 
@@ -122,6 +130,38 @@ describe("Web Push subscription repository", () => {
     ).toBe(true);
   });
 
+  it("deactivates the live endpoint and a mismatched cookie fallback in account scope", async () => {
+    mockWithDiscordUserTransaction.mockClear();
+    const statements: Array<{ sql: string; values: readonly unknown[] }> = [];
+    const client = {
+      async query(sql: string, values: readonly unknown[] = []) {
+        statements.push({ sql: sql.replace(/\s+/g, " ").trim(), values });
+        return { rows: [], rowCount: 1 };
+      },
+    };
+    mockWithDiscordUserTransaction.mockImplementation(async (_env, _name, _userId, operation) => {
+      return (operation as (...args: unknown[]) => unknown)({}, client);
+    });
+
+    const cookieFingerprint = "C".repeat(43);
+    const endpointFingerprint = await fingerprintWebPushEndpoint(endpoint);
+    await deactivateSubscriptionsForSignout(env, 7, endpoint, cookieFingerprint);
+
+    expect(mockWithDiscordUserTransaction).toHaveBeenCalledTimes(2);
+    expect(mockWithDiscordUserTransaction.mock.calls.map((call) => call[1])).toEqual([
+      "unsubscribe_web_push",
+      "unsubscribe_web_push",
+    ]);
+    const subscriptionUpdates = statements.filter(({ sql }) =>
+      sql.startsWith("update notification_push_subscriptions"),
+    );
+    expect(subscriptionUpdates).toHaveLength(2);
+    expect(subscriptionUpdates.map(({ sql, values }) => [sql, values[0], values[1]])).toEqual([
+      [expect.stringContaining("where user_id = $1 and endpoint_fingerprint = $2"), 7, endpointFingerprint],
+      [expect.stringContaining("where user_id = $1 and endpoint_fingerprint = $2"), 7, cookieFingerprint],
+    ]);
+  });
+
   it("returns platform configuration and current account state without secrets", async () => {
     const client = {
       async query(sql: string) {
@@ -137,6 +177,7 @@ describe("Web Push subscription repository", () => {
       configured: true,
       vapidPublicKey: "public-key",
       channelStatus: "active",
+      hasActiveSubscription: true,
       currentSubscriptionStatus: "active",
     });
     expect(JSON.stringify(state)).not.toContain(endpoint);

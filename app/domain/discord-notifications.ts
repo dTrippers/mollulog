@@ -1,27 +1,9 @@
-import type { DiscordNotificationTrigger } from "~/db/postgres/schema";
-
-export type { NotificationSettingsInput, NotificationTrigger } from "./notifications";
-export {
-  getEnabledNotificationTriggers,
-  NOTIFICATION_DEFAULTS,
-  NotificationValidationError,
-  validateNotificationSettings,
-} from "./notifications";
+import type { NotificationTrigger } from "./notifications";
+import { NOTIFICATION_DEFAULTS, NotificationValidationError, validateNotificationSettings } from "./notifications";
 
 export const DISCORD_NOTIFICATION_COMPLETION_MESSAGE = "몰루로그 Discord 알림 연결이 완료되었습니다.";
 export const DISCORD_NOTIFICATION_FEEDBACK_REPLY_MESSAGE = "작성한 제안/문의에 운영팀 답변이 등록되었습니다.";
 export const DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE = "작성한 이벤트 의견에 새 답글이 등록되었습니다.";
-
-export const DISCORD_NOTIFICATION_DEFAULTS = {
-  eventStartEnabled: false,
-  eventEndEnabled: false,
-  rewardExchangeEndEnabled: false,
-  recruitmentStartEnabled: false,
-  shopResetEnabled: false,
-  feedbackReplyEnabled: false,
-  eventOpinionReplyEnabled: false,
-  leadHours: 24,
-};
 
 export type DiscordOAuthStateValue = {
   state: string;
@@ -48,38 +30,11 @@ export function isDiscordOAuthStateValid(
   );
 }
 
-export type DiscordNotificationSettingsInput = {
-  eventStartEnabled: boolean;
-  eventEndEnabled: boolean;
-  rewardExchangeEndEnabled: boolean;
-  recruitmentStartEnabled: boolean;
-  shopResetEnabled: boolean;
-  feedbackReplyEnabled: boolean;
-  eventOpinionReplyEnabled: boolean;
-  leadHours: number;
-};
-
-export class DiscordNotificationValidationError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DiscordNotificationValidationError";
-  }
-}
-
 export class MissingNotificationNameError extends Error {
   constructor() {
     super("알림에 필요한 이름을 확인할 수 없어 작업을 만들지 못했습니다.");
     this.name = "MissingNotificationNameError";
   }
-}
-
-export function validateDiscordNotificationSettings(
-  input: DiscordNotificationSettingsInput,
-): DiscordNotificationSettingsInput {
-  if (!Number.isInteger(input.leadHours) || input.leadHours < 1 || input.leadHours > 24) {
-    throw new DiscordNotificationValidationError("알림 시점은 1시간 전부터 24시간 전까지 선택할 수 있어요.");
-  }
-  return { ...input, leadHours: input.leadHours };
 }
 
 export type KstDateParts = {
@@ -94,7 +49,7 @@ export type KstDateParts = {
 export function getKstDateParts(value: Date | string): KstDateParts {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new DiscordNotificationValidationError("알림 기준 시간이 올바르지 않아요.");
+    throw new NotificationValidationError("알림 기준 시간이 올바르지 않아요.");
   }
 
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -120,10 +75,10 @@ export function getKstDateParts(value: Date | string): KstDateParts {
 }
 
 export function plannedSendAtForAnchor(sourceAnchor: Date | string, leadHours: number): Date {
-  validateDiscordNotificationSettings({ ...DISCORD_NOTIFICATION_DEFAULTS, leadHours });
+  validateNotificationSettings({ ...NOTIFICATION_DEFAULTS, leadHours });
   const anchor = sourceAnchor instanceof Date ? sourceAnchor : new Date(sourceAnchor);
   if (Number.isNaN(anchor.getTime())) {
-    throw new DiscordNotificationValidationError("알림 기준 시간이 올바르지 않아요.");
+    throw new NotificationValidationError("알림 기준 시간이 올바르지 않아요.");
   }
   return new Date(anchor.getTime() - leadHours * 60 * 60 * 1000);
 }
@@ -149,7 +104,7 @@ export function formatDiscordNotificationMessage({
   contentName,
   studentNames = [],
 }: {
-  trigger: DiscordNotificationTrigger;
+  trigger: NotificationTrigger;
   sourceAnchor: Date | string;
   contentName?: string | null;
   studentNames?: readonly (string | null | undefined)[];
@@ -175,16 +130,4 @@ export function formatDiscordNotificationMessage({
     case "reward-exchange-end":
       return `${at}, "${name}" 이벤트의 보상 교환이 종료됩니다. 수령하지 않은 보상은 소멸되니 교환을 완료했는지 확인해주세요.`;
   }
-}
-
-export function getEnabledTriggers(settings: DiscordNotificationSettingsInput): DiscordNotificationTrigger[] {
-  return [
-    settings.eventStartEnabled ? "event-start" : null,
-    settings.eventEndEnabled ? "event-end" : null,
-    settings.rewardExchangeEndEnabled ? "reward-exchange-end" : null,
-    settings.recruitmentStartEnabled ? "recruitment-start" : null,
-    settings.shopResetEnabled ? "shop-reset" : null,
-    settings.feedbackReplyEnabled ? "feedback-reply" : null,
-    settings.eventOpinionReplyEnabled ? "event-opinion-reply" : null,
-  ].filter((trigger): trigger is DiscordNotificationTrigger => trigger !== null);
 }

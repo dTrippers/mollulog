@@ -32,7 +32,12 @@ const WEB_PUSH_EVENTS = new Set([
 function cookieValue(request: Request): string | null {
   const cookies = request.headers.get("Cookie")?.split(";") ?? [];
   const row = cookies.find((value) => value.trim().startsWith(`${FINGERPRINT_COOKIE}=`));
-  return row ? decodeURIComponent(row.trim().slice(FINGERPRINT_COOKIE.length + 1)) : null;
+  if (!row) return null;
+  try {
+    return decodeURIComponent(row.trim().slice(FINGERPRINT_COOKIE.length + 1));
+  } catch {
+    return null;
+  }
 }
 
 function setFingerprintCookie(fingerprint: string): string {

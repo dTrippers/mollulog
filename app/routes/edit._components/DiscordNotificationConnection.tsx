@@ -6,11 +6,11 @@ import type { DiscordProfileFeedback } from "~/components/features/auth/discord-
 import { Button, SectionCard } from "~/components/primitives";
 import { cn } from "~/lib/utils";
 import type { DiscordConnection } from "~/models/discord-notifications.server";
-import type { WebPushNotificationState } from "~/models/web-push-notifications.server";
+import type { WebPushNotificationSummary } from "~/models/web-push-notifications.server";
 
 type DiscordNotificationConnectionProps = {
   connection: DiscordConnection | null;
-  webPush: WebPushNotificationState;
+  webPush: WebPushNotificationSummary;
   notice?: DiscordProfileFeedback | null;
   error?: string;
   isSubmitting: boolean;
@@ -158,7 +158,7 @@ function statusClass(status: BrowserPushStatus): string {
   return "text-muted-foreground";
 }
 
-function BrowserPushNotificationSettings({ config }: { config: WebPushNotificationState }) {
+function BrowserPushNotificationSettings({ config }: { config: WebPushNotificationSummary }) {
   const [status, setStatus] = useState<BrowserPushStatus>("checking");
   const [isBusy, setIsBusy] = useState(false);
   const [announcement, setAnnouncement] = useState("");

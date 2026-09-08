@@ -25,7 +25,12 @@ export function fromBase64Url(value: string): Uint8Array {
   if (!/^[A-Za-z0-9_-]+$/.test(value))
     throw new WebPushSubscriptionValidationError("브라우저 알림 키를 확인할 수 없어요.");
   const padded = value.replaceAll("-", "+").replaceAll("_", "/") + "===".slice((value.length + 3) % 4);
-  const binary = atob(padded);
+  let binary: string;
+  try {
+    binary = atob(padded);
+  } catch {
+    throw new WebPushSubscriptionValidationError("브라우저 알림 키를 확인할 수 없어요.");
+  }
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
 
@@ -44,6 +49,22 @@ async function encryptionKey(secret: string): Promise<CryptoKey> {
 
 export async function fingerprintWebPushEndpoint(endpoint: string): Promise<string> {
   return toBase64Url(await digest(endpoint));
+}
+
+export function validateWebPushEndpoint(value: unknown): string {
+  if (typeof value !== "string" || value.length < 20 || value.length > 4096) {
+    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
+  }
+  if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
+  }
+  return value;
 }
 
 export async function encryptWebPushSecret(value: string, secret: string): Promise<string> {
@@ -74,18 +95,7 @@ export type WebPushSubscriptionInput = {
 };
 
 export function validateWebPushSubscription(input: WebPushSubscriptionInput): WebPushSubscriptionInput {
-  if (typeof input.endpoint !== "string" || input.endpoint.length < 20 || input.endpoint.length > 4096) {
-    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
-  }
-  let url: URL;
-  try {
-    url = new URL(input.endpoint);
-  } catch {
-    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
-  }
-  if (url.protocol !== "https:" || url.username || url.password || url.hash) {
-    throw new WebPushSubscriptionValidationError("브라우저 알림 구독 주소를 확인할 수 없어요.");
-  }
+  const endpoint = validateWebPushEndpoint(input.endpoint);
   if (!input.keys || typeof input.keys.p256dh !== "string" || typeof input.keys.auth !== "string") {
     throw new WebPushSubscriptionValidationError("브라우저 알림 암호화 키를 확인할 수 없어요.");
   }
@@ -101,5 +111,5 @@ export function validateWebPushSubscription(input: WebPushSubscriptionInput): We
   ) {
     throw new WebPushSubscriptionValidationError("브라우저 알림 만료 시간을 확인할 수 없어요.");
   }
-  return input;
+  return { ...input, endpoint };
 }

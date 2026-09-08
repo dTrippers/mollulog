@@ -37,6 +37,8 @@ describe("Discord page responsibility", () => {
       "app/routes/edit._components/DiscordNotificationConnection.tsx",
       "utf8",
     );
+    const notificationDomainSource = readFileSync("app/domain/discord-notifications.ts", "utf8");
+    const notificationModelSource = readFileSync("app/models/discord-notifications.server.ts", "utf8");
     const notificationChannelSource = readFileSync(
       "app/routes/notifications._components/NotificationChannelCard.tsx",
       "utf8",
@@ -48,6 +50,13 @@ describe("Discord page responsibility", () => {
     expect(editSource).toContain('title="연결된 서비스"');
     expect(editSource).toContain('id="connected-services"');
     expect(editSource).toContain("DiscordNotificationConnection");
+    expect(notificationDomainSource).not.toContain("getEnabledNotificationTriggers");
+    expect(notificationDomainSource).not.toContain("DiscordNotificationSettingsInput");
+    expect(notificationDomainSource).not.toContain("DISCORD_NOTIFICATION_DEFAULTS");
+    expect(notificationModelSource).toContain("getNotificationState");
+    expect(notificationModelSource).toContain("saveNotificationSettings");
+    expect(notificationModelSource).not.toContain("getDiscordNotificationState");
+    expect(notificationModelSource).not.toContain("saveDiscordNotificationSettings");
     expect(editSource).toContain('location.hash === "#discord-notifications"');
     expect(editSource).toContain('location.hash === "#notification-channels"');
     expect(editSource).toContain("scrollIntoView");
@@ -60,7 +69,7 @@ describe("Discord page responsibility", () => {
     expect(profileConnectionSource).toContain('action="/auth/discord/notifications/connect"');
     expect(profileConnectionSource).toContain('value="discord-unlink"');
     expect(editSource).toContain("discordMessage");
-    expect(editSource).toContain("webPush={discordState.webPush}");
+    expect(editSource).toContain("webPush={notificationState.webPush}");
     expect(notificationsSource).not.toContain('intent !== "discord-connect"');
     expect(notificationsSource).not.toContain('intent !== "discord-unlink"');
     expect(notificationsSource).not.toContain("upsertPendingDiscordConnection");
@@ -99,7 +108,7 @@ describe("Discord page responsibility", () => {
     expect(profileConnectionSource).toContain('aria-label="Discord 알림 설정"');
     expect(profileConnectionSource).toContain("tabIndex={-1}");
     expect(editSource).toContain("target?.focus({ preventScroll: true })");
-    expect(editSource).toContain('<fetcher.Form method="post" action="/signout">');
+    expect(editSource).toContain('<fetcher.Form method="post" action="/signout"');
     expect(notificationChannelSource).not.toContain("border-t");
     expect(notificationChannelSource).not.toContain("<Form");
     expect(notificationsSource).not.toContain("/notifications/discord");

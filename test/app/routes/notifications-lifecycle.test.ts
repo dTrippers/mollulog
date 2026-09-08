@@ -3,11 +3,9 @@ import { describe, expect, it, jest } from "@jest/globals";
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/components/primitives", () => ({ Title: () => null }));
 jest.mock("~/models/discord-notifications.server", () => ({
-  DiscordNotificationValidationError: class DiscordNotificationValidationError extends Error {},
-  DiscordSettingsUnavailableError: class DiscordSettingsUnavailableError extends Error {},
-  getDiscordNotificationState: jest.fn(),
-  parseDiscordNotificationSettingsForm: jest.fn(),
-  saveDiscordNotificationSettings: jest.fn(),
+  getNotificationState: jest.fn(),
+  parseNotificationSettingsForm: jest.fn(),
+  saveNotificationSettings: jest.fn(),
 }));
 jest.mock("~/routes/notifications._components/NotificationChannelCard", () => () => null);
 jest.mock("~/routes/notifications._components/NotificationPreferencesCard", () => () => null);

@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   formatDiscordNotificationMessage,
-  getEnabledTriggers,
   getKstDateParts,
   isDiscordOAuthStateValid,
   isPastEffectiveAt,
   plannedSendAtForAnchor,
 } from "~/domain/discord-notifications";
+import { getEnabledNotificationTriggers } from "~/domain/notifications";
 
 describe("Discord notification timing and copy", () => {
   it("formats fixed messages for reactive reply triggers without source content", () => {
@@ -27,7 +27,7 @@ describe("Discord notification timing and copy", () => {
 
   it("maps all seven settings to their notification triggers", () => {
     expect(
-      getEnabledTriggers({
+      getEnabledNotificationTriggers({
         eventStartEnabled: true,
         eventEndEnabled: false,
         rewardExchangeEndEnabled: false,

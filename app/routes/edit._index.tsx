@@ -1,7 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
 import { ArrowRightStartOnRectangleIcon, KeyIcon } from "@heroicons/react/24/outline";
-import { type ElementType, useEffect, useState } from "react";
+import { type ElementType, type FormEvent, useEffect, useState } from "react";
 import { FaDiscord, FaGithub } from "react-icons/fa6";
 import { FcGoogle } from "react-icons/fc";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -24,7 +24,7 @@ import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitiv
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
-import { getDiscordNotificationState, unlinkDiscordConnection } from "~/models/discord-notifications.server";
+import { getNotificationState, unlinkDiscordConnection } from "~/models/discord-notifications.server";
 import { getPasskeysBySensei } from "~/models/passkey";
 import { getSenseiById, updateSensei } from "~/models/sensei";
 import { getSenseiPrivacyByUserId, upsertSenseiPrivacy } from "~/models/sensei-privacy";
@@ -64,7 +64,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       .sort((a, b) => a.order - b.order),
     passkeyCount: (await getPasskeysBySensei(env, sensei, { ctx })).length,
     authIdentities: await getAuthIdentityStatuses(env, sensei.id, { ctx }),
-    discordState: await getDiscordNotificationState(env, sensei.id, { ctx }),
+    notificationState: await getNotificationState(env, sensei.id, { ctx }),
     authMessage: authMessageFromSearchParams(url.searchParams),
     discordMessage: getDiscordProfileFeedback(url.searchParams),
   };
@@ -274,10 +274,30 @@ function SettingsLink({
 function SignoutRow() {
   const fetcher = useFetcher<{ error?: string }>();
   const isSubmitting = fetcher.state !== "idle";
+  const [clientError, setClientError] = useState<string | null>(null);
+
+  const submitSignout = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isSubmitting) return;
+    setClientError(null);
+    try {
+      let endpoint: string | null = null;
+      if ("serviceWorker" in navigator && "PushManager" in window) {
+        const registration = await navigator.serviceWorker.getRegistration("/");
+        const subscription = await registration?.pushManager.getSubscription();
+        endpoint = subscription?.endpoint ?? null;
+      }
+      fetcher.submit({ endpoint }, { action: "/signout", method: "post", encType: "application/json" });
+    } catch {
+      setClientError("로그아웃 전에 이 브라우저의 알림 연결을 확인하지 못했어요. 잠시 후 다시 시도해주세요.");
+    }
+  };
+
+  const error = clientError ?? fetcher.data?.error;
 
   return (
     <div>
-      <fetcher.Form method="post" action="/signout">
+      <fetcher.Form method="post" action="/signout" onSubmit={(event) => void submitSignout(event)}>
         <button
           type="submit"
           disabled={isSubmitting}
@@ -290,9 +310,9 @@ function SignoutRow() {
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </button>
       </fetcher.Form>
-      {fetcher.data?.error ? (
+      {error ? (
         <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-          {fetcher.data.error}
+          {error}
         </p>
       ) : null}
     </div>
@@ -332,7 +352,7 @@ function AuthIdentityLinkForm({
 }
 
 export default function EditProfile() {
-  const { sensei, allStudents, passkeyCount, authIdentities, discordState, authMessage, discordMessage } =
+  const { sensei, allStudents, passkeyCount, authIdentities, notificationState, authMessage, discordMessage } =
     useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const location = useLocation();
@@ -391,12 +411,12 @@ export default function EditProfile() {
   }, [accountActionData]);
 
   useEffect(() => {
-    if (discordState.connection?.status !== "pending") return;
+    if (notificationState.connection?.status !== "pending") return;
     const intervalId = window.setInterval(() => {
       if (revalidator.state === "idle") revalidator.revalidate();
     }, 3000);
     return () => window.clearInterval(intervalId);
-  }, [discordState.connection?.status, revalidator]);
+  }, [notificationState.connection?.status, revalidator]);
 
   return (
     <div className="space-y-8">
@@ -494,8 +514,8 @@ export default function EditProfile() {
       </div>
 
       <DiscordNotificationConnection
-        connection={discordState.connection}
-        webPush={discordState.webPush}
+        connection={notificationState.connection}
+        webPush={notificationState.webPush}
         notice={discordMessage}
         error={discordActionData?.error?.form}
         isSubmitting={isDiscordSubmitting}

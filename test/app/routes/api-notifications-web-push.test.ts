@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
+import { validateWebPushSubscription } from "~/lib/web-push-crypto.server";
 import {
   getWebPushNotificationState,
   recordWebPushDeliveryClick,
@@ -84,6 +85,30 @@ describe("Web Push notification API", () => {
     expect(result.data).toMatchObject({ ok: true, status: "active" });
   });
 
+  it("returns 400 for malformed base64url keys without logging an unexpected error", async () => {
+    mockedSubscribe.mockImplementationOnce(async (_env, _userId, subscription) => {
+      validateWebPushSubscription(subscription);
+      return { fingerprint: "A".repeat(43), status: "active" };
+    });
+
+    const result = (await action(
+      args(
+        request({
+          intent: "subscribe",
+          subscription: {
+            endpoint: "https://push.example.test/send/abc",
+            expirationTime: null,
+            keys: { p256dh: "abcde", auth: "A".repeat(22) },
+          },
+        }),
+      ),
+    )) as { data: unknown; init?: { status?: number } };
+
+    expect(result).toMatchObject({ init: { status: 400 } });
+    expect(result.data).toMatchObject({ error: "브라우저 알림 키를 확인할 수 없어요." });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
   it("records click independently and returns a safe response", async () => {
     mockedClick.mockResolvedValue(true);
     const result = (await action(args(request({ intent: "click", deliveryUid: "delivery-1234567890123456" })))) as {
@@ -100,11 +125,21 @@ describe("Web Push notification API", () => {
     expect((result as { init?: { headers?: Headers } }).init?.headers).toBeDefined();
   });
 
+  it("treats a malformed fingerprint cookie as an absent marker", async () => {
+    const result = await action(
+      args(request({ intent: "unsubscribe" }, { Cookie: "mollulog_web_push_fingerprint=%" })),
+    );
+
+    expect(result).toMatchObject({ data: { ok: true, status: "not-found" } });
+    expect(mockedUnsubscribe).not.toHaveBeenCalled();
+  });
+
   it("returns server state for a browser subscription without exposing its endpoint", async () => {
     mockedState.mockResolvedValue({
       configured: true,
       vapidPublicKey: "public",
       channelStatus: "active",
+      hasActiveSubscription: true,
       currentSubscriptionStatus: "active",
     });
     const result = (await action(
@@ -125,6 +160,7 @@ describe("Web Push notification API", () => {
         configured: true,
         vapidPublicKey: "public",
         channelStatus: "active",
+        hasActiveSubscription: true,
         currentSubscriptionStatus: "active",
       },
     });
