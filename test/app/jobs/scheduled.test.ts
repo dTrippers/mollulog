@@ -9,6 +9,7 @@ import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
+import { syncStudentDirectory } from "~/models/student-directory";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
@@ -30,6 +31,10 @@ jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
   getStudentSkillItemsBatch: jest.fn(),
   syncRawStudents: jest.fn(),
+}));
+
+jest.mock("~/models/student-directory", () => ({
+  syncStudentDirectory: jest.fn(),
 }));
 
 jest.mock("~/models/timeline-content.server", () => ({
@@ -85,6 +90,7 @@ const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.Mocked
   typeof syncYoutubeCommunityPosts
 >;
 const mockedSyncRawStudents = syncRawStudents as jest.MockedFunction<typeof syncRawStudents>;
+const mockedSyncStudentDirectory = syncStudentDirectory as jest.MockedFunction<typeof syncStudentDirectory>;
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetStudentSkillItemsBatch = getStudentSkillItemsBatch as jest.MockedFunction<
   typeof getStudentSkillItemsBatch
@@ -127,6 +133,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedSyncYoutubeCommunityPosts.mockResolvedValue({ synced: 0 });
   mockedSyncRawStudents.mockResolvedValue([]);
+  mockedSyncStudentDirectory.mockResolvedValue([]);
   mockedGetAllStudents.mockResolvedValue([{ uid: "10000" }, { uid: "10001" }] as Awaited<
     ReturnType<typeof getAllStudents>
   >);
@@ -175,6 +182,7 @@ describe("runScheduledJobs", () => {
     await runScheduledJobs(env, ctx);
 
     expect(mockedSyncRawStudents).toHaveBeenCalledWith(env, true);
+    expect(mockedSyncStudentDirectory).toHaveBeenCalledWith(env, true);
     expect(mockedWarmRecruitmentCache).toHaveBeenCalledWith(env, true);
     expect(mockedWarmRaidCache).toHaveBeenCalledWith(env, true);
     expect(mockedGetMainStories).toHaveBeenCalledWith(env, true);
@@ -230,6 +238,7 @@ describe("runScheduledJobs", () => {
     await runScheduledJobs(env, {} as ExecutionContext);
 
     expect(mockedSyncRawStudents).not.toHaveBeenCalled();
+    expect(mockedSyncStudentDirectory).not.toHaveBeenCalled();
     expect(mockedWarmRecruitmentCache).not.toHaveBeenCalled();
     expect(mockedWarmRaidCache).not.toHaveBeenCalled();
     expect(mockedGetMainStories).not.toHaveBeenCalled();
@@ -286,5 +295,13 @@ describe("runScheduledJobs", () => {
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledTimes(1);
     expect(mockedSyncAllTimelineContentsMeta).toHaveBeenCalledTimes(1);
     expect(mockedSyncRawStudents).toHaveBeenCalledTimes(1);
+  });
+
+  it("raises a scheduled job failure when the student directory refresh fails", async () => {
+    mockedSyncStudentDirectory.mockRejectedValue(new Error("student directory failed"));
+    const { env } = createEnv();
+
+    await expect(runScheduledJobs(env, {} as ExecutionContext)).rejects.toThrow("One or more scheduled jobs failed");
+    expect(mockedSyncStudentDirectory).toHaveBeenCalledWith(env, true);
   });
 });

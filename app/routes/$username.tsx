@@ -7,9 +7,10 @@ import {
   QueueListIcon,
   UserIcon,
 } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Outlet, useLocation, useParams, useRouteError } from "react-router";
 import { ErrorPage, Page, type PagePanelProps, ServerErrorPage } from "~/components/features/layout";
+import type { PageLinkProps } from "~/components/features/layout/PageLink";
 import { Title } from "~/components/primitives";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 
@@ -52,6 +53,15 @@ export const ErrorBoundary = () => {
 };
 
 type Screen = "profile" | "students" | "pickups" | "futures" | "parties" | "timelines";
+type UserPageLinksState = { username: string; links: PageLinkProps[] };
+
+export function getUserPageLinks(
+  currentScreen: Screen,
+  username: string,
+  links: UserPageLinksState | undefined,
+): PageLinkProps[] | undefined {
+  return currentScreen === "students" && links?.username === username ? links.links : undefined;
+}
 
 export default function User() {
   const params = useParams();
@@ -72,9 +82,18 @@ export default function User() {
   }
 
   const [panels, setPanels] = useState<PagePanelProps[]>([]);
+  const [links, setLinks] = useState<UserPageLinksState | undefined>(undefined);
+  const setPageLinks = useCallback(
+    (nextLinks: PageLinkProps[] | undefined) => {
+      setLinks(nextLinks ? { username, links: nextLinks } : undefined);
+    },
+    [username],
+  );
+
   useEffect(() => {
     if (currentScreen !== "students") {
       setPanels([]);
+      setLinks(undefined);
     }
   }, [currentScreen]);
 
@@ -83,6 +102,7 @@ export default function User() {
       title={`@${username}`}
       description="선생님의 정보를 확인해보세요"
       panels={panels}
+      links={getUserPageLinks(currentScreen, username, links)}
       screens={[
         { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
         { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
@@ -107,7 +127,7 @@ export default function User() {
         },
       ]}
     >
-      <Outlet context={{ setPanels }} />
+      <Outlet context={{ setPanels, setLinks: setPageLinks }} />
     </Page>
   );
 }

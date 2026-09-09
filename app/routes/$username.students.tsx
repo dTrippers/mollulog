@@ -3,6 +3,7 @@ import {
   IdentificationIcon,
   MinusCircleIcon,
   PlusCircleIcon,
+  VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
@@ -11,6 +12,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, Link, useFetcher, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { PagePanelProps } from "~/components/features/layout";
+import type { PageLinkProps } from "~/components/features/layout/PageLink";
 import {
   getFilteredStudentUids,
   StudentCards,
@@ -38,6 +40,19 @@ import StudentGrowthCard, { type GrowthStudent } from "./$username.students._com
 export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
 export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
 export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+export function getStudentScannerLinks(me: boolean): PageLinkProps[] | undefined {
+  return me
+    ? [
+        {
+          Icon: VideoCameraIcon,
+          title: "영상 인식기",
+          description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+          to: "/scanner/student",
+        },
+      ]
+    : undefined;
+}
 
 export const growthPrivateCalloutDismissalStorageKey = "mollulog::dismissed-growth-private-callout";
 const growthPrivateCalloutId = "student-growth-private";
@@ -305,9 +320,15 @@ export default function UserPage() {
     return [filteredStudents.filter(({ tier }) => tier !== null), filteredStudents.filter(({ tier }) => tier === null)];
   }, [studentMap, filteredUids]);
 
-  const { setPanels } = useOutletContext<{
+  const { setPanels, setLinks } = useOutletContext<{
     setPanels: React.Dispatch<React.SetStateAction<PagePanelProps[]>>;
+    setLinks: (links: PageLinkProps[] | undefined) => void;
   }>();
+
+  useEffect(() => {
+    setLinks(getStudentScannerLinks(me));
+    return () => setLinks(undefined);
+  }, [me, setLinks]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

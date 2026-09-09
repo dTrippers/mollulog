@@ -13,9 +13,11 @@ import {
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
+import { getUserPageLinks } from "~/routes/$username";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import {
   action,
+  getStudentScannerLinks,
   growthPrivateCalloutDismissalStorageKey,
   loader,
   parseGrowthPrivateCalloutDismissal,
@@ -147,6 +149,22 @@ beforeEach(() => {
 });
 
 describe("@username students loader", () => {
+  it("configures the scanner link only for the owner's student page", () => {
+    const ownerLinks = getStudentScannerLinks(true);
+    expect(ownerLinks).toMatchObject([
+      {
+        title: "영상 인식기",
+        description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+        to: "/scanner/student",
+      },
+    ]);
+    expect(getStudentScannerLinks(false)).toBeUndefined();
+
+    expect(getUserPageLinks("students", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBe(ownerLinks);
+    expect(getUserPageLinks("students", "other", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
+    expect(getUserPageLinks("profile", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
+  });
+
   it("keeps owner growth callout priority and public sharing states in the students route", () => {
     const source = readFileSync("app/routes/$username.students.tsx", "utf8");
 

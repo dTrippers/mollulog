@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { AttributeBadge, ProfileImage, SectionCard } from "~/components/primitives";
-import type { StudentHeaderQuery, StudentTerrainAdaptationRank, TacticRole } from "~/graphql/graphql";
+import type { StudentHeaderQuery, StudentTerrainAdaptationRank } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import {
   attackTypeColor,
@@ -10,16 +10,9 @@ import {
   roleColor,
   roleLocale,
   schoolNameLocale,
+  tacticRoleLocale,
 } from "~/locales/ko";
 import { studentStandingImageUrl, terrainAdaptationIconUrl } from "~/models/assets";
-
-const tacticRoleLocale: Record<TacticRole, string> = {
-  attacker: "딜러",
-  healer: "힐러",
-  support: "서포터",
-  tactical_support: "T.S.",
-  tank: "탱커",
-};
 
 type StudentInfoProps = {
   student: Pick<
