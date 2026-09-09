@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
-import { createStudentFilterState, type StudentFilterState } from "~/components/features/students/StudentFilter";
+import {
+  createStudentFilterState,
+  STUDENT_DIRECTORY_DISPLAY_VALUES,
+  STUDENT_DIRECTORY_GROUP_VALUES,
+  type StudentFilterState,
+} from "~/components/features/students/StudentFilter";
 import {
   MAX_STUDENT_FILTER_COOKIE_SIZE,
   normalizeStudentFilterState,
@@ -23,6 +28,14 @@ const userOptions: PersistentStudentFilterStateOptions = {
   cookiePath: "/",
   defaultSort: "recent",
   allowedSorts: ["recent", "old", "name", "tier"],
+};
+
+const directoryOptions: PersistentStudentFilterStateOptions = {
+  ...generalOptions,
+  defaultGroup: "none",
+  allowedGroups: STUDENT_DIRECTORY_GROUP_VALUES,
+  defaultDisplay: "none",
+  allowedDisplays: STUDENT_DIRECTORY_DISPLAY_VALUES,
 };
 
 function cookieHeader(options: PersistentStudentFilterStateOptions, state: StudentFilterState): string {
@@ -107,6 +120,37 @@ describe("persistent student filter state", () => {
     expect(normalizeStudentFilterState({ sort: "tier" }, userOptions)).toEqual(createStudentFilterState("tier"));
   });
 
+  it("keeps valid directory group and display choices while normalizing old values to defaults", () => {
+    expect(
+      normalizeStudentFilterState(
+        {
+          ...createStudentFilterState("name"),
+          groupBy: "school",
+          displayBy: "height",
+          schools: ["millennium"],
+          equipmentSlots: [["hat"], ["watch"], []],
+          initialTiers: [3],
+        },
+        directoryOptions,
+      ),
+    ).toEqual({
+      ...createStudentFilterState("name"),
+      groupBy: "school",
+      displayBy: "height",
+      schools: ["millennium"],
+      equipmentSlots: [["hat"], ["watch"], []],
+      initialTiers: [3],
+    });
+
+    expect(normalizeStudentFilterState({ groupBy: "retired", displayBy: "retired" }, directoryOptions)).toEqual(
+      createStudentFilterState("recent"),
+    );
+    expect(normalizeStudentFilterState({ groupBy: "school" }, directoryOptions)).toEqual({
+      ...createStudentFilterState("recent"),
+      groupBy: "school",
+    });
+  });
+
   it("keeps general and user student preferences in independent cookies", () => {
     const generalState: StudentFilterState = {
       ...createStudentFilterState("name"),
@@ -130,6 +174,12 @@ describe("persistent student filter state", () => {
     expect(readStudentFilterStateFromCookie(cookieHeader(generalOptions, generalState), userOptions)).toEqual(
       createStudentFilterState("recent"),
     );
+    expect(
+      normalizeStudentFilterState(
+        { schools: ["millennium"], equipmentSlots: [["hat"], [], []], initialTiers: [5], groupBy: "school" },
+        userOptions,
+      ),
+    ).toEqual(createStudentFilterState("recent"));
   });
 
   it("serializes only supported filters and sort, excluding search and route-local state", () => {
@@ -142,7 +192,42 @@ describe("persistent student filter state", () => {
     const serialized = serializeStudentFilterStateCookie(generalOptions, state);
 
     expect(serialized).not.toBeNull();
-    expect(JSON.parse(decodeURIComponent(serialized as string))).toEqual(createStudentFilterState("recent"));
+    expect(JSON.parse(decodeURIComponent(serialized as string))).toEqual({
+      attackTypes: [],
+      defenseTypes: [],
+      roles: [],
+      tacticRoles: [],
+      positions: [],
+      sort: "recent",
+    });
+  });
+
+  it("persists directory filters, grouping, and display without persisting search", () => {
+    const state: StudentFilterState = {
+      ...createStudentFilterState("name"),
+      schools: ["millennium"],
+      equipmentSlots: [["hat"], ["watch"], []],
+      initialTiers: [3],
+      groupBy: "school",
+      displayBy: "height",
+      search: "아루",
+    };
+    const serialized = serializeStudentFilterStateCookie(directoryOptions, state);
+
+    expect(serialized).not.toBeNull();
+    expect(JSON.parse(decodeURIComponent(serialized as string))).toEqual({
+      attackTypes: [],
+      defenseTypes: [],
+      roles: [],
+      tacticRoles: [],
+      positions: [],
+      schools: ["millennium"],
+      equipmentSlots: [["hat"], ["watch"], []],
+      initialTiers: [3],
+      sort: "name",
+      groupBy: "school",
+      displayBy: "height",
+    });
   });
 
   it("falls back to defaults for malformed, unknown, oversized, missing, or unavailable cookies", () => {

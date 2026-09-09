@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { normalizeTimeZone } from "~/lib/date-time";
-import type { EventType, RaidType, Role, Terrain } from "~/models/content.d";
+import type { EventType, RaidType, Role, TacticRole, Terrain } from "~/models/content.d";
 import type { TimelineContentType } from "~/models/timeline-content";
 
 export const attackTypeLocale: Record<Attack, string> = {
@@ -189,8 +189,67 @@ export const schoolNameLocale: Record<string, string> = {
   tokiwadai: "토키와다이 중학교",
   highlander: "하이랜더 철도학원",
   wildhunt: "와일드헌트 예술학원",
+  odyssey: "오디세이아 해양학교",
   others: "기타 학원",
 };
+
+/** Compact labels for the student directory card and group headings. */
+export const schoolShortLocale: Record<string, string> = {
+  abydos: "아비도스",
+  shanhaijing: "산해경",
+  hyakkiyako: "백귀야행",
+  millennium: "밀레니엄",
+  srt: "SRT",
+  arius: "아리우스",
+  trinity: "트리니티",
+  gehenna: "게헨나",
+  valkyrie: "발키리",
+  redwinter: "붉은겨울",
+  sakugawa: "사쿠가와",
+  tokiwadai: "토키와다이",
+  highlander: "하이랜더",
+  wildhunt: "와일드헌트",
+  odyssey: "오디세이아",
+  others: "기타",
+};
+
+export const tacticRoleLocale: Record<TacticRole, string> = {
+  attacker: "딜러",
+  tank: "탱커",
+  healer: "힐러",
+  support: "서포터",
+  tactical_support: "T.S.",
+};
+
+export const positionLocale: Record<"front" | "middle" | "back", string> = {
+  front: "FRONT",
+  middle: "MIDDLE",
+  back: "BACK",
+};
+
+export const equipmentTypeLocale: Record<string, string> = {
+  hat: "모자",
+  gloves: "장갑",
+  shoes: "신발",
+  bag: "가방",
+  badge: "배지",
+  hairpin: "헤어핀",
+  charm: "부적",
+  watch: "시계",
+  necklace: "목걸이",
+};
+
+export const equipmentTypeOrder = [
+  "hat",
+  "gloves",
+  "shoes",
+  "bag",
+  "badge",
+  "hairpin",
+  "charm",
+  "watch",
+  "necklace",
+] as const;
 
 type RelativeTimeOptions = {
   now?: dayjs.Dayjs;

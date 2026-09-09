@@ -1,22 +1,42 @@
-import { ChatBubbleLeftRightIcon, FunnelIcon, IdentificationIcon, VideoCameraIcon } from "@heroicons/react/24/outline";
+import {
+  AdjustmentsHorizontalIcon,
+  ChatBubbleLeftRightIcon,
+  FunnelIcon,
+  IdentificationIcon,
+  VideoCameraIcon,
+} from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
-import { getFilteredStudentUids, StudentFilter, usePersistentStudentFilterState } from "~/components/features/students";
+import {
+  getFilteredStudentUids,
+  getStudentDirectoryDisplaySettingsSummary,
+  STUDENT_DIRECTORY_DISPLAY_VALUES,
+  STUDENT_DIRECTORY_GROUP_VALUES,
+  StudentDirectoryDisplaySettings,
+  default as StudentFilter,
+} from "~/components/features/students/StudentFilter";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
+import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
 import { canonicalLink } from "~/lib/seo";
-import { getAllStudents } from "~/models/student";
+import { getStudentDirectoryStudents } from "~/models/student-directory";
 
 export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
 export const STUDENT_FILTER_COOKIE_PATH = "/";
-export const STUDENT_FILTER_SORTS = ["recent", "old", "name"] as const;
+export const STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+export const STUDENT_FILTER_GROUPS = STUDENT_DIRECTORY_GROUP_VALUES;
+export const STUDENT_FILTER_DISPLAYS = STUDENT_DIRECTORY_DISPLAY_VALUES;
 
 const studentFilterCookieOptions = {
   cookieName: STUDENT_FILTER_COOKIE_NAME,
   cookiePath: STUDENT_FILTER_COOKIE_PATH,
   defaultSort: "recent",
   allowedSorts: STUDENT_FILTER_SORTS,
+  defaultGroup: "none",
+  allowedGroups: STUDENT_FILTER_GROUPS,
+  defaultDisplay: "none",
+  allowedDisplays: STUDENT_FILTER_DISPLAYS,
 } as const;
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -33,9 +53,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   }
 
   const env = context.cloudflare.env;
-  const allStudents = await getAllStudents(env, true);
+  const allStudents = await getStudentDirectoryStudents(env, true);
   return {
-    students: allStudents.sort((a, b) => b.order - a.order),
+    students: [...allStudents].sort((a, b) => b.order - a.order),
     filterState,
   };
 };
@@ -95,8 +115,16 @@ export default function StudentsLayout() {
                     sortBy={[...STUDENT_FILTER_SORTS]}
                     useFilter
                     useSearch
+                    directory
                   />
                 ),
+              },
+              {
+                title: "표시 설정",
+                description: getStudentDirectoryDisplaySettingsSummary(filterState),
+                Icon: AdjustmentsHorizontalIcon,
+                collapsible: true,
+                children: <StudentDirectoryDisplaySettings state={filterState} onStateChange={setFilterState} />,
               },
             ]
           : undefined
@@ -130,11 +158,12 @@ export default function StudentsLayout() {
         },
       ]}
     >
-      <Outlet context={{ students: filteredStudents } satisfies StudentsPageContext} />
+      <Outlet context={{ students: filteredStudents, filterState } satisfies StudentsPageContext} />
     </Page>
   );
 }
 
 export type StudentsPageContext = {
   students: Awaited<ReturnType<typeof loader>>["students"];
+  filterState: Awaited<ReturnType<typeof loader>>["filterState"];
 };
