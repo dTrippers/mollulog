@@ -37,7 +37,11 @@ function SlotCountInfos({
   statistics,
   allStudents,
   maxTier,
-}: { statistics: RaidStatistics[]; allStudents: Record<string, { name: string; role: Role }>; maxTier?: number }) {
+}: {
+  statistics: RaidStatistics[];
+  allStudents: Record<string, { name: string; role: Role }>;
+  maxTier?: number;
+}) {
   const [showMore, setShowMore] = useState(false);
   const sortedStatistics = useMemo(() => {
     const sorted = [...statistics].sort((a, b) => b.slotsCount + b.assistsCount - (a.slotsCount + a.assistsCount));

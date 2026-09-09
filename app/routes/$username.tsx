@@ -81,7 +81,7 @@ export default function User() {
     currentScreen = "parties";
   }
 
-  const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
+  const [panels, setPanels] = useState<PagePanelProps[]>([]);
   const [links, setLinks] = useState<UserPageLinksState | undefined>(undefined);
   const setPageLinks = useCallback(
     (nextLinks: PageLinkProps[] | undefined) => {
@@ -92,7 +92,7 @@ export default function User() {
 
   useEffect(() => {
     if (currentScreen !== "students") {
-      setPanel(undefined);
+      setPanels([]);
       setLinks(undefined);
     }
   }, [currentScreen]);
@@ -101,7 +101,7 @@ export default function User() {
     <Page
       title={`@${username}`}
       description="선생님의 정보를 확인해보세요"
-      panels={panel ? [panel] : undefined}
+      panels={panels}
       links={getUserPageLinks(currentScreen, username, links)}
       screens={[
         { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
@@ -127,7 +127,7 @@ export default function User() {
         },
       ]}
     >
-      <Outlet context={{ setPanel, setLinks: setPageLinks }} />
+      <Outlet context={{ setPanels, setLinks: setPageLinks }} />
     </Page>
   );
 }

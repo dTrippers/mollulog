@@ -593,7 +593,7 @@ describe("student calculator", () => {
     expect(stats.find(({ stat }) => stat === "MAX_HP")?.value).toBe(1_218);
   });
 
-  it("applies permanent passive-skill modifiers regardless of activation metadata", () => {
+  it("excludes permanent skill modifiers by default and applies them when enabled", () => {
     const student = createStudent();
     if (!student.catalog) throw new Error("student catalog fixture is required");
     student.catalog.statProfile.levelStats = [
@@ -647,10 +647,138 @@ describe("student calculator", () => {
       },
     ]);
 
-    const stats = calculateStudentStats(student, createCatalog(), emptyState);
+    const statsWithoutSkillEffects = calculateStudentStats(student, createCatalog(), emptyState);
+    const statsWithSkillEffects = calculateStudentStats(student, createCatalog(), emptyState, [], true);
 
-    expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(13_774);
-    expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(414);
+    expect(statsWithoutSkillEffects.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(7_558);
+    expect(statsWithoutSkillEffects.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(255);
+    expect(statsWithSkillEffects.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(13_774);
+    expect(statsWithSkillEffects.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(414);
+  });
+
+  it("recomputes enhanced skill levels and upgraded configurations only when enabled", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 100, level100: 100 }];
+    student.catalog.starBonuses = [];
+    student.catalog.favorRewards = [];
+    student.equipments = [];
+    student.catalog.skillConfigurations = [
+      {
+        formIndex: 0,
+        minimumWeaponStar: 0,
+        minimumGearTier: 0,
+        selectExSkillActionSlot: null,
+        slots: [{ slot: StudentSkillTypeEnum.Passive, skills: [{ position: 0, skillUid: "passive-base" }] }],
+      },
+      {
+        formIndex: 0,
+        minimumWeaponStar: 2,
+        minimumGearTier: 0,
+        selectExSkillActionSlot: null,
+        slots: [{ slot: StudentSkillTypeEnum.Passive, skills: [{ position: 0, skillUid: "passive-plus" }] }],
+      },
+    ];
+    student.skills.push(
+      {
+        uid: "passive-base",
+        skillType: StudentSkillTypeEnum.Passive,
+        name: "강화 스킬",
+        iconUrl: null,
+        maxLevel: 10,
+        levels: [
+          {
+            level: 1,
+            cost: null,
+            statModifiers: [
+              {
+                stat: StudentCatalogStat.AttackPower,
+                kind: StudentCatalogStatModifierKind.Base,
+                value: 10,
+                activation: StudentSkillModifierActivation.Unconditional,
+                persistence: StudentSkillModifierPersistence.Permanent,
+              },
+            ],
+          },
+          {
+            level: 5,
+            cost: null,
+            statModifiers: [
+              {
+                stat: StudentCatalogStat.AttackPower,
+                kind: StudentCatalogStatModifierKind.Base,
+                value: 50,
+                activation: StudentSkillModifierActivation.Unconditional,
+                persistence: StudentSkillModifierPersistence.Permanent,
+              },
+            ],
+          },
+        ],
+        description: null,
+        additionalSkillUids: [],
+        selectableSkills: [],
+      },
+      {
+        uid: "passive-plus",
+        skillType: StudentSkillTypeEnum.Passive,
+        name: "강화 스킬+",
+        iconUrl: null,
+        maxLevel: 10,
+        levels: [
+          {
+            level: 1,
+            cost: null,
+            statModifiers: [
+              {
+                stat: StudentCatalogStat.AttackPower,
+                kind: StudentCatalogStatModifierKind.Base,
+                value: 20,
+                activation: StudentSkillModifierActivation.Unconditional,
+                persistence: StudentSkillModifierPersistence.Permanent,
+              },
+            ],
+          },
+        ],
+        description: null,
+        additionalSkillUids: [],
+        selectableSkills: [],
+      },
+    );
+
+    const baseState = { ...emptyState, skillEnhanced: 1 };
+    const statsWithoutSkillEffects = calculateStudentStats(student, catalog, baseState);
+    const statsWithoutSkillEffectsAtLevelFive = calculateStudentStats(student, catalog, {
+      ...baseState,
+      skillEnhanced: 5,
+    });
+    const statsWithBaseSkill = calculateStudentStats(student, catalog, baseState, [], true);
+    const statsWithLevelFiveSkill = calculateStudentStats(
+      student,
+      catalog,
+      { ...baseState, skillEnhanced: 5 },
+      [],
+      true,
+    );
+    const statsWithBaseSkillAtWeaponStarOne = calculateStudentStats(
+      student,
+      catalog,
+      { ...baseState, tier: 6 },
+      [],
+      true,
+    );
+    const statsWithUpgradedSkill = calculateStudentStats(student, catalog, { ...baseState, tier: 7 }, [], true);
+
+    expect(statsWithoutSkillEffects.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(100);
+    expect(statsWithoutSkillEffectsAtLevelFive.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(
+      100,
+    );
+    expect(statsWithBaseSkill.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(110);
+    expect(statsWithLevelFiveSkill.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(150);
+    expect(statsWithBaseSkillAtWeaponStarOne.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(
+      110,
+    );
+    expect(statsWithUpgradedSkill.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(120);
   });
 
   it.each([
@@ -676,12 +804,12 @@ describe("student calculator", () => {
     ]);
 
     expect(
-      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 1 }).find(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 1 }, [], true).find(
         ({ stat }) => stat === StudentCatalogStat.AttackPower,
       )?.value,
     ).toBe(100);
     expect(
-      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }, [], true).find(
         ({ stat }) => stat === StudentCatalogStat.AttackPower,
       )?.value,
     ).toBe(127);
@@ -712,12 +840,12 @@ describe("student calculator", () => {
     );
 
     expect(
-      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }).find(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 2 }, [], true).find(
         ({ stat }) => stat === StudentCatalogStat.AttackPower,
       )?.value,
     ).toBe(100);
     expect(
-      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 3 }).find(
+      calculateStudentStats(student, createCatalog(), { ...emptyState, tier: 3 }, [], true).find(
         ({ stat }) => stat === StudentCatalogStat.AttackPower,
       )?.value,
     ).toBe(127);
@@ -807,12 +935,18 @@ describe("student calculator", () => {
       10,
     );
 
-    const stats = calculateStudentStats(student, catalog, {
-      ...emptyState,
-      tier: 3,
-      bond: 1,
-      skillEnhanced: 10,
-    });
+    const stats = calculateStudentStats(
+      student,
+      catalog,
+      {
+        ...emptyState,
+        tier: 3,
+        bond: 1,
+        skillEnhanced: 10,
+      },
+      [],
+      true,
+    );
 
     expect(stats.find(({ stat }) => stat === StudentCatalogStat.MaxHp)?.value).toBe(7_221);
     expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(330);

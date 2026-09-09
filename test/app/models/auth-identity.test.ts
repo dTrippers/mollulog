@@ -34,6 +34,7 @@ const senseiRow: typeof pgSenseisTable.$inferSelect = {
   bio: null,
   role: "guest",
   profileVisibility: "public",
+  growthVisibility: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),
 };

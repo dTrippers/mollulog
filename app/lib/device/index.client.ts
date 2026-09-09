@@ -9,7 +9,7 @@ export function isDarkMode(): boolean {
   const deviceConfig = window.matchMedia("(prefers-color-scheme: dark)").matches;
   localStorage.setItem(darkModeKey, deviceConfig ? "true" : "false");
   return deviceConfig;
-};
+}
 
 export function toggleDarkMode() {
   const current = isDarkMode();

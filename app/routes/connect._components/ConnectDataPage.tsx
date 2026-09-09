@@ -1,7 +1,4 @@
-import {
-  ArrowDownTrayIcon,
-  ArrowUpTrayIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 import { Page } from "~/components/features/layout";
 

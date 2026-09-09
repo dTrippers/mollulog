@@ -3,10 +3,10 @@ import { ArchiveBoxIcon, BeakerIcon, ClipboardDocumentListIcon } from "@heroicon
 import { useMemo } from "react";
 import { EmptyView, ResourceCard, Section, SectionCard } from "~/components/primitives";
 import {
+  buildFarmingRecommendations,
   type FarmingRequirement,
   type FarmingStage,
   type FarmingStageRecommendation,
-  buildFarmingRecommendations,
 } from "~/domain/farming-recommendation";
 import {
   EQUIPMENT_TYPE_LABELS,

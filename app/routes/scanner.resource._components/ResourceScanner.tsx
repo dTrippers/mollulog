@@ -734,7 +734,9 @@ function getSelectedResultImage(
     ? {
         width: firstCell.width ?? undefined,
         height: firstCell.height ?? undefined,
-        boxes: selectedCells.flatMap((cell) => (cell.bbox && cell.bbox.width > 0 && cell.bbox.height > 0 ? [cell.bbox] : [])),
+        boxes: selectedCells.flatMap((cell) =>
+          cell.bbox && cell.bbox.width > 0 && cell.bbox.height > 0 ? [cell.bbox] : [],
+        ),
       }
     : null;
 }
@@ -791,8 +793,16 @@ function ReviewSourceImage({
       const width = sourceWidth * scale;
       const height = sourceHeight * scale;
       setRenderedImage({
-        left: clampReviewImageOffset(containerWidth / 2 - (focusBox.x + focusBox.width / 2) * scale, width, containerWidth),
-        top: clampReviewImageOffset(containerHeight / 2 - (focusBox.y + focusBox.height / 2) * scale, height, containerHeight),
+        left: clampReviewImageOffset(
+          containerWidth / 2 - (focusBox.x + focusBox.width / 2) * scale,
+          width,
+          containerWidth,
+        ),
+        top: clampReviewImageOffset(
+          containerHeight / 2 - (focusBox.y + focusBox.height / 2) * scale,
+          height,
+          containerHeight,
+        ),
         width,
         height,
       });

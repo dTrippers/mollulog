@@ -1,6 +1,6 @@
-import { Link } from "react-router";
 import { ClockIcon, ExclamationTriangleIcon, SparklesIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
+import { Link } from "react-router";
 
 type TimelineItemBannerProps = {
   title?: ReactNode;

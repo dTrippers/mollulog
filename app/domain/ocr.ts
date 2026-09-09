@@ -162,11 +162,7 @@ export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
         trainingConsent: (value as { trainingConsent?: unknown }).trainingConsent === true,
       };
     }
-    if (
-      jobKind !== undefined &&
-      jobKind !== "item_inventory_images_v1" &&
-      jobKind !== "student_detail_images_v1"
-    ) {
+    if (jobKind !== undefined && jobKind !== "item_inventory_images_v1" && jobKind !== "student_detail_images_v1") {
       throw new OcrPublicError("요청한 인식 방식은 현재 사용할 수 없어요");
     }
     if (request.video !== undefined) {
@@ -176,9 +172,7 @@ export function parseOcrUploadRequest(value: unknown): OcrUploadRequest {
     return {
       jobKind: jobKind === "student_detail_images_v1" ? jobKind : "item_inventory_images_v1",
       images,
-      trainingConsent: Boolean(
-        (value as { trainingConsent?: unknown }).trainingConsent === true,
-      ),
+      trainingConsent: Boolean((value as { trainingConsent?: unknown }).trainingConsent === true),
     };
   }
   return {

@@ -1,4 +1,4 @@
-export default function MultilineText({ texts, className }: { texts: string[], className: string }) {
+export default function MultilineText({ texts, className }: { texts: string[]; className: string }) {
   return (
     <div className={className}>
       {texts.map((text) => (
@@ -7,5 +7,5 @@ export default function MultilineText({ texts, className }: { texts: string[], c
         </div>
       ))}
     </div>
-  )
+  );
 }

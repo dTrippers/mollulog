@@ -25,20 +25,25 @@ function ResourceCard({ imageUrl, itemUid, backgroundColor, count }: ResourceCar
   const card = (
     <div className={`relative p-1 flex items-center justify-center ${backgroundColorClass} transition rounded-lg`}>
       {resolvedImageUrl && <img src={resolvedImageUrl} alt="자원 정보" />}
-      {(count !== undefined) && (
+      {count !== undefined && (
         <div className="px-2 absolute right-0 bottom-0 bg-red-500 text-white text-xs rounded-full">
           <span>{count}</span>
         </div>
       )}
     </div>
-  )
+  );
 
   if (itemUid) {
     return (
-      <a href={`https://schaledb.com/item/${itemUid}`} target="_blank" rel="noopener noreferrer" className="hover:scale-105 transition">
+      <a
+        href={`https://schaledb.com/item/${itemUid}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hover:scale-105 transition"
+      >
         {card}
       </a>
-    )
+    );
   }
   return card;
 }

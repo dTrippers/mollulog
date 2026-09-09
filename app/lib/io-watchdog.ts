@@ -75,7 +75,10 @@ export function watchIo<T>(
 
   const timer = setTimeout(() => {
     warned = true;
-    console.warn(`${WATCHDOG_PREFIX} pending`, getIoWatchdogContext({ label, pendingMs: warnMs, ...context }, watchdogId));
+    console.warn(
+      `${WATCHDOG_PREFIX} pending`,
+      getIoWatchdogContext({ label, pendingMs: warnMs, ...context }, watchdogId),
+    );
   }, warnMs);
 
   const finalize = () => {

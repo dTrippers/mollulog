@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import type { EventShopState } from "~/models/event-shop-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
+import type { EventShopState } from "~/models/event-shop-state";
 import { pgEventShopStatesTable } from "./schema";
 
 type EventShopStateDatabase = NodePgDatabase;

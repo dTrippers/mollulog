@@ -53,7 +53,11 @@ export function getSpecifiedRounds(rewardGroups: RewardGroup[]): Set<number> {
   return allSpecifiedRounds;
 }
 
-export function getAppliedRoundCount(group: RewardGroup, effectiveCount: number, allSpecifiedRounds: Set<number>): number {
+export function getAppliedRoundCount(
+  group: RewardGroup,
+  effectiveCount: number,
+  allSpecifiedRounds: Set<number>,
+): number {
   if (group.rounds === "subsequent") {
     return effectiveCount - Array.from(allSpecifiedRounds).filter((round) => round <= effectiveCount).length;
   }

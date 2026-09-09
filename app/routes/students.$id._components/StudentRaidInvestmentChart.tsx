@@ -1,6 +1,6 @@
+import { formatTierKey, formatTierLabel, TIER_COLORS } from "./raidTierVisual";
 import type { StudentRaidInvestment } from "./StudentRaidSummaryModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
-import { TIER_COLORS, formatTierKey, formatTierLabel } from "./raidTierVisual";
 
 type InvestmentChartRow = {
   id: string;
@@ -139,9 +139,7 @@ function formatCount(value: number) {
 }
 
 function getInvestmentInsight(rows: InvestmentChartRow[]) {
-  const topRow = rows
-    .filter((row) => row.count > 0)
-    .sort((a, b) => b.count - a.count || b.tier - a.tier)[0];
+  const topRow = rows.filter((row) => row.count > 0).sort((a, b) => b.count - a.count || b.tier - a.tier)[0];
   if (!topRow) {
     return null;
   }

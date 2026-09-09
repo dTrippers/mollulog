@@ -50,11 +50,7 @@ export async function getPostgresPickupHistory(
   return row ? toPickupHistoryModel(row, includeRaw) : null;
 }
 
-export async function getPostgresPickupHistories(
-  env: Env,
-  userId: number,
-  options: PostgresPickupHistoryOptions = {},
-) {
+export async function getPostgresPickupHistories(env: Env, userId: number, options: PostgresPickupHistoryOptions = {}) {
   const rows = await withPickupHistoryDatabase(
     env,
     (db) =>
@@ -136,10 +132,7 @@ export async function deletePostgresPickupHistory(
   );
 }
 
-function toPickupHistoryModel(
-  row: typeof pgPickupHistoriesTable.$inferSelect,
-  includeRaw = false,
-): PickupHistory {
+function toPickupHistoryModel(row: typeof pgPickupHistoriesTable.$inferSelect, includeRaw = false): PickupHistory {
   const result: PickupHistory = {
     uid: row.uid,
     userId: row.userId,

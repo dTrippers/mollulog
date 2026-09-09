@@ -1,7 +1,7 @@
 import { difficultyLocale } from "~/locales/ko";
+import { formatUsagePercent } from "./formatUsagePercent";
 import type { StudentDifficultyUsage } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
-import { formatUsagePercent } from "./formatUsagePercent";
 
 type StudentDifficultyUsageChartProps = {
   rows: StudentDifficultyUsage[];

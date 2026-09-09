@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ResourceCard, Section, SubTitle } from "~/components/primitives";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 

@@ -8,9 +8,18 @@ import {
 } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
-import { Link, useFetcher } from "react-router";
-import { TierSelector } from "~/components/features/students";
-import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard, SubTitle } from "~/components/primitives";
+import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
+import { StudentSkillIcon, TierSelector } from "~/components/features/students";
+import {
+  Button,
+  Callout,
+  EmptyView,
+  HoverTooltip,
+  NumberInput,
+  SectionCard,
+  SubTitle,
+  Toggle,
+} from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
@@ -68,15 +77,6 @@ export function getSkillSelectionConditionLabel(condition: StudentSkillSelection
   return skillSelectionConditionLabels[condition];
 }
 
-const skillIconColorClass: Record<Attack, string> = {
-  explosive: "text-red-600",
-  piercing: "text-yellow-500",
-  mystic: "text-blue-600",
-  sonic: "text-purple-600",
-  chemical: "text-green-600",
-  normal: "text-neutral-600",
-};
-
 const primaryStats = [
   { stat: "MAX_HP" as StudentCatalogStat, label: "최대 체력" },
   { stat: "ATTACK_POWER" as StudentCatalogStat, label: "공격력" },
@@ -85,6 +85,10 @@ const primaryStats = [
 ] as const;
 
 const weaponStars = [1, 2, 3, 4] as const;
+
+export function scrollToStudentBasicInfo() {
+  document.getElementById("student-basic-info")?.scrollIntoView({ block: "start" });
+}
 
 export default function StudentBasicInfo({
   student,
@@ -99,8 +103,11 @@ export default function StudentBasicInfo({
   gradingSummary,
 }: StudentBasicInfoProps) {
   const fetcher = useFetcher<SaveResult>();
+  const { hash } = useLocation();
+  const navigationType = useNavigationType();
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const [state, setState] = useState<StudentCalculatorState>(savedState);
+  const [skillEffectsState, setSkillEffectsState] = useState({ studentUid: student.uid, enabled: false });
   const [saved, setSaved] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [, setDraftStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -123,12 +130,19 @@ export default function StudentBasicInfo({
       }),
     [student.character.studentVariants, stateStudentUid, relatedRelationshipLevels],
   );
+  const includeSkillEffects = skillEffectsState.studentUid === student.uid && skillEffectsState.enabled;
   const stats = useMemo(
-    () => calculateStudentStats(student, catalog, state, relatedFavorStates),
-    [student, catalog, state, relatedFavorStates],
+    () => calculateStudentStats(student, catalog, state, relatedFavorStates, includeSkillEffects),
+    [student, catalog, state, relatedFavorStates, includeSkillEffects],
   );
   const selectedSkills = useMemo(() => selectStudentSkills(student, state), [student, state]);
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
+
+  useEffect(() => {
+    if (hash !== "#student-basic-info" || navigationType !== "PUSH") return;
+    const frameId = window.requestAnimationFrame(scrollToStudentBasicInfo);
+    return () => window.cancelAnimationFrame(frameId);
+  }, [hash, navigationType]);
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
@@ -225,7 +239,7 @@ export default function StudentBasicInfo({
 
   return (
     <div className="space-y-6 md:space-y-8">
-      <section>
+      <section id="student-basic-info" className="scroll-mt-[calc(var(--mobile-header-height)+3.75rem)] lg:scroll-mt-4">
         <h2 className="text-lg font-semibold">학생 기본 정보</h2>
         <SectionCard className="mt-3 space-y-0 p-2.5 md:mt-4 md:p-4">
           <div className="grid gap-2 md:grid-cols-2 md:items-start">
@@ -328,7 +342,19 @@ export default function StudentBasicInfo({
           </div>
         ) : null}
 
-        <SectionCard className="mt-2.5 space-y-0 py-3 md:mt-3 md:py-3">
+        <SectionCard
+          title="능력치"
+          action={
+            <Toggle
+              key={student.uid}
+              label="스킬 효과 반영"
+              initialState={includeSkillEffects}
+              className="my-0"
+              onChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
+            />
+          }
+          className="mt-2.5 space-y-3 py-3 md:mt-3 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
+        >
           <div className="grid grid-cols-4 gap-3">
             {primaryStats.map(({ stat, label }) => (
               <div key={stat} className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-4">
@@ -724,19 +750,7 @@ function SkillRow({
 
   return (
     <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-start gap-3 p-3 sm:grid-cols-[3rem_minmax(0,1fr)_8rem] md:gap-4 md:p-5">
-      <div
-        className={`relative flex h-12 w-[2.598rem] justify-self-center items-center justify-center ${skillIconColorClass[attackType]}`}
-      >
-        <svg viewBox="0 0 41.569 48" className="absolute inset-0 size-full drop-shadow-sm" aria-hidden="true">
-          <path
-            fill="currentColor"
-            d="M18.211 1.5 Q20.785 0 23.358 1.5 L38.996 10.5 Q41.569 12 41.569 15 L41.569 33 Q41.569 36 38.996 37.5 L23.358 46.5 Q20.785 48 18.211 46.5 L2.573 37.5 Q0 36 0 33 L0 15 Q0 12 2.573 10.5 Z"
-          />
-        </svg>
-        {skill.iconUrl ? (
-          <img src={skill.iconUrl} alt="" className="relative z-10 size-12 object-contain drop-shadow-sm" />
-        ) : null}
-      </div>
+      <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} />
       <div className="min-w-0">
         <span className="block text-xs font-medium text-muted-foreground">{skillSlotLabels[skill.slot]}</span>
         <strong className="mt-0.5 block">{skill.name}</strong>

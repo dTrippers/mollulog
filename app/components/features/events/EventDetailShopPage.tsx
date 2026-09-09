@@ -152,7 +152,13 @@ export default function EventDetailShopPage({
     return minigameConfig.minigameType === "clue_search"
       ? convertClueSearchCostsToPoints(clueCosts, clueSearchExchange)
       : clueCosts;
-  }, [clueSearchExchange, minigameConfig, state.minigamePaymentQuantityMode, state.minigamePlayCount, state.minigameStartRound]);
+  }, [
+    clueSearchExchange,
+    minigameConfig,
+    state.minigamePaymentQuantityMode,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+  ]);
 
   // Shop calculations
   const stageCalculations = useShopCalculations({

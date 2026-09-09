@@ -14,6 +14,11 @@ function createErrorPayload(code: string, message: string, details?: ErrorDetail
   };
 }
 
-export function routeError(status: number, code: string, publicMessage = getHttpStatusMessage(status).message, details?: ErrorDetails) {
+export function routeError(
+  status: number,
+  code: string,
+  publicMessage = getHttpStatusMessage(status).message,
+  details?: ErrorDetails,
+) {
   return data(createErrorPayload(code, publicMessage, details), { status });
 }

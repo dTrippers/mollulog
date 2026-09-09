@@ -7,7 +7,8 @@ import { AttributeBadge, HorizontalScroll, SubTitle } from "~/components/primiti
 import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
-import { type UtcIsoString, formatInstant, formatInstantDateKey } from "~/lib/date-time";
+import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -19,7 +20,6 @@ import {
 } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
 import type { Role } from "~/models/content.d";
-import { cn } from "~/lib/utils";
 import EventInfoCard from "./EventInfoCard";
 
 export type Recruitment = {

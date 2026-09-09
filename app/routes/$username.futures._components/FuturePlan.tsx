@@ -1,10 +1,11 @@
-import { useState, useEffect } from "react";
-import { useFetcher } from "react-router";
-import { Link } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { AttributeBadge, MultilineText } from "~/components/primitives";
+import { useEffect, useState } from "react";
+import { Link, useFetcher } from "react-router";
+import ContentCommentView from "~/components/features/contents/ContentCommentView";
 import { ResourceCards, StudentCard } from "~/components/features/students";
+import { AttributeBadge, MultilineText } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { formatInstant, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import {
   attackTypeColor,
@@ -16,13 +17,15 @@ import {
   roleLocale,
   schoolNameLocale,
 } from "~/locales/ko";
-import type { Role } from "~/models/content.d";
-import type { Attack, Defense } from "~/graphql/graphql";
-import ContentCommentView from "~/components/features/contents/ContentCommentView";
-import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
 import type { NestedComment } from "~/models/content";
-import type { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { equipmentImageUrl } from "~/models/assets";
+import type { Role } from "~/models/content.d";
+import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+
+const EQUIPMENT_CATEGORY_IMAGE_BASE_URL = "https://assets.mollulog.net/assets/images/equipments";
+
+export function equipmentCategoryImageUrl(category: string): string {
+  return `${EQUIPMENT_CATEGORY_IMAGE_BASE_URL}/${category}`;
+}
 
 type FuturePlanStudents = {
   uid: string;
@@ -217,7 +220,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
                       cardProps={[
                         ...resources.equipments.map((equipment) => ({
                           id: `equipment-${student.uid}-${equipment}`,
-                          imageUrl: equipmentImageUrl(equipment),
+                          imageUrl: equipmentCategoryImageUrl(equipment),
                         })),
                         ...resources.mainSkillItems.map((itemUid) => ({
                           id: `skillItem-${student.uid}-${itemUid}`,

@@ -155,7 +155,8 @@ const QUIZ_SCENARIOS = [
       { id: "send-code", label: "청휘석은 못 참지! (당장 알려준다)", correct: false },
       { id: "check-notice", label: "먼저 공지를 확인해볼게.", correct: true },
     ],
-    explanation: "비밀번호, OTP 등은 메신저를 통해 누구에게도 알려주면 안 돼요. 상대방이 가족 등 믿을만한 사람을 사칭하고 있을 수 있어요.",
+    explanation:
+      "비밀번호, OTP 등은 메신저를 통해 누구에게도 알려주면 안 돼요. 상대방이 가족 등 믿을만한 사람을 사칭하고 있을 수 있어요.",
   },
   {
     category: "파일 다운로드",
@@ -677,8 +678,7 @@ export default function SecurityCampaign() {
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs leading-5 text-muted-foreground">
             이 페이지는 과거 사건을 돌아보고 일반적인 보안 수칙을 알리기 위한 비공식 캠페인입니다.
-            <br /> 특정인을 비방하거나 공격을 유도할 목적이 없으며, 퀴즈 속 상황은 설명을 위해 구성한
-            가상의 사례입니다.
+            <br /> 특정인을 비방하거나 공격을 유도할 목적이 없으며, 퀴즈 속 상황은 설명을 위해 구성한 가상의 사례입니다.
           </p>
 
           <a

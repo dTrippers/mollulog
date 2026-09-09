@@ -1,6 +1,6 @@
 import type { Defense } from "~/graphql/graphql";
 import type { RaidType } from "~/models/content.d";
-import { RANK_API_BASE_URL, createProtobufRootCache, fetchProtobuf } from "./base";
+import { createProtobufRootCache, fetchProtobuf, RANK_API_BASE_URL } from "./base";
 
 const RANGE_STATS_PROTO_SCHEMA = `
 syntax = "proto3";

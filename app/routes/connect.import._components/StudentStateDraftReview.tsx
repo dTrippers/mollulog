@@ -12,23 +12,21 @@ import {
   useNumberInputGridNavigation,
 } from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
-import {
-  type StudentStateCurrentComparisonValue,
-  type StudentStateTargetComparisonValue,
-  isStudentStateCurrentChanged,
-  isStudentStateCurrentFieldUpdateTarget,
-  isStudentStateTargetChanged,
-  isStudentStateTargetFieldUpdateTarget,
-  mergeStudentStateDraftValueForUpdate,
-} from "~/domain/student-state";
 import type {
   StudentStateDraftCurrentValue,
   StudentStateDraftTargetValue,
   StudentStateDraftValue,
 } from "~/domain/student-state";
 import {
+  isStudentStateCurrentChanged,
+  isStudentStateCurrentFieldUpdateTarget,
+  isStudentStateTargetChanged,
+  isStudentStateTargetFieldUpdateTarget,
+  mergeStudentStateDraftValueForUpdate,
   type StudentStateComparisonField,
+  type StudentStateCurrentComparisonValue,
   type StudentStateFieldDefinition,
+  type StudentStateTargetComparisonValue,
   studentStateComparisonFields,
   studentStateCurrentFields,
   studentStateTargetFields,

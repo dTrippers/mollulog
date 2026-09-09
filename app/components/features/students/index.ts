@@ -14,6 +14,8 @@ export type { StudentGradingTimelineItem } from "./StudentGradingTimeline";
 export { default as StudentGradingTimeline, formatStudentGradingTimestamp } from "./StudentGradingTimeline";
 export { default as StudentInfo } from "./StudentInfo";
 export { default as StudentSearchInput } from "./StudentSearchInput";
+export type { StudentSkillIconProps } from "./StudentSkillIcon";
+export { default as StudentSkillIcon } from "./StudentSkillIcon";
 export { default as TierCounts } from "./TierCounts";
 export { default as TierSelector } from "./TierSelector";
 export type { PersistentStudentFilterStateOptions } from "./usePersistentStudentFilterState";

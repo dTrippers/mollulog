@@ -1,18 +1,16 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Link } from "react-router";
 import { ActionCard } from "~/components/features/editor";
-import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { StudentCard, TierCounts } from "~/components/features/students";
 import { AttributeBadge, FilterButtons } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { raidTypeToParam } from "~/domain/raid";
+import type { Defense } from "~/graphql/graphql";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
-import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
-import { defenseTypeColor } from "~/locales/ko";
-import { raidTypeLocale } from "~/locales/ko";
+import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RaidType, Terrain } from "~/models/content.d";
-import type { Defense } from "~/graphql/graphql";
-import { raidTypeToParam } from "~/domain/raid";
 
 type RaidStatisticsSlotCountProps = {
   student?: { uid: string; name: string };
