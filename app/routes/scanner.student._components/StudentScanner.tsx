@@ -1,11 +1,10 @@
-import { CheckCircleIcon, ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
-import { useCallback, useState } from "react";
+import { ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
   Button,
   Callout,
-  FloatingActionBar,
   HoverTooltip,
   NumberInput,
   type NumberInputFlowNavigationInputProps,
@@ -44,7 +43,6 @@ import {
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
 import {
-  formatScannerRelativeTime,
   getScannerTerminalJobDescription,
   getScannerTerminalJobTitle,
   getScannerUnavailableResultMessage,
@@ -235,6 +233,7 @@ type ReviewStudent = {
 };
 
 export type ReviewState = Record<string, ReviewStudent>;
+type PendingFocusTarget = { kind: "student"; studentUid: string } | { kind: "action-bar" };
 type FieldComparison = "same" | "decreased" | null;
 
 const STUDENT_UPLOAD_HASH_ERROR = "파일 정보를 계산하지 못했어요";
@@ -495,13 +494,6 @@ export function selectLatestStudentJob<T extends Pick<StudentVideoJob, "createdA
   }, null);
 }
 
-function getStudentJobInputSummary(job: Pick<StudentVideoJob, "images" | "video">): string {
-  const inputs = [];
-  if (job.images.length > 0) inputs.push(`이미지 ${job.images.length}장`);
-  if (job.video) inputs.push("영상 1개");
-  return inputs.join(" · ") || "입력 파일 없음";
-}
-
 export default function StudentScanner() {
   const {
     videoUploadQuota: uploadQuota,
@@ -513,19 +505,23 @@ export default function StudentScanner() {
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
   const [partialFailure, setPartialFailure] = useState<StudentUploadPartialFailure | null>(null);
   const [review, setReview] = useState<ReviewState>({});
+  const [excludedStudentUids, setExcludedStudentUids] = useState<Set<string>>(() => new Set());
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const handleJob = useCallback((next: StudentVideoJob) => {
     if (next.status === "review_ready" && next.result) {
       setReview(next.application?.status === "applied" ? {} : createReviewState(next.result));
+      setExcludedStudentUids(new Set());
       return;
     }
     setReview({});
+    setExcludedStudentUids(new Set());
   }, []);
 
   const handleReset = useCallback(() => {
     setSelectedFiles([]);
     setReview({});
+    setExcludedStudentUids(new Set());
     setHashProgress(0);
     setUploadProgress(0);
     setAllowsTrainingDataUse(false);
@@ -619,7 +615,7 @@ export default function StudentScanner() {
     }
   }
 
-  async function applyReview(remainingReviewStudentCount: number) {
+  async function applyReview(remainingReviewStudentCount: number, excludedStudentUids: ReadonlySet<string>) {
     if (!job?.result) return;
     if (remainingReviewStudentCount > 0 && !window.confirm("검토가 필요한 데이터가 남아있어요. 정말 저장할까요?")) {
       return;
@@ -631,6 +627,7 @@ export default function StudentScanner() {
         job.result,
         review,
         new Set(Object.keys(job.studentCatalog ?? {})),
+        excludedStudentUids,
       );
       if (students.length === 0) {
         setError("저장할 수 있는 학생 데이터가 없어요.");
@@ -785,8 +782,16 @@ export default function StudentScanner() {
         key={job.uid}
         job={{ ...job, result: job.result }}
         review={review}
+        excludedStudentUids={excludedStudentUids}
         phase={phase}
         onReviewChange={setReview}
+        onExcludeStudent={(studentUid) =>
+          setExcludedStudentUids((current) => {
+            const next = new Set(current);
+            next.add(studentUid);
+            return next;
+          })
+        }
         onApply={applyReview}
         onCancel={cancelResult}
         onStartNew={() => resetForNewUpload()}
@@ -869,8 +874,10 @@ export default function StudentScanner() {
 function ReviewPanel({
   job,
   review,
+  excludedStudentUids,
   phase,
   onReviewChange,
+  onExcludeStudent,
   onApply,
   onCancel,
   onStartNew,
@@ -880,9 +887,11 @@ function ReviewPanel({
 }: {
   job: StudentVideoJob & { result: StudentGrowthResult };
   review: ReviewState;
+  excludedStudentUids: ReadonlySet<string>;
   phase: ScannerPhase;
   onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
-  onApply: (remainingReviewStudentCount: number) => void;
+  onExcludeStudent: (studentUid: string) => void;
+  onApply: (remainingReviewStudentCount: number, excludedStudentUids: ReadonlySet<string>) => void;
   onCancel: () => void;
   onStartNew: () => void;
   isCancelling: boolean;
@@ -890,22 +899,49 @@ function ReviewPanel({
   partialFailure: string | null;
 }) {
   const [reviewFilterStudentUids, setReviewFilterStudentUids] = useState<string[] | null>(null);
+  const [pendingFocusTarget, setPendingFocusTarget] = useState<PendingFocusTarget | null>(null);
+  const [exclusionAnnouncement, setExclusionAnnouncement] = useState("");
   const [selectedPreview, setSelectedPreview] = useState<{
     artifact: StudentVideoJob["artifacts"][number];
     studentName: string;
   } | null>(null);
-  const unresolvedStudents = job.result.students.filter(({ studentUid }) => !job.studentCatalog?.[studentUid]);
+  const excludeButtonRefs = useRef(new Map<string, HTMLButtonElement>());
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const activeStudents = job.result.students.filter(({ studentUid }) => !excludedStudentUids.has(studentUid));
   const failedImages = job.images.filter((image) => image.status === "failed");
   const artifactsByStudentUid = new Map(job.artifacts.map((artifact) => [artifact.studentUid, artifact]));
   const numberInputNavigation = useNumberInputFlowNavigation();
-  const remainingReviewStudents = job.result.students.filter((student) => {
+  const remainingReviewStudents = activeStudents.filter((student) => {
     const state = review[student.studentUid];
     return state ? studentNeedsReview(student, state, job.currentStudentStates?.[student.studentUid]) : false;
   });
+  const validStudentUids = new Set(Object.keys(job.studentCatalog ?? {}));
+  const saveableStudentCount = activeStudents.filter(
+    (student) => review[student.studentUid]?.confirmed.tier && validStudentUids.has(student.studentUid),
+  ).length;
+  const reviewDescription =
+    remainingReviewStudents.length > 0
+      ? `${job.result.students.length}명 인식 · ${remainingReviewStudents.length}명 검토 필요`
+      : `${job.result.students.length}명 인식 · 검토 완료`;
   const showReviewRequiredOnly = reviewFilterStudentUids !== null;
   const visibleStudents = showReviewRequiredOnly
-    ? job.result.students.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
-    : job.result.students;
+    ? activeStudents.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
+    : activeStudents;
+
+  useEffect(() => {
+    if (!pendingFocusTarget) return;
+    if (pendingFocusTarget.kind === "student") {
+      const nextButton = excludeButtonRefs.current.get(pendingFocusTarget.studentUid);
+      if (nextButton && !nextButton.disabled) {
+        nextButton.focus();
+      } else {
+        actionBarRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+      }
+    } else {
+      actionBarRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+    }
+    setPendingFocusTarget(null);
+  }, [pendingFocusTarget]);
 
   const updateStudent = (studentUid: string, update: (current: ReviewStudent) => ReviewStudent) => {
     onReviewChange((current) => {
@@ -915,22 +951,29 @@ function ReviewPanel({
     });
   };
 
+  const excludeStudent = (studentUid: string, studentName: string) => {
+    const currentIndex = visibleStudents.findIndex((student) => student.studentUid === studentUid);
+    const nextFocusStudentUid =
+      visibleStudents[currentIndex + 1]?.studentUid ?? visibleStudents[currentIndex - 1]?.studentUid ?? null;
+    setPendingFocusTarget(
+      nextFocusStudentUid === null ? { kind: "action-bar" } : { kind: "student", studentUid: nextFocusStudentUid },
+    );
+    setExclusionAnnouncement(`${studentName} 학생을 저장 대상에서 제외했어요.`);
+    onExcludeStudent(studentUid);
+  };
+
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      {exclusionAnnouncement ? (
+        <p role="status" aria-live="polite" className="sr-only">
+          {exclusionAnnouncement}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <SubTitle
-            text="인식 결과 검토"
-            description={`${job.result.students.length}명 인식 · 미해결 필드 ${job.result.unresolvedCount}개`}
-          />
-          <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">현재 작업</span>
-            <span className="truncate">
-              학생 · {getStudentJobInputSummary(job)} · {formatScannerRelativeTime(job.createdAt)}
-            </span>
-          </p>
+          <SubTitle text="인식 결과 검토" description={reviewDescription} />
         </div>
-        <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex w-full min-w-0 flex-wrap justify-end gap-2 sm:w-auto">
           <Button size="sm" onClick={onStartNew}>
             {scannerMessages.student.uploadAction}
           </Button>
@@ -951,26 +994,17 @@ function ReviewPanel({
         </div>
       </div>
 
-      {error ? (
-        <Callout tone="destructive" title="처리 중 오류가 발생했어요">
-          {error}
-        </Callout>
-      ) : partialFailure ? (
-        <Callout tone="destructive" title="일부 파일만 제출됐어요">
-          {partialFailure}
-        </Callout>
-      ) : failedImages.length > 0 ? (
-        <Callout
-          tone="destructive"
-          title="일부 이미지를 인식하지 못했어요"
-          description={getStudentFailedImagesDescription(failedImages)}
-        />
-      ) : unresolvedStudents.length > 0 ? (
-        <Callout
-          tone="warning"
-          title="학생 식별 필요"
-          description={`${unresolvedStudents.length}개 결과는 현재 학생 카탈로그와 확인되지 않아 임의 학생에게 연결하지 않았어요.`}
-        />
+      {error || partialFailure || failedImages.length > 0 ? (
+        <div role="alert" className="space-y-1 text-sm text-destructive">
+          {error ? <p>{error}</p> : null}
+          {partialFailure ? <p>{partialFailure}</p> : null}
+          {failedImages.length > 0 ? (
+            <p>
+              <span className="font-semibold">일부 이미지를 인식하지 못했어요.</span>{" "}
+              {getStudentFailedImagesDescription(failedImages)}
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="max-h-[70vh] max-w-full overflow-auto rounded-lg border border-border">
@@ -1004,6 +1038,7 @@ function ReviewPanel({
             {visibleStudents.map((student) => {
               const state = review[student.studentUid];
               const catalogStudent = job.studentCatalog?.[student.studentUid];
+              const studentName = catalogStudent?.name ?? student.studentName;
               const artifact = artifactsByStudentUid.get(student.studentUid);
               if (!state) return null;
               const reviewIssueCount = fields.filter(({ resultKey, applyKey }) => {
@@ -1025,7 +1060,6 @@ function ReviewPanel({
               return (
                 <tr
                   key={student.studentUid}
-                  aria-disabled={!catalogStudent || undefined}
                   className={cn(
                     "border-b border-border align-middle last:border-b-0",
                     !catalogStudent && "bg-muted/30",
@@ -1033,54 +1067,83 @@ function ReviewPanel({
                 >
                   <th
                     scope="row"
-                    className={cn("sticky left-0 z-10 bg-card px-1 py-1.5 font-medium", !catalogStudent && "bg-muted")}
+                    className={cn(
+                      "sticky left-0 z-10 w-24 bg-card px-1 py-1.5 font-medium",
+                      !catalogStudent && "bg-muted",
+                    )}
                   >
-                    <div className="flex flex-col items-center gap-1">
-                      <div className="flex items-center justify-center gap-1.5">
-                        <div className="relative w-11 shrink-0">
-                          <StudentCard
-                            uid={catalogStudent?.uid ?? null}
-                            name={catalogStudent?.name ?? student.studentName}
-                            nameSize="small"
-                            namePlacement="overlay"
-                            flush
-                          />
-                          {reviewIssueCount > 0 ? (
-                            <span
-                              title={`${reviewIssueCount}개 확인 필요`}
-                              className="absolute -top-1.5 -right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-amber-500/50 bg-card/95 text-amber-500 shadow-sm shadow-black/25 backdrop-blur-sm dark:border-amber-400/40 dark:bg-muted/95 dark:text-amber-300"
-                            >
-                              <ExclamationTriangleIcon className="size-4" strokeWidth={2.25} aria-hidden="true" />
-                              <span className="sr-only">{reviewIssueCount}개 확인 필요</span>
-                            </span>
-                          ) : null}
-                        </div>
+                    <div className="flex min-w-0 items-stretch justify-between gap-1">
+                      <div className="relative w-11 shrink-0">
+                        <StudentCard
+                          uid={catalogStudent?.uid ?? null}
+                          name={studentName}
+                          nameSize="small"
+                          namePlacement="overlay"
+                          flush
+                        />
+                        {reviewIssueCount > 0 ? (
+                          <span
+                            title={`${reviewIssueCount}개 확인 필요`}
+                            className="absolute -top-1.5 -right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-amber-500/50 bg-card/95 text-amber-500 shadow-sm shadow-black/25 backdrop-blur-sm dark:border-amber-400/40 dark:bg-muted/95 dark:text-amber-300"
+                          >
+                            <ExclamationTriangleIcon className="size-4" strokeWidth={2.25} aria-hidden="true" />
+                            <span className="sr-only">{reviewIssueCount}개 확인 필요</span>
+                          </span>
+                        ) : null}
+                        {!catalogStudent ? (
+                          <span className="mt-1 block whitespace-nowrap text-center text-xs font-semibold leading-none text-destructive">
+                            반영 불가
+                          </span>
+                        ) : null}
+                      </div>
+                      <div className="flex w-10 shrink-0 flex-col justify-center gap-1">
                         {artifact ? (
-                          <HoverTooltip content="인식 화면 보기">
-                            <button
-                              type="button"
+                          <HoverTooltip as="div" className="w-full" content="인식 화면 보기">
+                            <Button
+                              size="xs"
+                              fullWidth
                               onClick={() =>
                                 setSelectedPreview({
                                   artifact,
-                                  studentName: catalogStudent?.name ?? student.studentName,
+                                  studentName,
                                 })
                               }
-                              aria-label={`${catalogStudent?.name ?? student.studentName} 인식 화면 보기`}
-                              className="inline-flex size-7 shrink-0 cursor-zoom-in items-center justify-center rounded-full text-muted-foreground/60 outline-none transition-colors hover:bg-muted/80 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                              className="px-1"
                             >
-                              <PhotoIcon className="size-4" aria-hidden="true" />
-                            </button>
+                              <span aria-hidden="true">보기</span>
+                              <span className="sr-only">{studentName} 인식 화면 보기</span>
+                            </Button>
                           </HoverTooltip>
                         ) : null}
+                        <div
+                          className="w-full"
+                          ref={(element) => {
+                            if (!element) {
+                              excludeButtonRefs.current.delete(student.studentUid);
+                              return;
+                            }
+                            const button = element.querySelector<HTMLButtonElement>("button");
+                            if (button) excludeButtonRefs.current.set(student.studentUid, button);
+                          }}
+                        >
+                          <Button
+                            size="xs"
+                            fullWidth
+                            variant="danger-subtle"
+                            className="px-1"
+                            disabled={phase === "applying" || isCancelling}
+                            onClick={() => excludeStudent(student.studentUid, studentName)}
+                          >
+                            <span aria-hidden="true">제외</span>
+                            <span className="sr-only">{studentName} 학생을 저장 대상에서 제외</span>
+                          </Button>
+                        </div>
                       </div>
-                      {!catalogStudent ? (
-                        <span className="text-xs font-semibold text-destructive">반영 불가</span>
-                      ) : null}
                     </div>
                   </th>
                   <td className="border-l border-border px-1 py-1.5 align-top">
                     <ReviewBasicGroup
-                      studentName={catalogStudent?.name ?? student.studentName}
+                      studentName={studentName}
                       initialTier={catalogStudent?.initialTier ?? tierField.min}
                       student={student}
                       state={state}
@@ -1091,7 +1154,7 @@ function ReviewPanel({
                     />
                   </td>
                   <ReviewNumberGroup
-                    studentName={catalogStudent?.name ?? student.studentName}
+                    studentName={studentName}
                     student={student}
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
@@ -1101,7 +1164,7 @@ function ReviewPanel({
                     onValueChange={updateValue}
                   />
                   <ReviewNumberGroup
-                    studentName={catalogStudent?.name ?? student.studentName}
+                    studentName={studentName}
                     student={student}
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
@@ -1111,7 +1174,7 @@ function ReviewPanel({
                     onValueChange={updateValue}
                   />
                   <ReviewNumberGroup
-                    studentName={catalogStudent?.name ?? student.studentName}
+                    studentName={studentName}
                     student={student}
                     state={state}
                     currentState={job.currentStudentStates?.[student.studentUid]}
@@ -1126,39 +1189,24 @@ function ReviewPanel({
             {visibleStudents.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  검토가 필요한 데이터가 없습니다.
+                  {showReviewRequiredOnly ? "검토가 필요한 데이터가 없습니다." : "저장할 학생이 없습니다."}
                 </td>
               </tr>
             ) : null}
           </tbody>
         </table>
       </div>
-      <div className="sticky bottom-[var(--mobile-bottom-offset)] z-layer-navigation lg:bottom-4">
-        <FloatingActionBar className="mx-3 flex items-center justify-between gap-4 p-4 md:mx-5">
-          {remainingReviewStudents.length > 0 ? (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-amber-700 dark:text-amber-300">
-              <ExclamationTriangleIcon className="size-4 shrink-0" aria-hidden="true" />
-              {remainingReviewStudents.length}명의 데이터 검토 필요
-            </p>
-          ) : (
-            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-emerald-700 dark:text-emerald-300">
-              <CheckCircleIcon className="size-4 shrink-0" aria-hidden="true" />
-              모든 데이터 검토 완료
-            </p>
-          )}
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
-              {isCancelling ? "취소 중..." : "인식 결과 삭제"}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={phase === "applying" || isCancelling}
-              onClick={() => onApply(remainingReviewStudents.length)}
-            >
-              {phase === "applying" ? "반영 중..." : "성장도 저장"}
-            </Button>
-          </div>
-        </FloatingActionBar>
+      <div ref={actionBarRef} className="flex flex-wrap justify-end gap-2">
+        <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
+          {isCancelling ? "취소 중..." : "인식 결과 삭제"}
+        </Button>
+        <Button
+          variant="primary"
+          disabled={phase === "applying" || isCancelling || saveableStudentCount === 0}
+          onClick={() => onApply(remainingReviewStudents.length, excludedStudentUids)}
+        >
+          {phase === "applying" ? "반영 중..." : "성장도 저장"}
+        </Button>
       </div>
       <ScannerImageDialog
         open={selectedPreview !== null}
@@ -1599,6 +1647,7 @@ export function buildStudentVideoApplyRequest(
   result: StudentGrowthResult,
   review: ReviewState,
   validStudentUids?: ReadonlySet<string>,
+  excludedStudentUids?: ReadonlySet<string>,
 ): {
   students: Array<{
     studentUid: string;
@@ -1609,7 +1658,13 @@ export function buildStudentVideoApplyRequest(
   return {
     students: result.students.flatMap((student) => {
       const state = review[student.studentUid];
-      if (!state?.confirmed.tier || (validStudentUids && !validStudentUids.has(student.studentUid))) return [];
+      if (
+        !state?.confirmed.tier ||
+        (validStudentUids && !validStudentUids.has(student.studentUid)) ||
+        excludedStudentUids?.has(student.studentUid)
+      ) {
+        return [];
+      }
       const confirmedFields = fields.flatMap(({ applyKey }) => (state.confirmed[applyKey] ? [applyKey] : []));
       const current = Object.fromEntries(
         confirmedFields.map((field) => {
