@@ -17,10 +17,15 @@ import {
   roleLocale,
   schoolNameLocale,
 } from "~/locales/ko";
-import { equipmentImageUrl } from "~/models/assets";
 import type { NestedComment } from "~/models/content";
 import type { Role } from "~/models/content.d";
 import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+
+const EQUIPMENT_CATEGORY_IMAGE_BASE_URL = "https://assets.mollulog.net/assets/images/equipments";
+
+export function equipmentCategoryImageUrl(category: string): string {
+  return `${EQUIPMENT_CATEGORY_IMAGE_BASE_URL}/${category}`;
+}
 
 type FuturePlanStudents = {
   uid: string;
@@ -215,7 +220,7 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
                       cardProps={[
                         ...resources.equipments.map((equipment) => ({
                           id: `equipment-${student.uid}-${equipment}`,
-                          imageUrl: equipmentImageUrl(equipment),
+                          imageUrl: equipmentCategoryImageUrl(equipment),
                         })),
                         ...resources.mainSkillItems.map((itemUid) => ({
                           id: `skillItem-${student.uid}-${itemUid}`,
