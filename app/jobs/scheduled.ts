@@ -14,6 +14,7 @@ import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
+import { syncStudentDirectory } from "~/models/student-directory";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
@@ -97,6 +98,7 @@ async function refreshForcedSourceCaches(env: Env, ctx?: ExecutionContext): Prom
 
   const tasks: Array<() => Promise<unknown>> = [
     () => syncRawStudents(env, true),
+    () => syncStudentDirectory(env, true),
     () => warmRecruitmentCache(env, true),
     () => warmRaidCache(env, true),
     () => getMainStories(env, true),
