@@ -1,4 +1,4 @@
-import { BoltIcon, StarIcon, HeartIcon, UserGroupIcon } from "@heroicons/react/16/solid";
+import { BoltIcon, HeartIcon, StarIcon, UserGroupIcon } from "@heroicons/react/16/solid";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 
 type TagIconProps = {

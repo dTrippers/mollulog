@@ -1,5 +1,5 @@
-import { Outlet, redirect } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
+import { Outlet, redirect } from "react-router";
 import { createPageErrorBoundary } from "~/components/features/layout";
 import { raidTypeToParam } from "~/domain/raid";
 import { routeError } from "~/lib/http-errors";

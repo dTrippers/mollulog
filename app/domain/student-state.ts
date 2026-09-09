@@ -1,8 +1,8 @@
 import {
   ABILITY_RELEASE_MAX_LEVEL,
-  WEAPON_LEVEL_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
+  WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 
 export type StudentStateFieldDefinition<Key extends string = string> = {
@@ -116,7 +116,13 @@ export const studentStateComparisonFields: readonly StudentStateComparisonField[
     headerClassName: "w-16 px-0.5 py-1.5",
   },
   { label: "학생 Lv", currentKey: "level", targetKey: "targetLevel", min: 1, max: 90 },
-  { label: "고유무기 Lv", currentKey: "weaponLevel", targetKey: "targetWeaponLevel", min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
+  {
+    label: "고유무기 Lv",
+    currentKey: "weaponLevel",
+    targetKey: "targetWeaponLevel",
+    min: 0,
+    max: WEAPON_LEVEL_MAX_LEVEL,
+  },
   { label: "EX 스킬", currentKey: "skillEx", targetKey: "targetSkillEx", min: 1, max: 5 },
   { label: "기본 스킬", currentKey: "skillNormal", targetKey: "targetSkillNormal", min: 1, max: 10 },
   { label: "강화 스킬", currentKey: "skillEnhanced", targetKey: "targetSkillEnhanced", min: 1, max: 10 },
@@ -126,8 +132,20 @@ export const studentStateComparisonFields: readonly StudentStateComparisonField[
   { label: "장비3", currentKey: "equip3", targetKey: "targetEquip3", min: 1, max: 10, equipmentIndex: 2 },
   { label: "애용품", currentKey: "equipSpecial", targetKey: "targetEquipSpecial", min: 1, max: 2, gearOnly: true },
   { label: "HP 해방", currentKey: "abilityHp", targetKey: "targetAbilityHp", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  { label: "공격력 해방", currentKey: "abilityAtk", targetKey: "targetAbilityAtk", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  { label: "치유력 해방", currentKey: "abilityHeal", targetKey: "targetAbilityHeal", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
+  {
+    label: "공격력 해방",
+    currentKey: "abilityAtk",
+    targetKey: "targetAbilityAtk",
+    min: 0,
+    max: ABILITY_RELEASE_MAX_LEVEL,
+  },
+  {
+    label: "치유력 해방",
+    currentKey: "abilityHeal",
+    targetKey: "targetAbilityHeal",
+    min: 0,
+    max: ABILITY_RELEASE_MAX_LEVEL,
+  },
 ] as const;
 export type StudentStateDraftCurrentValue = {
   level: number | null;
@@ -551,7 +569,9 @@ function getMergedCurrentFieldValue(
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
 ): number | null {
-  return isStudentStateCurrentFieldUpdateTarget(key, imported, existing, options) ? imported[key] : (existing?.[key] ?? null);
+  return isStudentStateCurrentFieldUpdateTarget(key, imported, existing, options)
+    ? imported[key]
+    : (existing?.[key] ?? null);
 }
 
 function getMergedTargetFieldValue(
@@ -560,7 +580,9 @@ function getMergedTargetFieldValue(
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
 ): number | null {
-  return isStudentStateTargetFieldUpdateTarget(key, imported, existing, options) ? imported[key] : (existing?.[key] ?? null);
+  return isStudentStateTargetFieldUpdateTarget(key, imported, existing, options)
+    ? imported[key]
+    : (existing?.[key] ?? null);
 }
 
 function getMinimumValue(field: { kind?: "tier"; min: number }, initialTier: number): number {

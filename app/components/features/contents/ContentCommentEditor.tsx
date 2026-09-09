@@ -1,16 +1,15 @@
 import {
+  ArrowUpIcon,
+  ArrowUturnLeftIcon,
+  BookmarkIcon,
   LockClosedIcon,
   LockOpenIcon,
-  ArrowUturnLeftIcon,
-  TrashIcon,
   PencilSquareIcon,
-  ArrowUpIcon,
+  TrashIcon,
   XMarkIcon,
-  BookmarkIcon,
 } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Callout } from "~/components/primitives";
-import { ClickableSurface } from "~/components/primitives";
+import { Callout, ClickableSurface } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { cn } from "~/lib/utils";
 import CommentView from "./CommentView";

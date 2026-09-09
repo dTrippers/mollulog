@@ -1,9 +1,12 @@
-import { Link } from "react-router";
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { HeartIcon as HeartIconOutline } from "@heroicons/react/24/outline";
 import { HeartIcon as HeartIconSolid } from "@heroicons/react/24/solid";
+import { Link } from "react-router";
 import { StudentCard } from "~/components/features/students";
 import { AttributeBadge } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
+import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -14,9 +17,6 @@ import {
   roleLocale,
 } from "~/locales/ko";
 import type { Role } from "~/models/content.d";
-import { cn } from "~/lib/utils";
-import { useSignIn } from "~/contexts/SignInProvider";
-import type { RecruitmentTypeEnum, Attack, Defense } from "~/graphql/graphql";
 
 type EventRecruitmentProps = {
   recruitment: {

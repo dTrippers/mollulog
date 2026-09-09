@@ -1,4 +1,4 @@
-import type { TypedDocumentNode, AnyVariables, OperationResult } from "urql";
+import type { AnyVariables, OperationResult, TypedDocumentNode } from "urql";
 import { createClient, fetchExchange } from "urql";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";

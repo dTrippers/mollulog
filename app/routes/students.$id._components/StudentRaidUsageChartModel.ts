@@ -1,5 +1,5 @@
 import { Attack, Defense } from "~/graphql/graphql";
-import { type UtcIsoString, compareInstantAsc, getInstantTime, isInstantAfter } from "~/lib/date-time";
+import { compareInstantAsc, getInstantTime, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import type { RaidType } from "~/models/content.d";
 
 export type StudentRaidUsageDefenseFilter = Defense | "all";

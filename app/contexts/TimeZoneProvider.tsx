@@ -10,11 +10,7 @@ export function TimeZoneProvider({
   timeZone: string | null | undefined;
   children: React.ReactNode;
 }) {
-  return (
-    <TimeZoneContext.Provider value={normalizeTimeZone(timeZone)}>
-      {children}
-    </TimeZoneContext.Provider>
-  );
+  return <TimeZoneContext.Provider value={normalizeTimeZone(timeZone)}>{children}</TimeZoneContext.Provider>;
 }
 
 export function useDisplayTimeZone(): TimeZoneId {

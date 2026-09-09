@@ -18,10 +18,7 @@ export function SignInProvider({ children }: { children: React.ReactNode }) {
   const showSignIn = useCallback(() => setIsSignInVisible(true), []);
   const hideSignIn = useCallback(() => setIsSignInVisible(false), []);
 
-  const value = useMemo(
-    () => ({ isSignInVisible, showSignIn, hideSignIn }),
-    [isSignInVisible, showSignIn, hideSignIn],
-  );
+  const value = useMemo(() => ({ isSignInVisible, showSignIn, hideSignIn }), [isSignInVisible, showSignIn, hideSignIn]);
 
   return <SignInContext.Provider value={value}>{children}</SignInContext.Provider>;
 }

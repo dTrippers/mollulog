@@ -116,9 +116,7 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
 
   const [includeFirstClear, setIncludeFirstClear] = useState<boolean>(savedShopState?.includeFirstClear ?? false);
   const [extraStageRuns, setExtraStageRuns] = useState<Record<string, number>>(savedShopState?.extraStageRuns ?? {});
-  const [minigameStartRound, setMinigameStartRound] = useState<number>(
-    getInitialMinigameStartRound(savedShopState),
-  );
+  const [minigameStartRound, setMinigameStartRound] = useState<number>(getInitialMinigameStartRound(savedShopState));
   const [minigamePlayCount, setMinigamePlayCount] = useState<number>(savedShopState?.minigamePlayCount ?? 0);
   const [minigamePaymentQuantityMode, setMinigamePaymentQuantityMode] = useState<MinigamePaymentQuantityMode>(
     savedShopState?.minigamePaymentQuantityMode ?? "expected",

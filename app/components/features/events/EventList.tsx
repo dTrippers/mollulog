@@ -2,7 +2,7 @@ import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
 import { Link } from "react-router";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { type UtcIsoString, formatInstant } from "~/lib/date-time";
+import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content-rules";
 import type { TimelineContentType } from "~/models/timeline-content";

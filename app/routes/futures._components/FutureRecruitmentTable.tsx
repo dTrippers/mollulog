@@ -12,16 +12,16 @@ import { Link } from "react-router";
 import { StudentCard } from "~/components/features/students";
 import { EmptyView } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, getInstantTime, isInstantAfter, isInstantBefore, nowUtcIso } from "~/lib/date-time";
 import { contentTypeLocale, recruitmentLabelLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
-import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import {
+  buildFutureRecruitmentTableRows,
   type FutureRecruitmentTableContent,
   type FutureRecruitmentTableRecruitmentGroup,
   type FutureRecruitmentTableRow,
-  buildFutureRecruitmentTableRows,
   formatAuxiliaryContentPeriodLabel,
   isFutureRecruitmentTableContentLinkable,
   isFutureRecruitmentTableContentVisible,
@@ -225,7 +225,12 @@ function RecruitmentStudents({
 
   if (groupedStudents.length === 1) {
     return (
-      <RecruitmentContentStudentGroup group={groupedStudents[0]} rowUntil={rowUntil} now={now} showContentName={false} />
+      <RecruitmentContentStudentGroup
+        group={groupedStudents[0]}
+        rowUntil={rowUntil}
+        now={now}
+        showContentName={false}
+      />
     );
   }
 
@@ -356,13 +361,7 @@ function RecruitmentStudentSections({ students }: { students: FutureRecruitmentT
   );
 }
 
-function RecruitmentStudentSection({
-  title,
-  students,
-}: {
-  title?: string;
-  students: FutureRecruitmentTableStudent[];
-}) {
+function RecruitmentStudentSection({ title, students }: { title?: string; students: FutureRecruitmentTableStudent[] }) {
   if (students.length === 0) {
     return null;
   }

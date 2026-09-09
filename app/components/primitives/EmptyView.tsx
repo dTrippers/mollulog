@@ -12,7 +12,12 @@ export default function EmptyView({ Icon, text, description, className }: EmptyV
   const IconComponent = Icon ?? CubeTransparentIcon;
 
   return (
-    <div className={cn("my-16 flex w-full flex-col items-center justify-center text-center text-muted-foreground", className)}>
+    <div
+      className={cn(
+        "my-16 flex w-full flex-col items-center justify-center text-center text-muted-foreground",
+        className,
+      )}
+    >
       <IconComponent className="my-2 size-16" />
       <p className="my-2 text-sm font-medium text-foreground">{text}</p>
       {description ? <p className="max-w-md text-sm text-muted-foreground">{description}</p> : null}

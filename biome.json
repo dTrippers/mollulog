@@ -1,6 +1,6 @@
 {
   "files": {
-    "includes": ["**/app/**/*.tsx", "**/app/**/*.ts", "**/test/**/*.ts", "!**/app/graphql/**/*"]
+    "includes": ["app/**/*.tsx", "app/**/*.ts", "test/**/*.ts", "!app/graphql/**/*"]
   },
   "formatter": {
     "enabled": true,

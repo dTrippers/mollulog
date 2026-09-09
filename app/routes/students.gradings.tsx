@@ -1,4 +1,4 @@
-import { redirect, type LoaderFunctionArgs, type MetaFunction } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, redirect } from "react-router";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -15,10 +15,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 export const meta: MetaFunction = () => {
   const title = "학생 평가 목록 | 몰루로그";
   const description = "선생님들의 학생 평가 목록을 확인해보세요.";
-  return [
-    { title },
-    { name: "description", content: description },
-  ];
+  return [{ title }, { name: "description", content: description }];
 };
 
 export default function StudentGradingsRedirectPage() {

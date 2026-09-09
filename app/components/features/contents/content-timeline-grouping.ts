@@ -1,10 +1,10 @@
 import {
-  type UtcIsoString,
   compareInstantAsc,
   formatInstantDateKey,
   isInstantAfter,
   isInstantBefore,
   nowUtcIso,
+  type UtcIsoString,
 } from "~/lib/date-time";
 import { CONTENT_ORDER } from "~/models/content-rules";
 import type { ContentTimelineProps } from "./ContentTimeline";

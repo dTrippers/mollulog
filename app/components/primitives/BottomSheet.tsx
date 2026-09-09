@@ -1,6 +1,6 @@
+import { XMarkIcon } from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { XMarkIcon } from "@heroicons/react/24/solid";
 import { cn } from "~/lib/utils";
 
 type BottomSheetProps = {

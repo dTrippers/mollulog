@@ -1,4 +1,10 @@
-import type { Attack, Defense, RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery, RecruitmentTypeEnum } from "~/graphql/graphql";
+import type {
+  Attack,
+  Defense,
+  RecruitmentGroupsListQuery,
+  RecruitmentPoolStudentsQuery,
+  RecruitmentTypeEnum,
+} from "~/graphql/graphql";
 import type { Role } from "~/models/content.d";
 
 export type SimulationStudent = {
@@ -208,7 +214,8 @@ export function buildRecruitmentPoolSnapshot({
 }: BuildRecruitmentPoolSnapshotArgs): RecruitmentPoolSnapshot {
   const pickupStudents = recruitmentGroup.recruitments
     .filter(
-      (recruitment) => recruitment.pickup && !isGivenRecruitmentType(recruitment.recruitmentType) && recruitment.student,
+      (recruitment) =>
+        recruitment.pickup && !isGivenRecruitmentType(recruitment.recruitmentType) && recruitment.student,
     )
     .map((recruitment) => toSimulationStudent(recruitment.student as SimulationStudent));
   const pickupStudentUids = new Set(pickupStudents.map((student) => student.uid));
@@ -435,10 +442,7 @@ function drawRecruitmentSlot({
     };
   }
 
-  const student = pickRandomStudent(
-    getNonPickupStudentsByTier(snapshot, rarity, activePickupStudentUid),
-    random,
-  );
+  const student = pickRandomStudent(getNonPickupStudentsByTier(snapshot, rarity, activePickupStudentUid), random);
   return {
     rarity,
     pickup: false,

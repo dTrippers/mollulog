@@ -1,9 +1,7 @@
 import { type MetaFunction, Outlet, useLocation } from "react-router";
 import { Title } from "~/components/primitives";
 
-export const meta: MetaFunction = () => [
-  { title: "Passkey 관리 | 몰루로그" },
-];
+export const meta: MetaFunction = () => [{ title: "Passkey 관리 | 몰루로그" }];
 
 export default function EditPasskey() {
   const location = useLocation();

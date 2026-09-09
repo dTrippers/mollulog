@@ -1,9 +1,9 @@
 import {
   type AggregatedGrowthResourceRequirements,
-  type StudentGrowthResourceRequirements,
   aggregateGrowthResourceRequirements,
   getEquipmentTier,
   getEquipmentTypeKey,
+  type StudentGrowthResourceRequirements,
 } from "~/domain/growth-resource";
 
 export type FarmingDifficultyFilter = "all" | "normal" | "hard";

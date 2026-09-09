@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { type PyroxeneScheduleItem, buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
+import { buildPyroxeneScheduleItems, type PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import type { PyroxeneTimelineItem } from "~/models/pyroxene-planner";
 import type { PyroxenePlannerContent } from "~/views/pyroxene";
 

@@ -1,5 +1,5 @@
-import { useCallback, useId } from "react";
 import type { ComponentPropsWithoutRef, KeyboardEvent } from "react";
+import { useCallback, useId } from "react";
 
 type NumberInputFlowDirection = "left" | "right" | "up" | "down";
 

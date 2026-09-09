@@ -89,7 +89,9 @@ function isComingSchedule(schedule: EventListSchedule, now: string): boolean {
     return false;
   }
 
-  return schedule.runType !== "permanent" || getInstantTime(schedule.since) > getInstantTime(now) - permanentGracePeriodMs;
+  return (
+    schedule.runType !== "permanent" || getInstantTime(schedule.since) > getInstantTime(now) - permanentGracePeriodMs
+  );
 }
 
 export function filterEventList(events: EventListItem[], filter: EventFilterState, now: string): EventListItem[] {
