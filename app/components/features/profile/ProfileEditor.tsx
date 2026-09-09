@@ -21,14 +21,22 @@ type ProfileEditorProps = {
   students: ProfileStudent[];
   initialData?: Partial<Profile>;
   profileVisibilityField?: ReactNode;
+  growthVisibilityField?: ReactNode;
   error?: {
+    form?: string;
     username?: string;
     friendCode?: string;
     bio?: string;
   };
 };
 
-export default function ProfileEditor({ students, initialData, profileVisibilityField, error }: ProfileEditorProps) {
+export default function ProfileEditor({
+  students,
+  initialData,
+  profileVisibilityField,
+  growthVisibilityField,
+  error,
+}: ProfileEditorProps) {
   const initialProfileStudentId = initialData?.profileStudentId
     ? students.find(({ uid }) => initialData.profileStudentId === uid)?.uid
     : undefined;
@@ -56,12 +64,18 @@ export default function ProfileEditor({ students, initialData, profileVisibility
       description="8자리 영문자"
       placeholder="[소셜] > [친구] > [ID 카드] 에서 확인"
       error={error?.friendCode}
-      className={profileVisibilityField ? "max-w-none" : "max-w-none md:max-w-md"}
+      className="max-w-none md:max-w-md"
     />
   );
 
   return (
     <div className="space-y-6">
+      {error?.form ? (
+        <p role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error.form}
+        </p>
+      ) : null}
+
       <div className="grid gap-6 md:grid-cols-2">
         <Input
           label="닉네임"
@@ -77,14 +91,19 @@ export default function ProfileEditor({ students, initialData, profileVisibility
         {profileVisibilityField ?? profileStudentField}
       </div>
 
-      {profileVisibilityField ? (
+      {growthVisibilityField ? (
+        <div className="grid gap-6 md:grid-cols-2">
+          {profileStudentField}
+          {growthVisibilityField}
+        </div>
+      ) : profileVisibilityField ? (
         <div className="grid gap-6 md:grid-cols-2">
           {profileStudentField}
           {friendCodeField}
         </div>
-      ) : (
-        friendCodeField
-      )}
+      ) : null}
+
+      {growthVisibilityField || !profileVisibilityField ? friendCodeField : null}
 
       <Textarea
         label="자기소개"

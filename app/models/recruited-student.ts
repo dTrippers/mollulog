@@ -196,13 +196,20 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
       // A missing business-key row cannot be row-locked; the unique index and
       // conflict target serialize a concurrent insert at the write boundary.
       if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
-        throw new Error("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
+        throw new RecruitedStudentValidationError("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
       }
-      assertAbilityReleaseAvailable(
-        [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
-        tier,
-        "능력 해방",
-      );
+      try {
+        assertAbilityReleaseAvailable(
+          [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
+          tier,
+          "능력 해방",
+        );
+      } catch (error) {
+        if (error instanceof Error) {
+          throw new RecruitedStudentValidationError(error.message);
+        }
+        throw error;
+      }
       await tx
         .insert(pgRecruitedStudentsTable)
         .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })

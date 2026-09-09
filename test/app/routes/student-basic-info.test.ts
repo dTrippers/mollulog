@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { readFileSync } from "node:fs";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
 
 const mockGetActiveSensei = jest.fn<(env: Env, request: Request) => Promise<{ id: number } | null>>();
@@ -62,10 +63,20 @@ import { StudentSkillSelectionCondition } from "~/graphql/graphql";
 import {
   getAbilityReleaseDisabledReason,
   getSkillSelectionConditionLabel,
+  scrollToStudentBasicInfo,
 } from "~/routes/students.$id._components/StudentBasicInfo";
 import { action, toStudentBasicInfoCurrentStateInput } from "~/routes/students.$id._index";
 
 const env = {} as Env;
+const originalDocument = (globalThis as { document?: unknown }).document;
+
+afterEach(() => {
+  if (originalDocument === undefined) {
+    delete (globalThis as { document?: unknown }).document;
+  } else {
+    Object.defineProperty(globalThis, "document", { configurable: true, value: originalDocument });
+  }
+});
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -92,6 +103,34 @@ beforeEach(() => {
 });
 
 describe("student basic info ability release", () => {
+  it("keeps the growth card anchor visible below the fixed header", () => {
+    const source = readFileSync("app/routes/students.$id._components/StudentBasicInfo.tsx", "utf8");
+
+    expect(source).toContain(
+      '<section id="student-basic-info" className="scroll-mt-[calc(var(--mobile-header-height)+3.75rem)] lg:scroll-mt-4">',
+    );
+    expect(source).toContain("학생 기본 정보");
+    expect(source).toContain('hash !== "#student-basic-info"');
+    expect(source).toContain('navigationType !== "PUSH"');
+    expect(source).toContain("requestAnimationFrame");
+  });
+
+  it("scrolls the student basic info anchor after a client transition", () => {
+    const scrollIntoView = jest.fn<(options?: ScrollIntoViewOptions) => void>();
+    const getElementById = jest.fn<(id: string) => { scrollIntoView: (options?: ScrollIntoViewOptions) => void }>(
+      () => ({ scrollIntoView }),
+    );
+    Object.defineProperty(globalThis, "document", {
+      configurable: true,
+      value: { getElementById },
+    });
+
+    scrollToStudentBasicInfo();
+
+    expect(getElementById).toHaveBeenCalledWith("student-basic-info");
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: "start" });
+  });
+
   it("prioritizes the weapon tier requirement", () => {
     expect(getAbilityReleaseDisabledReason(5)).toBe("고유무기 1성부터 능력 개방을 설정할 수 있어요");
   });

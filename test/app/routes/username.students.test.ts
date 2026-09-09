@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createStudentFilterState } from "~/components/features/students/StudentFilter";
@@ -15,7 +16,9 @@ import { getAllStudents, getAllStudentsMap } from "~/models/student";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import {
   action,
+  growthPrivateCalloutDismissalStorageKey,
   loader,
+  parseGrowthPrivateCalloutDismissal,
   USER_STUDENT_FILTER_COOKIE_NAME,
   USER_STUDENT_FILTER_SORTS,
 } from "~/routes/$username.students";
@@ -45,6 +48,7 @@ jest.mock("~/models/recruited-student", () => ({
 jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
   getAllStudentsMap: jest.fn(),
+  getStudentWeaponAvailability: jest.fn(),
 }));
 
 jest.mock("~/components/features/students", () => ({
@@ -143,6 +147,36 @@ beforeEach(() => {
 });
 
 describe("@username students loader", () => {
+  it("keeps owner growth callout priority and public sharing states in the students route", () => {
+    const source = readFileSync("app/routes/$username.students.tsx", "utf8");
+
+    expect(source).toContain('title="성장도는 나만 확인할 수 있어요"');
+    expect(source).toContain('aria-label="성장도 비공개 안내 닫기"');
+    expect(source).toContain("growthPrivateCalloutDismissalLoaded");
+    expect(source).toContain("growthPrivateCalloutDismissalStorageKey");
+    expect(source).toContain("JSON.stringify([growthPrivateCalloutId])");
+    expect(source).toContain('to="/edit"');
+    expect(source).toContain("프로필 관리");
+    expect(source).toContain('profileVisibility === "private"');
+    expect(source).toContain("ShareStudentGrowthButton");
+    expect(source).toContain('text: "자세히"');
+    expect(source).toContain(
+      'className="grid grid-cols-1 justify-start gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,14.5rem),14.5rem))]"',
+    );
+    expect(source).not.toContain("repeat(auto-fit,minmax(min(100%,16rem),1fr))");
+    expect(source).not.toContain("GrowthVisibilityControl");
+    expect(source).not.toContain("성장 상태 편집");
+  });
+
+  it("parses only the own growth callout dismissal from browser storage", () => {
+    expect(growthPrivateCalloutDismissalStorageKey).toBe("mollulog::dismissed-growth-private-callout");
+    expect(parseGrowthPrivateCalloutDismissal(null)).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal("[]")).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["other-notice"]))).toBe(false);
+    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["student-growth-private"]))).toBe(true);
+    expect(parseGrowthPrivateCalloutDismissal("invalid")).toBe(false);
+  });
+
   it("seeds the first render from the user student filter cookie", async () => {
     const state = {
       ...createStudentFilterState("tier"),

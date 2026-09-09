@@ -21,6 +21,7 @@ export type Sensei = {
   active: boolean;
   role: SenseiRole;
   profileVisibility: ProfileVisibility;
+  growthVisibility?: boolean;
   config?: {
     darkMode?: boolean;
   };
@@ -166,12 +167,11 @@ export async function createSensei(
 }
 
 type SenseiUpdateFields = Partial<
-  Pick<Sensei, "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "profileVisibility">
+  Pick<
+    Sensei,
+    "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "profileVisibility" | "growthVisibility"
+  >
 >;
-
-function nullableFieldToUpdate<T>(value: T | null | undefined, existingValue: T | null): T | null {
-  return value === undefined ? existingValue : value;
-}
 
 export async function updateSensei(
   env: Env,
@@ -184,22 +184,18 @@ export async function updateSensei(
       env,
       "update_sensei",
       async (db) => {
-        const [existingRow] = await db.select().from(pgSenseisTable).where(eq(pgSenseisTable.id, id)).limit(1);
-        if (!existingRow) return {};
-        const existingSensei = toSenseiModel(existingRow);
+        const updateValues = {
+          ...(fields.username !== undefined ? { username: fields.username } : {}),
+          ...(fields.friendCode !== undefined ? { friendCode: fields.friendCode } : {}),
+          ...(fields.profileStudentId !== undefined ? { profileStudentId: fields.profileStudentId } : {}),
+          ...(fields.bio !== undefined ? { bio: fields.bio } : {}),
+          ...(fields.active !== undefined ? { active: fields.active } : {}),
+          ...(fields.profileVisibility !== undefined ? { profileVisibility: fields.profileVisibility } : {}),
+          ...(fields.growthVisibility !== undefined ? { growthVisibility: fields.growthVisibility } : {}),
+          updatedAt: new Date(),
+        };
 
-        await db
-          .update(pgSenseisTable)
-          .set({
-            username: fields.username ?? existingSensei.username,
-            friendCode: nullableFieldToUpdate(fields.friendCode, existingSensei.friendCode),
-            profileStudentId: nullableFieldToUpdate(fields.profileStudentId, existingSensei.profileStudentId),
-            bio: nullableFieldToUpdate(fields.bio, existingSensei.bio),
-            active: fields.active ?? existingSensei.active,
-            profileVisibility: fields.profileVisibility ?? existingSensei.profileVisibility,
-            updatedAt: new Date(),
-          })
-          .where(eq(pgSenseisTable.id, id));
+        await db.update(pgSenseisTable).set(updateValues).where(eq(pgSenseisTable.id, id));
         return {};
       },
       options,
@@ -225,5 +221,6 @@ export function toSenseiModel(row: SenseiRow): Sensei {
     active: typeof row.active === "boolean" ? row.active : Number(row.active) === 1,
     role: row.role as SenseiRole,
     profileVisibility: row.profileVisibility ?? "public",
+    growthVisibility: row.growthVisibility ?? false,
   };
 }
