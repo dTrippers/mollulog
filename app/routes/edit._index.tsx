@@ -52,6 +52,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       profileStudentId: senseiData.profileStudentId,
       friendCode: senseiData.friendCode,
       profileVisibility: senseiData.profileVisibility,
+      growthVisibility: senseiData.growthVisibility === true,
       memberCode: senseiPrivacy?.memberCode ?? null,
     },
     allStudents: (await getAllStudents(env, true))
@@ -82,6 +83,14 @@ function authMessageFromSearchParams(params: URLSearchParams): { tone: "success"
   if (params.get("auth_error") === "failed") {
     return { tone: "error", text: "로그인 계정 연결에 실패했어요. 다시 시도해주세요." };
   }
+  return null;
+}
+
+function parseBooleanField(formData: FormData, key: string): boolean | null | undefined {
+  if (!formData.has(key)) return undefined;
+  const value = formData.get(key);
+  if (value === "true") return true;
+  if (value === "false") return false;
   return null;
 }
 
@@ -139,11 +148,13 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     const profileStudentId = toNullable(getOptionalString("profileStudentId"));
     const friendCodeInput = toNullable(getOptionalString("friendCode"));
     const friendCode = typeof friendCodeInput === "string" ? friendCodeInput.toUpperCase() : friendCodeInput;
-    const profileVisibility = formData.has("profilePrivate")
-      ? formData.get("profilePrivate") === "true"
-        ? "private"
-        : "public"
-      : undefined;
+    const profilePublic = parseBooleanField(formData, "profilePublic");
+    const growthVisibility = parseBooleanField(formData, "growthVisibility");
+    if (profilePublic === null || growthVisibility === null) {
+      return data<ActionData>({ intent, error: { form: "공개 설정이 올바르지 않아요." } }, { status: 400 });
+    }
+    const profileVisibility =
+      profilePublic === undefined ? undefined : profilePublic ? ("public" as const) : ("private" as const);
 
     if (!username) {
       return data<ActionData>({ intent, error: { username: "닉네임을 입력해주세요." } }, { status: 400 });
@@ -170,6 +181,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         profileStudentId,
         friendCode,
         profileVisibility,
+        ...(growthVisibility === undefined ? {} : { growthVisibility }),
       },
       { ctx },
     );
@@ -184,6 +196,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     if (profileStudentId !== undefined) sensei.profileStudentId = profileStudentId;
     if (friendCode !== undefined) sensei.friendCode = friendCode;
     if (profileVisibility !== undefined) sensei.profileVisibility = profileVisibility;
+    if (growthVisibility !== undefined) sensei.growthVisibility = growthVisibility;
     session.set(authenticator.sessionKey, sensei);
 
     return data<ActionData>(
@@ -224,20 +237,36 @@ function SaveSubmitButton({
   );
 }
 
-function ProfileVisibilityField({ initialPrivate }: { initialPrivate: boolean }) {
-  const [privateProfile, setPrivateProfile] = useState(initialPrivate);
-
+function ProfileVisibilityField({ initialPublic, disabled }: { initialPublic: boolean; disabled: boolean }) {
   return (
     <div className="space-y-2">
       <p className="text-sm font-semibold">프로필 공개 범위</p>
-      <p className="text-sm text-muted-foreground">프로필과 작성한 컨텐츠를 숨겨요.</p>
+      <p className="text-sm text-muted-foreground">프로필과 작성한 콘텐츠를 다른 사람에게 공개해요.</p>
       <div className="flex min-h-10 items-center">
         <Toggle
-          name="profilePrivate"
-          label={privateProfile ? "비공개" : "공개"}
-          initialState={initialPrivate}
+          name="profilePublic"
+          label="프로필 공개"
+          initialState={initialPublic}
+          disabled={disabled}
           className="my-0"
-          onChange={setPrivateProfile}
+        />
+      </div>
+    </div>
+  );
+}
+
+function GrowthVisibilityField({ initialState, disabled }: { initialState: boolean; disabled: boolean }) {
+  return (
+    <div className="space-y-2">
+      <p className="text-sm font-semibold">학생 성장도 공개</p>
+      <p className="text-sm text-muted-foreground">내 모집한 학생의 성장도를 다른 사람에게 공개해요</p>
+      <div className="flex min-h-10 items-center">
+        <Toggle
+          name="growthVisibility"
+          label="학생 성장도 공개"
+          initialState={initialState}
+          disabled={disabled}
+          className="my-0"
         />
       </div>
     </div>
@@ -378,7 +407,15 @@ export default function EditProfile() {
           <ProfileEditor
             students={allStudents}
             initialData={sensei}
-            profileVisibilityField={<ProfileVisibilityField initialPrivate={sensei.profileVisibility === "private"} />}
+            profileVisibilityField={
+              <ProfileVisibilityField
+                initialPublic={sensei.profileVisibility === "public"}
+                disabled={isProfileSubmitting}
+              />
+            }
+            growthVisibilityField={
+              <GrowthVisibilityField initialState={sensei.growthVisibility === true} disabled={isProfileSubmitting} />
+            }
             error={profileActionData?.error}
           />
           <div className="flex justify-end">

@@ -22,7 +22,16 @@ type LegacyAuthProvider = Exclude<AuthProvider, "discord">;
 
 type DiscordSenseiProjection = Pick<
   typeof pgSenseisTable.$inferSelect,
-  "id" | "uid" | "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "role" | "profileVisibility"
+  | "id"
+  | "uid"
+  | "username"
+  | "friendCode"
+  | "profileStudentId"
+  | "active"
+  | "bio"
+  | "role"
+  | "profileVisibility"
+  | "growthVisibility"
 >;
 
 function toDiscordSenseiModel(row: DiscordSenseiProjection): Sensei {
@@ -36,6 +45,7 @@ function toDiscordSenseiModel(row: DiscordSenseiProjection): Sensei {
     active: row.active,
     role: row.role,
     profileVisibility: row.profileVisibility ?? "public",
+    growthVisibility: row.growthVisibility ?? false,
   };
 }
 
@@ -73,6 +83,7 @@ export async function getSenseiByAuthIdentity(
             bio: pgSenseisTable.bio,
             role: pgSenseisTable.role,
             profileVisibility: pgSenseisTable.profileVisibility,
+            growthVisibility: pgSenseisTable.growthVisibility,
           })
           .from(pgAuthIdentitiesTable)
           .innerJoin(pgSenseisTable, eq(pgAuthIdentitiesTable.senseiId, pgSenseisTable.id))

@@ -8,8 +8,9 @@ import {
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
+import { data, Link, useFetcher, useLoaderData, useOutletContext, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import type { PagePanelProps } from "~/components/features/layout";
 import {
   getFilteredStudentUids,
   StudentCards,
@@ -18,23 +19,39 @@ import {
   usePersistentStudentFilterState,
 } from "~/components/features/students";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
-import { Button, SubTitle, Toggle } from "~/components/primitives";
+import { Button, Callout, FilterButtons, SubTitle, Toggle } from "~/components/primitives";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
-  getRecruitedStudents,
   MAX_RECRUITED_STUDENT_BATCH_SIZE,
   type RecruitedStudentBatchInput,
   RecruitedStudentValidationError,
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { getAllStudents, getAllStudentsMap } from "~/models/student";
+import { getAllStudentsMap } from "~/models/student";
+import { getUserStudentsView, type UserStudentsViewMode } from "~/views/user-students.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
+import ShareStudentGrowthButton from "./$username.students._components/ShareStudentGrowthButton";
+import StudentGrowthCard, { type GrowthStudent } from "./$username.students._components/StudentGrowthCard";
 
 export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
 export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
 export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+export const growthPrivateCalloutDismissalStorageKey = "mollulog::dismissed-growth-private-callout";
+const growthPrivateCalloutId = "student-growth-private";
+
+export function parseGrowthPrivateCalloutDismissal(value: string | null): boolean {
+  if (!value) return false;
+
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) && parsed.includes(growthPrivateCalloutId);
+  } catch {
+    return false;
+  }
+}
 
 const userStudentFilterCookieOptions = {
   cookieName: USER_STUDENT_FILTER_COOKIE_NAME,
@@ -48,32 +65,19 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const currentUser = await getActiveSensei(env, request, ctx);
 
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
-  const recruitedStudents = await getRecruitedStudents(env, sensei.id);
-  const recruitedStudentTiers = recruitedStudents.reduce(
-    (acc, { studentUid, tier }) => {
-      acc[studentUid] = tier;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const allStudents = await getAllStudents(env);
+  const requestedView: UserStudentsViewMode =
+    new URL(request.url).searchParams.get("view") === "growth" ? "growth" : "summary";
+  const userStudents = await getUserStudentsView(env, sensei, currentUser?.id, requestedView);
   return {
-    me: currentUser?.username === sensei.username,
-    noRecruited: recruitedStudents.length === 0,
+    me: currentUser?.id === sensei.id,
+    noRecruited: userStudents.noRecruited,
+    view: userStudents.view,
+    growthVisibility: userStudents.growthVisibility,
+    canViewGrowth: userStudents.canViewGrowth,
     filterState: readStudentFilterStateFromCookie(request.headers.get("Cookie"), userStudentFilterCookieOptions),
-    students: allStudents.map((student) => ({
-      uid: student.uid,
-      name: student.name,
-      attackType: student.attackType,
-      defenseType: student.defenseType,
-      role: student.role,
-      position: student.position,
-      tacticRole: student.tacticRole,
-      order: student.order,
-      initialTier: student.initialTier,
-      tier: recruitedStudentTiers[student.uid] ?? null,
-    })),
+    profileVisibility: sensei.profileVisibility,
+    username: sensei.username,
+    students: userStudents.students,
   };
 };
 
@@ -97,7 +101,6 @@ const STUDENT_CATALOG_ERROR = "학생 목록을 확인하지 못했어요. 잠�
 const STUDENT_WRITE_ERROR = "학생 등록에 실패했어요. 잠시 후 다시 시도해 주세요";
 const SINGLE_TIER_INVALID_ERROR = "성급 범위가 올바르지 않아요";
 const METHOD_NOT_ALLOWED_ERROR = "지원하지 않는 요청 방식이에요";
-
 type BatchActionResult = { success: true } | { error: string };
 
 function parseBatchAddPayload(formData: FormData): { items: RecruitedStudentBatchInput[] } | { error: string } {
@@ -173,7 +176,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const sensei = await getRouteSensei(env, params, currentUser.id, { ctx });
-  if (currentUser.username !== sensei.username) {
+  if (currentUser.id !== sensei.id) {
     return data({ error: FORBIDDEN_ERROR }, { status: 403 });
   }
 
@@ -182,7 +185,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   }
 
   const formData = await request.formData();
-  if (request.method === "POST" && formData.get("intent") === BATCH_ADD_INTENT) {
+  const intent = formData.get("intent");
+  if (request.method === "POST" && intent === BATCH_ADD_INTENT) {
     const batchPayload = parseBatchAddPayload(formData);
     if ("error" in batchPayload) {
       return data({ error: batchPayload.error }, { status: 400 });
@@ -268,53 +272,70 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
 export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const { filterState: initialFilterState, me, noRecruited, students } = loaderData;
-
+  const {
+    filterState: initialFilterState,
+    me,
+    noRecruited,
+    students,
+    view,
+    growthVisibility,
+    canViewGrowth,
+    profileVisibility,
+    username,
+  } = loaderData;
+  const [, setSearchParams] = useSearchParams();
   const [filterState, setFilterState] = usePersistentStudentFilterState({
     ...userStudentFilterCookieOptions,
     initialState: initialFilterState,
   });
-  const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
+  const filterStudents = useMemo(
+    () => students.map((student) => ({ ...student, tier: student.tier ?? undefined })),
+    [students],
+  );
+  const filteredUids = useMemo(
+    () => getFilteredStudentUids(filterStudents, filterState),
+    [filterStudents, filterState],
+  );
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
     const filteredStudents = filteredUids.flatMap((uid) => {
       const student = studentMap.get(uid);
       return student ? [student] : [];
     });
-    return [filteredStudents.filter(({ tier }) => tier), filteredStudents.filter(({ tier }) => !tier)];
+    return [filteredStudents.filter(({ tier }) => tier !== null), filteredStudents.filter(({ tier }) => tier === null)];
   }, [studentMap, filteredUids]);
 
-  const { setPanel } = useOutletContext<{
-    setPanel: (panel: {
-      title: string;
-      description: string;
-      Icon: React.ElementType;
-      children: React.ReactNode;
-    }) => void;
+  const { setPanels } = useOutletContext<{
+    setPanels: React.Dispatch<React.SetStateAction<PagePanelProps[]>>;
   }>();
-  useEffect(() => {
-    setPanel({
-      title: "필터 및 정렬",
-      description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
-      Icon: FunnelIcon,
-      children: (
-        <StudentFilter
-          students={students}
-          state={filterState}
-          onStateChange={setFilterState}
-          useFilter
-          useSearch
-          sortBy={[...USER_STUDENT_FILTER_SORTS]}
-        />
-      ),
-    });
-  }, [filterState, students, setPanel, setFilterState, filteredUids.length]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const batchSubmittingRef = useRef(false);
   const batchDataAtSubmitRef = useRef<BatchActionResult | undefined>(undefined);
+  const [growthPrivateCalloutDismissed, setGrowthPrivateCalloutDismissed] = useState(false);
+  const [growthPrivateCalloutDismissalLoaded, setGrowthPrivateCalloutDismissalLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      setGrowthPrivateCalloutDismissed(
+        parseGrowthPrivateCalloutDismissal(localStorage.getItem(growthPrivateCalloutDismissalStorageKey)),
+      );
+    } catch {
+      setGrowthPrivateCalloutDismissed(false);
+    }
+    setGrowthPrivateCalloutDismissalLoaded(true);
+  }, []);
+
+  const dismissGrowthPrivateCallout = () => {
+    setGrowthPrivateCalloutDismissed(true);
+    try {
+      localStorage.setItem(growthPrivateCalloutDismissalStorageKey, JSON.stringify([growthPrivateCalloutId]));
+    } catch {
+      // Keep the notice dismissed for the current visit when browser storage is unavailable.
+    }
+  };
 
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const batchFetcher = useFetcher<BatchActionResult>();
@@ -333,6 +354,35 @@ export default function UserPage() {
     setBatchError(getBatchFailureMessage(batchFetcher.data));
   }, [batchFetcher.data, batchFetcher.state]);
 
+  const panels = useMemo<PagePanelProps[]>(
+    () => [
+      {
+        title: "필터 및 정렬",
+        description: `${students.length}명 중 ${filteredUids.length}명 표시 중`,
+        Icon: FunnelIcon,
+        children: (
+          <StudentFilter
+            students={filterStudents}
+            state={filterState}
+            onStateChange={setFilterState}
+            useFilter
+            useSearch
+            sortBy={[...USER_STUDENT_FILTER_SORTS]}
+          />
+        ),
+      },
+    ],
+    [filterState, filteredUids.length, filterStudents, setFilterState, students.length],
+  );
+
+  useEffect(() => {
+    setPanels(panels);
+  }, [panels, setPanels]);
+
+  useEffect(() => {
+    return () => setPanels([]);
+  }, [setPanels]);
+
   const handleAddStudent = (studentUid: string, tier: number) => {
     const formData = new FormData();
     formData.append("studentUid", studentUid);
@@ -346,6 +396,25 @@ export default function UserPage() {
     fetcher.submit(formData, { method: "delete" });
   };
 
+  const changeView = (nextView: UserStudentsViewMode) => {
+    if (nextView === view) return;
+    setSearchParams(nextView === "growth" ? { view: "growth" } : {});
+  };
+
+  const shareUrl = useMemo(() => {
+    if (typeof window === "undefined") return "";
+    const url = new URL(window.location.origin);
+    url.pathname = `/@${username}/students`;
+    url.searchParams.set("view", "growth");
+    return url.toString();
+  }, [username]);
+
+  const growthStudents = recruitedStudents.filter(
+    (student): student is GrowthStudent =>
+      student.growth?.skillVisuals !== undefined &&
+      student.growth.equipmentVisuals !== undefined &&
+      student.tier !== null,
+  );
   return (
     <>
       {batchSubmitting ? (
@@ -369,54 +438,147 @@ export default function UserPage() {
           </button>
         </div>
       ) : null}
-      <div className="my-8">
+
+      {me ? (
+        <div className="my-6 space-y-3">
+          {!growthVisibility ? (
+            growthPrivateCalloutDismissalLoaded ? (
+              growthPrivateCalloutDismissed ? (
+                profileVisibility === "private" ? (
+                  <Callout
+                    tone="warning"
+                    title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
+                    description="프로필 설정에서 공개로 바꾸면 공유 링크를 만들 수 있어요."
+                  >
+                    <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
+                  </Callout>
+                ) : null
+              ) : (
+                <div className="relative">
+                  <Callout
+                    className="pr-12"
+                    tone="info"
+                    title="성장도는 나만 확인할 수 있어요"
+                    description={
+                      <>
+                        다른 사람에게 성장도를 공개하려면 프로필 정보 &gt;{" "}
+                        <Link
+                          to="/edit"
+                          className="font-medium underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                        >
+                          프로필 관리
+                        </Link>{" "}
+                        페이지에서 "학생 성장도 공개"를 활성화해주세요.
+                      </>
+                    }
+                  />
+                  <button
+                    type="button"
+                    aria-label="성장도 비공개 안내 닫기"
+                    className="absolute top-3 right-3 inline-flex items-center justify-center rounded-md p-1 text-muted-foreground/70 transition hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                    onClick={dismissGrowthPrivateCallout}
+                  >
+                    <XMarkIcon className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )
+            ) : null
+          ) : profileVisibility === "private" ? (
+            <Callout
+              tone="warning"
+              title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
+              description="프로필 설정에서 공개로 바꾸면 공유 링크를 만들 수 있어요."
+            >
+              <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
+            </Callout>
+          ) : (
+            <ShareStudentGrowthButton url={shareUrl} />
+          )}
+        </div>
+      ) : null}
+
+      <div className="my-6 space-y-3">
         <SubTitle
           text="모집한 학생"
-          description={me && !noRecruited ? "학생을 선택해 성장 등급을 수정할 수 있어요." : undefined}
+          description={
+            me && !noRecruited
+              ? view === "growth"
+                ? "모집한 학생의 현재 성장 상태를 확인할 수 있어요."
+                : "학생을 선택해 성장 등급을 수정할 수 있어요."
+              : undefined
+          }
         />
-        {noRecruited ? (
-          <div className="my-16 text-center">아직 모집한 학생이 없어요</div>
-        ) : (
-          <StudentCards
-            layout="responsive-wrap"
-            cardSize="lg"
-            students={recruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier, tier }) => ({
-              uid,
-              name,
-              attackType,
-              defenseType,
-              role,
-              initialTier,
-              tier,
-              popups: [
-                ...(me
-                  ? [
-                      {
-                        children: (
-                          <TierSelector
-                            initialTier={initialTier}
-                            currentTier={tier}
-                            onTierChange={(tier) => handleAddStudent(uid, tier)}
-                          />
-                        ),
-                      },
-                      {
-                        Icon: MinusCircleIcon,
-                        text: "모집한 학생에서 제외",
-                        onClick: () => handleRemoveStudent(uid),
-                      },
-                    ]
-                  : []),
-                {
-                  Icon: IdentificationIcon,
-                  text: "학생부 보기",
-                  link: `/students/${uid}`,
-                },
-              ],
-            }))}
-          />
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <fieldset disabled={!canViewGrowth} className="shrink-0">
+            <legend className="sr-only">학생부 보기 방식</legend>
+            <FilterButtons
+              buttonProps={[
+                { text: "간략히", active: view === "summary", onToggle: () => changeView("summary") },
+                { text: "자세히", active: view === "growth", onToggle: () => changeView("growth") },
+              ]}
+              exclusive
+              atLeastOne
+              size="sm"
+              surface="page"
+              className="my-0"
+              buttonGroupClassName="justify-start"
+            />
+          </fieldset>
+        </div>
       </div>
+
+      {noRecruited ? (
+        <div className="my-16 text-center">아직 모집한 학생이 없어요</div>
+      ) : view === "growth" ? (
+        growthStudents.length > 0 ? (
+          <div className="grid grid-cols-1 justify-start gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,14.5rem),14.5rem))]">
+            {growthStudents.map((student) => (
+              <StudentGrowthCard key={student.uid} student={student} editable={me} />
+            ))}
+          </div>
+        ) : (
+          <div className="my-16 text-center text-muted-foreground">현재 조건에 맞는 모집한 학생이 없어요</div>
+        )
+      ) : (
+        <StudentCards
+          layout="responsive-wrap"
+          cardSize="lg"
+          students={recruitedStudents.map(({ uid, name, attackType, defenseType, role, initialTier, tier }) => ({
+            uid,
+            name,
+            attackType,
+            defenseType,
+            role,
+            initialTier,
+            tier,
+            popups: [
+              ...(me
+                ? [
+                    {
+                      children: (
+                        <TierSelector
+                          initialTier={initialTier}
+                          currentTier={tier}
+                          onTierChange={(nextTier) => handleAddStudent(uid, nextTier)}
+                        />
+                      ),
+                    },
+                    {
+                      Icon: MinusCircleIcon,
+                      text: "모집한 학생에서 제외",
+                      onClick: () => handleRemoveStudent(uid),
+                    },
+                  ]
+                : []),
+              {
+                Icon: IdentificationIcon,
+                text: "학생부 보기",
+                link: `/students/${uid}`,
+              },
+            ],
+          }))}
+        />
+      )}
 
       <div className="my-8">
         <SubTitle text="미모집 학생" description={me ? "학생을 선택해 모집 정보를 등록할 수 있어요." : undefined} />
