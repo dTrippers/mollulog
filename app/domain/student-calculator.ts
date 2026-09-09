@@ -142,6 +142,7 @@ export function calculateStudentStats(
   catalog: StudentCalculatorCatalog,
   input: StudentCalculatorState,
   relatedFavorStates: readonly RelatedStudentFavorState[] = [],
+  includeSkillEffects = false,
 ): StudentCalculatedStat[] {
   if (!student.catalog) return [];
 
@@ -261,20 +262,22 @@ export function calculateStudentStats(
     );
   }
 
-  const permanentSkillModifiers = selectStudentSkills(student, input).flatMap((skill) =>
-    (skill.levels.find((level) => level.level === skill.selectedLevel)?.statModifiers ?? [])
-      .filter((modifier) => {
-        const unlocked =
-          skill.slot === "passive" ? state.tier >= 2 : skill.slot === "extra_passive" ? state.tier >= 3 : true;
-        return (
-          modifier.persistence === StudentSkillModifierPersistence.Permanent &&
-          unlocked &&
-          (skill.slot === "passive" || modifier.activation === StudentSkillModifierActivation.Unconditional)
-        );
-      })
-      .map((modifier) => ({ stat: modifier.stat, kind: modifier.kind, value: modifier.value })),
-  );
-  applyModifiers(stats, coefficientRates, permanentSkillModifiers);
+  if (includeSkillEffects) {
+    const permanentSkillModifiers = selectStudentSkills(student, input).flatMap((skill) =>
+      (skill.levels.find((level) => level.level === skill.selectedLevel)?.statModifiers ?? [])
+        .filter((modifier) => {
+          const unlocked =
+            skill.slot === "passive" ? state.tier >= 2 : skill.slot === "extra_passive" ? state.tier >= 3 : true;
+          return (
+            modifier.persistence === StudentSkillModifierPersistence.Permanent &&
+            unlocked &&
+            (skill.slot === "passive" || modifier.activation === StudentSkillModifierActivation.Unconditional)
+          );
+        })
+        .map((modifier) => ({ stat: modifier.stat, kind: modifier.kind, value: modifier.value })),
+    );
+    applyModifiers(stats, coefficientRates, permanentSkillModifiers);
+  }
   applyCoefficientModifiers(stats, coefficientRates);
 
   return [...stats.entries()].map(([stat, value]) => ({ stat, value: Math.round(value) }));

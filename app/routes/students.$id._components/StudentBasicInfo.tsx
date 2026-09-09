@@ -10,7 +10,16 @@ import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
 import { StudentSkillIcon, TierSelector } from "~/components/features/students";
-import { Button, Callout, EmptyView, HoverTooltip, NumberInput, SectionCard, SubTitle } from "~/components/primitives";
+import {
+  Button,
+  Callout,
+  EmptyView,
+  HoverTooltip,
+  NumberInput,
+  SectionCard,
+  SubTitle,
+  Toggle,
+} from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
@@ -98,6 +107,7 @@ export default function StudentBasicInfo({
   const navigationType = useNavigationType();
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const [state, setState] = useState<StudentCalculatorState>(savedState);
+  const [skillEffectsState, setSkillEffectsState] = useState({ studentUid: student.uid, enabled: false });
   const [saved, setSaved] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [, setDraftStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -120,9 +130,10 @@ export default function StudentBasicInfo({
       }),
     [student.character.studentVariants, stateStudentUid, relatedRelationshipLevels],
   );
+  const includeSkillEffects = skillEffectsState.studentUid === student.uid && skillEffectsState.enabled;
   const stats = useMemo(
-    () => calculateStudentStats(student, catalog, state, relatedFavorStates),
-    [student, catalog, state, relatedFavorStates],
+    () => calculateStudentStats(student, catalog, state, relatedFavorStates, includeSkillEffects),
+    [student, catalog, state, relatedFavorStates, includeSkillEffects],
   );
   const selectedSkills = useMemo(() => selectStudentSkills(student, state), [student, state]);
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
@@ -331,7 +342,19 @@ export default function StudentBasicInfo({
           </div>
         ) : null}
 
-        <SectionCard className="mt-2.5 space-y-0 py-3 md:mt-3 md:py-3">
+        <SectionCard
+          title="능력치"
+          action={
+            <Toggle
+              key={student.uid}
+              label="스킬 효과 반영"
+              initialState={includeSkillEffects}
+              className="my-0"
+              onChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
+            />
+          }
+          className="mt-2.5 space-y-3 py-3 md:mt-3 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
+        >
           <div className="grid grid-cols-4 gap-3">
             {primaryStats.map(({ stat, label }) => (
               <div key={stat} className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-4">
