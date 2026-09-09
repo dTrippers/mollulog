@@ -8,6 +8,7 @@ export type PagePanelProps = {
   Icon: React.ElementType;
   collapsible?: boolean;
   disabled?: boolean;
+  headerAction?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -17,6 +18,7 @@ export default function PagePanel({
   description,
   collapsible = false,
   disabled = false,
+  headerAction,
   children,
 }: PagePanelProps) {
   const [expanded, setExpanded] = useState(!disabled && !collapsible);
@@ -36,6 +38,19 @@ export default function PagePanel({
       ) : null}
     </>
   );
+  const header =
+    collapsible && !disabled ? (
+      <button
+        type="button"
+        className="flex min-w-0 grow cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((current) => !current)}
+      >
+        {heading}
+      </button>
+    ) : (
+      <div className="flex min-w-0 grow items-center gap-3 p-1">{heading}</div>
+    );
 
   return (
     <section
@@ -45,19 +60,9 @@ export default function PagePanel({
         disabled && "opacity-50",
       )}
     >
-      <div>
-        {collapsible && !disabled ? (
-          <button
-            type="button"
-            className="flex w-full cursor-pointer items-center gap-3 rounded-md p-1 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-            aria-expanded={expanded}
-            onClick={() => setExpanded((current) => !current)}
-          >
-            {heading}
-          </button>
-        ) : (
-          <div className="flex items-center gap-3 p-1">{heading}</div>
-        )}
+      <div className="flex items-center gap-3">
+        {header}
+        {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
       </div>
       {expanded ? <div className="text-sm text-foreground/85">{children}</div> : null}
     </section>

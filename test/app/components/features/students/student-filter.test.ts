@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
+  clearStudentDirectoryDisplaySettings,
   clearStudentFilters,
   createStudentFilterState,
   getActiveStudentDirectoryFilterCount,
@@ -9,7 +10,10 @@ import {
   getStudentDirectoryDisplaySettingsSummary,
   getStudentDirectoryLabel,
   groupStudentDirectoryStudents,
+  hasActiveStudentDirectoryDisplaySettings,
   hasActiveStudentFilters,
+  normalizeStudentDirectorySchool,
+  STUDENT_FILTER_OPTION_VALUES,
   StudentDirectoryDisplaySettings,
   default as StudentFilter,
   type StudentFilterState,
@@ -58,6 +62,24 @@ describe("student filter", () => {
       search: "",
     });
     expect(hasActiveStudentFilters(cleared)).toBe(false);
+  });
+
+  it("clears only display settings while preserving filters, search, and sort", () => {
+    const state: StudentFilterState = {
+      ...createStudentFilterState("tier"),
+      attackTypes: [Attack.Explosive],
+      displayBy: "height",
+      groupBy: "school",
+      search: "아루",
+    };
+
+    expect(hasActiveStudentDirectoryDisplaySettings(state)).toBe(true);
+    expect(clearStudentDirectoryDisplaySettings(state)).toEqual({
+      ...state,
+      displayBy: "none",
+      groupBy: "none",
+    });
+    expect(hasActiveStudentDirectoryDisplaySettings(clearStudentDirectoryDisplaySettings(state))).toBe(false);
   });
 
   it("keeps the selected filter when only student tiers change", () => {
@@ -225,6 +247,134 @@ describe("student filter", () => {
     ]);
   });
 
+  it("renders canonical directory schools in the requested order and merges unknown schools into 기타", () => {
+    const expectedSchools = [
+      "abydos",
+      "gehenna",
+      "millennium",
+      "trinity",
+      "hyakkiyako",
+      "shanhaijing",
+      "redwinter",
+      "valkyrie",
+      "srt",
+      "arius",
+      "highlander",
+      "wildhunt",
+      "odyssey",
+      "others",
+    ] as const;
+    expect(STUDENT_FILTER_OPTION_VALUES.schools).toEqual(expectedSchools);
+
+    const students = [...expectedSchools.slice(0, -1), "sakugawa", "tokiwadai", "others", "future-school"].map(
+      (school, order) =>
+        student({
+          uid: `school-${school}`,
+          name: `학생-${school}`,
+          school,
+          attackType: Attack.Explosive,
+          order,
+        }),
+    );
+    const markup = renderToStaticMarkup(
+      createElement(StudentFilter, {
+        students,
+        state: { ...createStudentFilterState("recent"), initialTiers: [1] },
+        useFilter: true,
+        directory: true,
+      }),
+    );
+
+    let previousIndex = -1;
+    for (const school of expectedSchools) {
+      const label = schoolShortLocale[school];
+      const index = markup.indexOf(`>${label}</span>`);
+      expect(index).toBeGreaterThan(previousIndex);
+      previousIndex = index;
+    }
+    expect((markup.match(/>기타<\/span>/g) ?? []).length).toBe(1);
+    expect(normalizeStudentDirectorySchool("sakugawa")).toBe("others");
+    expect(normalizeStudentDirectorySchool("tokiwadai")).toBe("others");
+    expect(normalizeStudentDirectorySchool("others")).toBe("others");
+    expect(normalizeStudentDirectorySchool("future-school")).toBe("others");
+    expect(normalizeStudentDirectorySchool(null)).toBeNull();
+    expect(normalizeStudentDirectorySchool(undefined)).toBeNull();
+    expect(normalizeStudentDirectorySchool("")).toBeNull();
+  });
+
+  it("filters all non-empty unknown schools through the single 기타 bucket", () => {
+    const unknownSchools = ["sakugawa", "tokiwadai", "others", "future-school"];
+    const students = [
+      ...unknownSchools.map((school, index) =>
+        student({
+          uid: `unknown-${school}`,
+          name: `학생-${school}`,
+          school,
+          attackType: Attack.Explosive,
+          order: index + 1,
+        }),
+      ),
+      student({ uid: "missing-school", name: "정보 없음 학생", school: null, attackType: Attack.Explosive, order: 5 }),
+    ];
+
+    expect(
+      getFilteredStudentUids(students, {
+        ...createStudentFilterState("recent"),
+        schools: ["others"],
+      }),
+    ).toEqual(["unknown-future-school", "unknown-others", "unknown-tokiwadai", "unknown-sakugawa"]);
+  });
+
+  it("groups unknown schools together while retaining missing and card detail labels", () => {
+    const millenniumStudent = student({
+      uid: "millennium-student",
+      name: "밀레니엄 학생",
+      school: "millennium",
+      attackType: Attack.Explosive,
+      order: 1,
+    });
+    const sakugawaStudent = student({
+      uid: "sakugawa-student",
+      name: "사쿠가와 학생",
+      school: "sakugawa",
+      attackType: Attack.Explosive,
+      order: 2,
+    });
+    const futureSchoolStudent = student({
+      uid: "future-school-student",
+      name: "미래 학교 학생",
+      school: "future-school",
+      attackType: Attack.Explosive,
+      order: 3,
+    });
+    const missingStudent = student({
+      uid: "missing-school-student",
+      name: "정보 없음 학생",
+      school: "",
+      attackType: Attack.Explosive,
+      order: 4,
+    });
+
+    const groups = groupStudentDirectoryStudents(
+      [millenniumStudent, sakugawaStudent, futureSchoolStudent, missingStudent],
+      "school",
+    );
+    expect(groups).toEqual([
+      { key: "millennium", label: "밀레니엄", students: [millenniumStudent] },
+      { key: "others", label: "기타", students: [sakugawaStudent, futureSchoolStudent] },
+      { key: "__missing__", label: "정보 없음", students: [missingStudent] },
+    ]);
+
+    const catalog = {
+      profile: { age: "17세", schoolYear: "2학년", height: "159.7cm" },
+      terrainAdaptations: { street: "SS", outdoor: "A", indoor: "B" },
+    };
+    expect(getStudentDirectoryLabel({ ...sakugawaStudent, catalog }, "school")).toEqual({
+      value: "사쿠가와",
+      ariaLabel: "사쿠가와",
+    });
+  });
+
   it("uses 성급 terminology for the initial-tier filter and sort", () => {
     const filterMarkup = renderToStaticMarkup(
       createElement(StudentFilter, {
@@ -243,12 +393,13 @@ describe("student filter", () => {
     );
 
     expect(filterMarkup).toContain("초기 성급");
-    expect(filterMarkup).toContain("★ 성급순");
+    expect(filterMarkup).toContain("★ 순");
     expect(filterMarkup).toContain('aria-label="초기 성급 3성"');
     expect(filterMarkup).toContain('class="size-3.5 text-yellow-500"');
     expect(filterMarkup).toContain(">3</span>");
     expect(filterMarkup).not.toContain(">3성</span>");
     expect(filterMarkup).not.toContain("초기 등급");
+    expect(filterMarkup).not.toContain("★ 성급순");
     expect(filterMarkup).not.toContain("★ 등급순");
     expect(settingsMarkup).not.toContain("★ 성급순");
   });
@@ -266,11 +417,14 @@ describe("student filter", () => {
       }),
     );
 
-    expect(markup.indexOf("학생 카드 표시 정보")).toBeLessThan(markup.indexOf("학생 그룹"));
+    expect(markup.indexOf("표시할 정보")).toBeLessThan(markup.indexOf("묶어보기"));
+    expect(markup).toContain('aria-label="학생 카드에 표시할 정보"');
+    expect(markup).toContain('aria-label="학생 묶어보기"');
     expect(markup).toContain("키");
     expect(markup).toContain("학교");
     expect(markup).not.toContain("학생 정렬");
     expect(markup).toContain("space-y-0");
+    expect((markup.match(/flex min-h-8 items-center gap-2 lg:min-h-7 lg:gap-1.5 py-1/g) ?? []).length).toBe(2);
     expect(getStudentDirectoryDisplaySettingsSummary(state)).toBe("키 · 학교");
   });
 
@@ -298,10 +452,40 @@ describe("student filter", () => {
     );
 
     expect(markup).toContain("더 보기");
+    expect(markup).toContain('aria-label="더 보기, 고급 필터 펼치기"');
     expect(markup).toContain('aria-expanded="false"');
     expect(markup).toMatch(/aria-controls="[^"]+"/);
+    expect(markup).toContain("cursor-pointer");
+    expect(markup).toContain("bg-muted");
+    expect(markup).toContain("hover:bg-muted/80");
     expect(markup).not.toContain('aria-label="초기 성급 1성"');
     expect(markup).not.toContain("장비 1");
+  });
+
+  it("keeps reset in non-directory filter bodies but omits the duplicate directory reset", () => {
+    const state: StudentFilterState = {
+      ...createStudentFilterState("recent"),
+      attackTypes: [Attack.Explosive],
+      search: "아루",
+    };
+    const directoryMarkup = renderToStaticMarkup(
+      createElement(StudentFilter, {
+        students: [student({ uid: "directory-student", name: "학생", attackType: Attack.Explosive, order: 1 })],
+        state,
+        useFilter: true,
+        directory: true,
+      }),
+    );
+    const profileMarkup = renderToStaticMarkup(
+      createElement(StudentFilter, {
+        students: [student({ uid: "profile-student", name: "학생", attackType: Attack.Explosive, order: 1 })],
+        state,
+        useFilter: true,
+      }),
+    );
+
+    expect(directoryMarkup).not.toContain("필터 해제");
+    expect(profileMarkup).toContain("필터 해제");
   });
 
   it("hides every base filter row icon in the narrow sidebar while preserving other row styles", () => {
@@ -317,6 +501,7 @@ describe("student filter", () => {
 
     expect((markup.match(/lg:\[&amp;&gt;svg\]:hidden/g) ?? []).length).toBe(6);
     expect((markup.match(/flex-nowrap gap-x-0\.5 md:gap-x-0\.5/g) ?? []).length).toBe(2);
+    expect((markup.match(/gap-x-0\.5 md:gap-x-0\.5/g) ?? []).length).toBe(6);
     expect(markup).toContain("FRONT");
     expect(markup).toContain("MIDDLE");
     expect(markup).toContain("BACK");
@@ -368,11 +553,18 @@ describe("student filter", () => {
     );
 
     expect(getActiveStudentDirectoryFilterCount(state)).toBe(3);
+    expect(markup).toContain('aria-label="더 보기, 고급 필터 접기"');
     expect(markup).toContain('aria-expanded="true"');
     expect(markup).toContain("3개 적용");
     expect(markup).toContain("학교");
     expect(markup).toContain("장비 1");
     expect(markup).toContain('aria-label="초기 성급 3성"');
+    expect(markup).not.toContain('class="space-y-2 pt-1"');
+    expect(markup).toContain("mt-2 flex w-full");
+    expect((markup.match(/my-1 py-0/g) ?? []).length).toBe(4);
+    expect((markup.match(/gap-x-0\.5 md:gap-x-0\.5/g) ?? []).length).toBe(10);
+    expect((markup.match(/flex-nowrap gap-x-0\.5 md:gap-x-0\.5/g) ?? []).length).toBe(5);
+    expect(markup).toContain("items-center gap-0.5");
   });
 
   it("renders three horizontal choices for each equipment slot and initial rarity", () => {

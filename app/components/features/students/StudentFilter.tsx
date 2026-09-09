@@ -118,7 +118,22 @@ export const STUDENT_FILTER_OPTION_VALUES = {
   roles: roleFilterOptions.map(({ value }) => value),
   positions: positionFilterOptions.map(({ value }) => value),
   tacticRoles: tacticRoleFilterOptions.map(({ value }) => value),
-  schools: Object.keys(schoolShortLocale),
+  schools: [
+    "abydos",
+    "gehenna",
+    "millennium",
+    "trinity",
+    "hyakkiyako",
+    "shanhaijing",
+    "redwinter",
+    "valkyrie",
+    "srt",
+    "arius",
+    "highlander",
+    "wildhunt",
+    "odyssey",
+    "others",
+  ] as const,
   equipmentTypes: [...equipmentTypeOrder],
   initialTiers: [1, 2, 3],
 } as const;
@@ -156,8 +171,20 @@ const sortFilterOptions: Record<SortBy, string> = {
   recent: "최신순",
   old: "과거순",
   name: "이름순",
-  tier: "★ 성급순",
+  tier: "★ 순",
 };
+
+type StudentDirectorySchool = (typeof STUDENT_FILTER_OPTION_VALUES.schools)[number];
+
+export function normalizeStudentDirectorySchool(school: string | null | undefined): StudentDirectorySchool | null {
+  if (!school) {
+    return null;
+  }
+
+  return STUDENT_FILTER_OPTION_VALUES.schools.includes(school as StudentDirectorySchool)
+    ? (school as StudentDirectorySchool)
+    : "others";
+}
 
 export function createStudentFilterState(sort: SortBy = "recent"): StudentFilterState {
   return {
@@ -206,6 +233,14 @@ export function clearStudentFilters(state: StudentFilterState): StudentFilterSta
   };
 }
 
+export function hasActiveStudentDirectoryDisplaySettings(state: StudentFilterState): boolean {
+  return (state.displayBy ?? "none") !== "none" || (state.groupBy ?? "none") !== "none";
+}
+
+export function clearStudentDirectoryDisplaySettings(state: StudentFilterState): StudentFilterState {
+  return { ...state, displayBy: "none", groupBy: "none" };
+}
+
 type StudentDirectoryDisplaySettingsProps = {
   state: StudentFilterState;
   onStateChange: (state: StudentFilterState) => void;
@@ -215,10 +250,11 @@ export function StudentDirectoryDisplaySettings({ state, onStateChange }: Studen
   return (
     <PanelBody className="space-y-0">
       <PanelActionRow
-        title="표시 정보"
+        title="표시할 정보"
+        className="py-1"
         actions={
           <Dropdown
-            aria-label="학생 카드 표시 정보"
+            aria-label="학생 카드에 표시할 정보"
             value={state.displayBy ?? "none"}
             options={studentDisplayOptions}
             onChange={(displayBy) => onStateChange({ ...state, displayBy })}
@@ -227,10 +263,11 @@ export function StudentDirectoryDisplaySettings({ state, onStateChange }: Studen
         }
       />
       <PanelActionRow
-        title="그룹"
+        title="묶어보기"
+        className="py-1"
         actions={
           <Dropdown
-            aria-label="학생 그룹"
+            aria-label="학생 묶어보기"
             value={state.groupBy ?? "none"}
             options={studentGroupOptions}
             onChange={(groupBy) => onStateChange({ ...state, groupBy })}
@@ -414,6 +451,7 @@ export default function StudentFilter({
           <PanelFilterButtonRow
             Icon={ArrowsUpDownIcon}
             className={directory ? responsiveFilterIconClassName : undefined}
+            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
             buttonProps={roleFilterOptions.map(({ text, color, value }) => ({
               text,
               color,
@@ -425,6 +463,7 @@ export default function StudentFilter({
           <PanelFilterButtonRow
             Icon={ArrowsRightLeftIcon}
             className={directory ? responsiveFilterIconClassName : undefined}
+            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
             buttonProps={positionFilterOptions.map(({ text, value }) => ({
               text,
               active: state.positions.includes(value),
@@ -435,6 +474,7 @@ export default function StudentFilter({
           <PanelFilterButtonRow
             Icon={UserGroupIcon}
             className={directory ? responsiveFilterIconClassName : undefined}
+            buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
             buttonProps={tacticRoleFilterOptions.map(({ text, value }) => ({
               text,
               active: state.tacticRoles.includes(value),
@@ -448,6 +488,7 @@ export default function StudentFilter({
         <PanelFilterButtonRow
           Icon={BarsArrowDownIcon}
           className={directory ? responsiveFilterIconClassName : undefined}
+          buttonGroupClassName={directory ? "gap-x-0.5 md:gap-x-0.5" : undefined}
           buttonProps={sortBy.map((sort) => ({
             text: sortFilterOptions[sort],
             active: state.sort === sort,
@@ -466,7 +507,8 @@ export default function StudentFilter({
         <>
           <button
             type="button"
-            className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            className="mt-2 flex w-full cursor-pointer items-center justify-between rounded-md bg-muted px-2 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            aria-label={advancedFiltersOpen ? "더 보기, 고급 필터 접기" : "더 보기, 고급 필터 펼치기"}
             aria-expanded={advancedFiltersOpen}
             aria-controls={advancedFiltersId}
             onClick={() => setAdvancedFiltersOpen((current) => !current)}
@@ -481,13 +523,14 @@ export default function StudentFilter({
             />
           </button>
           {advancedFiltersOpen && (
-            <div id={advancedFiltersId} className="space-y-2 pt-1">
+            <div id={advancedFiltersId} className="pt-1">
               {schoolOptions.length > 0 && (
                 <PanelFilterButtonsSection
                   title="학교"
+                  buttonGroupClassName="gap-x-0.5 md:gap-x-0.5"
                   buttonProps={schoolOptions.map(({ text, value }) => ({
                     text,
-                    active: state.schools?.includes(value),
+                    active: state.schools?.some((school) => normalizeStudentDirectorySchool(school) === value),
                     onToggle: (activated: boolean) => toggleSchool(value, activated),
                   }))}
                   size="sm"
@@ -497,6 +540,7 @@ export default function StudentFilter({
                 <PanelActionRow
                   key={key}
                   title={title}
+                  className="my-1 py-0"
                   actions={
                     <FilterButtons
                       buttonProps={options.map(({ text, value }) => ({
@@ -506,13 +550,14 @@ export default function StudentFilter({
                       }))}
                       size="sm"
                       className="my-0 shrink-0"
-                      buttonGroupClassName="flex-nowrap"
+                      buttonGroupClassName="flex-nowrap gap-x-0.5 md:gap-x-0.5"
                     />
                   }
                 />
               ))}
               <PanelActionRow
                 title="초기 성급"
+                className="my-1 py-0"
                 actions={
                   <InitialTierFilterButtons selectedTiers={state.initialTiers ?? []} onToggle={toggleInitialTier} />
                 }
@@ -521,7 +566,7 @@ export default function StudentFilter({
           )}
         </>
       )}
-      {hasActiveStudentFilters(state) ? (
+      {!directory && hasActiveStudentFilters(state) ? (
         <div className="flex justify-end pt-1">
           <Button
             text="필터 해제"
@@ -545,7 +590,7 @@ type FilterableStudent = {
   name: string;
   familyName?: string | null;
   altNames?: string[];
-  school?: string;
+  school?: string | null;
   equipments?: string[];
   tier?: number;
   initialTier?: number;
@@ -571,7 +616,9 @@ function updateFilterState<
 }
 
 export function applyStudentFilter<T extends FilterableStudent>(students: T[], state: StudentFilterState): T[] {
+  const selectedSchools = state.schools?.map(normalizeStudentDirectorySchool) ?? [];
   const filtered = students.filter((student) => {
+    const normalizedSchool = normalizeStudentDirectorySchool(student.school);
     if (state.attackTypes?.length && !state.attackTypes.includes(student.attackType)) {
       return false;
     }
@@ -587,7 +634,7 @@ export function applyStudentFilter<T extends FilterableStudent>(students: T[], s
     if (state.tacticRoles?.length && !state.tacticRoles.includes(student.tacticRole)) {
       return false;
     }
-    if (state.schools?.length && (!student.school || !state.schools.includes(student.school))) {
+    if (state.schools?.length && (!normalizedSchool || !selectedSchools.includes(normalizedSchool))) {
       return false;
     }
     if (
@@ -643,8 +690,14 @@ function compareStudents(a: FilterableStudent, b: FilterableStudent, sort: SortB
 }
 
 function getSchoolOptions<T extends FilterableStudent>(students: T[]) {
-  return [...new Set(students.map((student) => student.school).filter((school): school is string => Boolean(school)))]
-    .sort(compareSchoolValues)
+  const availableSchools = new Set(
+    students
+      .map((student) => normalizeStudentDirectorySchool(student.school))
+      .filter((school): school is StudentDirectorySchool => school !== null),
+  );
+
+  return STUDENT_FILTER_OPTION_VALUES.schools
+    .filter((value) => availableSchools.has(value))
     .map((value) => ({ value, text: schoolShortLocale[value] ?? "정보 없음" }));
 }
 
@@ -662,7 +715,7 @@ type InitialTierFilterButtonsProps = {
 
 function InitialTierFilterButtons({ selectedTiers, onToggle }: InitialTierFilterButtonsProps) {
   return (
-    <fieldset className="flex flex-nowrap items-center gap-1" aria-label="초기 성급">
+    <fieldset className="flex flex-nowrap items-center gap-0.5" aria-label="초기 성급">
       {STUDENT_FILTER_OPTION_VALUES.initialTiers.map((initialTier) => {
         const active = selectedTiers.includes(initialTier);
         return (
@@ -688,9 +741,9 @@ function InitialTierFilterButtons({ selectedTiers, onToggle }: InitialTierFilter
 }
 
 function compareSchoolValues(a: string, b: string): number {
-  return (
-    (schoolShortLocale[a] ?? "정보 없음").localeCompare(schoolShortLocale[b] ?? "정보 없음", "ko") || a.localeCompare(b)
-  );
+  const aIndex = STUDENT_FILTER_OPTION_VALUES.schools.indexOf(normalizeStudentDirectorySchool(a) ?? "others");
+  const bIndex = STUDENT_FILTER_OPTION_VALUES.schools.indexOf(normalizeStudentDirectorySchool(b) ?? "others");
+  return aIndex - bIndex || a.localeCompare(b);
 }
 
 export type StudentDirectoryGroup<T extends FilterableStudent = FilterableStudent> = {
@@ -746,7 +799,7 @@ function getStudentGroupValue(
   groupBy: Exclude<StudentDirectoryGroupBy, "none">,
 ): string | null {
   if (groupBy === "school") {
-    return student.school ?? null;
+    return normalizeStudentDirectorySchool(student.school);
   }
   if (groupBy === "attackType") {
     return student.attackType;

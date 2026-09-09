@@ -1,6 +1,6 @@
+import { XMarkIcon } from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { XMarkIcon } from "@heroicons/react/24/solid";
 import { cn } from "~/lib/utils";
 
 type BottomSheetProps = {
@@ -9,10 +9,11 @@ type BottomSheetProps = {
   Icon: React.ElementType;
   title: string;
   description?: string;
+  headerAction?: React.ReactNode;
   onClose: () => void;
 };
 
-export default function BottomSheet({ children, Icon, title, description, onClose }: BottomSheetProps) {
+export default function BottomSheet({ children, Icon, title, description, headerAction, onClose }: BottomSheetProps) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -37,8 +38,8 @@ export default function BottomSheet({ children, Icon, title, description, onClos
         z-layer-modal rounded-t-lg bg-popover/90 shadow-t-xl backdrop-blur-sm
       `)}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
             <div className="flex items-center justify-center rounded-lg bg-muted p-2 lg:p-3">
               <Icon className="size-5 text-muted-foreground lg:size-6" strokeWidth={2} />
             </div>
@@ -47,14 +48,17 @@ export default function BottomSheet({ children, Icon, title, description, onClos
               {description && <p className="text-xs text-muted-foreground">{description}</p>}
             </div>
           </div>
-          <button
-            type="button"
-            className="rounded-md p-1 transition-colors hover:bg-muted"
-            onClick={onClose}
-            aria-label="바텀시트 닫기"
-          >
-            <XMarkIcon className="size-6 text-muted-foreground" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
+            <button
+              type="button"
+              className="rounded-md p-1 transition-colors hover:bg-muted"
+              onClick={onClose}
+              aria-label="바텀시트 닫기"
+            >
+              <XMarkIcon className="size-6 text-muted-foreground" />
+            </button>
+          </div>
         </div>
         <div className="flex-1 flex flex-col min-h-0 overflow-y-auto no-scrollbar">{children}</div>
       </div>

@@ -3,6 +3,7 @@ import {
   IdentificationIcon,
   MinusCircleIcon,
   PlusCircleIcon,
+  VideoCameraIcon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
@@ -10,6 +11,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, useFetcher, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import type { PagePanelProps } from "~/components/features/layout";
+import type { PageLinkProps } from "~/components/features/layout/PageLink";
 import {
   getFilteredStudentUids,
   StudentCards,
@@ -35,6 +38,19 @@ import { getRouteSensei } from "./$username._components/route-sensei.server";
 export const USER_STUDENT_FILTER_COOKIE_NAME = "mollulog_user_students_filter";
 export const USER_STUDENT_FILTER_COOKIE_PATH = "/";
 export const USER_STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
+
+export function getStudentScannerLinks(me: boolean): PageLinkProps[] | undefined {
+  return me
+    ? [
+        {
+          Icon: VideoCameraIcon,
+          title: "영상 인식기",
+          description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+          to: "/scanner/student",
+        },
+      ]
+    : undefined;
+}
 
 const userStudentFilterCookieOptions = {
   cookieName: USER_STUDENT_FILTER_COOKIE_NAME,
@@ -284,13 +300,9 @@ export default function UserPage() {
     return [filteredStudents.filter(({ tier }) => tier), filteredStudents.filter(({ tier }) => !tier)];
   }, [studentMap, filteredUids]);
 
-  const { setPanel } = useOutletContext<{
-    setPanel: (panel: {
-      title: string;
-      description: string;
-      Icon: React.ElementType;
-      children: React.ReactNode;
-    }) => void;
+  const { setPanel, setLinks } = useOutletContext<{
+    setPanel: (panel: PagePanelProps) => void;
+    setLinks: (links: PageLinkProps[] | undefined) => void;
   }>();
   useEffect(() => {
     setPanel({
@@ -309,6 +321,11 @@ export default function UserPage() {
       ),
     });
   }, [filterState, students, setPanel, setFilterState, filteredUids.length]);
+
+  useEffect(() => {
+    setLinks(getStudentScannerLinks(me));
+    return () => setLinks(undefined);
+  }, [me, setLinks]);
 
   const [batchAddMode, setBatchAddMode] = useState(false);
   const [batchAddStudentUids, setBatchAddStudentUids] = useState<string[]>([]);

@@ -3,15 +3,18 @@ import {
   ChatBubbleLeftRightIcon,
   FunnelIcon,
   IdentificationIcon,
-  VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
 import { Page } from "~/components/features/layout";
 import {
+  clearStudentDirectoryDisplaySettings,
+  clearStudentFilters,
   getFilteredStudentUids,
   getStudentDirectoryDisplaySettingsSummary,
+  hasActiveStudentDirectoryDisplaySettings,
+  hasActiveStudentFilters,
   STUDENT_DIRECTORY_DISPLAY_VALUES,
   STUDENT_DIRECTORY_GROUP_VALUES,
   StudentDirectoryDisplaySettings,
@@ -19,6 +22,7 @@ import {
 } from "~/components/features/students/StudentFilter";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
+import { Button } from "~/components/primitives";
 import { canonicalLink } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
 
@@ -107,6 +111,14 @@ export default function StudentsLayout() {
                 title: "필터 및 정렬",
                 description: `${students.length}명 중 ${filteredStudents.length}명 표시 중`,
                 Icon: FunnelIcon,
+                headerAction: hasActiveStudentFilters(filterState) ? (
+                  <Button
+                    text="필터 해제"
+                    size="xs"
+                    variant="danger-subtle"
+                    onClick={() => setFilterState(clearStudentFilters)}
+                  />
+                ) : undefined,
                 children: (
                   <StudentFilter
                     students={students}
@@ -123,20 +135,15 @@ export default function StudentsLayout() {
                 title: "표시 설정",
                 description: getStudentDirectoryDisplaySettingsSummary(filterState),
                 Icon: AdjustmentsHorizontalIcon,
-                collapsible: true,
+                headerAction: hasActiveStudentDirectoryDisplaySettings(filterState) ? (
+                  <Button
+                    text="초기화"
+                    size="xs"
+                    variant="danger-subtle"
+                    onClick={() => setFilterState(clearStudentDirectoryDisplaySettings)}
+                  />
+                ) : undefined,
                 children: <StudentDirectoryDisplaySettings state={filterState} onStateChange={setFilterState} />,
-              },
-            ]
-          : undefined
-      }
-      links={
-        isStudentsIndex
-          ? [
-              {
-                Icon: VideoCameraIcon,
-                title: "영상 인식기",
-                description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
-                to: "/scanner/student",
               },
             ]
           : undefined

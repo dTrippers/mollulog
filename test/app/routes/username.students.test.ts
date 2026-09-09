@@ -12,9 +12,11 @@ import {
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
+import { getUserPageLinks } from "~/routes/$username";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import {
   action,
+  getStudentScannerLinks,
   loader,
   USER_STUDENT_FILTER_COOKIE_NAME,
   USER_STUDENT_FILTER_SORTS,
@@ -143,6 +145,22 @@ beforeEach(() => {
 });
 
 describe("@username students loader", () => {
+  it("configures the scanner link only for the owner's student page", () => {
+    const ownerLinks = getStudentScannerLinks(true);
+    expect(ownerLinks).toMatchObject([
+      {
+        title: "영상 인식기",
+        description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
+        to: "/scanner/student",
+      },
+    ]);
+    expect(getStudentScannerLinks(false)).toBeUndefined();
+
+    expect(getUserPageLinks("students", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBe(ownerLinks);
+    expect(getUserPageLinks("students", "other", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
+    expect(getUserPageLinks("profile", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
+  });
+
   it("seeds the first render from the user student filter cookie", async () => {
     const state = {
       ...createStudentFilterState("tier"),

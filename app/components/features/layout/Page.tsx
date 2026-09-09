@@ -138,6 +138,7 @@ export default function Page({
           Icon={openPanel.Icon}
           title={openPanel.title}
           description={openPanel.description}
+          headerAction={openPanel.headerAction}
           onClose={() => setOpenPanelIndex(null)}
         >
           {openPanel.children}
