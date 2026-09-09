@@ -87,6 +87,12 @@ const recruitedStudent = {
   abilityHeal: 12,
 };
 
+const orphanRecruitedStudent = {
+  ...recruitedStudent,
+  uid: "recruited-orphan",
+  studentUid: "student-orphan",
+};
+
 const growthVisuals = {
   gearAvailable: true,
   skillConfigurations: [
@@ -172,6 +178,29 @@ describe("user students view", () => {
     expect(result.students[0]?.growth).not.toHaveProperty("equip3");
     expect(result.students[0]?.growth).not.toHaveProperty("equipmentAvailable");
     expect(result.students[0]?.growth).not.toHaveProperty("equip1Level");
+  });
+
+  it("omits recruited rows missing from the released catalog before growth lookups", async () => {
+    mockedGetRecruitedStudents.mockResolvedValueOnce([recruitedStudent, orphanRecruitedStudent]);
+
+    const result = await getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth");
+
+    expect(result.noRecruited).toBe(false);
+    expect(result.students.map(({ uid }) => uid)).toEqual(["student-a"]);
+    expect(mockedGetStudentWeaponAvailability).toHaveBeenCalledWith(env, ["student-a"]);
+    expect(mockedGetStudentGrowthVisualsBatch).toHaveBeenCalledWith(env, ["student-a"]);
+  });
+
+  it("treats orphan-only recruited rows as no visible recruited students", async () => {
+    mockedGetRecruitedStudents.mockResolvedValueOnce([orphanRecruitedStudent]);
+
+    const result = await getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth");
+
+    expect(result.noRecruited).toBe(true);
+    expect(result.students.filter(({ tier }) => tier !== null)).toEqual([]);
+    expect(result.students.find(({ uid }) => uid === "student-orphan")).toBeUndefined();
+    expect(mockedGetStudentWeaponAvailability).toHaveBeenCalledWith(env, []);
+    expect(mockedGetStudentGrowthVisualsBatch).toHaveBeenCalledWith(env, []);
   });
 
   it.each([

@@ -130,6 +130,11 @@ describe("student growth visual contracts", () => {
     expect(source).toContain("${" + "student.name} 성장 상태 편집");
     expect(source).toContain("inline-flex shrink-0 self-start rounded-md p-1.5");
     expect(source).toContain("text-sm font-semibold");
+    expect(source).toContain('from "@heroicons/react/16/solid"');
+    expect(source).toContain("ChevronRightIcon");
+    expect(source).toContain("to={`/students/${" + "encodeURIComponent(student.uid)}`}");
+    expect(source).toContain('className="group inline-flex min-w-0 max-w-full items-center gap-1');
+    expect(source).toContain('className="min-w-0 truncate break-keep"');
     expect(source).toContain("muted");
     expect(source).toContain('size="sm"');
     expect(source).toContain("미장착");
@@ -161,6 +166,12 @@ describe("student growth visual contracts", () => {
     expect(source).toContain("z-20 rounded-sm bg-card");
     expect(source).toContain("whitespace-nowrap text-[10px] font-semibold leading-4 text-muted-foreground");
     expect(source).toContain("self-end whitespace-nowrap text-[10px] font-semibold tabular-nums");
+    const metricGroupSource = source.slice(
+      source.indexOf("function MetricGroup"),
+      source.indexOf("function SkillTile"),
+    );
+    expect(metricGroupSource).toContain('<h4 className="sr-only">{title}</h4>');
+    expect(metricGroupSource).not.toContain("w-6 shrink-0");
     const equipmentSectionStart = source.indexOf('<MetricGroup title="장비">');
     const equipmentSectionEnd = source.indexOf("</MetricGroup>", equipmentSectionStart);
     const equipmentSection = source.slice(equipmentSectionStart, equipmentSectionEnd);
@@ -211,10 +222,16 @@ describe("student growth visual contracts", () => {
     );
 
     expect(markup).toContain('href="/students/student%20a#student-basic-info"');
+    expect(markup).toContain('href="/students/student%20a"');
     expect(markup).toContain('aria-label="아루 성장 상태 편집"');
+    expect(markup).toContain('viewBox="0 0 16 16"');
     expect(markup).toContain('aria-label="아루 EX 스킬 MAX"');
     expect(markup).toContain('aria-label="아루 강화 스킬 Lv.9"');
     expect(markup).toContain(">Lv.9</span>");
+    expect(markup).toContain('<h4 class="sr-only">스킬</h4>');
+    expect(markup).toContain('<h4 class="sr-only">장비</h4>');
+    expect(markup).toContain('<h4 class="sr-only">개방</h4>');
+    expect(markup).toContain(">최대 체력</dt>");
     expect(markup).toContain('aria-label="아루 장비 1 미장착"');
     expect(markup).toContain('aria-label="아루 장비 2 해당 없음"');
     expect(markup).toContain('aria-label="아루 애용품 T2"');
@@ -253,7 +270,23 @@ describe("student growth visual contracts", () => {
     const guestMarkup = renderToStaticMarkup(
       createElement(MemoryRouter, null, createElement(StudentGrowthCard, { student, editable: false })),
     );
+    expect(guestMarkup).toContain('href="/students/student%20a"');
+    expect(guestMarkup).toContain('viewBox="0 0 16 16"');
     expect(guestMarkup).not.toContain('aria-label="아루 성장 상태 편집"');
+
+    const longName = "이름이아주길어서chevron공간을보장해야해요";
+    const longNameMarkup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(StudentGrowthCard, {
+          student: { ...student, name: longName },
+          editable: true,
+        }),
+      ),
+    );
+    expect(longNameMarkup).toContain(`class="min-w-0 truncate break-keep">${longName}</span>`);
+    expect(longNameMarkup).toContain('viewBox="0 0 16 16"');
 
     const noSpecialMarkup = renderToStaticMarkup(
       createElement(

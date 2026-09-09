@@ -203,24 +203,24 @@ export async function getUserStudentsView(
   ]);
   const recruitedByStudentUid = new Map(recruitedStudents.map((student) => [student.studentUid, student]));
   const studentsByUid = new Map(allStudents.map((student) => [student.uid, student]));
+  const resolvedRecruitedStudents = recruitedStudents.flatMap((recruitedStudent) => {
+    const student = studentsByUid.get(recruitedStudent.studentUid);
+    return student ? [{ recruitedStudent, student }] : [];
+  });
 
   const applicabilityByStudentUid = new Map<string, GrowthApplicability & { abilityAvailable: boolean }>();
   let growthVisualsByStudentUid: Map<string, StudentGrowthVisuals> | undefined;
   let equipmentCatalog: StudentGrowthEquipment | undefined;
   if (view === "growth") {
-    const recruitedStudentUids = recruitedStudents.map((recruitedStudent) => recruitedStudent.studentUid);
+    const recruitedStudentUids = resolvedRecruitedStudents.map(({ recruitedStudent }) => recruitedStudent.studentUid);
     const [weaponAvailabilityByStudentUid, growthVisuals, equipment] = await Promise.all([
       getStudentWeaponAvailability(env, recruitedStudentUids),
       getStudentGrowthVisualsBatch(env, recruitedStudentUids),
-      recruitedStudentUids.length > 0 ? getStudentGrowthEquipmentCatalog(env) : Promise.resolve([]),
+      resolvedRecruitedStudents.length > 0 ? getStudentGrowthEquipmentCatalog(env) : Promise.resolve([]),
     ]);
     growthVisualsByStudentUid = growthVisuals;
     equipmentCatalog = equipment;
-    for (const recruitedStudent of recruitedStudents) {
-      const student = studentsByUid.get(recruitedStudent.studentUid);
-      if (!student) {
-        throw new Error("보유 학생 정보를 확인하지 못했어요");
-      }
+    for (const { recruitedStudent, student } of resolvedRecruitedStudents) {
       if (!weaponAvailabilityByStudentUid.has(recruitedStudent.studentUid)) {
         throw new Error("학생 고유무기 정보를 확인하지 못했어요");
       }
@@ -240,7 +240,7 @@ export async function getUserStudentsView(
     view,
     growthVisibility,
     canViewGrowth,
-    noRecruited: recruitedStudents.length === 0,
+    noRecruited: resolvedRecruitedStudents.length === 0,
     students: allStudents.map((student) => {
       const recruitedStudent = recruitedByStudentUid.get(student.uid);
       const baseStudent: UserStudent = {

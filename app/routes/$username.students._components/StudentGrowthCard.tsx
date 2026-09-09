@@ -1,3 +1,4 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { PencilSquareIcon } from "@heroicons/react/20/solid";
 import { Link } from "react-router";
 import { StudentCard, StudentSkillIcon } from "~/components/features/students";
@@ -31,7 +32,7 @@ const equipmentFields = [
 ] as const;
 
 const abilityFields = [
-  { key: "abilityHp", label: "HP" },
+  { key: "abilityHp", label: "최대 체력" },
   { key: "abilityAtk", label: "공격력" },
   { key: "abilityHeal", label: "치유력" },
 ] as const;
@@ -94,9 +95,9 @@ function Metric({
 
 function MetricGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="flex min-w-0 items-start gap-1">
-      <h4 className="w-6 shrink-0 pt-0.5 text-xs font-semibold text-muted-foreground">{title}</h4>
-      <div className="min-w-0 flex-1">{children}</div>
+    <section className="min-w-0">
+      <h4 className="sr-only">{title}</h4>
+      {children}
     </section>
   );
 }
@@ -186,7 +187,18 @@ export default function StudentGrowthCard({ student, editable = false }: Student
           <StudentCard uid={student.uid} name={student.name} hideName tier={student.tier} flush />
         </div>
         <div className="min-w-0 flex-1">
-          <h3 className="break-keep text-sm font-semibold">{student.name}</h3>
+          <h3 className="break-keep text-sm font-semibold">
+            <Link
+              to={`/students/${encodeURIComponent(student.uid)}`}
+              className="group inline-flex min-w-0 max-w-full items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            >
+              <span className="min-w-0 truncate break-keep">{student.name}</span>
+              <ChevronRightIcon
+                className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5"
+                aria-hidden="true"
+              />
+            </Link>
+          </h3>
           <p className="mt-0.5 text-xs text-muted-foreground">
             <span role="img" aria-label={`${student.name} 학생 레벨 ${valueDescription(student.growth.level)}`}>
               학생 Lv. <span aria-hidden="true">{displayValue(student.growth.level)}</span>
