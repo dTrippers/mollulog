@@ -184,6 +184,28 @@ describe("student basic info equipment-level action", () => {
     );
   });
 
+  it("keeps the display-only skill-effects toggle out of persisted state", async () => {
+    const response = await action({
+      params: { id: "student-a" },
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.test/students/student-a", {
+        method: "POST",
+        body: JSON.stringify({ tier: 3, includeSkillEffects: true }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({ data: { ok: true } });
+    expect(mockSaveStudentBasicInfo).toHaveBeenCalledWith(
+      env,
+      1,
+      "student-a",
+      expect.objectContaining({
+        currentState: expect.not.objectContaining({ includeSkillEffects: expect.anything() }),
+      }),
+    );
+  });
+
   it("returns a safe retryable 500 and logs unexpected save failures", async () => {
     const internalError = new Error("SQL timeout; password=secret");
     mockSaveStudentBasicInfo.mockRejectedValueOnce(internalError);
