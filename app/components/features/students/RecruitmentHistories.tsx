@@ -1,6 +1,6 @@
-import { Link } from "react-router";
 import { ChevronDoubleLeftIcon, ChevronDoubleRightIcon } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";

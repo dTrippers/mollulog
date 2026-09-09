@@ -1,12 +1,12 @@
 import {
+  type AccountLeaveResult,
   type AccountSecurityRepositoryOptions,
   type AccountSessionState,
-  type AccountLeaveResult,
   getAccountSessionState as getPostgresAccountSessionState,
   leaveAccount as leavePostgresAccount,
 } from "~/db/postgres/account-security";
 
-export type { AccountSecurityRepositoryOptions, AccountSessionState, AccountLeaveResult };
+export type { AccountLeaveResult, AccountSecurityRepositoryOptions, AccountSessionState };
 
 export async function getAccountSessionState(
   env: Env,

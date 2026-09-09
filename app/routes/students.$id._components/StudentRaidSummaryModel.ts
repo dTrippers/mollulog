@@ -36,11 +36,7 @@ const TIERS = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const;
 // so weak samples do not produce confident advice.
 const MIN_TOTAL_SAMPLE_SIZE = 100;
 
-export function buildStudentRaidSummary({
-  statistics,
-}: {
-  statistics: StudentRaidSummaryStat[];
-}): StudentRaidSummary {
+export function buildStudentRaidSummary({ statistics }: { statistics: StudentRaidSummaryStat[] }): StudentRaidSummary {
   let ownCount = 0;
   let assistCount = 0;
 

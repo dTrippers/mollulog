@@ -9,7 +9,7 @@ type SenseiListProps = {
     profileStudentId: string | null;
     friendCode: string | null;
   }[];
-}
+};
 
 export default function SenseiList({ senseis }: SenseiListProps) {
   return (
@@ -29,5 +29,5 @@ export default function SenseiList({ senseis }: SenseiListProps) {
         );
       })}
     </>
-  )
+  );
 }

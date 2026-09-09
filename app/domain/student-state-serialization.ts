@@ -129,7 +129,10 @@ function toJustin163Character(input: StudentStateExportInput, entry: StudentStat
   };
 }
 
-function toJustin163Current(recruitedStudent: RecruitedStudent | undefined, relationshipLevel: RelationshipLevel | undefined) {
+function toJustin163Current(
+  recruitedStudent: RecruitedStudent | undefined,
+  relationshipLevel: RelationshipLevel | undefined,
+) {
   const { star, uniqueWeapon } = splitTier(recruitedStudent?.tier ?? 1);
 
   return {
@@ -199,7 +202,11 @@ function createMap<T>(items: T[], getKey: (item: T) => string): Record<string, T
   return Object.fromEntries(items.map((item) => [getKey(item), item]));
 }
 
-function compareStudentOrder(studentCatalog: StudentStateExportStudentCatalog, leftUid: string, rightUid: string): number {
+function compareStudentOrder(
+  studentCatalog: StudentStateExportStudentCatalog,
+  leftUid: string,
+  rightUid: string,
+): number {
   const leftOrder = studentCatalog[leftUid]?.order;
   const rightOrder = studentCatalog[rightUid]?.order;
 

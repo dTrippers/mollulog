@@ -53,11 +53,7 @@ export async function createPostgresConnectApiKey(
   );
 }
 
-export async function listPostgresConnectApiKeys(
-  env: Env,
-  userId: number,
-  options: PostgresConnectApiKeyOptions = {},
-) {
+export async function listPostgresConnectApiKeys(env: Env, userId: number, options: PostgresConnectApiKeyOptions = {}) {
   return withConnectApiKeyDatabase(
     env,
     (db) =>

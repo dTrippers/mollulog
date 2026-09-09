@@ -1,5 +1,5 @@
-import type { FeedbackTicketStatus } from "~/models/feedback";
 import { cn } from "~/lib/utils";
+import type { FeedbackTicketStatus } from "~/models/feedback";
 
 const feedbackStatusMeta = {
   waiting: {

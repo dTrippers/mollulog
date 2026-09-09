@@ -18,7 +18,7 @@ import {
   type ClearTimeDistribution,
   fetchClearTimeDistribution,
 } from "~/lib/ranks/clear-time-distribution";
-import { type RangeStats, fetchRangeStats } from "~/lib/ranks/range-stats";
+import { fetchRangeStats, type RangeStats } from "~/lib/ranks/range-stats";
 import { difficultyLocale } from "~/locales/ko";
 import type { RaidType, Role } from "~/models/content.d";
 import RaidScoreRangeDetail from "./RaidScoreRangeDetail";

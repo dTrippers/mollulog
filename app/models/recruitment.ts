@@ -87,10 +87,7 @@ export async function getAllRecruitmentGroups(env: Env, forceRefresh = false): P
   }
 }
 
-export async function getAllHistoricalRecruitmentGroups(
-  env: Env,
-  forceRefresh = false,
-): Promise<RecruitmentGroup[]> {
+export async function getAllHistoricalRecruitmentGroups(env: Env, forceRefresh = false): Promise<RecruitmentGroup[]> {
   try {
     return await fetchAllHistoricalRecruitmentGroups(env, forceRefresh);
   } catch (error) {
@@ -182,10 +179,7 @@ export function normalizeRecruitmentGroupPeriod(group: Pick<RecruitmentGroup, "s
   };
 }
 
-export async function getRecruitmentPoolStudents(
-  env: Env,
-  forceRefresh = false,
-): Promise<RecruitmentPoolStudent[]> {
+export async function getRecruitmentPoolStudents(env: Env, forceRefresh = false): Promise<RecruitmentPoolStudent[]> {
   return fetchSourceCached(
     env,
     RECRUITMENT_POOL_STUDENTS_CACHE_KEY,

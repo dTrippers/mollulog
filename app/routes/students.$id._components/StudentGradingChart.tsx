@@ -119,9 +119,7 @@ function GradingTagMeter({ tag, displayName, count, maxCount, compact = false }:
     return (
       <div className="flex min-w-0 items-center gap-2">
         <TagIcon tag={tag} size="sm" />
-        <span className="min-w-0 flex-1 text-xs font-medium text-neutral-700 dark:text-neutral-300">
-          {displayName}
-        </span>
+        <span className="min-w-0 flex-1 text-xs font-medium text-neutral-700 dark:text-neutral-300">{displayName}</span>
         <span className="w-5 shrink-0 text-right text-xs font-semibold tabular-nums text-neutral-500 dark:text-neutral-400">
           {count}
         </span>
@@ -186,9 +184,7 @@ function ReviewSummaryLink({ studentUid, review, reviewerName, to }: ReviewSumma
         <div className="flex min-w-0 flex-col gap-0.5 sm:flex-row sm:items-baseline">
           <span className="truncate text-sm font-semibold text-neutral-800 dark:text-neutral-100">{reviewerName}</span>
           {review.comment ? (
-            <span className="line-clamp-1 text-sm text-neutral-600 dark:text-neutral-300">
-              {review.comment.trim()}
-            </span>
+            <span className="line-clamp-1 text-sm text-neutral-600 dark:text-neutral-300">{review.comment.trim()}</span>
           ) : null}
         </div>
         {review.tags && review.tags.length > 0 ? (

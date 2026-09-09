@@ -1,5 +1,5 @@
-import { EmptyView } from "~/components/primitives";
 import { EventDetailShopPage } from "~/components/features/events";
+import { EmptyView } from "~/components/primitives";
 
 type EventShopContentProps =
   | {

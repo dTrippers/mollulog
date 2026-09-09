@@ -1,11 +1,11 @@
-import type { ReactNode } from "react";
-import { useId } from "react";
 import { ExclamationTriangleIcon } from "@heroicons/react/24/outline";
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
+import type { ReactNode } from "react";
+import { useId } from "react";
 import { Form, Link, useNavigation } from "react-router";
 import { Button, Callout } from "~/components/primitives";
-import type { SyncDraft, SyncDraftStatus, SyncDraftType } from "~/models/sync-draft";
 import type { ItemCatalogResource } from "~/models/item-catalog";
+import type { SyncDraft, SyncDraftStatus, SyncDraftType } from "~/models/sync-draft";
 
 export type SyncDraftDisplayMetadata = {
   label: string;

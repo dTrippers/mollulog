@@ -308,9 +308,7 @@ function CellReviewTile({
   const unavailable = currentResource && "unavailable" in currentResource && currentResource.unavailable === true;
   const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
   const requiresSameAppearanceSelection =
-    !selectedUid &&
-    sameAppearanceCandidateCount > 1 &&
-    cell.reasons.includes("resource_visual_identity_ambiguous");
+    !selectedUid && sameAppearanceCandidateCount > 1 && cell.reasons.includes("resource_visual_identity_ambiguous");
   const warning = excluded
     ? { label: "제외됨", title: "적용에서 제외된 아이템이에요", tone: "muted" as const }
     : requiresSameAppearanceSelection
@@ -329,10 +327,7 @@ function CellReviewTile({
 
   return (
     <div
-      className={cn(
-        "flex w-12 justify-self-center flex-col items-center rounded-md md:w-14",
-        excluded && "opacity-50",
-      )}
+      className={cn("flex w-12 justify-self-center flex-col items-center rounded-md md:w-14", excluded && "opacity-50")}
     >
       <CellCandidatePopover
         jobUid={jobUid}
@@ -399,8 +394,7 @@ function CellReviewTile({
               title={warning.title}
               className={cn(
                 "pointer-events-none absolute top-0.5 z-10 inline-flex origin-top-right scale-80 items-center whitespace-nowrap rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-medium leading-tight backdrop-blur-sm",
-                currentResource?.name ||
-                  (requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid)
+                currentResource?.name || (requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid)
                   ? "right-1.5"
                   : "right-0.5",
                 warning.tone === "destructive" && "text-red-300 dark:text-red-200",
@@ -418,10 +412,10 @@ function CellReviewTile({
           (requiresSameAppearanceSelection
             ? "같은 모양의 아이템 중 선택 필요"
             : unavailable
-            ? "카탈로그에서 아이템 정보를 찾을 수 없음"
-            : cell.status === "unrecognized"
-              ? "인식하지 못한 아이템"
-              : "아이템 정보 없음")}
+              ? "카탈로그에서 아이템 정보를 찾을 수 없음"
+              : cell.status === "unrecognized"
+                ? "인식하지 못한 아이템"
+                : "아이템 정보 없음")}
       </span>
       <div className="mt-1 w-full">
         <NumberInput
@@ -556,9 +550,7 @@ function CellCandidatePopoverContent({
   const current = defaultDetails?.current ?? null;
   const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
   const sameAppearanceSelectionRequired =
-    !selectedUid &&
-    sameAppearanceCandidateCount > 1 &&
-    cell.reasons.includes("resource_visual_identity_ambiguous");
+    !selectedUid && sameAppearanceCandidateCount > 1 && cell.reasons.includes("resource_visual_identity_ambiguous");
   const defaultCandidates = sameAppearanceSelectionRequired
     ? (defaultDetails?.candidates ?? []).slice(0, sameAppearanceCandidateCount)
     : (defaultDetails?.candidates ?? []);

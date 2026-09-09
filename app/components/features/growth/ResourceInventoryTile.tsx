@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
-import { cn } from "~/lib/utils";
 import {
   HoverTooltip,
-  ResourceCard,
   NumberInput,
   type NumberInputFlowNavigationInputProps,
+  ResourceCard,
 } from "~/components/primitives";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { cn } from "~/lib/utils";
 
 export type ResourceInventoryTileMetric = {
   key?: string;
@@ -156,9 +156,7 @@ function MetricRow({
   if (!label) {
     return (
       <div className={cn("text-center", dimmed && "opacity-40", hidden && "invisible")}>
-        <span className={cn("whitespace-nowrap font-bold tabular-nums text-foreground", valueClassName)}>
-          {value}
-        </span>
+        <span className={cn("whitespace-nowrap font-bold tabular-nums text-foreground", valueClassName)}>{value}</span>
       </div>
     );
   }

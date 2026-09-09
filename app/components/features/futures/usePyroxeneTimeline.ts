@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PyroxeneCalculationOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { type PickupResources, type Timeline, buildTimeline } from "~/domain/pyroxene-timeline";
+import { buildTimeline, type PickupResources, type Timeline } from "~/domain/pyroxene-timeline";
 import {
   type PyroxeneTimelineWorkerRequest,
   type PyroxeneTimelineWorkerResponse,

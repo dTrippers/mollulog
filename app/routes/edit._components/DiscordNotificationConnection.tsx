@@ -3,8 +3,8 @@ import { FaDiscord } from "react-icons/fa6";
 import { Form } from "react-router";
 import type { DiscordProfileFeedback } from "~/components/features/auth/discord-profile-feedback";
 import { Button, SectionCard } from "~/components/primitives";
-import type { DiscordConnection } from "~/models/discord-notifications.server";
 import { cn } from "~/lib/utils";
+import type { DiscordConnection } from "~/models/discord-notifications.server";
 
 type DiscordNotificationConnectionProps = {
   connection: DiscordConnection | null;

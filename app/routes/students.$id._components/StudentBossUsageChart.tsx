@@ -1,9 +1,9 @@
 import { useState } from "react";
 import { Defense } from "~/graphql/graphql";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
+import { formatUsagePercent } from "./formatUsagePercent";
 import type { StudentBossUsageSummary } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
-import { formatUsagePercent } from "./formatUsagePercent";
 
 type StudentBossUsageChartProps = {
   summary: StudentBossUsageSummary | null;

@@ -1,4 +1,5 @@
 import { OcrPublicError } from "~/domain/ocr";
+import { parseStudentDetailImagesResult, type StudentDetailImageStudent } from "~/domain/student-image-ocr";
 import {
   parseStudentStateDraftValue,
   type StudentStateCurrentFieldKey,
@@ -9,10 +10,6 @@ import {
   type StudentDetailVideoStudent,
   type StudentVideoFieldName,
 } from "~/domain/student-video-ocr";
-import {
-  parseStudentDetailImagesResult,
-  type StudentDetailImageStudent,
-} from "~/domain/student-image-ocr";
 import type { SyncDraftCreateInput } from "~/models/sync-draft";
 
 export const studentVideoApplyFieldNames = [

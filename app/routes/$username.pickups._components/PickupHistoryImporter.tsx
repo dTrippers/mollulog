@@ -10,16 +10,10 @@ type PickupHistoryImporterProps = {
 
   initialRawData?: string;
 
-  onImport: (pickupData: {
-    totalCount?: number;
-    tier3Count: number;
-    tier3StudentIds: string[];
-  }) => void;
+  onImport: (pickupData: { totalCount?: number; tier3Count: number; tier3StudentIds: string[] }) => void;
 };
 
-export default function PickupHistoryImporter(
-  { tier3Students, initialRawData, onImport }: PickupHistoryImporterProps,
-) {
+export default function PickupHistoryImporter({ tier3Students, initialRawData, onImport }: PickupHistoryImporterProps) {
   const [rawData, setRawData] = useState(initialRawData ?? "");
   const hasRawData = rawData.trim().length > 0;
   const handleImport = () => {
@@ -48,12 +42,7 @@ export default function PickupHistoryImporter(
         containerClassName="mt-0 mb-0"
       />
       <div className="pt-2">
-        <Button
-          text="입력값 채우기"
-          variant="inverse"
-          disabled={!hasRawData}
-          onClick={handleImport}
-        />
+        <Button text="입력값 채우기" variant="inverse" disabled={!hasRawData} onClick={handleImport} />
       </div>
     </div>
   );

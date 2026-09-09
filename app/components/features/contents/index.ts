@@ -1,10 +1,10 @@
 export { default as CommentView } from "./CommentView";
 export { default as ContentCommentEditor } from "./ContentCommentEditor";
 export { default as ContentCommentView } from "./ContentCommentView";
-export { default as ContentTimeline } from "./ContentTimeline";
 export type { ContentTimelineProps } from "./ContentTimeline";
-export { default as ContentTimelineCompact } from "./ContentTimelineCompact";
+export { default as ContentTimeline } from "./ContentTimeline";
 export type { ContentTimelineCompactProps } from "./ContentTimelineCompact";
-export { ContentTimelineItem } from "./ContentTimelineItem";
+export { default as ContentTimelineCompact } from "./ContentTimelineCompact";
 export type { ContentTimelineItemProps } from "./ContentTimelineItem";
+export { ContentTimelineItem } from "./ContentTimelineItem";
 export { default as TimelineItemBanner } from "./TimelineItemBanner";

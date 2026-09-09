@@ -19,7 +19,7 @@
     "cdn:plan": "terraform -chdir=deploy/cdn plan",
     "cdn:deploy": "terraform -chdir=deploy/cdn apply",
     "test": "jest",
-    "typecheck": "react-router typegen && tsc",
+    "typecheck": "pnpm run cf-typegen && react-router typegen && tsc",
     "lint": "pnpm run lint:postgres-migrations && biome lint app test && biome check test",
     "lint:fix": "pnpm run lint:postgres-migrations && biome lint --write app test && biome check --write test",
     "lint:postgres-migrations": "node scripts/lint-postgres-migrations.mjs",

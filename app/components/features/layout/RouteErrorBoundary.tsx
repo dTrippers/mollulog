@@ -12,22 +12,10 @@ function NormalizedRouteErrorView({ page }: { page?: PageRouteErrorBoundaryProps
   const normalized = normalizeRouteError(error);
 
   if (isServerRouteError(normalized)) {
-    return (
-      <ServerErrorPage
-        status={normalized.status}
-        title={normalized.title}
-        message={normalized.message}
-      />
-    );
+    return <ServerErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />;
   }
 
-  const errorPage = (
-    <ErrorPage
-      status={normalized.status}
-      title={normalized.title}
-      message={normalized.message}
-    />
-  );
+  const errorPage = <ErrorPage status={normalized.status} title={normalized.title} message={normalized.message} />;
 
   if (page) {
     return <Page {...page}>{errorPage}</Page>;

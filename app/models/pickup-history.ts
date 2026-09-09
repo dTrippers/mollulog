@@ -12,7 +12,7 @@ export type PickupHistory = {
   rawResult?: string | null;
 };
 
-export function parsePickupHistory(raw: string, students: { uid: string, name: string }[]): PickupHistory["result"] {
+export function parsePickupHistory(raw: string, students: { uid: string; name: string }[]): PickupHistory["result"] {
   const studentNames = students.map((student) => student.name);
   const studentMap = new Map(students.map((student) => [student.name, student.uid]));
 
@@ -48,20 +48,25 @@ export function parsePickupHistory(raw: string, students: { uid: string, name: s
       tier3Count = count1;
     }
 
-    const tier3StudentIds = tier3Count > 0 ? names.map((searchName) => {
-      const studentId = studentMap.get(searchName);
-      if (studentId) {
-        return studentId;
-      }
+    const tier3StudentIds =
+      tier3Count > 0
+        ? names
+            .map((searchName) => {
+              const studentId = studentMap.get(searchName);
+              if (studentId) {
+                return studentId;
+              }
 
-      const [namePart1, namePart2] = [searchName.slice(0, 1), searchName.slice(1)];
-      const expectingName = studentNames.find((name) => {
-        const [originalName, skinName] = name.split("(").map((each) => each.replace(")", ""));
-        return originalName.includes(namePart2) && skinName?.includes(namePart1);
-      });
+              const [namePart1, namePart2] = [searchName.slice(0, 1), searchName.slice(1)];
+              const expectingName = studentNames.find((name) => {
+                const [originalName, skinName] = name.split("(").map((each) => each.replace(")", ""));
+                return originalName.includes(namePart2) && skinName?.includes(namePart1);
+              });
 
-      return expectingName ? studentMap.get(expectingName) ?? null : null;
-    }).filter((studentId) => studentId !== null) : [];
+              return expectingName ? (studentMap.get(expectingName) ?? null) : null;
+            })
+            .filter((studentId) => studentId !== null)
+        : [];
 
     result.push({
       trial,

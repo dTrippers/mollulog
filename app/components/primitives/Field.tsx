@@ -29,19 +29,14 @@ export default function Field({
   const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
 
   const content =
-    htmlFor &&
-    isValidElement(children) &&
-    typeof children.type !== "symbol"
+    htmlFor && isValidElement(children) && typeof children.type !== "symbol"
       ? cloneElement(children as ReactElement<Record<string, unknown>>, {
           id: (children.props as { id?: string }).id ?? htmlFor,
-          "aria-describedby": [
-            (children.props as { "aria-describedby"?: string })["aria-describedby"],
-            describedBy,
-          ]
-            .filter(Boolean)
-            .join(" ") || undefined,
-          "aria-invalid":
-            error ? true : (children.props as { "aria-invalid"?: boolean })["aria-invalid"],
+          "aria-describedby":
+            [(children.props as { "aria-describedby"?: string })["aria-describedby"], describedBy]
+              .filter(Boolean)
+              .join(" ") || undefined,
+          "aria-invalid": error ? true : (children.props as { "aria-invalid"?: boolean })["aria-invalid"],
         })
       : children;
 

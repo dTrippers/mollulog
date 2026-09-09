@@ -3,9 +3,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function pathEquals(path: unknown, expected: string[]) {
-  return Array.isArray(path)
-    && path.length === expected.length
-    && path.every((value, index) => value === expected[index]);
+  return (
+    Array.isArray(path) && path.length === expected.length && path.every((value, index) => value === expected[index])
+  );
 }
 
 export function isStudentNotFoundError(error: unknown) {
@@ -14,7 +14,10 @@ export function isStudentNotFoundError(error: unknown) {
   }
 
   const graphQLErrors = error.graphQLErrors;
-  if (Array.isArray(graphQLErrors) && graphQLErrors.some((graphQLError) => isRecord(graphQLError) && pathEquals(graphQLError.path, ["student"]))) {
+  if (
+    Array.isArray(graphQLErrors) &&
+    graphQLErrors.some((graphQLError) => isRecord(graphQLError) && pathEquals(graphQLError.path, ["student"]))
+  ) {
     return true;
   }
 

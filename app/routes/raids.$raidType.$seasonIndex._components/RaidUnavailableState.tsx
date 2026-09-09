@@ -13,9 +13,7 @@ export default function RaidUnavailableState({ raidType }: RaidUnavailableStateP
       <p className="my-2 text-2xl font-bold">
         {raidType ? `${raidTypeLocale[raidType]} 정보를 준비중이에요` : "정보를 준비중이에요"}
       </p>
-      <p className="my-2 text-neutral-500 dark:text-neutral-400">
-        정보가 준비된 컨텐츠를 선택하여 확인해보세요
-      </p>
+      <p className="my-2 text-neutral-500 dark:text-neutral-400">정보가 준비된 컨텐츠를 선택하여 확인해보세요</p>
     </div>
   );
 }

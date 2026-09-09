@@ -1,4 +1,4 @@
-import { redirect, type LoaderFunctionArgs } from "react-router";
+import { type LoaderFunctionArgs, redirect } from "react-router";
 
 // Keep legacy form actions posted to /utils/relationship/item working while the UI redirects to ?mode=item.
 export { action } from "./utils.relationship";

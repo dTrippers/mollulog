@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, type ReactNode, useContext, useState } from "react";
 
 type StudentCardPopupContextType = {
   activePopupId: string | null;
@@ -22,4 +22,4 @@ export function StudentCardPopupProvider({ children }: { children: ReactNode }) 
       {children}
     </StudentCardPopupContext.Provider>
   );
-} 
+}
