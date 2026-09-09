@@ -341,7 +341,6 @@ export default function StudentBasicInfo({
 
         <SectionCard
           title="능력치"
-          description="끄면 게임 내 프로필과 같은 능력치를 표시해요"
           action={
             <Toggle
               key={student.uid}
@@ -351,7 +350,7 @@ export default function StudentBasicInfo({
               onChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
             />
           }
-          className="mt-2.5 space-y-0 py-3 md:mt-3 md:py-3"
+          className="mt-2.5 space-y-3 py-3 md:mt-3 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
         >
           <div className="grid grid-cols-4 gap-3">
             {primaryStats.map(({ stat, label }) => (
