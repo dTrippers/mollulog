@@ -23,6 +23,7 @@ import {
   upsertPostgresCollectedSources,
   upsertPostgresPyroxeneEventData,
   upsertPostgresPyroxenePlannerOptions,
+  updatePostgresPyroxeneOneOffTimelineItem,
 } from "~/db/postgres/pyroxene-planner";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneMonthlyPackageType } from "~/domain/pyroxene-sources";
@@ -107,6 +108,23 @@ export async function createBuyPyroxene(
 
 export async function deletePyroxeneTimelineItem(env: Env, userId: number, uid: string): Promise<void> {
   return deletePostgresPyroxeneTimelineItem(env, userId, uid);
+}
+
+export async function updatePyroxeneOneOffTimelineItem(
+  env: Env,
+  userId: number,
+  uid: string,
+  input: {
+    source: "buy" | "other";
+    date: Date | string;
+    description: string;
+    pyroxeneDelta: number;
+    oneTimeTicketDelta: number;
+    tenTimeTicketDelta: number;
+  },
+  options: PostgresPyroxeneOptions = {},
+): Promise<boolean> {
+  return updatePostgresPyroxeneOneOffTimelineItem(env, userId, uid, input, options);
 }
 
 export async function createPyroxeneMonthlyPackage(

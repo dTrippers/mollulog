@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, like, or } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, like, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import {
@@ -599,6 +599,44 @@ export async function getPostgresPyroxeneTimelineItems(
   );
 }
 
+export async function updatePyroxeneOneOffTimelineItemInDatabase(
+  db: PyroxeneDatabase,
+  userId: number,
+  uid: string,
+  input: {
+    source: "buy" | "other";
+    date: Date | string;
+    description: string;
+    pyroxeneDelta: number;
+    oneTimeTicketDelta: number;
+    tenTimeTicketDelta: number;
+  },
+): Promise<boolean> {
+  const rows = await db
+    .update(pgPyroxeneTimelineItemsTable)
+    .set({
+      eventAt: toDate(normalizePyroxeneTimelineEventAt(input.date)),
+      description: input.description,
+      pyroxeneDelta: input.pyroxeneDelta,
+      oneTimeTicketDelta: input.oneTimeTicketDelta,
+      tenTimeTicketDelta: input.tenTimeTicketDelta,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(pgPyroxeneTimelineItemsTable.userId, userId),
+        eq(pgPyroxeneTimelineItemsTable.uid, uid),
+        eq(pgPyroxeneTimelineItemsTable.source, input.source),
+        isNull(pgPyroxeneTimelineItemsTable.repeatType),
+        isNull(pgPyroxeneTimelineItemsTable.repeatIntervalDays),
+        isNull(pgPyroxeneTimelineItemsTable.repeatCount),
+        eq(pgPyroxeneTimelineItemsTable.autoRepurchase, false),
+      ),
+    )
+    .returning({ uid: pgPyroxeneTimelineItemsTable.uid });
+  return rows.length === 1;
+}
+
 export async function createPostgresBuyPyroxene(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -627,6 +665,28 @@ export async function deletePostgresPyroxeneTimelineItem(
     env,
     "timeline_items.delete",
     (db) => deletePyroxeneTimelineItemInDatabase(db, userId, uid),
+    options,
+  );
+}
+
+export async function updatePostgresPyroxeneOneOffTimelineItem(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  uid: string,
+  input: {
+    source: "buy" | "other";
+    date: Date | string;
+    description: string;
+    pyroxeneDelta: number;
+    oneTimeTicketDelta: number;
+    tenTimeTicketDelta: number;
+  },
+  options: PostgresPyroxeneOptions = {},
+): Promise<boolean> {
+  return withPyroxeneDatabase(
+    env,
+    "timeline_items.update_one_off",
+    (db) => updatePyroxeneOneOffTimelineItemInDatabase(db, userId, uid, input),
     options,
   );
 }

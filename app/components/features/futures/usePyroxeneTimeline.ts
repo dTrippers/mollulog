@@ -15,6 +15,7 @@ type UsePyroxeneTimelineArgs = {
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
+  endDate?: Date;
 };
 
 /**
@@ -30,7 +31,8 @@ export function usePyroxeneTimeline({
   scheduleItems,
   options,
   collectedSourceKeys,
-}: UsePyroxeneTimelineArgs): { timeline: Timeline; pending: boolean } {
+  endDate,
+}: UsePyroxeneTimelineArgs): { timeline: Timeline; pending: boolean; error: boolean } {
   const computeSync = useCallback(
     () =>
       buildTimeline(
@@ -41,18 +43,33 @@ export function usePyroxeneTimeline({
         options,
         undefined,
         collectedSourceKeys,
+        endDate,
       ),
-    [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys],
+    [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate],
   );
 
   const [timeline, setTimeline] = useState<Timeline>([]);
   const [pending, setPending] = useState(true);
+  const [error, setError] = useState(false);
   const workerRef = useRef<Worker | null>(null);
   const requestIdRef = useRef(0);
 
   // 워커 에러 핸들러에서 항상 최신 입력으로 동기 계산할 수 있도록 참조를 갱신합니다.
   const computeSyncRef = useRef(computeSync);
   computeSyncRef.current = computeSync;
+
+  const calculateSynchronously = useCallback(() => {
+    setPending(true);
+    try {
+      setTimeline(computeSyncRef.current());
+      setError(false);
+    } catch {
+      setTimeline([]);
+      setError(true);
+    } finally {
+      setPending(false);
+    }
+  }, []);
 
   useEffect(() => {
     if (typeof Worker === "undefined") {
@@ -62,8 +79,7 @@ export function usePyroxeneTimeline({
     try {
       worker = new Worker(new URL("./pyroxene-timeline.worker.ts", import.meta.url), { type: "module" });
     } catch {
-      setTimeline(computeSyncRef.current());
-      setPending(false);
+      calculateSynchronously();
       return;
     }
     workerRef.current = worker;
@@ -72,25 +88,30 @@ export function usePyroxeneTimeline({
       if (event.data.id !== requestIdRef.current) {
         return;
       }
-      setTimeline(rehydrateTimeline(event.data.timeline));
+      try {
+        setTimeline(rehydrateTimeline(event.data.timeline));
+        setError(false);
+      } catch {
+        setTimeline([]);
+        setError(true);
+      }
       setPending(false);
     };
     worker.onerror = () => {
       // 워커 로드/실행 실패 시 메인 스레드 동기 계산으로 폴백하고, 이후 계산도 동기로 전환합니다.
       workerRef.current = null;
-      setTimeline(computeSyncRef.current());
-      setPending(false);
+      calculateSynchronously();
     };
     return () => {
       workerRef.current = null;
       worker.terminate();
     };
-  }, []);
+  }, [calculateSynchronously]);
 
   useEffect(() => {
     const worker = workerRef.current;
     if (!worker) {
-      setTimeline(computeSync());
+      calculateSynchronously();
       return;
     }
 
@@ -104,9 +125,16 @@ export function usePyroxeneTimeline({
       scheduleItems,
       options,
       collectedSourceKeys,
+      endDate,
     };
-    worker.postMessage(request);
-  }, [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, computeSync]);
+    try {
+      worker.postMessage(request);
+    } catch {
+      worker.terminate();
+      workerRef.current = null;
+      calculateSynchronously();
+    }
+  }, [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate, computeSync, calculateSynchronously]);
 
-  return { timeline, pending };
+  return { timeline, pending, error };
 }

@@ -71,6 +71,20 @@ describe("getNavigationSections", () => {
     });
     expect(eventShop?.disabled).toBeUndefined();
   });
+
+  it("adds the integrated planner while preserving detailed planner entries", () => {
+    const items = getMenuItems();
+
+    expect(items.find((item) => item.to === "/utils/planner")).toMatchObject({
+      name: "통합 플래너",
+      favoriteId: "integrated-planner",
+      mobileNavigationId: "integrated-planner",
+      OutlineIcon: CalendarIconOutline,
+    });
+    expect(items.map((item) => item.to)).toEqual(
+      expect.arrayContaining(["/utils/planner", "/utils/pyroxene", "/utils/event-shop"]),
+    );
+  });
 });
 
 describe("navigation surface projections", () => {
