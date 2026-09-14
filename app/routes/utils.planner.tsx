@@ -1,4 +1,4 @@
-import { CalendarIcon, CreditCardIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
+import { CreditCardIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Link, useFetcher, useLoaderData } from "react-router";
@@ -43,14 +43,13 @@ import { extractPyroxeneTimelineBaseUid } from "~/domain/pyroxene-sources";
 import type { GuestEventShopPlannerSnapshot } from "~/lib/guest-event-shop-planner.client";
 import { readGuestEventShopPlanner, subscribeGuestEventShopPlanner } from "~/lib/guest-event-shop-planner.client";
 import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
-import { favoriteStudent, getUserFavoritedStudents, unfavoriteStudent } from "~/models/favorite-students";
+import { saveIntegratedPlannerRecruitmentPlan } from "~/models/integrated-planner";
 import {
   createBuyPyroxene,
   createOtherPyroxeneGain,
   createPyroxeneApPackage,
   createPyroxeneMonthlyPackage,
   updatePyroxeneOneOffTimelineItem,
-  upsertPyroxeneEventData,
 } from "~/models/pyroxene-planner";
 import type { EventShopStateLookupResponse } from "~/routes/api.utils.planner.event-shop-states";
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
@@ -169,18 +168,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         return response(false, "선택한 학생을 해당 모집 일정에서 찾을 수 없어요.", 400);
       }
 
-      const currentFavorites = await getUserFavoritedStudents(env, currentUser.id, eventUid, { ctx });
-      const currentFavoriteUids = new Set(currentFavorites.map(({ studentId }) => studentId));
-      const selectedFavoriteUids = new Set(studentUids);
-      await Promise.all([
-        ...[...currentFavoriteUids]
-          .filter((uid) => !selectedFavoriteUids.has(uid))
-          .map((uid) => unfavoriteStudent(env, currentUser.id, uid, eventUid, { ctx })),
-        ...studentUids
-          .filter((uid) => !currentFavoriteUids.has(uid))
-          .map((uid) => favoriteStudent(env, currentUser.id, uid, eventUid, { ctx })),
-      ]);
-      await upsertPyroxeneEventData(env, currentUser.id, eventUid, { expectedTrials });
+      await saveIntegratedPlannerRecruitmentPlan(env, currentUser.id, eventUid, studentUids, expectedTrials, ctx);
       return response(true);
     } catch {
       return response(false, "모집 계획을 저장하지 못했어요. 입력을 보존했으니 다시 시도해주세요.", 500);
@@ -348,7 +336,10 @@ export default function IntegratedPlannerRoute() {
     requestFailed: boolean;
   } | null>(null);
   const [visibleMonthCount, setVisibleMonthCount] = useState(1);
-  const [shopStateOverrides, setShopStateOverrides] = useState<Record<string, EventShopState>>({});
+  const [shopStateOverrides, setShopStateOverrides] = useState<{
+    signedIn: boolean;
+    states: Record<string, EventShopState>;
+  }>(() => ({ signedIn: loaderData.signedIn, states: {} }));
   const [guestRecruitmentIsSaving, setGuestRecruitmentIsSaving] = useState(false);
   const [guestRecruitmentSaveResult, setGuestRecruitmentSaveResult] = useState<PlannerRecruitmentSaveResult | null>(
     null,
@@ -359,6 +350,12 @@ export default function IntegratedPlannerRoute() {
     refresh();
     return subscribeGuestEventShopPlanner(refresh);
   }, []);
+
+  useEffect(() => {
+    setShopStateOverrides((current) =>
+      current.signedIn === loaderData.signedIn ? current : { signedIn: loaderData.signedIn, states: {} },
+    );
+  }, [loaderData.signedIn]);
 
   const guestShopPlans = useMemo(() => getGuestShopPlans(guestShopSnapshot), [guestShopSnapshot]);
   const guestShopPlanSignature = useMemo(
@@ -435,6 +432,7 @@ export default function IntegratedPlannerRoute() {
 
   const accountState = loaderData.accountState;
   const isSignedIn = loaderData.signedIn;
+  const activeShopStateOverrides = shopStateOverrides.signedIn === isSignedIn ? shopStateOverrides.states : {};
   const guestData =
     !isSignedIn && (pyroxeneGuestPlanner.status === "ready" || pyroxeneGuestPlanner.status === "memory")
       ? pyroxeneGuestPlanner.data
@@ -630,7 +628,7 @@ export default function IntegratedPlannerRoute() {
   const recruitmentIsSaving = isSignedIn ? recruitmentFetcher.state !== "idle" : guestRecruitmentIsSaving;
   const handleSaveRecruitment = useCallback(
     (input: PlannerRecruitmentSaveInput) => {
-      const submissionId = crypto.randomUUID();
+      const submissionId = input.submissionId || crypto.randomUUID();
       if (isSignedIn) {
         const formData = new FormData();
         formData.set("intent", "save-recruitment");
@@ -769,8 +767,9 @@ export default function IntegratedPlannerRoute() {
           ? event.accountState
           : null
         : (guestPlan?.state ?? null);
+      const override = event.shopStateUid ? activeShopStateOverrides[event.shopStateUid] : undefined;
       const state =
-        (event.shopStateUid ? shopStateOverrides[event.shopStateUid] : undefined) ?? savedState ?? defaultState;
+        override ?? (isSignedIn && event.accountStateStatus === "unavailable" ? null : (savedState ?? defaultState));
       return {
         timelineUid: event.timelineUid,
         shopStateUid: event.shopStateUid,
@@ -795,12 +794,18 @@ export default function IntegratedPlannerRoute() {
     guestShopPlans,
     isSignedIn,
     loaderData.shopEvents,
-    shopStateOverrides,
+    activeShopStateOverrides,
   ]);
 
-  const handleShopSaved = useCallback((shopStateUid: string, state: EventShopState) => {
-    setShopStateOverrides((current) => ({ ...current, [shopStateUid]: state }));
-  }, []);
+  const handleShopSaved = useCallback(
+    (shopStateUid: string, state: EventShopState) => {
+      setShopStateOverrides((current) => {
+        if (current.signedIn !== isSignedIn) return current;
+        return { ...current, states: { ...current.states, [shopStateUid]: state } };
+      });
+    },
+    [isSignedIn],
+  );
 
   const shopPeriods = useMemo(
     () =>
@@ -926,28 +931,8 @@ export default function IntegratedPlannerRoute() {
       description="모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요. 재화 증감은 기존 계산 기준의 예상이에요."
       contentWidth="full"
       maxWidth="wide"
+      layout="vertical"
       panels={[
-        {
-          title: "세부 플래너",
-          description: "복잡한 입력과 조정은 기존 플래너에서 이어서 할 수 있어요.",
-          Icon: CalendarIcon,
-          children: (
-            <div className="space-y-2">
-              <Link
-                className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-                to="/utils/pyroxene"
-              >
-                <CreditCardIcon className="size-4" /> 청휘석 플래너
-              </Link>
-              <Link
-                className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-                to="/utils/event-shop"
-              >
-                <ShoppingBagIcon className="size-4" /> 이벤트 상점 계산기
-              </Link>
-            </div>
-          ),
-        },
         ...(isSignedIn && unresolvedGuestPyroxeneUnitCount > 0
           ? [
               {

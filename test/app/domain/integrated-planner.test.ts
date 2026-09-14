@@ -1,3 +1,4 @@
+import { describe, expect, test } from "@jest/globals";
 import {
   buildPlannerMonthDays,
   buildPlannerPeriods,
@@ -6,15 +7,89 @@ import {
   formatPlannerPeriodEndDate,
   getPlannerMonthEndInstant,
   getPlannerTodayMonth,
+  groupPlannerPeriods,
   type PlannerPeriod,
   shiftPlannerMonth,
   splitPlannerPeriodsForWeek,
   summarizePyroxeneTimeline,
 } from "~/domain/integrated-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import dayjs from "~/lib/dayjs";
 
 describe("integrated planner calendar domain", () => {
+  test("groups phases by canonical event uid, prefers the event name, and sorts by earliest phase", () => {
+    const periods: PlannerPeriod[] = [
+      {
+        key: "shop:event-b",
+        kind: "shop",
+        name: "상점 제목",
+        startDate: "2026-09-20",
+        endDate: "2026-09-25",
+        href: "/events/event-b/shop",
+        eventUid: "event-b",
+      },
+      {
+        key: "recruitment:event-a",
+        kind: "recruitment",
+        name: "모집 제목",
+        startDate: "2026-09-05",
+        endDate: "2026-09-09",
+        href: "/events/event-a/recruitment-simulator",
+        eventUid: "event-a",
+      },
+      {
+        key: "event:event-b",
+        kind: "event",
+        name: "같은 이벤트명",
+        startDate: "2026-09-15",
+        endDate: "2026-09-30",
+        href: "/events/event-b",
+        eventUid: "event-b",
+      },
+      {
+        key: "event:event-a",
+        kind: "event",
+        name: "같은 이벤트명",
+        startDate: "2026-09-10",
+        endDate: "2026-09-18",
+        href: "/events/event-a",
+        eventUid: "event-a",
+      },
+      {
+        key: "standalone",
+        kind: "shop",
+        name: "같은 이벤트명",
+        startDate: "2026-09-01",
+        endDate: "2026-09-04",
+        href: "/events/standalone/shop",
+      },
+    ];
+
+    expect(
+      groupPlannerPeriods(periods).map(({ key, eventUid, name, periods: groupedPeriods }) => ({
+        key,
+        eventUid,
+        name,
+        periodKeys: groupedPeriods.map(({ key: periodKey }) => periodKey),
+      })),
+    ).toEqual([
+      { key: "period:standalone", eventUid: undefined, name: "같은 이벤트명", periodKeys: ["standalone"] },
+      {
+        key: "event:event-a",
+        eventUid: "event-a",
+        name: "같은 이벤트명",
+        periodKeys: ["recruitment:event-a", "event:event-a"],
+      },
+      {
+        key: "event:event-b",
+        eventUid: "event-b",
+        name: "같은 이벤트명",
+        periodKeys: ["shop:event-b", "event:event-b"],
+      },
+    ]);
+  });
+
   test("builds Monday-first month rows with surrounding civil dates", () => {
     const weeks = buildPlannerMonthDays("2026-09");
 
@@ -78,7 +153,7 @@ describe("integrated planner calendar domain", () => {
             tags: [],
             recruitments: [
               {
-                recruitmentType: "usual",
+                recruitmentType: RecruitmentTypeEnum.Usual,
                 pickup: true,
                 rerun: false,
                 until: "2026-09-04T15:00:00.000Z",
@@ -160,7 +235,7 @@ describe("integrated planner calendar domain", () => {
           tags: [],
           recruitments: [
             {
-              recruitmentType: "usual",
+              recruitmentType: RecruitmentTypeEnum.Usual,
               pickup: true,
               rerun: false,
               until: "2026-10-06T14:59:00.000Z",

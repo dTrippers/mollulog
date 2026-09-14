@@ -1,21 +1,25 @@
-import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import type { EventShopState } from "~/domain/event-shop-state";
+import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
-import type { PyroxeneTimelineItem } from "~/models/pyroxene-planner";
-import type { PyroxeneEventData } from "~/models/pyroxene-planner";
-import { getEventContentSchedule, getEventMetadata, getEventShopContent, getShopAvailableEvents } from "~/models/event-content";
-import { getEventShopState } from "~/models/event-shop-state";
 import type { ShopAvailableEvent } from "~/models/event-content";
+import {
+  getEventContentSchedule,
+  getEventMetadata,
+  getEventShopContent,
+  getShopAvailableEvents,
+} from "~/models/event-content";
+import { getEventShopStates } from "~/models/event-shop-state";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
-import { getRecruitedStudents } from "~/models/recruited-student";
-import { getRecruitmentGroupsByUids } from "~/models/recruitment";
-import type { RecruitmentGroup } from "~/models/recruitment";
+import type { PyroxeneEventData, PyroxeneTimelineItem } from "~/models/pyroxene-planner";
 import { getPyroxeneUserState } from "~/models/pyroxene-planner";
+import { getRecruitedStudents } from "~/models/recruited-student";
+import type { RecruitmentGroup } from "~/models/recruitment";
+import { getRecruitmentGroupsByUids } from "~/models/recruitment";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
 import type { PyroxenePlannerContent } from "~/views/pyroxene";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
-import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
 
 type SourceStatus = "available" | "unavailable";
 
@@ -113,7 +117,8 @@ export async function getIntegratedPlannerData(
     accountState: accountStateResult?.state ?? null,
     accountStateStatus: userId === null ? "available" : (accountStateResult?.status ?? "unavailable"),
     shopEvents: shopEventsResult?.events ?? [],
-    shopEventsStatus: shopAvailableEventsResult.status === "fulfilled" && shopEventsResult ? "available" : "unavailable",
+    shopEventsStatus:
+      shopAvailableEventsResult.status === "fulfilled" && shopEventsResult ? "available" : "unavailable",
   };
 }
 
@@ -175,14 +180,16 @@ async function loadShopEvents(
   userId: number | null,
   ctx?: ExecutionContext,
 ): Promise<{ events: IntegratedPlannerShopEvent[] }> {
-  const results = await Promise.all(
-    events.map(async (event): Promise<IntegratedPlannerShopEvent> => {
+  const resolvedEvents = await Promise.all(
+    events.map(async (event) => {
       try {
         const metadata = await getEventMetadata(env, event.uid, ctx);
-        if (!metadata) return unavailableShopEvent(event);
+        if (!metadata) return { event, identity: null, startAt: null, endAt: null, content: null };
 
         const content = await getEventShopContent(env, event.uid, false, ctx);
-        if (!content || content.shopResources.length === 0) return unavailableShopEvent(event);
+        if (!content || content.shopResources.length === 0) {
+          return { event, identity: null, startAt: null, endAt: null, content: null };
+        }
 
         const canonicalShopDates = metadata.shopContentUid
           ? await getTimelineContentDatesByContentUid(env, metadata.shopContentUid, { ctx })
@@ -197,33 +204,59 @@ async function loadShopEvents(
           shopContentUid: metadata.shopContentUid,
         });
 
-        let accountState: EventShopState | null = null;
-        let accountStateStatus: SourceStatus = "available";
-        if (userId !== null) {
-          try {
-            accountState = await getEventShopState(env, userId, identity.shopStateUid);
-          } catch {
-            accountStateStatus = "unavailable";
-          }
-        }
-
-        return {
-          status: startAt && endAt ? "available" : "unavailable",
-          timelineUid: event.uid,
-          name: event.name,
-          shopStateUid: identity.shopStateUid,
-          startAt,
-          endAt,
-          content,
-          accountState,
-          accountStateStatus,
-        };
+        return { event, identity, startAt, endAt, content };
       } catch {
-        return unavailableShopEvent(event);
+        return { event, identity: null, startAt: null, endAt: null, content: null };
       }
     }),
   );
-  return { events: results };
+
+  const accountStateUids =
+    userId === null
+      ? []
+      : [
+          ...new Set(
+            resolvedEvents.flatMap(({ identity }) =>
+              identity
+                ? [identity.shopStateUid, ...(identity.fallbackStateUid ? [identity.fallbackStateUid] : [])]
+                : [],
+            ),
+          ),
+        ];
+  let accountStates: Record<string, EventShopState> = {};
+  let accountStateReadFailed = false;
+  if (userId !== null && accountStateUids.length > 0) {
+    try {
+      accountStates = await getEventShopStates(env, userId, accountStateUids, { ctx });
+    } catch {
+      accountStateReadFailed = true;
+    }
+  }
+
+  return {
+    events: resolvedEvents.map(({ event, identity, startAt, endAt, content }) => {
+      if (!identity || !content) return unavailableShopEvent(event);
+
+      const accountStateStatus: SourceStatus = userId !== null && accountStateReadFailed ? "unavailable" : "available";
+      const accountState =
+        userId === null || accountStateReadFailed
+          ? null
+          : (accountStates[identity.shopStateUid] ??
+            (identity.fallbackStateUid ? (accountStates[identity.fallbackStateUid] ?? null) : null));
+
+      return {
+        status: startAt && endAt ? "available" : "unavailable",
+        timelineUid: event.uid,
+        name: event.name,
+        shopStateUid: identity.shopStateUid,
+        startAt,
+        endAt,
+        content,
+        accountState,
+        accountStateStatus,
+      };
+    }),
+  };
 }
 
 function unavailableShopEvent(event: ShopAvailableEvent): IntegratedPlannerShopEvent {

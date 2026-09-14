@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
-import type { PickupResources } from "~/domain/pyroxene-timeline";
+import { Button } from "~/components/primitives";
 import { createGuestRecord, type GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
-import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
+import { DEFAULT_BUY_PYROXENE_QUANTITY } from "~/domain/pyroxene-sources";
+import type { PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
+import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
 
 export type PlannerQuickEditEntry = {
   id: string;
@@ -20,36 +22,115 @@ type PlannerQuickEditProps = {
   entries: readonly PlannerQuickEditEntry[];
   isSignedIn: boolean;
   guestStorageStatus: "ready" | "memory" | "corrupt" | "loading";
+  initialKind?: PlannerQuickEditKind;
+  initialEntry?: PlannerQuickEditEntry;
+  onSaved?: () => void;
+  onCancel?: () => void;
 };
 
 type SaveResponse = { success: boolean; error?: string; submissionId?: string };
-type PlannerQuickEditKind = "buy" | "other" | "package";
+export type PlannerQuickEditKind = "buy" | "other" | "package";
 type PlannerPackageType = "half" | "full" | "ap";
-
-function formatQuantity(value: number): string {
-  return new Intl.NumberFormat("ko-KR").format(value);
-}
 
 export default function PlannerQuickEdit({
   date: selectedDate,
   timeZone,
-  entries,
   isSignedIn,
   guestStorageStatus,
+  initialKind,
+  initialEntry,
+  onSaved,
+  onCancel,
 }: PlannerQuickEditProps) {
+  const initialEntryId = initialEntry?.id ?? null;
+  const initialEntryKind = initialEntry?.kind ?? null;
+  const initialEntryDate = initialEntry?.date ?? null;
+  const initialEntryDescription = initialEntry?.description ?? null;
+  const initialEntryQuantity = initialEntry?.quantity ?? null;
+  const initialEntryPyroxene = initialEntry?.resources.pyroxene ?? null;
+  const initialEntryOneTimeTicket = initialEntry?.resources.oneTimeTicket ?? null;
+  const initialEntryTenTimeTicket = initialEntry?.resources.tenTimeTicket ?? null;
+  const initialEntrySnapshot = useMemo(() => {
+    if (
+      initialEntryId === null ||
+      initialEntryKind === null ||
+      initialEntryDate === null ||
+      initialEntryDescription === null ||
+      initialEntryQuantity === null ||
+      initialEntryPyroxene === null ||
+      initialEntryOneTimeTicket === null ||
+      initialEntryTenTimeTicket === null
+    ) {
+      return null;
+    }
+
+    return {
+      id: initialEntryId,
+      kind: initialEntryKind,
+      date: initialEntryDate,
+      description: initialEntryDescription,
+      quantity: initialEntryQuantity,
+      resources: {
+        pyroxene: initialEntryPyroxene,
+        oneTimeTicket: initialEntryOneTimeTicket,
+        tenTimeTicket: initialEntryTenTimeTicket,
+      },
+    };
+  }, [
+    initialEntryId,
+    initialEntryKind,
+    initialEntryDate,
+    initialEntryDescription,
+    initialEntryQuantity,
+    initialEntryPyroxene,
+    initialEntryOneTimeTicket,
+    initialEntryTenTimeTicket,
+  ]);
   const fetcher = useFetcher();
   const submissionIdRef = useRef<string | null>(null);
-  const [kind, setKind] = useState<PlannerQuickEditKind>("buy");
+  const [kind, setKind] = useState<PlannerQuickEditKind>(() => initialEntrySnapshot?.kind ?? initialKind ?? "buy");
   const [packageType, setPackageType] = useState<PlannerPackageType>("half");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [date, setDate] = useState(selectedDate);
-  const [quantity, setQuantity] = useState("6600");
-  const [description, setDescription] = useState("");
-  const [resources, setResources] = useState<PickupResources>({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+  const [editingId, setEditingId] = useState<string | null>(() => initialEntrySnapshot?.id ?? null);
+  const [date, setDate] = useState(() => initialEntrySnapshot?.date ?? selectedDate);
+  const [quantity, setQuantity] = useState(() =>
+    String(initialEntrySnapshot?.quantity ?? DEFAULT_BUY_PYROXENE_QUANTITY),
+  );
+  const [description, setDescription] = useState(() => initialEntrySnapshot?.description ?? "");
+  const [resources, setResources] = useState<PickupResources>(
+    () => initialEntrySnapshot?.resources ?? { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+  );
   const [savingGuest, setSavingGuest] = useState(false);
   const [message, setMessage] = useState("");
   const [messageIsError, setMessageIsError] = useState(false);
   const response = fetcher.data as SaveResponse | undefined;
+
+  const resetForm = useCallback(
+    (nextKind: PlannerQuickEditKind = kind) => {
+      setEditingId(null);
+      setKind(nextKind);
+      setPackageType("half");
+      setDate(selectedDate);
+      setQuantity(String(DEFAULT_BUY_PYROXENE_QUANTITY));
+      setDescription("");
+      setResources({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+      setMessage("");
+      setMessageIsError(false);
+    },
+    [kind, selectedDate],
+  );
+
+  useEffect(() => {
+    const nextKind = initialEntrySnapshot?.kind ?? initialKind ?? "buy";
+    setEditingId(initialEntrySnapshot?.id ?? null);
+    setKind(nextKind);
+    setPackageType("half");
+    setDate(initialEntrySnapshot?.date ?? selectedDate);
+    setQuantity(String(initialEntrySnapshot?.quantity ?? DEFAULT_BUY_PYROXENE_QUANTITY));
+    setDescription(initialEntrySnapshot?.kind === "other" ? initialEntrySnapshot.description : "");
+    setResources(initialEntrySnapshot?.resources ?? { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+    setMessage("");
+    setMessageIsError(false);
+  }, [initialEntrySnapshot, initialKind, selectedDate]);
 
   useEffect(() => {
     if (!isSignedIn || fetcher.state !== "idle" || !response || response.submissionId !== submissionIdRef.current) {
@@ -59,42 +140,19 @@ export default function PlannerQuickEdit({
     setMessage(response.success ? "저장했어요." : (response.error ?? "저장하지 못했어요."));
     setMessageIsError(!response.success);
     if (response.success) {
-      setEditingId(null);
-      setKind("buy");
-      setPackageType("half");
-      setDate(selectedDate);
-      setQuantity("6600");
-      setDescription("");
-      setResources({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
+      resetForm(kind);
+      setMessage("저장했어요.");
+      onSaved?.();
     }
-  }, [fetcher.state, isSignedIn, response, selectedDate]);
+  }, [fetcher.state, isSignedIn, kind, onSaved, resetForm, response]);
 
-  function resetForm() {
-    setEditingId(null);
-    setKind("buy");
-    setPackageType("half");
-    setDate(selectedDate);
-    setQuantity("6600");
-    setDescription("");
-    setResources({ pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 });
-    setMessage("");
-    setMessageIsError(false);
-  }
-
-  function editEntry(entry: PlannerQuickEditEntry) {
-    setEditingId(entry.id);
-    setKind(entry.kind);
-    setDate(entry.date);
-    setQuantity(String(entry.quantity || 6600));
-    setDescription(entry.kind === "other" ? entry.description : "");
-    setResources(entry.resources);
-    setMessage("");
-    setMessageIsError(false);
-  }
-
-  function beginNewEntry(nextKind: PlannerQuickEditKind) {
-    resetForm();
-    setKind(nextKind);
+  function handleCancel() {
+    if (fetcher.state !== "idle" || savingGuest) return;
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+    resetForm(initialEntrySnapshot?.kind ?? initialKind ?? "buy");
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -115,15 +173,21 @@ export default function PlannerQuickEdit({
       oneTimeTicket: Number(resources.oneTimeTicket),
       tenTimeTicket: Number(resources.tenTimeTicket),
     };
-    if (kind === "buy" && (!Number.isSafeInteger(numericQuantity) || numericQuantity < 1 || numericQuantity > 10_000_000)) {
+    if (
+      kind === "buy" &&
+      (!Number.isSafeInteger(numericQuantity) || numericQuantity < 1 || numericQuantity > 10_000_000)
+    ) {
       setMessage("구매 수량을 확인해주세요.");
       setMessageIsError(true);
       return;
     }
     if (
       kind === "other" &&
-      (!description.trim() || description.trim().length > 200 ||
-        Object.values(numericResources).some((value) => !Number.isSafeInteger(value) || value < 0 || value > 10_000_000) ||
+      (!description.trim() ||
+        description.trim().length > 200 ||
+        Object.values(numericResources).some(
+          (value) => !Number.isSafeInteger(value) || value < 0 || value > 10_000_000,
+        ) ||
         Object.values(numericResources).every((value) => value === 0))
     ) {
       setMessage("이름과 입력할 재화 수량을 확인해주세요.");
@@ -223,13 +287,17 @@ export default function PlannerQuickEdit({
         setMessageIsError(true);
         return;
       }
-      setMessage(
-        snapshot.status === "memory"
-          ? "현재 화면에는 저장했지만 브라우저 저장소를 사용할 수 없어 나가면 사라질 수 있어요."
-          : "저장했어요.",
-      );
+      if (snapshot.status === "memory") {
+        if (newRecord) setEditingId(newRecord.recordId);
+        setMessage("현재 입력은 이 화면에서만 유지돼요. 브라우저 저장소에 기록되지 않아 나가면 사라질 수 있어요.");
+        setMessageIsError(false);
+        return;
+      }
+      setMessage("저장했어요.");
       setMessageIsError(false);
-      resetForm();
+      resetForm(kind);
+      setMessage("저장했어요.");
+      onSaved?.();
     } catch {
       setMessage("청휘석 계획을 저장하지 못했어요. 입력을 보존했으니 다시 시도해주세요.");
       setMessageIsError(true);
@@ -240,95 +308,57 @@ export default function PlannerQuickEdit({
 
   const pending = savingGuest || fetcher.state !== "idle";
   const guestCanSave = isSignedIn || guestStorageStatus === "ready" || guestStorageStatus === "memory";
+  const formTitle = editingId
+    ? kind === "buy"
+      ? "청휘석 구매 수정"
+      : "직접 입력 수정"
+    : kind === "buy"
+      ? "청휘석 구매"
+      : kind === "other"
+        ? "직접 재화 입력"
+        : "패키지 시작";
 
   return (
-    <section aria-labelledby="planner-quick-edit-title" className="space-y-3">
+    <section aria-labelledby="planner-quick-edit-title" className="space-y-4">
       <div>
-        <h3 id="planner-quick-edit-title" className="text-sm font-semibold">청휘석 빠른 입력</h3>
-        <p className="mt-1 text-sm text-muted-foreground">구매와 직접 입력을 추가하거나, 반복되지 않는 기존 항목을 수정할 수 있어요.</p>
+        <h3 id="planner-quick-edit-title" className="text-base font-semibold">
+          {formTitle}
+        </h3>
       </div>
 
-      {entries.length > 0 ? (
-        <ul className="space-y-2">
-          {entries.map((entry) => (
-            <li key={entry.id} className="flex items-center justify-between gap-3 rounded-md bg-muted/50 p-3">
-              <p className="min-w-0 truncate text-sm">
-                {entry.kind === "buy"
-                  ? `청휘석 구매 · ${formatQuantity(entry.quantity)}`
-                  : `${entry.description} · ${formatQuantity(entry.resources.pyroxene)} 청휘석`}
-              </p>
-              <button
-                type="button"
-                className="shrink-0 rounded-md px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => editEntry(entry)}
-              >
-                수정
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          aria-pressed={kind === "buy" && editingId === null}
-          className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => beginNewEntry("buy")}
-        >
-          청휘석 구매 추가
-        </button>
-        <button
-          type="button"
-          aria-pressed={kind === "other" && editingId === null}
-          className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => beginNewEntry("other")}
-        >
-          직접 입력 추가
-        </button>
-        <button
-          type="button"
-          aria-pressed={kind === "package" && editingId === null}
-          className="rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          onClick={() => beginNewEntry("package")}
-        >
-          패키지 시작 추가
-        </button>
-        {editingId ? (
-          <button
-            type="button"
-            className="rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={resetForm}
-          >
-            수정 취소
-          </button>
-        ) : null}
-      </div>
-
-      <form className="space-y-3 rounded-md border border-border p-3" onSubmit={(event) => void handleSubmit(event)}>
-        <p className="text-sm font-medium">
-          {editingId ? "기존 항목 수정" : kind === "buy" ? "청휘석 구매" : kind === "other" ? "직접 입력" : "패키지 시작"}
-        </p>
+      <form className="space-y-4" onSubmit={(event) => void handleSubmit(event)}>
         {kind === "package" ? (
-          <label className="block space-y-1 text-sm">
-            <span>패키지 종류</span>
-            <select
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              name="packageType"
-              value={packageType}
-              required
-              onChange={(event) => setPackageType(event.currentTarget.value as PlannerPackageType)}
-            >
-              <option value="half">하프 패키지</option>
-              <option value="full">청휘석 패키지</option>
-              <option value="ap">AP 패키지</option>
-            </select>
-            <span className="block text-xs text-muted-foreground">시작 날짜를 저장해요. 갱신과 반복 설정은 상세 플래너에서 조정할 수 있어요.</span>
-          </label>
+          <fieldset className="space-y-2">
+            <legend className="text-sm font-medium">패키지 상품</legend>
+            <input type="hidden" name="packageType" value={packageType} />
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(
+                [
+                  ["half", "하프 패키지"],
+                  ["full", "청휘석 패키지"],
+                  ["ap", "AP 패키지"],
+                ] as const
+              ).map(([value, label]) => (
+                <Button
+                  key={value}
+                  type="button"
+                  text={label}
+                  variant={packageType === value ? "primary" : "secondary"}
+                  size="sm"
+                  fullWidth
+                  pressed={packageType === value}
+                  disabled={pending}
+                  onClick={() => setPackageType(value)}
+                  className="min-h-11 whitespace-normal"
+                />
+              ))}
+            </div>
+            <p className="text-sm text-muted-foreground">반복 갱신은 상세 플래너에서 설정할 수 있어요.</p>
+          </fieldset>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block space-y-1 text-sm">
-            <span>{kind === "package" ? "시작 날짜" : "날짜"}</span>
+            <span>{kind === "package" ? "시작일" : "날짜"}</span>
             <input
               className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
               type="date"
@@ -372,11 +402,13 @@ export default function PlannerQuickEdit({
         </div>
         {kind === "other" ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            {([
-              ["pyroxene", "청휘석"],
-              ["oneTimeTicket", "1회 모집 티켓"],
-              ["tenTimeTicket", "10회 모집 티켓"],
-            ] as const).map(([resource, label]) => (
+            {(
+              [
+                ["pyroxene", "청휘석"],
+                ["oneTimeTicket", "1회 모집 티켓"],
+                ["tenTimeTicket", "10회 모집 티켓"],
+              ] as const
+            ).map(([resource, label]) => (
               <label key={resource} className="block space-y-1 text-sm">
                 <span>{label}</span>
                 <input
@@ -397,19 +429,41 @@ export default function PlannerQuickEdit({
             ))}
           </div>
         ) : null}
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="submit"
-            disabled={pending || !guestCanSave}
-            className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+        {!isSignedIn && !guestCanSave ? (
+          <p className="text-sm text-destructive" role="alert">
+            {guestStorageStatus === "loading"
+              ? "브라우저 계획을 불러오는 중이에요."
+              : "브라우저의 청휘석 계획을 읽지 못해 저장할 수 없어요."}
+          </p>
+        ) : null}
+        {message ? (
+          <p
+            className={`text-sm ${messageIsError ? "text-destructive" : "text-muted-foreground"}`}
+            role={messageIsError ? "alert" : "status"}
           >
-            {pending ? "저장 중…" : editingId ? "수정 저장" : "계획 추가"}
-          </button>
-          {message ? (
-            <p className={`text-sm ${messageIsError ? "text-destructive" : "text-muted-foreground"}`} role={messageIsError ? "alert" : "status"}>
-              {message}
-            </p>
-          ) : null}
+            {message}
+          </p>
+        ) : null}
+        <div className="sticky bottom-0 z-layer-navigation flex flex-col-reverse gap-2 border-t border-border bg-background/95 py-3 backdrop-blur-sm sm:flex-row sm:justify-end">
+          <Button
+            type="button"
+            text="취소"
+            variant="secondary"
+            size="sm"
+            disabled={pending}
+            onClick={handleCancel}
+            fullWidth
+            className="sm:w-fit"
+          />
+          <Button
+            type="submit"
+            text={pending ? "저장 중…" : editingId ? "수정 저장" : "저장"}
+            variant="primary"
+            size="sm"
+            disabled={pending || !guestCanSave}
+            fullWidth
+            className="sm:w-fit"
+          />
         </div>
       </form>
     </section>

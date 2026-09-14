@@ -37,6 +37,45 @@ export type PlannerPeriod = {
   conflict?: boolean;
 };
 
+export type PlannerPeriodGroup = {
+  key: string;
+  eventUid?: string;
+  name: string;
+  periods: PlannerPeriod[];
+};
+
+export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPeriodGroup[] {
+  const groups = new Map<string, PlannerPeriodGroup>();
+  for (const period of periods) {
+    const key = period.eventUid ? `event:${period.eventUid}` : `period:${period.key}`;
+    const group = groups.get(key) ?? {
+      key,
+      ...(period.eventUid ? { eventUid: period.eventUid } : {}),
+      name: period.name,
+      periods: [],
+    };
+    group.periods.push(period);
+    if (period.kind === "event") group.name = period.name;
+    groups.set(key, group);
+  }
+
+  return [...groups.values()].sort((left, right) => {
+    const leftStartDate = left.periods.reduce(
+      (startDate, period) => (period.startDate < startDate ? period.startDate : startDate),
+      left.periods[0].startDate,
+    );
+    const rightStartDate = right.periods.reduce(
+      (startDate, period) => (period.startDate < startDate ? period.startDate : startDate),
+      right.periods[0].startDate,
+    );
+    return (
+      leftStartDate.localeCompare(rightStartDate) ||
+      left.name.localeCompare(right.name) ||
+      left.key.localeCompare(right.key)
+    );
+  });
+}
+
 export type PlannerPeriodStudent = {
   uid: string;
   imageUid: string | null;

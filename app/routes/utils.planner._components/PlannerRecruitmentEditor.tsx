@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
-import { Button, Callout, Checkbox, Dropdown, Input } from "~/components/primitives";
+import { Button, Callout, Checkbox, Input } from "~/components/primitives";
 import { studentImageUrl } from "~/models/assets";
 
 export type PlannerRecruitmentCandidate = {
@@ -16,6 +16,7 @@ export type PlannerRecruitmentSavedState = {
 };
 
 export type PlannerRecruitmentSaveInput = {
+  submissionId?: string;
   eventUid: string;
   expectedTrials: number | null;
   favoriteStudentUids: string[];
@@ -36,6 +37,8 @@ export type PlannerRecruitmentEditorProps = {
   isSaving: boolean;
   saveResult: PlannerRecruitmentSaveResult | null;
   onSave: (input: PlannerRecruitmentSaveInput) => void;
+  onSaved?: () => void;
+  onCancel?: () => void;
 };
 
 type RecruitmentDraft = {
@@ -44,8 +47,8 @@ type RecruitmentDraft = {
 };
 
 type PendingSubmission = {
+  submissionId: string;
   input: PlannerRecruitmentSaveInput;
-  previousSubmissionId: string | null;
 };
 
 type SaveFeedback = {
@@ -151,7 +154,8 @@ function formatRecruitmentFirstDay(dateKey: string): string {
 
 function getInitialEventUid(candidates: readonly PlannerRecruitmentCandidate[], preferredEventUid?: string): string {
   return (
-    candidates.find((candidate) => candidate.eventUid === preferredEventUid)?.eventUid ?? candidates[0]?.eventUid ?? ""
+    candidates.find((candidate) => candidate.eventUid === preferredEventUid)?.eventUid ??
+    (candidates.length === 1 ? (candidates[0]?.eventUid ?? "") : "")
   );
 }
 
@@ -164,6 +168,8 @@ export function PlannerRecruitmentEditor({
   isSaving,
   saveResult,
   onSave,
+  onSaved,
+  onCancel,
 }: PlannerRecruitmentEditorProps) {
   const controlId = useId();
   const [selectedEventUid, setSelectedEventUid] = useState(() => getInitialEventUid(candidates, preferredEventUid));
@@ -186,8 +192,10 @@ export function PlannerRecruitmentEditor({
     const preferredCandidate = candidates.find((candidate) => candidate.eventUid === preferredEventUid);
     setSelectedEventUid((current) => {
       if (contextChanged && preferredCandidate) return preferredCandidate.eventUid;
+      if (candidates.length === 1) return candidates[0].eventUid;
+      if (contextChanged) return "";
       if (candidates.some((candidate) => candidate.eventUid === current)) return current;
-      return preferredCandidate?.eventUid ?? candidates[0]?.eventUid ?? "";
+      return preferredCandidate?.eventUid ?? "";
     });
   }, [candidates, preferredEventUid, selectedDate]);
 
@@ -232,7 +240,7 @@ export function PlannerRecruitmentEditor({
     lastSeenSubmissionIdRef.current = saveResult.submissionId;
 
     const pending = pendingSubmission;
-    if (!pending || pending.previousSubmissionId === saveResult.submissionId) return;
+    if (!pending || pending.submissionId !== saveResult.submissionId) return;
 
     setPendingSubmission(null);
     if (!saveResult.success) {
@@ -258,10 +266,13 @@ export function PlannerRecruitmentEditor({
         : { ...current, [input.eventUid]: submittedDraft };
     });
     setFeedback({ tone: "success", message: "모집 계획을 저장했어요." });
-  }, [pendingSubmission, saveResult]);
+    onSaved?.();
+  }, [onSaved, pendingSubmission, saveResult]);
 
   const selectedCandidate =
-    candidates.find((candidate) => candidate.eventUid === selectedEventUid) ?? candidates[0] ?? null;
+    candidates.find((candidate) => candidate.eventUid === selectedEventUid) ??
+    (candidates.length === 1 ? candidates[0] : null);
+  const isChoosingCandidate = candidates.length > 1 && selectedCandidate === null;
   const selectedUid = selectedCandidate?.eventUid ?? "";
   const savedState = selectedCandidate
     ? (confirmedStatesByEventUid[selectedCandidate.eventUid] ?? getSavedState(savedStates, selectedCandidate.eventUid))
@@ -291,7 +302,9 @@ export function PlannerRecruitmentEditor({
       return;
     }
 
+    const submissionId = crypto.randomUUID();
     const input: PlannerRecruitmentSaveInput = {
+      submissionId,
       eventUid: selectedCandidate.eventUid,
       expectedTrials,
       favoriteStudentUids: [...draft.favoriteStudentUids],
@@ -300,10 +313,7 @@ export function PlannerRecruitmentEditor({
 
     setExpectedTrialsError(null);
     setFeedback(null);
-    setPendingSubmission({
-      input,
-      previousSubmissionId: saveResult?.submissionId ?? null,
-    });
+    setPendingSubmission({ input, submissionId });
     try {
       onSave(input);
     } catch {
@@ -312,43 +322,156 @@ export function PlannerRecruitmentEditor({
     }
   }
 
+  function handleCancel() {
+    if (isPending) return;
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+    if (selectedCandidate) updateDraft(selectedUid, draftFromSavedState(savedState));
+    setExpectedTrialsError(null);
+    setFeedback(null);
+  }
+
   return (
-    <section className="space-y-3 rounded-lg border border-border bg-card p-4" aria-labelledby={`${controlId}-title`}>
+    <section className="space-y-4" aria-labelledby={`${controlId}-title`}>
       <div>
-        <h3 id={`${controlId}-title`} className="text-sm font-semibold text-foreground">
+        <h3 id={`${controlId}-title`} className="text-base font-semibold text-foreground">
           모집 계획
         </h3>
-        <p className="mt-1 text-xs text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           {isSignedIn ? "저장하면 계정 계획에 반영돼요." : "저장하면 이 브라우저에 계획이 보관돼요."}
         </p>
       </div>
 
       {candidates.length === 0 ? (
-        <p className="text-sm text-muted-foreground" role="status">
-          선택한 날짜에 진행 중인 모집이 없어요.
-        </p>
+        <>
+          <p className="text-sm text-muted-foreground" role="status">
+            선택한 날짜에 진행 중인 모집이 없어요.
+          </p>
+          <div className="sticky bottom-0 z-layer-navigation flex justify-end border-t border-border bg-background/95 py-3 backdrop-blur-sm">
+            <Button type="button" text="취소" variant="secondary" size="sm" onClick={handleCancel} />
+          </div>
+        </>
+      ) : isChoosingCandidate ? (
+        <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">모집 일정을 선택해주세요.</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {candidates.map((candidate) => (
+              <button
+                key={candidate.eventUid}
+                type="button"
+                onClick={() => {
+                  setSelectedEventUid(candidate.eventUid);
+                  setExpectedTrialsError(null);
+                  setFeedback(null);
+                }}
+                className="min-w-0 rounded-md bg-card p-3 text-left shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              >
+                <span className="block break-words text-sm font-semibold text-foreground">{candidate.eventName}</span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  첫 모집일 {formatRecruitmentFirstDay(candidate.startDate)}
+                </span>
+                <span className="mt-1 block text-sm text-muted-foreground">
+                  픽업 학생 {candidate.students.length}명
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className="sticky bottom-0 z-layer-navigation flex justify-end border-t border-border bg-background/95 py-3 backdrop-blur-sm">
+            <Button type="button" text="취소" variant="secondary" size="sm" onClick={handleCancel} />
+          </div>
+        </div>
       ) : selectedCandidate && draft ? (
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <Dropdown
-            id={`${controlId}-event`}
-            label="모집 선택"
-            value={selectedCandidate.eventUid}
-            options={candidates.map((candidate) => ({ value: candidate.eventUid, label: candidate.eventName }))}
-            onChange={(eventUid) => {
-              setSelectedEventUid(eventUid);
-              setExpectedTrialsError(null);
-              setFeedback(null);
-            }}
-            fullWidth
-            disabled={isPending}
-          />
+        <form className="space-y-4 pb-28" onSubmit={handleSubmit}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h4 className="break-words text-sm font-semibold text-foreground">{selectedCandidate.eventName}</h4>
+              <p className="mt-1 text-sm text-muted-foreground">
+                첫 모집일 {formatRecruitmentFirstDay(selectedCandidate.startDate)}
+              </p>
+            </div>
+            {candidates.length > 1 ? (
+              <Button
+                type="button"
+                text="모집 변경"
+                size="xs"
+                variant="secondary"
+                onClick={() => {
+                  setSelectedEventUid("");
+                  setExpectedTrialsError(null);
+                  setFeedback(null);
+                }}
+                disabled={isPending}
+              />
+            ) : null}
+          </div>
 
-          <p className="text-sm text-muted-foreground">
-            첫 모집일:{" "}
+          <p className="rounded-md bg-muted/50 p-3 text-sm text-muted-foreground">
+            선택한 날짜가 모집 기간 중간이어도 이 계획은 첫 모집일{" "}
             <span className="font-medium text-foreground">
               {formatRecruitmentFirstDay(selectedCandidate.startDate)}
             </span>
+            에 반영돼요.
           </p>
+
+          <fieldset className="space-y-2" disabled={isPending}>
+            <legend className="w-full text-sm font-medium text-foreground">
+              <span className="flex flex-wrap items-baseline justify-between gap-2">
+                <span>목표 학생</span>
+                <span className="text-sm font-normal text-muted-foreground" aria-live="polite">
+                  {draft.favoriteStudentUids.length}명 선택
+                </span>
+              </span>
+            </legend>
+            {selectedCandidate.students.length === 0 ? (
+              <p className="text-sm text-muted-foreground">선택할 학생 정보가 없어요.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {selectedCandidate.students.map((student, index) => {
+                  const selected = draft.favoriteStudentUids.includes(student.uid);
+                  return (
+                    <Checkbox
+                      key={student.uid}
+                      id={`${controlId}-student-${index}`}
+                      checked={selected}
+                      className={`w-full min-w-0 items-center gap-3 rounded-md p-3 text-left transition-colors focus-within:ring-2 focus-within:ring-ring/30 ${
+                        selected ? "bg-primary/10 ring-2 ring-primary" : "bg-card shadow-xs hover:bg-muted"
+                      }`}
+                      onChange={(checked) => {
+                        const selectedUids = new Set(draft.favoriteStudentUids);
+                        if (checked) selectedUids.add(student.uid);
+                        else selectedUids.delete(student.uid);
+                        updateDraft(selectedUid, { ...draft, favoriteStudentUids: [...selectedUids] });
+                      }}
+                      label={
+                        <span className="flex w-full min-w-0 items-center gap-3">
+                          <span className="relative grid size-12 shrink-0 place-items-center rounded-full bg-muted">
+                            <img
+                              src={studentImageUrl(student.imageUid ?? student.uid)}
+                              alt=""
+                              className="size-12 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                            {selected ? (
+                              <span
+                                aria-hidden="true"
+                                className="absolute -right-1 -bottom-1 grid size-5 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+                              >
+                                ✓
+                              </span>
+                            ) : null}
+                          </span>
+                          <span className="min-w-0 flex-1 break-words text-sm text-foreground">{student.name}</span>
+                        </span>
+                      }
+                      disabled={isPending}
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </fieldset>
 
           <Input
             id={`${controlId}-expected-trials`}
@@ -371,50 +494,27 @@ export function PlannerRecruitmentEditor({
             disabled={isPending}
           />
 
-          <fieldset className="space-y-2" disabled={isPending}>
-            <legend className="text-sm font-medium text-foreground">목표 학생</legend>
-            {selectedCandidate.students.length === 0 ? (
-              <p className="text-sm text-muted-foreground">선택할 학생 정보가 없어요.</p>
-            ) : (
-              <div className="grid grid-cols-1 gap-1 sm:grid-cols-2">
-                {selectedCandidate.students.map((student) => (
-                  <Checkbox
-                    key={student.uid}
-                    checked={draft.favoriteStudentUids.includes(student.uid)}
-                    className="min-w-0 rounded-md p-2 hover:bg-muted/50"
-                    onChange={(checked) => {
-                      const selected = new Set(draft.favoriteStudentUids);
-                      if (checked) selected.add(student.uid);
-                      else selected.delete(student.uid);
-                      updateDraft(selectedUid, { ...draft, favoriteStudentUids: [...selected] });
-                    }}
-                    label={
-                      <span className="flex min-w-0 items-center gap-2">
-                        <img
-                          src={studentImageUrl(student.imageUid ?? student.uid)}
-                          alt=""
-                          className="size-9 shrink-0 rounded-full object-cover"
-                          loading="lazy"
-                        />
-                        <span className="truncate">{student.name}</span>
-                      </span>
-                    }
-                    disabled={isPending}
-                  />
-                ))}
-              </div>
-            )}
-          </fieldset>
-
           {feedback ? <Callout tone={feedback.tone} description={feedback.message} /> : null}
 
-          <div className="flex justify-end">
+          <div className="sticky bottom-0 z-layer-navigation flex flex-col-reverse gap-2 border-t border-border bg-background/95 py-3 backdrop-blur-sm sm:flex-row sm:justify-end">
+            <Button
+              type="button"
+              text="취소"
+              size="sm"
+              variant="secondary"
+              onClick={handleCancel}
+              disabled={isPending}
+              fullWidth
+              className="sm:w-fit"
+            />
             <Button
               type="submit"
-              text={isPending ? "저장 중…" : "모집 계획 저장"}
+              text={isPending ? "저장 중…" : "저장"}
               size="sm"
               variant="primary"
               disabled={isPending || !hasDraftChanges(draft, savedState) || parsedExpectedTrials === undefined}
+              fullWidth
+              className="sm:w-fit"
             />
           </div>
         </form>

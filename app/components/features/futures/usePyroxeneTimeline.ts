@@ -134,7 +134,16 @@ export function usePyroxeneTimeline({
       workerRef.current = null;
       calculateSynchronously();
     }
-  }, [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate, computeSync, calculateSynchronously]);
+  }, [
+    initialResources,
+    initialDate,
+    eventDataMap,
+    scheduleItems,
+    options,
+    collectedSourceKeys,
+    endDate,
+    calculateSynchronously,
+  ]);
 
   return { timeline, pending, error };
 }
