@@ -19,6 +19,7 @@ import {
   calculateLevelRequiredExp,
   calculateLevelResourceItems,
   calculateTierResourceItems,
+  classifyGrowthResourceKind,
   GROWTH_RESOURCE_KIND_ORDER,
   getEquipmentBlueprintChoiceBoxTier,
   getEquipmentBlueprintChoiceBoxUid,
@@ -201,6 +202,20 @@ describe("growth-resource", () => {
     expect(getEquipmentBlueprintChoiceBoxTier("150028")).toBe(2);
     expect(getEquipmentBlueprintChoiceBoxTier("150048")).toBe(10);
     expect(getEquipmentBlueprintChoiceBoxTier("999999")).toBeNull();
+  });
+
+  it("classifies only canonical gift-box UIDs as gifts", () => {
+    const giftBoxUids = ["100000", "100008", "100009"];
+
+    expect(
+      giftBoxUids.map((uid) =>
+        classifyGrowthResourceKind({ uid, type: ResourceTypeEnum.Item, category: "consumable" }),
+      ),
+    ).toEqual(Array.from({ length: giftBoxUids.length }, () => GROWTH_RESOURCE_KIND_ORDER.favor));
+    expect(
+      classifyGrowthResourceKind({ uid: "100010", type: ResourceTypeEnum.Item, category: "consumable" }),
+    ).toBeNull();
+    expect(classifyGrowthResourceKind({ uid: "100000", type: ResourceTypeEnum.Equipment, category: "hat" })).toBeNull();
   });
 
   it("maps the first BD and tech note choice box UID set by rarity", () => {
