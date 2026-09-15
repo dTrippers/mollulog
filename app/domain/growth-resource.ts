@@ -1243,6 +1243,11 @@ const GROWTH_RESOURCE_KIND_DISPLAY_ORDER = [
 ] as const;
 
 const ABILITY_RELEASE_WB_UID_SET = new Set<string>(Object.values(ABILITY_RELEASE_WB_UIDS));
+const GIFT_BOX_UID_SET = new Set(["100000", "100008", "100009"]);
+
+export function isGiftBoxUid(uid: string): boolean {
+  return GIFT_BOX_UID_SET.has(uid);
+}
 
 export function compareGrowthResourceKindOrder(a: number, b: number): number {
   return getGrowthResourceKindDisplayOrder(a) - getGrowthResourceKindDisplayOrder(b);
@@ -1304,7 +1309,7 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
     return GROWTH_RESOURCE_KIND_ORDER.techNote;
   }
 
-  if (resource.category === "favor") {
+  if (resource.category === "favor" || isGiftBoxUid(resource.uid)) {
     return GROWTH_RESOURCE_KIND_ORDER.favor;
   }
 

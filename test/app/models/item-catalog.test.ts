@@ -83,6 +83,75 @@ describe("item-catalog", () => {
     expect(getGrowthPlannerCatalogResources([choiceBox])).toEqual([choiceBox]);
   });
 
+  it("includes canonical gift boxes and sorts them before regular gifts", () => {
+    const resources: ItemCatalogResource[] = [
+      {
+        uid: "100009",
+        name: "고급 선물 상자",
+        rarity: 4,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "5017",
+        name: "일반 선물 B",
+        rarity: 3,
+        type: ResourceTypeEnum.Item,
+        category: "favor",
+        subCategory: null,
+      },
+      {
+        uid: "100008",
+        name: "선물 선택 상자",
+        rarity: 3,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "5016",
+        name: "일반 선물 A",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "favor",
+        subCategory: null,
+      },
+      {
+        uid: "100000",
+        name: "선물 상자",
+        rarity: 3,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+      {
+        uid: "100010",
+        name: "기타 소모품",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: "consumable",
+        subCategory: null,
+      },
+    ];
+
+    expect(resources.slice(0, 3).map(getGrowthPlannerCatalogResourceKindOrder)).toEqual([
+      GROWTH_RESOURCE_KIND_ORDER.favor,
+      GROWTH_RESOURCE_KIND_ORDER.favor,
+      GROWTH_RESOURCE_KIND_ORDER.favor,
+    ]);
+    expect(resources.filter(({ uid }) => uid === "100010").map(getGrowthPlannerCatalogResourceKindOrder)).toEqual([
+      null,
+    ]);
+    expect(getGrowthPlannerCatalogResources(resources).map((resource) => resource.uid)).toEqual([
+      "100000",
+      "100008",
+      "100009",
+      "5016",
+      "5017",
+    ]);
+  });
+
   it("includes only the first BD and tech note choice box UID set in the growth planner catalog", () => {
     const resources: ItemCatalogResource[] = [
       {

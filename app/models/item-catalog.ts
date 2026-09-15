@@ -6,6 +6,7 @@ import {
   getEquipmentTier,
   getEquipmentTypeOrder,
   getSkillMaterialChoiceBoxRarity,
+  isGiftBoxUid,
   shouldSortGrowthResourceKindByUid,
 } from "~/domain/growth-resource";
 import {
@@ -146,6 +147,14 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
   const kindDelta = compareGrowthResourceKindOrder(kindOrderA, kindOrderB);
   if (kindDelta !== 0) {
     return kindDelta;
+  }
+
+  if (kindOrderA === GROWTH_RESOURCE_KIND_ORDER.favor && kindOrderB === GROWTH_RESOURCE_KIND_ORDER.favor) {
+    const aIsGiftBox = isGiftBoxUid(a.uid);
+    const bIsGiftBox = isGiftBoxUid(b.uid);
+    if (aIsGiftBox !== bIsGiftBox) {
+      return aIsGiftBox ? -1 : 1;
+    }
   }
 
   if (kindOrderA === GROWTH_RESOURCE_KIND_ORDER.bd || kindOrderA === GROWTH_RESOURCE_KIND_ORDER.techNote) {

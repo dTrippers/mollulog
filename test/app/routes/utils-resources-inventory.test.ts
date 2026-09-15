@@ -73,6 +73,33 @@ const catalogResources = [
   },
 ] as const;
 
+const giftBoxCatalogResources = [
+  {
+    uid: "100000",
+    name: "선물 상자",
+    rarity: 3,
+    type: ResourceTypeEnum.Item,
+    category: "consumable",
+    subCategory: null,
+  },
+  {
+    uid: "100008",
+    name: "선물 선택 상자",
+    rarity: 3,
+    type: ResourceTypeEnum.Item,
+    category: "consumable",
+    subCategory: null,
+  },
+  {
+    uid: "100009",
+    name: "고급 선물 상자",
+    rarity: 4,
+    type: ResourceTypeEnum.Item,
+    category: "consumable",
+    subCategory: null,
+  },
+] as const;
+
 function routeArgs(request: Request) {
   return {
     request,
@@ -162,6 +189,75 @@ describe("resource inventory canonical identity", () => {
       ]),
     );
     expect(payload.ownedQuantities).toEqual({ "23": 4, "equipment:23": 8 });
+  });
+
+  it("loads gift boxes into the editor catalog with their stored quantities", async () => {
+    const ownedQuantities = { "100000": 2, "100008": 5, "100009": 1 };
+    mockedGetCatalogResources.mockResolvedValue(giftBoxCatalogResources as never);
+    mockedGetInventory.mockResolvedValue(ownedQuantities);
+
+    const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
+    const payload = result as Extract<Awaited<ReturnType<typeof loader>>, { resources: unknown }>;
+
+    expect(payload.resources.map(({ uid, inventoryUid }) => [uid, inventoryUid])).toEqual([
+      ["100000", "100000"],
+      ["100008", "100008"],
+      ["100009", "100009"],
+    ]);
+    expect(payload.ownedQuantities).toEqual(ownedQuantities);
+  });
+
+  it("accepts a gift-box quantity in the inventory save action", async () => {
+    mockedGetCatalogResources.mockResolvedValue([giftBoxCatalogResources[0]] as never);
+    mockedGetInventory.mockResolvedValue({ "100000": 1 });
+
+    const result = await action(
+      routeArgs(
+        new Request("https://mollulog.net/utils/resources/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: [{ itemUid: "100000", quantity: 3 }] }),
+        }),
+      ),
+    );
+
+    expect((result as { data: unknown }).data).toEqual({ saved: true, savedAt: expect.any(Number) });
+    expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "100000", quantity: 3 }]);
+  });
+
+  it("does not allocate gift-box quantities against individual gift requirements", () => {
+    const individualGift = {
+      uid: "5017",
+      name: "일반 선물",
+      rarity: 3,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      source: "relationship" as const,
+      amount: 3,
+    };
+    const resources = buildInventoryResources([...giftBoxCatalogResources, { ...individualGift }], [individualGift]);
+
+    const shortageGroups = buildResourceGroups(
+      resources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "all" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "100000": 100, "100008": 100, "100009": 100, "5017": 0 },
+    );
+
+    expect(shortageGroups[0]?.resources.map(({ uid, requiredAmount }) => [uid, requiredAmount])).toEqual([["5017", 3]]);
+  });
+
+  it("applies name and rarity filters to gift boxes", () => {
+    const resources = [...giftBoxCatalogResources];
+
+    expect(
+      filterResourceInventoryResources(resources, { search: "선물 선택", rarities: [3] }).map(({ uid }) => uid),
+    ).toEqual(["100008"]);
+    expect(
+      filterResourceInventoryResources(resources, { search: "선물", rarities: [4] }).map(({ uid }) => uid),
+    ).toEqual(["100009"]);
   });
 
   it("accepts and persists a canonical equipment key separately from the colliding item", async () => {
