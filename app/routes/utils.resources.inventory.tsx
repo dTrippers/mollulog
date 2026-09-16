@@ -5,8 +5,10 @@ import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
   getEquipmentTypeKey,
+  UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID,
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { getLogger } from "~/lib/observability.server";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
@@ -43,7 +45,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   }
 
   const [catalogResources, ownedQuantities, relationshipLevels] = await Promise.all([
-    getItemCatalogResources(env),
+    loadValidatedUniversalEquipmentCatalog(env),
     getUserResourceInventoryMap(env, currentUser.id),
     getRelationshipLevels(env, currentUser.id),
   ]);
@@ -164,4 +166,40 @@ function isKnownResourceUid(resourceUidSet: Set<string>, itemUid: string): boole
 
   const { resourceType, sourceUid } = parseOcrInventoryResourceUid(itemUid);
   return (resourceType === null || resourceType === "equipment") && getEquipmentTypeKey(sourceUid) !== null;
+}
+
+async function loadValidatedUniversalEquipmentCatalog(
+  env: Env,
+): Promise<Awaited<ReturnType<typeof getItemCatalogResources>>> {
+  const catalogResources = await getItemCatalogResources(env);
+  if (hasValidUniversalEquipmentBlueprintCatalog(catalogResources)) {
+    return catalogResources;
+  }
+
+  let refreshedCatalogResources: Awaited<ReturnType<typeof getItemCatalogResources>>;
+  try {
+    refreshedCatalogResources = await getItemCatalogResources(env, true);
+  } catch {
+    throw new Response("만능 설계도 정보를 불러오지 못했어요.", { status: 503 });
+  }
+  if (!hasValidUniversalEquipmentBlueprintCatalog(refreshedCatalogResources)) {
+    throw new Response("만능 설계도 정보를 불러오지 못했어요.", { status: 503 });
+  }
+  return refreshedCatalogResources;
+}
+
+function hasValidUniversalEquipmentBlueprintCatalog(
+  resources: Awaited<ReturnType<typeof getItemCatalogResources>>,
+): boolean {
+  const resourcesByUid = new Map(resources.map((resource) => [resource.uid, resource]));
+  return Object.entries(UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID).every(([uid, category]) => {
+    const resource = resourcesByUid.get(uid);
+    return (
+      resource !== undefined &&
+      resource.type === ResourceTypeEnum.Equipment &&
+      resource.category === category &&
+      typeof resource.name === "string" &&
+      resource.name.trim().length > 0
+    );
+  });
 }

@@ -297,7 +297,7 @@ describe("item-catalog", () => {
     ]);
   });
 
-  it("includes direct equipment blueprints but excludes universal blueprints", () => {
+  it("includes canonical direct and universal equipment blueprints", () => {
     const blueprints: ItemCatalogResource[] = [
       {
         uid: "101001",
@@ -319,9 +319,9 @@ describe("item-catalog", () => {
 
     expect(blueprints.map(getGrowthPlannerCatalogResourceKindOrder)).toEqual([
       GROWTH_RESOURCE_KIND_ORDER.equipment,
-      null,
+      GROWTH_RESOURCE_KIND_ORDER.equipment,
     ]);
-    expect(getGrowthPlannerCatalogResources(blueprints).map((resource) => resource.uid)).toEqual(["101001"]);
+    expect(getGrowthPlannerCatalogResources(blueprints).map((resource) => resource.uid)).toEqual(["501000", "101001"]);
   });
 
   it("sorts equipment blueprint choice boxes before direct equipment blueprints by tier ascending", () => {

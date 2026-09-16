@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { ResourceInventoryTile } from "~/components/features/growth";
 import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { getItemCatalogResources } from "~/models/item-catalog";
@@ -100,6 +101,25 @@ const giftBoxCatalogResources = [
   },
 ] as const;
 
+const universalBlueprintCatalogResources = [
+  ["501000", "모자 만능 설계도", "hat"],
+  ["502000", "장갑 만능 설계도", "gloves"],
+  ["503000", "신발 만능 설계도", "shoes"],
+  ["504000", "가방 만능 설계도", "bag"],
+  ["505000", "배지 만능 설계도", "badge"],
+  ["506000", "헤어핀 만능 설계도", "hairpin"],
+  ["507000", "부적 만능 설계도", "charm"],
+  ["508000", "손목시계 만능 설계도", "watch"],
+  ["509000", "목걸이 만능 설계도", "necklace"],
+].map(([uid, name, category]) => ({
+  uid,
+  name,
+  rarity: 1,
+  type: ResourceTypeEnum.Equipment,
+  category,
+  subCategory: null,
+}));
+
 function routeArgs(request: Request) {
   return {
     request,
@@ -107,11 +127,17 @@ function routeArgs(request: Request) {
   } as never;
 }
 
+function assertResponse(value: unknown): asserts value is Response {
+  if (!(value instanceof Response)) {
+    throw new Error("expected the loader to return a Response error");
+  }
+}
+
 describe("resource inventory canonical identity", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedGetActiveSensei.mockResolvedValue({ id: 7 } as never);
-    mockedGetCatalogResources.mockResolvedValue(catalogResources as never);
+    mockedGetCatalogResources.mockResolvedValue([...catalogResources, ...universalBlueprintCatalogResources] as never);
     mockedGetRelationshipLevels.mockResolvedValue([]);
     mockedGetInventory.mockResolvedValue({ "23": 4, "equipment:23": 8 });
     mockedUpsertInventory.mockResolvedValue(undefined);
@@ -178,6 +204,26 @@ describe("resource inventory canonical identity", () => {
     ]);
   });
 
+  it("fails explicitly instead of rendering a required resource without catalog metadata", () => {
+    expect(() =>
+      buildInventoryResources(
+        [...catalogResources],
+        [
+          {
+            uid: "101001",
+            name: "",
+            rarity: 1,
+            type: ResourceTypeEnum.Equipment,
+            category: "hat",
+            subCategory: null,
+            source: "equipment",
+            amount: 1,
+          },
+        ],
+      ),
+    ).toThrow("필요한 재화 카탈로그 정보를 확인하지 못했어요");
+  });
+
   it("loads both canonical inventory keys with their stored quantities", async () => {
     const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
     const payload = result as Extract<Awaited<ReturnType<typeof loader>>, { resources: unknown }>;
@@ -193,18 +239,109 @@ describe("resource inventory canonical identity", () => {
 
   it("loads gift boxes into the editor catalog with their stored quantities", async () => {
     const ownedQuantities = { "100000": 2, "100008": 5, "100009": 1 };
-    mockedGetCatalogResources.mockResolvedValue(giftBoxCatalogResources as never);
+    mockedGetCatalogResources.mockResolvedValue([
+      ...giftBoxCatalogResources,
+      ...universalBlueprintCatalogResources,
+    ] as never);
     mockedGetInventory.mockResolvedValue(ownedQuantities);
 
     const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
     const payload = result as Extract<Awaited<ReturnType<typeof loader>>, { resources: unknown }>;
 
-    expect(payload.resources.map(({ uid, inventoryUid }) => [uid, inventoryUid])).toEqual([
+    expect(
+      payload.resources
+        .filter(({ uid }) => giftBoxCatalogResources.some((resource) => resource.uid === uid))
+        .map(({ uid, inventoryUid }) => [uid, inventoryUid]),
+    ).toEqual([
       ["100000", "100000"],
       ["100008", "100008"],
       ["100009", "100009"],
     ]);
     expect(payload.ownedQuantities).toEqual(ownedQuantities);
+  });
+
+  it("loads all canonical universal equipment blueprints with their stored quantities", async () => {
+    const ownedQuantities = Object.fromEntries(universalBlueprintCatalogResources.map(({ uid }) => [uid, 2]));
+    mockedGetCatalogResources.mockResolvedValue(universalBlueprintCatalogResources as never);
+    mockedGetInventory.mockResolvedValue(ownedQuantities);
+
+    const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
+    const payload = result as Extract<Awaited<ReturnType<typeof loader>>, { resources: unknown }>;
+
+    expect(payload.resources.map(({ uid, name, inventoryUid }) => [uid, name, inventoryUid])).toEqual(
+      universalBlueprintCatalogResources.map(({ uid, name }) => [uid, name, uid]),
+    );
+    expect(payload.ownedQuantities).toEqual(ownedQuantities);
+  });
+
+  it("refreshes a stale incomplete catalog once before loading the planner", async () => {
+    const staleCatalogResources = universalBlueprintCatalogResources.slice(0, -1);
+    mockedGetCatalogResources
+      .mockResolvedValueOnce(staleCatalogResources as never)
+      .mockResolvedValueOnce(universalBlueprintCatalogResources as never);
+    const ownedQuantities = Object.fromEntries(universalBlueprintCatalogResources.map(({ uid }) => [uid, 2]));
+    mockedGetInventory.mockResolvedValue(ownedQuantities);
+
+    const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
+    const payload = result as Extract<Awaited<ReturnType<typeof loader>>, { resources: unknown }>;
+
+    expect(payload.resources.map(({ uid }) => uid)).toEqual(universalBlueprintCatalogResources.map(({ uid }) => uid));
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(1, env);
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
+  });
+
+  it("returns an explicit 503 when a canonical universal equipment blueprint is missing", async () => {
+    const incompleteCatalogResources = universalBlueprintCatalogResources.slice(0, -1);
+    mockedGetCatalogResources
+      .mockResolvedValueOnce(incompleteCatalogResources as never)
+      .mockResolvedValueOnce(incompleteCatalogResources as never);
+
+    const error = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory"))).catch(
+      (value) => value,
+    );
+
+    assertResponse(error);
+    expect(error.status).toBe(503);
+    await expect(error.text()).resolves.toBe("만능 설계도 정보를 불러오지 못했어요.");
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(1, env);
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
+  });
+
+  it("returns the same explicit 503 when canonical universal metadata mismatches", async () => {
+    const mismatchedCatalogResources = universalBlueprintCatalogResources.map((resource, index) =>
+      index === 0 ? { ...resource, category: "gloves" } : resource,
+    );
+    mockedGetCatalogResources
+      .mockResolvedValueOnce(mismatchedCatalogResources as never)
+      .mockResolvedValueOnce(mismatchedCatalogResources as never);
+
+    const error = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory"))).catch(
+      (value) => value,
+    );
+
+    assertResponse(error);
+    expect(error.status).toBe(503);
+    await expect(error.text()).resolves.toBe("만능 설계도 정보를 불러오지 못했어요.");
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(1, env);
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
+  });
+
+  it("accepts and persists a canonical universal equipment blueprint key", async () => {
+    mockedGetCatalogResources.mockResolvedValue([universalBlueprintCatalogResources[0]] as never);
+    mockedGetInventory.mockResolvedValue({ "501000": 1 });
+
+    const result = await action(
+      routeArgs(
+        new Request("https://mollulog.net/utils/resources/inventory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: [{ itemUid: "501000", quantity: 3 }] }),
+        }),
+      ),
+    );
+
+    expect((result as { data: unknown }).data).toEqual({ saved: true, savedAt: expect.any(Number) });
+    expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "501000", quantity: 3 }]);
   });
 
   it("accepts a gift-box quantity in the inventory save action", async () => {
@@ -520,6 +657,123 @@ describe("resource inventory filter", () => {
     expect(groups[0]?.allocationResources.map((resource) => resource.uid)).toEqual(["101001", "102001", "150028"]);
   });
 
+  it("uses one full equipment allocation for direct, choice-box, and universal shortage filtering", () => {
+    const inventoryResources = [
+      {
+        uid: "101004",
+        name: "T5 모자 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 1,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "102004",
+        name: "T5 장갑 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "gloves",
+        subCategory: null,
+        requiredAmount: 2,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "150031",
+        name: "T5 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: null,
+        requiredAmount: 3,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "501000",
+        name: "모자 만능 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 0,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "502000",
+        name: "장갑 만능 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "gloves",
+        subCategory: null,
+        requiredAmount: 0,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+    ];
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.equipment]: "needed" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "101004": 0, "102004": 0, "150031": 1, "501000": 7, "502000": 0 },
+    );
+
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["102004", "150031", "502000"]);
+    expect(groups[0]?.allocationResources.map((resource) => resource.uid)).toEqual([
+      "101004",
+      "102004",
+      "150031",
+      "501000",
+      "502000",
+    ]);
+  });
+
+  it("does not mark a direct blueprint or optional choice box short when universal stock covers it", () => {
+    const inventoryResources = [
+      {
+        uid: "101004",
+        name: "T5 모자 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 1,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "150031",
+        name: "T5 선택 상자",
+        rarity: 1,
+        type: ResourceTypeEnum.Item,
+        category: null,
+        subCategory: null,
+        requiredAmount: 1,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+      {
+        uid: "501000",
+        name: "모자 만능 설계도",
+        rarity: 1,
+        type: ResourceTypeEnum.Equipment,
+        category: "hat",
+        subCategory: null,
+        requiredAmount: 0,
+        kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+      },
+    ];
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.equipment]: "needed" },
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      { "101004": 0, "150031": 0, "501000": 7 },
+    );
+
+    expect(groups).toEqual([]);
+  });
+
   it("keeps shared skill-material choice-box allocation stable when shortage filtering narrows tiles", () => {
     const inventoryResources = [
       {
@@ -618,5 +872,25 @@ describe("resource inventory filter", () => {
     expect(markup).toContain("레벨 1 → 90 기준 1명분 미만");
     expect(markup).not.toContain("필요 경험치");
     expect(markup).not.toContain("여유 경험치");
+  });
+
+  it("gives universal blueprint quantity inputs a resource-specific accessible name and label", () => {
+    const markup = renderToStaticMarkup(
+      createElement(ResourceInventoryTile, {
+        resource: {
+          itemUid: "501000",
+          resourceType: ResourceTypeEnum.Equipment,
+          rarity: 1,
+          name: "모자 만능 설계도",
+          label: "만능",
+        },
+        currentQuantity: 0,
+        draftQuantity: 0,
+        onQuantityChange: jest.fn(),
+      }),
+    );
+
+    expect(markup).toContain('aria-label="모자 만능 설계도 보유 수량"');
+    expect(markup).toContain(">만능</div>");
   });
 });

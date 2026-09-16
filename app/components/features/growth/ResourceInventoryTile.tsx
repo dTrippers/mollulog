@@ -44,7 +44,7 @@ type ResourceInventoryTileProps = {
   quantityLabel?: string;
   showQuantityInput?: boolean;
   showName?: boolean;
-  inputProps?: NumberInputFlowNavigationInputProps;
+  inputProps?: NumberInputFlowNavigationInputProps & { "aria-label"?: string };
   metrics?: ResourceInventoryTileMetric[];
   onQuantityChange?: (quantity: number) => void;
   /**
@@ -111,7 +111,10 @@ export default function ResourceInventoryTile({
             showIncrease={false}
             size="sm"
             value={draftQuantity}
-            inputProps={inputProps}
+            inputProps={{
+              "aria-label": `${resource.name ?? "재화"} 보유 수량`,
+              ...inputProps,
+            }}
             onChange={onQuantityChange}
           />
         </div>
@@ -165,7 +168,7 @@ function MetricRow({
     <div className={cn("flex items-center justify-between gap-1", dimmed && "opacity-40", hidden && "invisible")}>
       <span
         className={cn(
-          "shrink-0 whitespace-nowrap leading-tight text-muted-foreground/70",
+          "shrink-0 whitespace-nowrap leading-tight text-muted-foreground",
           tooltip && "underline decoration-dotted underline-offset-2",
         )}
       >

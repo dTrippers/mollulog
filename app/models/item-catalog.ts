@@ -6,6 +6,7 @@ import {
   getEquipmentTier,
   getEquipmentTypeOrder,
   getSkillMaterialChoiceBoxRarity,
+  getUniversalEquipmentBlueprintTypeKey,
   isGiftBoxUid,
   shouldSortGrowthResourceKindByUid,
 } from "~/domain/growth-resource";
@@ -181,6 +182,23 @@ function compareGrowthPlannerCatalogResources(a: ItemCatalogResource, b: ItemCat
   if (kindOrderA === GROWTH_RESOURCE_KIND_ORDER.equipment && kindOrderB === GROWTH_RESOURCE_KIND_ORDER.equipment) {
     const choiceBoxTierA = getEquipmentBlueprintChoiceBoxTier(a.uid);
     const choiceBoxTierB = getEquipmentBlueprintChoiceBoxTier(b.uid);
+    const universalTypeA = getUniversalEquipmentBlueprintTypeKey(a.uid);
+    const universalTypeB = getUniversalEquipmentBlueprintTypeKey(b.uid);
+
+    if (universalTypeA !== null || universalTypeB !== null) {
+      if (universalTypeA !== null && universalTypeB === null) {
+        return -1;
+      }
+      if (universalTypeA === null && universalTypeB !== null) {
+        return 1;
+      }
+
+      const universalTypeDelta = getEquipmentTypeOrder(a.uid) - getEquipmentTypeOrder(b.uid);
+      if (universalTypeDelta !== 0) {
+        return universalTypeDelta;
+      }
+      return Number(a.uid) - Number(b.uid);
+    }
 
     if (a.type === "equipment" && b.type === "equipment") {
       const equipmentTypeOrderA = getEquipmentTypeOrder(a.uid);

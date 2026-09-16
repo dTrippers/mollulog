@@ -269,6 +269,41 @@ const EQUIPMENT_BLUEPRINT_BASE_UID = {
   necklace: 108999,
 } as const;
 
+export const UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID = {
+  "501000": "hat",
+  "502000": "gloves",
+  "503000": "shoes",
+  "504000": "bag",
+  "505000": "badge",
+  "506000": "hairpin",
+  "507000": "charm",
+  "508000": "watch",
+  "509000": "necklace",
+} as const;
+
+export type EquipmentTypeKey =
+  | "hat"
+  | "gloves"
+  | "shoes"
+  | "bag"
+  | "badge"
+  | "hairpin"
+  | "charm"
+  | "watch"
+  | "necklace";
+
+export const EQUIPMENT_TYPE_ORDER: readonly string[] = [
+  "hat",
+  "gloves",
+  "shoes",
+  "bag",
+  "badge",
+  "hairpin",
+  "charm",
+  "watch",
+  "necklace",
+];
+
 export const EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER: Record<number, string> = {
   2: "150028",
   3: "150029",
@@ -318,8 +353,6 @@ export const EQUIPMENT_TYPE_LABELS: Record<string, string> = {
   necklace: "목걸이",
 };
 
-export const EQUIPMENT_TYPE_ORDER = ["hat", "gloves", "shoes", "bag", "badge", "hairpin", "charm", "watch", "necklace"];
-
 const EQUIPMENT_UID_PREFIX_TO_TYPE = Object.fromEntries(
   Object.entries(EQUIPMENT_BLUEPRINT_BASE_UID).map(([type, baseUid]) => [Math.floor(baseUid / 1000) + 1, type]),
 ) as Record<number, string>;
@@ -329,9 +362,24 @@ export function getEquipmentTypeKey(uid: string): string | null {
   return EQUIPMENT_UID_PREFIX_TO_TYPE[prefix] ?? null;
 }
 
+export function getUniversalEquipmentBlueprintTypeKey(uid: string): EquipmentTypeKey | null {
+  return (
+    UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID[uid as keyof typeof UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID] ?? null
+  );
+}
+
+export function getUniversalEquipmentBlueprintUid(typeKey: string): string | null {
+  const entry = Object.entries(UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID).find(([, value]) => value === typeKey);
+  return entry?.[0] ?? null;
+}
+
+export function isUniversalEquipmentBlueprintUid(uid: string): boolean {
+  return getUniversalEquipmentBlueprintTypeKey(uid) !== null;
+}
+
 export function getEquipmentTypeOrder(uid: string): number {
-  const typeKey = getEquipmentTypeKey(uid);
-  const index = typeKey ? EQUIPMENT_TYPE_ORDER.indexOf(typeKey) : -1;
+  const typeKey = getEquipmentTypeKey(uid) ?? getUniversalEquipmentBlueprintTypeKey(uid);
+  const index = typeKey ? EQUIPMENT_TYPE_ORDER.indexOf(typeKey as EquipmentTypeKey) : -1;
   return index === -1 ? EQUIPMENT_TYPE_ORDER.length : index;
 }
 
@@ -419,19 +467,6 @@ export function getSkillMaterialResourceChoiceBoxUid(
 
   return null;
 }
-
-export type EquipmentTierCoverage = {
-  tier: number;
-  requiredAmount: number;
-  directOwnedAmount: number;
-  directDeficit: number;
-  choiceBoxUid: string;
-  choiceBoxQuantity: number;
-  finalDeficit: number;
-};
-
-type EquipmentCoverageItem = Pick<GrowthResourceItem, "uid" | "type" | "amount"> &
-  Partial<Pick<GrowthResourceItem, "source">>;
 
 const EQUIPMENT_TIER_RECIPE: Record<number, readonly { tier: number; amount: number }[]> = {
   2: [{ tier: 2, amount: 15 }],
@@ -586,69 +621,6 @@ export function calculateEquipmentResourceItems(
   accumulateEquipmentSlot(items, equipmentSlots[2], student.equip3, student.targetEquip3);
 
   return Array.from(items.values());
-}
-
-export function calculateEquipmentTierCoverage(
-  requiredItems: EquipmentCoverageItem[],
-  quantities: Record<string, number>,
-): EquipmentTierCoverage[] {
-  const coverageByTier = new Map<
-    number,
-    Pick<EquipmentTierCoverage, "tier" | "requiredAmount" | "directOwnedAmount" | "directDeficit" | "choiceBoxUid">
-  >();
-
-  for (const item of requiredItems) {
-    if (!isEquipmentBlueprintRequirement(item)) {
-      continue;
-    }
-
-    const tier = getEquipmentTier(item.uid);
-    const choiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
-    if (!choiceBoxUid) {
-      continue;
-    }
-
-    const current = coverageByTier.get(tier) ?? {
-      tier,
-      requiredAmount: 0,
-      directOwnedAmount: 0,
-      directDeficit: 0,
-      choiceBoxUid,
-    };
-    const requiredAmount = Math.max(0, item.amount);
-    const ownedAmount = Math.max(0, quantities[item.uid] ?? 0);
-
-    current.requiredAmount += requiredAmount;
-    current.directOwnedAmount += ownedAmount;
-    current.directDeficit += Math.max(0, requiredAmount - ownedAmount);
-    coverageByTier.set(tier, current);
-  }
-
-  for (const [tier, choiceBoxUid] of Object.entries(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER)) {
-    const choiceBoxQuantity = Math.max(0, quantities[choiceBoxUid] ?? 0);
-    if (choiceBoxQuantity <= 0 || coverageByTier.has(Number(tier))) {
-      continue;
-    }
-
-    coverageByTier.set(Number(tier), {
-      tier: Number(tier),
-      requiredAmount: 0,
-      directOwnedAmount: 0,
-      directDeficit: 0,
-      choiceBoxUid,
-    });
-  }
-
-  return Array.from(coverageByTier.values())
-    .map((coverage) => {
-      const choiceBoxQuantity = Math.max(0, quantities[coverage.choiceBoxUid] ?? 0);
-      return {
-        ...coverage,
-        choiceBoxQuantity,
-        finalDeficit: Math.max(0, coverage.directDeficit - choiceBoxQuantity),
-      };
-    })
-    .sort((a, b) => a.tier - b.tier);
 }
 
 export function calculateGearResourceItems(
@@ -916,14 +888,6 @@ function countOverlappingLevels(currentLevel: number, targetLevel: number, bandM
   const from = Math.max(currentLevel + 1, bandMin);
   const to = Math.min(targetLevel, bandMax);
   return Math.max(0, to - from + 1);
-}
-
-function isEquipmentBlueprintRequirement(
-  item: Pick<GrowthResourceItem, "uid" | "type"> & Partial<Pick<GrowthResourceItem, "source">>,
-): boolean {
-  return (
-    (item.source === "equipment" || item.type === ResourceTypeEnum.Equipment) && getEquipmentTypeKey(item.uid) !== null
-  );
 }
 
 function accumulateEquipmentSlot(
@@ -1287,8 +1251,12 @@ export function classifyGrowthResourceKind(resource: GrowthResourceKindInput): n
       return GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth;
     }
 
-    // Only direct blueprint UIDs are included here. Regular equipment and
-    // universal blueprints are intentionally excluded for now.
+    if (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null) {
+      return GROWTH_RESOURCE_KIND_ORDER.equipment;
+    }
+
+    // Only direct blueprint UIDs are included here. Regular equipment stays
+    // excluded because its category alone does not identify a blueprint.
     return getEquipmentTypeKey(resource.uid) === null ? null : GROWTH_RESOURCE_KIND_ORDER.equipment;
   }
 

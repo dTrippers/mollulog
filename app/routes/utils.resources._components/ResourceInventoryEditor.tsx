@@ -22,23 +22,26 @@ import {
   useNumberInputFlowNavigation,
 } from "~/components/primitives";
 import {
+  allocateEquipmentBlueprints,
+  type EquipmentBlueprintAllocation,
+  getUniversalBlueprintCost,
+} from "~/domain/equipment-blueprint-allocation";
+import {
   type AggregatedGrowthResourceRequirements,
   CHARACTER_EXP_REPORTS,
   calculateCharacterExpDifference,
-  calculateEquipmentTierCoverage,
   compareGrowthResourceKindOrder,
   EQUIPMENT_TYPE_LABELS,
   EQUIPMENT_TYPE_ORDER,
   GROWTH_RESOURCE_KIND_LABELS,
   GROWTH_RESOURCE_KIND_ORDER,
   getEquipmentBlueprintChoiceBoxTier,
-  getEquipmentBlueprintChoiceBoxUid,
   getEquipmentResourceTierLabel,
-  getEquipmentTier,
   getEquipmentTypeKey,
   getResourceKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
+  getUniversalEquipmentBlueprintTypeKey,
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { cn } from "~/lib/utils";
@@ -605,12 +608,30 @@ function EquipmentSubGroups({
         ),
     [allocationResources],
   );
+  const universalResources = useMemo(
+    () => resources.filter((resource) => getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null),
+    [resources],
+  );
+  const allocationUniversalResources = useMemo(
+    () => allocationResources.filter((resource) => getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null),
+    [allocationResources],
+  );
   const equipmentResources = useMemo(
-    () => resources.filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null),
+    () =>
+      resources.filter(
+        (resource) =>
+          getEquipmentBlueprintChoiceBoxTier(resource.uid) === null &&
+          getUniversalEquipmentBlueprintTypeKey(resource.uid) === null,
+      ),
     [resources],
   );
   const allocationEquipmentResources = useMemo(
-    () => allocationResources.filter((resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null),
+    () =>
+      allocationResources.filter(
+        (resource) =>
+          getEquipmentBlueprintChoiceBoxTier(resource.uid) === null &&
+          getUniversalEquipmentBlueprintTypeKey(resource.uid) === null,
+      ),
     [allocationResources],
   );
   const subGroups = useMemo(() => {
@@ -624,13 +645,111 @@ function EquipmentSubGroups({
         grouped.set(typeKey, [resource]);
       }
     }
+    for (const resource of universalResources) {
+      const typeKey = getUniversalEquipmentBlueprintTypeKey(resource.uid);
+      if (typeKey !== null && !grouped.has(typeKey)) {
+        grouped.set(typeKey, []);
+      }
+    }
     return EQUIPMENT_TYPE_ORDER.filter((key) => grouped.has(key)).map(
       (key) => [key, grouped.get(key) as InventoryResource[]] as const,
     );
-  }, [equipmentResources]);
-  const choiceBoxAllocation = useMemo(
-    () => allocateEquipmentChoiceBoxes(allocationEquipmentResources, allocationChoiceBoxResources, draftQuantities),
-    [allocationChoiceBoxResources, allocationEquipmentResources, draftQuantities],
+  }, [equipmentResources, universalResources]);
+  const allocation = useMemo(
+    () =>
+      buildEquipmentBlueprintAllocation(
+        allocationEquipmentResources,
+        allocationChoiceBoxResources,
+        allocationUniversalResources,
+        draftQuantities,
+      ),
+    [allocationChoiceBoxResources, allocationEquipmentResources, allocationUniversalResources, draftQuantities],
+  );
+  const allocationDemandByUid = useMemo(
+    () => new Map(allocation.demands.map((demand) => [demand.inventoryUid, demand])),
+    [allocation.demands],
+  );
+  const allocationChoiceBoxByUid = useMemo(
+    () => new Map(allocation.choiceBoxes.map((choiceBox) => [choiceBox.inventoryUid, choiceBox])),
+    [allocation.choiceBoxes],
+  );
+  const allocationUniversalByUid = useMemo(
+    () => new Map(allocation.universalBlueprints.map((universal) => [universal.inventoryUid, universal])),
+    [allocation.universalBlueprints],
+  );
+  const universalResourceByType = useMemo(() => {
+    const byType = new Map<string, InventoryResource>();
+    for (const resource of universalResources) {
+      const typeKey = getUniversalEquipmentBlueprintTypeKey(resource.uid);
+      if (typeKey !== null) {
+        byType.set(typeKey, resource);
+      }
+    }
+    return byType;
+  }, [universalResources]);
+
+  const renderUniversalResource = (typeKey: string) => {
+    const resource = universalResourceByType.get(typeKey);
+    if (!resource) {
+      return null;
+    }
+    const allocationResource = allocationUniversalByUid.get(getInventoryUid(resource));
+    return (
+      <ResourceTile
+        key={getInventoryUid(resource)}
+        resource={resource}
+        currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+        draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
+        showRequiredMetrics={false}
+        label="만능"
+        metrics={allocationResource ? buildUniversalBlueprintMetrics(allocationResource) : undefined}
+        inputProps={numberInputFlowNavigation.getInputProps()}
+        onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
+      />
+    );
+  };
+
+  const renderDirectResource = (resource: InventoryResource) => {
+    const demand = allocationDemandByUid.get(getInventoryUid(resource));
+    return (
+      <ResourceTile
+        key={getInventoryUid(resource)}
+        resource={resource}
+        currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+        draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
+        showRequiredMetrics
+        showRequiredBalance={false}
+        metrics={demand ? buildDirectBlueprintMetrics(demand) : undefined}
+        inputProps={numberInputFlowNavigation.getInputProps()}
+        onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
+      />
+    );
+  };
+
+  const renderChoiceBoxResource = (resource: InventoryResource) => {
+    const allocationResource = allocationChoiceBoxByUid.get(getInventoryUid(resource));
+    return (
+      <ResourceTile
+        key={getInventoryUid(resource)}
+        resource={resource}
+        currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
+        draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
+        showRequiredMetrics={false}
+        metrics={allocationResource ? buildChoiceBoxMetrics(allocationResource) : undefined}
+        inputProps={numberInputFlowNavigation.getInputProps()}
+        onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
+      />
+    );
+  };
+
+  const renderEquipmentGroup = ([typeKey, typeResources]: readonly [string, InventoryResource[]]) => (
+    <div key={typeKey} className="px-3 py-2">
+      <p className="mb-1 text-xs font-medium text-muted-foreground">{EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}</p>
+      <div className="flex flex-wrap">
+        {renderUniversalResource(typeKey)}
+        {typeResources.map(renderDirectResource)}
+      </div>
+    </div>
   );
 
   return (
@@ -638,42 +757,10 @@ function EquipmentSubGroups({
       {choiceBoxResources.length > 0 ? (
         <div className="px-3 py-2">
           <p className="mb-1 text-xs font-medium text-muted-foreground">선택 상자</p>
-          <div className="flex flex-wrap">
-            {choiceBoxResources.map((resource) => (
-              <ResourceTile
-                key={getInventoryUid(resource)}
-                resource={resource}
-                currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
-                draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
-                showRequiredMetrics={false}
-                metrics={choiceBoxAllocation.choiceBoxMetricsByUid.get(getInventoryUid(resource))}
-                inputProps={numberInputFlowNavigation.getInputProps()}
-                onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
-              />
-            ))}
-          </div>
+          <div className="flex flex-wrap">{choiceBoxResources.map(renderChoiceBoxResource)}</div>
         </div>
       ) : null}
-      {subGroups.map(([typeKey, typeResources]) => (
-        <div key={typeKey} className="px-3 py-2">
-          <p className="mb-1 text-xs font-medium text-muted-foreground">{EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}</p>
-          <div className="flex flex-wrap">
-            {typeResources.map((resource) => (
-              <ResourceTile
-                key={getInventoryUid(resource)}
-                resource={resource}
-                currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
-                draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
-                showRequiredMetrics
-                showRequiredBalance={false}
-                metrics={choiceBoxAllocation.itemMetricsByUid.get(getInventoryUid(resource))}
-                inputProps={numberInputFlowNavigation.getInputProps()}
-                onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
-              />
-            ))}
-          </div>
-        </div>
-      ))}
+      {subGroups.map(renderEquipmentGroup)}
     </div>
   );
 }
@@ -773,109 +860,6 @@ function allocateSkillMaterialChoiceBoxes(
   return { choiceBoxMetricsByUid, itemMetricsByUid, shortageByUid };
 }
 
-type EquipmentChoiceBoxAllocation = {
-  choiceBoxMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
-  itemMetricsByUid: Map<string, ResourceInventoryTileMetric[]>;
-  shortageByUid: Map<string, boolean>;
-};
-
-function allocateEquipmentChoiceBoxes(
-  equipmentResources: InventoryResource[],
-  choiceBoxResources: InventoryResource[],
-  quantities: Record<string, number>,
-): EquipmentChoiceBoxAllocation {
-  const remainingChoiceBoxesByTier = new Map<number, number>();
-  const totalDeficitByTier = new Map<number, number>();
-  const itemMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
-  const shortageByUid = new Map(
-    equipmentResources.map((resource) => [
-      getInventoryUid(resource),
-      resource.requiredAmount > (quantities[getInventoryUid(resource)] ?? 0),
-    ]),
-  );
-
-  for (const choiceBox of choiceBoxResources) {
-    const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
-    if (tier !== null) {
-      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[getInventoryUid(choiceBox)] ?? 0));
-    }
-  }
-
-  const allocationTargets = equipmentResources
-    .map((resource) => {
-      const tier = getEquipmentTier(resource.uid);
-      const sourceChoiceBoxUid = getEquipmentBlueprintChoiceBoxUid(tier);
-      const choiceBoxUid =
-        sourceChoiceBoxUid === null ? null : findInventoryUidBySourceUid(choiceBoxResources, sourceChoiceBoxUid);
-      const directDeficit = Math.max(0, resource.requiredAmount - (quantities[getInventoryUid(resource)] ?? 0));
-      return { resource, tier, choiceBoxUid, directDeficit };
-    })
-    .filter(
-      (target): target is { resource: InventoryResource; tier: number; choiceBoxUid: string; directDeficit: number } =>
-        target.choiceBoxUid !== null && target.directDeficit > 0,
-    )
-    .sort(compareChoiceBoxAllocationTargets);
-
-  for (const { resource, tier, choiceBoxUid, directDeficit } of allocationTargets) {
-    if (!remainingChoiceBoxesByTier.has(tier)) {
-      remainingChoiceBoxesByTier.set(tier, Math.max(0, quantities[choiceBoxUid] ?? 0));
-    }
-
-    totalDeficitByTier.set(tier, (totalDeficitByTier.get(tier) ?? 0) + directDeficit);
-
-    const remainingChoiceBoxes = remainingChoiceBoxesByTier.get(tier) ?? 0;
-    const choiceBoxAmount = Math.min(directDeficit, remainingChoiceBoxes);
-    remainingChoiceBoxesByTier.set(tier, remainingChoiceBoxes - choiceBoxAmount);
-
-    const metrics: ResourceInventoryTileMetric[] = [];
-    if (choiceBoxAmount > 0) {
-      metrics.push({
-        label: "선택상자",
-        value: choiceBoxAmount.toLocaleString(),
-        valueClassName: "text-emerald-600 dark:text-emerald-400",
-      });
-    }
-
-    const remainingDeficit = directDeficit - choiceBoxAmount;
-    shortageByUid.set(getInventoryUid(resource), remainingDeficit > 0);
-    if (remainingDeficit > 0) {
-      metrics.push({
-        label: "부족",
-        value: remainingDeficit.toLocaleString(),
-        valueClassName: "text-red-600 dark:text-red-300",
-      });
-    }
-
-    if (metrics.length > 0) {
-      itemMetricsByUid.set(getInventoryUid(resource), metrics);
-    }
-  }
-
-  const choiceBoxMetricsByUid = new Map<string, ResourceInventoryTileMetric[]>();
-  for (const choiceBox of choiceBoxResources) {
-    const tier = getEquipmentBlueprintChoiceBoxTier(choiceBox.uid);
-    if (tier === null) {
-      continue;
-    }
-
-    const choiceBoxUid = getInventoryUid(choiceBox);
-    const balance = Math.max(0, quantities[choiceBoxUid] ?? 0) - (totalDeficitByTier.get(tier) ?? 0);
-    shortageByUid.set(choiceBoxUid, balance < 0);
-    choiceBoxMetricsByUid.set(choiceBoxUid, [
-      {
-        label: balance >= 0 ? "여유" : "부족",
-        value: Math.abs(balance).toLocaleString(),
-        valueClassName: cn(
-          balance >= 0 && "text-emerald-600 dark:text-emerald-400",
-          balance < 0 && "text-red-600 dark:text-red-300",
-        ),
-      },
-    ]);
-  }
-
-  return { choiceBoxMetricsByUid, itemMetricsByUid, shortageByUid };
-}
-
 function compareChoiceBoxAllocationTargets(
   a: { resource: InventoryResource; directDeficit: number },
   b: { resource: InventoryResource; directDeficit: number },
@@ -892,12 +876,108 @@ function compareChoiceBoxAllocationTargets(
   return a.resource.uid.localeCompare(b.resource.uid);
 }
 
+function buildEquipmentBlueprintAllocation(
+  equipmentResources: InventoryResource[],
+  choiceBoxResources: InventoryResource[],
+  universalResources: InventoryResource[],
+  quantities: Record<string, number>,
+): EquipmentBlueprintAllocation {
+  return allocateEquipmentBlueprints({
+    directDemands: equipmentResources.map((resource) => ({
+      uid: resource.uid,
+      inventoryUid: getInventoryUid(resource),
+      requiredAmount: resource.requiredAmount,
+      ownedAmount: quantities[getInventoryUid(resource)] ?? 0,
+    })),
+    choiceBoxes: choiceBoxResources.map((resource) => ({
+      uid: resource.uid,
+      inventoryUid: getInventoryUid(resource),
+      ownedAmount: quantities[getInventoryUid(resource)] ?? 0,
+    })),
+    universalBlueprints: universalResources.map((resource) => ({
+      uid: resource.uid,
+      inventoryUid: getInventoryUid(resource),
+      ownedAmount: quantities[getInventoryUid(resource)] ?? 0,
+    })),
+  });
+}
+
+function buildChoiceBoxMetrics(
+  allocation: EquipmentBlueprintAllocation["choiceBoxes"][number],
+): ResourceInventoryTileMetric[] {
+  const balance = allocation.remainingAmount;
+  return [
+    {
+      label: balance >= 0 ? "여유" : "부족",
+      value: Math.abs(balance).toLocaleString(),
+      valueClassName: cn(
+        balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+        balance < 0 && "text-red-600 dark:text-red-300",
+      ),
+    },
+  ];
+}
+
+function buildDirectBlueprintMetrics(
+  allocation: EquipmentBlueprintAllocation["demands"][number],
+): ResourceInventoryTileMetric[] | undefined {
+  if (allocation.directDeficit <= 0) {
+    return undefined;
+  }
+
+  const universalCost = getUniversalBlueprintCost(allocation.tier);
+  return [
+    {
+      key: "choice-box",
+      label: "선택상자",
+      value: allocation.choiceBoxAmount.toLocaleString(),
+      valueClassName: allocation.choiceBoxAmount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
+    },
+    {
+      key: "universal",
+      label: "만능",
+      value: allocation.universalBlueprintAmount.toLocaleString(),
+      valueClassName: allocation.universalBlueprintAmount > 0 ? "text-emerald-600 dark:text-emerald-400" : undefined,
+      tooltip: `T${allocation.tier} 설계도 1개를 대체하려면 만능 설계도 ${universalCost.toLocaleString()}개가 필요해요.`,
+    },
+    {
+      key: "shortage",
+      label: "부족",
+      value: allocation.finalDeficit.toLocaleString(),
+      valueClassName: allocation.finalDeficit > 0 ? "text-red-600 dark:text-red-300" : undefined,
+    },
+  ];
+}
+
+function buildUniversalBlueprintMetrics(
+  allocation: EquipmentBlueprintAllocation["universalBlueprints"][number],
+): ResourceInventoryTileMetric[] {
+  const balance = allocation.remainingAmount;
+  return [
+    {
+      key: "required",
+      label: "대체 필요",
+      value: allocation.requiredAmount.toLocaleString(),
+    },
+    {
+      key: "balance",
+      label: balance >= 0 ? "여유" : "부족",
+      value: Math.abs(balance).toLocaleString(),
+      valueClassName: cn(
+        balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+        balance < 0 && "text-red-600 dark:text-red-300",
+      ),
+    },
+  ];
+}
+
 function ResourceTile({
   resource,
   currentQuantity,
   draftQuantity,
   showRequiredMetrics,
   showRequiredBalance = true,
+  label,
   metrics,
   inputProps,
   onQuantityChange,
@@ -907,6 +987,7 @@ function ResourceTile({
   draftQuantity: number;
   showRequiredMetrics: boolean;
   showRequiredBalance?: boolean;
+  label?: string;
   metrics?: ResourceInventoryTileMetric[];
   inputProps?: NumberInputFlowNavigationInputProps;
   onQuantityChange: (quantity: number) => void;
@@ -938,7 +1019,7 @@ function ResourceTile({
         resourceType: resource.type,
         rarity: resource.rarity,
         name: resource.name,
-        label: getEquipmentResourceTierLabel(resource.uid) ?? undefined,
+        label: label ?? getEquipmentResourceTierLabel(resource.uid) ?? undefined,
       }}
       currentQuantity={currentQuantity}
       draftQuantity={draftQuantity}
@@ -1118,15 +1199,38 @@ function buildResourceShortageByUid(
       (resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null,
     );
     const equipmentResources = resources.filter(
-      (resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) === null,
+      (resource) =>
+        getEquipmentBlueprintChoiceBoxTier(resource.uid) === null &&
+        getUniversalEquipmentBlueprintTypeKey(resource.uid) === null,
     );
-    const allocation = allocateEquipmentChoiceBoxes(equipmentResources, choiceBoxResources, quantities);
-    for (const [resourceUid, isShortage] of allocation.shortageByUid) {
-      shortageByUid.set(resourceUid, isShortage);
+    const universalResources = resources.filter(
+      (resource) => getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null,
+    );
+    const allocation = buildEquipmentBlueprintAllocation(
+      equipmentResources,
+      choiceBoxResources,
+      universalResources,
+      quantities,
+    );
+    for (const demand of allocation.demands) {
+      shortageByUid.set(demand.inventoryUid, demand.finalDeficit > 0);
+    }
+    for (const choiceBox of allocation.choiceBoxes) {
+      shortageByUid.set(choiceBox.inventoryUid, choiceBox.remainingAmount < 0);
+    }
+    for (const universal of allocation.universalBlueprints) {
+      shortageByUid.set(universal.inventoryUid, universal.remainingAmount < 0);
     }
   }
 
   return shortageByUid;
+}
+
+function hasEquipmentTypeRequirement(resources: InventoryResource[], typeKey: string | null): boolean {
+  return (
+    typeKey !== null &&
+    resources.some((resource) => getEquipmentTypeKey(resource.uid) === typeKey && resource.requiredAmount > 0)
+  );
 }
 
 export function buildResourceGroups(
@@ -1158,6 +1262,9 @@ export function buildResourceGroups(
         (resource) =>
           mode === "all" ||
           resource.requiredAmount > 0 ||
+          (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null &&
+            ((quantities[getInventoryUid(resource)] ?? 0) > 0 ||
+              hasEquipmentTypeRequirement(groupResources, getUniversalEquipmentBlueprintTypeKey(resource.uid)))) ||
           (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
             (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
           (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
@@ -1195,16 +1302,17 @@ export function buildInventoryResources(
   );
   const catalogResourceMap = new Map(catalogResources.map((resource) => [sourceResourceKey(resource), resource]));
   const requiredItemMap = new Map(requiredItems.map((item) => [sourceResourceKey(item), item]));
-  const equipmentCoverageByChoiceBoxUid = new Map(
-    calculateEquipmentTierCoverage(requiredItems, {}).map((coverage) => [coverage.choiceBoxUid, coverage]),
-  );
+  const equipmentChoiceBoxRequiredAmountByUid = getEquipmentChoiceBoxRequiredAmounts(catalogResources, requiredItems);
   const skillMaterialChoiceBoxRequiredAmountByUid = getSkillMaterialChoiceBoxRequiredAmounts(requiredItems);
+  if (catalogResources.some((resource) => !resource.name?.trim())) {
+    throw new Error("필요한 재화 카탈로그 정보를 확인하지 못했어요");
+  }
   const inventoryResources = catalogResources.map((resource) => ({
     ...resource,
     inventoryUid: resource.inventoryUid ?? identityBySourceKey.get(sourceResourceKey(resource)) ?? resource.uid,
     requiredAmount:
       requiredItemMap.get(sourceResourceKey(resource))?.amount ??
-      equipmentCoverageByChoiceBoxUid.get(resource.uid)?.requiredAmount ??
+      equipmentChoiceBoxRequiredAmountByUid.get(resource.uid) ??
       skillMaterialChoiceBoxRequiredAmountByUid.get(resource.uid) ??
       0,
     kindOrder: getGrowthPlannerCatalogResourceKindOrder(resource) ?? GROWTH_RESOURCE_KIND_ORDER.other,
@@ -1215,10 +1323,14 @@ export function buildInventoryResources(
       continue;
     }
 
+    if (!item.name?.trim()) {
+      throw new Error("필요한 재화 카탈로그 정보를 확인하지 못했어요");
+    }
+
     inventoryResources.push({
       uid: item.uid,
       inventoryUid: identityBySourceKey.get(sourceResourceKey(item)) ?? item.uid,
-      name: item.name ?? "알 수 없는 재화",
+      name: item.name,
       rarity: item.rarity,
       type: item.type,
       category: item.category ?? null,
@@ -1229,6 +1341,32 @@ export function buildInventoryResources(
   }
 
   return inventoryResources;
+}
+
+function getEquipmentChoiceBoxRequiredAmounts(
+  catalogResources: InventoryCatalogResource[],
+  requiredItems: AggregatedGrowthResourceRequirements["items"],
+): Map<string, number> {
+  const choiceBoxResources = catalogResources.filter(
+    (resource) => getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null,
+  );
+  if (choiceBoxResources.length === 0) {
+    return new Map();
+  }
+
+  const directDemands = requiredItems
+    .filter((item) => item.source === "equipment" && getEquipmentTypeKey(item.uid) !== null)
+    .map((item) => ({ uid: item.uid, requiredAmount: item.amount, ownedAmount: 0 }));
+  const allocation = allocateEquipmentBlueprints({
+    directDemands,
+    choiceBoxes: choiceBoxResources.map((resource) => ({
+      uid: resource.uid,
+      inventoryUid: getInventoryUid(resource),
+      ownedAmount: Number.MAX_SAFE_INTEGER,
+    })),
+    universalBlueprints: [],
+  });
+  return new Map(allocation.choiceBoxes.map((choiceBox) => [choiceBox.uid, choiceBox.requiredAmount]));
 }
 
 export const CHARACTER_EXP_PER_STUDENT = calculateCharacterExpDifference(1, 90);
