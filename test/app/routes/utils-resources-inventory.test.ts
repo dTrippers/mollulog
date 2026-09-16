@@ -3,8 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ResourceInventoryTile } from "~/components/features/growth";
+import { clampNumberInputValue } from "~/components/primitives/NumberInput";
 import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getUserResourceInventoryMap, upsertUserResourceInventories } from "~/models/user-resource-inventory";
@@ -43,6 +45,7 @@ jest.mock("~/models/user-resource-inventory", () => ({
 
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
+const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedGetRelationshipLevels = getRelationshipLevels as jest.MockedFunction<typeof getRelationshipLevels>;
 const mockedGetInventory = getUserResourceInventoryMap as jest.MockedFunction<typeof getUserResourceInventoryMap>;
 const mockedUpsertInventory = upsertUserResourceInventories as jest.MockedFunction<
@@ -51,7 +54,7 @@ const mockedUpsertInventory = upsertUserResourceInventories as jest.MockedFuncti
 const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
 
 jest.mock("~/lib/observability.server", () => ({
-  getLogger: () => logger,
+  getLogger: jest.fn(() => logger),
 }));
 
 const env = { KV_CACHE: { get: jest.fn(async () => null) } } as unknown as Env;
@@ -290,6 +293,32 @@ describe("resource inventory canonical identity", () => {
     expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
   });
 
+  it("logs a forced refresh failure before returning the safe catalog error", async () => {
+    const incompleteCatalogResources = universalBlueprintCatalogResources.slice(0, -1);
+    const refreshError = new Error("catalog refresh failed; password=secret");
+    mockedGetCatalogResources
+      .mockResolvedValueOnce(incompleteCatalogResources as never)
+      .mockRejectedValueOnce(refreshError);
+
+    const error = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory"))).catch(
+      (value) => value,
+    );
+
+    assertResponse(error);
+    expect(error.status).toBe(503);
+    await expect(error.text()).resolves.toBe("만능 설계도 정보를 불러오지 못했어요.");
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(1, env);
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
+    expect(mockedGetLogger).toHaveBeenCalledWith(env, undefined, {
+      route: "utils.resources.inventory.loader",
+    });
+    expect(logger.error).toHaveBeenCalledWith("Failed to refresh resource inventory catalog", undefined, {
+      forceRefresh: true,
+      errorCategory: "Error",
+    });
+    expect(JSON.stringify(logger.error.mock.calls)).not.toContain("password=secret");
+  });
+
   it("returns an explicit 503 when a canonical universal equipment blueprint is missing", async () => {
     const incompleteCatalogResources = universalBlueprintCatalogResources.slice(0, -1);
     mockedGetCatalogResources
@@ -327,7 +356,7 @@ describe("resource inventory canonical identity", () => {
   });
 
   it("accepts and persists a canonical universal equipment blueprint key", async () => {
-    mockedGetCatalogResources.mockResolvedValue([universalBlueprintCatalogResources[0]] as never);
+    mockedGetCatalogResources.mockResolvedValue([...catalogResources, ...universalBlueprintCatalogResources] as never);
     mockedGetInventory.mockResolvedValue({ "501000": 1 });
 
     const result = await action(
@@ -345,7 +374,10 @@ describe("resource inventory canonical identity", () => {
   });
 
   it("accepts a gift-box quantity in the inventory save action", async () => {
-    mockedGetCatalogResources.mockResolvedValue([giftBoxCatalogResources[0]] as never);
+    mockedGetCatalogResources.mockResolvedValue([
+      ...giftBoxCatalogResources,
+      ...universalBlueprintCatalogResources,
+    ] as never);
     mockedGetInventory.mockResolvedValue({ "100000": 1 });
 
     const result = await action(
@@ -413,21 +445,35 @@ describe("resource inventory canonical identity", () => {
     expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "equipment:23", quantity: 10 }]);
   });
 
-  it("persists a known equipment blueprint even when the equipment catalog is incomplete", async () => {
-    mockedGetCatalogResources.mockResolvedValue([catalogResources[0]] as never);
+  it("rejects a mixed save before upserting when the universal catalog is incomplete", async () => {
+    const incompleteCatalogResources = [...catalogResources, ...universalBlueprintCatalogResources.slice(0, -1)];
+    mockedGetCatalogResources
+      .mockResolvedValueOnce(incompleteCatalogResources as never)
+      .mockResolvedValueOnce(incompleteCatalogResources as never);
 
     const result = await action(
       routeArgs(
         new Request("https://mollulog.net/utils/resources/inventory", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ items: [{ itemUid: "101001", quantity: 3 }] }),
+          body: JSON.stringify({
+            items: [
+              { itemUid: "23", quantity: 5 },
+              { itemUid: "509000", quantity: 3 },
+            ],
+          }),
         }),
       ),
     );
 
-    expect((result as { data: unknown }).data).toEqual({ saved: true, savedAt: expect.any(Number) });
-    expect(mockedUpsertInventory).toHaveBeenCalledWith(env, 7, [{ itemUid: "101001", quantity: 3 }]);
+    expect(result).toMatchObject({
+      type: "DataWithResponseInit",
+      data: { error: "만능 설계도 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요" },
+      init: { status: 503 },
+    });
+    expect(mockedUpsertInventory).not.toHaveBeenCalled();
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(1, env);
+    expect(mockedGetCatalogResources).toHaveBeenNthCalledWith(2, env, true);
   });
 
   it("keeps malformed payloads actionable without logging a server failure", async () => {
@@ -892,5 +938,30 @@ describe("resource inventory filter", () => {
 
     expect(markup).toContain('aria-label="모자 만능 설계도 보유 수량"');
     expect(markup).toContain(">만능</div>");
+  });
+
+  it("clamps overlarge inventory quantities to the database integer bound", () => {
+    const maxQuantity = 2_147_483_647;
+    const pastedQuantity = maxQuantity + 1;
+    const clampedQuantity = clampNumberInputValue(pastedQuantity, 0, maxQuantity);
+
+    expect(clampedQuantity).toBe(maxQuantity);
+
+    const markup = renderToStaticMarkup(
+      createElement(ResourceInventoryTile, {
+        resource: {
+          itemUid: "501000",
+          resourceType: ResourceTypeEnum.Equipment,
+          rarity: 1,
+          name: "모자 만능 설계도",
+          label: "만능",
+        },
+        currentQuantity: 0,
+        draftQuantity: clampedQuantity,
+        onQuantityChange: jest.fn(),
+      }),
+    );
+
+    expect(markup).toContain(`value="${maxQuantity}"`);
   });
 });

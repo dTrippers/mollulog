@@ -38,14 +38,15 @@ type ActionData = {
 export const meta: MetaFunction = () => [{ title: "보유 재화 관리 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const env = context.cloudflare.env;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "utils.resources.inventory.loader" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
   const [catalogResources, ownedQuantities, relationshipLevels] = await Promise.all([
-    loadValidatedUniversalEquipmentCatalog(env),
+    loadValidatedUniversalEquipmentCatalog(env, logger),
     getUserResourceInventoryMap(env, currentUser.id),
     getRelationshipLevels(env, currentUser.id),
   ]);
@@ -84,10 +85,16 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   let ownedQuantities: Awaited<ReturnType<typeof getUserResourceInventoryMap>>;
   try {
     [catalogResources, ownedQuantities] = await Promise.all([
-      getItemCatalogResources(env),
+      loadValidatedUniversalEquipmentCatalog(env, logger),
       getUserResourceInventoryMap(env, currentUser.id),
     ]);
   } catch (error) {
+    if (error instanceof Response) {
+      return data<ActionData>(
+        { error: "만능 설계도 정보를 불러오지 못했어요. 잠시 후 다시 시도해주세요" },
+        { status: 503 },
+      );
+    }
     logger.error("Failed to load resource inventory save dependencies", error, { userId: currentUser.id });
     return data<ActionData>({ error: "보유 재화를 확인하지 못했어요. 잠시 후 다시 시도해주세요" }, { status: 500 });
   }
@@ -170,6 +177,7 @@ function isKnownResourceUid(resourceUidSet: Set<string>, itemUid: string): boole
 
 async function loadValidatedUniversalEquipmentCatalog(
   env: Env,
+  logger: ReturnType<typeof getLogger>,
 ): Promise<Awaited<ReturnType<typeof getItemCatalogResources>>> {
   const catalogResources = await getItemCatalogResources(env);
   if (hasValidUniversalEquipmentBlueprintCatalog(catalogResources)) {
@@ -179,7 +187,11 @@ async function loadValidatedUniversalEquipmentCatalog(
   let refreshedCatalogResources: Awaited<ReturnType<typeof getItemCatalogResources>>;
   try {
     refreshedCatalogResources = await getItemCatalogResources(env, true);
-  } catch {
+  } catch (error) {
+    logger.error("Failed to refresh resource inventory catalog", undefined, {
+      forceRefresh: true,
+      errorCategory: error instanceof Error ? error.name : "UnknownError",
+    });
     throw new Response("만능 설계도 정보를 불러오지 못했어요.", { status: 503 });
   }
   if (!hasValidUniversalEquipmentBlueprintCatalog(refreshedCatalogResources)) {

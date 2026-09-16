@@ -8,6 +8,8 @@ import {
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 
+const MAX_RESOURCE_INVENTORY_QUANTITY = 2_147_483_647;
+
 export type ResourceInventoryTileMetric = {
   key?: string;
   label?: string;
@@ -106,6 +108,7 @@ export default function ResourceInventoryTile({
         <div className="w-full">
           <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">{quantityLabel}</p>
           <NumberInput
+            maxValue={MAX_RESOURCE_INVENTORY_QUANTITY}
             minValue={0}
             showDecrease={false}
             showIncrease={false}
