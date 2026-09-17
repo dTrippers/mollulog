@@ -77,6 +77,7 @@ describe("OCR cell apply", () => {
       { uid: "100", name: "A", rarity: 1, type: "item", category: null, subCategory: null },
       { uid: "200", name: "B", rarity: 1, type: "item", category: null, subCategory: null },
       { uid: "300", name: "C", rarity: 1, type: "item", category: null, subCategory: null },
+      { uid: "501000", name: "모자 만능 설계도", rarity: 1, type: "equipment", category: "hat", subCategory: null },
       { uid: "23", name: "엘리그마", rarity: 1, type: "item", category: "coin", subCategory: null },
       {
         uid: "23",
@@ -87,7 +88,7 @@ describe("OCR cell apply", () => {
         subCategory: null,
       },
     ] as never);
-    mockedGetInventory.mockResolvedValue({ "100": 1, "200": 3, "300": 0, "equipment:23": 0 });
+    mockedGetInventory.mockResolvedValue({ "100": 1, "200": 3, "300": 0, "501000": 2, "equipment:23": 0 });
     mockedCreateAndApply.mockResolvedValue({
       draft: { status: "applied", appliedAt: "2026-01-01T00:00:00.000Z" },
       alreadyApplied: false,
@@ -151,6 +152,23 @@ describe("OCR cell apply", () => {
       7,
       expect.objectContaining({
         entries: expect.arrayContaining([expect.objectContaining({ entryKey: "equipment:23", value: 4 })]),
+      }),
+    );
+  });
+
+  it("accepts a canonical universal equipment blueprint UID from manual review", async () => {
+    await action(
+      createArgs({
+        resultGeneration: 4,
+        cells: [{ imageIndex: 0, position: 2, itemUid: "501000", quantity: 4 }],
+      }),
+    );
+
+    expect(mockedCreateAndApply).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({
+        entries: expect.arrayContaining([expect.objectContaining({ entryKey: "501000", value: 4 })]),
       }),
     );
   });

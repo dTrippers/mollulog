@@ -8,6 +8,8 @@ import {
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 
+const MAX_RESOURCE_INVENTORY_QUANTITY = 2_147_483_647;
+
 export type ResourceInventoryTileMetric = {
   key?: string;
   label?: string;
@@ -44,7 +46,7 @@ type ResourceInventoryTileProps = {
   quantityLabel?: string;
   showQuantityInput?: boolean;
   showName?: boolean;
-  inputProps?: NumberInputFlowNavigationInputProps;
+  inputProps?: NumberInputFlowNavigationInputProps & { "aria-label"?: string };
   metrics?: ResourceInventoryTileMetric[];
   onQuantityChange?: (quantity: number) => void;
   /**
@@ -106,12 +108,16 @@ export default function ResourceInventoryTile({
         <div className="w-full">
           <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">{quantityLabel}</p>
           <NumberInput
+            maxValue={MAX_RESOURCE_INVENTORY_QUANTITY}
             minValue={0}
             showDecrease={false}
             showIncrease={false}
             size="sm"
             value={draftQuantity}
-            inputProps={inputProps}
+            inputProps={{
+              "aria-label": `${resource.name ?? "재화"} 보유 수량`,
+              ...inputProps,
+            }}
             onChange={onQuantityChange}
           />
         </div>
@@ -165,7 +171,7 @@ function MetricRow({
     <div className={cn("flex items-center justify-between gap-1", dimmed && "opacity-40", hidden && "invisible")}>
       <span
         className={cn(
-          "shrink-0 whitespace-nowrap leading-tight text-muted-foreground/70",
+          "shrink-0 whitespace-nowrap leading-tight text-muted-foreground",
           tooltip && "underline decoration-dotted underline-offset-2",
         )}
       >

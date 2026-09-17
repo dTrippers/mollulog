@@ -1,9 +1,12 @@
+import { allocateEquipmentBlueprints } from "~/domain/equipment-blueprint-allocation";
 import {
   type AggregatedGrowthResourceRequirements,
   aggregateGrowthResourceRequirements,
+  EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER,
   getEquipmentTier,
   getEquipmentTypeKey,
   type StudentGrowthResourceRequirements,
+  UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID,
 } from "~/domain/growth-resource";
 
 export type FarmingDifficultyFilter = "all" | "normal" | "hard";
@@ -82,15 +85,11 @@ export function buildEquipmentFarmingNeeded(
   ownedQuantities: Record<string, number>,
 ): Record<string, number> {
   const aggregated = Array.isArray(requirements) ? aggregateGrowthResourceRequirements(requirements) : requirements;
-  return aggregated.items
-    .filter((item) => item.source === "equipment" && getEquipmentTypeKey(item.uid) !== null)
-    .reduce<Record<string, number>>((acc, item) => {
-      const needed = Math.max(0, item.amount - (ownedQuantities[item.uid] ?? 0));
-      if (needed > 0) {
-        acc[item.uid] = needed;
-      }
-      return acc;
-    }, {});
+  return Object.fromEntries(
+    buildEquipmentBlueprintAllocation(aggregated, ownedQuantities)
+      .demands.filter((demand) => demand.finalDeficit > 0)
+      .map((demand) => [demand.uid, demand.finalDeficit]),
+  );
 }
 
 export function buildEquipmentFarmingRequirements(
@@ -98,16 +97,42 @@ export function buildEquipmentFarmingRequirements(
   ownedQuantities: Record<string, number>,
 ): FarmingRequirement[] {
   const aggregated = Array.isArray(requirements) ? aggregateGrowthResourceRequirements(requirements) : requirements;
-  return aggregated.items
-    .filter((item) => item.source === "equipment" && getEquipmentTypeKey(item.uid) !== null)
-    .map((item) => ({
-      uid: item.uid,
-      required: item.amount,
-      owned: ownedQuantities[item.uid] ?? 0,
-      needed: Math.max(0, item.amount - (ownedQuantities[item.uid] ?? 0)),
+  return buildEquipmentBlueprintAllocation(aggregated, ownedQuantities)
+    .demands.map((demand) => ({
+      uid: demand.uid,
+      required: demand.requiredAmount,
+      owned: demand.directOwnedAmount,
+      needed: demand.finalDeficit,
     }))
     .filter((requirement) => requirement.needed > 0)
     .sort((a, b) => Number(a.uid) - Number(b.uid));
+}
+
+function buildEquipmentBlueprintAllocation(
+  requirements: AggregatedGrowthResourceRequirements,
+  ownedQuantities: Record<string, number>,
+) {
+  const directDemands = requirements.items
+    .filter((item) => item.source === "equipment" && getEquipmentTypeKey(item.uid) !== null)
+    .map((item) => ({
+      uid: item.uid,
+      requiredAmount: item.amount,
+      ownedAmount: getOwnedQuantity(ownedQuantities, item.uid),
+    }));
+  const choiceBoxes = Object.values(EQUIPMENT_BLUEPRINT_CHOICE_BOX_UID_BY_TIER).map((uid) => ({
+    uid,
+    ownedAmount: getOwnedQuantity(ownedQuantities, uid),
+  }));
+  const universalBlueprints = Object.keys(UNIVERSAL_EQUIPMENT_BLUEPRINT_TYPE_BY_UID).map((uid) => ({
+    uid,
+    ownedAmount: getOwnedQuantity(ownedQuantities, uid),
+  }));
+
+  return allocateEquipmentBlueprints({ directDemands, choiceBoxes, universalBlueprints });
+}
+
+function getOwnedQuantity(ownedQuantities: Record<string, number>, uid: string): number {
+  return ownedQuantities[uid] ?? ownedQuantities[`equipment:${uid}`] ?? 0;
 }
 
 export function buildFarmingRecommendations(

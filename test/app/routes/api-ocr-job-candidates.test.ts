@@ -70,6 +70,7 @@ describe("OCR candidate lookup", () => {
       { uid: "100", name: "기존 아이템", rarity: 1, type: "item", category: null, subCategory: null },
       { uid: "200", name: "후보 아이템", rarity: 2, type: "item", category: null, subCategory: null },
       { uid: "999", name: "검색 아이템", rarity: 3, type: "item", category: null, subCategory: null },
+      { uid: "501000", name: "모자 만능 설계도", rarity: 1, type: "equipment", category: "hat", subCategory: null },
       { uid: "23", name: "엘리그마", rarity: 1, type: "item", category: "coin", subCategory: null },
       {
         uid: "23",
@@ -80,12 +81,13 @@ describe("OCR candidate lookup", () => {
         subCategory: null,
       },
     ] as never);
-    mockedGetInventory.mockResolvedValue({ "23": 5, "100": 12, "200": 4, "999": 1, "equipment:23": 2 });
+    mockedGetInventory.mockResolvedValue({ "23": 5, "100": 12, "200": 4, "999": 1, "501000": 6, "equipment:23": 2 });
     mockedGetDescriptions.mockResolvedValue({
       "23": "엘리그마 설명",
       "100": "기존 아이템 설명",
       "200": "후보 아이템 설명",
       "999": "검색 아이템 설명",
+      "501000": "모자 만능 설계도 설명",
       "equipment:23": "티타늄 해머 설명",
     });
   });
@@ -161,6 +163,36 @@ describe("OCR candidate lookup", () => {
         assetUid: "23",
         resourceType: "equipment",
         name: "티타늄 해머",
+      }),
+    ]);
+  });
+
+  it("finds a universal equipment blueprint by name with its canonical identity and quantity", async () => {
+    const response = expectDataResult<{
+      candidates: Array<{
+        uid: string;
+        assetUid: string;
+        resourceType: string;
+        name: string;
+        currentQuantity: number;
+      }>;
+    }>(
+      await loader({
+        request: new Request(
+          "https://mollulog.net/api/ocr/jobs/job-1/candidates?imageIndex=0&position=0&q=모자%20만능",
+        ),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
+
+    expect(response.data.candidates).toEqual([
+      expect.objectContaining({
+        uid: "501000",
+        assetUid: "501000",
+        resourceType: "equipment",
+        name: "모자 만능 설계도",
+        currentQuantity: 6,
       }),
     ]);
   });

@@ -1,8 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import {
   buildCellReviewAttentionCounts,
   buildCellReviewPreviewSummary,
+  CellReviewPanel,
   getCellReviewCandidateList,
   hasCellReviewCells,
   type ReviewCell,
@@ -168,5 +171,49 @@ describe("resource cell review preview", () => {
         "1:1": { excluded: true, exclusionTouched: true },
       }),
     ).toEqual({});
+  });
+
+  it("includes the current resource name in the candidate trigger accessible name", () => {
+    const markup = renderToStaticMarkup(
+      createElement(CellReviewPanel, {
+        jobUid: "job-1",
+        selectedImageUid: null,
+        cells: [cells[0]],
+        edits: {},
+        candidateDetails: {},
+        disabled: false,
+        onHighlightChange: () => {},
+        onLoadCandidates: () => {},
+        onEdit: () => {},
+      }),
+    );
+
+    expect(markup).toContain('aria-label="A 후보 열기"');
+  });
+
+  it("includes the cell resource name in the same-appearance candidate trigger accessible name", () => {
+    const markup = renderToStaticMarkup(
+      createElement(CellReviewPanel, {
+        jobUid: "job-1",
+        selectedImageUid: null,
+        cells: [
+          {
+            ...cells[0],
+            itemUid: null,
+            resource: { uid: "100", name: "A", rarity: 1 },
+            sameAppearanceCandidateCount: 2,
+            reasons: ["resource_visual_identity_ambiguous"],
+          },
+        ],
+        edits: {},
+        candidateDetails: {},
+        disabled: false,
+        onHighlightChange: () => {},
+        onLoadCandidates: () => {},
+        onEdit: () => {},
+      }),
+    );
+
+    expect(markup).toContain('aria-label="A 같은 모양의 아이템 선택"');
   });
 });

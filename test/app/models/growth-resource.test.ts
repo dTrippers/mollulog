@@ -14,7 +14,6 @@ import {
   calculateCharacterExpDifference,
   calculateCumulativeTierEleph,
   calculateEquipmentResourceItems,
-  calculateEquipmentTierCoverage,
   calculateGearResourceItems,
   calculateLevelRequiredExp,
   calculateLevelResourceItems,
@@ -28,6 +27,8 @@ import {
   getSkillMaterialChoiceBoxKindOrder,
   getSkillMaterialChoiceBoxRarity,
   getSkillMaterialResourceChoiceBoxUid,
+  getUniversalEquipmentBlueprintTypeKey,
+  isUniversalEquipmentBlueprintUid,
   normalizeStudentGrowthInputForCalculation,
   sortGrowthResourceItems,
 } from "../../../app/domain/growth-resource";
@@ -470,84 +471,24 @@ describe("growth-resource", () => {
   it("formats equipment blueprint tier labels for resource cards", () => {
     expect(getEquipmentTierLabel("101007")).toBe("T8");
     expect(getEquipmentTierLabel("108009")).toBe("T10");
+    expect(getEquipmentTierLabel("501000")).toBeNull();
     expect(getEquipmentTierLabel("150041")).toBeNull();
     expect(getEquipmentTierLabel("999999")).toBeNull();
     expect(getEquipmentResourceTierLabel("101007")).toBe("T8");
     expect(getEquipmentResourceTierLabel("150041")).toBe("T8");
+    expect(getEquipmentResourceTierLabel("501000")).toBeNull();
     expect(getEquipmentResourceTierLabel("999999")).toBeNull();
   });
 
-  it("applies equipment blueprint choice boxes only to same-tier total deficit", () => {
+  it("maps only the nine canonical universal blueprint UIDs to equipment categories", () => {
     expect(
-      calculateEquipmentTierCoverage(
-        [
-          {
-            uid: "101007",
-            type: ResourceTypeEnum.Equipment,
-            amount: 50,
-            source: "equipment",
-          },
-          {
-            uid: "102007",
-            type: ResourceTypeEnum.Equipment,
-            amount: 20,
-            source: "equipment",
-          },
-          {
-            uid: "101006",
-            type: ResourceTypeEnum.Equipment,
-            amount: 30,
-            source: "equipment",
-          },
-          {
-            uid: "150",
-            type: ResourceTypeEnum.Item,
-            amount: 100,
-            source: "skill",
-          },
-        ],
-        {
-          "101007": 30,
-          "102007": 5,
-          "101006": 0,
-          "150041": 10,
-          "150033": 999,
-        },
+      ["501000", "502000", "503000", "504000", "505000", "506000", "507000", "508000", "509000"].map(
+        getUniversalEquipmentBlueprintTypeKey,
       ),
-    ).toEqual([
-      {
-        tier: 7,
-        requiredAmount: 30,
-        directOwnedAmount: 0,
-        directDeficit: 30,
-        choiceBoxUid: "150033",
-        choiceBoxQuantity: 999,
-        finalDeficit: 0,
-      },
-      {
-        tier: 8,
-        requiredAmount: 70,
-        directOwnedAmount: 35,
-        directDeficit: 35,
-        choiceBoxUid: "150041",
-        choiceBoxQuantity: 10,
-        finalDeficit: 25,
-      },
-    ]);
-  });
-
-  it("includes owned equipment blueprint choice boxes even without direct equipment requirements", () => {
-    expect(calculateEquipmentTierCoverage([], { "150048": 3 })).toEqual([
-      {
-        tier: 10,
-        requiredAmount: 0,
-        directOwnedAmount: 0,
-        directDeficit: 0,
-        choiceBoxUid: "150048",
-        choiceBoxQuantity: 3,
-        finalDeficit: 0,
-      },
-    ]);
+    ).toEqual(["hat", "gloves", "shoes", "bag", "badge", "hairpin", "charm", "watch", "necklace"]);
+    expect(isUniversalEquipmentBlueprintUid("501001")).toBe(false);
+    expect(isUniversalEquipmentBlueprintUid("100000")).toBe(false);
+    expect(classifyGrowthResourceKind({ uid: "501001", type: ResourceTypeEnum.Equipment, category: "hat" })).toBeNull();
   });
 
   it("treats missing current equipment tier as tier 1 when a target tier exists", () => {

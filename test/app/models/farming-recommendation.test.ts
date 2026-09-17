@@ -92,6 +92,36 @@ describe("farming-recommendation", () => {
     ]);
   });
 
+  it("uses the shared sequential choice-box and universal blueprint allocation for farming needs", () => {
+    const requirements = requirement([
+      {
+        uid: "101004",
+        type: ResourceTypeEnum.Equipment,
+        rarity: 1,
+        amount: 1,
+        source: "equipment",
+      },
+      {
+        uid: "102004",
+        type: ResourceTypeEnum.Equipment,
+        rarity: 1,
+        amount: 2,
+        source: "equipment",
+      },
+    ]);
+
+    const ownedQuantities = { "150031": 1, "501000": 7 };
+    expect(buildEquipmentFarmingNeeded(requirements, ownedQuantities)).toEqual({ "102004": 2 });
+    expect(buildEquipmentFarmingRequirements(requirements, ownedQuantities)).toEqual([
+      {
+        uid: "102004",
+        required: 2,
+        owned: 0,
+        needed: 2,
+      },
+    ]);
+  });
+
   it("scores repeatable equipment drops and keeps the full stage drop list", () => {
     const recommendations = buildFarmingRecommendations(
       { "101001": 20, "102001": 10 },

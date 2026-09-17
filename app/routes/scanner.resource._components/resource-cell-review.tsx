@@ -551,6 +551,7 @@ function CellCandidatePopoverContent({
   const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
   const sameAppearanceSelectionRequired =
     !selectedUid && sameAppearanceCandidateCount > 1 && cell.reasons.includes("resource_visual_identity_ambiguous");
+  const candidateTriggerResourceName = current?.name ?? cell.resource?.name ?? "아이템";
   const defaultCandidates = sameAppearanceSelectionRequired
     ? (defaultDetails?.candidates ?? []).slice(0, sameAppearanceCandidateCount)
     : (defaultDetails?.candidates ?? []);
@@ -627,7 +628,11 @@ function CellCandidatePopoverContent({
     <>
       <PopoverButton
         disabled={disabled}
-        aria-label={sameAppearanceSelectionRequired ? "같은 모양의 아이템 선택" : "아이템 후보 열기"}
+        aria-label={
+          sameAppearanceSelectionRequired
+            ? `${candidateTriggerResourceName} 같은 모양의 아이템 선택`
+            : `${candidateTriggerResourceName} 후보 열기`
+        }
         onMouseEnter={() => onHighlightChange(true)}
         className="block cursor-pointer rounded-lg leading-none outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
       >
