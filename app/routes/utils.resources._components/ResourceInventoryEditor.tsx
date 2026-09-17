@@ -571,7 +571,7 @@ function SkillMaterialSubGroups({
   );
 }
 
-function EquipmentSubGroups({
+export function EquipmentSubGroups({
   resources,
   allocationResources,
   ownedQuantities,
@@ -746,8 +746,8 @@ function EquipmentSubGroups({
     <div key={typeKey} className="px-3 py-2">
       <p className="mb-1 text-xs font-medium text-muted-foreground">{EQUIPMENT_TYPE_LABELS[typeKey] ?? typeKey}</p>
       <div className="flex flex-wrap">
-        {renderUniversalResource(typeKey)}
         {typeResources.map(renderDirectResource)}
+        {renderUniversalResource(typeKey)}
       </div>
     </div>
   );
@@ -952,21 +952,11 @@ function buildDirectBlueprintMetrics(
 function buildUniversalBlueprintMetrics(
   allocation: EquipmentBlueprintAllocation["universalBlueprints"][number],
 ): ResourceInventoryTileMetric[] {
-  const balance = allocation.remainingAmount;
   return [
     {
       key: "required",
-      label: "대체 필요",
+      label: "필요",
       value: allocation.requiredAmount.toLocaleString(),
-    },
-    {
-      key: "balance",
-      label: balance >= 0 ? "여유" : "부족",
-      value: Math.abs(balance).toLocaleString(),
-      valueClassName: cn(
-        balance >= 0 && "text-emerald-600 dark:text-emerald-400",
-        balance < 0 && "text-red-600 dark:text-red-300",
-      ),
     },
   ];
 }

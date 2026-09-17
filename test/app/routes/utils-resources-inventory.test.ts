@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { createElement } from "react";
+import { type ComponentProps, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ResourceInventoryTile } from "~/components/features/growth";
+import { useNumberInputFlowNavigation } from "~/components/primitives";
 import { clampNumberInputValue } from "~/components/primitives/NumberInput";
 import { GROWTH_RESOURCE_KIND_ORDER } from "~/domain/growth-resource";
 import { ResourceTypeEnum } from "~/graphql/graphql";
@@ -16,6 +17,7 @@ import {
   CHARACTER_EXP_PER_STUDENT,
   CharacterExpSummary,
   calculateOwnedCharacterExp,
+  EquipmentSubGroups,
   formatCharacterExpEquivalent,
   getResourceInventoryEmptyText,
 } from "~/routes/utils.resources._components/ResourceInventoryEditor";
@@ -963,5 +965,99 @@ describe("resource inventory filter", () => {
     );
 
     expect(markup).toContain(`value="${maxQuantity}"`);
+  });
+});
+
+type EquipmentSubGroupsProps = ComponentProps<typeof EquipmentSubGroups>;
+
+function EquipmentSubGroupsWithInputNavigation(props: Omit<EquipmentSubGroupsProps, "numberInputFlowNavigation">) {
+  const numberInputFlowNavigation = useNumberInputFlowNavigation();
+  return createElement(EquipmentSubGroups, { ...props, numberInputFlowNavigation });
+}
+
+function renderEquipmentSubGroups(props: Omit<EquipmentSubGroupsProps, "numberInputFlowNavigation">) {
+  return renderToStaticMarkup(createElement(EquipmentSubGroupsWithInputNavigation, props));
+}
+
+function extractTileMarkup(markup: string, tileName: string): string {
+  const start = markup.indexOf(`<div title="${tileName}"`);
+  if (start === -1) {
+    throw new Error(`tile markup not found: ${tileName}`);
+  }
+  const nextTileStart = markup.indexOf('<div title="', start + 1);
+  return markup.slice(start, nextTileStart === -1 ? undefined : nextTileStart);
+}
+
+describe("resource inventory editor universal blueprint tile", () => {
+  const equipmentResources = [
+    {
+      uid: "101004",
+      name: "T5 모자 설계도",
+      rarity: 1,
+      type: ResourceTypeEnum.Equipment,
+      category: "hat",
+      subCategory: null,
+      requiredAmount: 200,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+    },
+    {
+      uid: "501000",
+      name: "모자 만능 설계도",
+      rarity: 1,
+      type: ResourceTypeEnum.Equipment,
+      category: "hat",
+      subCategory: null,
+      requiredAmount: 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.equipment,
+    },
+  ] as const;
+  function renderHatGroupEditor(universalOwnedAmount = 3) {
+    const draftQuantities = { "101004": 0, "501000": universalOwnedAmount };
+    return renderEquipmentSubGroups({
+      resources: [...equipmentResources],
+      allocationResources: [...equipmentResources],
+      ownedQuantities: draftQuantities,
+      draftQuantities,
+      onQuantityChange: jest.fn(),
+    });
+  }
+
+  it("renders the universal blueprint tile after direct blueprint tiles in its equipment type group", () => {
+    const markup = renderHatGroupEditor();
+
+    const directTileIndex = markup.indexOf('<div title="T5 모자 설계도"');
+    const universalTileIndex = markup.indexOf('<div title="모자 만능 설계도"');
+    expect(directTileIndex).toBeGreaterThan(-1);
+    expect(universalTileIndex).toBeGreaterThan(directTileIndex);
+  });
+
+  it("shows a single required metric with the ownership-independent universal amount", () => {
+    const markup = renderHatGroupEditor();
+    const universalTileMarkup = extractTileMarkup(markup, "모자 만능 설계도");
+
+    // T5 부족분 200 × 만능 설계도 코스트 7 = 1400 (보유량 3과 무관)
+    expect(universalTileMarkup).toContain(">필요</span>");
+    expect(universalTileMarkup).toContain(">1,400</span>");
+  });
+
+  it("keeps the required amount independent of universal blueprint ownership", () => {
+    const markup = renderHatGroupEditor(7);
+    const universalTileMarkup = extractTileMarkup(markup, "모자 만능 설계도");
+
+    // 보유 7개로 T5 설계도 1개(코스트 7)를 대체해도 필요량은 1400으로 유지된다.
+    // 보유량 의존 값(requiredAmount - usedAmount = 1400 - 7)이라면 1,393이 렌더된다.
+    expect(universalTileMarkup).toContain(">필요</span>");
+    expect(universalTileMarkup).toContain(">1,400</span>");
+  });
+
+  it("no longer shows substitute-required or balance metrics on the universal blueprint tile", () => {
+    const markup = renderHatGroupEditor();
+    const universalTileMarkup = extractTileMarkup(markup, "모자 만능 설계도");
+    const directTileMarkup = extractTileMarkup(markup, "T5 모자 설계도");
+
+    expect(markup).not.toContain("대체 필요");
+    expect(universalTileMarkup).not.toContain("여유");
+    expect(universalTileMarkup).not.toContain("부족");
+    expect(directTileMarkup).toContain("부족");
   });
 });
