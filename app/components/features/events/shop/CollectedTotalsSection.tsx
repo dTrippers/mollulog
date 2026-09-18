@@ -2,6 +2,7 @@ import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import BugReportModal from "./BugReportModal";
 import { calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
@@ -14,6 +15,8 @@ type CollectedTotalsSectionProps = {
   collectableResources: CollectableResource[];
   shopResources: ShopResource[];
   eventUid: string;
+  shopStateUid: string;
+  savedShopStateSource: SavedShopStateSource;
   minigameConfig?: MinigameConfig | null;
   state: ShopState;
   actions: ShopActions;
@@ -96,6 +99,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   collectableResources,
   shopResources,
   eventUid,
+  shopStateUid,
+  savedShopStateSource,
   minigameConfig,
   state,
   actions,
@@ -416,6 +421,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
         <BugReportModal
           show={showBugReportModal}
           eventUid={eventUid}
+          shopStateUid={shopStateUid}
+          savedShopStateSource={savedShopStateSource}
           stages={stages}
           shopResources={shopResources}
           collectableResources={collectableResources}

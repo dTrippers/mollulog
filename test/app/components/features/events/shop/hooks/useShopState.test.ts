@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   getInitialItemPurchaseDays,
   getInitialMinigameStartRound,
+  getPostSignInState,
 } from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
@@ -104,5 +105,60 @@ describe("getInitialMinigameStartRound", () => {
 
   it("restores a saved start round", () => {
     expect(getInitialMinigameStartRound(createSavedShopState({ minigameStartRound: 4 }))).toBe(4);
+  });
+});
+
+describe("getPostSignInState", () => {
+  it("returns null when neither a saved state nor recruited students exist", () => {
+    expect(
+      getPostSignInState({ savedShopState: null, recruitedStudentUids: [], shopResources: [], stages: [] }),
+    ).toBeNull();
+  });
+
+  it("applies the recruited-student default over the guest empty selection", () => {
+    const syncedState = getPostSignInState({
+      savedShopState: null,
+      recruitedStudentUids: ["student-1", "student-2"],
+      shopResources: [],
+      stages: [],
+    });
+
+    expect(syncedState?.selectedBonusStudentUids).toEqual(["student-1", "student-2"]);
+    expect(syncedState?.itemQuantities).toEqual({});
+    expect(syncedState?.minigameStartRound).toBe(1);
+  });
+
+  it("prefers the saved state over the recruited-student default", () => {
+    const savedShopState = createSavedShopState({
+      itemQuantities: { "daily-ticket": 60 },
+      selectedBonusStudentUids: ["student-9"],
+      enabledStages: { "stage-1": true },
+    });
+    const syncedState = getPostSignInState({
+      savedShopState,
+      recruitedStudentUids: ["student-1", "student-2"],
+      shopResources: [],
+      stages: [],
+    });
+
+    expect(syncedState).toEqual(
+      createSavedShopState({
+        itemQuantities: { "daily-ticket": 60 },
+        selectedBonusStudentUids: ["student-9"],
+        enabledStages: { "stage-1": true },
+      }),
+    );
+  });
+
+  it("keeps the saved minigame start round within the valid range and the saved bonus selection", () => {
+    const syncedState = getPostSignInState({
+      savedShopState: createSavedShopState({ minigameStartRound: 0, selectedBonusStudentUids: [] }),
+      recruitedStudentUids: ["student-1"],
+      shopResources: [],
+      stages: [],
+    });
+
+    expect(syncedState?.minigameStartRound).toBe(1);
+    expect(syncedState?.selectedBonusStudentUids).toEqual([]);
   });
 });

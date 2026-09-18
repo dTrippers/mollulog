@@ -6,6 +6,8 @@ export type EventShopBugReportAdditional = {
   payload: Record<string, unknown> & {
     timestamp: string;
     eventUid: string;
+    shopStateUid?: string;
+    savedShopStateSource?: string;
   };
 };
 

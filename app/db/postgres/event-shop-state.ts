@@ -3,9 +3,20 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import type { EventShopState } from "~/models/event-shop-state";
-import { pgEventShopStatesTable } from "./schema";
+import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
 
 type EventShopStateDatabase = NodePgDatabase;
+
+const eventShopStateHistorySources = ["autosave"] as const;
+
+export type EventShopStateHistorySource = (typeof eventShopStateHistorySources)[number];
+
+function parseEventShopStateHistorySource(value: string): EventShopStateHistorySource {
+  if (!(eventShopStateHistorySources as readonly string[]).includes(value)) {
+    throw new Error(`Invalid event shop state history source: ${value}`);
+  }
+  return value as EventShopStateHistorySource;
+}
 
 export type PostgresEventShopStateOptions = {
   ctx?: ExecutionContext;
@@ -57,50 +68,49 @@ export async function upsertPostgresEventShopState(
   options: PostgresEventShopStateOptions = {},
 ): Promise<void> {
   const minigameStartRound = Math.max(1, state.minigameStartRound ?? 1);
+  const historySource = parseEventShopStateHistorySource("autosave");
+  const normalizedState: EventShopState = {
+    itemQuantities: state.itemQuantities,
+    itemPurchaseDays: state.itemPurchaseDays ?? {},
+    selectedBonusStudentUids: state.selectedBonusStudentUids,
+    bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
+    selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem ?? {},
+    enabledStages: state.enabledStages,
+    includeRecruitedStudents: state.includeRecruitedStudents,
+    existingPaymentItemQuantities: state.existingPaymentItemQuantities ?? {},
+    includeFirstClear: state.includeFirstClear,
+    extraStageRuns: state.extraStageRuns ?? {},
+    minigameStartRound,
+    minigamePlayCount: state.minigamePlayCount ?? 0,
+    minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
+    overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
+  };
   await withEventShopStateDatabase(
     env,
     async (db) => {
-      await db
-        .insert(pgEventShopStatesTable)
-        .values({
-          uid: nanoid(8),
+      await db.transaction(async (tx) => {
+        await tx
+          .insert(pgEventShopStatesTable)
+          .values({
+            uid: nanoid(8),
+            userId,
+            eventUid,
+            ...normalizedState,
+          })
+          .onConflictDoUpdate({
+            target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+            set: {
+              ...normalizedState,
+              updatedAt: new Date(),
+            },
+          });
+        await tx.insert(pgEventShopStatesHistoryTable).values({
           userId,
           eventUid,
-          itemQuantities: state.itemQuantities,
-          itemPurchaseDays: state.itemPurchaseDays ?? {},
-          selectedBonusStudentUids: state.selectedBonusStudentUids,
-          bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
-          selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem ?? {},
-          enabledStages: state.enabledStages,
-          includeRecruitedStudents: state.includeRecruitedStudents,
-          existingPaymentItemQuantities: state.existingPaymentItemQuantities ?? {},
-          includeFirstClear: state.includeFirstClear,
-          extraStageRuns: state.extraStageRuns ?? {},
-          minigameStartRound,
-          minigamePlayCount: state.minigamePlayCount ?? 0,
-          minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
-          overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
-        })
-        .onConflictDoUpdate({
-          target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-          set: {
-            itemQuantities: state.itemQuantities,
-            itemPurchaseDays: state.itemPurchaseDays ?? {},
-            selectedBonusStudentUids: state.selectedBonusStudentUids,
-            bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
-            selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem ?? {},
-            enabledStages: state.enabledStages,
-            includeRecruitedStudents: state.includeRecruitedStudents,
-            existingPaymentItemQuantities: state.existingPaymentItemQuantities ?? {},
-            includeFirstClear: state.includeFirstClear,
-            extraStageRuns: state.extraStageRuns ?? {},
-            minigameStartRound,
-            minigamePlayCount: state.minigamePlayCount ?? 0,
-            minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
-            overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
-            updatedAt: new Date(),
-          },
+          state: normalizedState,
+          source: historySource,
         });
+      });
     },
     options,
   );

@@ -8,6 +8,9 @@ export type EventShopStateIdentity = {
   fallbackStateUid: string | null;
 };
 
+/** Where the loader resolved the persisted shop state from. */
+export type SavedShopStateSource = "primary" | "fallback" | "none";
+
 export function buildEventShopStateIdentity({
   timelineUid,
   shopContentUid,

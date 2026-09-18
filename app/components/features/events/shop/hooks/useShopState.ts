@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode, ShopResource, Stage } from "~/domain/event-shop";
 import type { EventShopState } from "~/models/event-shop-state";
 import { isDailyResetShopResource } from "../calculations/shop-costs";
@@ -48,6 +48,7 @@ type UseShopStateParams = {
   recruitedStudentUids: string[];
   shopResources: ShopResource[];
   stages: Stage[];
+  signedIn: boolean;
 };
 
 function getDefaultEnabledStages(stages: Stage[]) {
@@ -86,9 +87,88 @@ export function getInitialMinigameStartRound(savedShopState: EventShopState | nu
 }
 
 /**
+ * Serializes the live shop state into the persisted shape with a fixed field
+ * order so auto-save comparisons stay consistent across baseline and periodic saves.
+ */
+export function toEventShopState(state: ShopState): EventShopState {
+  return {
+    itemQuantities: state.itemQuantities,
+    itemPurchaseDays: state.itemPurchaseDays,
+    selectedBonusStudentUids: state.selectedBonusStudentUids,
+    bonusStudentSelectionMode: state.bonusStudentSelectionMode,
+    selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem,
+    enabledStages: state.enabledStages,
+    includeRecruitedStudents: state.includeRecruitedStudents,
+    existingPaymentItemQuantities: state.existingPaymentItemQuantities,
+    includeFirstClear: state.includeFirstClear,
+    extraStageRuns: state.extraStageRuns,
+    minigameStartRound: state.minigameStartRound,
+    minigamePlayCount: state.minigamePlayCount,
+    minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
+    overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+  };
+}
+
+/**
+ * Save baseline for auto-save: the server-loaded state when one exists,
+ * otherwise a snapshot of the state at mount so the untouched default state
+ * is never saved.
+ */
+export function getInitialLastSavedState(
+  savedShopState: EventShopState | null,
+  state: ShopState,
+): EventShopState | null {
+  return savedShopState ?? toEventShopState(state);
+}
+
+/**
+ * State to apply when user context arrives on a page that was mounted while
+ * signed out. useState initializers run only at mount, so after a client-side
+ * sign-in (e.g., passkey from the sign-in sheet) revalidates the loader, the
+ * live state would keep guest defaults — an empty recruited-student selection
+ * among them — and the next save would persist them. When a saved state
+ * exists it is authoritative and replaces any edits made while signed out;
+ * otherwise only the recruited-student defaults change. Returns null when
+ * there is no user context to apply yet.
+ */
+export function getPostSignInState({
+  savedShopState,
+  recruitedStudentUids,
+  shopResources,
+  stages,
+}: Pick<UseShopStateParams, "savedShopState" | "recruitedStudentUids" | "shopResources" | "stages">): ShopState | null {
+  if (!savedShopState && recruitedStudentUids.length === 0) {
+    return null;
+  }
+
+  return {
+    itemQuantities: savedShopState?.itemQuantities ?? {},
+    itemPurchaseDays: getInitialItemPurchaseDays(savedShopState, shopResources),
+    selectedBonusStudentUids: savedShopState?.selectedBonusStudentUids ?? recruitedStudentUids,
+    bonusStudentSelectionMode: savedShopState?.bonusStudentSelectionMode ?? "shared",
+    selectedBonusStudentUidsByItem: savedShopState?.selectedBonusStudentUidsByItem ?? {},
+    includeRecruitedStudents: savedShopState?.includeRecruitedStudents ?? true,
+    enabledStages: savedShopState?.enabledStages ?? getDefaultEnabledStages(stages),
+    existingPaymentItemQuantities: savedShopState?.existingPaymentItemQuantities ?? {},
+    includeFirstClear: savedShopState?.includeFirstClear ?? false,
+    extraStageRuns: savedShopState?.extraStageRuns ?? {},
+    minigameStartRound: getInitialMinigameStartRound(savedShopState),
+    minigamePlayCount: savedShopState?.minigamePlayCount ?? 0,
+    minigamePaymentQuantityMode: savedShopState?.minigamePaymentQuantityMode ?? "expected",
+    overriddenRequiredQuantities: savedShopState?.overriddenRequiredQuantities ?? {},
+  };
+}
+
+/**
  * Unified state management hook for event shop page.
  */
-export function useShopState({ savedShopState, recruitedStudentUids, shopResources, stages }: UseShopStateParams) {
+export function useShopState({
+  savedShopState,
+  recruitedStudentUids,
+  shopResources,
+  stages,
+  signedIn,
+}: UseShopStateParams) {
   const [itemQuantities, setItemQuantities] = useState<Record<string, number>>(savedShopState?.itemQuantities ?? {});
   const [itemPurchaseDays, setItemPurchaseDays] = useState<Record<string, number>>(
     getInitialItemPurchaseDays(savedShopState, shopResources),
@@ -125,6 +205,37 @@ export function useShopState({ savedShopState, recruitedStudentUids, shopResourc
   const [overriddenRequiredQuantities, setOverriddenRequiredQuantities] = useState<Record<string, number>>(
     savedShopState?.overriddenRequiredQuantities ?? {},
   );
+
+  // A page mounted while signed out keeps guest defaults even after a
+  // client-side sign-in revalidates the loader, so apply the user context
+  // (saved state or recruited-student defaults) once, when it arrives. The
+  // next periodic save then persists the synced state instead of guest
+  // defaults such as the empty recruited-student selection.
+  const didSyncSignedInStateRef = useRef(signedIn);
+  useEffect(() => {
+    if (didSyncSignedInStateRef.current || !signedIn) {
+      return;
+    }
+    const syncedState = getPostSignInState({ savedShopState, recruitedStudentUids, shopResources, stages });
+    if (!syncedState) {
+      return;
+    }
+    didSyncSignedInStateRef.current = true;
+    setItemQuantities(syncedState.itemQuantities);
+    setItemPurchaseDays(syncedState.itemPurchaseDays);
+    setSelectedBonusStudentUids(syncedState.selectedBonusStudentUids);
+    setBonusStudentSelectionMode(syncedState.bonusStudentSelectionMode);
+    setSelectedBonusStudentUidsByItem(syncedState.selectedBonusStudentUidsByItem);
+    setIncludeRecruitedStudents(syncedState.includeRecruitedStudents);
+    setEnabledStages(syncedState.enabledStages);
+    setExistingPaymentItemQuantities(syncedState.existingPaymentItemQuantities);
+    setIncludeFirstClear(syncedState.includeFirstClear);
+    setExtraStageRuns(syncedState.extraStageRuns);
+    setMinigameStartRound(syncedState.minigameStartRound);
+    setMinigamePlayCount(syncedState.minigamePlayCount);
+    setMinigamePaymentQuantityMode(syncedState.minigamePaymentQuantityMode);
+    setOverriddenRequiredQuantities(syncedState.overriddenRequiredQuantities);
+  }, [signedIn, savedShopState, recruitedStudentUids, shopResources, stages]);
 
   // Actions object with memoized callbacks
   const actions = useMemo<ShopActions>(

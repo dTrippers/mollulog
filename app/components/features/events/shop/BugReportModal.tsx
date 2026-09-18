@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { useFetcher } from "react-router";
 import { Button, Textarea } from "~/components/primitives";
 import type { CollectableResource, ShopResource, Stage } from "~/domain/event-shop";
+import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { nowUtcIso } from "~/lib/date-time";
 import type { CalculationResult } from "./hooks/useShopCalculations";
 import type { ShopState } from "./hooks/useShopState";
@@ -12,6 +13,8 @@ import type { ShopState } from "./hooks/useShopState";
 type BugReportModalProps = {
   show: boolean;
   eventUid: string;
+  shopStateUid: string;
+  savedShopStateSource: SavedShopStateSource;
   stages: Stage[];
   shopResources: ShopResource[];
   collectableResources: CollectableResource[];
@@ -23,6 +26,8 @@ type BugReportModalProps = {
 export default function BugReportModal({
   show,
   eventUid,
+  shopStateUid,
+  savedShopStateSource,
   stages,
   shopResources,
   collectableResources,
@@ -47,6 +52,8 @@ export default function BugReportModal({
     const debugLog = {
       timestamp: nowUtcIso(),
       eventUid,
+      shopStateUid,
+      savedShopStateSource,
       stages,
       shopResources,
       collectableResources,

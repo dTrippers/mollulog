@@ -2,9 +2,9 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
-import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
+import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
-import { getEventShopState } from "~/models/event-shop-state";
+import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
 import EventShopContent from "./events.$uid._components/EventShopContent";
@@ -64,12 +64,17 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     timelineUid,
     shopContentUid: metadata.shopContentUid,
   });
-  const savedShopState = currentUser
-    ? ((await getEventShopState(env, currentUser.id, shopStateIdentity.shopStateUid)) ??
-      (shopStateIdentity.fallbackStateUid
-        ? await getEventShopState(env, currentUser.id, shopStateIdentity.fallbackStateUid)
-        : null))
-    : null;
+  let savedShopState: EventShopState | null = null;
+  let savedShopStateSource: SavedShopStateSource = "none";
+  if (currentUser) {
+    savedShopState = await getEventShopState(env, currentUser.id, shopStateIdentity.shopStateUid);
+    if (savedShopState) {
+      savedShopStateSource = "primary";
+    } else if (shopStateIdentity.fallbackStateUid) {
+      savedShopState = await getEventShopState(env, currentUser.id, shopStateIdentity.fallbackStateUid);
+      savedShopStateSource = savedShopState ? "fallback" : "none";
+    }
+  }
   return {
     eventName: metadata.name,
     until: shopUntil,
@@ -80,6 +85,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     minigameConfig,
     recruitedStudentUids,
     savedShopState,
+    savedShopStateSource,
     availablePurchaseDays: calculateShopPurchaseDays(shopSince, shopUntil),
     eventUid: timelineUid,
     shopStateUid: shopStateIdentity.shopStateUid,
@@ -112,6 +118,7 @@ export default function EventShop() {
       eventUid={loaderData.eventUid}
       shopStateUid={loaderData.shopStateUid}
       savedShopState={loaderData.savedShopState}
+      savedShopStateSource={loaderData.savedShopStateSource}
       availablePurchaseDays={loaderData.availablePurchaseDays}
       signedIn={loaderData.signedIn}
       minigameConfig={loaderData.minigameConfig}

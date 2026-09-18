@@ -521,6 +521,21 @@ export const pgEventShopStatesTable = pgTable(
   ],
 );
 
+export const pgEventShopStatesHistoryTable = pgTable(
+  "event_shop_state_history",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    eventUid: text("event_uid").notNull(),
+    state: jsonb("state").$type<EventShopState>().notNull(),
+    source: text("source").notNull().default("autosave"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("event_shop_state_history_user_event_created_idx").on(table.userId, table.eventUid, table.createdAt.desc()),
+  ],
+);
+
 export const pgConnectApiKeysTable = pgTable(
   "connect_api_keys",
   {
