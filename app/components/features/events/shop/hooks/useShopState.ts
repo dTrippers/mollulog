@@ -86,6 +86,41 @@ export function getInitialMinigameStartRound(savedShopState: EventShopState | nu
 }
 
 /**
+ * Serializes the live shop state into the persisted shape with a fixed field
+ * order so auto-save comparisons stay consistent across baseline and periodic saves.
+ */
+export function toEventShopState(state: ShopState): EventShopState {
+  return {
+    itemQuantities: state.itemQuantities,
+    itemPurchaseDays: state.itemPurchaseDays,
+    selectedBonusStudentUids: state.selectedBonusStudentUids,
+    bonusStudentSelectionMode: state.bonusStudentSelectionMode,
+    selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem,
+    enabledStages: state.enabledStages,
+    includeRecruitedStudents: state.includeRecruitedStudents,
+    existingPaymentItemQuantities: state.existingPaymentItemQuantities,
+    includeFirstClear: state.includeFirstClear,
+    extraStageRuns: state.extraStageRuns,
+    minigameStartRound: state.minigameStartRound,
+    minigamePlayCount: state.minigamePlayCount,
+    minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
+    overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+  };
+}
+
+/**
+ * Save baseline for auto-save: the server-loaded state when one exists,
+ * otherwise a snapshot of the state at mount so the untouched default state
+ * is never saved.
+ */
+export function getInitialLastSavedState(
+  savedShopState: EventShopState | null,
+  state: ShopState,
+): EventShopState | null {
+  return savedShopState ?? toEventShopState(state);
+}
+
+/**
  * Unified state management hook for event shop page.
  */
 export function useShopState({ savedShopState, recruitedStudentUids, shopResources, stages }: UseShopStateParams) {

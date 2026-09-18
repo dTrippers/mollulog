@@ -1,31 +1,25 @@
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import type { EventShopState } from "~/models/event-shop-state";
-import type { ShopState } from "./useShopState";
+import { getInitialLastSavedState, toEventShopState, type ShopState } from "./useShopState";
 
 type UseAutoSaveParams = {
   state: ShopState;
   signedIn: boolean;
   shopStateUid: string;
   savedShopState: EventShopState | null;
-  isInitialLoad: boolean;
 };
 
 /**
  * Auto-save hook that periodically saves shop state changes to the server.
  * Handles synchronization and prevents unnecessary saves.
  */
-export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isInitialLoad }: UseAutoSaveParams) {
+export function useAutoSave({ state, signedIn, shopStateUid, savedShopState }: UseAutoSaveParams) {
   const fetcher = useFetcher();
   const saveIntervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const lastSavedStateRef = useRef<EventShopState | null>(null);
-
-  // Initialize lastSavedStateRef with the initial saved state
-  useEffect(() => {
-    if (savedShopState && lastSavedStateRef.current === null) {
-      lastSavedStateRef.current = savedShopState;
-    }
-  }, [savedShopState]);
+  // Save baseline: the server-loaded state, or the state at mount when the
+  // server has none, so the untouched default state is never saved.
+  const lastSavedStateRef = useRef<EventShopState | null>(getInitialLastSavedState(savedShopState, state));
 
   // Prevent re-render from revalidation
   const prevSavedShopStateRef = useRef(savedShopState);
@@ -33,23 +27,16 @@ export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isI
     if (savedShopState && savedShopState !== prevSavedShopStateRef.current) {
       prevSavedShopStateRef.current = savedShopState;
 
-      if (lastSavedStateRef.current === null) {
+      const stateMatches = JSON.stringify(lastSavedStateRef.current) === JSON.stringify(savedShopState);
+      if (stateMatches) {
         lastSavedStateRef.current = savedShopState;
-      } else {
-        const stateMatches = JSON.stringify(lastSavedStateRef.current) === JSON.stringify(savedShopState);
-        if (stateMatches) {
-          lastSavedStateRef.current = savedShopState;
-        }
       }
-    } else if (!savedShopState) {
-      prevSavedShopStateRef.current = null;
-      lastSavedStateRef.current = null;
     }
   }, [savedShopState]);
 
   // Periodic save check: every 1.5 seconds
   useEffect(() => {
-    if (!signedIn || isInitialLoad) {
+    if (!signedIn) {
       return;
     }
 
@@ -58,26 +45,9 @@ export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isI
     }
 
     saveIntervalRef.current = setInterval(() => {
-      const currentState: EventShopState = {
-        itemQuantities: state.itemQuantities,
-        itemPurchaseDays: state.itemPurchaseDays,
-        selectedBonusStudentUids: state.selectedBonusStudentUids,
-        bonusStudentSelectionMode: state.bonusStudentSelectionMode,
-        selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem,
-        enabledStages: state.enabledStages,
-        includeRecruitedStudents: state.includeRecruitedStudents,
-        existingPaymentItemQuantities: state.existingPaymentItemQuantities,
-        includeFirstClear: state.includeFirstClear,
-        extraStageRuns: state.extraStageRuns,
-        minigameStartRound: state.minigameStartRound,
-        minigamePlayCount: state.minigamePlayCount,
-        minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
-        overriddenRequiredQuantities: state.overriddenRequiredQuantities,
-      };
+      const currentState = toEventShopState(state);
 
-      const hasChanged =
-        lastSavedStateRef.current === null ||
-        JSON.stringify(lastSavedStateRef.current) !== JSON.stringify(currentState);
+      const hasChanged = JSON.stringify(lastSavedStateRef.current) !== JSON.stringify(currentState);
       if (hasChanged && fetcher.state === "idle") {
         lastSavedStateRef.current = currentState;
         fetcher.submit(
@@ -96,7 +66,7 @@ export function useAutoSave({ state, signedIn, shopStateUid, savedShopState, isI
         clearInterval(saveIntervalRef.current);
       }
     };
-  }, [state, signedIn, shopStateUid, fetcher, isInitialLoad]);
+  }, [state, signedIn, shopStateUid, fetcher]);
 
   const isSaving = fetcher.state === "submitting" || fetcher.state === "loading";
   return { isSaving };

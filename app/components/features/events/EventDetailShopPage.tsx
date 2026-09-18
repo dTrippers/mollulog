@@ -1,7 +1,8 @@
 import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
 import EventInfoCard from "./EventInfoCard";
@@ -28,6 +29,7 @@ type EventDetailShopPageProps = {
   eventUid: string;
   shopStateUid: string;
   savedShopState: EventShopState | null;
+  savedShopStateSource: SavedShopStateSource;
   availablePurchaseDays: number;
   signedIn: boolean;
   minigameConfig?: MinigameConfig | null;
@@ -41,6 +43,7 @@ export default function EventDetailShopPage({
   eventUid,
   shopStateUid,
   savedShopState,
+  savedShopStateSource,
   availablePurchaseDays,
   signedIn,
   minigameConfig = null,
@@ -117,19 +120,6 @@ export default function EventDetailShopPage({
     stages,
   });
 
-  // Track initial load for auto-save
-  const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
-  const hasSavedShopStateRef = useRef(savedShopState !== null);
-  useEffect(() => {
-    if (!hasSavedShopStateRef.current) {
-      const timer = setTimeout(() => {
-        setIsInitialLoad(false);
-      }, 100);
-
-      return () => clearTimeout(timer);
-    }
-  }, []);
-
   // Bonus calculation
   const { appliedBonusRatios } = useBonusCalculation({
     eventRewardBonus,
@@ -139,7 +129,7 @@ export default function EventDetailShopPage({
   });
 
   // Auto-save
-  const { isSaving } = useAutoSave({ state, signedIn, shopStateUid, savedShopState, isInitialLoad });
+  const { isSaving } = useAutoSave({ state, signedIn, shopStateUid, savedShopState });
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
@@ -243,6 +233,8 @@ export default function EventDetailShopPage({
             collectableResources={collectableResources}
             shopResources={visibleShopResources}
             eventUid={eventUid}
+            shopStateUid={shopStateUid}
+            savedShopStateSource={savedShopStateSource}
             minigameConfig={minigameConfig}
             state={state}
             actions={actions}
