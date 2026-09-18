@@ -37,6 +37,7 @@ export const workerEnvKeys = [
 
 const requiredWorkerEnvKeys = ["HOST", "SESSION_SECRET"];
 const sslModes = new Set(["disable", "prefer", "require", "verify-ca", "verify-full", "no-verify"]);
+const hostnamePattern = /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/;
 
 export class LocalDevError extends Error {}
 
@@ -81,7 +82,7 @@ function normalizeHost(value) {
   const host = bracketed ? rawHost.slice(1, -1) : rawHost;
   if (isIP(host) === 6) return `[${host}]`;
   if (isIP(host) === 4) return host;
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(host)) {
+  if (!hostnamePattern.test(host)) {
     throw new LocalDevError("Invalid PGHOST. Use a PostgreSQL hostname or IP address.");
   }
   return host;
@@ -106,17 +107,37 @@ export function connectionStringFromPostgresEnvironment(env) {
   return url.toString();
 }
 
-export function assertLocalConnection(value) {
+export function allowedLocalDbHosts(env) {
+  const raw = env.LOCAL_DB_ALLOWED_HOSTS;
+  if (raw === undefined) return [];
+  if (typeof raw !== "string") {
+    throw new LocalDevError("Invalid LOCAL_DB_ALLOWED_HOSTS. Use a comma-separated list of hostnames.");
+  }
+  const entries = raw.split(",").map((entry) => entry.trim());
+  for (const entry of entries) {
+    if (!entry) {
+      throw new LocalDevError("Invalid LOCAL_DB_ALLOWED_HOSTS: entries cannot be empty. Use a comma-separated hostname list, or remove the variable for loopback-only access.");
+    }
+    if (!hostnamePattern.test(entry)) {
+      throw new LocalDevError("Invalid LOCAL_DB_ALLOWED_HOSTS entry. Use a comma-separated list of plain hostnames.");
+    }
+  }
+  return entries.map((entry) => entry.toLowerCase());
+}
+
+export function assertLocalConnection(value, allowedHosts = []) {
   let url;
   try {
     url = new URL(value);
   } catch {
     throw new LocalDevError(`Missing or invalid ${connectionKey}.`);
   }
+  const permittedLoopbackHosts = ["127.0.0.1", "localhost", "[::1]"];
+  const hostPermitted = permittedLoopbackHosts.includes(url.hostname) || allowedHosts.includes(url.hostname.toLowerCase());
   const queryKeys = [...url.searchParams.keys()];
   if (
     !["postgres:", "postgresql:"].includes(url.protocol) ||
-    !["127.0.0.1", "localhost", "[::1]"].includes(url.hostname) ||
+    !hostPermitted ||
     url.hash ||
     !url.pathname.slice(1) ||
     !url.username ||
@@ -124,7 +145,10 @@ export function assertLocalConnection(value) {
     queryKeys.some((key) => key !== "sslmode") ||
     (url.searchParams.has("sslmode") && !sslModes.has(url.searchParams.get("sslmode")))
   ) {
-    throw new LocalDevError("Local DB commands require a loopback PostgreSQL connection with a database and user, without connection overrides.");
+    throw new LocalDevError(
+      "Local DB commands require a loopback PostgreSQL connection with a database and user, without connection overrides. " +
+        "To allow a non-loopback local database host, set LOCAL_DB_ALLOWED_HOSTS to a comma-separated hostname list in the selected environment file.",
+    );
   }
   return url;
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import pg from "pg";
-import { assertLocalConnection, connectionKey, LocalDevError } from "./local-dev-env.mjs";
+import { allowedLocalDbHosts, assertLocalConnection, connectionKey, LocalDevError } from "./local-dev-env.mjs";
 
 const historyTable = "_mollulog_local_migrations";
 
@@ -19,7 +19,7 @@ export function reportDatabaseError(error) {
 }
 
 export async function connectLocalDatabase(env) {
-  const connection = assertLocalConnection(env[connectionKey]);
+  const connection = assertLocalConnection(env[connectionKey], allowedLocalDbHosts(env));
   const sslMode = env.PGSSLMODE ?? connection.searchParams.get("sslmode");
   const ssl = !sslMode || sslMode === "disable" ? false : sslMode === "no-verify" ? { rejectUnauthorized: false } : true;
   const client = new pg.Client({
