@@ -118,6 +118,7 @@ export default function EventDetailShopPage({
     recruitedStudentUids,
     shopResources: visibleShopResources,
     stages,
+    signedIn,
   });
 
   // Bonus calculation
