@@ -4,7 +4,14 @@ import { data, Form, redirect, useActionData, useLoaderData, useNavigation } fro
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { parseStudentStateImport } from "~/domain/student-state-serialization";
-import { getSyncDraftEntryCounts, listPendingSyncDrafts } from "~/models/sync-draft";
+import { getAllStudentsMap } from "~/models/student";
+import {
+  SyncDraftPersistenceError,
+  createSyncDraft,
+  getSyncDraftEntryCounts,
+  listPendingSyncDrafts,
+} from "~/models/sync-draft";
+import { getLogger } from "~/lib/observability.server";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 import PendingSyncDraftList from "./connect._components/PendingSyncDraftList";
 
@@ -14,12 +21,9 @@ type ActionData = {
   importedCount?: number;
 };
 
-type ConnectDraftCreateResponse = {
-  draftUid?: unknown;
-  error?: {
-    message?: unknown;
-  };
-};
+const MAX_IMPORT_STUDENT_ENTRIES = 5000;
+const IMPORT_DRAFT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const GENERIC_IMPORT_ERROR = "데이터를 가져오지 못했어요.";
 
 export const meta: MetaFunction = () => [{ title: "데이터 가져오기 | 몰루로그" }];
 
@@ -44,7 +48,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "connect.import" });
   const sensei = await getActiveSensei(env, request);
   if (!sensei) {
     return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
@@ -52,56 +57,65 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
   const formData = await request.formData();
   const input = String(formData.get("payload") ?? "");
+  const formError = (error: string) => data<ActionData>({ error, input }, { status: 400 });
 
+  // Parsing and the import limits are pure user-input validation; every error
+  // they produce is a user-facing message.
+  let parsed: ReturnType<typeof parseStudentStateImport>;
   try {
-    const apiUrl = env.CONNECT_API_URL ?? "http://localhost:8787";
-    const internalToken = env.CONNECT_INTERNAL_TOKEN;
-    if (!internalToken) {
-      throw new Error("데이터 가져오기 설정이 아직 완료되지 않았어요.");
-    }
-
-    const parsed = parseStudentStateImport(input);
-    const response = await fetch(new URL("/api/v1/drafts", apiUrl), {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "X-Connect-Internal-Token": internalToken,
-        "X-Connect-User-Id": String(sensei.id),
-      },
-      body: JSON.stringify({
-        type: "student_state",
-        source: {
-          toolName: parsed.format === "schaledb" ? "SchaleDB 데이터 가져오기" : "Justin163 데이터 가져오기",
-        },
-        entries: parsed.entries,
-      }),
-      signal: AbortSignal.timeout(15000),
-    });
-    const body = (await response.json().catch(() => ({}))) as ConnectDraftCreateResponse;
-
-    if (!response.ok) {
-      throw new Error(typeof body.error?.message === "string" ? body.error.message : "변경안 생성에 실패했어요.");
-    }
-
-    if (typeof body.draftUid !== "string" || body.draftUid.length === 0) {
-      throw new Error("변경안 응답을 확인할 수 없어요.");
-    }
-
-    return redirect(`/connect/import/${body.draftUid}`);
+    parsed = parseStudentStateImport(input);
   } catch (error) {
-    const isTimeout = error instanceof DOMException && (error.name === "TimeoutError" || error.name === "AbortError");
-    return data<ActionData>(
-      {
-        error: isTimeout
-          ? "연동 서버 응답이 지연되고 있어요. 잠시 후 다시 시도해주세요."
-          : error instanceof Error
-            ? error.message
-            : "데이터를 가져오지 못했어요.",
-        input,
-      },
-      { status: 400 },
+    return formError(error instanceof Error ? error.message : GENERIC_IMPORT_ERROR);
+  }
+  if (parsed.entries.length > MAX_IMPORT_STUDENT_ENTRIES) {
+    return formError(
+      `한 번에 최대 ${MAX_IMPORT_STUDENT_ENTRIES.toLocaleString()}명의 학생 데이터만 가져올 수 있어요.`,
     );
   }
+
+  // The student catalog lookup hits the cache/PostgreSQL layer, so its failures
+  // are infrastructure failures and must not reach the user verbatim.
+  let studentUids: Set<string>;
+  try {
+    studentUids = new Set(Object.keys(await getAllStudentsMap(env, true)));
+  } catch (error) {
+    logger.error("connect import student catalog lookup failed", error);
+    return formError(GENERIC_IMPORT_ERROR);
+  }
+
+  const unknownStudentIds = parsed.entries.flatMap((entry) =>
+    studentUids.has(entry.studentId) ? [] : [entry.studentId],
+  );
+  if (unknownStudentIds.length > 0) {
+    return formError(`다음 학생을 현재 학생 목록에서 찾을 수 없어요: ${unknownStudentIds.join(", ")}`);
+  }
+
+  const entries = parsed.entries.map((entry) => {
+    const value = Number(entry.current?.tier ?? entry.target?.targetTier ?? 1);
+    const valueJson = JSON.stringify({ current: entry.current, target: entry.target });
+    return { entryKey: entry.studentId, value, valueJson };
+  });
+
+  // createSyncDraft reports validation failures as plain errors (safe to show)
+  // and unexpected persistence failures as SyncDraftPersistenceError.
+  let draftUid: string;
+  try {
+    draftUid = await createSyncDraft(env, sensei.id, {
+      source: "web",
+      type: "student_state",
+      toolName: parsed.format === "schaledb" ? "SchaleDB 데이터 가져오기" : "Justin163 데이터 가져오기",
+      expiresAt: new Date(Date.now() + IMPORT_DRAFT_TTL_MS).toISOString(),
+      entries,
+    });
+  } catch (error) {
+    if (error instanceof SyncDraftPersistenceError) {
+      logger.error("connect import draft persistence failed", error.cause);
+      return formError(GENERIC_IMPORT_ERROR);
+    }
+    return formError(error instanceof Error ? error.message : GENERIC_IMPORT_ERROR);
+  }
+
+  return redirect(`/connect/import/${draftUid}`);
 };
 
 export default function ConnectImportIndexPage() {

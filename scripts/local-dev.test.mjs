@@ -86,7 +86,6 @@ test("repository dotenv files fail explicitly instead of becoming an implicit co
 test("worker bindings expose only the explicit Worker allowlist", () => {
   const bindings = workerBindingsFromEnvironment({
     ...fixtureEnv(),
-    CONNECT_API_URL: "http://127.0.0.1:8788",
     PGHOST: "127.0.0.1",
     PGPASSWORD: "secret-must-not-be-bound",
     OP_SERVICE_ACCOUNT_TOKEN: "token-must-not-be-bound",

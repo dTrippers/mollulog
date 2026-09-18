@@ -65,12 +65,29 @@ export type SyncDraftCreateInput = {
   toolName?: string | null;
   toolVersion?: string | null;
   catalogVersion?: string | null;
+  expiresAt?: string | null;
   entries: Array<SyncDraftEntryUpdateInput & { meta?: unknown }>;
 };
+
+function toExpiresAtDate(expiresAt: string | null | undefined): Date | null {
+  if (expiresAt == null) return null;
+  const date = new Date(expiresAt);
+  if (Number.isNaN(date.getTime())) throw new Error("변경안 만료 시각을 확인할 수 없어요");
+  return date;
+}
 
 function toIso(value: Date | string | null): string | null {
   if (value == null) return null;
   return value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * Wraps unexpected PostgreSQL/Hyperdrive failures from sync draft persistence
+ * so callers can separate them from user-facing validation errors, which stay
+ * plain errors and are safe to show verbatim.
+ */
+export class SyncDraftPersistenceError extends Error {
+  override readonly name = "SyncDraftPersistenceError";
 }
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
@@ -223,35 +240,40 @@ export async function createSyncDraft(env: Env, userId: number, input: SyncDraft
   );
   const draftUid = nanoid(12);
 
-  await withPostgresClient(env, async (client) => {
-    const db = drizzle(client);
-    await db.transaction(async (tx) => {
-      await tx.insert(syncDraftsTable).values({
-        uid: draftUid,
-        userId,
-        source: input.source,
-        sourceRef: input.sourceRef ?? null,
-        type: input.type,
-        status: "pending",
-        toolName: input.toolName ?? null,
-        toolVersion: input.toolVersion ?? null,
-        catalogVersion: input.catalogVersion ?? null,
+  try {
+    await withPostgresClient(env, async (client) => {
+      const db = drizzle(client);
+      await db.transaction(async (tx) => {
+        await tx.insert(syncDraftsTable).values({
+          uid: draftUid,
+          userId,
+          source: input.source,
+          sourceRef: input.sourceRef ?? null,
+          type: input.type,
+          status: "pending",
+          toolName: input.toolName ?? null,
+          toolVersion: input.toolVersion ?? null,
+          catalogVersion: input.catalogVersion ?? null,
+          expiresAt: toExpiresAtDate(input.expiresAt),
+        });
+        for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
+          const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+          await tx.insert(syncDraftEntriesTable).values(
+            chunk.map((entry) => ({
+              uid: nanoid(8),
+              draftUid,
+              entryKey: entry.entryKey,
+              value: entry.value,
+              valueJson: entry.valueJson,
+              meta: metaByEntryKey.get(entry.entryKey) ?? null,
+            })),
+          );
+        }
       });
-      for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
-        const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
-        await tx.insert(syncDraftEntriesTable).values(
-          chunk.map((entry) => ({
-            uid: nanoid(8),
-            draftUid,
-            entryKey: entry.entryKey,
-            value: entry.value,
-            valueJson: entry.valueJson,
-            meta: metaByEntryKey.get(entry.entryKey) ?? null,
-          })),
-        );
-      }
     });
-  });
+  } catch (error) {
+    throw new SyncDraftPersistenceError("PostgreSQL sync draft persistence failed", { cause: error });
+  }
   return draftUid;
 }
 
@@ -298,6 +320,7 @@ export async function createAndApplySyncDraft(
           toolName: input.toolName ?? null,
           toolVersion: input.toolVersion ?? null,
           catalogVersion: input.catalogVersion ?? null,
+          expiresAt: toExpiresAtDate(input.expiresAt),
         });
         for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
           const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);

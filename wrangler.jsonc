@@ -67,7 +67,6 @@
   },
   // Secrets configuration
   // - SESSION_SECRET
-  // - CONNECT_INTERNAL_TOKEN
   // - GOOGLE_CLIENT_SECRET
   // - GITHUB_CLIENT_ID
   // - GITHUB_CLIENT_SECRET
@@ -91,7 +90,6 @@
       ],
       "vars": {
         "HOST": "https://staging.mollulog.net",
-        "CONNECT_API_URL": "https://connect-staging.mollulog.net",
         "STAGE": "staging",
         "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
       },
@@ -135,7 +133,6 @@
       ],
       "vars": {
         "HOST": "https://mollulog.net",
-        "CONNECT_API_URL": "https://connect.mollulog.net",
         "STAGE": "prod",
         "OCR_R2_BUCKET_NAME": "mollulog-aoi-uploads-prod"
       },
