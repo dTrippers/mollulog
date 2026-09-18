@@ -532,7 +532,7 @@ export const pgEventShopStatesHistoryTable = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
   },
   (table) => [
-    index("event_shop_state_history_user_event_created_idx").on(table.userId, table.eventUid, table.createdAt),
+    index("event_shop_state_history_user_event_created_idx").on(table.userId, table.eventUid, table.createdAt.desc()),
   ],
 );
 

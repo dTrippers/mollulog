@@ -69,7 +69,13 @@ describe("event shop state history PostgreSQL migration contract", () => {
 
   test("indexes the history lookup path and mirrors the Drizzle schema", () => {
     expect(historyMigration).toContain("event_shop_state_history_user_event_created_idx");
+    expect(historyMigration).toContain(
+      "CREATE INDEX event_shop_state_history_user_event_created_idx ON event_shop_state_history (user_id, event_uid, created_at DESC)",
+    );
     expect(schema).toContain("export const pgEventShopStatesHistoryTable = pgTable(");
     expect(schema).toContain('index("event_shop_state_history_user_event_created_idx")');
+    expect(schema).toContain(
+      'index("event_shop_state_history_user_event_created_idx").on(table.userId, table.eventUid, table.createdAt.desc())',
+    );
   });
 });

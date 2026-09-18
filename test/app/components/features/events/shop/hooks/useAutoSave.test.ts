@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { resolveSaveSubmitOutcome } from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
 import {
   getInitialLastSavedState,
   type ShopState,
@@ -91,5 +92,88 @@ describe("getInitialLastSavedState", () => {
   it("falls back to the state at mount so the untouched default state is never saved", () => {
     const state = createLiveState();
     expect(getInitialLastSavedState(null, state)).toEqual(toEventShopState(state));
+  });
+});
+
+describe("resolveSaveSubmitOutcome", () => {
+  const submittedState = createSavedShopState({ minigamePlayCount: 4 });
+
+  it("confirms the submitted state on a first-attempt success", () => {
+    const data = { success: true };
+    const resolution = resolveSaveSubmitOutcome({
+      fetcherState: "idle",
+      fetcherData: data,
+      acknowledgedData: undefined,
+      submittedState,
+    });
+
+    expect(resolution.confirmedSavedState).toBe(submittedState);
+    expect(resolution.acknowledgedData).toBe(data);
+  });
+
+  it("does not confirm while a submit is still in flight", () => {
+    for (const fetcherState of ["submitting", "loading"] as const) {
+      const data = { success: true };
+      const resolution = resolveSaveSubmitOutcome({
+        fetcherState,
+        fetcherData: data,
+        acknowledgedData: undefined,
+        submittedState,
+      });
+
+      expect(resolution.confirmedSavedState).toBeNull();
+      expect(resolution.acknowledgedData).toBe(undefined);
+    }
+  });
+
+  it("ignores a first-attempt failure with no fetcher data", () => {
+    const resolution = resolveSaveSubmitOutcome({
+      fetcherState: "idle",
+      fetcherData: undefined,
+      acknowledgedData: undefined,
+      submittedState,
+    });
+
+    expect(resolution.confirmedSavedState).toBeNull();
+    expect(resolution.acknowledgedData).toBe(undefined);
+  });
+
+  it("keeps the save dirty when a failure after a success replays the previous data", () => {
+    const data = { success: true };
+    const resolution = resolveSaveSubmitOutcome({
+      fetcherState: "idle",
+      fetcherData: data,
+      acknowledgedData: data,
+      submittedState,
+    });
+
+    expect(resolution.confirmedSavedState).toBeNull();
+    expect(resolution.acknowledgedData).toBe(data);
+  });
+
+  it("confirms a retry that succeeds after a failure with a fresh result", () => {
+    const data = { success: true };
+    const resolution = resolveSaveSubmitOutcome({
+      fetcherState: "idle",
+      fetcherData: data,
+      acknowledgedData: { success: true },
+      submittedState,
+    });
+
+    expect(resolution.confirmedSavedState).toBe(submittedState);
+    expect(resolution.acknowledgedData).toBe(data);
+  });
+
+  it("acknowledges a fresh failure result without confirming", () => {
+    const data = { success: false };
+    const resolution = resolveSaveSubmitOutcome({
+      fetcherState: "idle",
+      fetcherData: data,
+      acknowledgedData: undefined,
+      submittedState,
+    });
+
+    expect(resolution.confirmedSavedState).toBeNull();
+    expect(resolution.acknowledgedData).toBe(data);
   });
 });
