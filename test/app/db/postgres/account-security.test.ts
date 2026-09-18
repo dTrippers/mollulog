@@ -13,7 +13,6 @@ jest.mock("~/db/postgres/identity", () => ({
 import { getAccountSessionState, leaveAccount } from "~/db/postgres/account-security";
 import {
   pgAuthIdentitiesTable,
-  pgConnectApiKeysTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgNotificationChannelsTable,
@@ -122,7 +121,7 @@ describe("account-security PostgreSQL repository", () => {
       status: "left",
     });
     expect(mockWithDiscordUserTransaction).toHaveBeenCalledWith(env, "leave_account", 7, expect.any(Function), {});
-    expect(deletes).toHaveLength(9);
+    expect(deletes).toHaveLength(8);
     expect(updates).toHaveLength(3);
     expect(deletes.map(({ table }) => table)).toEqual(
       expect.arrayContaining([
@@ -133,7 +132,6 @@ describe("account-security PostgreSQL repository", () => {
         pgPasskeysTable,
         pgSenseiPrivaciesTable,
         pgFollowershipsTable,
-        pgConnectApiKeysTable,
         pgPendingSenseiRegistrationsTable,
       ]),
     );
@@ -144,7 +142,6 @@ describe("account-security PostgreSQL repository", () => {
       pgNotificationReadStatesTable,
       pgPasskeysTable,
       pgSenseiPrivaciesTable,
-      pgConnectApiKeysTable,
     ]) {
       const deletion = deletes.find((call) => call.table === table);
       expect(deletion).toBeDefined();

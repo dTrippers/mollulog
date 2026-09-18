@@ -4,11 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
+  allowedLocalDbHosts,
   assertLocalConnection,
   assertNoRepositoryEnvironmentFiles,
   connectionKey,
   connectionStringFromPostgresEnvironment,
   loadLocalEnvironment,
+  LocalDevError,
   workerBindingsFromEnvironment,
 } from "./local-dev-env.mjs";
 import { connectLocalDatabase, databaseStatus, migrateFiles, transactionalSql } from "./local-postgres.mjs";
@@ -86,7 +88,6 @@ test("repository dotenv files fail explicitly instead of becoming an implicit co
 test("worker bindings expose only the explicit Worker allowlist", () => {
   const bindings = workerBindingsFromEnvironment({
     ...fixtureEnv(),
-    CONNECT_API_URL: "http://127.0.0.1:8788",
     PGHOST: "127.0.0.1",
     PGPASSWORD: "secret-must-not-be-bound",
     OP_SERVICE_ACCOUNT_TOKEN: "token-must-not-be-bound",
@@ -238,6 +239,58 @@ test("local DB guard permits only loopback PostgreSQL connections and sslmode", 
     "http://user@127.0.0.1/db",
   ]) {
     assert.throws(() => assertLocalConnection(url));
+  }
+});
+
+test("LOCAL_DB_ALLOWED_HOSTS unset keeps the loopback-only guard unchanged", () => {
+  assert.deepEqual(allowedLocalDbHosts(fixtureEnv()), []);
+  const remote = "postgres://user:secret@mollu-db.example.ts.net/mollulog";
+  assert.throws(
+    () => assertLocalConnection(remote, allowedLocalDbHosts(fixtureEnv())),
+    (error) =>
+      error instanceof LocalDevError &&
+      error.message.startsWith("Local DB commands require a loopback PostgreSQL connection with a database and user, without connection overrides.") &&
+      error.message.includes("LOCAL_DB_ALLOWED_HOSTS"),
+  );
+});
+
+test("allowlisted local host passes while unlisted remote hosts stay rejected", () => {
+  const allowed = fixtureEnv({ PGHOST: "Mollu-Db.Example.Ts.Net", LOCAL_DB_ALLOWED_HOSTS: " mollu-db.example.ts.net " });
+  const connection = assertLocalConnection(loadLocalEnvironment(allowed)[connectionKey], allowedLocalDbHosts(allowed));
+  assert.equal(connection.hostname, "Mollu-Db.Example.Ts.Net");
+
+  const other = fixtureEnv({ PGHOST: "other.example.ts.net", LOCAL_DB_ALLOWED_HOSTS: "mollu-db.example.ts.net" });
+  assert.throws(
+    () => assertLocalConnection(loadLocalEnvironment(other)[connectionKey], allowedLocalDbHosts(other)),
+    (error) => error instanceof LocalDevError && /loopback PostgreSQL connection/.test(error.message),
+  );
+});
+
+test("LOCAL_DB_ALLOWED_HOSTS entries are trimmed and compared case-insensitively", () => {
+  assert.deepEqual(allowedLocalDbHosts(fixtureEnv({ LOCAL_DB_ALLOWED_HOSTS: " Host.Example , DB2.Example " })), ["host.example", "db2.example"]);
+});
+
+test("LOCAL_DB_ALLOWED_HOSTS accepts IPv4 literals, rejects IPv6 entries, and keeps duplicates", () => {
+  const ipv4 = fixtureEnv({ PGHOST: "10.0.0.10", LOCAL_DB_ALLOWED_HOSTS: "10.0.0.10" });
+  assert.deepEqual(allowedLocalDbHosts(ipv4), ["10.0.0.10"]);
+  assert.equal(assertLocalConnection(loadLocalEnvironment(ipv4)[connectionKey], allowedLocalDbHosts(ipv4)).hostname, "10.0.0.10");
+
+  for (const LOCAL_DB_ALLOWED_HOSTS of ["[fd00::1]", "fd00::1"]) {
+    assert.throws(
+      () => allowedLocalDbHosts(fixtureEnv({ LOCAL_DB_ALLOWED_HOSTS })),
+      (error) => error instanceof LocalDevError && error.message.includes("LOCAL_DB_ALLOWED_HOSTS"),
+    );
+  }
+
+  assert.deepEqual(allowedLocalDbHosts(fixtureEnv({ LOCAL_DB_ALLOWED_HOSTS: "a,a" })), ["a", "a"]);
+});
+
+test("LOCAL_DB_ALLOWED_HOSTS fails explicitly on empty or invalid entries", () => {
+  for (const LOCAL_DB_ALLOWED_HOSTS of ["", "   ", "*", "https://x", "a,,b", "a,", ","]) {
+    assert.throws(
+      () => allowedLocalDbHosts(fixtureEnv({ LOCAL_DB_ALLOWED_HOSTS })),
+      (error) => error instanceof LocalDevError && error.message.includes("LOCAL_DB_ALLOWED_HOSTS"),
+    );
   }
 });
 

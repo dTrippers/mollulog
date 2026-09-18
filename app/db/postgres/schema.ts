@@ -22,7 +22,6 @@ import type {
   CommunityPostType,
   CommunityVisibility,
 } from "~/models/community";
-import type { ConnectApiKeyScope } from "~/models/connect-api-key";
 import type { EventShopState } from "~/models/event-shop-state";
 import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
@@ -533,44 +532,6 @@ export const pgEventShopStatesHistoryTable = pgTable(
   },
   (table) => [
     index("event_shop_state_history_user_event_created_idx").on(table.userId, table.eventUid, table.createdAt.desc()),
-  ],
-);
-
-export const pgConnectApiKeysTable = pgTable(
-  "connect_api_keys",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    uid: text().notNull(),
-    userId: integer("user_id").notNull(),
-    name: text().notNull(),
-    keyPrefix: text("key_prefix").notNull(),
-    keyHash: text("key_hash").notNull(),
-    scopes: jsonb().$type<ConnectApiKeyScope[]>().notNull().default(["catalog:read", "draft:write"]),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    expiresAt: timestamptz("expires_at"),
-    lastUsedAt: timestamptz("last_used_at"),
-    revokedAt: timestamptz("revoked_at"),
-  },
-  (table) => [
-    uniqueIndex("connect_api_keys_uid_uidx").on(table.uid),
-    index("connect_api_keys_key_prefix_idx").on(table.keyPrefix),
-    index("connect_api_keys_user_id_idx").on(table.userId),
-  ],
-);
-
-export const pgConnectRequestLogsTable = pgTable(
-  "connect_request_logs",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    uid: text().notNull(),
-    apiKeyUid: text("api_key_uid"),
-    endpoint: text().notNull(),
-    status: integer().notNull(),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("connect_request_logs_uid_uidx").on(table.uid),
-    index("connect_request_logs_api_key_created_at_idx").on(table.apiKeyUid, table.createdAt),
   ],
 );
 

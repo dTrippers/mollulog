@@ -147,3 +147,90 @@ describe("first-party OCR sync draft creation", () => {
     expect(statement).not.toContain('"level" = coalesce');
   });
 });
+
+describe("sync draft optional expiry", () => {
+  const studentStateEntry = {
+    entryKey: "10000",
+    value: 7,
+    valueJson: JSON.stringify({
+      current: {
+        tier: 7,
+        bond: null,
+        level: null,
+        weaponLevel: 0,
+        skillEx: null,
+        skillNormal: null,
+        skillEnhanced: null,
+        skillSub: null,
+        equip1: null,
+        equip2: null,
+        equip3: null,
+        equipSpecial: null,
+        abilityHp: 0,
+        abilityAtk: 0,
+        abilityHeal: 0,
+      },
+      target: null,
+    }),
+  };
+
+  it("stores an optional expiry timestamp on created drafts", async () => {
+    const db = new FakePostgresClient();
+    const expiresAt = new Date("2026-10-18T00:00:00.000Z");
+
+    await createSyncDraft(
+      { HYPERDRIVE: { connectionString: "fake://web-import" }, __pgClient: db } as unknown as Env,
+      7,
+      {
+        source: "web",
+        type: "student_state",
+        toolName: "SchaleDB 데이터 가져오기",
+        expiresAt: expiresAt.toISOString(),
+        entries: [studentStateEntry],
+      },
+    );
+
+    expect(db.statements.some((sql) => sql.includes('insert into "sync_drafts"'))).toBe(true);
+    expect(new Date(db.drafts[0]?.expiresAt as unknown as string).getTime()).toBe(expiresAt.getTime());
+  });
+
+  it("keeps drafts without an expiry when expiresAt is omitted", async () => {
+    const db = new FakePostgresClient();
+
+    await createSyncDraft(
+      { HYPERDRIVE: { connectionString: "fake://web-import" }, __pgClient: db } as unknown as Env,
+      7,
+      {
+        source: "first_party_ocr",
+        sourceRef: "job-1",
+        type: "student_state",
+        toolName: "학생 성장도 이미지 인식",
+        entries: [studentStateEntry],
+      },
+    );
+
+    expect(db.drafts[0]?.expiresAt ?? null).toBeNull();
+  });
+
+  it("stores the optional expiry on create-and-apply drafts", async () => {
+    const db = new FakePostgresClient();
+    const expiresAt = new Date("2026-10-18T00:00:00.000Z");
+
+    const { draft } = await createAndApplySyncDraft(
+      { HYPERDRIVE: { connectionString: "fake://web-import" }, __pgClient: db } as unknown as Env,
+      7,
+      {
+        source: "first_party_ocr",
+        sourceRef: "job-9",
+        type: "item_inventory",
+        toolName: "아이템 스크린샷 인식",
+        expiresAt: expiresAt.toISOString(),
+        entries: [{ entryKey: "item-1", value: 12 }],
+      },
+    );
+
+    expect(draft.status).toBe("applied");
+    const stored = db.drafts.find((row) => row.uid === draft.uid)?.expiresAt;
+    expect(new Date(stored as unknown as string).getTime()).toBe(expiresAt.getTime());
+  });
+});

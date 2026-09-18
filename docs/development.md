@@ -67,6 +67,17 @@ it remains a local development invocation and does not select a production
 Cloudflare environment. Run only the migration files belonging to the current
 task.
 
+When the local PostgreSQL intentionally lives on a non-loopback host, such as a
+Tailscale machine, set `LOCAL_DB_ALLOWED_HOSTS` to a comma-separated hostname
+list in an environment file you own, for example
+`~/Workspace/mollulog/.config/local.env`. Entries are DNS hostnames or IPv4
+addresses, trimmed and compared without case sensitivity; an empty or invalid
+entry, including an empty or whitespace-only value, fails explicitly. IPv6
+addresses, bracketed or not, cannot be allowlisted and fail explicitly.
+Removing the variable returns the guard to loopback-only hosts. The allowlist
+is an escape hatch for infrastructure you own; the guard still keeps local
+migration commands away from remote or production databases.
+
 The existing database predates the migration ledger. `untracked` means its
 application history is unknown, **not** that the SQL is pending. There is no
 automatic replay or schema reset. Selected files run in filename order in one

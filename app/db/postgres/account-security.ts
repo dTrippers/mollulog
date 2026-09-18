@@ -7,7 +7,6 @@ import {
 } from "~/db/postgres/identity";
 import {
   pgAuthIdentitiesTable,
-  pgConnectApiKeysTable,
   pgFeedbackTicketsTable,
   pgFollowershipsTable,
   pgNotificationChannelsTable,
@@ -125,7 +124,6 @@ export async function leaveAccount(
       await db
         .delete(pgFollowershipsTable)
         .where(or(eq(pgFollowershipsTable.followerId, sensei.id), eq(pgFollowershipsTable.followeeId, sensei.id)));
-      await db.delete(pgConnectApiKeysTable).where(eq(pgConnectApiKeysTable.userId, sensei.id));
       await db
         .update(pgFeedbackTicketsTable)
         .set({ replyEmail: null })
