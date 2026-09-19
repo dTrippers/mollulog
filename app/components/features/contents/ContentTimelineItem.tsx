@@ -16,7 +16,7 @@ import {
   XCircleIcon,
 } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { RaidCard } from "~/components/features/raids";
 import { StudentCards } from "~/components/features/students";
@@ -46,6 +46,14 @@ import {
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
+import {
+  getRecruitmentOpinionTutorialDismissalAction,
+  isRecruitmentOpinionTutorialDismissedForCurrentVisit,
+  isRecruitmentOpinionTutorialEligible,
+  notifyRecruitmentOpinionTutorialDismissed,
+  recruitmentOpinionTutorialStorageKey,
+  subscribeToRecruitmentOpinionTutorialDismissal,
+} from "./recruitment-opinion-tutorial";
 import { TimelineItemBanner } from "./TimelineItemBanner";
 
 export type ContentTimelineItemProps = {
@@ -64,6 +72,7 @@ export type ContentTimelineItemProps = {
   tags: string[];
   recruitmentGroupUid?: string | null;
   recruitmentPeriod?: RecruitmentPeriod | null;
+  showRecruitmentPeriodNotice?: boolean;
 
   allComments?: {
     uid: string;
@@ -90,8 +99,11 @@ export type ContentTimelineItemProps = {
   }[];
   commentSummary?: ContentCommentSummary;
   commentsUnavailable?: boolean;
+  hideRecruitmentOpinions?: boolean;
 
   onCommentOpen?: () => void;
+  onCommentClose?: () => void;
+  onOpenContentFilter?: () => void;
   onCommentCreate?: (body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (parentCommentId: string, body: string, visibility: "private" | "public") => void;
   onCommentUpdate?: (commentUid: string, body: string, visibility: "private" | "public") => void;
@@ -154,6 +166,7 @@ export type ContentTimelineItemProps = {
 export type ContentTimelineFeatureBannerId = "student-analysis" | "pending-student-favorite";
 
 export function ContentTimelineItem({
+  uid,
   name,
   imageUrl,
   contentType,
@@ -168,6 +181,7 @@ export function ContentTimelineItem({
   tags,
   recruitmentGroupUid,
   recruitmentPeriod,
+  showRecruitmentPeriodNotice = true,
   raidInfo,
   recruitments,
   allComments,
@@ -179,7 +193,10 @@ export function ContentTimelineItem({
   onCommentUnpin,
   commentSummary,
   commentsUnavailable = false,
+  hideRecruitmentOpinions = false,
   onCommentOpen,
+  onCommentClose,
+  onOpenContentFilter,
   isLoadingComments = false,
   isSubmittingComment,
   favoritedStudents,
@@ -202,16 +219,95 @@ export function ContentTimelineItem({
   const showComments =
     (recruitments?.length ?? 0) > 0 || COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES.includes(contentType);
   const [commentEditing, setCommentEditing] = useState(false);
+  const [tutorialDismissalLoaded, setTutorialDismissalLoaded] = useState(false);
+  const [tutorialDismissed, setTutorialDismissed] = useState(false);
+  const skipCommentTriggerFocusRef = useRef(false);
+  const wasCommentEditingRef = useRef(false);
+  const focusAfterTutorialDismissRef = useRef(false);
 
   let daysLabel = null;
   const now = nowUtcIso();
-  const recruitmentPeriodNotice = since
-    ? getRecruitmentPeriodNotice(
-        { recruitmentGroupUid, contentType, startAt: since, endAt: until, endless },
-        recruitmentPeriod,
-        now,
-      )
-    : null;
+  const recruitmentActive = Boolean(
+    recruitmentPeriod &&
+      !isInstantAfter(recruitmentPeriod.startAt, now) &&
+      (recruitmentPeriod.endAt === null || isInstantAfter(recruitmentPeriod.endAt, now)),
+  );
+  const shouldShowRecruitmentOpinionTutorial = isRecruitmentOpinionTutorialEligible({
+    hideRecruitmentOpinions,
+    contentType,
+    tutorialDismissalLoaded,
+    tutorialDismissed,
+    recruitmentActive,
+  });
+
+  useEffect(() => {
+    const unsubscribe = subscribeToRecruitmentOpinionTutorialDismissal(() => setTutorialDismissed(true));
+    try {
+      setTutorialDismissed(
+        isRecruitmentOpinionTutorialDismissedForCurrentVisit() ||
+          localStorage.getItem(recruitmentOpinionTutorialStorageKey) === "dismissed",
+      );
+    } catch {
+      // Show the banner when storage cannot be read; a later in-memory dismissal
+      // still synchronizes all mounted items for the current visit.
+      setTutorialDismissed(isRecruitmentOpinionTutorialDismissedForCurrentVisit());
+    } finally {
+      setTutorialDismissalLoaded(true);
+    }
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    if (!focusAfterTutorialDismissRef.current || !commentEditing || !tutorialDismissed) return;
+    focusAfterTutorialDismissRef.current = false;
+    const editor = document.querySelector<HTMLElement>(`[data-content-comment-editor="${uid}"]`);
+    editor?.querySelector<HTMLElement>("textarea, input, button")?.focus();
+  }, [commentEditing, tutorialDismissed, uid]);
+
+  useEffect(() => {
+    if (commentEditing) {
+      wasCommentEditingRef.current = true;
+      return;
+    }
+    if (!wasCommentEditingRef.current) return;
+    wasCommentEditingRef.current = false;
+    if (skipCommentTriggerFocusRef.current) {
+      skipCommentTriggerFocusRef.current = false;
+      return;
+    }
+    const trigger = document.querySelector<HTMLElement>(`[data-content-comment-trigger="${uid}"] button`);
+    trigger?.focus();
+  }, [commentEditing, uid]);
+
+  const dismissRecruitmentOpinionTutorial = (openFilter: boolean) => {
+    const action = getRecruitmentOpinionTutorialDismissalAction(openFilter);
+    setTutorialDismissed(true);
+    try {
+      localStorage.setItem(recruitmentOpinionTutorialStorageKey, "dismissed");
+    } catch {
+      // The state above keeps the current visit dismissed when storage is unavailable.
+    }
+    notifyRecruitmentOpinionTutorialDismissed();
+    if (action.closeCommentSheet) {
+      skipCommentTriggerFocusRef.current = true;
+      setCommentEditing(false);
+      onCommentClose?.();
+    }
+    if (action.openFilter) onOpenContentFilter?.();
+    if (action.focusCommentEditor) focusAfterTutorialDismissRef.current = true;
+  };
+  const closeCommentSheet = () => {
+    setCommentEditing(false);
+    onCommentClose?.();
+  };
+  const recruitmentPeriodNotice =
+    showRecruitmentPeriodNotice && since
+      ? getRecruitmentPeriodNotice(
+          { recruitmentGroupUid, contentType, startAt: since, endAt: until, endless },
+          recruitmentPeriod,
+          now,
+        )
+      : null;
 
   let finishSoon = false;
   if (since && until && isInstantBefore(since, now)) {
@@ -340,35 +436,55 @@ export function ContentTimelineItem({
       {showComments && onCommentCreate && (
         <>
           <div className={(recruitments?.length ?? 0) === 0 ? "mt-3" : undefined}>
-            <ContentCommentView
-              comments={allComments}
-              summary={commentSummary}
-              unavailable={commentsUnavailable}
-              onClick={() => {
-                onCommentOpen?.();
-                setCommentEditing(true);
-              }}
-            />
+            <div data-content-comment-trigger={uid}>
+              <ContentCommentView
+                comments={allComments}
+                summary={commentSummary}
+                unavailable={commentsUnavailable}
+                hideRecruitmentOpinions={hideRecruitmentOpinions}
+                onClick={() => {
+                  onCommentOpen?.();
+                  setCommentEditing(true);
+                }}
+              />
+            </div>
           </div>
 
           {commentEditing && !commentsUnavailable && (
             <BottomSheet
               Icon={ChatBubbleOvalLeftEllipsisIcon}
               title={contentType === "live" ? "공식 방송 의견" : "이벤트 의견"}
-              onClose={() => setCommentEditing(false)}
+              onClose={closeCommentSheet}
             >
-              <ContentCommentEditor
-                comments={allComments ?? []}
-                onCreateComment={onCommentCreate}
-                onCreateSubcomment={onCommentCreateSubcomment ?? (() => {})}
-                onUpdateComment={onCommentUpdate}
-                onDeleteComment={onCommentDelete}
-                onPinComment={onCommentPin}
-                onUnpinComment={onCommentUnpin}
-                isLoading={isLoadingComments}
-                isSubmitting={isSubmittingComment}
-                signedIn={signedIn}
-              />
+              {shouldShowRecruitmentOpinionTutorial ? (
+                <div className="shrink-0">
+                  <TimelineItemBanner
+                    message="모집 결과글을 숨길 수 있어요"
+                    linkText="설정 보기"
+                    actionVariant="button"
+                    icon="information"
+                    color="neutral"
+                    onLinkClick={() => dismissRecruitmentOpinionTutorial(true)}
+                    onDismiss={() => dismissRecruitmentOpinionTutorial(false)}
+                    dismissLabel="모집 결과글 숨김 기능 안내 닫기"
+                  />
+                </div>
+              ) : null}
+              <div data-content-comment-editor={uid} className="min-h-0 flex-1 flex flex-col">
+                <ContentCommentEditor
+                  comments={allComments ?? []}
+                  onCreateComment={onCommentCreate}
+                  onCreateSubcomment={onCommentCreateSubcomment ?? (() => {})}
+                  onUpdateComment={onCommentUpdate}
+                  onDeleteComment={onCommentDelete}
+                  onPinComment={onCommentPin}
+                  onUnpinComment={onCommentUnpin}
+                  isLoading={isLoadingComments}
+                  isSubmitting={isSubmittingComment}
+                  signedIn={signedIn}
+                  hideRecruitmentOpinions={hideRecruitmentOpinions}
+                />
+              </div>
             </BottomSheet>
           )}
         </>

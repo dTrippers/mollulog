@@ -19,7 +19,7 @@ import {
 } from "~/locales/ko";
 import type { NestedComment } from "~/models/content";
 import type { Role } from "~/models/content.d";
-import type { ActionData as CommentActionData } from "~/routes/api.contents.$uid.comments";
+import type { ActionData as CommentActionData, CommentResponse } from "~/routes/api.contents.$uid.comments";
 
 const EQUIPMENT_CATEGORY_IMAGE_BASE_URL = "https://assets.mollulog.net/assets/images/equipments";
 
@@ -66,12 +66,12 @@ type FuturePlanProps = {
 export default function FuturePlan({ event, favoritedStudents, comments }: FuturePlanProps) {
   const displayTimeZone = useDisplayTimeZone();
   const [allComments, setAllComments] = useState(comments ?? []);
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<CommentResponse>();
 
   // Update comments when fetcher returns data
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data && Array.isArray(fetcher.data)) {
-      setAllComments(fetcher.data);
+    if (fetcher.state === "idle" && fetcher.data && Array.isArray(fetcher.data.comments)) {
+      setAllComments(fetcher.data.comments);
     }
   }, [fetcher.state, fetcher.data]);
 

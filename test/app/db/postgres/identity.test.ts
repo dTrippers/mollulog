@@ -24,6 +24,7 @@ const row: typeof pgSenseisTable.$inferSelect = {
   role: "guest",
   profileVisibility: "private",
   growthVisibility: false,
+  hideRecruitmentOpinions: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),
 };
@@ -53,6 +54,7 @@ describe("identity PostgreSQL repository contract", () => {
       role: "guest",
       profileVisibility: "private",
       growthVisibility: false,
+      hideRecruitmentOpinions: false,
     });
     expect(Object.keys(toSenseiModel(row))).toEqual([
       "id",
@@ -65,6 +67,7 @@ describe("identity PostgreSQL repository contract", () => {
       "role",
       "profileVisibility",
       "growthVisibility",
+      "hideRecruitmentOpinions",
     ]);
   });
 

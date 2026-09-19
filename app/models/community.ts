@@ -15,6 +15,8 @@ export type CommunityPostType =
 export type CommunityPostOrigin = "user" | "curated";
 export type CommunityVisibility = "public" | "unlisted" | "private";
 export type CommunityCommentVisibility = "public" | "private";
+export type RecruitmentOpinionClassification = "RESULT_RELATED" | "OTHER";
+export type RecruitmentOpinionClassificationStatus = "pending" | "completed" | "failed";
 
 export type PlaintextCommunityPostBlock = {
   type: "plaintext";
