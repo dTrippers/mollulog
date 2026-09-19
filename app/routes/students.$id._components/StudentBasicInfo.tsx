@@ -56,6 +56,7 @@ type StudentBasicInfoProps = {
   recruited: boolean;
   savedState: StudentCalculatorState;
   relatedRelationshipLevels: Record<string, number>;
+  aiSummary?: React.ReactNode;
   gradingSummary?: React.ReactNode;
 };
 
@@ -100,6 +101,7 @@ export default function StudentBasicInfo({
   recruited,
   savedState,
   relatedRelationshipLevels,
+  aiSummary,
   gradingSummary,
 }: StudentBasicInfoProps) {
   const fetcher = useFetcher<SaveResult>();
@@ -392,6 +394,7 @@ export default function StudentBasicInfo({
             </Link>
           </div>
           {gradingSummary}
+          {aiSummary}
         </section>
       ) : null}
 
