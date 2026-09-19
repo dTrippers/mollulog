@@ -14,8 +14,5 @@ CREATE TABLE student_summary_revisions (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE UNIQUE INDEX student_summary_revisions_identity_uidx
-  ON student_summary_revisions (student_uid, source_hash, prompt_version, COALESCE(provider, ''), COALESCE(model, ''));
-
 CREATE INDEX student_summary_revisions_student_published_at_id_idx
   ON student_summary_revisions (student_uid, published_at DESC, id DESC);

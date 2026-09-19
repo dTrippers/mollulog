@@ -28,7 +28,7 @@ export default function StudentAiSummaryCard({ summary }: StudentAiSummaryCardPr
         </svg>
         AI 요약
       </h3>
-      <p className="text-sm text-foreground">{summary}</p>
+      <p className="text-sm leading-relaxed text-foreground/80">{summary}</p>
       <p className="text-xs text-muted-foreground">AI가 생성한 결과로 내용이 부정확할 수 있어요</p>
     </SectionCard>
   );

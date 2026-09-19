@@ -28,29 +28,21 @@ describe("student summary revision PostgreSQL migration contract", () => {
     }
   });
 
-  test("stays PostgreSQL 14 compatible with nulls-not-distinct uniqueness and no CHECK constraints", () => {
+  test("stays PostgreSQL 14 compatible with insert-only revisions and no CHECK constraints", () => {
     expect(migration).not.toContain("NULLS NOT DISTINCT");
     expect(migration).not.toMatch(/\bCHECK\b/i);
-    expect(migration).toContain("CREATE UNIQUE INDEX student_summary_revisions_identity_uidx");
-    expect(migration).toContain(
-      "ON student_summary_revisions (student_uid, source_hash, prompt_version, COALESCE(provider, ''), COALESCE(model, ''))",
-    );
+    expect(migration).not.toMatch(/CREATE UNIQUE INDEX/);
     expect(migration).toContain("CREATE INDEX student_summary_revisions_student_published_at_id_idx");
     expect(migration).toContain("ON student_summary_revisions (student_uid, published_at DESC, id DESC)");
   });
 
   test("mirrors the table in the drizzle schema with explicit snake_case columns", () => {
     expect(schema).toContain("export const pgStudentSummaryRevisionsTable = pgTable(");
-    expect(schema).toContain('uniqueIndex("student_summary_revisions_identity_uidx")');
-    const identityIndexBlock = schema.slice(
-      schema.indexOf('uniqueIndex("student_summary_revisions_identity_uidx")'),
-      schema.indexOf('index("student_summary_revisions_student_published_at_id_idx")'),
+    const tableBlock = schema.slice(
+      schema.indexOf('export const pgStudentSummaryRevisionsTable = pgTable('),
+      schema.indexOf('export const', schema.indexOf('export const pgStudentSummaryRevisionsTable = pgTable(') + 1),
     );
-    expect(identityIndexBlock).toContain("table.studentUid");
-    expect(identityIndexBlock).toContain("table.sourceHash");
-    expect(identityIndexBlock).toContain("table.promptVersion");
-    expect(identityIndexBlock).toContain("sql`coalesce(${table.provider}, '')`");
-    expect(identityIndexBlock).toContain("sql`coalesce(${table.model}, '')`");
+    expect(tableBlock).not.toContain("uniqueIndex");
     expect(schema).toContain('index("student_summary_revisions_student_published_at_id_idx")');
     expect(schema).toContain('text("student_uid")');
     expect(schema).toContain('text("generated_summary")');

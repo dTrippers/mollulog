@@ -1255,13 +1255,6 @@ export const pgStudentSummaryRevisionsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("student_summary_revisions_identity_uidx").on(
-      table.studentUid,
-      table.sourceHash,
-      table.promptVersion,
-      sql`coalesce(${table.provider}, '')`,
-      sql`coalesce(${table.model}, '')`,
-    ),
     index("student_summary_revisions_student_published_at_id_idx").on(
       table.studentUid,
       table.publishedAt.desc(),
