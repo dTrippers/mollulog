@@ -1236,3 +1236,36 @@ export const pgOcrOutboxTable = pgTable(
     index("ocr_outbox_dispatch_idx").on(table.status, table.availableAt, table.id),
   ],
 );
+
+export const pgStudentSummaryRevisionsTable = pgTable(
+  "student_summary_revisions",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    studentUid: text("student_uid").notNull(),
+    generatedSummary: text("generated_summary").notNull(),
+    summary: text().notNull(),
+    sourceCatalogVersion: text("source_catalog_version").notNull(),
+    sourceHash: text("source_hash").notNull(),
+    sourceSnapshot: jsonb("source_snapshot").$type<Record<string, unknown>>().notNull(),
+    provider: text(),
+    model: text(),
+    promptVersion: text("prompt_version").notNull(),
+    publishedAt: timestamptz("published_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_summary_revisions_identity_uidx").on(
+      table.studentUid,
+      table.sourceHash,
+      table.promptVersion,
+      sql`coalesce(${table.provider}, '')`,
+      sql`coalesce(${table.model}, '')`,
+    ),
+    index("student_summary_revisions_student_published_at_id_idx").on(
+      table.studentUid,
+      table.publishedAt.desc(),
+      table.id.desc(),
+    ),
+  ],
+);

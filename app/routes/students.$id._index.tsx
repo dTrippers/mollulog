@@ -19,8 +19,10 @@ import { getStudentDetailData } from "~/models/student";
 import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
 import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
+import { getPublishedStudentSummary } from "~/models/student-summary.server";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { getStudentRelevantTimelineContents } from "./students.$id";
+import StudentAiSummaryCard from "./students.$id._components/StudentAiSummaryCard";
 import StudentBasicInfo from "./students.$id._components/StudentBasicInfo";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
 import StudentRaidUsageChart from "./students.$id._components/StudentRaidUsageChart";
@@ -134,6 +136,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
 
+  const publishedSummaryPromise = getPublishedStudentSummary(publicReadEnv, uid, { ctx }).catch((error) => {
+    logger.error("Failed to load published student summary", error, { studentUid: uid });
+    return null;
+  });
+
   const currentUser = await currentUserPromise;
   const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
   const variantPrimaryStudentUids = student.character.studentVariants.map((variant) => variant.primaryStudent.uid);
@@ -142,16 +149,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     ? getRelationshipLevels(env, currentUser.id, variantPrimaryStudentUids)
     : Promise.resolve(null);
 
-  const [timelineContents, tagCounts, allGradings, allRaids, recruitedStudents, relationshipLevels] = await Promise.all(
-    [
+  const [timelineContents, tagCounts, allGradings, allRaids, recruitedStudents, relationshipLevels, publishedSummary] =
+    await Promise.all([
       getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
       getTagCountsByStudent(env, uid),
       getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id),
       allRaidsPromise,
       recruitedStudentsPromise,
       relationshipLevelsPromise,
-    ],
-  );
+      publishedSummaryPromise,
+    ]);
 
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const myStudentState =
@@ -189,6 +196,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       ...grading,
       student: { uid: student.uid, name: student.name },
     })),
+    publishedSummary,
     currentUser,
     allRaids,
   };
@@ -302,6 +310,7 @@ export default function StudentDetail() {
     studentCatalog,
     myStudentState,
     myRelationshipLevels,
+    publishedSummary,
   } = useLoaderData<typeof loader>();
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
@@ -347,6 +356,9 @@ export default function StudentDetail() {
             released={student.released}
             recruited={myStudentState !== null}
             relatedRelationshipLevels={myRelationshipLevels}
+            aiSummary={
+              publishedSummary ? <StudentAiSummaryCard summary={publishedSummary.summary} /> : null
+            }
             gradingSummary={
               <StudentGradingChart
                 student={student}
