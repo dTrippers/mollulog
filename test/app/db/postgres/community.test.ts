@@ -23,6 +23,7 @@ import {
   setPostgresCommunityPostLike,
   unpinPostgresContentComment,
   updatePostgresCommunityComment,
+  updatePostgresContentOpinion,
 } from "~/db/postgres/community";
 import { createPostgresClient } from "~/lib/postgres.server";
 
@@ -173,6 +174,13 @@ function communityPostRow({
     now,
     now,
     now,
+    null,
+    null,
+    null,
+    0,
+    null,
+    null,
+    null,
   ];
 }
 
@@ -383,6 +391,48 @@ describe("PostgreSQL community repository", () => {
       config.text.includes('insert into "community_posts"'),
     );
     expect(laterInsert?.[1]).toEqual(expect.arrayContaining([10, "event_opinion", "public", false, "content-1"]));
+  });
+
+  it("does not classify a pre-recruitment root opinion when it is edited after recruitment starts", async () => {
+    const recruitmentPeriodStartAt = new Date("2026-09-01T00:00:00.000Z");
+    const existingCreatedAt = new Date("2026-08-31T23:59:59.000Z");
+    const { client, query } = createClient((text) => {
+      if (text.includes('from "community_posts"') && text.includes('"created_at"')) {
+        return [[existingCreatedAt, recruitmentPeriodStartAt]];
+      }
+      if (text.includes('update "community_posts"')) return [[4]];
+      return [];
+    });
+
+    await expect(
+      updatePostgresContentOpinion(env, 10, "opinion-1", "edited", "public", {
+        recruitmentPeriodStartAt,
+        createClient: () => client,
+      }),
+    ).resolves.toBeNull();
+
+    const updateQuery = query.mock.calls.find(([config]) => config.text.includes('update "community_posts"'));
+    expect(updateQuery?.[1]).toContain(null);
+    expect(updateQuery?.[0].text).toContain('"recruitment_opinion_classification_status"');
+  });
+
+  it("queues a revisioned classifier job when an eligible root opinion is edited", async () => {
+    const recruitmentPeriodStartAt = new Date("2026-09-01T00:00:00.000Z");
+    const existingCreatedAt = new Date("2026-09-01T00:00:00.000Z");
+    const { client } = createClient((text) => {
+      if (text.includes('from "community_posts"') && text.includes('"created_at"')) {
+        return [[existingCreatedAt, recruitmentPeriodStartAt]];
+      }
+      if (text.includes('update "community_posts"')) return [[5]];
+      return [];
+    });
+
+    await expect(
+      updatePostgresContentOpinion(env, 10, "opinion-1", "edited", "public", {
+        recruitmentPeriodStartAt,
+        createClient: () => client,
+      }),
+    ).resolves.toEqual({ postUid: "opinion-1", body: "edited", revision: 5 });
   });
 
   it("creates content subcomments only for a parent in the requested content", async () => {

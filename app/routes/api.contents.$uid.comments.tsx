@@ -1,16 +1,43 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { nestComments } from "~/models/content";
+import type { NestedComment } from "~/models/content";
 import {
   createComment,
   createSubcomment,
   deleteComment,
-  getContentComments,
+  getContentCommentClassificationFailures,
+  getContentRecruitmentPeriod,
   getNestedContentComments,
   pinComment,
   unpinComment,
   updateComment,
 } from "~/models/content.server";
+import { classifyAndPersistRecruitmentOpinion } from "~/models/recruitment-opinion-classifier.server";
+
+export type CommentResponse = {
+  comments: NestedComment[];
+  unavailable: boolean;
+};
+
+async function getCommentsResponse(
+  env: Env,
+  contentUid: string,
+  currentUser: Awaited<ReturnType<typeof getActiveSensei>>,
+  ctx: ExecutionContext,
+): Promise<CommentResponse> {
+  const hideRecruitmentOpinions = currentUser?.hideRecruitmentOpinions === true;
+  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
+  const options = {
+    hideRecruitmentOpinions,
+    recruitmentPeriodStartAtByContentId: { [contentUid]: recruitmentPeriod?.startAt ?? null },
+    ctx,
+  };
+  const [comments, unavailable] = await Promise.all([
+    getNestedContentComments(env, contentUid, currentUser, options),
+    getContentCommentClassificationFailures(env, contentUid, currentUser?.id, options),
+  ]);
+  return { comments, unavailable };
+}
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {
   const contentUid = params.uid;
@@ -18,9 +45,9 @@ export const loader = async ({ request, params, context }: LoaderFunctionArgs) =
     throw new Response("Content UID is required", { status: 400 });
   }
 
-  const env = context.cloudflare.env;
-  const currentUser = await getActiveSensei(env, request);
-  return nestComments(await getContentComments(env, contentUid, currentUser?.id), currentUser);
+  const { env, ctx } = context.cloudflare;
+  const currentUser = await getActiveSensei(env, request, ctx);
+  return getCommentsResponse(env, contentUid, currentUser, ctx);
 };
 
 export type ActionData = {
@@ -37,18 +64,32 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     throw new Response("Content UID is required", { status: 400 });
   }
 
-  const { env } = context.cloudflare;
-  const currentUser = await getActiveSensei(env, request);
+  const { env, ctx } = context.cloudflare;
+  const currentUser = await getActiveSensei(env, request, ctx);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
   const actionData = await request.json<ActionData>();
+  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
+  const commentOptions = { recruitmentPeriodStartAt: recruitmentPeriod?.startAt ?? null, ctx };
   if (actionData.action === "create") {
     if (!actionData.body) {
       throw new Response("Body is required", { status: 400 });
     }
-    await createComment(env, currentUser.id, contentUid, actionData.body, actionData.visibility ?? "private");
+    const commentUid = await createComment(
+      env,
+      currentUser.id,
+      contentUid,
+      actionData.body,
+      actionData.visibility ?? "private",
+      commentOptions,
+    );
+    if (recruitmentPeriod && Date.now() >= new Date(recruitmentPeriod.startAt).getTime()) {
+      ctx.waitUntil(
+        classifyAndPersistRecruitmentOpinion(env, { postUid: commentUid, body: actionData.body, revision: 0 }, ctx),
+      );
+    }
   } else if (actionData.action === "createSubcomment") {
     if (!actionData.body || !actionData.parentCommentUid) {
       throw new Response("Body and parentCommentUid are required", { status: 400 });
@@ -60,18 +101,23 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       actionData.parentCommentUid,
       actionData.body,
       actionData.visibility ?? "private",
+      commentOptions,
     );
   } else if (actionData.action === "update") {
     if (!actionData.commentUid || !actionData.body) {
       throw new Response("CommentUid and body are required", { status: 400 });
     }
-    await updateComment(
+    const classificationJob = await updateComment(
       env,
       currentUser.id,
       actionData.commentUid,
       actionData.body,
       actionData.visibility ?? "private",
+      commentOptions,
     );
+    if (classificationJob) {
+      ctx.waitUntil(classifyAndPersistRecruitmentOpinion(env, classificationJob, ctx));
+    }
   } else if (actionData.action === "delete") {
     if (!actionData.commentUid) {
       throw new Response("CommentUid is required", { status: 400 });
@@ -89,5 +135,5 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   // Return updated comments
-  return getNestedContentComments(env, contentUid, currentUser);
+  return getCommentsResponse(env, contentUid, currentUser, ctx);
 };

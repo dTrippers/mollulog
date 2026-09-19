@@ -22,6 +22,7 @@ export type Sensei = {
   role: SenseiRole;
   profileVisibility: ProfileVisibility;
   growthVisibility?: boolean;
+  hideRecruitmentOpinions?: boolean;
   config?: {
     darkMode?: boolean;
   };
@@ -169,7 +170,14 @@ export async function createSensei(
 type SenseiUpdateFields = Partial<
   Pick<
     Sensei,
-    "username" | "friendCode" | "profileStudentId" | "active" | "bio" | "profileVisibility" | "growthVisibility"
+    | "username"
+    | "friendCode"
+    | "profileStudentId"
+    | "active"
+    | "bio"
+    | "profileVisibility"
+    | "growthVisibility"
+    | "hideRecruitmentOpinions"
   >
 >;
 
@@ -192,6 +200,9 @@ export async function updateSensei(
           ...(fields.active !== undefined ? { active: fields.active } : {}),
           ...(fields.profileVisibility !== undefined ? { profileVisibility: fields.profileVisibility } : {}),
           ...(fields.growthVisibility !== undefined ? { growthVisibility: fields.growthVisibility } : {}),
+          ...(fields.hideRecruitmentOpinions !== undefined
+            ? { hideRecruitmentOpinions: fields.hideRecruitmentOpinions }
+            : {}),
           updatedAt: new Date(),
         };
 
@@ -222,5 +233,6 @@ export function toSenseiModel(row: SenseiRow): Sensei {
     role: row.role as SenseiRole,
     profileVisibility: row.profileVisibility ?? "public",
     growthVisibility: row.growthVisibility ?? false,
+    hideRecruitmentOpinions: row.hideRecruitmentOpinions ?? false,
   };
 }

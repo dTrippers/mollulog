@@ -1,4 +1,11 @@
-import { ClockIcon, ExclamationTriangleIcon, SparklesIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/16/solid";
+import {
+  ClockIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+  XMarkIcon,
+} from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 
@@ -11,7 +18,7 @@ type TimelineItemBannerProps = {
   actionVariant?: "link" | "button";
   onDismiss?: () => void;
   dismissLabel?: string;
-  icon?: "clock" | "exclamation" | "info" | "menu";
+  icon?: "clock" | "exclamation" | "info" | "information" | "menu";
   color?: "amber" | "green" | "neutral";
 };
 
@@ -63,11 +70,13 @@ export function TimelineItemBanner({
   const IconComponent =
     icon === "clock"
       ? ClockIcon
-      : icon === "info"
-        ? SparklesIcon
-        : icon === "menu"
-          ? Squares2X2Icon
-          : ExclamationTriangleIcon;
+      : icon === "information"
+        ? InformationCircleIcon
+        : icon === "info"
+          ? SparklesIcon
+          : icon === "menu"
+            ? Squares2X2Icon
+            : ExclamationTriangleIcon;
   const classes = colorClasses[color];
   const structured = Boolean(title || onDismiss);
   const linkClassName =

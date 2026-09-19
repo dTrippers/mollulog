@@ -17,6 +17,9 @@ type PageProps = {
   screens?: PageScreenSelectorProps["screens"];
   showMobileScreens?: boolean;
   panels?: PagePanelProps[];
+  panelRequest?: { index: number; id: number } | null;
+  panelCloseRequest?: number | null;
+  onPanelCloseRequestHandled?: () => void;
   belowPanels?: React.ReactNode;
   links?: PageLinkProps[];
   contentWidth?: "narrow" | "full";
@@ -64,6 +67,9 @@ export default function Page({
   screens,
   showMobileScreens = true,
   panels,
+  panelRequest,
+  panelCloseRequest,
+  onPanelCloseRequestHandled,
   belowPanels,
   links,
   contentWidth = "narrow",
@@ -85,6 +91,21 @@ export default function Page({
     previousLocationSignatureRef.current = locationSignature;
     setOpenPanelIndex(null);
   }, [locationSignature]);
+
+  const panelRequestIndex = panelRequest?.index;
+  const panelRequestId = panelRequest?.id;
+  const panelRequestAvailable = panelRequestIndex !== undefined && Boolean(panels?.[panelRequestIndex]);
+
+  useEffect(() => {
+    if (!panelRequestAvailable || panelRequestId === undefined || panelRequestIndex === undefined) return;
+    setOpenPanelIndex(panelRequestIndex);
+  }, [panelRequestAvailable, panelRequestId, panelRequestIndex]);
+
+  useEffect(() => {
+    if (panelCloseRequest == null) return;
+    setOpenPanelIndex(null);
+    onPanelCloseRequestHandled?.();
+  }, [onPanelCloseRequestHandled, panelCloseRequest]);
 
   useEffect(() => {
     const sentinel = tabBarSentinelRef.current;

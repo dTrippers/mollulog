@@ -9,7 +9,7 @@ import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/do
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
-import { getNestedContentComments } from "~/models/content.server";
+import { getContentCommentClassificationFailures, getNestedContentComments } from "~/models/content.server";
 import {
   favoriteStudent,
   getFavoritedCounts,
@@ -60,13 +60,27 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   };
 
   const currentUser = await getActiveSensei(env, request);
+  const canFilterRecruitmentOpinions = content.contentType !== "live" && eventContent.recruitmentPeriod !== null;
+  const commentReadOptions = {
+    hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
+    recruitmentPeriodStartAtByContentId: {
+      [timelineUid]: canFilterRecruitmentOpinions ? (eventContent.recruitmentPeriod?.startAt ?? null) : null,
+    },
+    ctx,
+  };
 
   const studentUids = eventContent.recruitments.map(getRecruitmentFavoriteKey);
 
-  const [favoritedStudents, favoritedCounts, allComments, livePost] = await Promise.all([
+  const [favoritedStudents, favoritedCounts, allComments, commentsUnavailable, livePost] = await Promise.all([
     currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid, { ctx }) : [],
     getFavoritedCounts(env, studentUids, { ctx }),
-    getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser),
+    getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser, commentReadOptions),
+    getContentCommentClassificationFailures(
+      currentUser ? env : publicReadEnv,
+      timelineUid,
+      currentUser?.id,
+      commentReadOptions,
+    ),
     content.contentType === "live" ? getPostByTimelineContentUid(env, timelineUid, { ctx }) : null,
   ]);
 
@@ -84,7 +98,10 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   return {
     eventContent: { ...eventContent, recruitments: recruitmentsWithFavorites },
     signedIn: currentUser !== null,
+    hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
+    canFilterRecruitmentOpinions,
     allComments,
+    commentsUnavailable,
     me: currentUser ? { username: currentUser.username } : null,
     eventUid: timelineUid,
     siblingEvents: siblingEvents.map((sibling) => ({ uid: sibling.uid, name: sibling.name })),
@@ -147,7 +164,18 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
 };
 
 export default function EventIndex() {
-  const { eventContent, signedIn, allComments, me, eventUid, siblingEvents, livePost } = useLoaderData<typeof loader>();
+  const {
+    eventContent,
+    signedIn,
+    hideRecruitmentOpinions,
+    canFilterRecruitmentOpinions,
+    allComments,
+    commentsUnavailable,
+    me,
+    eventUid,
+    siblingEvents,
+    livePost,
+  } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const displayTimeZone = useDisplayTimeZone();
   const isLive = eventContent.type === "live";
@@ -226,6 +254,9 @@ export default function EventIndex() {
         me={me}
         eventUid={eventUid}
         title={isLive ? "공식 방송 의견" : "이벤트 의견"}
+        hideRecruitmentOpinions={hideRecruitmentOpinions}
+        canFilterRecruitmentOpinions={canFilterRecruitmentOpinions}
+        commentsUnavailable={commentsUnavailable}
       />
     </div>
   );

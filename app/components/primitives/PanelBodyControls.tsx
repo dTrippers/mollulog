@@ -29,6 +29,8 @@ type PanelSwitchRowProps = {
   checked: boolean;
   disabled?: boolean;
   name?: string;
+  hitArea?: boolean;
+  compact?: boolean;
   onChange: (checked: boolean) => void;
   className?: string;
 };
@@ -92,6 +94,8 @@ export function PanelSwitchRow({
   checked,
   disabled,
   name,
+  hitArea = false,
+  compact = false,
   onChange,
   className,
 }: PanelSwitchRowProps) {
@@ -99,13 +103,14 @@ export function PanelSwitchRow({
     <PanelActionRow
       title={title}
       description={description}
-      className={cn("pt-3", className)}
+      className={cn(compact ? "min-h-8 gap-2 py-0 lg:min-h-7 lg:gap-1.5" : "pt-3", className)}
       actions={
         <Toggle
           name={name}
           label={title}
           initialState={checked}
           disabled={disabled}
+          hitArea={hitArea}
           className="m-0 shrink-0 [&_label]:sr-only"
           onChange={onChange}
         />

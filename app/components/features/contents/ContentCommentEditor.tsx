@@ -42,6 +42,7 @@ type ContentCommentEditorProps = {
   onUnpinComment?: () => void;
   isLoading?: boolean;
   isSubmitting?: boolean;
+  hideRecruitmentOpinions?: boolean;
 };
 
 export default function ContentCommentEditor({
@@ -58,6 +59,7 @@ export default function ContentCommentEditor({
   onUnpinComment,
   isLoading = false,
   isSubmitting = false,
+  hideRecruitmentOpinions = false,
 }: ContentCommentEditorProps) {
   const { showSignIn } = useSignIn();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -243,7 +245,9 @@ export default function ContentCommentEditor({
               </div>
             ))
           ) : (
-            <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">작성된 의견이 없어요</p>
+            <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">
+              {hideRecruitmentOpinions ? "표시할 의견이 없어요" : "작성된 의견이 없어요"}
+            </p>
           )}
         </div>
       </div>

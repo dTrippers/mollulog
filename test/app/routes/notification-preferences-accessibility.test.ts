@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "@jest/globals";
 
 const preferencesSource = readFileSync("app/routes/notifications._components/NotificationPreferencesCard.tsx", "utf8");
-const toggleSource = readFileSync("app/components/primitives/Toggle.tsx", "utf8");
 
 describe("notification preference accessibility", () => {
   it("gives every notification switch a direct accessible name", () => {
@@ -22,8 +21,7 @@ describe("notification preference accessibility", () => {
     expect(preferencesSource).not.toContain("notification-event-start-description");
     expect(preferencesSource).not.toContain("notification-feedback-reply-label");
     expect(preferencesSource).not.toContain("notification-feedback-reply-description");
-    expect(toggleSource).not.toContain('"aria-labelledby"?: string');
-    expect(toggleSource).not.toContain('"aria-describedby"?: string');
+    expect(preferencesSource).not.toContain("aria-describedby");
   });
 
   it("keeps preference groups and feedback states semantically connected", () => {

@@ -68,6 +68,8 @@ export type ContentTimelineProps = {
   onRevealSpoiler?: (contentUid: string) => void;
   onHideSpoiler?: (contentUid: string) => void;
   onCommentOpen?: (contentUid: string) => void;
+  onCommentClose?: (contentUid: string) => void;
+  onOpenContentFilter?: () => void;
   onCommentCreate?: (contentUid: string, body: string, visibility: "private" | "public") => void;
   onCommentCreateSubcomment?: (
     contentUid: string,
@@ -80,6 +82,7 @@ export type ContentTimelineProps = {
   onCommentPin?: (contentUid: string, commentUid: string) => void;
   onCommentUnpin?: (contentUid: string) => void;
   isSubmittingComment?: boolean;
+  hideRecruitmentOpinions?: boolean;
   onFavorite?: (contentUid: string, studentUid: string, favorited: boolean) => void;
   onRecruitmentComplete?: (
     contentUid: string,
@@ -100,6 +103,8 @@ export default function ContentTimeline({
   onRevealSpoiler,
   onHideSpoiler,
   onCommentOpen,
+  onCommentClose,
+  onOpenContentFilter,
   onCommentCreate,
   onCommentCreateSubcomment,
   onCommentUpdate,
@@ -109,6 +114,7 @@ export default function ContentTimeline({
   onFavorite,
   onRecruitmentComplete,
   isSubmittingComment,
+  hideRecruitmentOpinions = false,
   signedIn,
   showFeatureBanners = false,
   showRecruitmentPeriodNotice = true,
@@ -199,15 +205,21 @@ export default function ContentTimeline({
                       key={content.uid}
                       confirmed={content.confirmed}
                       {...content}
-                      recruitmentPeriod={showRecruitmentPeriodNotice ? content.recruitmentPeriod : null}
+                      recruitmentPeriod={content.recruitmentPeriod}
+                      showRecruitmentPeriodNotice={showRecruitmentPeriodNotice}
                       spoilerVisible={spoilerVisible}
                       onRevealSpoiler={content.isSpoiler ? () => onRevealSpoiler?.(content.uid) : undefined}
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
                       commentSummary={content.commentSummary}
-                      commentsUnavailable={content.commentsUnavailable}
+                      commentsUnavailable={
+                        content.commentsUnavailable || content.commentSummary?.hasClassificationFailure === true
+                      }
+                      hideRecruitmentOpinions={hideRecruitmentOpinions}
                       isLoadingComments={content.isLoadingComments}
                       onCommentOpen={showComments ? () => onCommentOpen?.(content.uid) : undefined}
+                      onCommentClose={showComments ? () => onCommentClose?.(content.uid) : undefined}
+                      onOpenContentFilter={onOpenContentFilter}
                       onCommentCreate={
                         showComments
                           ? (body, visibility) => onCommentCreate?.(content.uid, body, visibility)
