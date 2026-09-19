@@ -11,6 +11,7 @@ import {
   createPostgresContentComment,
   createPostgresContentSubcomment,
   deletePostgresCommunityComment,
+  deletePostgresCommunityPostByUid,
   getPostgresCommunityFeedPage,
   getPostgresCommunityLikeCountsByPostUids,
   getPostgresContentCommentIdByUid,
@@ -174,13 +175,6 @@ function communityPostRow({
     now,
     now,
     now,
-    null,
-    null,
-    null,
-    0,
-    null,
-    null,
-    null,
   ];
 }
 
@@ -380,6 +374,24 @@ describe("PostgreSQL community repository", () => {
     );
     expect(firstInsert?.[1]).toEqual(expect.arrayContaining([10, "event_opinion", "private", true, "content-1"]));
 
+    const firstOpinionInsert = first.query.mock.calls.find(([config]) =>
+      config.text.includes('insert into "community_post_recruitment_opinions"'),
+    );
+    expect(firstOpinionInsert).toBeTruthy();
+    expect(firstOpinionInsert?.[1]).toEqual(
+      expect.arrayContaining([firstInsert?.[1]?.[0], null, null, 0]),
+    );
+    const lowered = first.query.mock.calls.map(([config]) => config.text.toLowerCase());
+    expect(lowered).toContain("begin");
+    expect(lowered).toContain("commit");
+    const postsInsertIndex = lowered.findIndex((text) => text.includes('insert into "community_posts"'));
+    const opinionInsertIndex = lowered.findIndex((text) =>
+      text.includes('insert into "community_post_recruitment_opinions"'),
+    );
+    expect(lowered.indexOf("begin")).toBeLessThan(postsInsertIndex);
+    expect(opinionInsertIndex).toBeGreaterThan(postsInsertIndex);
+    expect(lowered.indexOf("commit")).toBeGreaterThan(opinionInsertIndex);
+
     const later = createClient((text) => (text.includes('from "community_posts"') ? [["existing"]] : []));
     await expect(
       createPostgresContentComment(env, 10, "content-1", "later", "public", {
@@ -400,7 +412,8 @@ describe("PostgreSQL community repository", () => {
       if (text.includes('from "community_posts"') && text.includes('"created_at"')) {
         return [[existingCreatedAt, recruitmentPeriodStartAt]];
       }
-      if (text.includes('update "community_posts"')) return [[4]];
+      if (text.includes('update "community_posts"')) return [["opinion-1"]];
+      if (text.includes('insert into "community_post_recruitment_opinions"')) return [[1]];
       return [];
     });
 
@@ -412,18 +425,23 @@ describe("PostgreSQL community repository", () => {
     ).resolves.toBeNull();
 
     const updateQuery = query.mock.calls.find(([config]) => config.text.includes('update "community_posts"'));
-    expect(updateQuery?.[1]).toContain(null);
-    expect(updateQuery?.[0].text).toContain('"recruitment_opinion_classification_status"');
+    expect(updateQuery?.[0].text).not.toContain("recruitment_opinion_classification_status");
+    const upsertQuery = query.mock.calls.find(([config]) =>
+      config.text.includes('insert into "community_post_recruitment_opinions"'),
+    );
+    expect(upsertQuery?.[0].text).toContain("on conflict");
+    expect(upsertQuery?.[1]).toContain(null);
   });
 
   it("queues a revisioned classifier job when an eligible root opinion is edited", async () => {
     const recruitmentPeriodStartAt = new Date("2026-09-01T00:00:00.000Z");
     const existingCreatedAt = new Date("2026-09-01T00:00:00.000Z");
-    const { client } = createClient((text) => {
+    const { client, query } = createClient((text) => {
       if (text.includes('from "community_posts"') && text.includes('"created_at"')) {
         return [[existingCreatedAt, recruitmentPeriodStartAt]];
       }
-      if (text.includes('update "community_posts"')) return [[5]];
+      if (text.includes('update "community_posts"')) return [["opinion-1"]];
+      if (text.includes('insert into "community_post_recruitment_opinions"')) return [[5]];
       return [];
     });
 
@@ -433,6 +451,11 @@ describe("PostgreSQL community repository", () => {
         createClient: () => client,
       }),
     ).resolves.toEqual({ postUid: "opinion-1", body: "edited", revision: 5 });
+
+    const upsertQuery = query.mock.calls.find(([config]) =>
+      config.text.includes('insert into "community_post_recruitment_opinions"'),
+    );
+    expect(upsertQuery?.[0].text).toContain('"recruitment_opinion_classification_revision" = "community_post_recruitment_opinions"."recruitment_opinion_classification_revision" + 1');
   });
 
   it("creates content subcomments only for a parent in the requested content", async () => {
@@ -540,6 +563,28 @@ describe("PostgreSQL community repository", () => {
     );
     expect(deleteCall?.[1]).toEqual(expect.arrayContaining(["comment-1"]));
     expect(deleteCall?.[0].text).toContain('"parent_uid"');
+  });
+
+  it("deletes the recruitment-opinion extension row with the owning post", async () => {
+    const { client, query } = createClient((text) =>
+      text.includes('from "community_posts"') ? [["post-1"]] : [],
+    );
+    await expect(
+      deletePostgresCommunityPostByUid(env, "post-1", 10, { createClient: () => client }),
+    ).resolves.toBeUndefined();
+
+    const texts = query.mock.calls.map(([config]) => config.text);
+    const opinionDeleteIndex = texts.findIndex((text) =>
+      text.includes('delete from "community_post_recruitment_opinions"'),
+    );
+    const postDeleteIndex = texts.findIndex((text) => text.includes('delete from "community_posts"'));
+    expect(opinionDeleteIndex).toBeGreaterThanOrEqual(0);
+    expect(postDeleteIndex).toBeGreaterThan(opinionDeleteIndex);
+    const opinionDelete = query.mock.calls[opinionDeleteIndex];
+    expect(opinionDelete?.[1]).toEqual(expect.arrayContaining(["post-1"]));
+    expect(texts.some((text) => text.includes('delete from "community_comments"'))).toBe(true);
+    expect(texts.some((text) => text.includes('delete from "community_post_likes"'))).toBe(true);
+    expect(texts.some((text) => text.includes('delete from "community_post_tags"'))).toBe(true);
   });
 
   it("uses PostgreSQL aggregation for summaries and keeps pinned preview separate", async () => {

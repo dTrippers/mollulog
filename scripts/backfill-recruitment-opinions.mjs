@@ -82,12 +82,13 @@ export async function backfillRecruitmentOpinions({ pool, periods, classifyOpini
   let processed = 0;
   let skipped = 0;
   const { rows } = await pool.query(
-    `SELECT uid, subject_content_uid, blocks, created_at,
-            recruitment_period_start_at, recruitment_opinion_classification_status,
-            recruitment_opinion_classification_revision
-       FROM community_posts
-      WHERE post_type = 'event_opinion'
-      ORDER BY id ASC`,
+    `SELECT p.uid, p.subject_content_uid, p.blocks, p.created_at,
+            o.recruitment_period_start_at, o.recruitment_opinion_classification_status,
+            o.recruitment_opinion_classification_revision
+       FROM community_posts p
+       LEFT JOIN community_post_recruitment_opinions o ON o.post_uid = p.uid
+      WHERE p.post_type = 'event_opinion'
+      ORDER BY p.id ASC`,
   );
   for (const row of rows) {
     const periodStart = periods[row.subject_content_uid];
@@ -98,10 +99,16 @@ export async function backfillRecruitmentOpinions({ pool, periods, classifyOpini
     const startAt = new Date(periodStart);
     if (Number.isNaN(startAt.getTime())) throw new Error(`Invalid recruitment start for ${row.subject_content_uid}`);
     await pool.query(
-      `UPDATE community_posts
-          SET recruitment_period_start_at = $1
-        WHERE uid = $2
-          AND recruitment_period_start_at IS DISTINCT FROM $1`,
+      `INSERT INTO community_post_recruitment_opinions (
+         post_uid, recruitment_period_start_at, recruitment_opinion_classification_revision,
+         created_at, updated_at
+       )
+       VALUES ($2, $1, 0, now(), now())
+       ON CONFLICT (post_uid) DO UPDATE
+          SET recruitment_period_start_at = EXCLUDED.recruitment_period_start_at,
+              updated_at = now()
+        WHERE community_post_recruitment_opinions.recruitment_period_start_at
+              IS DISTINCT FROM EXCLUDED.recruitment_period_start_at`,
       [startAt, row.uid],
     );
     if (new Date(row.created_at).getTime() < startAt.getTime()) {
@@ -115,17 +122,19 @@ export async function backfillRecruitmentOpinions({ pool, periods, classifyOpini
 
     const revision = Number(row.recruitment_opinion_classification_revision ?? 0) + 1;
     const pending = await pool.query(
-      `UPDATE community_posts
+      `UPDATE community_post_recruitment_opinions o
           SET recruitment_opinion_classification_status = 'pending',
               recruitment_opinion_classification = NULL,
               recruitment_opinion_classification_revision = $1,
               recruitment_opinion_classification_model = $2,
               recruitment_opinion_classification_prompt_version = $3,
               recruitment_opinion_classified_at = NULL
-        WHERE uid = $4
-          AND post_type = 'event_opinion'
-          AND recruitment_opinion_classification_status IS DISTINCT FROM 'completed'
-        RETURNING blocks`,
+         FROM community_posts p
+        WHERE o.post_uid = p.uid
+          AND p.post_type = 'event_opinion'
+          AND o.post_uid = $4
+          AND o.recruitment_opinion_classification_status IS DISTINCT FROM 'completed'
+        RETURNING p.blocks`,
       [revision, MODEL, PROMPT_VERSION, row.uid],
     );
     if (pending.rowCount !== 1) {
@@ -135,21 +144,23 @@ export async function backfillRecruitmentOpinions({ pool, periods, classifyOpini
     try {
       const classification = await classifyOpinion(bodyFromBlocks(pending.rows[0].blocks));
       await pool.query(
-        `UPDATE community_posts
+        `UPDATE community_post_recruitment_opinions
             SET recruitment_opinion_classification_status = 'completed',
                 recruitment_opinion_classification = $1,
-                recruitment_opinion_classified_at = now()
-          WHERE uid = $2
+                recruitment_opinion_classified_at = now(),
+                updated_at = now()
+          WHERE post_uid = $2
             AND recruitment_opinion_classification_revision = $3
             AND recruitment_opinion_classification_status = 'pending'`,
         [classification, row.uid, revision],
       );
     } catch {
       await pool.query(
-        `UPDATE community_posts
+        `UPDATE community_post_recruitment_opinions
             SET recruitment_opinion_classification_status = 'failed',
-                recruitment_opinion_classified_at = now()
-          WHERE uid = $1
+                recruitment_opinion_classified_at = now(),
+                updated_at = now()
+          WHERE post_uid = $1
             AND recruitment_opinion_classification_revision = $2
             AND recruitment_opinion_classification_status = 'pending'`,
         [row.uid, revision],
