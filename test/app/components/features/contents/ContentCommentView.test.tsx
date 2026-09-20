@@ -29,21 +29,4 @@ describe("ContentCommentView", () => {
     expect(markup).toContain("표시할 의견이 없어요");
     expect(markup).not.toContain("분류");
   });
-
-  it("uses the generic unavailable state for a failed classification", () => {
-    const markup = renderToStaticMarkup(
-      <ContentCommentView
-        summary={{
-          count: 0,
-          hasRecentComment: false,
-          pinnedPreviewBody: null,
-          hasClassificationFailure: true,
-        }}
-        onClick={() => undefined}
-      />,
-    );
-
-    expect(markup).toContain("의견을 불러오지 못했습니다");
-    expect(markup).not.toContain("분류 실패");
-  });
 });

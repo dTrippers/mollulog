@@ -9,7 +9,7 @@ import type { RecruitmentOpinionClassification } from "~/models/community";
 export const RECRUITMENT_OPINION_MODEL = "@cf/google/gemma-4-26b-a4b-it";
 export const RECRUITMENT_OPINION_PROMPT_VERSION = "gemma4-completion-event-gate-v1";
 
-const RECRUITMENT_OPINION_SYSTEM_PROMPT = `You classify one user-written game event opinion.
+export const RECRUITMENT_OPINION_SYSTEM_PROMPT = `You classify one user-written game event opinion.
 
 Return RESULT_RELATED only when the text reports the outcome of a completed student recruitment event, such as pulls already made, obtained students, counts, pity, spark, or exchange results.
 Return OTHER for plans, wishes, predictions, questions, advice, recommendations, general event discussion, or text that does not clearly report a completed recruitment outcome.
@@ -36,7 +36,14 @@ const RESPONSE_FORMAT = {
   },
 } as const;
 
-type ClassifierResponse = { response?: unknown } | string | unknown;
+type ClassifierResponse = {
+  choices?: Array<{
+    message?: {
+      content?: unknown;
+    };
+    finish_reason?: unknown;
+  }>;
+};
 
 export type RecruitmentOpinionClassificationResult = {
   classification: RecruitmentOpinionClassification;
@@ -45,12 +52,16 @@ export type RecruitmentOpinionClassificationResult = {
 };
 
 function parseClassificationResponse(response: ClassifierResponse): RecruitmentOpinionClassification {
-  const candidate =
-    typeof response === "string"
-      ? response
-      : response && typeof response === "object" && "response" in response
-        ? (response as { response?: unknown }).response
-        : response;
+  if (!response || typeof response !== "object" || !Array.isArray(response.choices) || response.choices.length === 0) {
+    throw new Error("Workers AI returned no chat completion choices");
+  }
+  const choice = response.choices[0];
+  if (choice?.finish_reason !== "stop") {
+    throw new Error(
+      `Workers AI returned an incomplete classification (${String(choice?.finish_reason ?? "missing finish reason")})`,
+    );
+  }
+  const candidate = choice.message?.content;
   if (typeof candidate !== "string") {
     throw new Error("Workers AI returned a non-text classification response");
   }
@@ -90,7 +101,8 @@ export async function classifyRecruitmentOpinion(
       { role: "user", content: body },
     ],
     temperature: 0,
-    max_tokens: 80,
+    max_completion_tokens: 80,
+    chat_template_kwargs: { enable_thinking: false },
     response_format: RESPONSE_FORMAT,
   });
   return {
@@ -109,7 +121,7 @@ export async function classifyAndPersistRecruitmentOpinion(
   try {
     const result = await classifyRecruitmentOpinion(env, job.body);
     await completePostgresContentOpinionClassification(env, job, result, { ctx });
-  } catch {
+  } catch (error) {
     await failPostgresContentOpinionClassification(
       env,
       job,
@@ -120,6 +132,7 @@ export async function classifyAndPersistRecruitmentOpinion(
       postUid: job.postUid,
       model: RECRUITMENT_OPINION_MODEL,
       promptVersion: RECRUITMENT_OPINION_PROMPT_VERSION,
+      reason: error instanceof Error ? error.message : "unknown classification error",
     });
   }
 }

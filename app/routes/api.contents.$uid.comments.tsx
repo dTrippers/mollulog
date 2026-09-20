@@ -1,11 +1,11 @@
 import { type ActionFunctionArgs, type LoaderFunctionArgs, redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import type { NestedComment } from "~/models/content";
 import {
   createComment,
   createSubcomment,
   deleteComment,
-  getContentCommentClassificationFailures,
   getContentRecruitmentPeriod,
   getNestedContentComments,
   pinComment,
@@ -25,6 +25,7 @@ async function getCommentsResponse(
   currentUser: Awaited<ReturnType<typeof getActiveSensei>>,
   ctx: ExecutionContext,
 ): Promise<CommentResponse> {
+  const logger = getLogger(env, ctx, { route: "api.contents.comments", contentUid });
   const hideRecruitmentOpinions = currentUser?.hideRecruitmentOpinions === true;
   const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
   const options = {
@@ -32,11 +33,19 @@ async function getCommentsResponse(
     recruitmentPeriodStartAtByContentId: { [contentUid]: recruitmentPeriod?.startAt ?? null },
     ctx,
   };
-  const [comments, unavailable] = await Promise.all([
-    getNestedContentComments(env, contentUid, currentUser, options),
-    getContentCommentClassificationFailures(env, contentUid, currentUser?.id, options),
-  ]);
-  return { comments, unavailable };
+  try {
+    return { comments: await getNestedContentComments(env, contentUid, currentUser, options), unavailable: false };
+  } catch (error) {
+    const errorContext = {
+      route: "api.contents.comments",
+      operation: "comments",
+      contentUid,
+      signedIn: currentUser !== null,
+    };
+    logger.error("Failed to load content comments", error, errorContext);
+    captureServerError(error, errorContext);
+    return { comments: [], unavailable: true };
+  }
 }
 
 export const loader = async ({ request, params, context }: LoaderFunctionArgs) => {

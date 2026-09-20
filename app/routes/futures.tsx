@@ -351,7 +351,7 @@ export default function FutureContents() {
     ),
   );
   const [allComments, setAllComments] = useState<AllCommentsState>({});
-  const [commentClassificationFailures, setCommentClassificationFailures] = useState<Record<string, boolean>>({});
+  const [commentUnavailable, setCommentUnavailable] = useState<Record<string, boolean>>({});
   const [loadedCommentContentUids, setLoadedCommentContentUids] = useState<string[]>([]);
   const [commentLoadRequest, setCommentLoadRequest] = useState<{
     uid: string;
@@ -388,7 +388,7 @@ export default function FutureContents() {
   const refreshCommentsAfterFilterSave = useCallback(
     (_nextValue: boolean) => {
       setAllComments({});
-      setCommentClassificationFailures({});
+      setCommentUnavailable({});
       setLoadedCommentContentUids([]);
       setCommentLoadRequest(null);
       revalidator.revalidate();
@@ -445,7 +445,7 @@ export default function FutureContents() {
           [pendingContentUid]: response.comments,
         }),
       );
-      setCommentClassificationFailures((prev) => ({ ...prev, [pendingContentUid]: response.unavailable }));
+      setCommentUnavailable((prev) => ({ ...prev, [pendingContentUid]: response.unavailable }));
       setLoadedCommentContentUids((prev) => (prev.includes(pendingContentUid) ? prev : [...prev, pendingContentUid]));
       if (commentLoadRequest?.uid === pendingContentUid) {
         previousCommentThreadDataRef.current = commentThreadFetcher.data;
@@ -488,7 +488,7 @@ export default function FutureContents() {
       ...prev,
       [contentUid]: response.comments,
     }));
-    setCommentClassificationFailures((prev) => ({
+    setCommentUnavailable((prev) => ({
       ...prev,
       [contentUid]: response.unavailable,
     }));
@@ -647,14 +647,13 @@ export default function FutureContents() {
           showPendingStudentFavoriteFeatureBanner: hasPendingStudentRecruitment(content),
           allComments: allComments[content.uid],
           commentSummary: commentSummaries.status === "available" ? commentSummaries.summaries[content.uid] : undefined,
-          commentsUnavailable:
-            commentSummaries.status === "unavailable" || commentClassificationFailures[content.uid] === true,
+          commentsUnavailable: commentSummaries.status === "unavailable" || commentUnavailable[content.uid] === true,
           isLoadingComments: commentLoadRequest?.uid === content.uid,
         };
       }),
     [
       allComments,
-      commentClassificationFailures,
+      commentUnavailable,
       commentLoadRequest?.uid,
       commentSummaries,
       filteredContents,

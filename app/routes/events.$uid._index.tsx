@@ -8,8 +8,9 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { getContentCommentClassificationFailures, getNestedContentComments } from "~/models/content.server";
+import { getNestedContentComments } from "~/models/content.server";
 import {
   favoriteStudent,
   getFavoritedCounts,
@@ -27,6 +28,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
   const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "events.$uid._index.loader", contentUid: timelineUid });
   const publicReadEnv = env;
   const content = await getTimelineContent(publicReadEnv, timelineUid, { ctx });
   if (!content) {
@@ -70,17 +72,29 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   };
 
   const studentUids = eventContent.recruitments.map(getRecruitmentFavoriteKey);
+  const commentsPromise = getNestedContentComments(
+    currentUser ? env : publicReadEnv,
+    timelineUid,
+    currentUser,
+    commentReadOptions,
+  )
+    .then((comments) => ({ comments, unavailable: false }))
+    .catch((error) => {
+      const errorContext = {
+        route: "events.$uid._index.loader",
+        operation: "comments",
+        contentUid: timelineUid,
+        signedIn: currentUser !== null,
+      };
+      logger.error("Failed to load event comments", error, errorContext);
+      captureServerError(error, errorContext);
+      return { comments: [], unavailable: true };
+    });
 
-  const [favoritedStudents, favoritedCounts, allComments, commentsUnavailable, livePost] = await Promise.all([
+  const [favoritedStudents, favoritedCounts, commentResult, livePost] = await Promise.all([
     currentUser ? getUserFavoritedStudents(env, currentUser.id, timelineUid, { ctx }) : [],
     getFavoritedCounts(env, studentUids, { ctx }),
-    getNestedContentComments(currentUser ? env : publicReadEnv, timelineUid, currentUser, commentReadOptions),
-    getContentCommentClassificationFailures(
-      currentUser ? env : publicReadEnv,
-      timelineUid,
-      currentUser?.id,
-      commentReadOptions,
-    ),
+    commentsPromise,
     content.contentType === "live" ? getPostByTimelineContentUid(env, timelineUid, { ctx }) : null,
   ]);
 
@@ -100,8 +114,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     signedIn: currentUser !== null,
     hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
     canFilterRecruitmentOpinions,
-    allComments,
-    commentsUnavailable,
+    allComments: commentResult.comments,
+    commentsUnavailable: commentResult.unavailable,
     me: currentUser ? { username: currentUser.username } : null,
     eventUid: timelineUid,
     siblingEvents: siblingEvents.map((sibling) => ({ uid: sibling.uid, name: sibling.name })),

@@ -56,7 +56,6 @@ export default function ContentCommentView({
   onClick,
 }: ContentCommentViewProps) {
   const resolvedSummary = comments ? summarizeComments(comments) : (summary ?? null);
-  const resolvedUnavailable = unavailable || resolvedSummary?.hasClassificationFailure === true;
 
   const displayBody = resolvedSummary?.pinnedPreviewBody
     ? resolvedSummary.pinnedPreviewBody.length > 50
@@ -67,21 +66,21 @@ export default function ContentCommentView({
     <ClickableSurface
       className={cn(`
         w-full p-2 flex items-center gap-x-1.5 rounded-lg bg-neutral-100 text-sm shadow-xs shadow-black/5 transition dark:bg-neutral-900 dark:shadow-none
-        ${onClick && !resolvedUnavailable ? "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700" : ""}
+        ${onClick && !unavailable ? "cursor-pointer hover:bg-neutral-200 dark:hover:bg-neutral-700" : ""}
       `)}
       onClick={onClick}
-      disabled={resolvedUnavailable}
+      disabled={unavailable}
     >
       <div className="relative flex items-center gap-x-1">
         <ChatBubbleOvalLeftEllipsisIcon className="shrink-0 size-4 text-neutral-500 dark:text-neutral-400" />
-        {!resolvedUnavailable && resolvedSummary && (
+        {!unavailable && resolvedSummary && (
           <span className="text-neutral-500 dark:text-neutral-400">{resolvedSummary.count}</span>
         )}
-        {!resolvedUnavailable && resolvedSummary?.hasRecentComment && (
+        {!unavailable && resolvedSummary?.hasRecentComment && (
           <div className="absolute -top-0.5 -right-2 size-1.5 bg-red-500 rounded-full animate-pulse" />
         )}
       </div>
-      {resolvedUnavailable ? (
+      {unavailable ? (
         <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-400 dark:text-neutral-600">
           의견을 불러오지 못했습니다
         </p>

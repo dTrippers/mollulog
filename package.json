@@ -26,8 +26,6 @@
     "dev:doctor": "node scripts/local-dev.mjs doctor",
     "dev:db:status": "node scripts/local-dev.mjs db:status",
     "dev:db:migrate": "node scripts/local-dev.mjs db:migrate",
-    "backfill:recruitment-opinions": "node scripts/backfill-recruitment-opinions.mjs",
-    "test:backfill-recruitment-opinions": "node --test scripts/backfill-recruitment-opinions.test.mjs",
     "test:local-dev": "node --test scripts/local-dev.test.mjs"
   },
   "dependencies": {

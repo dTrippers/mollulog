@@ -24,5 +24,4 @@ export type ContentCommentSummary = {
   count: number;
   hasRecentComment: boolean;
   pinnedPreviewBody: string | null;
-  hasClassificationFailure?: boolean;
 };

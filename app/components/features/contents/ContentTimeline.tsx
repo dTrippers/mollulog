@@ -212,9 +212,7 @@ export default function ContentTimeline({
                       onHideSpoiler={content.isSpoiler ? () => onHideSpoiler?.(content.uid) : undefined}
                       allComments={content.allComments}
                       commentSummary={content.commentSummary}
-                      commentsUnavailable={
-                        content.commentsUnavailable || content.commentSummary?.hasClassificationFailure === true
-                      }
+                      commentsUnavailable={content.commentsUnavailable}
                       hideRecruitmentOpinions={hideRecruitmentOpinions}
                       isLoadingComments={content.isLoadingComments}
                       onCommentOpen={showComments ? () => onCommentOpen?.(content.uid) : undefined}

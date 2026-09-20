@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useLoaderData, useNavigate } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getContentCommentClassificationFailures, getNestedContentComments } from "~/models/content.server";
+import { getNestedContentComments } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getPostByTimelineContentUid } from "~/models/post";
 import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
@@ -33,7 +33,6 @@ jest.mock("~/components/features/events", () => {
 });
 
 jest.mock("~/models/content.server", () => ({
-  getContentCommentClassificationFailures: jest.fn(),
   getNestedContentComments: jest.fn(),
 }));
 
@@ -71,9 +70,6 @@ const mockedUseLoaderData = useLoaderData as jest.MockedFunction<typeof useLoade
 const mockedUseNavigate = useNavigate as jest.MockedFunction<typeof useNavigate>;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetNestedContentComments = getNestedContentComments as jest.MockedFunction<typeof getNestedContentComments>;
-const mockedGetContentCommentClassificationFailures = getContentCommentClassificationFailures as jest.MockedFunction<
-  typeof getContentCommentClassificationFailures
->;
 const mockedGetFavoritedCounts = getFavoritedCounts as jest.MockedFunction<typeof getFavoritedCounts>;
 const mockedGetUserFavoritedStudents = getUserFavoritedStudents as jest.MockedFunction<typeof getUserFavoritedStudents>;
 const mockedGetPostByTimelineContentUid = getPostByTimelineContentUid as jest.MockedFunction<
@@ -136,7 +132,6 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedGetActiveSensei.mockResolvedValue(null);
   mockedGetNestedContentComments.mockResolvedValue([] as never);
-  mockedGetContentCommentClassificationFailures.mockResolvedValue(false);
   mockedGetFavoritedCounts.mockResolvedValue([]);
   mockedGetUserFavoritedStudents.mockResolvedValue([]);
   mockedGetPostByTimelineContentUid.mockResolvedValue(null);
@@ -167,11 +162,6 @@ describe("event recruitment period notice loader", () => {
       recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
       ctx,
     });
-    expect(mockedGetContentCommentClassificationFailures).toHaveBeenCalledWith(env, "future-event", undefined, {
-      hideRecruitmentOpinions: false,
-      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
-      ctx,
-    });
   });
 
   it("passes the signed-in recruitment opinion setting to the event comment read", async () => {
@@ -189,19 +179,15 @@ describe("event recruitment period notice loader", () => {
       recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
       ctx,
     });
-    expect(mockedGetContentCommentClassificationFailures).toHaveBeenCalledWith(env, "future-event", currentUser.id, {
-      hideRecruitmentOpinions: true,
-      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
-      ctx,
-    });
   });
 
-  it("returns the initial classification failure state with the event comments", async () => {
-    mockedGetContentCommentClassificationFailures.mockResolvedValue(true);
+  it("returns the genuine comment query failure state without exposing classifier state", async () => {
+    mockedGetNestedContentComments.mockRejectedValue(new Error("database unavailable"));
 
     const result = await loader(loaderArgs());
 
     expect(result.commentsUnavailable).toBe(true);
+    expect(result.allComments).toEqual([]);
   });
 
   it("does not enable the filter for live events without a recruitment period", async () => {

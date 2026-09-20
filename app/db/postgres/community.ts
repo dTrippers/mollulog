@@ -160,9 +160,8 @@ function recruitmentPeriodStartExpression(
 
 /**
  * Returns the server-side visibility rule for the optional recruitment-opinion filter.
- * The predicate intentionally treats every non-completed classification as hidden for
- * another user once the post was created after the recruitment period started. That
- * keeps pending and failed classifications out of the UI without exposing their state.
+ * Only a completed RESULT_RELATED classification hides another user's post. Missing,
+ * pending, failed, and otherwise unknown classification states remain visible.
  */
 function recruitmentOpinionVisiblePredicate(
   columns: RecruitmentOpinionPostColumns,
@@ -176,26 +175,8 @@ function recruitmentOpinionVisiblePredicate(
     ${columns.userId} <> ${viewerUserId}
     AND ${recruitmentPeriodStartAt} IS NOT NULL
     AND ${columns.createdAt} >= ${recruitmentPeriodStartAt}
-    AND (
-      ${columns.classificationStatus} IS DISTINCT FROM 'completed'
-      OR ${columns.classification} IS DISTINCT FROM 'OTHER'
-    )
-  )`;
-}
-
-function recruitmentOpinionFailurePredicate(
-  columns: RecruitmentOpinionPostColumns,
-  viewerUserId: number | undefined,
-  options: PostgresCommunityOptions,
-): SQL {
-  if (!options.hideRecruitmentOpinions || viewerUserId == null) return sql`FALSE`;
-  const recruitmentPeriodStartAt = recruitmentPeriodStartExpression(columns, options);
-
-  return sql`(
-    ${columns.userId} <> ${viewerUserId}
-    AND ${recruitmentPeriodStartAt} IS NOT NULL
-    AND ${columns.createdAt} >= ${recruitmentPeriodStartAt}
-    AND ${columns.classificationStatus} = 'failed'
+    AND ${columns.classificationStatus} IS NOT DISTINCT FROM 'completed'
+    AND ${columns.classification} IS NOT DISTINCT FROM 'RESULT_RELATED'
   )`;
 }
 
@@ -221,7 +202,10 @@ export function recruitmentOpinionVisibleForRow(
   const createdAt = row.createdAt instanceof Date ? row.createdAt.getTime() : new Date(row.createdAt).getTime();
   const startAt = new Date(recruitmentPeriodStartAt).getTime();
   if (createdAt < startAt) return true;
-  return row.recruitmentOpinionClassificationStatus === "completed" && row.recruitmentOpinionClassification === "OTHER";
+  return !(
+    row.recruitmentOpinionClassificationStatus === "completed" &&
+    row.recruitmentOpinionClassification === "RESULT_RELATED"
+  );
 }
 
 function mapPost(
@@ -1140,55 +1124,6 @@ export async function getPostgresContentComments(
   return result;
 }
 
-export async function getPostgresContentCommentClassificationFailures(
-  env: Env,
-  contentIds: string[],
-  userId: number | undefined,
-  options: PostgresCommunityOptions = {},
-): Promise<Record<string, boolean>> {
-  const unique = [...new Set(contentIds)];
-  const result: Record<string, boolean> = Object.fromEntries(unique.map((id) => [id, false]));
-  if (!unique.length || !options.hideRecruitmentOpinions || userId == null) return result;
-
-  await withCommunityDatabase(
-    env,
-    "content_comment_classification_failures",
-    async (db) => {
-      const contentValues = sql.join(
-        unique.map((contentId) => sql`${contentId}`),
-        sql`, `,
-      );
-      const rows = await db.execute(sql`
-        SELECT p.subject_content_uid AS content_uid
-        FROM community_posts p
-        LEFT JOIN community_post_recruitment_opinions r ON r.post_uid = p.uid
-        WHERE p.post_type = 'event_opinion'
-          AND p.subject_content_uid IN (${contentValues})
-          AND (p.visibility = 'public' OR p.user_id = ${userId})
-          AND ${communityAuthorVisiblePredicate(sql.raw("p.user_id"), userId)}
-          AND ${recruitmentOpinionFailurePredicate(
-            {
-              userId: sql.raw("p.user_id"),
-              subjectContentUid: sql.raw("p.subject_content_uid"),
-              createdAt: sql.raw("p.created_at"),
-              recruitmentPeriodStartAt: sql.raw("r.recruitment_period_start_at"),
-              classificationStatus: sql.raw("r.recruitment_opinion_classification_status"),
-              classification: sql.raw("r.recruitment_opinion_classification"),
-            },
-            userId,
-            options,
-          )}
-        GROUP BY p.subject_content_uid
-      `);
-      for (const row of rows.rows as Array<{ content_uid: string | null }>) {
-        if (row.content_uid && result[row.content_uid] !== undefined) result[row.content_uid] = true;
-      }
-    },
-    options,
-  );
-  return result;
-}
-
 export async function createPostgresContentComment(
   env: Env,
   userId: number,
@@ -1628,34 +1563,6 @@ export async function getPostgresContentCommentSummaries(
         if (!row.content_uid || !result[row.content_uid]) continue;
         result[row.content_uid].count = Number(row.count);
         result[row.content_uid].hasRecentComment = Boolean(row.has_recent_comment);
-      }
-
-      if (options.hideRecruitmentOpinions && userId != null) {
-        const failureQuery = await db.execute(sql`
-          SELECT p.subject_content_uid AS content_uid
-          FROM community_posts p
-          LEFT JOIN community_post_recruitment_opinions r ON r.post_uid = p.uid
-          WHERE p.post_type = 'event_opinion'
-            AND p.subject_content_uid IN (${contentValues})
-            AND ${postVisibility}
-            AND ${postAuthorVisibility}
-            AND ${recruitmentOpinionFailurePredicate(
-              {
-                userId: sql.raw("p.user_id"),
-                subjectContentUid: sql.raw("p.subject_content_uid"),
-                createdAt: sql.raw("p.created_at"),
-                recruitmentPeriodStartAt: sql.raw("r.recruitment_period_start_at"),
-                classificationStatus: sql.raw("r.recruitment_opinion_classification_status"),
-                classification: sql.raw("r.recruitment_opinion_classification"),
-              },
-              userId,
-              options,
-            )}
-          GROUP BY p.subject_content_uid
-        `);
-        for (const row of failureQuery.rows as Array<{ content_uid: string | null }>) {
-          if (row.content_uid && result[row.content_uid]) result[row.content_uid].hasClassificationFailure = true;
-        }
       }
 
       if (userId === undefined) return;

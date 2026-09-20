@@ -5,7 +5,6 @@ import {
   deletePostgresCommunityComment,
   deletePostgresCommunityPostByUid,
   getPostgresCommunityPostByUid,
-  getPostgresContentCommentClassificationFailures,
   getPostgresContentCommentIdByUid,
   getPostgresContentCommentSummaries,
   getPostgresContentComments,
@@ -67,15 +66,6 @@ export async function getContentsCommentSummaries(
   options: ContentCommentReadOptions = {},
 ): Promise<Record<string, ContentCommentSummary>> {
   return getPostgresContentCommentSummaries(env, contentIds, userId, options);
-}
-
-export async function getContentCommentClassificationFailures(
-  env: Env,
-  contentId: string,
-  userId: number | undefined,
-  options: ContentCommentReadOptions = {},
-): Promise<boolean> {
-  return (await getPostgresContentCommentClassificationFailures(env, [contentId], userId, options))[contentId] ?? false;
 }
 
 export async function createComment(

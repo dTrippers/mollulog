@@ -27,7 +27,7 @@ describe("recruitment opinion visibility", () => {
     );
   });
 
-  it("hides pending and failed rows and uses the content-period fallback", () => {
+  it("shows pending, failed, missing, and unknown rows and uses the content-period fallback", () => {
     expect(
       recruitmentOpinionVisibleForRow(
         row({
@@ -38,14 +38,34 @@ describe("recruitment opinion visibility", () => {
         1,
         { ...enabled, recruitmentPeriodStartAtByContentId: { "content-1": startAt } },
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       recruitmentOpinionVisibleForRow(
         row({ recruitmentOpinionClassificationStatus: "failed", recruitmentOpinionClassification: null }),
         1,
         enabled,
       ),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      recruitmentOpinionVisibleForRow(
+        row({
+          recruitmentOpinionClassificationStatus: null,
+          recruitmentOpinionClassification: null,
+        }),
+        1,
+        enabled,
+      ),
+    ).toBe(true);
+    expect(
+      recruitmentOpinionVisibleForRow(
+        row({
+          recruitmentOpinionClassificationStatus: "completed",
+          recruitmentOpinionClassification: null,
+        }),
+        1,
+        enabled,
+      ),
+    ).toBe(true);
     expect(recruitmentOpinionVisibleForRow(row(), 1, {})).toBe(true);
   });
 });
