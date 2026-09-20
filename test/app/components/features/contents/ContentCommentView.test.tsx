@@ -17,4 +17,16 @@ describe("ContentCommentView", () => {
     expect(markup).not.toContain("의견을 남겨보세요");
     expect(markup).not.toContain(">0<");
   });
+
+  it("uses the filtered empty state without exposing a classification status", () => {
+    const markup = renderToStaticMarkup(
+      <ContentCommentView
+        hideRecruitmentOpinions
+        summary={{ count: 0, hasRecentComment: false, pinnedPreviewBody: null }}
+      />,
+    );
+
+    expect(markup).toContain("표시할 의견이 없어요");
+    expect(markup).not.toContain("분류");
+  });
 });

@@ -47,6 +47,7 @@ export const pgSenseisTable = pgTable(
     growthVisibility: boolean("growth_visibility").notNull().default(false),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(false),
   },
   (table) => [
     uniqueIndex("senseis_uid_uidx").on(table.uid),
@@ -742,6 +743,33 @@ export const pgCommunityPostsTable = pgTable(
     uniqueIndex("community_posts_student_review_per_user_uidx")
       .on(table.userId, table.subjectStudentUid)
       .where(sql`${table.postType} = 'student_review'`),
+  ],
+);
+
+export const pgCommunityPostRecruitmentOpinionsTable = pgTable(
+  "community_post_recruitment_opinions",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    postUid: text("post_uid").notNull(),
+    recruitmentPeriodStartAt: timestamptz("recruitment_period_start_at"),
+    recruitmentOpinionClassificationStatus: text("recruitment_opinion_classification_status").$type<
+      "pending" | "completed" | "failed"
+    >(),
+    recruitmentOpinionClassification: text("recruitment_opinion_classification").$type<"RESULT_RELATED" | "OTHER">(),
+    recruitmentOpinionClassificationRevision: integer("recruitment_opinion_classification_revision")
+      .notNull()
+      .default(0),
+    recruitmentOpinionClassificationModel: text("recruitment_opinion_classification_model"),
+    recruitmentOpinionClassificationPromptVersion: text("recruitment_opinion_classification_prompt_version"),
+    recruitmentOpinionClassifiedAt: timestamptz("recruitment_opinion_classified_at"),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_recruitment_opinions_post_uid_uidx").on(table.postUid),
+    index("community_post_recruitment_opinions_classification_status_idx").on(
+      table.recruitmentOpinionClassificationStatus,
+    ),
   ],
 );
 

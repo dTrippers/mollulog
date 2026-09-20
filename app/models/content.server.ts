@@ -1,3 +1,4 @@
+import type { RecruitmentOpinionClassificationJob } from "~/db/postgres/community";
 import {
   createPostgresContentComment,
   createPostgresContentSubcomment,
@@ -10,10 +11,11 @@ import {
   pinPostgresContentComment,
   unpinPostgresContentComment,
   updatePostgresCommunityComment,
-  upsertPostgresCommunityPost,
+  updatePostgresContentOpinion,
 } from "~/db/postgres/community";
 import type { ConcurrencyGate } from "~/lib/concurrency";
-import { createPlaintextCommunityPostBlocks } from "./community";
+import { getRecruitmentGroupByUid, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
+import { getTimelineContent } from "~/models/timeline-content.server";
 import type { ContentCommentSummary, ContentCommentWithSensei, NestedComment } from "./content";
 import { nestComments } from "./content";
 import type { ContentCommentVisibility } from "./content-comment";
@@ -21,20 +23,39 @@ import type { ContentCommentVisibility } from "./content-comment";
 export type { ContentCommentSummary, ContentCommentWithSensei, NestedComment } from "./content";
 export { nestComments } from "./content";
 
+export type ContentCommentReadOptions = {
+  hideRecruitmentOpinions?: boolean;
+  recruitmentPeriodStartAtByContentId?: Readonly<Record<string, string | null>>;
+  ctx?: ExecutionContext;
+};
+
+export async function getContentRecruitmentPeriod(
+  env: Env,
+  contentId: string,
+  options: { ctx?: ExecutionContext } = {},
+) {
+  const content = await getTimelineContent(env, contentId, options);
+  if (!content?.recruitmentGroupUid) return null;
+  const recruitmentGroup = await getRecruitmentGroupByUid(env, content.recruitmentGroupUid);
+  return recruitmentGroup ? normalizeRecruitmentGroupPeriod(recruitmentGroup) : null;
+}
+
 export async function getContentComments(
   env: Env,
   contentId: string,
   userId?: number,
+  options: ContentCommentReadOptions = {},
 ): Promise<ContentCommentWithSensei[]> {
-  return (await getPostgresContentComments(env, [contentId], userId))[contentId] ?? [];
+  return (await getPostgresContentComments(env, [contentId], userId, options))[contentId] ?? [];
 }
 
 export async function getContentsComments(
   env: Env,
   contentIds: string[],
   userId?: number,
+  options: ContentCommentReadOptions = {},
 ): Promise<Record<string, ContentCommentWithSensei[]>> {
-  return getPostgresContentComments(env, contentIds, userId);
+  return getPostgresContentComments(env, contentIds, userId, options);
 }
 
 export async function getContentsCommentSummaries(
@@ -42,8 +63,9 @@ export async function getContentsCommentSummaries(
   contentIds: string[],
   userId?: number,
   _concurrencyGate?: ConcurrencyGate,
+  options: ContentCommentReadOptions = {},
 ): Promise<Record<string, ContentCommentSummary>> {
-  return getPostgresContentCommentSummaries(env, contentIds, userId);
+  return getPostgresContentCommentSummaries(env, contentIds, userId, options);
 }
 
 export async function createComment(
@@ -52,8 +74,9 @@ export async function createComment(
   contentId: string,
   body: string,
   visibility: ContentCommentVisibility = "private",
+  options: { recruitmentPeriodStartAt?: string | null; ctx?: ExecutionContext } = {},
 ): Promise<string> {
-  return createPostgresContentComment(env, userId, contentId, body, visibility);
+  return createPostgresContentComment(env, userId, contentId, body, visibility, options);
 }
 
 export async function createSubcomment(
@@ -63,8 +86,9 @@ export async function createSubcomment(
   parentCommentUid: string,
   body: string,
   visibility: ContentCommentVisibility = "private",
+  options: { recruitmentPeriodStartAt?: string | null; ctx?: ExecutionContext } = {},
 ): Promise<string> {
-  return createPostgresContentSubcomment(env, userId, contentId, parentCommentUid, body, visibility);
+  return createPostgresContentSubcomment(env, userId, contentId, parentCommentUid, body, visibility, options);
 }
 
 export async function updateComment(
@@ -73,19 +97,15 @@ export async function updateComment(
   commentUid: string,
   body: string,
   visibility: ContentCommentVisibility,
-): Promise<void> {
+  options: { recruitmentPeriodStartAt?: string | null; ctx?: ExecutionContext } = {},
+): Promise<RecruitmentOpinionClassificationJob | null> {
   const post = await getPostgresCommunityPostByUid(env, commentUid, userId);
   if (post?.postType === "event_opinion" && post.author?.id === userId) {
-    await upsertPostgresCommunityPost(env, commentUid, {
-      uid: commentUid,
-      userId,
-      postType: "event_opinion",
-      visibility,
-      blocks: createPlaintextCommunityPostBlocks(body),
-    });
-    return;
+    const job = await updatePostgresContentOpinion(env, userId, commentUid, body, visibility, options);
+    return job ?? null;
   }
   await updatePostgresCommunityComment(env, userId, commentUid, body, visibility);
+  return null;
 }
 
 export async function deleteComment(env: Env, userId: number, commentUid: string): Promise<void> {
@@ -113,7 +133,8 @@ export async function getNestedContentComments(
   env: Env,
   contentUid: string,
   currentUser: { id: number; username: string } | null,
+  options: ContentCommentReadOptions = {},
 ): Promise<NestedComment[]> {
-  const comments = await getPostgresContentComments(env, [contentUid], currentUser?.id);
+  const comments = await getPostgresContentComments(env, [contentUid], currentUser?.id, options);
   return nestComments(comments[contentUid] ?? [], currentUser);
 }

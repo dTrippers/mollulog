@@ -20,6 +20,7 @@ import { getActiveSensei, getAuthenticator, sessionStorage } from "~/auth/authen
 import { getDiscordProfileFeedback } from "~/components/features/auth/discord-profile-feedback";
 import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
+import RecruitmentOpinionSetting from "~/components/features/account/RecruitmentOpinionSetting";
 import { nowUtcIso } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
@@ -53,6 +54,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       friendCode: senseiData.friendCode,
       profileVisibility: senseiData.profileVisibility,
       growthVisibility: senseiData.growthVisibility === true,
+      hideRecruitmentOpinions: senseiData.hideRecruitmentOpinions === true,
       memberCode: senseiPrivacy?.memberCode ?? null,
     },
     allStudents: (await getAllStudents(env, true))
@@ -426,6 +428,10 @@ export default function EditProfile() {
             />
           </div>
         </Form>
+      </SectionCard>
+
+      <SectionCard title="의견 표시 설정">
+        <RecruitmentOpinionSetting initialState={sensei.hideRecruitmentOpinions === true} signedIn />
       </SectionCard>
 
       <SectionCard title="블루 아카이브 계정 정보" description="계정 정보는 다른 사람이 확인할 수 없어요">

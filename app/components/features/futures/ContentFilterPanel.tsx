@@ -1,3 +1,4 @@
+import RecruitmentOpinionSetting from "~/components/features/account/RecruitmentOpinionSetting";
 import { PanelBody, PanelFilterButtonsSection, PanelSwitchRow } from "~/components/primitives";
 import type { EventType, RaidType } from "~/models/content.d";
 import type { ContentFilterState } from "./content-filter-state";
@@ -5,9 +6,24 @@ import type { ContentFilterState } from "./content-filter-state";
 type ContentFilterPanelProps = {
   filter: ContentFilterState;
   onFilterChange: (filter: ContentFilterState) => void;
+  hideRecruitmentOpinions: boolean;
+  signedIn: boolean;
+  onHideRecruitmentOpinionsChange: (value: boolean) => void;
+  onHideRecruitmentOpinionsSaved?: (value: boolean) => void;
+  onSignedOutOpinionToggle?: () => void;
+  focusOpinionSetting?: boolean;
 };
 
-export default function ContentFilterPanel({ filter, onFilterChange }: ContentFilterPanelProps) {
+export default function ContentFilterPanel({
+  filter,
+  onFilterChange,
+  hideRecruitmentOpinions,
+  signedIn,
+  onHideRecruitmentOpinionsChange,
+  onHideRecruitmentOpinionsSaved,
+  onSignedOutOpinionToggle,
+  focusOpinionSetting = false,
+}: ContentFilterPanelProps) {
   const onToggleType = (activated: boolean, types: (EventType | RaidType)[]) => {
     const nextTypes = activated
       ? Array.from(new Set([...filter.types, ...types]))
@@ -84,7 +100,24 @@ export default function ContentFilterPanel({ filter, onFilterChange }: ContentFi
     <PanelBody>
       <PanelFilterButtonsSection title="이벤트" buttonProps={eventFilterProps} size="sm" />
       <PanelFilterButtonsSection title="레이드" buttonProps={contentFilterProps} size="sm" />
-      <PanelSwitchRow title="학생 모집 컨텐츠만 보기" checked={filter.onlyPickups} onChange={onToggleOnlyPickups} />
+      <div className="pt-3">
+        <PanelSwitchRow
+          title="학생 모집 컨텐츠만 보기"
+          checked={filter.onlyPickups}
+          hitArea
+          compact
+          onChange={onToggleOnlyPickups}
+        />
+        <RecruitmentOpinionSetting
+          initialState={hideRecruitmentOpinions}
+          signedIn={signedIn}
+          onValueChange={onHideRecruitmentOpinionsChange}
+          onSaved={onHideRecruitmentOpinionsSaved}
+          onSignedOutToggle={onSignedOutOpinionToggle}
+          autoFocus={focusOpinionSetting}
+          compact
+        />
+      </div>
     </PanelBody>
   );
 }

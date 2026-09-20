@@ -153,6 +153,62 @@ describe("event recruitment period notice loader", () => {
     });
     expect(mockedGetRecruitmentGroupByUidStrict).toHaveBeenCalledWith(env, "group-a");
     expect(mockedNormalizeRecruitmentGroupPeriod).toHaveBeenCalledWith(recruitmentGroup as never);
+    expect(result).toMatchObject({
+      hideRecruitmentOpinions: false,
+      canFilterRecruitmentOpinions: true,
+    });
+    expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", null, {
+      hideRecruitmentOpinions: false,
+      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
+      ctx,
+    });
+  });
+
+  it("passes the signed-in recruitment opinion setting to the event comment read", async () => {
+    const currentUser = { id: 7, username: "sensei", hideRecruitmentOpinions: true };
+    mockedGetActiveSensei.mockResolvedValue(currentUser as never);
+
+    const result = await loader(loaderArgs());
+
+    expect(result).toMatchObject({
+      hideRecruitmentOpinions: true,
+      canFilterRecruitmentOpinions: true,
+    });
+    expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", currentUser, {
+      hideRecruitmentOpinions: true,
+      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
+      ctx,
+    });
+  });
+
+  it("returns the genuine comment query failure state without exposing classifier state", async () => {
+    mockedGetNestedContentComments.mockRejectedValue(new Error("database unavailable"));
+
+    const result = await loader(loaderArgs());
+
+    expect(result.commentsUnavailable).toBe(true);
+    expect(result.allComments).toEqual([]);
+  });
+
+  it("does not enable the filter for live events without a recruitment period", async () => {
+    mockedGetTimelineContent.mockResolvedValue({
+      ...timelineContent,
+      contentType: "live",
+      recruitmentGroupUid: null,
+    } as never);
+    mockedGetActiveSensei.mockResolvedValue({ id: 7, username: "sensei", hideRecruitmentOpinions: true } as never);
+
+    const result = await loader(loaderArgs());
+
+    expect(result).toMatchObject({
+      hideRecruitmentOpinions: false,
+      canFilterRecruitmentOpinions: false,
+    });
+    expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", expect.anything(), {
+      hideRecruitmentOpinions: false,
+      recruitmentPeriodStartAtByContentId: { "future-event": null },
+      ctx,
+    });
   });
 
   it("propagates a strict recruitment lookup failure", async () => {

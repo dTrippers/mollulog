@@ -1,6 +1,6 @@
 import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
@@ -25,7 +25,7 @@ import {
 } from "~/models/recruitment-result.server";
 import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
-import type { ActionData as CommentActionData } from "./api.contents.$uid.comments";
+import type { ActionData as CommentActionData, CommentResponse } from "./api.contents.$uid.comments";
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
 import FutureRecruitmentTable from "./futures._components/FutureRecruitmentTable";
 import type { FutureRecruitmentTableContent } from "./futures._components/future-recruitment-table-model";
@@ -51,7 +51,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   return ctx.tracing.enterSpan("futures.loader", async (span) => {
     const rawContentsPromise = ctx.tracing.enterSpan("future_contents", () => getFutureContents(env, false, ctx));
-    const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
+    const currentUserPromise = ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request, ctx));
     const [rawContents, currentUser] = await Promise.all([rawContentsPromise, currentUserPromise]);
     const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
       uid: content.uid,
@@ -89,6 +89,14 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
           env,
           contents.map((content: FutureContentsLoaderContent) => content.uid),
           currentUserId,
+          undefined,
+          {
+            hideRecruitmentOpinions: currentUser?.hideRecruitmentOpinions === true,
+            recruitmentPeriodStartAtByContentId: Object.fromEntries(
+              contents.map((content) => [content.uid, content.recruitmentPeriod?.startAt ?? null]),
+            ),
+            ctx,
+          },
         ),
       )
       .then<CommentSummariesState>((summaries) => ({ status: "available", summaries }))
@@ -121,6 +129,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     const payload: FutureContentsLoaderData = {
       signedIn,
+      hideRecruitmentOpinions: currentUser?.hideRecruitmentOpinions === true,
       contents,
       favoritedStudents,
       favoritedCounts,
@@ -188,6 +197,7 @@ type CommentSummariesState =
   | { status: "unavailable" };
 type FutureContentsLoaderData = {
   signedIn: boolean;
+  hideRecruitmentOpinions: boolean;
   contents: FutureContentsLoaderContent[];
   favoritedStudents: FavoriteStudentLoaderData[] | null;
   favoritedCounts: FavoritedCountLoaderData[];
@@ -316,6 +326,12 @@ export default function FutureContents() {
 
   const loaderData = useLoaderData() as FutureContentsLoaderData;
   const { contents, commentSummaries, signedIn } = loaderData;
+  const [hideRecruitmentOpinions, setHideRecruitmentOpinions] = useState(loaderData.hideRecruitmentOpinions);
+  const revalidator = useRevalidator();
+  const [filterPanelRequest, setFilterPanelRequest] = useState(0);
+  const [filterPanelCloseRequest, setFilterPanelCloseRequest] = useState(0);
+  const openContentFilter = useCallback(() => setFilterPanelRequest((request) => request + 1), []);
+  const requestGuestOpinionSignIn = useCallback(() => setFilterPanelCloseRequest((request) => request + 1), []);
 
   const [favoritedStudents, setFavoritedStudents] = useState<FavoritedStudentState[] | undefined>(
     loaderData.favoritedStudents?.map(
@@ -335,6 +351,7 @@ export default function FutureContents() {
     ),
   );
   const [allComments, setAllComments] = useState<AllCommentsState>({});
+  const [commentUnavailable, setCommentUnavailable] = useState<Record<string, boolean>>({});
   const [loadedCommentContentUids, setLoadedCommentContentUids] = useState<string[]>([]);
   const [commentLoadRequest, setCommentLoadRequest] = useState<{
     uid: string;
@@ -346,17 +363,19 @@ export default function FutureContents() {
   const submitFavorite = (data: ContentsActionData) =>
     favoriteFetcher.submit(data, { action: "/api/contents", method: "post", encType: "application/json" });
 
-  const commentFetcher = useFetcher<NestedComment[]>();
+  const commentFetcher = useFetcher<CommentResponse>();
   const submitComment = (contentUid: string, data: CommentActionData) =>
     commentFetcher.submit(data, {
       action: `/api/contents/${contentUid}/comments`,
       method: "post",
       encType: "application/json",
     });
-  const commentThreadFetcher = useFetcher<NestedComment[]>();
+  const commentThreadFetcher = useFetcher<CommentResponse>();
   const previousCommentThreadDataRef = useRef<unknown>(null);
+  const [openCommentContentUid, setOpenCommentContentUid] = useState<string | null>(null);
 
   const loadCommentThread = (contentUid: string) => {
+    setOpenCommentContentUid(contentUid);
     if (loadedCommentContentUids.includes(contentUid) || commentLoadRequest?.uid === contentUid) {
       return;
     }
@@ -365,6 +384,22 @@ export default function FutureContents() {
     setCommentLoadRequest({ uid: contentUid, started: false });
     commentThreadFetcher.load(`/api/contents/${contentUid}/comments`);
   };
+
+  const refreshCommentsAfterFilterSave = useCallback(
+    (_nextValue: boolean) => {
+      setAllComments({});
+      setCommentUnavailable({});
+      setLoadedCommentContentUids([]);
+      setCommentLoadRequest(null);
+      revalidator.revalidate();
+
+      if (!openCommentContentUid) return;
+      previousCommentThreadDataRef.current = commentThreadFetcher.data;
+      setCommentLoadRequest({ uid: openCommentContentUid, started: false });
+      commentThreadFetcher.load(`/api/contents/${openCommentContentUid}/comments`);
+    },
+    [commentThreadFetcher, openCommentContentUid, revalidator],
+  );
 
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
@@ -397,18 +432,20 @@ export default function FutureContents() {
   }, [recruitmentResultFetcher.state, recruitmentResultFetcher.data]);
 
   useEffect(() => {
+    const response = commentFetcher.data;
     if (
       (commentFetcher.state === "idle" || commentFetcher.state === "loading") &&
-      commentFetcher.data &&
-      Array.isArray(commentFetcher.data) &&
+      response &&
+      Array.isArray(response.comments) &&
       pendingContentUid
     ) {
       setAllComments(
         (prev: AllCommentsState): AllCommentsState => ({
           ...prev,
-          [pendingContentUid]: commentFetcher.data as NestedComment[],
+          [pendingContentUid]: response.comments,
         }),
       );
+      setCommentUnavailable((prev) => ({ ...prev, [pendingContentUid]: response.unavailable }));
       setLoadedCommentContentUids((prev) => (prev.includes(pendingContentUid) ? prev : [...prev, pendingContentUid]));
       if (commentLoadRequest?.uid === pendingContentUid) {
         previousCommentThreadDataRef.current = commentThreadFetcher.data;
@@ -438,15 +475,22 @@ export default function FutureContents() {
       !commentLoadRequest ||
       commentThreadFetcher.state !== "idle" ||
       !hasFreshData ||
-      !Array.isArray(commentThreadFetcher.data)
+      !commentThreadFetcher.data ||
+      !Array.isArray(commentThreadFetcher.data.comments)
     ) {
       return;
     }
 
     const contentUid = commentLoadRequest.uid;
+    const response = commentThreadFetcher.data;
+    if (!response) return;
     setAllComments((prev) => ({
       ...prev,
-      [contentUid]: commentThreadFetcher.data as NestedComment[],
+      [contentUid]: response.comments,
+    }));
+    setCommentUnavailable((prev) => ({
+      ...prev,
+      [contentUid]: response.unavailable,
     }));
     setLoadedCommentContentUids((prev) => (prev.includes(contentUid) ? prev : [...prev, contentUid]));
     setCommentLoadRequest(null);
@@ -603,11 +647,18 @@ export default function FutureContents() {
           showPendingStudentFavoriteFeatureBanner: hasPendingStudentRecruitment(content),
           allComments: allComments[content.uid],
           commentSummary: commentSummaries.status === "available" ? commentSummaries.summaries[content.uid] : undefined,
-          commentsUnavailable: commentSummaries.status === "unavailable",
+          commentsUnavailable: commentSummaries.status === "unavailable" || commentUnavailable[content.uid] === true,
           isLoadingComments: commentLoadRequest?.uid === content.uid,
         };
       }),
-    [allComments, commentLoadRequest?.uid, commentSummaries, filteredContents, studentAnalysisFeatureBannerContentUid],
+    [
+      allComments,
+      commentUnavailable,
+      commentLoadRequest?.uid,
+      commentSummaries,
+      filteredContents,
+      studentAnalysisFeatureBannerContentUid,
+    ],
   );
 
   const tableContents = useMemo<FutureRecruitmentTableContent[]>(
@@ -681,9 +732,23 @@ export default function FutureContents() {
         {
           title: "컨텐츠 필터",
           Icon: FunnelIcon,
-          children: <ContentFilterPanel filter={filter} onFilterChange={setFilter} />,
+          children: (
+            <ContentFilterPanel
+              filter={filter}
+              onFilterChange={setFilter}
+              hideRecruitmentOpinions={hideRecruitmentOpinions}
+              signedIn={signedIn}
+              onHideRecruitmentOpinionsChange={setHideRecruitmentOpinions}
+              onHideRecruitmentOpinionsSaved={refreshCommentsAfterFilterSave}
+              onSignedOutOpinionToggle={requestGuestOpinionSignIn}
+              focusOpinionSetting={filterPanelRequest > 0}
+            />
+          ),
         },
       ]}
+      panelRequest={filterPanelRequest > 0 ? { index: 0, id: filterPanelRequest } : null}
+      panelCloseRequest={filterPanelCloseRequest > 0 ? filterPanelCloseRequest : null}
+      onPanelCloseRequestHandled={showSignIn}
     >
       {(view === "timeline" || view === "table") && (
         <div className={view === "table" ? "lg:hidden" : ""}>
@@ -701,6 +766,9 @@ export default function FutureContents() {
             onRevealSpoiler={revealSpoiler}
             onHideSpoiler={hideSpoiler}
             onCommentOpen={loadCommentThread}
+            onCommentClose={() => setOpenCommentContentUid(null)}
+            onOpenContentFilter={openContentFilter}
+            hideRecruitmentOpinions={hideRecruitmentOpinions}
             onCommentCreate={(contentUid, body, visibility) => {
               setPendingContentUid(contentUid);
               submitComment(contentUid, { action: "create", body, visibility });
