@@ -378,9 +378,7 @@ describe("PostgreSQL community repository", () => {
       config.text.includes('insert into "community_post_recruitment_opinions"'),
     );
     expect(firstOpinionInsert).toBeTruthy();
-    expect(firstOpinionInsert?.[1]).toEqual(
-      expect.arrayContaining([firstInsert?.[1]?.[0], null, null, 0]),
-    );
+    expect(firstOpinionInsert?.[1]).toEqual(expect.arrayContaining([firstInsert?.[1]?.[0], null, null, 0]));
     const lowered = first.query.mock.calls.map(([config]) => config.text.toLowerCase());
     expect(lowered).toContain("begin");
     expect(lowered).toContain("commit");
@@ -483,7 +481,9 @@ describe("PostgreSQL community repository", () => {
     const upsertQuery = query.mock.calls.find(([config]) =>
       config.text.includes('insert into "community_post_recruitment_opinions"'),
     );
-    expect(upsertQuery?.[0].text).toContain('"recruitment_opinion_classification_revision" = "community_post_recruitment_opinions"."recruitment_opinion_classification_revision" + 1');
+    expect(upsertQuery?.[0].text).toContain(
+      '"recruitment_opinion_classification_revision" = "community_post_recruitment_opinions"."recruitment_opinion_classification_revision" + 1',
+    );
   });
 
   it("creates content subcomments only for a parent in the requested content", async () => {
@@ -594,9 +594,7 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("deletes the recruitment-opinion extension row with the owning post", async () => {
-    const { client, query } = createClient((text) =>
-      text.includes('from "community_posts"') ? [["post-1"]] : [],
-    );
+    const { client, query } = createClient((text) => (text.includes('from "community_posts"') ? [["post-1"]] : []));
     await expect(
       deletePostgresCommunityPostByUid(env, "post-1", 10, { createClient: () => client }),
     ).resolves.toBeUndefined();
@@ -651,12 +649,8 @@ describe("PostgreSQL community repository", () => {
     });
 
     const summaryQuery = query.mock.calls[0]?.[0].text ?? "";
-    expect(summaryQuery).toMatch(
-      /recruitment_opinion_classification_status.*IS NOT DISTINCT FROM 'completed'/s,
-    );
-    expect(summaryQuery).toMatch(
-      /recruitment_opinion_classification.*IS NOT DISTINCT FROM 'RESULT_RELATED'/s,
-    );
+    expect(summaryQuery).toMatch(/recruitment_opinion_classification_status.*IS NOT DISTINCT FROM 'completed'/s);
+    expect(summaryQuery).toMatch(/recruitment_opinion_classification.*IS NOT DISTINCT FROM 'RESULT_RELATED'/s);
     expect(summaryQuery).not.toContain("IS DISTINCT FROM 'completed'");
     expect(summaryQuery).not.toContain("IS DISTINCT FROM 'OTHER'");
   });

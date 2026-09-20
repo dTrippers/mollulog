@@ -39,8 +39,8 @@ describe("student summary revision PostgreSQL migration contract", () => {
   test("mirrors the table in the drizzle schema with explicit snake_case columns", () => {
     expect(schema).toContain("export const pgStudentSummaryRevisionsTable = pgTable(");
     const tableBlock = schema.slice(
-      schema.indexOf('export const pgStudentSummaryRevisionsTable = pgTable('),
-      schema.indexOf('export const', schema.indexOf('export const pgStudentSummaryRevisionsTable = pgTable(') + 1),
+      schema.indexOf("export const pgStudentSummaryRevisionsTable = pgTable("),
+      schema.indexOf("export const", schema.indexOf("export const pgStudentSummaryRevisionsTable = pgTable(") + 1),
     );
     expect(tableBlock).not.toContain("uniqueIndex");
     expect(schema).toContain('index("student_summary_revisions_student_published_at_id_idx")');
