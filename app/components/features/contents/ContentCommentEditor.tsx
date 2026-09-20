@@ -9,7 +9,7 @@ import {
   XMarkIcon,
 } from "@heroicons/react/16/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Callout, ClickableSurface } from "~/components/primitives";
+import { Callout, ClickableSurface, LoadingSkeleton } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { cn } from "~/lib/utils";
 import CommentView from "./CommentView";
@@ -148,7 +148,9 @@ export default function ContentCommentEditor({
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar">
         <div className={`${variant === "compact" ? "mb-3 space-y-1" : "-mt-3 mb-4 space-y-1"}`}>
           {isLoading ? (
-            <p className="my-16 text-sm text-center text-neutral-500 dark:text-neutral-400">의견을 불러오고 있어요</p>
+            <div className="my-16" role="status" aria-label="의견을 불러오는 중">
+              <LoadingSkeleton noOuterMargin />
+            </div>
           ) : sortedComments.length > 0 ? (
             sortedComments.map((comment) => (
               <div key={comment.uid} className={variant === "compact" ? "mb-2.5" : "mb-3"}>
