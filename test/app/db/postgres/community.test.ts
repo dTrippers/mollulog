@@ -655,6 +655,18 @@ describe("PostgreSQL community repository", () => {
     expect(summaryQuery).not.toContain("IS DISTINCT FROM 'OTHER'");
   });
 
+  it("casts content-period fallbacks before coalescing them with timestamp columns", async () => {
+    const { client, query } = createClient(() => []);
+    await getPostgresContentCommentSummaries(env, ["content-1"], 10, {
+      hideRecruitmentOpinions: true,
+      recruitmentPeriodStartAtByContentId: { "content-1": "2026-09-01T00:00:00.000Z" },
+      createClient: () => client,
+    });
+
+    const summaryQuery = query.mock.calls[0]?.[0].text ?? "";
+    expect(summaryQuery).toMatch(/THEN \$\d+::timestamptz/);
+  });
+
   it("joins feed authors in count/page queries and preserves curated rows", async () => {
     setAuthors([1, "public"], [2, "private"], [3, "public"]);
     const { client, query } = createClient(() => []);

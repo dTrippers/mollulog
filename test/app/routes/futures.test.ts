@@ -231,6 +231,8 @@ describe("futures loader data source routing", () => {
     expect(timelineSource).toContain("recruitmentPeriod={content.recruitmentPeriod}");
     expect(timelineSource).toContain("showRecruitmentPeriodNotice={showRecruitmentPeriodNotice}");
     expect(itemSource).toContain('message="모집 결과글을 숨길 수 있어요"');
+    expect(itemSource).toContain('icon="eye-slash"');
+    expect(itemSource).toContain("mobileActionInline");
     expect(itemSource).not.toContain('message="컨텐츠 필터에서 설정할 수 있어요."');
     expect(tutorialSource).toContain("mllg:feature:recruitment-opinion-filter:v1");
   });

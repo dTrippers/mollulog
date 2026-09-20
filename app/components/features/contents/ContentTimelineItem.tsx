@@ -441,7 +441,6 @@ export function ContentTimelineItem({
                 comments={allComments}
                 summary={commentSummary}
                 unavailable={commentsUnavailable}
-                hideRecruitmentOpinions={hideRecruitmentOpinions}
                 onClick={() => {
                   onCommentOpen?.();
                   setCommentEditing(true);
@@ -462,8 +461,9 @@ export function ContentTimelineItem({
                     message="모집 결과글을 숨길 수 있어요"
                     linkText="설정 보기"
                     actionVariant="button"
-                    icon="information"
+                    icon="eye-slash"
                     color="neutral"
+                    mobileActionInline
                     onLinkClick={() => dismissRecruitmentOpinionTutorial(true)}
                     onDismiss={() => dismissRecruitmentOpinionTutorial(false)}
                     dismissLabel="모집 결과글 숨김 기능 안내 닫기"

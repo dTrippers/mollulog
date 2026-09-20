@@ -1,6 +1,7 @@
 import {
   ClockIcon,
   ExclamationTriangleIcon,
+  EyeSlashIcon,
   InformationCircleIcon,
   SparklesIcon,
   Squares2X2Icon,
@@ -18,7 +19,8 @@ type TimelineItemBannerProps = {
   actionVariant?: "link" | "button";
   onDismiss?: () => void;
   dismissLabel?: string;
-  icon?: "clock" | "exclamation" | "info" | "information" | "menu";
+  mobileActionInline?: boolean;
+  icon?: "clock" | "exclamation" | "eye-slash" | "info" | "information" | "menu";
   color?: "amber" | "green" | "neutral";
 };
 
@@ -64,19 +66,22 @@ export function TimelineItemBanner({
   actionVariant = "link",
   onDismiss,
   dismissLabel = "배너 닫기",
+  mobileActionInline = false,
   icon = "exclamation",
   color = "amber",
 }: TimelineItemBannerProps) {
   const IconComponent =
     icon === "clock"
       ? ClockIcon
-      : icon === "information"
-        ? InformationCircleIcon
-        : icon === "info"
-          ? SparklesIcon
-          : icon === "menu"
-            ? Squares2X2Icon
-            : ExclamationTriangleIcon;
+      : icon === "eye-slash"
+        ? EyeSlashIcon
+        : icon === "information"
+          ? InformationCircleIcon
+          : icon === "info"
+            ? SparklesIcon
+            : icon === "menu"
+              ? Squares2X2Icon
+              : ExclamationTriangleIcon;
   const classes = colorClasses[color];
   const structured = Boolean(title || onDismiss);
   const linkClassName =
@@ -102,7 +107,7 @@ export function TimelineItemBanner({
     return null;
   };
   const action = renderAction();
-  const mobileAction = structured ? renderAction("sm:hidden") : null;
+  const mobileAction = structured && !mobileActionInline ? renderAction("sm:hidden") : null;
 
   return (
     <div className={`my-2 flex items-start gap-x-2 rounded-lg px-2 py-2 text-sm sm:items-center ${classes.container}`}>
@@ -113,7 +118,9 @@ export function TimelineItemBanner({
         {mobileAction && <div className="mt-2">{mobileAction}</div>}
       </div>
       <div className="ml-auto flex shrink-0 items-start gap-1 sm:items-center">
-        {structured ? action && <div className="hidden items-center sm:flex">{action}</div> : action}
+        {structured
+          ? action && <div className={`${mobileActionInline ? "flex" : "hidden sm:flex"} items-center`}>{action}</div>
+          : action}
         {onDismiss && (
           <button
             type="button"

@@ -151,7 +151,7 @@ function recruitmentPeriodStartExpression(
   if (!fallbackEntries.length) return columns.recruitmentPeriodStartAt;
   const fallback = sql`CASE ${sql.join(
     fallbackEntries.map(
-      ([contentId, startAt]) => sql`WHEN ${columns.subjectContentUid} = ${contentId} THEN ${startAt}`,
+      ([contentId, startAt]) => sql`WHEN ${columns.subjectContentUid} = ${contentId} THEN ${startAt}::timestamptz`,
     ),
     sql` `,
   )} ELSE NULL END`;

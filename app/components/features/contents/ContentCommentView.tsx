@@ -28,7 +28,6 @@ type ContentCommentViewProps = {
   summary?: ContentCommentSummary;
   placeholder?: string;
   unavailable?: boolean;
-  hideRecruitmentOpinions?: boolean;
 
   onClick?: () => void;
 };
@@ -52,7 +51,6 @@ export default function ContentCommentView({
   summary,
   placeholder,
   unavailable = false,
-  hideRecruitmentOpinions = false,
   onClick,
 }: ContentCommentViewProps) {
   const resolvedSummary = comments ? summarizeComments(comments) : (summary ?? null);
@@ -90,7 +88,7 @@ export default function ContentCommentView({
         </p>
       ) : (
         <p className="ml-1 pl-2 border-l border-neutral-200 dark:border-neutral-700 grow text-neutral-400 dark:text-neutral-600">
-          {hideRecruitmentOpinions ? "표시할 의견이 없어요" : (placeholder ?? "의견을 남겨보세요")}
+          {placeholder ?? "의견을 남겨보세요"}
         </p>
       )}
     </ClickableSurface>
