@@ -103,6 +103,163 @@
   z-index: 200;
 }
 
+.mllg-view-transition-content {
+  view-transition-name: mllg-content-area;
+}
+
+html[data-mllg-view-transition-direction="forward"] .mllg-view-transition-content,
+html[data-mllg-view-transition-direction="reverse"] .mllg-view-transition-content {
+  /* Preserve the scrollbar gutter while removing it from route snapshots. */
+  scrollbar-color: transparent transparent;
+  scrollbar-width: auto;
+}
+
+html[data-mllg-view-transition-direction="forward"] .mllg-view-transition-content::-webkit-scrollbar,
+html[data-mllg-view-transition-direction="forward"] .mllg-view-transition-content::-webkit-scrollbar-track,
+html[data-mllg-view-transition-direction="forward"] .mllg-view-transition-content::-webkit-scrollbar-thumb,
+html[data-mllg-view-transition-direction="forward"] .mllg-view-transition-content::-webkit-scrollbar-corner,
+html[data-mllg-view-transition-direction="reverse"] .mllg-view-transition-content::-webkit-scrollbar,
+html[data-mllg-view-transition-direction="reverse"] .mllg-view-transition-content::-webkit-scrollbar-track,
+html[data-mllg-view-transition-direction="reverse"] .mllg-view-transition-content::-webkit-scrollbar-thumb,
+html[data-mllg-view-transition-direction="reverse"] .mllg-view-transition-content::-webkit-scrollbar-corner {
+  background: transparent;
+  border-color: transparent;
+  color: transparent;
+}
+
+.mllg-mobile-action-bar-transition {
+  view-transition-name: mllg-mobile-action-bar;
+}
+
+.mllg-futures-view {
+  animation: mllg-futures-view-fade 150ms ease-out both;
+}
+
+@keyframes mllg-futures-view-fade {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mllg-futures-detail-forward-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes mllg-futures-detail-forward-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+@keyframes mllg-futures-detail-reverse-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+@keyframes mllg-futures-detail-reverse-out {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-image-pair(mllg-content-area),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-image-pair(mllg-content-area) {
+  isolation: isolate;
+  overflow: clip;
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-group(mllg-content-area),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-group(mllg-content-area),
+html[data-mllg-view-transition-direction="forward"]::view-transition-group(mllg-mobile-action-bar),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-group(mllg-mobile-action-bar) {
+  animation: none;
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-old(mllg-content-area) {
+  animation: mllg-futures-detail-forward-out 250ms ease both;
+  mix-blend-mode: normal;
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-new(mllg-content-area) {
+  animation: mllg-futures-detail-forward-in 250ms ease both;
+  mix-blend-mode: normal;
+}
+
+html[data-mllg-view-transition-direction="reverse"]::view-transition-old(mllg-content-area) {
+  animation: mllg-futures-detail-reverse-out 250ms ease both;
+  mix-blend-mode: normal;
+}
+
+html[data-mllg-view-transition-direction="reverse"]::view-transition-new(mllg-content-area) {
+  animation: mllg-futures-detail-reverse-in 250ms ease both;
+  mix-blend-mode: normal;
+}
+
+@keyframes mllg-mobile-action-bar-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mllg-mobile-action-bar-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-old(mllg-mobile-action-bar),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-old(mllg-mobile-action-bar) {
+  animation: mllg-mobile-action-bar-fade-out 150ms ease both;
+  mix-blend-mode: normal;
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-new(mllg-mobile-action-bar),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-new(mllg-mobile-action-bar) {
+  animation: mllg-mobile-action-bar-fade-in 150ms ease both;
+  mix-blend-mode: normal;
+}
+
+html[data-mllg-view-transition-direction="forward"]::view-transition-old(root),
+html[data-mllg-view-transition-direction="forward"]::view-transition-new(root),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-old(root),
+html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mllg-futures-view,
+  html[data-mllg-view-transition-direction]::view-transition-old(mllg-content-area),
+  html[data-mllg-view-transition-direction]::view-transition-new(mllg-content-area),
+  html[data-mllg-view-transition-direction]::view-transition-old(mllg-mobile-action-bar),
+  html[data-mllg-view-transition-direction]::view-transition-new(mllg-mobile-action-bar) {
+    animation: none;
+  }
+}
+
 /*
   ---break---
 */

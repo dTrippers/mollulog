@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Links,
@@ -10,6 +10,7 @@ import {
   useLoaderData,
   useLocation,
   useNavigation,
+  useNavigationType,
 } from "react-router";
 import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
 import type { Route } from "./+types/root";
@@ -36,11 +37,18 @@ import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
 import { DEFAULT_OPEN_GRAPH_IMAGE_URL } from "./lib/seo";
 import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
+import {
+  clearNavigationDirection,
+  consumeNavigationDirection,
+  getBrowserStorage,
+  readFutureVisitState,
+} from "./routes/futures._components/futures-navigation";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
 import { getSiteBanner } from "./views/site-banner";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 const themeConfig = {
   dark: {
     backgroundColor: "#262626",
@@ -244,11 +252,14 @@ export default function App() {
   }, []);
 
   const location = useLocation();
+  const navigationType = useNavigationType();
   const pathname = location.pathname;
   const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
   const pagePath = `${location.pathname}${location.search}`;
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
   const routeKey = location.key;
+  const isContentTransitionRoute =
+    pathname === "/futures" || pathname.startsWith("/events/") || pathname.startsWith("/raids/");
 
   useEffect(() => {
     if (!analyticsEnabled) {
@@ -264,12 +275,31 @@ export default function App() {
     trackCurrentGoogleAnalyticsPageView(pagePath);
   }, [analyticsEnabled, pagePath]);
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     void routeKey;
+    const restoredFutureVisit =
+      navigationType === "POP" && location.pathname === "/futures"
+        ? readFutureVisitState(getBrowserStorage("sessionStorage"), routeKey)
+        : null;
+    if (restoredFutureVisit) {
+      return;
+    }
+
     const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
     if (scrollableContainer) {
-      scrollableContainer.scrollTo({ top: 0, behavior: "instant" });
+      scrollableContainer.scrollTop = 0;
     }
+  }, [location.pathname, navigationType, routeKey]);
+
+  useIsomorphicLayoutEffect(() => {
+    const direction = consumeNavigationDirection();
+    if (!direction) {
+      clearNavigationDirection();
+      return;
+    }
+
+    const timeoutId = window.setTimeout(clearNavigationDirection, 300);
+    return () => window.clearTimeout(timeoutId);
   }, [routeKey]);
 
   return (
@@ -292,7 +322,11 @@ export default function App() {
             unreadNotificationCount={navigationBarContents.unreadNotificationCount}
             siteBanner={siteBanner}
           />
-          <div className="mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0">
+          <div
+            className={`mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0 ${
+              isContentTransitionRoute ? "mllg-view-transition-content" : ""
+            }`}
+          >
             <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>

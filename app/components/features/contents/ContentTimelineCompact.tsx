@@ -28,6 +28,8 @@ export type ContentTimelineCompactProps = {
     completed: boolean,
     recruitment: RecruitmentCompletionMeta,
   ) => void;
+  onOpenContent?: (contentUid: string) => void;
+  getContentNavigationState?: (contentUid: string) => unknown;
 };
 
 export default function ContentTimelineCompact({
@@ -39,6 +41,8 @@ export default function ContentTimelineCompact({
   onRevealSpoiler,
   onFavorite,
   onRecruitmentComplete,
+  onOpenContent,
+  getContentNavigationState,
 }: ContentTimelineCompactProps) {
   const displayTimeZone = useDisplayTimeZone();
   const contentGroups = useMemo(() => groupContents(contents, displayTimeZone), [contents, displayTimeZone]);
@@ -119,6 +123,8 @@ export default function ContentTimelineCompact({
                               )
                           : undefined
                       }
+                      onOpenContent={onOpenContent ? () => onOpenContent(content.uid) : undefined}
+                      navigationState={getContentNavigationState?.(content.uid)}
                     />
                   );
                 })}
@@ -146,6 +152,8 @@ function CompactContentItem({
   onRevealSpoiler,
   onFavorite,
   onRecruitmentComplete,
+  onOpenContent,
+  navigationState,
 }: {
   content: ContentTimelineProps["contents"][number];
   spoilerVisible: boolean;
@@ -155,6 +163,8 @@ function CompactContentItem({
   onRevealSpoiler?: () => void;
   onFavorite?: (studentUid: string, favorited: boolean) => void;
   onRecruitmentComplete?: (studentUid: string, completed: boolean, recruitment: RecruitmentCompletionMeta) => void;
+  onOpenContent?: () => void;
+  navigationState?: unknown;
 }) {
   const navigate = useNavigate();
   const hiddenSpoiler = content.isSpoiler && !spoilerVisible;
@@ -189,7 +199,7 @@ function CompactContentItem({
     "group w-full cursor-pointer rounded-md px-1.5 py-1 text-left transition hover:bg-neutral-100 dark:hover:bg-neutral-800";
 
   return (
-    <div className="py-0.5">
+    <div className="py-0.5" data-futures-content-uid={content.uid}>
       {hiddenSpoiler || linked ? (
         <button
           type="button"
@@ -202,7 +212,8 @@ function CompactContentItem({
               return;
             }
 
-            navigate(content.link);
+            onOpenContent?.();
+            navigate(content.link, { state: navigationState, viewTransition: true });
           }}
         >
           {lineContent}
