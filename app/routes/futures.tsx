@@ -1,11 +1,17 @@
 import { Bars3BottomLeftIcon, FunnelIcon, QueueListIcon, TableCellsIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { type LoaderFunctionArgs, type MetaFunction, useFetcher, useLoaderData, useRevalidator } from "react-router";
+import {
+  type LoaderFunctionArgs,
+  type MetaFunction,
+  useFetcher,
+  useLoaderData,
+  useLocation,
+  useRevalidator,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { ContentTimelineProps } from "~/components/features/contents";
 import { ContentTimeline, ContentTimelineCompact } from "~/components/features/contents";
 import { ContentFilterPanel } from "~/components/features/futures";
-import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
 import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { raidTypeToParam } from "~/domain/raid";
@@ -29,6 +35,9 @@ import type { ActionData as CommentActionData, CommentResponse } from "./api.con
 import type { ActionData as RecruitmentResultActionData } from "./api.recruitment-results";
 import FutureRecruitmentTable from "./futures._components/FutureRecruitmentTable";
 import type { FutureRecruitmentTableContent } from "./futures._components/future-recruitment-table-model";
+import { createFutureDetailNavigationState } from "./futures._components/futures-navigation";
+import { useFuturesNavigation } from "./futures._components/use-futures-navigation";
+import { useFuturesViewState } from "./futures._components/use-futures-view-state";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "블루 아카이브 이벤트, 픽업 미래시";
@@ -158,10 +167,6 @@ function equalFavorites(
   return a.contentUid === b.contentUid && a.studentUid === b.studentUid;
 }
 
-const futuresContentFilterKey = "futures::content-filter";
-const futuresContentViewKey = "futures::content-view";
-
-type FutureContentView = "timeline" | "table" | "compact";
 type FavoritedStudentState = { contentUid: string; studentUid: string };
 type FavoritedCountState = FavoritedStudentState & { count: number };
 type FutureContentForView = Pick<
@@ -275,54 +280,34 @@ function hasPendingStudentRecruitment(content: FutureContentsLoaderContent): boo
 }
 
 export default function FutureContents() {
-  const [filter, setFilter] = useState<ContentFilterState>({ types: [], onlyPickups: false });
-  const [view, setView] = useState<FutureContentView>("timeline");
+  const location = useLocation();
+  const { filter, setFilter, view, desktopView, setView, isMobile, visitState } = useFuturesViewState(location.key);
   const [revealedSpoilerContentUids, setRevealedSpoilerContentUids] = useState<string[]>([]);
-  const [isHydrated, setIsHydrated] = useState(false);
+  const [isSpoilerHydrated, setIsSpoilerHydrated] = useState(false);
 
   const { showSignIn } = useSignIn();
 
   useEffect(() => {
-    setIsHydrated(true);
-    const saved = localStorage.getItem(futuresContentFilterKey);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setFilter(parsed);
-      } catch (e) {
-        console.warn("Failed to parse saved content filter:", e);
-      }
-    }
-
-    const savedSpoilers = localStorage.getItem(futuresRevealedSpoilerKey);
-    const parsedSpoilers = parseRevealedSpoilerContentUids(savedSpoilers);
-    if (parsedSpoilers.length > 0) {
-      setRevealedSpoilerContentUids(parsedSpoilers);
-    }
-
-    const savedView = localStorage.getItem(futuresContentViewKey);
-    if (savedView === "timeline" || savedView === "table" || savedView === "compact") {
-      setView(savedView);
+    setIsSpoilerHydrated(true);
+    try {
+      const savedSpoilers = localStorage.getItem(futuresRevealedSpoilerKey);
+      setRevealedSpoilerContentUids(parseRevealedSpoilerContentUids(savedSpoilers));
+    } catch {
+      setRevealedSpoilerContentUids([]);
     }
   }, []);
 
   useEffect(() => {
-    if (isHydrated) {
-      localStorage.setItem(futuresContentFilterKey, JSON.stringify(filter));
+    if (!isSpoilerHydrated) {
+      return;
     }
-  }, [filter, isHydrated]);
 
-  useEffect(() => {
-    if (isHydrated) {
+    try {
       localStorage.setItem(futuresRevealedSpoilerKey, JSON.stringify(revealedSpoilerContentUids));
+    } catch {
+      // A blocked local store must not prevent spoiler controls from working in memory.
     }
-  }, [isHydrated, revealedSpoilerContentUids]);
-
-  useEffect(() => {
-    if (isHydrated) {
-      localStorage.setItem(futuresContentViewKey, view);
-    }
-  }, [isHydrated, view]);
+  }, [isSpoilerHydrated, revealedSpoilerContentUids]);
 
   const loaderData = useLoaderData() as FutureContentsLoaderData;
   const { contents, commentSummaries, signedIn } = loaderData;
@@ -703,29 +688,63 @@ export default function FutureContents() {
     [recruitmentResults],
   );
 
+  const contentSignature = timelineContents.map((content) => content.uid).join("\u0000");
+  const { preserveCurrentPosition, saveBeforeContentNavigation } = useFuturesNavigation({
+    entryKey: location.key,
+    surface: isMobile ? "mobile" : "desktop",
+    view,
+    filter,
+    visitState,
+    contentSignature,
+  });
+  const handleViewChange = useCallback(
+    (nextView: "timeline" | "table" | "compact") => {
+      preserveCurrentPosition();
+      setView(nextView);
+    },
+    [preserveCurrentPosition, setView],
+  );
+  const handleFilterChange = useCallback(
+    (nextFilter: Parameters<typeof setFilter>[0]) => {
+      preserveCurrentPosition();
+      setFilter(nextFilter);
+    },
+    [preserveCurrentPosition, setFilter],
+  );
+  const getContentNavigationState = useCallback(
+    (contentUid: string) => {
+      const sourceContent = contents.find((content) => content.uid === contentUid);
+      const detailContentUid =
+        sourceContent?.contentType === "raid" ? (sourceContent.contentUid ?? contentUid) : contentUid;
+      return createFutureDetailNavigationState(location.key, detailContentUid);
+    },
+    [contents, location.key],
+  );
+
   return (
     <Page
       title="미래시"
       description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
+      enableContentViewTransition
       showMobileScreens={false}
       screens={[
         {
           text: "타임라인",
           Icon: QueueListIcon,
-          active: view === "timeline",
-          onClick: () => setView("timeline"),
+          active: desktopView === "timeline",
+          onClick: () => handleViewChange("timeline"),
         },
         {
           text: "목록",
           Icon: Bars3BottomLeftIcon,
-          active: view === "compact",
-          onClick: () => setView("compact"),
+          active: desktopView === "compact",
+          onClick: () => handleViewChange("compact"),
         },
         {
           text: "일정표",
           Icon: TableCellsIcon,
-          active: view === "table",
-          onClick: () => setView("table"),
+          active: desktopView === "table",
+          onClick: () => handleViewChange("table"),
         },
       ]}
       panels={[
@@ -735,7 +754,7 @@ export default function FutureContents() {
           children: (
             <ContentFilterPanel
               filter={filter}
-              onFilterChange={setFilter}
+              onFilterChange={handleFilterChange}
               hideRecruitmentOpinions={hideRecruitmentOpinions}
               signedIn={signedIn}
               onHideRecruitmentOpinionsChange={setHideRecruitmentOpinions}
@@ -750,81 +769,87 @@ export default function FutureContents() {
       panelCloseRequest={filterPanelCloseRequest > 0 ? filterPanelCloseRequest : null}
       onPanelCloseRequestHandled={showSignIn}
     >
-      {(view === "timeline" || view === "table") && (
-        <div className={view === "table" ? "lg:hidden" : ""}>
-          <ContentTimeline
+      <div key={view} className="mllg-futures-view">
+        {(view === "timeline" || view === "table") && (
+          <div className={view === "table" ? "lg:hidden" : undefined}>
+            <ContentTimeline
+              contents={timelineContents}
+              favoritedStudents={favoritedStudents ?? []}
+              favoritedCounts={favoritedCounts}
+              completedRecruitmentStudents={completedRecruitmentStudents}
+              recruitmentResultEditLinks={recruitmentResultEditLinks}
+              signedIn={signedIn}
+              recruitmentStudentMobileGrid={5}
+              showFeatureBanners={view === "timeline"}
+              showRecruitmentPeriodNotice={view === "timeline"}
+              revealedSpoilerContentUids={revealedSpoilerContentUids}
+              onRevealSpoiler={revealSpoiler}
+              onHideSpoiler={hideSpoiler}
+              onCommentOpen={loadCommentThread}
+              onCommentClose={() => setOpenCommentContentUid(null)}
+              onOpenContentFilter={openContentFilter}
+              hideRecruitmentOpinions={hideRecruitmentOpinions}
+              onCommentCreate={(contentUid, body, visibility) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "create", body, visibility });
+              }}
+              onCommentCreateSubcomment={(contentUid, parentCommentUid, body, visibility) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "createSubcomment", parentCommentUid, body, visibility });
+              }}
+              onCommentUpdate={(contentUid, commentUid, body, visibility) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "update", commentUid, body, visibility });
+              }}
+              onCommentDelete={(contentUid, commentUid) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "delete", commentUid });
+              }}
+              onCommentPin={(contentUid, commentUid) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "pin", commentUid });
+              }}
+              onCommentUnpin={(contentUid) => {
+                setPendingContentUid(contentUid);
+                submitComment(contentUid, { action: "unpin" });
+              }}
+              onFavorite={toggleFavorite}
+              onRecruitmentComplete={setRecruitmentCompleted}
+              onOpenContent={saveBeforeContentNavigation}
+              getContentNavigationState={getContentNavigationState}
+              isSubmittingComment={commentFetcher.state === "submitting"}
+            />
+          </div>
+        )}
+        {view === "compact" && (
+          <ContentTimelineCompact
             contents={timelineContents}
             favoritedStudents={favoritedStudents ?? []}
             favoritedCounts={favoritedCounts}
             completedRecruitmentStudents={completedRecruitmentStudents}
-            recruitmentResultEditLinks={recruitmentResultEditLinks}
-            signedIn={signedIn}
-            recruitmentStudentMobileGrid={5}
-            showFeatureBanners={view === "timeline"}
-            showRecruitmentPeriodNotice={view === "timeline"}
             revealedSpoilerContentUids={revealedSpoilerContentUids}
             onRevealSpoiler={revealSpoiler}
-            onHideSpoiler={hideSpoiler}
-            onCommentOpen={loadCommentThread}
-            onCommentClose={() => setOpenCommentContentUid(null)}
-            onOpenContentFilter={openContentFilter}
-            hideRecruitmentOpinions={hideRecruitmentOpinions}
-            onCommentCreate={(contentUid, body, visibility) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "create", body, visibility });
-            }}
-            onCommentCreateSubcomment={(contentUid, parentCommentUid, body, visibility) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "createSubcomment", parentCommentUid, body, visibility });
-            }}
-            onCommentUpdate={(contentUid, commentUid, body, visibility) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "update", commentUid, body, visibility });
-            }}
-            onCommentDelete={(contentUid, commentUid) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "delete", commentUid });
-            }}
-            onCommentPin={(contentUid, commentUid) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "pin", commentUid });
-            }}
-            onCommentUnpin={(contentUid) => {
-              setPendingContentUid(contentUid);
-              submitComment(contentUid, { action: "unpin" });
-            }}
             onFavorite={toggleFavorite}
             onRecruitmentComplete={setRecruitmentCompleted}
-            isSubmittingComment={commentFetcher.state === "submitting"}
+            onOpenContent={saveBeforeContentNavigation}
+            getContentNavigationState={getContentNavigationState}
           />
-        </div>
-      )}
-      {view === "compact" && (
-        <ContentTimelineCompact
-          contents={timelineContents}
-          favoritedStudents={favoritedStudents ?? []}
-          favoritedCounts={favoritedCounts}
-          completedRecruitmentStudents={completedRecruitmentStudents}
-          revealedSpoilerContentUids={revealedSpoilerContentUids}
-          onRevealSpoiler={revealSpoiler}
-          onFavorite={toggleFavorite}
-          onRecruitmentComplete={setRecruitmentCompleted}
-        />
-      )}
-      {view === "table" && (
-        <div className="hidden lg:block">
-          <FutureRecruitmentTable
-            contents={tableContents}
-            favoritedStudents={favoritedStudents ?? []}
-            favoritedCounts={favoritedCounts}
-            completedRecruitmentStudents={completedRecruitmentStudents}
-            recruitmentResultEditLinks={recruitmentResultEditLinks}
-            revealedSpoilerContentUids={revealedSpoilerContentUids}
-            onFavorite={toggleFavorite}
-            onRecruitmentComplete={setRecruitmentCompleted}
-          />
-        </div>
-      )}
+        )}
+        {view === "table" && (
+          <div className="hidden lg:block">
+            <FutureRecruitmentTable
+              contents={tableContents}
+              favoritedStudents={favoritedStudents ?? []}
+              favoritedCounts={favoritedCounts}
+              completedRecruitmentStudents={completedRecruitmentStudents}
+              recruitmentResultEditLinks={recruitmentResultEditLinks}
+              revealedSpoilerContentUids={revealedSpoilerContentUids}
+              onFavorite={toggleFavorite}
+              onRecruitmentComplete={setRecruitmentCompleted}
+            />
+          </div>
+        )}
+      </div>
     </Page>
   );
 }

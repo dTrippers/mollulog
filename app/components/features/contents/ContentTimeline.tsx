@@ -91,6 +91,8 @@ export type ContentTimelineProps = {
     completed: boolean,
     recruitment: RecruitmentCompletionMeta,
   ) => void;
+  onOpenContent?: (contentUid: string) => void;
+  getContentNavigationState?: (contentUid: string) => unknown;
 };
 
 export default function ContentTimeline({
@@ -113,6 +115,8 @@ export default function ContentTimeline({
   onCommentUnpin,
   onFavorite,
   onRecruitmentComplete,
+  onOpenContent,
+  getContentNavigationState,
   isSubmittingComment,
   hideRecruitmentOpinions = false,
   signedIn,
@@ -136,9 +140,13 @@ export default function ContentTimeline({
   }, [favoritedCounts]);
 
   useEffect(() => {
-    setDismissedFeatureBannerIds(
-      parseDismissedFeatureBannerIds(localStorage.getItem(featureBannerDismissalStorageKey)),
-    );
+    try {
+      setDismissedFeatureBannerIds(
+        parseDismissedFeatureBannerIds(localStorage.getItem(featureBannerDismissalStorageKey)),
+      );
+    } catch {
+      setDismissedFeatureBannerIds([]);
+    }
     setFeatureBannerDismissalsLoaded(true);
   }, []);
 
@@ -149,7 +157,11 @@ export default function ContentTimeline({
       }
 
       const next = [...prev, bannerId];
-      localStorage.setItem(featureBannerDismissalStorageKey, JSON.stringify(next));
+      try {
+        localStorage.setItem(featureBannerDismissalStorageKey, JSON.stringify(next));
+      } catch {
+        // A blocked local store must not prevent dismissing the banner in memory.
+      }
       return next;
     });
   };
@@ -173,7 +185,7 @@ export default function ContentTimeline({
           <div key={isCurrent ? "current" : groupDateKey}>
             {/* 날짜 구분자 영역 */}
             {isCurrent ? (
-              <div className="flex items-center">
+              <div className="flex items-center py-3 md:py-4 lg:py-0">
                 <div className="inline-block size-3 bg-red-600 rounded-full animate-pulse" />
                 <span className="mx-2 md:mx-4 font-bold text-red-600">진행중인 컨텐츠</span>
               </div>
@@ -271,6 +283,8 @@ export default function ContentTimeline({
                               )
                           : undefined
                       }
+                      onOpenContent={onOpenContent ? () => onOpenContent(content.uid) : undefined}
+                      navigationState={getContentNavigationState?.(content.uid)}
                       showStudentAnalysisFeatureBanner={
                         showFeatureBanners &&
                         featureBannerDismissalsLoaded &&

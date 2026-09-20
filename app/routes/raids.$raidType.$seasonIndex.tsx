@@ -8,7 +8,7 @@ import {
 import dayjs from "dayjs";
 import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, Outlet, useLoaderData, useLocation, useSearchParams } from "react-router";
+import { Link, Outlet, useLoaderData, useLocation, useNavigate, useSearchParams } from "react-router";
 import { createPageErrorBoundary, Page, type PagePanelProps } from "~/components/features/layout";
 import { RaidSelector } from "~/components/features/raids";
 import { FilterButtons } from "~/components/primitives";
@@ -21,6 +21,7 @@ import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale }
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
 import { buildRaidYoutubeSearchUrl, getVideoDateRange } from "~/models/raid-videos";
 import { loadRaidSeasonPage } from "~/views/raid";
+import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
 function getDefenseTypeSetLabel(defenseTypeSet: RaidDefenseTypeSet) {
   return defenseTypeSet.defenseTypes.map((defenseType) => defenseTypeLocale[defenseType]).join(" / ");
@@ -108,7 +109,9 @@ export type RaidPageContext = {
 export default function RaidPage() {
   const { currentRaid, currentOrClosestRaid, allRaids, signedIn, youtubeSearchDateRange } =
     useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { pathname } = location;
   const [searchParams, setSearchParams] = useSearchParams();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
   const currentOrClosestRaidPath = currentOrClosestRaid
@@ -118,6 +121,19 @@ export default function RaidPage() {
     ? (raidTypeLocale[currentOrClosestRaid.raidType as keyof typeof raidTypeLocale] ?? currentOrClosestRaid.raidType)
     : null;
   const showCurrentOrClosestRaidLink = currentOrClosestRaidPath !== null && currentOrClosestRaidPath !== raidPath;
+  const { navigationState, verifiedFutureReturn, returnToFutures } = useFutureDetailReturn(
+    currentRaid.uid,
+    location.state,
+    (delta) => navigate(delta),
+  );
+  const futureLinkState = navigationState ? location.state : undefined;
+  const backward = verifiedFutureReturn
+    ? {
+        title: "미래시",
+        to: "/futures",
+        onClick: returnToFutures,
+      }
+    : undefined;
 
   const [panel, setPanel] = useState<PagePanelProps | undefined>(undefined);
   useEffect(() => {
@@ -154,7 +170,7 @@ export default function RaidPage() {
         next.delete("difficulty");
         return next;
       },
-      { replace: true },
+      { replace: true, state: futureLinkState },
     );
   };
   const selectedDefenseTypeSetKey = getRaidDefenseTypeSetKey(selectedDefenseTypeSet);
@@ -182,6 +198,8 @@ export default function RaidPage() {
     <Page
       title={`${raidTypeLocale[currentRaid.raidType as keyof typeof raidTypeLocale] ?? currentRaid.raidType} 정보`}
       description="총력전/대결전의 편성, 통계, 공략 영상 정보를 확인할 수 있어요"
+      enableContentViewTransition
+      backward={backward}
       belowTitle={
         <RaidSelector
           raids={allRaids}
@@ -221,6 +239,7 @@ export default function RaidPage() {
           Icon: InformationCircleIcon,
           link: raidPath,
           active: pathname === raidPath,
+          linkState: futureLinkState,
         },
         {
           text: "상위권 편성",
@@ -228,6 +247,7 @@ export default function RaidPage() {
           description: "상위권 편성 정보를 학생/성장도로 찾기",
           link: `${raidPath}/ranks`,
           active: pathname === `${raidPath}/ranks`,
+          linkState: futureLinkState,
         },
         {
           text: "영상",
@@ -235,6 +255,7 @@ export default function RaidPage() {
           description: "공략 영상과 해당 영상에서 사용한 편성 정보 확인",
           link: `${raidPath}/videos`,
           active: pathname === `${raidPath}/videos`,
+          linkState: futureLinkState,
         },
         {
           text: "타임라인 (β)",

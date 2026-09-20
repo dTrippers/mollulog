@@ -1,9 +1,18 @@
 import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { type LoaderFunctionArgs, Outlet, redirect, useLoaderData, useLocation, useParams } from "react-router";
+import {
+  type LoaderFunctionArgs,
+  Outlet,
+  redirect,
+  useLoaderData,
+  useLocation,
+  useNavigate,
+  useParams,
+} from "react-router";
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
 import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
+import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const uid = params.uid;
@@ -39,11 +48,28 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
 };
 
 export default function EventPage() {
+  const navigate = useNavigate();
   const { uid } = useParams();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const { eventMetadata, shopAvailableEvents } = useLoaderData<typeof loader>();
   const isLive = eventMetadata.contentType === "live";
   const showEventSelector = pathname === `/events/${uid}/shop` && shopAvailableEvents.length > 1;
+  const { navigationState, verifiedFutureReturn, returnToFutures } = useFutureDetailReturn(
+    uid,
+    location.state,
+    (delta) => navigate(delta),
+  );
+  const futureLinkState = navigationState ? location.state : undefined;
+  const backward = verifiedFutureReturn
+    ? {
+        title: "미래시",
+        to: "/futures",
+        onClick: returnToFutures,
+      }
+    : isLive
+      ? { title: "미래시", to: "/futures" }
+      : { title: "이벤트", to: "/events" };
   const overviewScreen = {
     text: "개요",
     description: isLive
@@ -52,12 +78,14 @@ export default function EventPage() {
     Icon: InformationCircleIcon,
     link: `/events/${uid}`,
     active: pathname === `/events/${uid}`,
+    linkState: futureLinkState,
   };
   return (
     <Page
       title={isLive ? "공식 방송" : "이벤트 정보"}
       description={eventMetadata.name}
-      backward={isLive ? { title: "미래시", to: "/futures" } : { title: "이벤트", to: "/events" }}
+      enableContentViewTransition
+      backward={backward}
       panels={
         showEventSelector
           ? [
@@ -84,6 +112,7 @@ export default function EventPage() {
                 link: `/events/${uid}/shop`,
                 active: pathname === `/events/${uid}/shop`,
                 disabled: !eventMetadata.shopAvailable,
+                linkState: futureLinkState,
               },
               {
                 text: "모집 시뮬레이션",
@@ -94,6 +123,7 @@ export default function EventPage() {
                 link: `/events/${uid}/recruitment-simulator`,
                 active: pathname === `/events/${uid}/recruitment-simulator`,
                 disabled: !eventMetadata.recruitmentGroupUid,
+                linkState: futureLinkState,
               },
             ]
       }

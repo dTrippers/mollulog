@@ -14,6 +14,7 @@ export type PageScreenSelectorItemProps = {
   disabled?: boolean;
   onClick?: () => void;
   link?: string;
+  linkState?: unknown;
 };
 
 export default function PageScreenSelector({ screens }: PageScreenSelectorProps) {
@@ -35,6 +36,7 @@ function PageScreenSelectorItem({
   disabled,
   onClick,
   link,
+  linkState,
 }: PageScreenSelectorItemProps) {
   const className = cn(
     "flex w-full items-center justify-between gap-3 rounded-lg px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
@@ -61,7 +63,7 @@ function PageScreenSelectorItem({
 
   if (!disabled && link) {
     return (
-      <Link to={link} className={className}>
+      <Link to={link} state={linkState} className={className}>
         {content}
       </Link>
     );

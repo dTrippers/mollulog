@@ -66,6 +66,8 @@ export type ContentTimelineItemProps = {
   since?: UtcIsoString | null;
   until: UtcIsoString | null;
   link: string;
+  navigationState?: unknown;
+  onOpenContent?: () => void;
   confirmed?: boolean;
   isSpoiler?: boolean;
   spoilerVisible?: boolean;
@@ -175,6 +177,8 @@ export function ContentTimelineItem({
   since,
   until,
   link,
+  navigationState,
+  onOpenContent,
   confirmed,
   isSpoiler = false,
   spoilerVisible = true,
@@ -322,7 +326,13 @@ export function ContentTimelineItem({
   const headerLinked = isContentHeaderLinked({ contentType, raidInfo, isSpoiler, spoilerVisible });
   const titleContent = <ContentTitles name={name} showLink={headerLinked} />;
   const headerContent = headerLinked ? (
-    <Link to={link} className="block cursor-pointer hover:underline tracking-tight">
+    <Link
+      to={link}
+      state={navigationState}
+      viewTransition
+      onClick={onOpenContent}
+      className="block cursor-pointer hover:underline tracking-tight"
+    >
       {titleContent}
       {raidInfo && <RaidInfo raid={raidInfo} since={since ?? null} until={until} />}
     </Link>
@@ -335,7 +345,7 @@ export function ContentTimelineItem({
   const showThumbnail = contentType === "live" && imageUrl && (!isSpoiler || spoilerVisible);
 
   return (
-    <div className="my-4 md:my-6">
+    <div className="my-4 md:my-6" data-futures-content-uid={uid}>
       <div className={showThumbnail ? "sm:grid sm:grid-cols-[minmax(0,1fr)_10rem] sm:items-start sm:gap-4" : undefined}>
         <div className="min-w-0">
           {/* 컨텐츠 분류 */}
@@ -370,7 +380,14 @@ export function ContentTimelineItem({
         </div>
 
         {showThumbnail && (
-          <Link to={link} className="mt-3 block w-28 sm:mt-1 sm:w-40" aria-label={`${name} 상세 보기`}>
+          <Link
+            to={link}
+            state={navigationState}
+            viewTransition
+            onClick={onOpenContent}
+            className="mt-3 block w-28 sm:mt-1 sm:w-40"
+            aria-label={`${name} 상세 보기`}
+          >
             <img
               src={imageUrl}
               alt={`${name.replaceAll("\n", " ")} 썸네일`}
@@ -404,7 +421,10 @@ export function ContentTimelineItem({
           message={recruitmentPeriodNotice}
           color="amber"
           icon="clock"
-          onLinkClick={() => navigate(link)}
+          onLinkClick={() => {
+            onOpenContent?.();
+            navigate(link, { state: navigationState, viewTransition: true });
+          }}
           linkText="자세히"
           actionVariant="button"
         />

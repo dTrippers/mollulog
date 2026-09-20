@@ -16,6 +16,7 @@ type PageProps = {
   belowTitle?: React.ReactNode;
   screens?: PageScreenSelectorProps["screens"];
   showMobileScreens?: boolean;
+  enableContentViewTransition?: boolean;
   panels?: PagePanelProps[];
   panelRequest?: { index: number; id: number } | null;
   panelCloseRequest?: number | null;
@@ -29,6 +30,7 @@ type PageProps = {
   backward?: {
     title: string;
     to: string;
+    onClick?: () => void;
   };
 
   children: React.ReactNode;
@@ -66,6 +68,7 @@ export default function Page({
   belowTitle,
   screens,
   showMobileScreens = true,
+  enableContentViewTransition = false,
   panels,
   panelRequest,
   panelCloseRequest,
@@ -80,16 +83,19 @@ export default function Page({
 }: PageProps) {
   const location = useLocation();
   const [openPanelIndex, setOpenPanelIndex] = useState<number | null>(null);
+  const [closingPanelIndex, setClosingPanelIndex] = useState<number | null>(null);
   const tabBarSentinelRef = useRef<HTMLDivElement>(null);
   const locationSignature = `${location.pathname}${location.search}${location.hash}`;
   const previousLocationSignatureRef = useRef(locationSignature);
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
-  const openPanel = openPanelIndex === null ? undefined : panels?.[openPanelIndex];
+  const visiblePanelIndex = openPanelIndex ?? closingPanelIndex;
+  const openPanel = visiblePanelIndex === null ? undefined : panels?.[visiblePanelIndex];
 
   useEffect(() => {
     if (previousLocationSignatureRef.current === locationSignature) return;
     previousLocationSignatureRef.current = locationSignature;
     setOpenPanelIndex(null);
+    setClosingPanelIndex(null);
   }, [locationSignature]);
 
   const panelRequestIndex = panelRequest?.index;
@@ -122,7 +128,7 @@ export default function Page({
 
   return (
     <>
-      <div data-page-max-width={maxWidth} className={`flex flex-col ${layout === "horizontal" ? "lg:flex-row" : ""}`}>
+      <div data-page-max-width={maxWidth} className={cn("flex flex-col", layout === "horizontal" && "lg:flex-row")}>
         <PageSidebar
           title={title}
           description={description}
@@ -151,16 +157,30 @@ export default function Page({
       </div>
 
       {((links && links.length > 0) || (panels && panels.length > 0)) && (
-        <MobileActionBar links={links} panels={panels} onOpenPanel={setOpenPanelIndex} />
+        <MobileActionBar
+          links={links}
+          panels={panels}
+          openPanelIndex={openPanelIndex}
+          enableViewTransition={enableContentViewTransition}
+          onOpenPanel={(index) => {
+            setClosingPanelIndex(null);
+            setOpenPanelIndex(index);
+          }}
+        />
       )}
 
       {openPanel && (
         <BottomSheet
+          open={openPanelIndex !== null}
           Icon={openPanel.Icon}
           title={openPanel.title}
           description={openPanel.description}
           headerAction={openPanel.headerAction}
-          onClose={() => setOpenPanelIndex(null)}
+          onClose={() => {
+            setClosingPanelIndex(visiblePanelIndex);
+            setOpenPanelIndex(null);
+          }}
+          onExited={() => setClosingPanelIndex(null)}
         >
           {openPanel.children}
           {belowPanels ? <div className="mt-3">{belowPanels}</div> : null}
@@ -189,15 +209,25 @@ function PageSidebar({
   return (
     <div className={containerClass}>
       <header className="pt-6 pb-4">
-        {backward && (
-          <Link
-            to={backward.to}
-            className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeftIcon className="size-4" />
-            <span>{backward.title}</span>
-          </Link>
-        )}
+        {backward &&
+          (backward.onClick ? (
+            <button
+              type="button"
+              onClick={backward.onClick}
+              className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeftIcon className="size-4" />
+              <span>{backward.title}</span>
+            </button>
+          ) : (
+            <Link
+              to={backward.to}
+              className="mb-4 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeftIcon className="size-4" />
+              <span>{backward.title}</span>
+            </Link>
+          ))}
         <h1 className="text-2xl font-bold text-foreground md:text-3xl">{title}</h1>
         {description ? <p className="mt-2 text-sm text-muted-foreground">{description}</p> : null}
       </header>
@@ -264,14 +294,23 @@ function MobileTabBar({ screens, isSticky }: { screens: PageScreenSelectorProps[
 function MobileActionBar({
   links,
   panels,
+  openPanelIndex,
+  enableViewTransition,
   onOpenPanel,
 }: {
   links?: PageLinkProps[];
   panels?: PagePanelProps[];
-  onOpenPanel: React.Dispatch<React.SetStateAction<number | null>>;
+  openPanelIndex: number | null;
+  enableViewTransition: boolean;
+  onOpenPanel: (index: number) => void;
 }) {
   return (
-    <div className="lg:hidden fixed w-fit bottom-[var(--mobile-bottom-offset)] right-4 z-30 flex gap-x-2">
+    <div
+      className={cn(
+        "lg:hidden fixed w-fit bottom-[var(--mobile-bottom-offset)] right-4 z-30 flex gap-x-2",
+        enableViewTransition && "mllg-mobile-action-bar-transition",
+      )}
+    >
       <div className="flex rounded-full border border-border bg-card/95 px-2 py-1 shadow-lg backdrop-blur-sm">
         {links?.map((link) => (
           <MobileActionLink key={link.title} {...link} />
@@ -281,6 +320,7 @@ function MobileActionBar({
             key={panel.title}
             type="button"
             onClick={() => onOpenPanel(index)}
+            aria-expanded={openPanelIndex === index}
             disabled={panel.disabled}
             className={cn(`
               w-20 flex flex-col justify-center items-center p-2 text-foreground rounded-full transition-colors
@@ -351,6 +391,7 @@ function ResponsiveTabItem({
   active,
   disabled,
   link,
+  linkState,
   onClick,
   compact = false,
 }: PageScreenSelectorItemProps & { compact?: boolean }) {
@@ -376,6 +417,7 @@ function ResponsiveTabItem({
     return (
       <Link
         to={link}
+        state={linkState}
         className={className}
         data-active={active ? "true" : undefined}
         aria-current={active ? "page" : undefined}
