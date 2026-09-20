@@ -281,9 +281,7 @@ function hasPendingStudentRecruitment(content: FutureContentsLoaderContent): boo
 
 export default function FutureContents() {
   const location = useLocation();
-  const { filter, setFilter, view, desktopView, mobileView, setView, isMobile, visitState } = useFuturesViewState(
-    location.key,
-  );
+  const { filter, setFilter, view, desktopView, setView, isMobile, visitState } = useFuturesViewState(location.key);
   const [revealedSpoilerContentUids, setRevealedSpoilerContentUids] = useState<string[]>([]);
   const [isSpoilerHydrated, setIsSpoilerHydrated] = useState(false);
 
@@ -728,6 +726,7 @@ export default function FutureContents() {
       title="미래시"
       description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
       enableContentViewTransition
+      showMobileScreens={false}
       screens={[
         {
           text: "타임라인",
@@ -746,20 +745,6 @@ export default function FutureContents() {
           Icon: TableCellsIcon,
           active: desktopView === "table",
           onClick: () => handleViewChange("table"),
-        },
-      ]}
-      mobileScreens={[
-        {
-          text: "타임라인",
-          Icon: QueueListIcon,
-          active: mobileView === "timeline",
-          onClick: () => handleViewChange("timeline"),
-        },
-        {
-          text: "목록",
-          Icon: Bars3BottomLeftIcon,
-          active: mobileView === "compact",
-          onClick: () => handleViewChange("compact"),
         },
       ]}
       panels={[

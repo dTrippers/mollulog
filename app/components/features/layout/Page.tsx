@@ -15,7 +15,6 @@ type PageProps = {
   description?: string;
   belowTitle?: React.ReactNode;
   screens?: PageScreenSelectorProps["screens"];
-  mobileScreens?: PageScreenSelectorProps["screens"];
   showMobileScreens?: boolean;
   enableContentViewTransition?: boolean;
   panels?: PagePanelProps[];
@@ -68,7 +67,6 @@ export default function Page({
   description,
   belowTitle,
   screens,
-  mobileScreens,
   showMobileScreens = true,
   enableContentViewTransition = false,
   panels,
@@ -92,7 +90,6 @@ export default function Page({
   const [isTabBarSticky, setIsTabBarSticky] = useState(false);
   const visiblePanelIndex = openPanelIndex ?? closingPanelIndex;
   const openPanel = visiblePanelIndex === null ? undefined : panels?.[visiblePanelIndex];
-  const mobileScreenItems = mobileScreens ?? screens;
 
   useEffect(() => {
     if (previousLocationSignatureRef.current === locationSignature) return;
@@ -144,12 +141,12 @@ export default function Page({
           layout={layout}
         />
 
-        {(showMobileScreens || layout === "vertical") && mobileScreenItems && mobileScreenItems.length > 0 && (
+        {(showMobileScreens || layout === "vertical") && screens && screens.length > 0 && (
           <div ref={tabBarSentinelRef} className={layout === "vertical" ? "h-px" : "lg:hidden h-px"} />
         )}
 
-        {showMobileScreens && mobileScreenItems && mobileScreenItems.length > 0 && (
-          <MobileTabBar screens={mobileScreenItems} isSticky={isTabBarSticky} />
+        {showMobileScreens && screens && screens.length > 0 && (
+          <MobileTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
         {layout === "vertical" && screens && screens.length > 0 && (
