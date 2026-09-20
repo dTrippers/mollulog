@@ -1,14 +1,22 @@
 import { ChevronRightIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
+import StudentCard from "~/components/features/students/StudentCard";
 import { Button } from "~/components/primitives";
-import type { EventShopState } from "~/domain/event-shop-state";
-import type { PlannerDayResources, PlannerPeriod } from "~/domain/integrated-planner";
+import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
+import type {
+  PlannerDayResources,
+  PlannerMonthLayout,
+  PlannerPeriod,
+  PlannerPeriodStudent,
+} from "~/domain/integrated-planner";
 import {
-  buildPlannerMonthDays,
+  buildPlannerMonthLayout,
   buildPlannerRecruitmentCandidatesForDate,
   groupPlannerPeriods,
+  hasPlannerExactEventHandoff,
   shiftPlannerMonth,
 } from "~/domain/integrated-planner";
+import { formatInstant } from "~/lib/date-time";
 import PlannerCalendarWeek, {
   DailyResourceChanges,
   type PlannerForecastStatus,
@@ -39,9 +47,11 @@ export type PlannerCalendarShopPlan = {
 
 type PlannerCalendarProps = {
   initialMonth: string;
+  todayDateKey: string;
   periods: PlannerPeriod[];
   publicPeriods: PlannerPeriod[];
   dailyResources: Record<string, PlannerDayResources>;
+  calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
   statusMessages: string[];
   isSignedIn: boolean;
@@ -74,32 +84,103 @@ function formatMonth(monthKey: string): string {
   );
 }
 
-function formatDate(dateKey: string): string {
-  const [year, month, day] = dateKey.split("-").map(Number);
-  return new Intl.DateTimeFormat("ko-KR", { year: "numeric", month: "long", day: "numeric", timeZone: "UTC" }).format(
-    new Date(Date.UTC(year, month - 1, day)),
-  );
+function formatDateKey(dateKey: string): string {
+  return dateKey;
 }
 
 function isOnDate(period: PlannerPeriod, dateKey: string): boolean {
   return period.startDate <= dateKey && period.endDate >= dateKey;
 }
 
-function phaseName(period: PlannerPeriod): string {
-  if (period.kind === "recruitment") return "모집";
-  if (period.kind === "shop") return "상점 교환";
-  return "이벤트 플레이";
+function formatPeriodRange(period: PlannerPeriod): string {
+  return `${formatDateKey(period.startDate)}–${formatDateKey(period.endDate)}`;
 }
 
-function formatPeriodRange(period: PlannerPeriod): string {
-  return `${formatDate(period.startDate)}–${formatDate(period.endDate)}`;
+function formatRecruitmentEnd(period: PlannerPeriod, timeZone: string): string {
+  return period.endAt
+    ? `${formatInstant(period.endAt, { timeZone, format: "YYYY-MM-DD HH:mm" })} 종료`
+    : "종료 시각을 확인할 수 없어요";
+}
+
+function hasExactEventHandoff(period: PlannerPeriod, dateKey: string, periods: readonly PlannerPeriod[]): boolean {
+  return periods.some((other) => {
+    return isOnDate(other, dateKey) && hasPlannerExactEventHandoff(period, other);
+  });
+}
+
+function PlannerRecruitmentStudentCards({
+  students,
+  label,
+}: {
+  students: readonly PlannerPeriodStudent[];
+  label: string;
+}) {
+  if (students.length === 0) {
+    return <p className="text-xs text-muted-foreground">관심 학생을 선택하지 않았어요.</p>;
+  }
+
+  return (
+    <ul className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1" aria-label={label}>
+      {students.map((student) => (
+        <li key={student.uid} className="w-12 shrink-0 sm:w-14">
+          <StudentCard uid={student.imageUid ?? student.uid} name={student.name} namePlacement="overlay" />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function shopPlanHasInput(plan: PlannerCalendarShopPlan): boolean {
+  if (plan.conflict) return true;
+  if (!plan.state || !plan.defaultState) return false;
+  return !eventShopStatesEqual(plan.state, plan.defaultState);
+}
+
+function headingIdForShopPlan(groupKey: string, plan: PlannerCalendarShopPlan): string {
+  const value = `${groupKey}-${plan.shopStateUid ?? plan.timelineUid}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+  return `planner-shop-summary-${value}`;
+}
+
+function PlannerEventThumbnail({ period, name }: { period?: PlannerPeriod; name: string }) {
+  return period?.imageUrl ? (
+    <img
+      src={period.imageUrl}
+      alt={name}
+      className="size-16 shrink-0 rounded-md object-cover sm:size-20"
+      loading="lazy"
+    />
+  ) : (
+    <div
+      className="grid size-16 shrink-0 place-items-center rounded-md bg-muted text-center text-[10px] text-muted-foreground sm:size-20"
+      role="img"
+      aria-label="이벤트 이미지 없음"
+    >
+      이미지 없음
+    </div>
+  );
+}
+
+function PlannerInfoPill({ children, tone = "default" }: { children: string; tone?: "default" | "warning" }) {
+  return (
+    <span
+      className={
+        tone === "warning"
+          ? "rounded-full bg-amber-500/15 px-2 py-1 text-xs text-amber-800 dark:text-amber-200"
+          : "rounded-full bg-card px-2 py-1 text-xs text-muted-foreground"
+      }
+    >
+      {children}
+    </span>
+  );
 }
 
 export default function PlannerCalendar({
   initialMonth,
+  todayDateKey,
   periods,
   publicPeriods,
   dailyResources,
+  calendarResources,
   forecastStatus,
   statusMessages,
   isSignedIn,
@@ -126,14 +207,23 @@ export default function PlannerCalendar({
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogHeadingRef = useRef<HTMLHeadingElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const calendarRootRef = useRef<HTMLDivElement>(null);
+  const todayCellRef = useRef<HTMLButtonElement | null>(null);
+  const monthRefs = useRef(new Map<string, HTMLElement>());
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const previousSelectedDateRef = useRef<string | null>(null);
   const summaryFocusTargetKeyRef = useRef("planner-add-plan");
   const restoreSummaryFocusRef = useRef(false);
+  const [activeMonth, setActiveMonth] = useState(initialMonth);
+  const [showMonthToolbar, setShowMonthToolbar] = useState(false);
 
   const months = useMemo(
     () => Array.from({ length: monthCount }, (_, index) => shiftPlannerMonth(initialMonth, index)),
     [initialMonth, monthCount],
+  );
+  const monthLayouts = useMemo(
+    () => months.map((monthKey) => buildPlannerMonthLayout(monthKey, periods, timeZone)),
+    [months, periods, timeZone],
   );
 
   useEffect(() => {
@@ -149,6 +239,41 @@ export default function PlannerCalendar({
     observer.observe(target);
     return () => observer.disconnect();
   }, [monthCount, onLoadMore]);
+
+  useEffect(() => {
+    const scrollContainer = document.querySelector<HTMLElement>(".mllg-content-area");
+    if (!scrollContainer) return;
+
+    const updateViewportState = () => {
+      const rootRect = scrollContainer.getBoundingClientRect();
+      const calendarRect = calendarRootRef.current?.getBoundingClientRect();
+      setShowMonthToolbar(Boolean(calendarRect && calendarRect.top < rootRect.top - 8));
+
+      const marker = rootRect.top + 72;
+      const visibleMonth = months
+        .filter((monthKey) => {
+          const element = monthRefs.current.get(monthKey);
+          return element && element.getBoundingClientRect().top <= marker;
+        })
+        .at(-1);
+      if (visibleMonth) setActiveMonth(visibleMonth);
+    };
+
+    const observer = new IntersectionObserver(updateViewportState, {
+      root: scrollContainer,
+      rootMargin: "-72px 0px -55% 0px",
+      threshold: [0, 0.25, 0.5, 1],
+    });
+    for (const element of monthRefs.current.values()) observer.observe(element);
+    scrollContainer.addEventListener("scroll", updateViewportState, { passive: true });
+    window.addEventListener("resize", updateViewportState);
+    updateViewportState();
+    return () => {
+      observer.disconnect();
+      scrollContainer.removeEventListener("scroll", updateViewportState);
+      window.removeEventListener("resize", updateViewportState);
+    };
+  }, [months]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -247,7 +372,7 @@ export default function PlannerCalendar({
     restoreSummaryFocusRef.current = false;
     setSelectedDate(dateKey);
     setFocusedPeriodKey(period?.key ?? null);
-    setEventContextUid(period?.eventUid ?? null);
+    setEventContextUid(period && !hasExactEventHandoff(period, dateKey, periods) ? (period.eventUid ?? null) : null);
     setDialogView("summary");
     setSavedNotice(null);
   }
@@ -315,10 +440,27 @@ export default function PlannerCalendar({
     returnToSummary();
   }
 
-  function renderMonth(monthKey: string) {
-    const weeks = buildPlannerMonthDays(monthKey);
+  function scrollToToday() {
+    const todayCell = todayCellRef.current;
+    if (!todayCell) return;
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    todayCell.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "center" });
+    requestAnimationFrame(() => todayCell.focus());
+  }
+
+  function renderMonth(monthLayout: PlannerMonthLayout) {
+    const { monthKey, weeks, weekLayouts, maxEventLaneCount, laneHeights } = monthLayout;
     return (
-      <section key={monthKey} aria-labelledby={`planner-month-${monthKey}`} className="space-y-3">
+      <section
+        key={monthKey}
+        ref={(element) => {
+          if (element) monthRefs.current.set(monthKey, element);
+          else monthRefs.current.delete(monthKey);
+        }}
+        data-planner-month={monthKey}
+        aria-labelledby={`planner-month-${monthKey}`}
+        className="space-y-3"
+      >
         <h2 id={`planner-month-${monthKey}`} className="text-lg font-semibold text-foreground">
           {formatMonth(monthKey)}
         </h2>
@@ -329,17 +471,27 @@ export default function PlannerCalendar({
             </div>
           ))}
         </div>
-        <div className="space-y-1.5">
-          {weeks.map((week) => (
+        <div className="space-y-0">
+          {weeks.map((week, index) => (
             <PlannerCalendarWeek
               key={week[0].dateKey}
               week={week}
               periods={periods}
-              dailyResources={dailyResources}
+              calendarResources={calendarResources}
               forecastStatus={forecastStatus}
+              weekLayout={weekLayouts[index]}
+              maxEventLaneCount={maxEventLaneCount}
+              laneHeights={laneHeights}
+              timeZone={timeZone}
+              todayDateKey={todayDateKey}
               selectedDate={selectedDate}
+              isFirstWeek={index === 0}
+              isLastWeek={index === weeks.length - 1}
               onSelectDate={(dateKey, trigger) => openDate(dateKey, trigger)}
               onSelectPeriod={(dateKey, trigger, period) => openDate(dateKey, trigger, period)}
+              onTodayCellRef={(element) => {
+                todayCellRef.current = element;
+              }}
             />
           ))}
         </div>
@@ -348,7 +500,7 @@ export default function PlannerCalendar({
   }
 
   return (
-    <div className="space-y-5">
+    <div ref={calendarRootRef} className="space-y-5">
       {statusMessages.map((message) => (
         <div key={message} role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
           {message}
@@ -370,7 +522,14 @@ export default function PlannerCalendar({
         </div>
       ) : null}
 
-      {months.map(renderMonth)}
+      {showMonthToolbar ? (
+        <div className="sticky top-0 z-20 flex items-center justify-between gap-3 rounded-md bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+          <span className="text-sm font-semibold text-foreground">{formatMonth(activeMonth)}</span>
+          <Button text="오늘 보기" size="sm" variant="secondary" onClick={scrollToToday} />
+        </div>
+      ) : null}
+
+      {monthLayouts.map(renderMonth)}
       <div ref={loadMoreRef} aria-hidden="true" className="h-px" />
       <button
         type="button"
@@ -392,7 +551,7 @@ export default function PlannerCalendar({
               <div className="min-w-0">
                 <h2 ref={dialogHeadingRef} id="planner-day-title" tabIndex={-1} className="text-lg font-semibold">
                   {dialogView === "summary"
-                    ? formatDate(selectedDate)
+                    ? formatDateKey(selectedDate)
                     : dialogView === "actions"
                       ? "계획 추가"
                       : dialogView === "quick-edit"
@@ -411,12 +570,17 @@ export default function PlannerCalendar({
                   {dialogView === "summary"
                     ? (contextEventName ??
                       (isSignedIn ? "계정에 저장된 계획과 예상 변동" : "이 브라우저에 저장된 계획과 예상 변동"))
-                    : `${formatDate(selectedDate)}${contextEventName ? ` · ${contextEventName}` : ""}`}
+                    : `${formatDateKey(selectedDate)}${contextEventName ? ` · ${contextEventName}` : ""}`}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {dialogView === "actions" || dialogView === "shop-choice" ? (
                   <Button text="뒤로" size="sm" variant="secondary" onClick={returnToSummary} />
+                ) : null}
+                {dialogView === "summary" ? (
+                  <span className="inline-flex" data-planner-focus-key="planner-add-plan">
+                    <Button text="＋ 계획 추가" variant="primary" size="sm" onClick={beginActionChoice} />
+                  </span>
                 ) : null}
                 <button
                   type="button"
@@ -438,14 +602,9 @@ export default function PlannerCalendar({
               {dialogView === "summary" ? (
                 <>
                   <section aria-labelledby="planner-day-resources" className="space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <h3 id="planner-day-resources" className="text-sm font-semibold">
-                        예상 재화 증감
-                      </h3>
-                      <span className="inline-flex" data-planner-focus-key="planner-add-plan">
-                        <Button text="＋ 계획 추가" variant="primary" size="sm" onClick={beginActionChoice} />
-                      </span>
-                    </div>
+                    <h3 id="planner-day-resources" className="text-sm font-semibold">
+                      예상 재화 증감
+                    </h3>
                     {forecastStatus === "ready" && selectedResources ? (
                       <>
                         {selectedResources.changes.length > 0 ? (
@@ -454,19 +613,19 @@ export default function PlannerCalendar({
                           <p className="text-sm text-muted-foreground">예상 재화 변동이 없어요.</p>
                         )}
                         {selectedResources.sources.length > 0 ? (
-                          <details className="rounded-md bg-muted/50 px-3 py-2">
-                            <summary className="cursor-pointer text-sm font-medium">예상 재화 내역 보기</summary>
-                            <ul className="mt-3 space-y-3">
-                              {selectedResources.sources.map((source) => (
-                                <li key={source.key} className="rounded-md bg-card p-3">
-                                  <p className="text-sm font-medium">
-                                    {source.label ?? "예상 항목 이름을 확인할 수 없어요"}
-                                  </p>
-                                  <DailyResourceChanges changes={source.changes} compact />
-                                </li>
-                              ))}
-                            </ul>
-                          </details>
+                          <ul className="space-y-1">
+                            {selectedResources.sources.map((source) => (
+                              <li
+                                key={source.key}
+                                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-md bg-muted/50 px-3 py-2"
+                              >
+                                <span className="min-w-0 text-xs font-medium">
+                                  {source.label ?? "예상 항목 이름을 확인할 수 없어요"}
+                                </span>
+                                <DailyResourceChanges changes={source.changes} compact />
+                              </li>
+                            ))}
+                          </ul>
                         ) : null}
                       </>
                     ) : forecastStatus === "input-needed" ? (
@@ -504,7 +663,7 @@ export default function PlannerCalendar({
                             <div className="min-w-0">
                               <p className="truncate text-sm font-medium">{entry.description || "직접 입력"}</p>
                               <p className="mt-1 text-xs text-muted-foreground">
-                                {entry.kind === "buy" ? "청휘석 구매" : "직접 재화"} · {formatDate(entry.date)}
+                                {entry.kind === "buy" ? "청휘석 구매" : "직접 재화"} · {formatDateKey(entry.date)}
                               </p>
                               {entryChanges.length > 0 ? <DailyResourceChanges changes={entryChanges} compact /> : null}
                             </div>
@@ -522,117 +681,154 @@ export default function PlannerCalendar({
                     </section>
                   ) : null}
 
-                  {summaryGroups.map((group) => {
-                    const recruitmentPeriod = group.periods.find((period) => period.kind === "recruitment");
-                    const groupShopPlans = group.eventUid
-                      ? shopPlans.filter((plan) => plan.timelineUid === group.eventUid)
-                      : [];
-                    const detailPeriods = group.periods.filter(
-                      (period, index) =>
-                        group.periods.findIndex((candidate) => candidate.kind === period.kind) === index,
-                    );
-                    return (
-                      <section key={group.key} aria-label={group.name} className="space-y-3 rounded-md bg-muted/50 p-3">
-                        <h3 className="text-sm font-semibold">{group.name}</h3>
-                        <ul className="space-y-2">
-                          {group.periods.map((period) => (
-                            <li
-                              key={period.key}
-                              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm"
-                            >
-                              <span>{phaseName(period)}</span>
-                              <span className="text-xs text-muted-foreground">{formatPeriodRange(period)}</span>
-                            </li>
-                          ))}
-                        </ul>
-                        {groupShopPlans.map((plan) => (
-                          <div key={plan.shopStateUid ?? plan.timelineUid} className="space-y-2">
-                            {plan.state && plan.defaultState ? (
-                              <PlannerShopSummary
-                                content={plan.content}
-                                state={plan.state}
-                                defaultState={plan.defaultState}
-                              />
-                            ) : (
-                              <p className="text-sm text-muted-foreground">
-                                이벤트 상점의 기본 입력을 확인할 수 없어요.
-                              </p>
-                            )}
-                            {plan.conflict ? (
-                              <p className="text-sm text-amber-700 dark:text-amber-300">
-                                이 브라우저에 다른 상점 계획이 있어요
-                              </p>
-                            ) : null}
-                            <div className="flex flex-wrap gap-2">
-                              {plan.shopStateUid ? (
-                                <span
-                                  className="inline-flex"
-                                  data-planner-focus-key={`shop-edit-${plan.shopStateUid ?? plan.timelineUid}`}
-                                >
-                                  <Button
-                                    text="보유 재화 수정"
-                                    size="xs"
-                                    variant="secondary"
-                                    onClick={() =>
-                                      beginShopEdit(plan, `shop-edit-${plan.shopStateUid ?? plan.timelineUid}`)
-                                    }
+                  {summaryGroups.some((group) => group.periods.some((period) => period.kind === "recruitment")) ? (
+                    <section aria-labelledby="planner-recruitment-summary" className="space-y-2">
+                      <h3 id="planner-recruitment-summary" className="text-sm font-semibold">
+                        관심 학생 모집
+                      </h3>
+                      <ul className="space-y-2">
+                        {summaryGroups.flatMap((group) =>
+                          group.periods
+                            .filter((period) => period.kind === "recruitment")
+                            .map((period) => {
+                              const focusTargetKey = `recruitment-edit-${period.key}`;
+                              return (
+                                <li key={period.key} className="space-y-2 rounded-md bg-muted/50 p-3">
+                                  <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium">{group.name}</p>
+                                      <p className="mt-1 text-xs text-muted-foreground">
+                                        {formatRecruitmentEnd(period, timeZone)}
+                                      </p>
+                                    </div>
+                                    <span className="inline-flex" data-planner-focus-key={focusTargetKey}>
+                                      <Button
+                                        text="모집 수정"
+                                        size="xs"
+                                        variant="secondary"
+                                        onClick={() => beginRecruitmentEdit(period, focusTargetKey)}
+                                      />
+                                    </span>
+                                  </div>
+                                  <PlannerRecruitmentStudentCards
+                                    students={period.students ?? []}
+                                    label={`${group.name} 관심 학생`}
                                   />
-                                </span>
-                              ) : null}
-                              {plan.conflict ? (
-                                <Button
-                                  text="비교하기"
-                                  size="xs"
-                                  variant="secondary"
-                                  to={`/utils/planner/import?event=${encodeURIComponent(plan.timelineUid)}`}
-                                />
-                              ) : null}
-                            </div>
-                          </div>
-                        ))}
-                        <div className="flex flex-wrap gap-2">
-                          {recruitmentPeriod ? (
-                            <span
-                              className="inline-flex"
-                              data-planner-focus-key={`recruitment-edit-${recruitmentPeriod.key}`}
-                            >
-                              <Button
-                                text="모집 수정"
-                                size="xs"
-                                variant="secondary"
-                                onClick={() =>
-                                  beginRecruitmentEdit(recruitmentPeriod, `recruitment-edit-${recruitmentPeriod.key}`)
-                                }
-                              />
-                            </span>
-                          ) : null}
-                          {detailPeriods.map((period) =>
-                            period.kind === "shop" && period.conflict ? (
-                              <div key={`${period.kind}:${period.key}`} className="flex flex-wrap gap-2">
-                                <Button text="상점 계산기 상세" size="xs" variant="secondary" to={period.href} />
-                                {!groupShopPlans.some((plan) => plan.conflict) && period.eventUid ? (
+                                </li>
+                              );
+                            }),
+                        )}
+                      </ul>
+                    </section>
+                  ) : null}
+
+                  {summaryGroups.length > 0 ? (
+                    <section aria-labelledby="planner-event-summary" className="space-y-2">
+                      <h3 id="planner-event-summary" className="text-sm font-semibold">
+                        이벤트 일정
+                      </h3>
+                      <div className="space-y-2">
+                        {summaryGroups.map((group) => {
+                          const eventPeriod = group.periods.find((period) => period.kind === "event");
+                          const shopPeriod = group.periods.find((period) => period.kind === "shop");
+                          const groupShopPlans = group.eventUid
+                            ? shopPlans.filter((plan) => plan.timelineUid === group.eventUid && shopPlanHasInput(plan))
+                            : [];
+                          const hasShopConflict = groupShopPlans.some((plan) => plan.conflict);
+                          return (
+                            <div key={group.key} className="rounded-md bg-muted/50 p-3">
+                              <div className="flex min-w-0 gap-3">
+                                <PlannerEventThumbnail period={eventPeriod} name={group.name} />
+                                <div className="min-w-0 flex-1 space-y-2">
+                                  <p className="break-keep text-sm font-medium">{group.name}</p>
+                                  <div className="flex flex-wrap gap-1">
+                                    {eventPeriod ? (
+                                      <PlannerInfoPill>{formatPeriodRange(eventPeriod)}</PlannerInfoPill>
+                                    ) : null}
+                                    {shopPeriod ? (
+                                      <PlannerInfoPill>{`상점 교환 ${formatPeriodRange(shopPeriod)}`}</PlannerInfoPill>
+                                    ) : null}
+                                    {hasShopConflict ? (
+                                      <PlannerInfoPill tone="warning">상점 계획 비교 필요</PlannerInfoPill>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {eventPeriod ? (
                                   <Button
-                                    text="비교하기"
+                                    text="이벤트 상세"
                                     size="xs"
                                     variant="secondary"
-                                    to={`/utils/planner/import?event=${encodeURIComponent(period.eventUid)}`}
+                                    className="rounded-full"
+                                    to={eventPeriod.href}
                                   />
                                 ) : null}
                               </div>
-                            ) : (
-                              <Button
-                                key={`${period.kind}:${period.key}`}
-                                text={`${phaseName(period)} 상세`}
-                                size="xs"
-                                variant="secondary"
-                                to={period.href}
-                              />
-                            ),
-                          )}
-                        </div>
-                      </section>
-                    );
-                  })}
+                              {groupShopPlans.map((plan) => {
+                                const headingId = headingIdForShopPlan(group.key, plan);
+                                return (
+                                  <div key={plan.shopStateUid ?? plan.timelineUid} className="mt-3 space-y-2">
+                                    {plan.state && plan.defaultState ? (
+                                      <PlannerShopSummary
+                                        content={plan.content}
+                                        state={plan.state}
+                                        defaultState={plan.defaultState}
+                                        headingId={headingId}
+                                      />
+                                    ) : (
+                                      <p className="text-sm text-muted-foreground">
+                                        이벤트 상점의 기본 입력을 확인할 수 없어요.
+                                      </p>
+                                    )}
+                                    {plan.conflict ? (
+                                      <p className="text-sm text-amber-700 dark:text-amber-300" role="status">
+                                        이 브라우저에 다른 상점 계획이 있어요
+                                      </p>
+                                    ) : null}
+                                    <div className="flex flex-wrap gap-2">
+                                      {plan.shopStateUid ? (
+                                        <span
+                                          className="inline-flex"
+                                          data-planner-focus-key={`shop-edit-${plan.shopStateUid ?? plan.timelineUid}`}
+                                        >
+                                          <Button
+                                            text="보유 재화 수정"
+                                            size="xs"
+                                            variant="secondary"
+                                            className="rounded-full"
+                                            onClick={() =>
+                                              beginShopEdit(plan, `shop-edit-${plan.shopStateUid ?? plan.timelineUid}`)
+                                            }
+                                          />
+                                        </span>
+                                      ) : null}
+                                      <Button
+                                        text="상점 계산기"
+                                        size="xs"
+                                        variant="secondary"
+                                        className="rounded-full"
+                                        to={`/events/${encodeURIComponent(plan.timelineUid)}/shop`}
+                                      />
+                                      {plan.conflict ? (
+                                        <Button
+                                          text="비교하기"
+                                          size="xs"
+                                          variant="secondary"
+                                          className="rounded-full"
+                                          to={`/utils/planner/import?event=${encodeURIComponent(plan.timelineUid)}`}
+                                        />
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </section>
+                  ) : null}
 
                   {publicGroups.length > 0 ? (
                     <section aria-labelledby="planner-related-schedules" className="space-y-2">
@@ -640,50 +836,72 @@ export default function PlannerCalendar({
                         관련 공개 일정
                       </h3>
                       {publicGroups.map((group) => {
-                        const recruitmentPeriod = group.periods.find((period) => period.kind === "recruitment");
-                        const detailPeriods = group.periods.filter(
-                          (period, index) =>
-                            group.periods.findIndex((candidate) => candidate.kind === period.kind) === index,
-                        );
+                        const eventPeriod = group.periods.find((period) => period.kind === "event");
+                        const recruitmentPeriods = group.periods.filter((period) => period.kind === "recruitment");
+                        const shopPeriod = group.periods.find((period) => period.kind === "shop");
                         return (
                           <div key={group.key} className="rounded-md bg-muted/50 p-3">
-                            <p className="text-sm font-medium">{group.name}</p>
-                            <ul className="mt-2 space-y-1">
-                              {group.periods.map((period) => (
-                                <li key={period.key} className="flex flex-wrap justify-between gap-x-3 gap-y-1 text-xs">
-                                  <span>{phaseName(period)}</span>
-                                  <span className="text-muted-foreground">{formatPeriodRange(period)}</span>
-                                </li>
-                              ))}
-                            </ul>
+                            <div className="flex min-w-0 gap-3">
+                              <PlannerEventThumbnail period={eventPeriod} name={group.name} />
+                              <div className="min-w-0 flex-1 space-y-2">
+                                <p className="break-keep text-sm font-medium">{group.name}</p>
+                                <div className="flex flex-wrap gap-1">
+                                  {eventPeriod ? (
+                                    <PlannerInfoPill>{formatPeriodRange(eventPeriod)}</PlannerInfoPill>
+                                  ) : null}
+                                  {shopPeriod ? (
+                                    <PlannerInfoPill>{`상점 교환 ${formatPeriodRange(shopPeriod)}`}</PlannerInfoPill>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                            {recruitmentPeriods.length > 0 ? (
+                              <ul className="mt-3 space-y-2">
+                                {recruitmentPeriods.map((period) => {
+                                  const focusTargetKey = `recruitment-add-${period.key}`;
+                                  return (
+                                    <li key={period.key} className="space-y-2 rounded-md bg-card p-3">
+                                      <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="min-w-0 text-xs">
+                                          <p className="font-medium">모집 · {formatRecruitmentEnd(period, timeZone)}</p>
+                                        </div>
+                                        <span className="inline-flex" data-planner-focus-key={focusTargetKey}>
+                                          <Button
+                                            text="모집 계획 추가"
+                                            size="xs"
+                                            variant="primary"
+                                            onClick={() => beginRecruitmentEdit(period, focusTargetKey)}
+                                          />
+                                        </span>
+                                      </div>
+                                      <PlannerRecruitmentStudentCards
+                                        students={period.students ?? []}
+                                        label={`${group.name} 공개 모집 학생`}
+                                      />
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ) : null}
                             <div className="mt-3 flex flex-wrap gap-2">
-                              {recruitmentPeriod ? (
-                                <span
-                                  className="inline-flex"
-                                  data-planner-focus-key={`recruitment-add-${recruitmentPeriod.key}`}
-                                >
-                                  <Button
-                                    text="모집 계획 추가"
-                                    size="xs"
-                                    variant="primary"
-                                    onClick={() =>
-                                      beginRecruitmentEdit(
-                                        recruitmentPeriod,
-                                        `recruitment-add-${recruitmentPeriod.key}`,
-                                      )
-                                    }
-                                  />
-                                </span>
-                              ) : null}
-                              {detailPeriods.map((period) => (
+                              {eventPeriod ? (
                                 <Button
-                                  key={`${period.kind}:${period.key}`}
-                                  text={`${phaseName(period)} 상세`}
+                                  text="이벤트 상세"
                                   size="xs"
                                   variant="secondary"
-                                  to={period.href}
+                                  className="rounded-full"
+                                  to={eventPeriod.href}
                                 />
-                              ))}
+                              ) : null}
+                              {shopPeriod ? (
+                                <Button
+                                  text="상점 계산기"
+                                  size="xs"
+                                  variant="secondary"
+                                  className="rounded-full"
+                                  to={shopPeriod.href}
+                                />
+                              ) : null}
                             </div>
                           </div>
                         );
@@ -694,7 +912,8 @@ export default function PlannerCalendar({
                   {selectedResources === undefined &&
                   selectedOneOffEntries.length === 0 &&
                   summaryGroups.length === 0 &&
-                  publicGroups.length === 0 ? (
+                  publicGroups.length === 0 &&
+                  selectedShopPlans.length === 0 ? (
                     <p className="text-sm text-muted-foreground">이 날짜에 표시할 계획이나 공개 일정이 없어요.</p>
                   ) : null}
                 </>

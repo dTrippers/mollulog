@@ -156,6 +156,7 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
     const eventA = timelineContent({
       uid: "event-a",
       name: "이벤트A",
+      imageUrl: "https://cdn.example.test/event-a.webp",
       startAt: "2026-11-11T02:00:00.000Z",
       endAt: "2026-11-20T02:00:00.000Z",
       earnablePyroxene: 600,
@@ -207,7 +208,11 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
 
     const rewardA = contents.find((c) => c.uid === "event-a");
     const rewardB = contents.find((c) => c.uid === "event-b");
-    expect(rewardA).toMatchObject({ earnablePyroxene: 600, recruitments: [] });
+    expect(rewardA).toMatchObject({
+      earnablePyroxene: 600,
+      recruitments: [],
+      imageUrl: "https://cdn.example.test/event-a.webp",
+    });
     expect(rewardB).toMatchObject({ earnablePyroxene: 500, recruitments: [] });
 
     const merged = contents.find((c) => c.uid === "group:shared-group");
@@ -216,6 +221,7 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       since: "2026-11-10T02:00:00.000Z",
       until: "2026-11-24T02:00:00.000Z",
       earnablePyroxene: null,
+      imageUrl: null,
     });
     expect(merged && "recruitments" in merged ? merged.recruitments.map((r) => r.student?.uid) : null).toEqual([
       "a",

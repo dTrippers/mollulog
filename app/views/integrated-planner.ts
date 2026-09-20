@@ -43,6 +43,24 @@ export type IntegratedPlannerAccountState = {
 
 type EventShopContent = NonNullable<Awaited<ReturnType<typeof getEventShopContent>>>;
 
+type ExplicitShopDates = {
+  startAt: string | null;
+  endAt: string | null;
+};
+
+function resolveExplicitShopDates(
+  shopSchedule: Awaited<ReturnType<typeof getEventContentSchedule>>,
+  canonicalShopDates: Awaited<ReturnType<typeof getTimelineContentDatesByContentUid>>,
+): ExplicitShopDates {
+  if (shopSchedule?.startAt && shopSchedule.endAt) {
+    return { startAt: shopSchedule.startAt, endAt: shopSchedule.endAt };
+  }
+  if (canonicalShopDates?.startAt && canonicalShopDates.endAt) {
+    return { startAt: canonicalShopDates.startAt, endAt: canonicalShopDates.endAt };
+  }
+  return { startAt: null, endAt: null };
+}
+
 export type IntegratedPlannerShopEvent = {
   status: SourceStatus;
   timelineUid: string;
@@ -197,8 +215,7 @@ async function loadShopEvents(
         const shopSchedule = metadata.shopContentUid
           ? await getEventContentSchedule(env, metadata.shopContentUid, metadata.runType)
           : null;
-        const startAt = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
-        const endAt = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;
+        const { startAt, endAt } = resolveExplicitShopDates(shopSchedule, canonicalShopDates);
         const identity = buildEventShopStateIdentity({
           timelineUid: event.uid,
           shopContentUid: metadata.shopContentUid,
@@ -245,7 +262,7 @@ async function loadShopEvents(
             (identity.fallbackStateUid ? (accountStates[identity.fallbackStateUid] ?? null) : null));
 
       return {
-        status: startAt && endAt ? "available" : "unavailable",
+        status: "available",
         timelineUid: event.uid,
         name: event.name,
         shopStateUid: identity.shopStateUid,

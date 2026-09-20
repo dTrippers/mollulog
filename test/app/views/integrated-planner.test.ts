@@ -126,6 +126,10 @@ describe("integrated planner view", () => {
     );
     expect(result.shopEvents[0]?.accountState).toBe(canonicalState);
     expect(result.shopEvents[0]?.accountStateStatus).toBe("available");
+    expect(result.shopEvents[0]).toMatchObject({
+      startAt: "2026-09-01T00:00:00.000Z",
+      endAt: "2026-09-30T00:00:00.000Z",
+    });
     expect(result.shopEvents[1]?.accountState).toBe(fallbackState);
     expect(result.shopEvents[2]?.accountState).toBeNull();
     expect(result.shopEvents[2]?.accountStateStatus).toBe("available");
@@ -149,5 +153,43 @@ describe("integrated planner view", () => {
 
     expect(mockGetEventShopStates).not.toHaveBeenCalled();
     expect(result.shopEvents[0]).toMatchObject({ accountState: null, accountStateStatus: "available" });
+  });
+
+  it("keeps an undated shop event available without using event metadata dates", async () => {
+    mockGetEventContentSchedule.mockResolvedValue({
+      startAt: "2026-09-03T00:00:00.000Z",
+      endAt: null,
+    });
+    mockGetTimelineContentDatesByContentUid.mockResolvedValue(null);
+
+    const result = await getIntegratedPlannerData(env, null, ctx);
+
+    expect(result.shopEvents[0]).toMatchObject({
+      status: "available",
+      startAt: null,
+      endAt: null,
+      content: { shopResources: [{}] },
+      shopStateUid: "canonical-shop-1",
+      accountStateStatus: "available",
+    });
+  });
+
+  it("uses a complete explicit shop schedule in preference to canonical fallback dates", async () => {
+    mockGetEventContentSchedule.mockResolvedValue({
+      startAt: "2026-09-03T00:00:00.000Z",
+      endAt: "2026-09-08T00:00:00.000Z",
+    });
+    mockGetTimelineContentDatesByContentUid.mockResolvedValue({
+      startAt: "2026-09-01T00:00:00.000Z",
+      endAt: "2026-09-30T00:00:00.000Z",
+    });
+
+    const result = await getIntegratedPlannerData(env, null, ctx);
+
+    expect(result.shopEvents[0]).toMatchObject({
+      status: "available",
+      startAt: "2026-09-03T00:00:00.000Z",
+      endAt: "2026-09-08T00:00:00.000Z",
+    });
   });
 });

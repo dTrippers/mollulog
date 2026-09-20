@@ -12,6 +12,7 @@ export type PyroxeneScheduleContent =
       kind: "event";
       uid: string;
       name: string;
+      imageUrl?: string | null;
       since: UtcIsoString;
       until: UtcIsoString;
       rewardAt?: UtcIsoString;
@@ -38,6 +39,7 @@ export type PyroxeneScheduleContent =
       kind: "raid";
       uid: string;
       name: string;
+      imageUrl?: string | null;
       type: RaidType;
       since: UtcIsoString;
       until: UtcIsoString;
@@ -52,6 +54,7 @@ export type PyroxeneScheduleItem = {
   event?: {
     uid: string;
     name: string;
+    imageUrl?: string | null;
     since: UtcIsoString | Date;
     until: UtcIsoString | Date;
     rewardAt?: UtcIsoString | Date;
@@ -76,6 +79,7 @@ export type PyroxeneScheduleItem = {
     uid: string;
     type: RaidType;
     name: string;
+    imageUrl?: string | null;
     since: UtcIsoString | Date;
     until: UtcIsoString | Date;
   };
@@ -165,6 +169,7 @@ export function buildPyroxeneScheduleItems(
         event: {
           uid: content.uid,
           name: content.name,
+          imageUrl: content.imageUrl ?? null,
           since: content.since,
           until: content.until,
           rewardAt: content.rewardAt,
@@ -186,6 +191,7 @@ export function buildPyroxeneScheduleItems(
       raid: {
         uid: content.uid,
         name: content.name,
+        imageUrl: content.imageUrl ?? null,
         type: content.type,
         since: content.since,
         until: content.until,

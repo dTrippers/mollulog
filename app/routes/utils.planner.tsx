@@ -30,6 +30,7 @@ import {
   formatPlannerPeriodEndDate,
   getPlannerMonthEndInstant,
   getPlannerTodayMonth,
+  projectPlannerCalendarResources,
   shiftPlannerMonth,
   summarizePyroxeneTimeline,
 } from "~/domain/integrated-planner";
@@ -424,6 +425,10 @@ export default function IntegratedPlannerRoute() {
     () => getPlannerTodayMonth(loaderData.now, displayTimeZone),
     [displayTimeZone, loaderData.now],
   );
+  const todayDateKey = useMemo(
+    () => formatPlannerPeriodDate(loaderData.now, displayTimeZone),
+    [displayTimeZone, loaderData.now],
+  );
   const lastVisibleMonth = shiftPlannerMonth(initialMonth, visibleMonthCount - 1);
   const timelineEndDate = useMemo(
     () => monthEnd(lastVisibleMonth, displayTimeZone),
@@ -726,6 +731,7 @@ export default function IntegratedPlannerRoute() {
     () => (pyroxeneForecastStatus === "ready" ? summarizePyroxeneTimeline(calculation.timeline, displayTimeZone) : {}),
     [calculation.timeline, displayTimeZone, pyroxeneForecastStatus],
   );
+  const calendarResources = useMemo(() => projectPlannerCalendarResources(dailyResources), [dailyResources]);
 
   const currentGuestShopComparison =
     guestShopComparison?.signature === guestShopPlanSignature ? guestShopComparison : null;
@@ -971,9 +977,11 @@ export default function IntegratedPlannerRoute() {
     >
       <PlannerCalendar
         initialMonth={initialMonth}
+        todayDateKey={todayDateKey}
         periods={periods}
         publicPeriods={publicPeriods}
         dailyResources={dailyResources}
+        calendarResources={calendarResources}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
         isSignedIn={isSignedIn}

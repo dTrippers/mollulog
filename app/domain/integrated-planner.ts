@@ -1,7 +1,7 @@
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline } from "~/domain/pyroxene-timeline";
-import { formatInstantDateKey, type LocalDateString, normalizeTimeZone } from "~/lib/date-time";
+import { formatInstantDateKey, getInstantTime, type LocalDateString, normalizeTimeZone } from "~/lib/date-time";
 import dayjs from "~/lib/dayjs";
 
 export type PlannerResourceKey = keyof PickupResources;
@@ -31,6 +31,9 @@ export type PlannerPeriod = {
   startDate: LocalDateString;
   endDate: LocalDateString;
   href: string;
+  startAt?: string | null;
+  imageUrl?: string | null;
+  endAt?: string | null;
   eventUid?: string;
   students?: PlannerPeriodStudent[];
   expectedTrials?: number;
@@ -93,6 +96,7 @@ export type PlannerScheduleContentInput = {
   kind: "event" | "raid";
   uid: string;
   name: string;
+  imageUrl?: string | null;
   since: string;
   until: string;
   tags?: readonly string[];
@@ -121,16 +125,44 @@ export type PlannerCalendarDay = {
   inMonth: boolean;
 };
 
-export type PlannerPeriodSegment = {
+export type PlannerPeriodTimingStatus = "exact" | "date-only" | "invalid";
+
+export type PlannerCalendarLaneHeight = "compact" | "wrapped";
+
+export type PlannerCalendarStrip = {
+  key: string;
+  kind: "event" | "recruitment" | "combined";
   period: PlannerPeriod;
-  startColumn: number;
-  endColumn: number;
+  recruitmentPeriods: PlannerPeriod[];
   track: number;
+  leftPercent: number;
+  widthPercent: number;
   continuesBefore: boolean;
   continuesAfter: boolean;
+  timingStatus: PlannerPeriodTimingStatus;
+  hasStudentRow: boolean;
+  hasShopConflict: boolean;
+};
+
+export type PlannerWeekLayout = {
+  eventStrips: PlannerCalendarStrip[];
+  recruitmentStrips: PlannerCalendarStrip[];
+  eventLaneCount: number;
+  recruitmentLaneCount: number;
+};
+
+export type PlannerMonthLayout = {
+  monthKey: string;
+  weeks: PlannerCalendarDay[][];
+  weekLayouts: PlannerWeekLayout[];
+  maxEventLaneCount: number;
+  maxRecruitmentLaneCount: number;
+  laneHeights: PlannerCalendarLaneHeight[];
 };
 
 const RESOURCE_KEYS: readonly PlannerResourceKey[] = ["pyroxene", "oneTimeTicket", "tenTimeTicket"];
+export const CALENDAR_FORECAST_SOURCE_TYPES = ["event_reward", "raid", "buy", "other"] as const;
+const CALENDAR_FORECAST_SOURCE_TYPE_SET: ReadonlySet<string> = new Set(CALENDAR_FORECAST_SOURCE_TYPES);
 
 function toInstantKey(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -230,45 +262,322 @@ export function summarizePyroxeneTimeline(timeline: Timeline, timeZone: string):
   return byDate;
 }
 
-export function splitPlannerPeriodsForWeek(
-  periods: readonly PlannerPeriod[],
+export function projectPlannerCalendarResources(
+  resources: Record<string, PlannerDayResources>,
+): Record<string, PlannerDayResources> {
+  return Object.fromEntries(
+    Object.entries(resources).map(([dateKey, day]) => {
+      const sources = day.sources.filter((source) => CALENDAR_FORECAST_SOURCE_TYPE_SET.has(source.type));
+      const changes: PlannerResourceChange[] = [];
+      for (const source of sources) {
+        for (const change of source.changes) {
+          const aggregate = changes.find(({ key }) => key === change.key);
+          if (aggregate) aggregate.quantity += change.quantity;
+          else changes.push({ ...change });
+        }
+      }
+      changes.sort((left, right) => RESOURCE_KEYS.indexOf(left.key) - RESOURCE_KEYS.indexOf(right.key));
+      return [dateKey, { dateKey: day.dateKey, changes, sources }];
+    }),
+  );
+}
+
+type PlannerExactInterval = {
+  startMs: number;
+  endMs: number;
+};
+
+type PlannerWeekTemporalContext = {
+  weekStartMs: number;
+  weekEndMs: number;
+  dayStartsMs: number[];
+  timeZone: string;
+  week: readonly PlannerCalendarDay[];
+};
+
+type PlannerWeekInterval = {
+  timingStatus: PlannerPeriodTimingStatus;
+  occupancyStartMs: number;
+  occupancyEndMs: number;
+  leftPercent: number;
+  widthPercent: number;
+  continuesBefore: boolean;
+  continuesAfter: boolean;
+};
+
+type PlannerCalendarStripDraft = Omit<PlannerCalendarStrip, "track"> & {
+  occupancyStartMs: number;
+  occupancyEndMs: number;
+};
+
+function nextPlannerDate(dateKey: string): LocalDateString {
+  return dayjs.utc(`${dateKey}T00:00:00Z`).add(1, "day").format("YYYY-MM-DD") as LocalDateString;
+}
+
+function createPlannerWeekTemporalContext(
   week: readonly PlannerCalendarDay[],
-): PlannerPeriodSegment[] {
-  if (week.length !== 7) return [];
-  const weekStart = week[0].dateKey;
-  const weekEnd = week[6].dateKey;
-  const candidates = periods
-    .filter((period) => period.startDate <= weekEnd && period.endDate >= weekStart)
-    .map((period) => {
-      const startColumn = Math.max(
-        0,
-        week.findIndex((day) => day.dateKey >= period.startDate),
-      );
-      const reverseEndColumn = [...week].reverse().findIndex((day) => day.dateKey <= period.endDate);
-      const endColumn = 6 - reverseEndColumn;
-      return {
-        period,
-        startColumn,
-        endColumn,
-        continuesBefore: period.startDate < weekStart,
-        continuesAfter: period.endDate > weekEnd,
-      };
-    })
-    .filter((segment) => segment.startColumn <= segment.endColumn)
+  timeZone: string,
+): PlannerWeekTemporalContext {
+  const normalizedTimeZone = normalizeTimeZone(timeZone);
+  const dayStartsMs = [
+    ...week.map(({ dateKey }) => dayjs.tz(`${dateKey}T00:00:00`, normalizedTimeZone).valueOf()),
+    dayjs.tz(`${nextPlannerDate(week[week.length - 1].dateKey)}T00:00:00`, normalizedTimeZone).valueOf(),
+  ];
+  return {
+    weekStartMs: dayStartsMs[0],
+    weekEndMs: dayStartsMs[dayStartsMs.length - 1],
+    dayStartsMs,
+    timeZone: normalizedTimeZone,
+    week,
+  };
+}
+
+function getPlannerExactInterval(period: PlannerPeriod): PlannerExactInterval | null {
+  if (!period.startAt || !period.endAt) return null;
+  const startMs = getInstantTime(period.startAt);
+  const endMs = getInstantTime(period.endAt);
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
+function hasInvalidPlannerInterval(period: PlannerPeriod): boolean {
+  if (!period.startAt || !period.endAt) return false;
+  const startMs = getInstantTime(period.startAt);
+  const endMs = getInstantTime(period.endAt);
+  return !Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs;
+}
+
+function plannerInstantPosition(instantMs: number, dayStartsMs: readonly number[]): number {
+  if (instantMs <= dayStartsMs[0]) return 0;
+  if (instantMs >= dayStartsMs[dayStartsMs.length - 1]) return 1;
+
+  const dayIndex = dayStartsMs.findIndex((dayStartMs, index) => {
+    const nextDayStartMs = dayStartsMs[index + 1];
+    return nextDayStartMs !== undefined && instantMs < nextDayStartMs && instantMs >= dayStartMs;
+  });
+  if (dayIndex < 0) return 0;
+
+  const dayStartMs = dayStartsMs[dayIndex];
+  const dayEndMs = dayStartsMs[dayIndex + 1];
+  const dayFraction = (instantMs - dayStartMs) / (dayEndMs - dayStartMs);
+  return (dayIndex + dayFraction) / (dayStartsMs.length - 1);
+}
+
+function buildDateOnlyPlannerInterval(
+  period: PlannerPeriod,
+  context: PlannerWeekTemporalContext,
+  timingStatus: "date-only" | "invalid",
+): PlannerWeekInterval | null {
+  const { week, weekStartMs, weekEndMs } = context;
+  const startsBeforeWeek = period.startDate < week[0].dateKey;
+  const endsAfterWeek = period.endDate > week[week.length - 1].dateKey;
+  const hasCivilOverlap = period.startDate <= week[week.length - 1].dateKey && period.endDate >= week[0].dateKey;
+  if (!hasCivilOverlap) return null;
+
+  const startDate = startsBeforeWeek ? week[0].dateKey : period.startDate;
+  const endDate = endsAfterWeek ? week[week.length - 1].dateKey : period.endDate;
+  const startColumn = Math.max(
+    0,
+    week.findIndex(({ dateKey }) => dateKey === startDate),
+  );
+  const endColumn = Math.max(
+    startColumn,
+    week.findIndex(({ dateKey }) => dateKey === endDate),
+  );
+  const occupancyStartMs = Math.max(weekStartMs, dayjs.tz(`${period.startDate}T00:00:00`, context.timeZone).valueOf());
+  const occupancyEndMs = Math.min(
+    weekEndMs,
+    dayjs.tz(`${nextPlannerDate(period.endDate)}T00:00:00`, context.timeZone).valueOf(),
+  );
+  const normalizedOccupancyStartMs = Math.min(occupancyStartMs, occupancyEndMs);
+  const normalizedOccupancyEndMs = Math.max(occupancyStartMs, occupancyEndMs);
+  const safeOccupancyEndMs =
+    normalizedOccupancyEndMs > normalizedOccupancyStartMs
+      ? normalizedOccupancyEndMs
+      : Math.min(weekEndMs, normalizedOccupancyStartMs + (context.dayStartsMs[1] - context.dayStartsMs[0]));
+
+  return {
+    timingStatus,
+    occupancyStartMs: normalizedOccupancyStartMs,
+    occupancyEndMs: safeOccupancyEndMs,
+    leftPercent: (startColumn / week.length) * 100,
+    widthPercent: ((endColumn + 1 - startColumn) / week.length) * 100,
+    continuesBefore: startsBeforeWeek,
+    continuesAfter: endsAfterWeek,
+  };
+}
+
+function buildPlannerWeekInterval(
+  period: PlannerPeriod,
+  context: PlannerWeekTemporalContext,
+): PlannerWeekInterval | null {
+  const exactInterval = getPlannerExactInterval(period);
+  if (!exactInterval) {
+    return buildDateOnlyPlannerInterval(period, context, hasInvalidPlannerInterval(period) ? "invalid" : "date-only");
+  }
+
+  if (exactInterval.startMs >= context.weekEndMs || exactInterval.endMs <= context.weekStartMs) return null;
+  const clippedStartMs = Math.max(exactInterval.startMs, context.weekStartMs);
+  const clippedEndMs = Math.min(exactInterval.endMs, context.weekEndMs);
+  const leftPercent = plannerInstantPosition(clippedStartMs, context.dayStartsMs) * 100;
+  const rightPercent = plannerInstantPosition(clippedEndMs, context.dayStartsMs) * 100;
+
+  return {
+    timingStatus: "exact",
+    occupancyStartMs: clippedStartMs,
+    occupancyEndMs: clippedEndMs,
+    leftPercent,
+    widthPercent: Math.max(0, rightPercent - leftPercent),
+    continuesBefore: exactInterval.startMs < context.weekStartMs,
+    continuesAfter: exactInterval.endMs > context.weekEndMs,
+  };
+}
+
+function hasSamePlannerExactInterval(left: PlannerPeriod, right: PlannerPeriod): boolean {
+  const leftInterval = getPlannerExactInterval(left);
+  const rightInterval = getPlannerExactInterval(right);
+  return (
+    leftInterval !== null &&
+    rightInterval !== null &&
+    leftInterval.startMs === rightInterval.startMs &&
+    leftInterval.endMs === rightInterval.endMs
+  );
+}
+
+export function hasPlannerExactEventHandoff(left: PlannerPeriod, right: PlannerPeriod): boolean {
+  if (
+    left.kind !== "event" ||
+    right.kind !== "event" ||
+    !left.eventUid ||
+    !right.eventUid ||
+    left.eventUid === right.eventUid
+  ) {
+    return false;
+  }
+  const leftInterval = getPlannerExactInterval(left);
+  const rightInterval = getPlannerExactInterval(right);
+  return (
+    leftInterval !== null &&
+    rightInterval !== null &&
+    (leftInterval.endMs === rightInterval.startMs || leftInterval.startMs === rightInterval.endMs)
+  );
+}
+
+function packPlannerCalendarStrips(drafts: PlannerCalendarStripDraft[]): PlannerCalendarStrip[] {
+  const laneEnds: number[] = [];
+  return [...drafts]
     .sort(
       (left, right) =>
-        left.startColumn - right.startColumn ||
-        left.endColumn - right.endColumn ||
-        left.period.name.localeCompare(right.period.name),
-    );
+        left.occupancyStartMs - right.occupancyStartMs ||
+        left.occupancyEndMs - right.occupancyEndMs ||
+        left.key.localeCompare(right.key),
+    )
+    .map((draft) => {
+      const availableLane = laneEnds.findIndex((endMs) => endMs <= draft.occupancyStartMs);
+      const track = availableLane >= 0 ? availableLane : laneEnds.length;
+      laneEnds[track] = draft.occupancyEndMs;
+      const { occupancyStartMs: _occupancyStartMs, occupancyEndMs: _occupancyEndMs, ...strip } = draft;
+      return { ...strip, track };
+    });
+}
 
-  const trackEnds: number[] = [];
-  return candidates.map((segment) => {
-    let track = trackEnds.findIndex((endColumn) => endColumn < segment.startColumn);
-    if (track === -1) track = trackEnds.length;
-    trackEnds[track] = segment.endColumn;
-    return { ...segment, track };
-  });
+export function buildPlannerWeekLayout(
+  periods: readonly PlannerPeriod[],
+  week: readonly PlannerCalendarDay[],
+  timeZone: string,
+): PlannerWeekLayout {
+  if (week.length !== 7) {
+    return {
+      eventStrips: [],
+      recruitmentStrips: [],
+      eventLaneCount: 0,
+      recruitmentLaneCount: 0,
+    };
+  }
+
+  const context = createPlannerWeekTemporalContext(week, timeZone);
+  const eventPeriods = periods.filter((period) => period.kind === "event");
+  const recruitmentPeriods = periods.filter((period) => period.kind === "recruitment");
+  const shopConflictEventUids = new Set(
+    periods
+      .filter((period) => period.kind === "shop" && period.conflict && period.eventUid)
+      .map((period) => period.eventUid as string),
+  );
+  const mergedRecruitmentKeys = new Set<string>();
+  const eventDrafts: PlannerCalendarStripDraft[] = [];
+
+  for (const eventPeriod of eventPeriods) {
+    const matchingRecruitments = eventPeriod.eventUid
+      ? recruitmentPeriods.filter(
+          (recruitmentPeriod) =>
+            recruitmentPeriod.eventUid === eventPeriod.eventUid &&
+            hasSamePlannerExactInterval(eventPeriod, recruitmentPeriod),
+        )
+      : [];
+    for (const recruitmentPeriod of matchingRecruitments) mergedRecruitmentKeys.add(recruitmentPeriod.key);
+    const interval = buildPlannerWeekInterval(eventPeriod, context);
+    if (!interval) continue;
+    eventDrafts.push({
+      key: matchingRecruitments.length > 0 ? `${eventPeriod.key}:combined` : eventPeriod.key,
+      kind: matchingRecruitments.length > 0 ? "combined" : "event",
+      period: eventPeriod,
+      recruitmentPeriods: matchingRecruitments,
+      ...interval,
+      hasStudentRow: matchingRecruitments.some((period) => (period.students?.length ?? 0) > 0),
+      hasShopConflict: eventPeriod.eventUid ? shopConflictEventUids.has(eventPeriod.eventUid) : false,
+    });
+  }
+
+  const recruitmentDrafts: PlannerCalendarStripDraft[] = [];
+  for (const recruitmentPeriod of recruitmentPeriods) {
+    if (mergedRecruitmentKeys.has(recruitmentPeriod.key)) continue;
+    const interval = buildPlannerWeekInterval(recruitmentPeriod, context);
+    if (!interval) continue;
+    recruitmentDrafts.push({
+      key: recruitmentPeriod.key,
+      kind: "recruitment",
+      period: recruitmentPeriod,
+      recruitmentPeriods: [],
+      ...interval,
+      hasStudentRow: false,
+      hasShopConflict: false,
+    });
+  }
+
+  const eventStrips = packPlannerCalendarStrips(eventDrafts);
+  const recruitmentStrips = packPlannerCalendarStrips(recruitmentDrafts);
+  return {
+    eventStrips,
+    recruitmentStrips,
+    eventLaneCount: eventStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0),
+    recruitmentLaneCount: recruitmentStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0),
+  };
+}
+
+export function buildPlannerMonthLayout(
+  monthKey: string,
+  periods: readonly PlannerPeriod[],
+  timeZone: string,
+): PlannerMonthLayout {
+  const weeks = buildPlannerMonthDays(monthKey);
+  const weekLayouts = weeks.map((week) => buildPlannerWeekLayout(periods, week, timeZone));
+  const maxEventLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.eventLaneCount), 0);
+  const maxRecruitmentLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.recruitmentLaneCount), 0);
+  const eventLaneHeights: PlannerCalendarLaneHeight[] = Array.from({ length: maxEventLaneCount }, (_, track) =>
+    weekLayouts.some((layout) =>
+      layout.eventStrips.some((strip) => strip.kind === "combined" && strip.track === track && strip.hasStudentRow),
+    )
+      ? "wrapped"
+      : "compact",
+  );
+  return {
+    monthKey,
+    weeks,
+    weekLayouts,
+    maxEventLaneCount,
+    maxRecruitmentLaneCount,
+    laneHeights: [...eventLaneHeights, ...Array.from({ length: maxRecruitmentLaneCount }, () => "compact" as const)],
+  };
 }
 
 export function getPlannerTodayMonth(now: string | Date, timeZone: string): string {
@@ -340,6 +649,9 @@ export function buildPlannerPeriods({
       startDate: formatPlannerPeriodDate(content.since, timeZone),
       endDate: formatPlannerPeriodEndDate(content.until, timeZone),
       href: `/events/${encodeURIComponent(content.uid)}`,
+      startAt: content.since,
+      imageUrl: content.imageUrl ?? null,
+      endAt: content.until,
       eventUid: content.uid,
     });
   }
@@ -385,6 +697,8 @@ export function buildPlannerPeriods({
         startDate: formatPlannerPeriodDate(scheduleEvent.since, timeZone),
         endDate: formatPlannerPeriodEndDate(endAt, timeZone),
         href: `/events/${encodeURIComponent(eventUid)}/recruitment-simulator`,
+        startAt: toInstantKey(scheduleEvent.since),
+        endAt,
         eventUid,
         students: studentsByEndAt.get(endAt) ?? [],
         ...(trialCount === undefined || trialCount === null ? {} : { expectedTrials: trialCount }),
@@ -401,6 +715,8 @@ export function buildPlannerPeriods({
       startDate: formatPlannerPeriodDate(shop.startAt, timeZone),
       endDate: formatPlannerPeriodEndDate(shop.endAt, timeZone),
       href: `/events/${encodeURIComponent(shop.timelineUid)}/shop`,
+      startAt: shop.startAt,
+      endAt: shop.endAt,
       eventUid: shop.timelineUid,
       conflict: shop.conflict,
     });
@@ -436,6 +752,9 @@ export function buildPublicPlannerPeriods({
       startDate: formatPlannerPeriodDate(content.since, timeZone),
       endDate: formatPlannerPeriodEndDate(content.until, timeZone),
       href: `/events/${encodeURIComponent(content.uid)}`,
+      startAt: content.since,
+      imageUrl: content.imageUrl ?? null,
+      endAt: content.until,
       eventUid: content.uid,
     });
   }
@@ -476,6 +795,8 @@ export function buildPublicPlannerPeriods({
       startDate: formatPlannerPeriodDate(startAt, timeZone),
       endDate: formatPlannerPeriodEndDate(endAt, timeZone),
       href: `/events/${encodeURIComponent(eventUid)}/recruitment-simulator`,
+      startAt: toInstantKey(startAt),
+      endAt: toInstantKey(endAt),
       eventUid,
       students,
     });
@@ -490,6 +811,8 @@ export function buildPublicPlannerPeriods({
       startDate: formatPlannerPeriodDate(shop.startAt, timeZone),
       endDate: formatPlannerPeriodEndDate(shop.endAt, timeZone),
       href: `/events/${encodeURIComponent(shop.timelineUid)}/shop`,
+      startAt: shop.startAt,
+      endAt: shop.endAt,
       eventUid: shop.timelineUid,
     });
   }
