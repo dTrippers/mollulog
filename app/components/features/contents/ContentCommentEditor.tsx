@@ -148,7 +148,7 @@ export default function ContentCommentEditor({
       <div ref={scrollContainerRef} className="flex-1 overflow-y-auto no-scrollbar">
         <div className={`${variant === "compact" ? "mb-3 space-y-1" : "-mt-3 mb-4 space-y-1"}`}>
           {isLoading ? (
-            <div className="my-16" role="status" aria-label="의견을 불러오는 중">
+            <div className="mb-16" role="status" aria-label="의견을 불러오는 중">
               <LoadingSkeleton noOuterMargin />
             </div>
           ) : sortedComments.length > 0 ? (

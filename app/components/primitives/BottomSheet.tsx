@@ -36,8 +36,8 @@ export default function BottomSheet({
   }
 
   return (
-    <Transition show={open} as={Fragment} afterLeave={onExited}>
-      <Dialog open={open} onClose={onClose} className="relative z-layer-modal">
+    <Transition appear show={open} as={Fragment} afterLeave={onExited}>
+      <Dialog onClose={onClose} className="relative z-layer-modal">
         <TransitionChild
           as={Fragment}
           enter="transition-opacity duration-300 ease-out motion-reduce:transition-none"
