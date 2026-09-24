@@ -9,7 +9,7 @@ import {
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
-import { StudentSkillIcon, TierSelector } from "~/components/features/students";
+import { LevelSlider, StudentSkillIcon, TierSelector } from "~/components/features/students";
 import {
   Button,
   Callout,
@@ -23,6 +23,7 @@ import {
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
+  getAbilityReleaseDisabledReason,
   getEquipmentMaxLevel,
   getEquipmentSlotUnlockLevel,
   renderStudentSkillDescriptionParts,
@@ -658,76 +659,7 @@ function CompactNumber({
   );
 }
 
-export function getAbilityReleaseDisabledReason(tier: number, level = 90): string | null {
-  if (tier <= 5) {
-    return "고유무기 1성부터 능력 개방을 설정할 수 있어요";
-  }
-  if (level < 90) {
-    return "학생 레벨 90부터 능력 개방을 설정할 수 있어요";
-  }
-  return null;
-}
-
-function LevelSlider({
-  label,
-  value,
-  min,
-  max,
-  valuePrefix,
-  showHeader = true,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  valuePrefix?: string;
-  showHeader?: boolean;
-  disabled?: boolean;
-  onChange: (value: number) => void;
-}) {
-  const sliderMax = Math.max(min, max);
-  const clampedValue = Math.min(Math.max(value, min), sliderMax);
-  const progress = sliderMax === min ? 0 : ((clampedValue - min) / (sliderMax - min)) * 100;
-
-  return (
-    <label className={disabled ? "block min-w-0 opacity-45" : "block min-w-0"}>
-      {showHeader ? (
-        <span className="flex items-center justify-between gap-3 text-xs">
-          <span className="truncate font-medium">{label}</span>
-          <strong className="shrink-0 tabular-nums text-primary">
-            {valuePrefix}
-            {value}
-          </strong>
-        </span>
-      ) : null}
-      <span className={`relative mx-1.5 block h-4 ${showHeader ? "mt-1.5" : "mt-0.5"}`}>
-        <input
-          type="range"
-          aria-label={`${label} ${valuePrefix ?? ""}${value}`}
-          className="peer absolute -inset-x-1.5 top-0 z-10 h-4 w-[calc(100%+0.75rem)] cursor-pointer opacity-0 disabled:cursor-default"
-          min={min}
-          max={sliderMax}
-          value={clampedValue}
-          disabled={disabled}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-        />
-        <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true" />
-        <span
-          className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary transition-[width]"
-          style={{ width: `${progress}%` }}
-          aria-hidden="true"
-        />
-        <span
-          className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-card shadow-sm transition-[left] peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2"
-          style={{ left: `${progress}%` }}
-          aria-hidden="true"
-        />
-      </span>
-    </label>
-  );
-}
+export { getAbilityReleaseDisabledReason } from "~/domain/student-calculator";
 
 function SkillRow({
   skill,

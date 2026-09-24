@@ -422,6 +422,16 @@ export function getEquipmentSlotUnlockLevel(index: number): number {
   return EQUIPMENT_SLOT_UNLOCK_LEVELS[index] ?? 1;
 }
 
+export function getAbilityReleaseDisabledReason(tier: number, level = 90): string | null {
+  if (tier <= 5) {
+    return "고유무기 1성부터 능력 개방을 설정할 수 있어요";
+  }
+  if (level < 90) {
+    return "학생 레벨 90부터 능력 개방을 설정할 수 있어요";
+  }
+  return null;
+}
+
 export function validateStudentEquipmentLevels(
   student: Pick<StudentCalculatorSource, "equipments">,
   catalog: StudentCalculatorCatalog | null | undefined,

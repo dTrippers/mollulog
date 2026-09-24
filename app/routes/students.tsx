@@ -1,5 +1,6 @@
 import {
   AdjustmentsHorizontalIcon,
+  ArrowsRightLeftIcon,
   ChatBubbleLeftRightIcon,
   FunnelIcon,
   IdentificationIcon,
@@ -81,7 +82,8 @@ export const meta: MetaFunction = ({ location }) => {
 export default function StudentsLayout() {
   const { filterState: initialFilterState, students } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
-  const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
+  const usesStudentsPageLayout =
+    pathname === "/students" || pathname === "/students/gradings" || pathname === "/students/compare";
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [filterState, setFilterState] = usePersistentStudentFilterState({
     ...studentFilterCookieOptions,
@@ -104,6 +106,8 @@ export default function StudentsLayout() {
     <Page
       title="학생부"
       description="학생들의 프로필과 총력전/대결전 통계, 평가 정보를 확인해보세요"
+      maxWidth={pathname === "/students/compare" ? "wide" : "default"}
+      contentWidth={pathname === "/students/compare" ? "full" : "narrow"}
       panels={
         isStudentsIndex
           ? [
@@ -155,6 +159,13 @@ export default function StudentsLayout() {
           Icon: IdentificationIcon,
           link: "/students",
           active: pathname === "/students",
+        },
+        {
+          text: "학생 비교",
+          description: "두 학생의 능력치 비교",
+          Icon: ArrowsRightLeftIcon,
+          link: "/students/compare",
+          active: pathname === "/students/compare",
         },
         {
           text: "학생 평가 목록",

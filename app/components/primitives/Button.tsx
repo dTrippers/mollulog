@@ -1,8 +1,11 @@
-import type { ElementType, MouseEvent, ReactNode } from "react";
+import type { AriaAttributes, ElementType, MouseEvent, ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
 
-type ButtonProps = {
+type ButtonProps = Pick<
+  AriaAttributes,
+  "aria-label" | "aria-describedby" | "aria-controls" | "aria-expanded" | "aria-haspopup"
+> & {
   text?: string;
   children?: ReactNode | ReactNode[];
   icon?: ElementType;
@@ -42,6 +45,11 @@ export default function Button({
   to,
   target,
   rel,
+  "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
+  "aria-controls": ariaControls,
+  "aria-expanded": ariaExpanded,
+  "aria-haspopup": ariaHasPopup,
 }: ButtonProps) {
   const variantClass = {
     default: "border-border bg-background text-foreground hover:bg-muted hover:text-foreground",
@@ -100,6 +108,11 @@ export default function Button({
         className={buttonClassName}
         onClick={handleClick}
         aria-disabled={disabled}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-controls={ariaControls}
+        aria-expanded={ariaExpanded}
+        aria-haspopup={ariaHasPopup}
       >
         {content}
       </a>
@@ -108,7 +121,17 @@ export default function Button({
 
   if (to) {
     return (
-      <Link to={to} className={buttonClassName} onClick={handleClick} aria-disabled={disabled}>
+      <Link
+        to={to}
+        className={buttonClassName}
+        onClick={handleClick}
+        aria-disabled={disabled}
+        aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
+        aria-controls={ariaControls}
+        aria-expanded={ariaExpanded}
+        aria-haspopup={ariaHasPopup}
+      >
         {content}
       </Link>
     );
@@ -121,6 +144,11 @@ export default function Button({
       onClick={handleClick}
       disabled={disabled}
       aria-pressed={pressed}
+      aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
+      aria-controls={ariaControls}
+      aria-expanded={ariaExpanded}
+      aria-haspopup={ariaHasPopup}
       name={name}
       value={value}
       form={form}

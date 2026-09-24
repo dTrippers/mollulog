@@ -1,3 +1,4 @@
+export { default as LevelSlider } from "./LevelSlider";
 export { default as RecruitmentHistories } from "./RecruitmentHistories";
 export type { ResourceCardsProps } from "./ResourceCards";
 export { default as ResourceCards } from "./ResourceCards";

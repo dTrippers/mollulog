@@ -144,7 +144,7 @@ export default function NumberInput({
             }}
             className={cn(shortcutButtonClass, "border-l-0 border-r")}
             disabled={disabled || internalValue === effectiveMin}
-            aria-label="최소값으로 설정"
+            aria-label={label ? `${label} 최소값으로 설정` : "최소값으로 설정"}
           >
             최소
           </button>
@@ -163,7 +163,7 @@ export default function NumberInput({
                 ? internalValue <= effectiveMin
                 : internalValue != null && internalValue <= 0)
             }
-            aria-label="감소"
+            aria-label={label ? `${label} 감소` : "감소"}
           >
             -
           </button>
@@ -214,7 +214,7 @@ export default function NumberInput({
             }}
             className={buttonClass}
             disabled={disabled || (maxValue !== undefined && internalValue != null && internalValue >= maxValue)}
-            aria-label="증가"
+            aria-label={label ? `${label} 증가` : "증가"}
           >
             +
           </button>
@@ -227,7 +227,7 @@ export default function NumberInput({
             }}
             className={shortcutButtonClass}
             disabled={disabled || internalValue === maxValue}
-            aria-label="최대값으로 설정"
+            aria-label={label ? `${label} 최대값으로 설정` : "최대값으로 설정"}
           >
             최대
           </button>

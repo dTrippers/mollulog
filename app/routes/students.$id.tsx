@@ -1,4 +1,5 @@
 import {
+  ArrowsRightLeftIcon,
   ChartBarIcon,
   ChatBubbleLeftRightIcon,
   InformationCircleIcon,
@@ -120,6 +121,12 @@ export default function StudentDetailPage() {
       backward={{ title: "학생 목록", to: "/students" }}
       belowTitle={<StudentInfo student={student} />}
       links={[
+        {
+          Icon: ArrowsRightLeftIcon,
+          title: "학생 비교",
+          description: "다른 학생과 능력치를 비교해보세요",
+          to: `/students/compare?left=${encodeURIComponent(student.uid)}`,
+        },
         {
           Icon: VideoCameraIcon,
           title: "영상 인식기",
