@@ -82,6 +82,7 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
                 <ResourceCard
                   resourceType={exchangePointResource.type}
                   itemUid={exchangePointResource.uid}
+                  imageUrl={exchangePointResource.imageUrl ?? undefined}
                   label={resourceCountLabel(rate.pointAmount)}
                   name={exchangePointResource.name}
                 />
@@ -122,11 +123,12 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
             <p className="text-xs font-medium text-muted-foreground">단서 {totalClueCount.toLocaleString()}개</p>
             {clueCosts.length > 0 ? (
               <div className="mt-2 flex flex-wrap gap-1">
-                {clueCosts.map(({ resourceType, resourceUid, resourceName, quantity }) => (
+                {clueCosts.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity }) => (
                   <ResourceCard
                     key={`${resourceType}:${resourceUid}`}
                     resourceType={resourceType}
                     itemUid={resourceUid}
+                    imageUrl={imageUrl ?? undefined}
                     label={resourceCountLabel(quantity)}
                     name={resourceName}
                   />
@@ -141,11 +143,12 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
             <div>
               <p className="text-xs font-medium text-muted-foreground">이벤트 포인트</p>
               <div className="mt-2 flex flex-wrap gap-1">
-                {pointCosts.map(({ resourceType, resourceUid, resourceName, quantity }) => (
+                {pointCosts.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity }) => (
                   <ResourceCard
                     key={`${resourceType}:${resourceUid}`}
                     resourceType={resourceType}
                     itemUid={resourceUid}
+                    imageUrl={imageUrl ?? undefined}
                     label={resourceCountLabel(quantity)}
                     name={resourceName}
                   />
@@ -195,11 +198,12 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
                       <span className="block text-xs font-medium text-muted-foreground">필요 단서</span>
                       <div className="flex flex-wrap gap-1">
                         {detail.clues.length > 0 ? (
-                          detail.clues.map(({ resourceType, resourceUid, resourceName, quantity }) => (
+                          detail.clues.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity }) => (
                             <ResourceCard
                               key={`${detail.round}:clue:${resourceType}:${resourceUid}`}
                               resourceType={resourceType}
                               itemUid={resourceUid}
+                              imageUrl={imageUrl ?? undefined}
                               label={resourceCountLabel(quantity)}
                               name={resourceName}
                             />
@@ -213,16 +217,19 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
                       <span className="block text-xs font-medium text-muted-foreground">획득 보상</span>
                       <div className="flex flex-wrap gap-1">
                         {detail.rewards.length > 0 ? (
-                          detail.rewards.map(({ resourceType, resourceUid, resourceName, quantity, rarity }) => (
-                            <ResourceCard
-                              key={`${detail.round}:reward:${resourceType}:${resourceUid}:${rarity ?? ""}`}
-                              resourceType={resourceType}
-                              itemUid={resourceUid}
-                              rarity={rarity}
-                              label={resourceCountLabel(quantity)}
-                              name={resourceName}
-                            />
-                          ))
+                          detail.rewards.map(
+                            ({ resourceType, resourceUid, resourceName, imageUrl, quantity, rarity }) => (
+                              <ResourceCard
+                                key={`${detail.round}:reward:${resourceType}:${resourceUid}:${rarity ?? ""}`}
+                                resourceType={resourceType}
+                                itemUid={resourceUid}
+                                imageUrl={imageUrl ?? undefined}
+                                rarity={rarity}
+                                label={resourceCountLabel(quantity)}
+                                name={resourceName}
+                              />
+                            ),
+                          )
                         ) : (
                           <span className="pt-1 text-xs text-muted-foreground">보상 정보 없음</span>
                         )}
@@ -241,11 +248,12 @@ export function ClueSearchSection({ config, state, actions, exchange }: ClueSear
         <p className="text-sm font-semibold text-foreground">총 획득 보상</p>
         {rewards.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1">
-            {rewards.map(({ resourceType, resourceUid, resourceName, quantity, rarity }) => (
+            {rewards.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity, rarity }) => (
               <ResourceCard
                 key={`${resourceType}:${resourceUid}:${rarity ?? ""}`}
                 resourceType={resourceType}
                 itemUid={resourceUid}
+                imageUrl={imageUrl ?? undefined}
                 rarity={rarity}
                 label={resourceCountLabel(quantity)}
                 name={resourceName}

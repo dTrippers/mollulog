@@ -30,7 +30,7 @@ export const StageCard = memo(function StageCard({
     ({ item, rewardRequirement }) => item?.category === "coin" && rewardRequirement === null,
   );
   const nonCoinRewards = rewards.filter(
-    ({ item, rewardRequirement }) => item?.category !== "coin" && rewardRequirement === null,
+    ({ item, rewardRequirement }) => item !== null && item.category !== "coin" && rewardRequirement === null,
   );
   const coinRewardKeyCounts = new Map<string, number>();
   const bonusRewardKeyCounts = new Map<string, number>();
@@ -65,7 +65,7 @@ export const StageCard = memo(function StageCard({
         </div>
       </div>
 
-      {coinRewards.length > 0 && (
+      {(coinRewards.length > 0 || nonCoinRewards.length > 0) && (
         <div className="mt-4 space-y-2">
           <div className="flex flex-wrap gap-1">
             {coinRewards.map(({ amount, item }) => {
@@ -107,7 +107,8 @@ export const StageCard = memo(function StageCard({
                 <ResourceCard
                   key={getRewardKey(nonCoinRewardKeyCounts, item.uid, amount, "-non-coin")}
                   itemUid={item.uid}
-                  resourceType={ResourceTypeEnum.Item}
+                  resourceType={item.resourceType ?? ResourceTypeEnum.Item}
+                  imageUrl={item.imageUrl ?? undefined}
                   label={amount}
                   rarity={item.rarity}
                   name={item.name}

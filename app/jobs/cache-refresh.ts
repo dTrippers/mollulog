@@ -1,6 +1,7 @@
 import type { CacheRefreshTaskName, CacheRefreshTaskResult } from "~/domain/cache-refresh";
 import { getLogger } from "~/lib/observability.server";
 import { syncEventContentsList } from "~/models/event-content";
+import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -59,6 +60,9 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
       return;
     case "getItemCatalogResources":
       await getItemCatalogResources(env, true);
+      return;
+    case "getFurnitureCatalogSource":
+      await getFurnitureCatalogSource(env, true);
       return;
     case "getCampaignFarmingStages":
       await getCampaignFarmingStages(env, true);

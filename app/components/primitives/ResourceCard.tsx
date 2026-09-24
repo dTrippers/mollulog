@@ -1,7 +1,7 @@
 import { memo } from "react";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
-import { resourceImageUrl } from "~/models/assets";
+import { type ResourceImageType, resourceImageUrl } from "~/models/assets";
 import HoverTooltip from "./HoverTooltip";
 
 type ResourceCardProps = {
@@ -16,7 +16,7 @@ type ResourceCardProps = {
 } & (
   | {
       itemUid: string;
-      imageUrl?: undefined;
+      imageUrl?: string;
     }
   | {
       itemUid?: undefined;
@@ -36,10 +36,8 @@ function ResourceCard({
   name,
   size = "md",
 }: ResourceCardProps) {
-  let imageUrl = imageUrlProp;
-  if (itemUid) {
-    imageUrl = resourceImageUrl(resourceType ?? "item", itemUid);
-  }
+  const imageUrl =
+    imageUrlProp || (itemUid ? resourceImageUrlForCard(resourceType ?? ResourceTypeEnum.Item, itemUid) : undefined);
 
   let sizeClass = "size-10";
   let imageSizeClass = "size-8";
@@ -57,12 +55,22 @@ function ResourceCard({
         <div
           className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
         >
-          <img
-            alt="아이템 이미지"
-            src={imageUrl}
-            className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
-            loading="lazy"
-          />
+          {imageUrl ? (
+            <img
+              alt="아이템 이미지"
+              src={imageUrl}
+              className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
+              loading="lazy"
+            />
+          ) : (
+            <span
+              role="img"
+              aria-label={`${name ?? "아이템"} 이미지 없음`}
+              className="px-1 text-center text-[8px] leading-tight text-muted-foreground"
+            >
+              이미지 없음
+            </span>
+          )}
         </div>
         {label != null && (
           <div
@@ -88,6 +96,26 @@ function ResourceCard({
 }
 
 export default memo(ResourceCard);
+
+function resourceImageUrlForCard(resourceType: ResourceTypeEnum, uid: string): string | undefined {
+  const resourceImageType = getResourceImageType(resourceType);
+  return resourceImageType ? resourceImageUrl(resourceImageType, uid) : undefined;
+}
+
+function getResourceImageType(resourceType: ResourceTypeEnum): ResourceImageType | undefined {
+  switch (resourceType) {
+    case ResourceTypeEnum.Item:
+      return "item";
+    case ResourceTypeEnum.Currency:
+      return "currency";
+    case ResourceTypeEnum.Equipment:
+      return "equipment";
+    case ResourceTypeEnum.Furniture:
+      return "furniture";
+    case ResourceTypeEnum.Emblem:
+      return undefined;
+  }
+}
 
 function labelBadgeBgClass(labelBgColor: "black" | "red"): string {
   if (labelBgColor === "red") {

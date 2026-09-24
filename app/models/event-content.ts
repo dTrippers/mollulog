@@ -5,7 +5,7 @@ import type {
   EventContentsListQuery,
   RecruitmentGroupsListQuery,
 } from "~/graphql/graphql";
-import { RunTypeEnum } from "~/graphql/graphql";
+import { ResourceTypeEnum, RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
@@ -213,19 +213,23 @@ const eventContentShopContentQuery = graphql(`
         uid stageNumber stageIndex stageType enterCostAmount
         rewards {
           amount probability tag
-          resource { __typename uid name rarity ... on Item { category } }
+          resource {
+            __typename uid name rarity
+            ... on Item { category }
+            ... on Emblem { imageUrl(lang: ko) }
+          }
         }
       }
       shopResources(runType: $runType) {
         uid resourceAmount shopAmount
-        resource { type uid name rarity }
-        paymentResource { type uid name }
+        resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } }
+        paymentResource { type uid name ... on Emblem { imageUrl(lang: ko) } }
         purchaseTiers {
           tierIndex
           startQuantity
           quantity
           unitPrice
-          paymentResource { type uid name }
+          paymentResource { type uid name ... on Emblem { imageUrl(lang: ko) } }
         }
       }
       bonuses(runType: $runType) {
@@ -235,8 +239,8 @@ const eventContentShopContentQuery = graphql(`
       }
       minigameConfigs(runType: $runType) {
         minigameType
-        payment { quantity resource { type uid name } }
-        payments { quantity resource { type uid name } }
+        payment { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+        payments { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -244,9 +248,9 @@ const eventContentShopContentQuery = graphql(`
             quantityExpected
             quantityMax
             quantityVariable
-            resource { type uid name }
+            resource { type uid name ... on Emblem { imageUrl(lang: ko) } }
           }
-          rewards { quantity resource { type uid name rarity } }
+          rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
         }
       }
     }
@@ -254,6 +258,7 @@ const eventContentShopContentQuery = graphql(`
 `);
 
 type EventContentData = NonNullable<EventContentShopContentQuery["eventContent"]>;
+type EventStageRewardResource = NonNullable<EventContentData["stages"][number]["rewards"][number]["resource"]>;
 
 function transformStages(stages: NonNullable<EventContentData>["stages"]) {
   const stageDifficulty: Record<string, number> = { story: 0, stage: 1 };
@@ -272,10 +277,29 @@ function transformStages(stages: NonNullable<EventContentData>["stages"]) {
             name: reward.resource.name,
             category: "category" in reward.resource ? (reward.resource as { category: string }).category : "",
             rarity: reward.resource.rarity,
+            resourceType: getStageRewardResourceType(reward.resource.__typename),
+            imageUrl: getEmblemImageUrl(reward.resource),
           }
         : null,
     })),
   }));
+}
+
+function getStageRewardResourceType(resourceType: EventStageRewardResource["__typename"]): ResourceTypeEnum {
+  switch (resourceType) {
+    case "Currency":
+      return ResourceTypeEnum.Currency;
+    case "Emblem":
+      return ResourceTypeEnum.Emblem;
+    case "Equipment":
+      return ResourceTypeEnum.Equipment;
+    case "Furniture":
+      return ResourceTypeEnum.Furniture;
+    case "Item":
+      return ResourceTypeEnum.Item;
+    default:
+      throw new Error("Unsupported event stage reward resource type");
+  }
 }
 
 function hasShopResourceAndPaymentResource(
@@ -285,6 +309,12 @@ function hasShopResourceAndPaymentResource(
   paymentResource: NonNullable<NonNullable<EventContentData>["shopResources"][number]["paymentResource"]>;
 } {
   return resource.resource !== null && resource.paymentResource !== null;
+}
+
+function getEmblemImageUrl(resource: object): string | null | undefined {
+  if (!("imageUrl" in resource)) return undefined;
+  const { imageUrl } = resource;
+  return typeof imageUrl === "string" || imageUrl === null ? imageUrl : undefined;
 }
 
 function transformShopResources(shopResources: NonNullable<EventContentData>["shopResources"]): ShopResource[] {
@@ -299,14 +329,30 @@ function transformShopResources(shopResources: NonNullable<EventContentData>["sh
               startQuantity: tier.startQuantity,
               quantity: tier.quantity,
               unitPrice: tier.unitPrice,
-              paymentResource: tier.paymentResource,
+              paymentResource: {
+                type: tier.paymentResource.type,
+                uid: tier.paymentResource.uid,
+                name: tier.paymentResource.name,
+                imageUrl: getEmblemImageUrl(tier.paymentResource),
+              },
             },
           ]
         : [],
     ),
     shopAmount: r.shopAmount,
-    resource: r.resource,
-    paymentResource: r.paymentResource,
+    resource: {
+      type: r.resource.type,
+      uid: r.resource.uid,
+      name: r.resource.name,
+      rarity: r.resource.rarity,
+      imageUrl: getEmblemImageUrl(r.resource),
+    },
+    paymentResource: {
+      type: r.paymentResource.type,
+      uid: r.paymentResource.uid,
+      name: r.paymentResource.name,
+      imageUrl: getEmblemImageUrl(r.paymentResource),
+    },
   }));
 }
 
@@ -364,6 +410,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
             resourceType: payment.resource.type,
             resourceUid: payment.resource.uid,
             resourceName: payment.resource.name,
+            imageUrl: getEmblemImageUrl(payment.resource),
             quantity: payment.quantity,
           },
         ]
@@ -376,6 +423,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
       resourceName: paymentResource.name,
+      imageUrl: getEmblemImageUrl(paymentResource),
       quantity: serverConfig.payment.quantity,
     },
     payments,
@@ -388,6 +436,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
                 resourceType: payment.resource.type,
                 resourceUid: payment.resource.uid,
                 resourceName: payment.resource.name,
+                imageUrl: getEmblemImageUrl(payment.resource),
                 quantityMin: payment.quantityMin,
                 quantityExpected: payment.quantityExpected,
                 quantityMax: payment.quantityMax,
@@ -403,6 +452,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
                 resourceType: r.resource.type,
                 resourceUid: r.resource.uid,
                 resourceName: r.resource.name,
+                imageUrl: getEmblemImageUrl(r.resource),
                 quantity: r.quantity,
                 rarity: r.resource.rarity ?? undefined,
               },

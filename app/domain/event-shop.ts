@@ -14,6 +14,7 @@ export type RewardItem = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
   resourceName?: string;
+  imageUrl?: string | null;
   quantity: number;
   rarity?: number;
 };
@@ -37,6 +38,7 @@ export type DiceNodeReward = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
   resourceName?: string;
+  imageUrl?: string | null;
   quantity: number;
 };
 
@@ -62,6 +64,7 @@ export type MinigameConfig = {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
     resourceName?: string;
+    imageUrl?: string | null;
     quantity: number;
   };
   payments: MinigamePayment[];
@@ -73,6 +76,7 @@ export type MinigamePayment = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
   resourceName?: string;
+  imageUrl?: string | null;
   quantity: number;
 };
 
@@ -80,6 +84,7 @@ export type MinigamePaymentRange = {
   resourceType: ResourceTypeEnum;
   resourceUid: string;
   resourceName?: string;
+  imageUrl?: string | null;
   quantityMin: number;
   quantityExpected: number;
   quantityMax: number;
@@ -100,6 +105,8 @@ export type Stage = {
       name: string;
       category: string;
       rarity: number;
+      resourceType?: ResourceTypeEnum;
+      imageUrl?: string | null;
     } | null;
   }[];
 };
@@ -111,12 +118,14 @@ export type ShopResource = {
     uid: string;
     name: string;
     rarity: number;
+    imageUrl?: string | null;
   };
   resourceAmount: number;
   paymentResource: {
     type: ResourceTypeEnum;
     uid: string;
     name: string;
+    imageUrl?: string | null;
   };
   purchaseTiers: {
     tierIndex: number;
@@ -127,6 +136,7 @@ export type ShopResource = {
       type: ResourceTypeEnum;
       uid: string;
       name: string;
+      imageUrl?: string | null;
     };
   }[];
   shopAmount: number | null;
@@ -149,5 +159,6 @@ export type CollectableResource = {
   type: ResourceTypeEnum;
   uid: string;
   name: string;
+  imageUrl?: string | null;
   forPayment: boolean;
 };

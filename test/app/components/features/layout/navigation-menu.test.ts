@@ -82,7 +82,7 @@ describe("navigation surface projections", () => {
   it("exposes exactly the approved mobile candidates and labels in order", () => {
     const options = getMobileNavigationOptions(navigationOptions);
 
-    expect(options).toHaveLength(12);
+    expect(options).toHaveLength(13);
     expect(options.map((item) => item.mobileNavigationId)).toEqual([
       "feed",
       "students",
@@ -92,6 +92,7 @@ describe("navigation surface projections", () => {
       "pyroxene-planner",
       "student-growth-planner",
       "resource-planner",
+      "furniture-catalog",
       "event-shop-calculator",
       "relationship-calculator",
       "strategy-timeline",
@@ -106,6 +107,7 @@ describe("navigation surface projections", () => {
       "청휘석 플래너",
       "성장 플래너",
       "재화 관리",
+      "가구 도감",
       "상점 계산기",
       "인연 계산기",
       "공략",
@@ -140,6 +142,7 @@ describe("navigation surface projections", () => {
       "/utils/pyroxene",
       "/utils/growth/students",
       "/utils/resources/inventory",
+      "/utils/furniture",
       "/utils/event-shop",
       "/utils/relationship",
       "/timelines",
@@ -157,6 +160,7 @@ describe("navigation surface projections", () => {
       "청휘석 플래너",
       "학생 성장 플래너",
       "재화 관리/파밍 계산기",
+      "가구 도감",
       "이벤트 상점 계산기",
       "인연 랭크 계산기",
       "공략 타임라인",

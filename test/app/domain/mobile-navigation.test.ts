@@ -13,6 +13,13 @@ describe("mobile navigation preference", () => {
     ]);
   });
 
+  it("accepts the furniture catalog as a mobile navigation choice", () => {
+    expect(normalizeMobileNavigationIds(["furniture-catalog", "resource-planner"])).toEqual([
+      "furniture-catalog",
+      "resource-planner",
+    ]);
+  });
+
   it.each([
     undefined,
     null,

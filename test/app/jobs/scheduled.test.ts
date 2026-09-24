@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { syncEventContentsList } from "~/models/event-content";
+import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -57,6 +58,10 @@ jest.mock("~/models/item-catalog", () => ({
   getItemCatalogResources: jest.fn(),
 }));
 
+jest.mock("~/models/furniture-catalog", () => ({
+  getFurnitureCatalogSource: jest.fn(),
+}));
+
 jest.mock("~/models/stage", () => ({
   getCampaignFarmingStages: jest.fn(),
 }));
@@ -109,6 +114,9 @@ const mockedWarmActiveUpcomingEventContent = warmActiveUpcomingEventContent as j
   typeof warmActiveUpcomingEventContent
 >;
 const mockedGetItemCatalogResources = getItemCatalogResources as jest.MockedFunction<typeof getItemCatalogResources>;
+const mockedGetFurnitureCatalogSource = getFurnitureCatalogSource as jest.MockedFunction<
+  typeof getFurnitureCatalogSource
+>;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
 const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
 const mockedGetStudentSkillCosts = getStudentSkillCosts as jest.MockedFunction<typeof getStudentSkillCosts>;
@@ -148,6 +156,7 @@ beforeEach(() => {
   mockedSyncEventContentsList.mockResolvedValue([]);
   mockedWarmActiveUpcomingEventContent.mockResolvedValue();
   mockedGetItemCatalogResources.mockResolvedValue([]);
+  mockedGetFurnitureCatalogSource.mockResolvedValue({ furnitures: [], themes: [] });
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
   mockedReconcileOcrJobs.mockResolvedValue();
   mockedPublishPendingOcrOutbox.mockResolvedValue(0);
@@ -195,6 +204,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedWarmActiveUpcomingEventContent).toHaveBeenCalledWith(env, false, expect.anything());
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
+    expect(mockedGetFurnitureCatalogSource).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
     expect(kv.put).toHaveBeenCalledWith(
       SOURCE_WARM_MARKER_KEY,
@@ -246,6 +256,7 @@ describe("runScheduledJobs", () => {
     expect(mockedSyncAllTimelineContentsMeta).not.toHaveBeenCalled();
     expect(mockedSyncEventContentsList).not.toHaveBeenCalled();
     expect(mockedGetItemCatalogResources).not.toHaveBeenCalled();
+    expect(mockedGetFurnitureCatalogSource).not.toHaveBeenCalled();
     expect(mockedGetCampaignFarmingStages).not.toHaveBeenCalled();
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);

@@ -5,6 +5,7 @@ import { getLogger } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 import { syncEventContentsList } from "~/models/event-content";
+import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import { getStudentGearData, getStudentSkillCosts } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
@@ -106,6 +107,7 @@ async function refreshForcedSourceCaches(env: Env, ctx?: ExecutionContext): Prom
     () => syncAllTimelineContentsMeta(env, true, { ctx }),
     () => syncEventContentsList(env, true),
     () => getItemCatalogResources(env, true),
+    () => getFurnitureCatalogSource(env, true),
     () => getCampaignFarmingStages(env, true),
   ];
 

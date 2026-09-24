@@ -354,6 +354,32 @@ export enum DrillTypeEnum {
   Shooting = 'shooting'
 }
 
+export type Emblem = ResourceInterface & {
+  __typename?: 'Emblem';
+  category: Scalars['String']['output'];
+  description: Maybe<Scalars['String']['output']>;
+  imageUrl: Maybe<Scalars['String']['output']>;
+  name: Scalars['String']['output'];
+  rarity: Scalars['Int']['output'];
+  type: ResourceTypeEnum;
+  uid: Scalars['String']['output'];
+};
+
+
+export type EmblemDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type EmblemImageUrlArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type EmblemNameArgs = {
+  lang?: InputMaybe<Language>;
+};
+
 export type Equipment = ResourceInterface & {
   __typename?: 'Equipment';
   category: Scalars['String']['output'];
@@ -379,6 +405,7 @@ export type EventContent = {
   __typename?: 'EventContent';
   bonuses: Array<EventContentBonus>;
   minigameConfigs: Array<EventMinigameConfig>;
+  missions: Array<EventContentMission>;
   name: Scalars['String']['output'];
   schedules: Array<EventContentSchedule>;
   shopResources: Array<EventContentShopResource>;
@@ -393,6 +420,11 @@ export type EventContentBonusesArgs = {
 
 
 export type EventContentMinigameConfigsArgs = {
+  runType: RunTypeEnum;
+};
+
+
+export type EventContentMissionsArgs = {
   runType: RunTypeEnum;
 };
 
@@ -423,6 +455,65 @@ export type EventContentBonusStudent = {
 
 export type EventContentBonusStudentNameArgs = {
   lang?: InputMaybe<Language>;
+};
+
+export type EventContentMission = {
+  __typename?: 'EventContentMission';
+  category: EventContentMissionCategoryEnum;
+  completionExtension: Scalars['Boolean']['output'];
+  completionReferenceMissionUid: Maybe<Scalars['String']['output']>;
+  completionReferenceRequiredCount: Scalars['Int']['output'];
+  condition: EventContentMissionCondition;
+  conditionReward: Maybe<EventContentMissionReward>;
+  description: EventContentMissionDescription;
+  displayOrder: Scalars['Int']['output'];
+  preMissionUid: Maybe<Scalars['String']['output']>;
+  resetType: EventContentMissionResetTypeEnum;
+  reward: EventContentMissionReward;
+  uid: Scalars['String']['output'];
+};
+
+
+export type EventContentMissionDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export enum EventContentMissionCategoryEnum {
+  Daily = 'daily',
+  EventAchievement = 'eventAchievement',
+  EventFixed = 'eventFixed'
+}
+
+export type EventContentMissionCondition = {
+  __typename?: 'EventContentMissionCondition';
+  count: Scalars['Int']['output'];
+  parameterTags: Array<Scalars['String']['output']>;
+  parameters: Array<Scalars['String']['output']>;
+  type: Scalars['String']['output'];
+};
+
+export type EventContentMissionDescription = {
+  __typename?: 'EventContentMissionDescription';
+  parameters: Array<EventContentMissionDescriptionParameter>;
+  template: Scalars['String']['output'];
+};
+
+export type EventContentMissionDescriptionParameter = {
+  __typename?: 'EventContentMissionDescriptionParameter';
+  emphasized: Scalars['Boolean']['output'];
+  id: Scalars['Int']['output'];
+  text: Scalars['String']['output'];
+};
+
+export enum EventContentMissionResetTypeEnum {
+  Daily = 'daily',
+  None = 'none'
+}
+
+export type EventContentMissionReward = {
+  __typename?: 'EventContentMissionReward';
+  amount: Scalars['Int']['output'];
+  resource: ResourceInterface;
 };
 
 export type EventContentSchedule = {
@@ -540,10 +631,12 @@ export type Furniture = ResourceInterface & {
   __typename?: 'Furniture';
   category: Scalars['String']['output'];
   description: Maybe<Scalars['String']['output']>;
+  imageUrl: Scalars['String']['output'];
   name: Scalars['String']['output'];
   rarity: Scalars['Int']['output'];
   subCategory: Maybe<Scalars['String']['output']>;
   tags: Array<Scalars['String']['output']>;
+  theme: Maybe<FurnitureTheme>;
   type: ResourceTypeEnum;
   uid: Scalars['String']['output'];
 };
@@ -555,6 +648,38 @@ export type FurnitureDescriptionArgs = {
 
 
 export type FurnitureNameArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type FurnitureTemplatePreview = {
+  __typename?: 'FurnitureTemplatePreview';
+  imageUrl: Scalars['String']['output'];
+  thumbnailUrl: Scalars['String']['output'];
+  title: Scalars['String']['output'];
+  uid: Scalars['String']['output'];
+};
+
+
+export type FurnitureTemplatePreviewTitleArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+export type FurnitureTheme = {
+  __typename?: 'FurnitureTheme';
+  description: Maybe<Scalars['String']['output']>;
+  furnitures: Array<Furniture>;
+  name: Scalars['String']['output'];
+  previews: Array<FurnitureTemplatePreview>;
+  uid: Scalars['String']['output'];
+};
+
+
+export type FurnitureThemeDescriptionArgs = {
+  lang?: InputMaybe<Language>;
+};
+
+
+export type FurnitureThemeNameArgs = {
   lang?: InputMaybe<Language>;
 };
 
@@ -924,6 +1049,9 @@ export type Query = {
   equipments: Array<Equipment>;
   eventContent: Maybe<EventContent>;
   eventContents: Array<EventContent>;
+  furnitureTheme: Maybe<FurnitureTheme>;
+  furnitureThemes: Array<FurnitureTheme>;
+  furnitures: Array<Furniture>;
   gachaGroup: Maybe<GachaGroup>;
   items: Array<Item>;
   jointFiringDrill: Maybe<JointFiringDrill>;
@@ -971,6 +1099,16 @@ export type QueryEventContentArgs = {
 
 
 export type QueryEventContentsArgs = {
+  uids: InputMaybe<Array<Scalars['String']['input']>>;
+};
+
+
+export type QueryFurnitureThemeArgs = {
+  uid: Scalars['String']['input'];
+};
+
+
+export type QueryFurnituresArgs = {
   uids: InputMaybe<Array<Scalars['String']['input']>>;
 };
 
@@ -1245,6 +1383,7 @@ export type ResourceInterfaceNameArgs = {
 
 export enum ResourceTypeEnum {
   Currency = 'currency',
+  Emblem = 'emblem',
   Equipment = 'equipment',
   Furniture = 'furniture',
   Item = 'item'
@@ -2196,50 +2335,64 @@ export type EventContentShopContentQueryVariables = Exact<{
 
 export type EventContentShopContentQuery = { __typename?: 'Query', eventContent: { __typename?: 'EventContent', stages: Array<{ __typename?: 'EventContentStage', uid: string, stageNumber: string, stageIndex: number, stageType: string, enterCostAmount: number, rewards: Array<{ __typename?: 'EventContentStageReward', amount: number, probability: string, tag: string, resource:
           | { __typename: 'Currency', uid: string, name: string, rarity: number }
+          | { __typename: 'Emblem', imageUrl: string | null, uid: string, name: string, rarity: number }
           | { __typename: 'Equipment', uid: string, name: string, rarity: number }
           | { __typename: 'Furniture', uid: string, name: string, rarity: number }
           | { __typename: 'Item', category: string, uid: string, name: string, rarity: number }
          | null }> }>, shopResources: Array<{ __typename?: 'EventContentShopResource', uid: string, resourceAmount: number, shopAmount: number | null, resource:
         | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+        | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
         | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
         | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
         | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
        | null, paymentResource:
         | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
+        | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
         | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
         | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
         | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
        | null, purchaseTiers: Array<{ __typename?: 'EventContentShopResourcePurchaseTier', tierIndex: number, startQuantity: number, quantity: number | null, unitPrice: number, paymentResource:
           | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
+          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
          | null }> }>, bonuses: Array<{ __typename?: 'EventContentBonus', percentage: string, resource:
         | { __typename?: 'Currency', uid: string, name: string }
+        | { __typename?: 'Emblem', uid: string, name: string }
         | { __typename?: 'Equipment', uid: string, name: string }
         | { __typename?: 'Furniture', uid: string, name: string }
         | { __typename?: 'Item', uid: string, name: string }
        | null, student: { __typename?: 'EventContentBonusStudent', uid: string, name: string, role: RoleEnum } | null }>, minigameConfigs: Array<{ __typename?: 'EventMinigameConfig', minigameType: string, payment: { __typename?: 'EventMinigamePayment', quantity: number, resource:
           | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
+          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
          | null }, payments: Array<{ __typename?: 'EventMinigamePayment', quantity: number, resource:
           | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
+          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
           | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
          | null }>, rewardGroups: Array<{ __typename?: 'EventMinigameRewardGroup', condition: { __typename?: 'EventMinigameSlotCondition', type: string, value: number | null, values: Array<number> | null, divisor: number | null, remainders: Array<number> | null }, payments: Array<{ __typename?: 'EventMinigamePaymentRange', quantityMin: number, quantityExpected: number, quantityMax: number, quantityVariable: boolean, resource:
             | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
+            | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
             | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
             | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
             | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
            | null }>, rewards: Array<{ __typename?: 'EventMinigameRewardItem', quantity: number, resource:
             | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+            | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
             | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
             | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
             | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
            | null }> }> }> } | null };
+
+export type FurnitureCatalogSourceQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type FurnitureCatalogSourceQuery = { __typename?: 'Query', furnitures: Array<{ __typename?: 'Furniture', uid: string, name: string, imageUrl: string, rarity: number, category: string, subCategory: string | null, tags: Array<string> }>, furnitureThemes: Array<{ __typename?: 'FurnitureTheme', uid: string, name: string, description: string | null, previews: Array<{ __typename?: 'FurnitureTemplatePreview', uid: string, title: string, imageUrl: string, thumbnailUrl: string }>, furnitures: Array<{ __typename?: 'Furniture', uid: string }> }> };
 
 export type GrowthSkillCostsQueryVariables = Exact<{
   uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
@@ -2320,16 +2473,19 @@ export type FarmingStagesQueryVariables = Exact<{
 
 export type FarmingStagesQuery = { __typename?: 'Query', stages: Array<{ __typename?: 'Stage', uid: string, name: string | null, stageNumber: string | null, area: number | null, difficulty: number | null, terrain: string | null, entryCosts: Array<{ __typename?: 'StageEntryCost', amount: number, resource:
         | { __typename?: 'Currency', uid: string, name: string, type: ResourceTypeEnum }
+        | { __typename?: 'Emblem', uid: string, name: string, type: ResourceTypeEnum }
         | { __typename?: 'Equipment', uid: string, name: string, type: ResourceTypeEnum }
         | { __typename?: 'Furniture', uid: string, name: string, type: ResourceTypeEnum }
         | { __typename?: 'Item', uid: string, name: string, type: ResourceTypeEnum }
        }>, rewards: Array<{ __typename?: 'StageReward', rewardType: string, rewardTag: string | null, probability: number | null, resource:
         | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+        | { __typename: 'Emblem', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Furniture', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Item', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
        | null, gachaGroup: { __typename?: 'GachaGroup', items: Array<{ __typename?: 'GachaGroupItem', chance: number | null, resource:
             | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
+            | { __typename: 'Emblem', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
             | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
             | { __typename: 'Furniture', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
             | { __typename: 'Item', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
@@ -2402,7 +2558,8 @@ export type StudentWeaponAvailabilityQuery = { __typename?: 'Query', students: A
 
 export const EventContentScheduleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventContentSchedule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventContent"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedules"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"region"}},{"kind":"Field","name":{"kind":"Name","value":"runType"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}}]}}]} as unknown as DocumentNode<EventContentScheduleQuery, EventContentScheduleQueryVariables>;
 export const EventContentsListDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventContentsList"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventContents"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"schedules"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"region"}},{"kind":"Field","name":{"kind":"Name","value":"runType"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}}]}}]} as unknown as DocumentNode<EventContentsListQuery, EventContentsListQueryVariables>;
-export const EventContentShopContentDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventContentShopContent"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"runType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RunTypeEnum"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventContent"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stages"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"stageNumber"}},{"kind":"Field","name":{"kind":"Name","value":"stageIndex"}},{"kind":"Field","name":{"kind":"Name","value":"stageType"}},{"kind":"Field","name":{"kind":"Name","value":"enterCostAmount"}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"probability"}},{"kind":"Field","name":{"kind":"Name","value":"tag"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"shopResources"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"resourceAmount"}},{"kind":"Field","name":{"kind":"Name","value":"shopAmount"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"paymentResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"purchaseTiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tierIndex"}},{"kind":"Field","name":{"kind":"Name","value":"startQuantity"}},{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"unitPrice"}},{"kind":"Field","name":{"kind":"Name","value":"paymentResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"bonuses"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"percentage"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"student"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"role"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"minigameConfigs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"minigameType"}},{"kind":"Field","name":{"kind":"Name","value":"payment"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"payments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewardGroups"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"condition"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"values"}},{"kind":"Field","name":{"kind":"Name","value":"divisor"}},{"kind":"Field","name":{"kind":"Name","value":"remainders"}}]}},{"kind":"Field","name":{"kind":"Name","value":"payments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantityMin"}},{"kind":"Field","name":{"kind":"Name","value":"quantityExpected"}},{"kind":"Field","name":{"kind":"Name","value":"quantityMax"}},{"kind":"Field","name":{"kind":"Name","value":"quantityVariable"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<EventContentShopContentQuery, EventContentShopContentQueryVariables>;
+export const EventContentShopContentDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventContentShopContent"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"runType"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"RunTypeEnum"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventContent"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"stages"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"stageNumber"}},{"kind":"Field","name":{"kind":"Name","value":"stageIndex"}},{"kind":"Field","name":{"kind":"Name","value":"stageType"}},{"kind":"Field","name":{"kind":"Name","value":"enterCostAmount"}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"probability"}},{"kind":"Field","name":{"kind":"Name","value":"tag"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"shopResources"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"resourceAmount"}},{"kind":"Field","name":{"kind":"Name","value":"shopAmount"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"paymentResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"purchaseTiers"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"tierIndex"}},{"kind":"Field","name":{"kind":"Name","value":"startQuantity"}},{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"unitPrice"}},{"kind":"Field","name":{"kind":"Name","value":"paymentResource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"bonuses"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"percentage"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"student"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"role"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"minigameConfigs"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"runType"},"value":{"kind":"Variable","name":{"kind":"Name","value":"runType"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"minigameType"}},{"kind":"Field","name":{"kind":"Name","value":"payment"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"payments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewardGroups"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"condition"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"value"}},{"kind":"Field","name":{"kind":"Name","value":"values"}},{"kind":"Field","name":{"kind":"Name","value":"divisor"}},{"kind":"Field","name":{"kind":"Name","value":"remainders"}}]}},{"kind":"Field","name":{"kind":"Name","value":"payments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantityMin"}},{"kind":"Field","name":{"kind":"Name","value":"quantityExpected"}},{"kind":"Field","name":{"kind":"Name","value":"quantityMax"}},{"kind":"Field","name":{"kind":"Name","value":"quantityVariable"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"rewards"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"quantity"}},{"kind":"Field","name":{"kind":"Name","value":"resource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Emblem"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"imageUrl"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"lang"},"value":{"kind":"EnumValue","value":"ko"}}]}]}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<EventContentShopContentQuery, EventContentShopContentQueryVariables>;
+export const FurnitureCatalogSourceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"FurnitureCatalogSource"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"furnitures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}},{"kind":"Field","name":{"kind":"Name","value":"tags"}}]}},{"kind":"Field","name":{"kind":"Name","value":"furnitureThemes"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"description"}},{"kind":"Field","name":{"kind":"Name","value":"previews"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"title"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"thumbnailUrl"}}]}},{"kind":"Field","name":{"kind":"Name","value":"furnitures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]} as unknown as DocumentNode<FurnitureCatalogSourceQuery, FurnitureCatalogSourceQueryVariables>;
 export const GrowthSkillCostsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GrowthSkillCosts"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","alias":{"kind":"Name","value":"ex2"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"2"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"ex3"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"3"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"ex4"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"4"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"ex5"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"5"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal2"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"2"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal3"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"3"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal4"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"4"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal5"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"5"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal6"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"6"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal7"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"7"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal8"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"8"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}},{"kind":"Field","alias":{"kind":"Name","value":"normal9"},"name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"normal"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"9"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<GrowthSkillCostsQuery, GrowthSkillCostsQueryVariables>;
 export const GrowthStudentGearsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GrowthStudentGears"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"gear"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"growthItems"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"gearTier"}},{"kind":"Field","name":{"kind":"Name","value":"amount"}},{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<GrowthStudentGearsQuery, GrowthStudentGearsQueryVariables>;
 export const UserResourceInventoryCatalogDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"UserResourceInventoryCatalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"Item"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"category"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"equipments"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}},{"kind":"Field","name":{"kind":"Name","value":"type"}},{"kind":"Field","name":{"kind":"Name","value":"category"}}]}}]}}]} as unknown as DocumentNode<UserResourceInventoryCatalogQuery, UserResourceInventoryCatalogQueryVariables>;
