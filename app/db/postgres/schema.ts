@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
@@ -1283,6 +1283,9 @@ export const pgStudentSummaryRevisionsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    unique("student_summary_revisions_identity_uidx")
+      .on(table.studentUid, table.sourceHash, table.provider, table.model, table.promptVersion, table.publishedAt)
+      .nullsNotDistinct(),
     index("student_summary_revisions_student_published_at_id_idx").on(
       table.studentUid,
       table.publishedAt.desc(),
