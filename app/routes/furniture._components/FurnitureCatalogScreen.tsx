@@ -694,7 +694,7 @@ function FurnitureCard({
   return (
     <article
       aria-label={`${item.name} · ${FURNITURE_RARITY_LABELS[item.rarity]} 등급`}
-      className="flex w-24 shrink-0 flex-col items-center gap-1 rounded-md px-0.5 py-1.5"
+      className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-md px-0.5 py-1.5"
     >
       <div
         className="relative flex h-12 w-full items-center justify-center md:h-14"
@@ -706,10 +706,10 @@ function FurnitureCard({
         {item.name}
       </h3>
       {signedIn ? (
-        <div className="mx-auto w-20">
+        <div className="w-full">
+          <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">보유</p>
           <NumberInput
             nullable
-            label="보유"
             fullWidth
             minValue={0}
             showDecrease={false}
