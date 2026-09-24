@@ -27,14 +27,14 @@ describe("furniture catalog inventory state", () => {
     ).toEqual({ ownedKinds: 1, totalKinds: 3, notOwnedKinds: 1, unregisteredKinds: 1 });
   });
 
-  it("filters only confirmed zero-quantity furniture as not owned", () => {
+  it("filters furniture by name or theme", () => {
     const items = [
       { name: "Oak Chair", themeUids: ["cafe"], status: "owned" as const },
       { name: "Oak Table", themeUids: ["cafe"], status: "not-owned" as const },
       { name: "Lamp", themeUids: [], status: "unregistered" as const },
     ];
 
-    expect(filterFurnitureCatalogItems(items, { query: "oak", notOwnedOnly: true })).toEqual([items[1]]);
+    expect(filterFurnitureCatalogItems(items, { query: "oak" })).toEqual(items.slice(0, 2));
     expect(filterFurnitureCatalogItems(items, { themeUid: "cafe" })).toEqual(items.slice(0, 2));
     expect(filterFurnitureCatalogItems(items, { query: "LAMP" })).toEqual([items[2]]);
   });

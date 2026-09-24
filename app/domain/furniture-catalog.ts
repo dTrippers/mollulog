@@ -64,7 +64,6 @@ export type FurnitureCatalogProgress = {
 export type FurnitureCatalogFilter = {
   query?: string;
   themeUid?: string | null;
-  notOwnedOnly?: boolean;
 };
 
 export function getFurnitureInventoryStatus(quantity: number | undefined): FurnitureInventoryStatus {
@@ -100,7 +99,7 @@ export function getFurnitureCatalogProgress(
   };
 }
 
-export function filterFurnitureCatalogItems<T extends Pick<FurnitureCatalogItem, "name" | "themeUids" | "status">>(
+export function filterFurnitureCatalogItems<T extends Pick<FurnitureCatalogItem, "name" | "themeUids">>(
   items: T[],
   filter: FurnitureCatalogFilter,
 ): T[] {
@@ -108,7 +107,6 @@ export function filterFurnitureCatalogItems<T extends Pick<FurnitureCatalogItem,
   return items.filter((item) => {
     if (query && !item.name.toLocaleLowerCase().includes(query)) return false;
     if (filter.themeUid && !item.themeUids.includes(filter.themeUid)) return false;
-    if (filter.notOwnedOnly && item.status !== "not-owned") return false;
     return true;
   });
 }

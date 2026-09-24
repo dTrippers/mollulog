@@ -1,5 +1,5 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { ArchiveBoxIcon, FunnelIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArchiveBoxIcon, MagnifyingGlassIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
@@ -9,7 +9,6 @@ import {
   NumberInput,
   PanelBody,
   PanelSearchField,
-  PanelSwitchRow,
   ResourceCard,
   SectionCard,
 } from "~/components/primitives";
@@ -72,7 +71,6 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const [activeThemeUid, setActiveThemeUid] = useState<string | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<FurnitureCatalogViewTheme["previews"][number] | null>(null);
   const [query, setQuery] = useState("");
-  const [notOwnedOnly, setNotOwnedOnly] = useState(false);
   const [ownedQuantities, setOwnedQuantities] = useState(view?.ownedQuantities ?? {});
   const [draftValues, setDraftValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -232,7 +230,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     );
   }, [liveView, query]);
   const itemsToFilter = mode === "themes" && activeTheme ? activeTheme.items : (liveView?.items ?? []);
-  const visibleItems = filterFurnitureCatalogItems(itemsToFilter, { query, notOwnedOnly: signedIn && notOwnedOnly });
+  const visibleItems = filterFurnitureCatalogItems(itemsToFilter, { query });
 
   const handleQuantityChange = (furnitureUid: string, value: string) => {
     if (value !== "") pendingUnregisteredClearUidsRef.current.delete(furnitureUid);
@@ -293,10 +291,6 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     setQuery(nextQuery);
   };
 
-  const handleNotOwnedOnlyChange = (nextNotOwnedOnly: boolean) => {
-    setNotOwnedOnly(nextNotOwnedOnly);
-  };
-
   const handleModeChange = (nextMode: "themes" | "all") => {
     setSelectedPreview(null);
     setMode(nextMode);
@@ -348,8 +342,8 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
       }
       panels={[
         {
-          title: "검색 및 필터",
-          Icon: FunnelIcon,
+          title: "검색",
+          Icon: MagnifyingGlassIcon,
           children: (
             <PanelBody>
               <PanelSearchField
@@ -359,16 +353,6 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
                 value={query}
                 onChange={handleQueryChange}
               />
-              {mode === "all" || activeTheme ? (
-                <PanelSwitchRow
-                  title="미보유만 보기"
-                  description={!signedIn ? "로그인 후 사용" : undefined}
-                  name="furniture-not-owned-only"
-                  checked={signedIn && notOwnedOnly}
-                  disabled={!signedIn}
-                  onChange={handleNotOwnedOnlyChange}
-                />
-              ) : null}
             </PanelBody>
           ),
         },
