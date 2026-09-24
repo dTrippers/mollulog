@@ -1,5 +1,4 @@
 import { ArrowRightIcon, FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
-import dayjs from "dayjs";
 import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
@@ -20,6 +19,7 @@ import {
   type WalkthroughTimelineRecord,
 } from "~/domain/walkthrough-timeline";
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
+import { formatInstant } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
 import {
   defenseTypeColor,
@@ -70,12 +70,17 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       WALKTHROUGH_TIMELINE_DEFENSE_TYPES.find((defenseType) => defenseType === searchParams.get("defenseType")) ?? null,
     maxDifficulty:
       WALKTHROUGH_TIMELINE_DIFFICULTIES.find((difficulty) => difficulty === searchParams.get("difficulty")) ?? null,
+    autoOnly: searchParams.get("auto") === "1",
     likedOnly,
   };
   const timelines = await listPostgresVisibleWalkthroughTimelines(
     env,
     {
-      ...filters,
+      bossUid: filters.bossUid,
+      terrain: filters.terrain,
+      defenseType: filters.defenseType,
+      maxDifficulty: filters.maxDifficulty,
+      isAuto: filters.autoOnly ? true : undefined,
       likedByUserId: likedOnly ? sensei.id : null,
       viewerUserId: sensei?.id,
     },
@@ -213,6 +218,11 @@ export default function WalkthroughTimelineCatalogPage() {
                 atLeastOne
                 size="sm"
               />
+              <PanelSwitchRow
+                title="오토 공략만 보기"
+                checked={filters.autoOnly}
+                onChange={(checked) => setFilter("auto", checked ? "1" : null)}
+              />
               {hasRecruitedStudentData || signedIn ? (
                 <div className="space-y-0">
                   {hasRecruitedStudentData ? (
@@ -245,33 +255,46 @@ export default function WalkthroughTimelineCatalogPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-2">
-          <WalkthroughTimelineCard
-            timeline={DEMO_WALKTHROUGH_TIMELINE}
-            bossName={
-              bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ?? DEMO_WALKTHROUGH_BOSS_NAME
-            }
-            studentsByUid={studentsByUid}
-            recruitedStudentTiers={recruitedStudentTiers}
-            showUnrecruitedStudents={false}
-            engagement={{ liked: false, likeCount: 0 }}
-            signedIn={signedIn}
-            demo
-          />
-          {timelines.map((timeline) => (
-            <WalkthroughTimelineCard
-              key={timeline.uid}
-              timeline={timeline}
-              bossName={bosses.find((boss) => boss.uid === timeline.bossUid)?.name ?? null}
-              author={authorsById[timeline.userId]}
-              studentsByUid={studentsByUid}
-              recruitedStudentTiers={recruitedStudentTiers}
-              showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
-              engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
-              signedIn={signedIn}
-            />
-          ))}
-        </div>
+        {filters.autoOnly && timelines.length === 0 ? (
+          <div
+            className="rounded-lg bg-card p-8 text-center text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            조건에 맞는 오토 공략이 없어요.
+          </div>
+        ) : (
+          <div className="grid gap-4 xl:grid-cols-2">
+            {!filters.autoOnly ? (
+              <WalkthroughTimelineCard
+                timeline={DEMO_WALKTHROUGH_TIMELINE}
+                bossName={
+                  bosses.find((boss) => boss.uid === DEMO_WALKTHROUGH_TIMELINE.bossUid)?.name ??
+                  DEMO_WALKTHROUGH_BOSS_NAME
+                }
+                studentsByUid={studentsByUid}
+                recruitedStudentTiers={recruitedStudentTiers}
+                showUnrecruitedStudents={false}
+                engagement={{ liked: false, likeCount: 0 }}
+                signedIn={signedIn}
+                demo
+              />
+            ) : null}
+            {timelines.map((timeline) => (
+              <WalkthroughTimelineCard
+                key={timeline.uid}
+                timeline={timeline}
+                bossName={bosses.find((boss) => boss.uid === timeline.bossUid)?.name ?? null}
+                author={authorsById[timeline.userId]}
+                studentsByUid={studentsByUid}
+                recruitedStudentTiers={recruitedStudentTiers}
+                showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
+                engagement={engagementByUid[timeline.uid] ?? { liked: false, likeCount: 0 }}
+                signedIn={signedIn}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </Page>
   );
@@ -342,7 +365,7 @@ function WalkthroughTimelineCard({
               <span>
                 {demo
                   ? "데모 타임라인으로 동작을 확인해보세요"
-                  : `${author ? `@${author} · ` : ""}${dayjs(timeline.updatedAt).format("YYYY.MM.DD")}`}
+                  : `${author ? `@${author} · ` : ""}${formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}`}
               </span>
               {timeline.visibility !== "public" ? (
                 <span className="rounded-full bg-muted px-2 py-0.5">
@@ -355,6 +378,7 @@ function WalkthroughTimelineCard({
         <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
           <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
           <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
+          {timeline.isAuto ? <AttributeBadge text="오토" color={null} /> : null}
           <AttributeBadge
             text={defenseTypeLocale[timeline.defenseType]}
             color={defenseTypeColor[timeline.defenseType]}

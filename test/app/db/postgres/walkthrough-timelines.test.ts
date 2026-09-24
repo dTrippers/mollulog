@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
 import {
+  clonePostgresWalkthroughTimeline,
   createPostgresWalkthroughTimeline,
   createPostgresWalkthroughTimelineWithCommunityPost,
   deletePostgresWalkthroughTimelineWithCommunityPost,
@@ -16,13 +17,17 @@ import type { WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline"
 
 const document: WalkthroughTimelineDocument = {
   type: "walkthrough_timeline",
-  schemaVersion: 1,
+  schemaVersion: 2,
   partySize: 6,
   context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
   parties: [],
 };
 
-function postgresRow(uid = "timeline-1", visibility: "private" | "unlisted" | "public" = "public"): unknown[] {
+function postgresRow(
+  uid = "timeline-1",
+  visibility: "private" | "unlisted" | "public" = "public",
+  isAuto = false,
+): unknown[] {
   return [
     1,
     uid,
@@ -30,6 +35,7 @@ function postgresRow(uid = "timeline-1", visibility: "private" | "unlisted" | "p
     "공략",
     "공략 설명",
     visibility,
+    isAuto,
     "boss-1",
     "indoor",
     "heavy",
@@ -66,6 +72,7 @@ const input = {
   title: "공략",
   description: "공략 설명",
   visibility: "public" as const,
+  isAuto: false,
   bossUid: "boss-1",
   terrain: "indoor" as const,
   defenseType: "heavy" as const,
@@ -122,6 +129,31 @@ describe("PostgreSQL walkthrough timelines", () => {
     expect(visibleListSql).toContain('"raid_walkthroughs"."visibility" = $1');
     expect(visibleListSql).toContain('"raid_walkthroughs"."user_id" = $2');
     expect(visibleListSql).toContain(" or ");
+  });
+
+  it("filters auto guides in the PostgreSQL query", async () => {
+    const { client, query } = createClient(() => [postgresRow("timeline-auto", "public", true)]);
+    await expect(
+      listPostgresVisibleWalkthroughTimelines(env, { isAuto: true }, { createClient: () => client }),
+    ).resolves.toMatchObject([{ uid: "timeline-auto", isAuto: true }]);
+    const sql = (query.mock.calls[0]?.[0] as { text: string }).text;
+    expect(sql).toContain('"raid_walkthroughs"."is_auto" = $');
+  });
+
+  it("preserves the auto declaration when cloning a guide", async () => {
+    const { client, query } = createClient((sql) =>
+      sql.includes('insert into "raid_walkthroughs"')
+        ? [postgresRow("timeline-source", "private", true)]
+        : [postgresRow("timeline-source", "public", true)],
+    );
+    await expect(
+      clonePostgresWalkthroughTimeline(env, "timeline-source", 22, { createClient: () => client }),
+    ).resolves.toMatchObject({ isAuto: true, visibility: "private" });
+    const insertCall = query.mock.calls.find(([config]) => {
+      const sql = typeof config === "string" ? config : config.text;
+      return sql.includes('insert into "raid_walkthroughs"');
+    });
+    expect(insertCall?.[1]).toContain(true);
   });
 
   it("applies mute policy to public and profile walkthrough lists", async () => {
@@ -191,7 +223,7 @@ describe("PostgreSQL walkthrough timelines", () => {
 
   it("rejects a malformed JSONB document instead of rendering fallback data", async () => {
     const malformed = postgresRow();
-    malformed[10] = { type: "walkthrough_timeline", schemaVersion: 999 };
+    malformed[11] = { type: "walkthrough_timeline", schemaVersion: 999 };
     const { client } = createClient(() => [malformed]);
     await expect(getPostgresWalkthroughTimeline(env, "timeline-1", { createClient: () => client })).rejects.toThrow(
       "schemaVersion",

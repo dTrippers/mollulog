@@ -16,6 +16,7 @@ import { createPostgresWalkthroughTimelineWithCommunityPost } from "~/db/postgre
 import {
   isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
+  WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
   type WalkthroughParty,
 } from "~/domain/walkthrough-timeline";
 import { ActionValidationError, isActionValidationError } from "~/lib/action-errors";
@@ -55,6 +56,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const formData = await request.formData();
   let document: ReturnType<typeof parseWalkthroughTimelineDocument>;
   let visibility: "private" | "unlisted" | "public";
+  let isAuto: boolean;
   try {
     document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
     const rawVisibility = String(formData.get("visibility") ?? "private");
@@ -62,6 +64,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       throw new ActionValidationError("공개 범위를 확인해주세요.");
     }
     visibility = rawVisibility;
+    const rawIsAuto = formData.get("isAuto");
+    if (rawIsAuto !== "true" && rawIsAuto !== "false") {
+      throw new ActionValidationError("오토 여부를 확인해주세요.");
+    }
+    isAuto = rawIsAuto === "true";
   } catch (error) {
     return data<ActionData>(
       { error: isActionValidationError(error) ? error.message : "입력값을 확인해주세요." },
@@ -77,6 +84,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         title: String(formData.get("title") ?? ""),
         description: String(formData.get("description") ?? ""),
         visibility,
+        isAuto,
         bossUid: document.context.bossUid,
         terrain: document.context.terrain,
         defenseType: document.context.defenseType,
@@ -151,9 +159,10 @@ export default function NewWalkthroughTimelinePage() {
           initialTitle=""
           initialDescription=""
           initialVisibility="private"
+          initialIsAuto={false}
           initialDocument={{
             type: "walkthrough_timeline",
-            schemaVersion: 1,
+            schemaVersion: WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
             partySize: boss.partySize,
             context: {
               bossUid: boss.uid,

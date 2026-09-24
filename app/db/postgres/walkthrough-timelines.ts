@@ -31,6 +31,7 @@ export type WalkthroughTimelineWriteInput = {
   title: string;
   description: string;
   visibility: WalkthroughTimelineVisibility;
+  isAuto: boolean;
   bossUid: string;
   terrain: WalkthroughTimelineTerrain;
   defenseType: WalkthroughTimelineDefenseType;
@@ -45,6 +46,7 @@ function toDomain(row: WalkthroughTimelineRow): WalkthroughTimelineRecord {
     title: row.title,
     description: row.description,
     visibility: row.visibility,
+    isAuto: row.isAuto,
     bossUid: row.bossUid,
     terrain: row.terrain,
     defenseType: row.defenseType,
@@ -82,6 +84,7 @@ function normalizeWriteInput(input: WalkthroughTimelineWriteInput): WalkthroughT
   const title = input.title.trim();
   const description = input.description.trim();
   if (!title) throw new ActionValidationError("타임라인 제목을 입력해주세요.");
+  if (typeof input.isAuto !== "boolean") throw new ActionValidationError("오토 여부를 확인해주세요.");
   if (
     input.document.context.bossUid !== input.bossUid ||
     input.document.context.terrain !== input.terrain ||
@@ -285,6 +288,7 @@ export async function listPostgresPublicWalkthroughTimelinesByBoss(
     terrain?: WalkthroughTimelineTerrain | null;
     defenseType?: WalkthroughTimelineDefenseType | null;
     maxDifficulty?: WalkthroughTimelineDifficulty | null;
+    isAuto?: boolean;
   },
   options: PostgresWalkthroughTimelineOptions = {},
 ): Promise<WalkthroughTimelineRecord[]> {
@@ -298,6 +302,7 @@ export async function listPostgresPublicWalkthroughTimelines(
     terrain?: WalkthroughTimelineTerrain | null;
     defenseType?: WalkthroughTimelineDefenseType | null;
     maxDifficulty?: WalkthroughTimelineDifficulty | null;
+    isAuto?: boolean;
     likedByUserId?: number | null;
   } = {},
   options: PostgresWalkthroughTimelineOptions = {},
@@ -312,6 +317,7 @@ export async function listPostgresVisibleWalkthroughTimelines(
     terrain?: WalkthroughTimelineTerrain | null;
     defenseType?: WalkthroughTimelineDefenseType | null;
     maxDifficulty?: WalkthroughTimelineDifficulty | null;
+    isAuto?: boolean;
     likedByUserId?: number | null;
     viewerUserId?: number | null;
   } = {},
@@ -337,6 +343,7 @@ export async function listPostgresVisibleWalkthroughTimelines(
       if (filters.maxDifficulty) {
         conditions.push(eq(pgWalkthroughTimelinesTable.maxDifficulty, filters.maxDifficulty));
       }
+      if (filters.isAuto !== undefined) conditions.push(eq(pgWalkthroughTimelinesTable.isAuto, filters.isAuto));
       if (filters.likedByUserId) {
         conditions.push(
           exists(
@@ -378,6 +385,7 @@ export async function clonePostgresWalkthroughTimeline(
       title: `${source.title} 복사본`,
       description: source.description,
       visibility: "private",
+      isAuto: source.isAuto,
       bossUid: source.bossUid,
       terrain: source.terrain,
       defenseType: source.defenseType,

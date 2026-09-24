@@ -52,6 +52,7 @@ type EditorProps = {
   initialTitle: string;
   initialDescription: string;
   initialVisibility: WalkthroughTimelineVisibility;
+  initialIsAuto: boolean;
   initialDocument: WalkthroughTimelineDocument;
   students: ImportStudent[];
   bosses: BossOption[];
@@ -345,6 +346,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
       initialTitle,
       initialDescription,
       initialVisibility,
+      initialIsAuto,
       initialDocument,
       students,
       bosses,
@@ -360,6 +362,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
     const [title, setTitle] = useState(initialTitle);
     const [description, setDescription] = useState(initialDescription);
     const [visibility, setVisibility] = useState(initialVisibility);
+    const [isAuto, setIsAuto] = useState(initialIsAuto);
     const [document, setDocument] = useState(initialDocument);
     const [past, setPast] = useState<WalkthroughTimelineDocument[]>([]);
     const [future, setFuture] = useState<WalkthroughTimelineDocument[]>([]);
@@ -376,6 +379,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
         title: initialTitle,
         description: initialDescription,
         visibility: initialVisibility,
+        isAuto: initialIsAuto,
         document: initialDocument,
         importText: "",
       }),
@@ -383,8 +387,8 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
     const studentsByUid = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
     const importDraft = useMemo(() => extractCertainTimelineImport(importText, students), [importText, students]);
     const currentState = useMemo(
-      () => ({ title, description, visibility, document, importText }),
-      [description, document, importText, title, visibility],
+      () => ({ title, description, visibility, isAuto, document, importText }),
+      [description, document, importText, isAuto, title, visibility],
     );
     const currentStateJson = useMemo(() => JSON.stringify(currentState), [currentState]);
     const hasChanges = currentStateJson !== initialStateRef.current;
@@ -398,6 +402,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
             title?: unknown;
             description?: unknown;
             visibility?: unknown;
+            isAuto?: unknown;
             document?: unknown;
             importText?: unknown;
           };
@@ -406,9 +411,13 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
             if (typeof draft.title !== "string" || !isWalkthroughTimelineVisibility(draft.visibility)) {
               throw new Error("invalid timeline draft");
             }
+            if (draft.isAuto !== undefined && typeof draft.isAuto !== "boolean") {
+              throw new Error("invalid timeline draft auto flag");
+            }
             setTitle(draft.title.slice(0, 100));
             setDescription(typeof draft.description === "string" ? draft.description : initialDescription);
             setVisibility(draft.visibility);
+            setIsAuto(draft.isAuto === undefined ? initialIsAuto : draft.isAuto);
             setDocument(restoredDocument);
             if (typeof draft.importText === "string" && draft.importText) {
               setImportText(draft.importText);
@@ -421,7 +430,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
       } finally {
         setDraftReady(true);
       }
-    }, [draftStorageKey, initialDescription]);
+    }, [draftStorageKey, initialDescription, initialIsAuto]);
 
     useEffect(() => {
       if (navigation.state === "idle" && isSavingRef.current) {
@@ -567,7 +576,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
         ref={formRef}
         id="walkthrough-timeline-editor"
         method="post"
-        className="space-y-5"
+        className="space-y-5 pb-24 md:pb-0"
         onSubmit={() => {
           isSavingRef.current = true;
           try {
@@ -578,6 +587,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
         }}
       >
         <input type="hidden" name="document" value={JSON.stringify(document)} />
+        <input type="hidden" name="isAuto" value={String(isAuto)} />
         <section className="space-y-3">
           <h2 className="text-lg font-bold">공략 정보</h2>
           <div className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
@@ -606,6 +616,16 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
                   </select>
                 </Field>
               </div>
+
+              <label className="flex min-h-10 items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={isAuto}
+                  onChange={(event) => setIsAuto(event.target.checked)}
+                  className="size-4 rounded border-input accent-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
+                />
+                <span>오토로 클리어하는 공략이에요</span>
+              </label>
 
               <Textarea
                 name="description"

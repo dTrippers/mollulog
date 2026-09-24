@@ -8,7 +8,6 @@ import {
   PencilSquareIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
-import dayjs from "dayjs";
 import { QRCodeSVG } from "qrcode.react";
 import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
@@ -23,7 +22,7 @@ import {
   WalkthroughTimelineViewerLauncher,
 } from "~/components/features/walkthrough-timeline";
 import { AttributeBadge, Button, Callout } from "~/components/primitives";
-import { PanelBody, PanelBodyRow } from "~/components/primitives/PanelBody";
+import { PanelBody } from "~/components/primitives/PanelBody";
 import {
   canPostgresWalkthroughTimelineReceiveLike,
   getPostgresWalkthroughTimelineLikeSummaries,
@@ -38,7 +37,7 @@ import {
   DEMO_WALKTHROUGH_TIMELINE,
   isDemoWalkthroughTimelineUid,
 } from "~/domain/walkthrough-timeline-demo";
-import { compareInstantDesc } from "~/lib/date-time";
+import { compareInstantDesc, formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
@@ -112,7 +111,9 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       : null,
     detailUrl,
     viewerUrl,
-    studentsByUid: Object.fromEntries(Object.entries(students).map(([uid, student]) => [uid, { name: student.name }])),
+    studentsByUid: Object.fromEntries(
+      Object.entries(students).map(([uid, student]) => [uid, { name: student.name, equipments: student.equipments }]),
+    ),
   };
 };
 
@@ -182,6 +183,29 @@ export default function WalkthroughTimelineDetailPage() {
   const deleteControlRef = useRef<HTMLDivElement>(null);
   const isDeleteSubmitting = navigation.state !== "idle" && navigation.formData?.get("intent") === "delete";
   const items = flattenTimelineParties(timeline.document.parties);
+  const visibilityLabel =
+    timeline.visibility === "public" ? "전체 공개" : timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기";
+  const authorSummary = demo ? (
+    <span className="text-sm">몰루로그</span>
+  ) : author ? (
+    <Link to={`/@${author.username}`} className="text-sm text-primary hover:underline">
+      @{author.username}
+    </Link>
+  ) : (
+    <span className="text-sm">작성자 정보 없음</span>
+  );
+  const visibilitySummary = (
+    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+      {timeline.visibility === "public" ? (
+        <LockOpenIcon className="size-3.5" />
+      ) : timeline.visibility === "unlisted" ? (
+        <LinkIcon className="size-3.5" />
+      ) : (
+        <LockClosedIcon className="size-3.5" />
+      )}
+      {visibilityLabel}
+    </span>
+  );
 
   useEffect(() => {
     if (!actionData?.error || navigation.state !== "idle") return;
@@ -193,6 +217,38 @@ export default function WalkthroughTimelineDetailPage() {
       title="공략 타임라인 상세"
       description={timeline.title}
       contentWidth="full"
+      belowTitle={
+        <div className="lg:hidden">
+          <div className="relative overflow-hidden rounded-md border border-border bg-background px-3 py-3">
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-y-0 right-0 w-2/3 bg-contain bg-right bg-no-repeat opacity-70"
+              style={{ backgroundImage: `url(${bossImageUrl(timeline.bossUid)})` }}
+            />
+            <div className="relative">
+              <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
+                <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
+                <AttributeBadge
+                  text={defenseTypeLocale[timeline.defenseType]}
+                  color={defenseTypeColor[timeline.defenseType]}
+                />
+                {timeline.isAuto ? <AttributeBadge text="오토" color={null} /> : null}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                {authorSummary}
+                {visibilitySummary}
+                {!demo ? (
+                  <span className="rounded-sm bg-background px-1 text-foreground">
+                    수정 {formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}
+                  </span>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </div>
+      }
       panels={[
         {
           title: "공략 정보",
@@ -213,47 +269,47 @@ export default function WalkthroughTimelineDetailPage() {
                 </div>
               </div>
 
-              <PanelBodyRow title="방어 타입">
-                <AttributeBadge
-                  text={defenseTypeLocale[timeline.defenseType]}
-                  color={defenseTypeColor[timeline.defenseType]}
-                />
-              </PanelBodyRow>
-              <PanelBodyRow title="난이도">
-                <span className="text-sm">{difficultyLocale[timeline.maxDifficulty]}</span>
-              </PanelBodyRow>
-              <PanelBodyRow title="공개 범위">
-                <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                  {timeline.visibility === "public" ? (
-                    <LockOpenIcon className="size-3.5" />
-                  ) : timeline.visibility === "unlisted" ? (
-                    <LinkIcon className="size-3.5" />
-                  ) : (
-                    <LockClosedIcon className="size-3.5" />
-                  )}
-                  {timeline.visibility === "public"
-                    ? "전체 공개"
-                    : timeline.visibility === "unlisted"
-                      ? "목록 미노출"
-                      : "나만 보기"}
-                </span>
-              </PanelBodyRow>
-              <PanelBodyRow title="작성자">
-                {demo ? (
-                  <span className="text-sm">몰루로그</span>
-                ) : author ? (
-                  <Link to={`/@${author.username}`} className="text-sm text-primary hover:underline">
-                    @{author.username}
-                  </Link>
-                ) : (
-                  <span className="text-sm">작성자 정보 없음</span>
-                )}
-              </PanelBodyRow>
-              {!demo ? (
-                <PanelBodyRow title="수정일">
-                  <span className="text-sm tabular-nums">{dayjs(timeline.updatedAt).format("YYYY.MM.DD")}</span>
-                </PanelBodyRow>
-              ) : null}
+              <dl className="text-sm">
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <dt className="shrink-0 text-muted-foreground">방어 타입</dt>
+                  <dd className="max-w-[70%] break-words text-right font-medium">
+                    <AttributeBadge
+                      text={defenseTypeLocale[timeline.defenseType]}
+                      color={defenseTypeColor[timeline.defenseType]}
+                    />
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <dt className="shrink-0 text-muted-foreground">난이도</dt>
+                  <dd className="max-w-[70%] break-words text-right font-medium">
+                    {difficultyLocale[timeline.maxDifficulty]}
+                  </dd>
+                </div>
+                {timeline.isAuto ? (
+                  <div className="flex items-center justify-between gap-3 py-1.5">
+                    <dt className="shrink-0 text-muted-foreground">클리어 방식</dt>
+                    <dd className="max-w-[70%] break-words text-right font-medium">
+                      <AttributeBadge text="오토" color={null} />
+                    </dd>
+                  </div>
+                ) : null}
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <dt className="shrink-0 text-muted-foreground">공개 범위</dt>
+                  <dd className="max-w-[70%] break-words text-right font-medium">{visibilitySummary}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-3 py-1.5">
+                  <dt className="shrink-0 text-muted-foreground">작성자</dt>
+                  <dd className="max-w-[70%] break-words text-right font-medium">{authorSummary}</dd>
+                </div>
+                {!demo ? (
+                  <div className="flex items-center justify-between gap-3 py-1.5">
+                    <dt className="shrink-0 text-muted-foreground">수정일</dt>
+                    <dd className="max-w-[70%] break-words text-right font-medium tabular-nums">
+                      {formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
 
               {owner ? (
                 <div className="space-y-2">
@@ -273,9 +329,7 @@ export default function WalkthroughTimelineDetailPage() {
                     <Form
                       method="post"
                       onSubmit={(event) => {
-                        if (!window.confirm("이 타임라인을 삭제할까요?")) {
-                          event.preventDefault();
-                        }
+                        if (!window.confirm("이 타임라인을 삭제할까요?")) event.preventDefault();
                       }}
                     >
                       <div ref={deleteControlRef}>
@@ -322,43 +376,43 @@ export default function WalkthroughTimelineDetailPage() {
             tone="info"
           />
         ) : null}
-        <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <div className="grid gap-5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-            <div>
-              <h2 className="font-bold">타임라인 뷰어 열기</h2>
-              <p className="mt-1 text-sm text-muted-foreground">
-                공략 타임라인을 새 창에 띄워놓고 총력전/대결전을 진행해보세요
-              </p>
-              <div className="mt-4">
-                <WalkthroughTimelineViewerLauncher
-                  items={items}
-                  studentsByUid={studentsByUid}
-                  viewerUrl={viewerUrl}
-                  shareUrl={detailUrl}
-                  shareTitle={timeline.title}
-                />
+        <section
+          className="flex flex-wrap items-start justify-between gap-3 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5"
+          aria-labelledby="timeline-viewer-actions"
+        >
+          <div className="min-w-0 flex-1">
+            <h2 id="timeline-viewer-actions" className="sr-only">
+              뷰어와 공유
+            </h2>
+            <WalkthroughTimelineViewerLauncher
+              items={items}
+              studentsByUid={studentsByUid}
+              viewerUrl={viewerUrl}
+              shareUrl={detailUrl}
+              shareTitle={timeline.title}
+            />
+            {timeline.description ? (
+              <div className="mt-3">
+                <h2 className="sr-only">공략 설명</h2>
+                <p className="whitespace-pre-wrap break-words text-sm leading-6">{timeline.description}</p>
               </div>
-            </div>
-            <div
-              role="img"
-              aria-label="모바일 뷰어 접속 QR 코드"
-              className="flex w-fit flex-col items-center gap-2 rounded-md border border-border bg-background p-2 text-center transition-colors hover:bg-muted"
-            >
-              <QRCodeSVG value={viewerUrl} size={104} level="M" includeMargin aria-label="모바일 뷰어 접속 QR 코드" />
-              <span className="text-xs text-muted-foreground">모바일에서 열기</span>
-            </div>
+            ) : null}
+          </div>
+          <div
+            role="img"
+            aria-label="모바일 뷰어 접속 QR 코드"
+            className="hidden w-fit flex-col items-center gap-2 rounded-md bg-background p-2 text-center md:flex"
+          >
+            <QRCodeSVG value={viewerUrl} size={88} level="M" includeMargin aria-label="모바일 뷰어 접속 QR 코드" />
+            <span className="text-xs text-muted-foreground">모바일에서 열기</span>
           </div>
         </section>
 
-        <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-          <h2 className="font-bold">타임라인</h2>
-          {timeline.description ? (
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-6">{timeline.description}</p>
-          ) : null}
-          <div className="mt-4">
-            <WalkthroughTimelineReadOnly parties={timeline.document.parties} studentsByUid={studentsByUid} />
-          </div>
-        </section>
+        <WalkthroughTimelineReadOnly
+          parties={timeline.document.parties}
+          partySize={timeline.document.partySize}
+          studentsByUid={studentsByUid}
+        />
 
         <div className="flex flex-wrap gap-2">
           {!demo && timeline.visibility === "public" ? (

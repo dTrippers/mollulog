@@ -48,13 +48,14 @@ export async function loadTimelineEditorOptions(env: Env, userId: number) {
     bossesByUid.set(boss.uid, boss);
   }
   return {
-    students: students.map(({ uid, name, familyName, altNames, initialTier, role }) => ({
+    students: students.map(({ uid, name, familyName, altNames, initialTier, role, equipments }) => ({
       uid,
       name,
       familyName,
       altNames,
       initialTier,
       role,
+      equipments,
     })),
     bosses: [...bossesByUid.values()]
       .filter((boss) => boss.defenseTypes.size > 0 && boss.terrains.size > 0)

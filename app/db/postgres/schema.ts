@@ -652,6 +652,7 @@ export const pgWalkthroughTimelinesTable = pgTable(
     title: text().notNull(),
     description: text().notNull().default(""),
     visibility: text().$type<WalkthroughTimelineVisibility>().notNull(),
+    isAuto: boolean("is_auto").notNull().default(false),
     bossUid: text("boss_uid").notNull(),
     terrain: text().$type<WalkthroughTimelineTerrain>().notNull(),
     defenseType: text("defense_type").$type<WalkthroughTimelineDefenseType>().notNull(),
@@ -665,6 +666,11 @@ export const pgWalkthroughTimelinesTable = pgTable(
     index("raid_walkthroughs_user_updated_at_idx").on(table.userId, table.updatedAt.desc()),
     index("raid_walkthroughs_boss_visibility_updated_at_idx").on(
       table.bossUid,
+      table.visibility,
+      table.updatedAt.desc(),
+    ),
+    index("raid_walkthroughs_auto_visibility_updated_at_idx").on(
+      table.isAuto,
       table.visibility,
       table.updatedAt.desc(),
     ),

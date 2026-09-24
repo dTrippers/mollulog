@@ -8,6 +8,7 @@ export type ImportStudent = {
   altNames?: string[];
   initialTier?: number;
   role?: "striker" | "special";
+  equipments?: string[];
 };
 
 export type ImportToken = {

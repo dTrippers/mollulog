@@ -1,4 +1,5 @@
-export const WALKTHROUGH_TIMELINE_SCHEMA_VERSION = 1 as const;
+export const LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION = 1 as const;
+export const WALKTHROUGH_TIMELINE_SCHEMA_VERSION = 2 as const;
 export const WALKTHROUGH_TIMELINE_LIMITS = {
   parties: 20,
   stepsPerParty: 200,
@@ -99,6 +100,7 @@ export type WalkthroughTimelineRecord = {
   title: string;
   description: string;
   visibility: WalkthroughTimelineVisibility;
+  isAuto: boolean;
   bossUid: string;
   terrain: WalkthroughTimelineTerrain;
   defenseType: WalkthroughTimelineDefenseType;
@@ -200,7 +202,12 @@ function assertStep(value: unknown, path: string): asserts value is TimelineStep
   }
 }
 
-function assertParty(value: unknown, path: string, partySize: 6 | 10): asserts value is WalkthroughParty {
+function assertParty(
+  value: unknown,
+  path: string,
+  partySize: 6 | 10,
+  schemaVersion: typeof LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION | typeof WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
+): asserts value is WalkthroughParty {
   if (!isObject(value)) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path} 값이 올바른 party가 아니에요.`);
   }
@@ -214,8 +221,14 @@ function assertParty(value: unknown, path: string, partySize: 6 | 10): asserts v
   ) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.startingSkillStudentUids 값이 올바르지 않아요.`);
   }
-  if (value.startingSkillStudentUids.length > 3) {
-    throw new InvalidWalkthroughTimelineDocumentError(`${path}.startingSkillStudentUids는 3개를 넘을 수 없어요.`);
+  const maximumStartingSkills = schemaVersion === LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION ? 3 : partySize - 1;
+  if (value.startingSkillStudentUids.length > maximumStartingSkills) {
+    throw new InvalidWalkthroughTimelineDocumentError(
+      `${path}.startingSkillStudentUids는 ${maximumStartingSkills}개를 넘을 수 없어요.`,
+    );
+  }
+  if (new Set(value.startingSkillStudentUids).size !== value.startingSkillStudentUids.length) {
+    throw new InvalidWalkthroughTimelineDocumentError(`${path}.startingSkillStudentUids에 중복된 학생이 있어요.`);
   }
   if (!Array.isArray(value.units)) {
     throw new InvalidWalkthroughTimelineDocumentError(`${path}.units 값이 배열이 아니에요.`);
@@ -273,7 +286,10 @@ export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTim
   if (!isObject(value) || value.type !== "walkthrough_timeline") {
     throw new InvalidWalkthroughTimelineDocumentError("walkthrough_timeline 문서가 아니에요.");
   }
-  if (value.schemaVersion !== WALKTHROUGH_TIMELINE_SCHEMA_VERSION) {
+  if (
+    value.schemaVersion !== LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION &&
+    value.schemaVersion !== WALKTHROUGH_TIMELINE_SCHEMA_VERSION
+  ) {
     throw new InvalidWalkthroughTimelineDocumentError(
       `지원하지 않는 schemaVersion이에요: ${String(value.schemaVersion)}`,
     );
@@ -304,8 +320,24 @@ export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTim
     );
   }
   value.parties.forEach((party, index) => {
-    assertParty(party, `parties[${index}]`, partySize);
+    assertParty(party, `parties[${index}]`, partySize, value.schemaVersion as 1 | 2);
   });
+
+  if (value.schemaVersion === LEGACY_WALKTHROUGH_TIMELINE_SCHEMA_VERSION) {
+    const parties = (value.parties as WalkthroughParty[]).map((party) => {
+      const slotByStudentUid = new Map(
+        party.units.flatMap((unit) => (unit.studentUid ? [[unit.studentUid, unit.slot] as const] : [])),
+      );
+      return {
+        ...party,
+        startingSkillStudentUids: [...party.startingSkillStudentUids].sort(
+          (left, right) => (slotByStudentUid.get(left) ?? Number.MAX_SAFE_INTEGER) - (slotByStudentUid.get(right) ?? Number.MAX_SAFE_INTEGER),
+        ),
+      };
+    });
+    return { ...value, schemaVersion: WALKTHROUGH_TIMELINE_SCHEMA_VERSION, parties } as WalkthroughTimelineDocument;
+  }
+
   return value as WalkthroughTimelineDocument;
 }
 

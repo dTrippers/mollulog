@@ -54,6 +54,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const formData = await request.formData();
   let document: ReturnType<typeof parseWalkthroughTimelineDocument>;
   let visibility: "private" | "unlisted" | "public";
+  let isAuto: boolean;
   try {
     document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
     const rawVisibility = String(formData.get("visibility") ?? "private");
@@ -61,6 +62,11 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       throw new ActionValidationError("공개 범위를 확인해주세요.");
     }
     visibility = rawVisibility;
+    const rawIsAuto = formData.get("isAuto");
+    if (rawIsAuto !== "true" && rawIsAuto !== "false") {
+      throw new ActionValidationError("오토 여부를 확인해주세요.");
+    }
+    isAuto = rawIsAuto === "true";
   } catch (error) {
     return data<ActionData>(
       { error: isActionValidationError(error) ? error.message : "입력값을 확인해주세요." },
@@ -77,6 +83,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         title: String(formData.get("title") ?? ""),
         description: String(formData.get("description") ?? ""),
         visibility,
+        isAuto,
         bossUid: document.context.bossUid,
         terrain: document.context.terrain,
         defenseType: document.context.defenseType,
@@ -148,6 +155,7 @@ export default function EditWalkthroughTimelinePage() {
           initialTitle={timeline.title}
           initialDescription={timeline.description}
           initialVisibility={timeline.visibility}
+          initialIsAuto={timeline.isAuto}
           initialDocument={timeline.document}
           students={students}
           bosses={bosses}

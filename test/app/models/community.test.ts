@@ -1,5 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import type { WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline";
+import { WALKTHROUGH_TIMELINE_SCHEMA_VERSION, type WalkthroughTimelineDocument } from "~/domain/walkthrough-timeline";
 import {
   createPlaintextCommunityPostBlocks,
   createWalkthroughTimelineCommunityPostBlocks,
@@ -54,7 +54,7 @@ describe("community post block helpers", () => {
   it("builds a compact walkthrough projection from the first party", () => {
     const document: WalkthroughTimelineDocument = {
       type: "walkthrough_timeline",
-      schemaVersion: 1,
+      schemaVersion: WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
       partySize: 6,
       context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
       parties: [
