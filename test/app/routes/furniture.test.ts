@@ -4,7 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import { saveUserFurnitureInventory, USER_FURNITURE_INVENTORY_QUANTITY_ERROR } from "~/models/user-furniture-inventory";
-import { action, shouldRevalidate } from "~/routes/utils.furniture";
+import { action, shouldRevalidate } from "~/routes/furniture";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
@@ -31,7 +31,7 @@ const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest
 function createActionArgs(body: unknown) {
   return {
     context: { cloudflare: { env, ctx: undefined } },
-    request: new Request("http://127.0.0.1/utils/furniture", {
+    request: new Request("http://127.0.0.1/furniture", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
@@ -40,14 +40,14 @@ function createActionArgs(body: unknown) {
 }
 
 function createRevalidationArgs(overrides: Partial<ShouldRevalidateFunctionArgs> = {}) {
-  const currentUrl = new URL("http://127.0.0.1/utils/furniture");
+  const currentUrl = new URL("http://127.0.0.1/furniture");
   return {
     currentUrl,
     currentParams: {},
     nextUrl: new URL(currentUrl),
     nextParams: {},
     formMethod: "POST",
-    formAction: "/utils/furniture.data",
+    formAction: "/furniture.data",
     formEncType: "application/json",
     formData: undefined,
     json: { operation: "set" },
@@ -80,7 +80,7 @@ describe("furniture route revalidation", () => {
   });
 
   it("also recognizes the route pathname when the action does not use the single-fetch suffix", () => {
-    expect(shouldRevalidate(createRevalidationArgs({ formAction: "/utils/furniture" }))).toBe(false);
+    expect(shouldRevalidate(createRevalidationArgs({ formAction: "/furniture" }))).toBe(false);
   });
 
   it("preserves default revalidation for manual refreshes, other actions, and navigation", () => {
@@ -98,7 +98,7 @@ describe("furniture route revalidation", () => {
     expect(shouldRevalidate(createRevalidationArgs({ json: { operation: "other" } }))).toBe(true);
     expect(shouldRevalidate(createRevalidationArgs({ formAction: "/utils/resources.data" }))).toBe(true);
     expect(
-      shouldRevalidate(createRevalidationArgs({ nextUrl: new URL("http://127.0.0.1/utils/furniture?search=chair") })),
+      shouldRevalidate(createRevalidationArgs({ nextUrl: new URL("http://127.0.0.1/furniture?search=chair") })),
     ).toBe(true);
   });
 });

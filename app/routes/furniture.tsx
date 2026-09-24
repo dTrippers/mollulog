@@ -9,8 +9,8 @@ import {
   USER_FURNITURE_INVENTORY_QUANTITY_ERROR,
 } from "~/models/user-furniture-inventory";
 import { getFurnitureCatalogView } from "~/views/furniture-catalog";
-import type { FurnitureInventoryActionResult } from "./utils.furniture._components/action-data";
-import FurnitureCatalogScreen from "./utils.furniture._components/FurnitureCatalogScreen";
+import type { FurnitureInventoryActionResult } from "./furniture._components/action-data";
+import FurnitureCatalogScreen from "./furniture._components/FurnitureCatalogScreen";
 
 export const meta: MetaFunction = () => [
   { title: "가구 도감 | 몰루로그" },
@@ -50,7 +50,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { env, ctx } = context.cloudflare;
-  const logger = getLogger(env, ctx, { route: "utils.furniture.loader" });
+  const logger = getLogger(env, ctx, { route: "furniture.loader" });
   const currentUser = await getActiveSensei(env, request, ctx);
 
   try {
@@ -68,7 +68,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
 export async function action({ context, request }: ActionFunctionArgs): Promise<Response> {
   const { env, ctx } = context.cloudflare;
-  const logger = getLogger(env, ctx, { route: "utils.furniture.action" });
+  const logger = getLogger(env, ctx, { route: "furniture.action" });
   const submitted = await request.json<unknown>().catch(() => null);
   if (!isRecord(submitted)) return actionResponse({ ok: false, requestId: "", error: "요청을 확인할 수 없어요." }, 400);
 

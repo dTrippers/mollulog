@@ -166,7 +166,9 @@ export function getNavigationSectionStates(
       pathname.startsWith("/events") ||
       pathname.startsWith("/raids") ||
       isStudentActive ||
-      pathname.startsWith("/mainstory"),
+      pathname.startsWith("/mainstory") ||
+      pathname === "/furniture" ||
+      pathname.startsWith("/furniture/"),
     isUtilActive:
       pathname.startsWith("/utils") ||
       pathname.startsWith("/timelines") ||
@@ -279,6 +281,19 @@ export function getNavigationCatalog({
       isActive: pathname.startsWith("/mainstory"),
     },
     {
+      group: "content",
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
+      to: "/furniture",
+      name: "가구 도감",
+      mobileNavigationId: "furniture-catalog",
+      mobileLabel: "가구 도감",
+      favoriteId: "furniture-catalog",
+      description: "테마별 가구 구성과 보유 현황을 확인해보세요",
+      OutlineIcon: RectangleGroupIconOutline,
+      SolidIcon: RectangleGroupIconSolid,
+      isActive: pathname === "/furniture" || pathname.startsWith("/furniture/"),
+    },
+    {
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/pyroxene",
@@ -317,19 +332,6 @@ export function getNavigationCatalog({
       OutlineIcon: ArchiveBoxIconOutline,
       SolidIcon: ArchiveBoxIconSolid,
       isActive: pathname.startsWith("/utils/resources"),
-    },
-    {
-      group: "planner",
-      surfaces: ["desktop", "mobileBottom", "more", "search"],
-      to: "/utils/furniture",
-      name: "가구 도감",
-      mobileNavigationId: "furniture-catalog",
-      mobileLabel: "가구 도감",
-      favoriteId: "furniture-catalog",
-      description: "테마별 가구 구성과 보유 현황을 확인해보세요",
-      OutlineIcon: RectangleGroupIconOutline,
-      SolidIcon: RectangleGroupIconSolid,
-      isActive: pathname === "/utils/furniture" || pathname.startsWith("/utils/furniture/"),
     },
     {
       group: "planner",

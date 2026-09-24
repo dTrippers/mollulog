@@ -323,7 +323,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
           <FurnitureThemeSummary theme={activeTheme} signedIn={signedIn} onPreviewSelect={setSelectedPreview} />
         ) : undefined
       }
-      backward={activeTheme ? { title: "테마 목록", to: "/utils/furniture", onClick: handleThemeLeave } : undefined}
+      backward={activeTheme ? { title: "테마 목록", to: "/furniture", onClick: handleThemeLeave } : undefined}
       contentWidth="full"
       maxWidth="wide"
       screens={
@@ -417,6 +417,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
             <FurnitureCollection
               items={visibleItems}
               signedIn={signedIn}
+              showCategoryCounts
               draftValues={draftValues}
               saveStates={saveStates}
               onQuantityChange={handleQuantityChange}
@@ -429,6 +430,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
             <FurnitureCollection
               items={visibleItems}
               signedIn={signedIn}
+              showCategoryCounts={false}
               draftValues={draftValues}
               saveStates={saveStates}
               onQuantityChange={handleQuantityChange}
@@ -470,7 +472,7 @@ function ThemeGrid({
           <button
             key={theme.uid}
             type="button"
-            className="group flex h-full flex-col justify-start overflow-hidden rounded-lg bg-card text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+            className="group flex h-full cursor-pointer flex-col justify-start overflow-hidden rounded-lg bg-card text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
             onClick={() => onSelect(theme.uid)}
             aria-label={`${theme.name} 테마 상세 보기`}
           >
@@ -487,12 +489,12 @@ function ThemeGrid({
                 </div>
               )}
             </div>
-            <div className="space-y-2 p-4">
-              <h2 className="line-clamp-2 break-keep font-semibold text-foreground">{theme.name}</h2>
+            <div className="space-y-1.5 p-3">
+              <h2 className="line-clamp-2 break-keep text-sm font-semibold text-foreground">{theme.name}</h2>
               {signedIn && theme.items.some((item) => item.quantity !== null) ? (
                 <ProgressSummary progress={theme.progress} />
               ) : (
-                <p className="text-sm text-muted-foreground">가구 {theme.items.length.toLocaleString()}종</p>
+                <p className="text-xs text-muted-foreground">가구 {theme.items.length.toLocaleString()}종</p>
               )}
             </div>
           </button>
@@ -569,6 +571,7 @@ function FurnitureThemeSummary({
 function FurnitureCollection({
   items,
   signedIn,
+  showCategoryCounts,
   draftValues,
   saveStates,
   onQuantityChange,
@@ -577,6 +580,7 @@ function FurnitureCollection({
 }: {
   items: FurnitureCatalogItem[];
   signedIn: boolean;
+  showCategoryCounts: boolean;
   draftValues: Record<string, string>;
   saveStates: Record<string, SaveState>;
   onQuantityChange: (uid: string, value: string) => void;
@@ -596,9 +600,13 @@ function FurnitureCollection({
       {groups.map(({ category, items: categoryItems }) => (
         <SectionCard
           key={category}
-          title={`${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`}
+          title={
+            showCategoryCounts
+              ? `${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`
+              : FURNITURE_CATEGORY_LABELS[category]
+          }
         >
-          <div className="flex flex-wrap gap-x-2 gap-y-3">
+          <div className="flex flex-wrap gap-x-1 gap-y-3">
             {categoryItems.map((item) => (
               <FurnitureCard
                 key={item.uid}
@@ -683,20 +691,6 @@ function FurnitureCard({
     <ResourceCard imageUrl={item.imageUrl} rarity={item.rarity} size="lg" />
   );
 
-  const imageStatusClassName = !signedIn
-    ? ""
-    : item.status === "unregistered"
-      ? "opacity-50"
-      : item.status === "not-owned"
-        ? "grayscale opacity-40"
-        : "";
-  const showUnregisteredLabel =
-    draftValue === "" &&
-    item.quantity === null &&
-    saveState?.kind !== "invalid" &&
-    saveState?.kind !== "queued" &&
-    saveState?.kind !== "saving";
-
   return (
     <article
       aria-label={`${item.name} · ${FURNITURE_RARITY_LABELS[item.rarity]} 등급`}
@@ -706,15 +700,16 @@ function FurnitureCard({
         className="relative flex h-12 w-full items-center justify-center md:h-14"
         onErrorCapture={() => setFailedImageUrl(item.imageUrl)}
       >
-        {imageFailed ? image : <div className={imageStatusClassName}>{image}</div>}
+        {image}
       </div>
       <h3 className="line-clamp-2 h-8 min-h-8 w-full break-keep text-center text-xs leading-tight text-foreground">
         {item.name}
       </h3>
       {signedIn ? (
-        <div className="relative mx-auto w-20">
+        <div className="mx-auto w-20">
           <NumberInput
             nullable
+            label="보유"
             fullWidth
             minValue={0}
             showDecrease={false}
@@ -733,14 +728,6 @@ function FurnitureCard({
                     : "보유 수량이에요.",
             }}
           />
-          {showUnregisteredLabel ? (
-            <span
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-0 flex items-center justify-center text-xs text-muted-foreground"
-            >
-              미등록
-            </span>
-          ) : null}
         </div>
       ) : null}
       {signedIn && saveState ? (

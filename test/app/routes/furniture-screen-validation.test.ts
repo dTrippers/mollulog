@@ -3,7 +3,7 @@ import {
   getEmptyFurnitureInventoryInputBehavior,
   isImageAlreadyBroken,
   isValidFurnitureInventoryQuantityInput,
-} from "~/routes/utils.furniture._components/FurnitureCatalogScreen";
+} from "~/routes/furniture._components/FurnitureCatalogScreen";
 
 describe("furniture screen input and image boundaries", () => {
   it.each([
