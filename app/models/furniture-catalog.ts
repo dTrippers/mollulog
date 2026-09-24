@@ -1,5 +1,5 @@
-import { graphql } from "~/graphql";
 import { parseFurnitureCategory, parseFurnitureRarity } from "~/domain/furniture-catalog";
+import { graphql } from "~/graphql";
 import type { FurnitureCatalogSourceQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";

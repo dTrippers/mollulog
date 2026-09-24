@@ -598,15 +598,15 @@ function FurnitureCollection({
   return (
     <div className="space-y-4">
       {groups.map(({ category, items: categoryItems }) => (
-        <SectionCard
-          key={category}
-          title={
-            showCategoryCounts
-              ? `${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`
-              : FURNITURE_CATEGORY_LABELS[category]
-          }
-        >
-          <div className="flex flex-wrap gap-x-1 gap-y-3">
+        <SectionCard key={category} className="overflow-hidden space-y-0 p-0 md:p-0">
+          <div className="px-3 pt-3">
+            <h2 className="text-sm font-semibold text-foreground">
+              {showCategoryCounts
+                ? `${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`
+                : FURNITURE_CATEGORY_LABELS[category]}
+            </h2>
+          </div>
+          <div className="flex flex-wrap gap-x-1 gap-y-0 px-3 py-2">
             {categoryItems.map((item) => (
               <FurnitureCard
                 key={item.uid}

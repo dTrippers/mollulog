@@ -1,8 +1,8 @@
 import {
-  getFurnitureCatalogProgress,
-  getFurnitureInventoryStatus,
   type FurnitureCatalogItem,
   type FurnitureCatalogProgress,
+  getFurnitureCatalogProgress,
+  getFurnitureInventoryStatus,
 } from "~/domain/furniture-catalog";
 import type { FurnitureCatalogSource } from "~/models/furniture-catalog";
 
