@@ -283,12 +283,6 @@ export default function WalkthroughPartyFormationEditor({
       setStartingSkillSheetAnnouncement(`${studentName}: 시작 스킬 순서에서 제외했어요. 뒤 번호가 갱신됐어요.`);
       return;
     }
-    if (stagedStartingSkillStudentUids.length >= startingSkillMaximum) {
-      setStartingSkillSheetAnnouncement(
-        `${partySize}인 편성은 시작 스킬을 최대 ${startingSkillMaximum}명까지 지정할 수 있어요.`,
-      );
-      return;
-    }
     const nextOrder = stagedStartingSkillStudentUids.length + 1;
     setStagedStartingSkillStudentUids((current) =>
       toggleStartingSkillStudentUid(current, studentUid, startingSkillMaximum),
