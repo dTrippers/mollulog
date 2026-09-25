@@ -8,8 +8,9 @@ import {
   PencilSquareIcon,
   TrashIcon,
 } from "@heroicons/react/24/outline";
+import { BoltIcon } from "@heroicons/react/16/solid";
 import { QRCodeSVG } from "qrcode.react";
-import { useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -37,6 +38,7 @@ import {
   DEMO_WALKTHROUGH_TIMELINE,
   isDemoWalkthroughTimelineUid,
 } from "~/domain/walkthrough-timeline-demo";
+import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { compareInstantDesc, formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -186,16 +188,16 @@ export default function WalkthroughTimelineDetailPage() {
   const visibilityLabel =
     timeline.visibility === "public" ? "전체 공개" : timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기";
   const authorSummary = demo ? (
-    <span className="text-sm">몰루로그</span>
+    <span>몰루로그</span>
   ) : author ? (
-    <Link to={`/@${author.username}`} className="text-sm text-primary hover:underline">
+    <Link to={`/@${author.username}`} className="text-primary hover:underline">
       @{author.username}
     </Link>
   ) : (
-    <span className="text-sm">작성자 정보 없음</span>
+    <span>작성자 정보 없음</span>
   );
   const visibilitySummary = (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+    <span className="inline-flex items-center gap-1">
       {timeline.visibility === "public" ? (
         <LockOpenIcon className="size-3.5" />
       ) : timeline.visibility === "unlisted" ? (
@@ -227,23 +229,14 @@ export default function WalkthroughTimelineDetailPage() {
             />
             <div className="relative">
               <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
-                <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
-                <AttributeBadge
-                  text={defenseTypeLocale[timeline.defenseType]}
-                  color={defenseTypeColor[timeline.defenseType]}
+              <div className="mt-3 space-y-3">
+                <TimelineConditionBadges timeline={timeline} />
+                <TimelineMetadata
+                  visibilitySummary={visibilitySummary}
+                  authorSummary={authorSummary}
+                  updatedAt={timeline.updatedAt}
+                  demo={demo}
                 />
-                {timeline.isAuto ? <AttributeBadge text="오토" color={null} /> : null}
-              </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                {authorSummary}
-                {visibilitySummary}
-                {!demo ? (
-                  <span className="rounded-sm bg-background px-1 text-foreground">
-                    수정 {formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
@@ -263,53 +256,16 @@ export default function WalkthroughTimelineDetailPage() {
                 />
                 <div className="relative">
                   <p className="font-semibold">{bossName ?? "보스 정보 확인 불가"}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {terrainLocale[timeline.terrain]} · {defenseTypeLocale[timeline.defenseType]}
-                  </p>
                 </div>
               </div>
 
-              <dl className="text-sm">
-                <div className="flex items-center justify-between gap-3 py-1.5">
-                  <dt className="shrink-0 text-muted-foreground">방어 타입</dt>
-                  <dd className="max-w-[70%] break-words text-right font-medium">
-                    <AttributeBadge
-                      text={defenseTypeLocale[timeline.defenseType]}
-                      color={defenseTypeColor[timeline.defenseType]}
-                    />
-                  </dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-1.5">
-                  <dt className="shrink-0 text-muted-foreground">난이도</dt>
-                  <dd className="max-w-[70%] break-words text-right font-medium">
-                    {difficultyLocale[timeline.maxDifficulty]}
-                  </dd>
-                </div>
-                {timeline.isAuto ? (
-                  <div className="flex items-center justify-between gap-3 py-1.5">
-                    <dt className="shrink-0 text-muted-foreground">클리어 방식</dt>
-                    <dd className="max-w-[70%] break-words text-right font-medium">
-                      <AttributeBadge text="오토" color={null} />
-                    </dd>
-                  </div>
-                ) : null}
-                <div className="flex items-center justify-between gap-3 py-1.5">
-                  <dt className="shrink-0 text-muted-foreground">공개 범위</dt>
-                  <dd className="max-w-[70%] break-words text-right font-medium">{visibilitySummary}</dd>
-                </div>
-                <div className="flex items-center justify-between gap-3 py-1.5">
-                  <dt className="shrink-0 text-muted-foreground">작성자</dt>
-                  <dd className="max-w-[70%] break-words text-right font-medium">{authorSummary}</dd>
-                </div>
-                {!demo ? (
-                  <div className="flex items-center justify-between gap-3 py-1.5">
-                    <dt className="shrink-0 text-muted-foreground">수정일</dt>
-                    <dd className="max-w-[70%] break-words text-right font-medium tabular-nums">
-                      {formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}
-                    </dd>
-                  </div>
-                ) : null}
-              </dl>
+              <TimelineConditionBadges timeline={timeline} />
+              <TimelineMetadata
+                visibilitySummary={visibilitySummary}
+                authorSummary={authorSummary}
+                updatedAt={timeline.updatedAt}
+                demo={demo}
+              />
 
               {owner ? (
                 <div className="space-y-2">
@@ -445,5 +401,54 @@ export default function WalkthroughTimelineDetailPage() {
         </div>
       </div>
     </Page>
+  );
+}
+
+function TimelineConditionBadges({ timeline }: { timeline: WalkthroughTimelineRecord }) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
+      <AttributeBadge text={defenseTypeLocale[timeline.defenseType]} color={defenseTypeColor[timeline.defenseType]} />
+      <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
+      {timeline.isAuto ? (
+        <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold leading-none text-emerald-700 dark:text-emerald-300">
+          <BoltIcon className="size-3.5" aria-hidden="true" />
+          오토
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function TimelineMetadata({
+  visibilitySummary,
+  authorSummary,
+  updatedAt,
+  demo,
+}: {
+  visibilitySummary: ReactNode;
+  authorSummary: ReactNode;
+  updatedAt: Date;
+  demo: boolean;
+}) {
+  return (
+    <dl className="space-y-1.5 text-sm">
+      <div className="flex items-center justify-between gap-3">
+        <dt className="shrink-0 text-muted-foreground">공개 범위</dt>
+        <dd className="max-w-[70%] break-words text-right font-medium">{visibilitySummary}</dd>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <dt className="shrink-0 text-muted-foreground">작성자</dt>
+        <dd className="max-w-[70%] break-words text-right font-medium">{authorSummary}</dd>
+      </div>
+      {!demo ? (
+        <div className="flex items-center justify-between gap-3">
+          <dt className="shrink-0 text-muted-foreground">수정일</dt>
+          <dd className="max-w-[70%] break-words text-right font-medium tabular-nums">
+            {formatInstant(updatedAt, { timeZone: "Asia/Seoul" })}
+          </dd>
+        </div>
+      ) : null}
+    </dl>
   );
 }

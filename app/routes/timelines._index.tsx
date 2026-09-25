@@ -1,4 +1,5 @@
 import { ArrowRightIcon, FunnelIcon, PlusIcon } from "@heroicons/react/24/outline";
+import { BoltIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
@@ -218,30 +219,30 @@ export default function WalkthroughTimelineCatalogPage() {
                 atLeastOne
                 size="sm"
               />
-              <PanelSwitchRow
-                title="오토 공략만 보기"
-                checked={filters.autoOnly}
-                onChange={(checked) => setFilter("auto", checked ? "1" : null)}
-              />
-              {hasRecruitedStudentData || signedIn ? (
-                <div className="space-y-0">
-                  {hasRecruitedStudentData ? (
-                    <PanelSwitchRow
-                      title="미모집 학생 표시"
-                      checked={showUnrecruitedStudents}
-                      onChange={setShowUnrecruitedStudents}
-                    />
-                  ) : null}
-                  {signedIn ? (
-                    <PanelSwitchRow
-                      title="좋아요한 공략만 보기"
-                      checked={filters.likedOnly}
-                      onChange={(checked) => setFilter("liked", checked ? "1" : null)}
-                      className="border-t-0 pt-0"
-                    />
-                  ) : null}
-                </div>
-              ) : null}
+              <div className="space-y-0">
+                <PanelSwitchRow
+                  title="오토 공략만 보기"
+                  checked={filters.autoOnly}
+                  onChange={(checked) => setFilter("auto", checked ? "1" : null)}
+                  className="border-t-0 pt-0"
+                />
+                {hasRecruitedStudentData ? (
+                  <PanelSwitchRow
+                    title="미모집 학생 표시"
+                    checked={showUnrecruitedStudents}
+                    onChange={setShowUnrecruitedStudents}
+                    className="border-t-0 pt-0"
+                  />
+                ) : null}
+                {signedIn ? (
+                  <PanelSwitchRow
+                    title="좋아요한 공략만 보기"
+                    checked={filters.likedOnly}
+                    onChange={(checked) => setFilter("liked", checked ? "1" : null)}
+                    className="border-t-0 pt-0"
+                  />
+                ) : null}
+              </div>
             </PanelBody>
           ),
         },
@@ -376,9 +377,14 @@ function WalkthroughTimelineCard({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 px-4 py-3">
+          {timeline.isAuto ? (
+            <span className="inline-flex w-fit shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-2 py-1 text-xs font-semibold leading-none text-emerald-700 dark:text-emerald-300">
+              <BoltIcon className="size-3.5" aria-hidden="true" />
+              오토
+            </span>
+          ) : null}
           <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
           <AttributeBadge text={difficultyLocale[timeline.maxDifficulty]} color={null} />
-          {timeline.isAuto ? <AttributeBadge text="오토" color={null} /> : null}
           <AttributeBadge
             text={defenseTypeLocale[timeline.defenseType]}
             color={defenseTypeColor[timeline.defenseType]}
