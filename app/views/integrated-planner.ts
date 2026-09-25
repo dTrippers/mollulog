@@ -17,7 +17,8 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import type { RecruitmentGroup } from "~/models/recruitment";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
-import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
+import type { TimelineContent } from "~/models/timeline-content.server";
+import { getTimelineContentDatesByContentUid, getTimelineContents } from "~/models/timeline-content.server";
 import type { PyroxenePlannerContent } from "~/views/pyroxene";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
@@ -73,9 +74,16 @@ export type IntegratedPlannerShopEvent = {
   accountStateStatus: SourceStatus;
 };
 
+export type IntegratedPlannerTimelineEvent = Pick<
+  TimelineContent,
+  "uid" | "name" | "startAt" | "endAt" | "endless" | "imageUrl" | "runType" | "contentType" | "tags"
+>;
+
 export type IntegratedPlannerData = {
   pyroxeneSchedules: PyroxenePlannerContent[];
   pyroxeneSchedulesStatus: SourceStatus;
+  timelineEvents: IntegratedPlannerTimelineEvent[];
+  timelineEventsStatus: SourceStatus;
   recruitmentGroups: IntegratedPlannerRecruitmentGroup[];
   recruitmentGroupsStatus: SourceStatus;
   accountState: IntegratedPlannerAccountState | null;
@@ -89,14 +97,37 @@ export async function getIntegratedPlannerData(
   userId: number | null,
   ctx?: ExecutionContext,
 ): Promise<IntegratedPlannerData> {
-  const [pyroxeneSchedulesResult, shopAvailableEventsResult] = await Promise.allSettled([
+  const [pyroxeneSchedulesResult, timelineEventsResult, shopAvailableEventsResult] = await Promise.allSettled([
     getPyroxenePlannerContents(env, false, ctx),
+    getTimelineContents(env, undefined, { ctx }),
     getShopAvailableEvents(env, ctx),
   ]);
 
   const pyroxeneSchedules = pyroxeneSchedulesResult.status === "fulfilled" ? pyroxeneSchedulesResult.value : [];
   const pyroxeneSchedulesStatus: SourceStatus =
     pyroxeneSchedulesResult.status === "fulfilled" ? "available" : "unavailable";
+  const timelineEventsStatus: SourceStatus = timelineEventsResult.status === "fulfilled" ? "available" : "unavailable";
+  const timelineEvents: IntegratedPlannerTimelineEvent[] =
+    timelineEventsResult.status === "fulfilled"
+      ? timelineEventsResult.value
+          .filter(
+            (content) =>
+              content.contentType === "event" ||
+              content.contentType === "main_story" ||
+              content.contentType === "pickup",
+          )
+          .map(({ uid, name, startAt, endAt, endless, imageUrl, runType, contentType, tags }) => ({
+            uid,
+            name,
+            startAt,
+            endAt,
+            endless,
+            imageUrl,
+            runType,
+            contentType,
+            tags,
+          }))
+      : [];
 
   let recruitmentGroups: IntegratedPlannerRecruitmentGroup[] = [];
   let recruitmentGroupsStatus: SourceStatus = "available";
@@ -130,6 +161,8 @@ export async function getIntegratedPlannerData(
   return {
     pyroxeneSchedules,
     pyroxeneSchedulesStatus,
+    timelineEvents,
+    timelineEventsStatus,
     recruitmentGroups,
     recruitmentGroupsStatus,
     accountState: accountStateResult?.state ?? null,

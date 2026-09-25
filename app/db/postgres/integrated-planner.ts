@@ -3,7 +3,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { nowUtcIso } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
-import { pgFavoriteStudentsTable, pgPyroxeneEventDataTable } from "./schema";
+import { pgFavoriteStudentsTable } from "./schema";
 
 export type PostgresIntegratedPlannerOptions = {
   ctx?: ExecutionContext;
@@ -38,7 +38,6 @@ export async function savePostgresIntegratedRecruitmentPlan(
   userId: number,
   eventUid: string,
   studentUids: readonly string[],
-  expectedTrials: number | null,
   options: PostgresIntegratedPlannerOptions = {},
 ): Promise<void> {
   const selectedStudentUids = new Set(studentUids);
@@ -48,22 +47,6 @@ export async function savePostgresIntegratedRecruitmentPlan(
     "recruitment.save",
     async (db) => {
       await db.transaction(async (tx) => {
-        const updatedAt = new Date(nowUtcIso());
-        await tx
-          .insert(pgPyroxeneEventDataTable)
-          .values({
-            uid: nanoid(8),
-            userId,
-            eventUid,
-            completed: false,
-            expectedTrials,
-            updatedAt,
-          })
-          .onConflictDoUpdate({
-            target: [pgPyroxeneEventDataTable.userId, pgPyroxeneEventDataTable.eventUid],
-            set: { expectedTrials, updatedAt },
-          });
-
         const currentFavorites = await tx
           .select({ studentUid: pgFavoriteStudentsTable.studentUid })
           .from(pgFavoriteStudentsTable)

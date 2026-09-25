@@ -23,11 +23,11 @@ function createClient(options: { failOn?: string } = {}) {
 }
 
 describe("PostgreSQL integrated planner", () => {
-  it("rolls back the expected-trials upsert when saving favorites fails", async () => {
+  it("rolls back favorite changes when saving favorites fails", async () => {
     const { client, queries } = createClient({ failOn: 'insert into "content_favorite_students"' });
 
     await expect(
-      savePostgresIntegratedRecruitmentPlan(env, 7, "event-1", ["student-1"], 20, {
+      savePostgresIntegratedRecruitmentPlan(env, 7, "event-1", ["student-1"], {
         createClient: () => client,
       }),
     ).rejects.toThrow();
@@ -36,40 +36,29 @@ describe("PostgreSQL integrated planner", () => {
     const favoriteInsertIndex = normalizedQueries.findIndex((query) =>
       query.includes('insert into "content_favorite_students"'),
     );
-    const eventDataInsertIndex = normalizedQueries.findIndex((query) =>
-      query.includes('insert into "pyroxene_event_data"'),
-    );
     expect(normalizedQueries).toContain("begin");
-    expect(eventDataInsertIndex).toBeGreaterThan(-1);
     expect(favoriteInsertIndex).toBeGreaterThan(-1);
-    expect(eventDataInsertIndex).toBeLessThan(favoriteInsertIndex);
+    expect(normalizedQueries.some((query) => query.includes('"pyroxene_event_data"'))).toBe(false);
     expect(normalizedQueries).toContain("rollback");
     expect(normalizedQueries).not.toContain("commit");
   });
 
-  it("commits event-specific favorites and expected trials together", async () => {
+  it("saves event-specific favorites without writing recruitment counts", async () => {
     const { client, queries } = createClient();
 
     await expect(
-      savePostgresIntegratedRecruitmentPlan(env, 7, "event-1", ["student-1"], 20, {
+      savePostgresIntegratedRecruitmentPlan(env, 7, "event-1", ["student-1"], {
         createClient: () => client,
       }),
     ).resolves.toBeUndefined();
 
     const normalizedQueries = queries.map((query) => query.toLowerCase());
-    const eventDataInsertIndex = normalizedQueries.findIndex((query) =>
-      query.includes('insert into "pyroxene_event_data"'),
-    );
     const favoriteInsertIndex = normalizedQueries.findIndex((query) =>
       query.includes('insert into "content_favorite_students"'),
     );
-    const eventDataUpsert = normalizedQueries[eventDataInsertIndex] ?? "";
-    const eventDataConflictUpdate = eventDataUpsert.split("do update set")[1] ?? "";
     expect(normalizedQueries).toContain("begin");
-    expect(eventDataInsertIndex).toBeGreaterThan(-1);
-    expect(favoriteInsertIndex).toBeGreaterThan(eventDataInsertIndex);
-    expect(eventDataConflictUpdate).toContain('"expected_trials"');
-    expect(eventDataConflictUpdate).not.toContain('"completed"');
+    expect(favoriteInsertIndex).toBeGreaterThan(-1);
+    expect(normalizedQueries.some((query) => query.includes('"pyroxene_event_data"'))).toBe(false);
     expect(normalizedQueries).toContain("commit");
     expect(normalizedQueries).not.toContain("rollback");
   });

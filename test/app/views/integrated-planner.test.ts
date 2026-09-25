@@ -13,6 +13,7 @@ const mockGetRecruitmentGroupsByUids = jest.fn<(...args: unknown[]) => Promise<u
 const mockGetPyroxeneUserState = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetPyroxenePlannerContents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetTimelineContentDatesByContentUid = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetTimelineContents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
 jest.mock("~/models/event-content", () => ({
   getEventContentSchedule: mockGetEventContentSchedule,
@@ -31,6 +32,7 @@ jest.mock("~/models/pyroxene-planner", () => ({ getPyroxeneUserState: mockGetPyr
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: mockGetPyroxenePlannerContents }));
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentDatesByContentUid: mockGetTimelineContentDatesByContentUid,
+  getTimelineContents: mockGetTimelineContents,
 }));
 
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
@@ -69,9 +71,31 @@ beforeEach(() => {
     startAt: "2026-09-01T00:00:00.000Z",
     endAt: "2026-09-30T00:00:00.000Z",
   });
+  mockGetTimelineContents.mockResolvedValue([]);
 });
 
 describe("integrated planner view", () => {
+  it("returns original event timing and run type separately from pyroxene schedules", async () => {
+    const sourceEvent = {
+      uid: "event-open-ended",
+      name: "Open ended event",
+      startAt: "2026-09-03T11:00:00.000Z",
+      endAt: null,
+      endless: false,
+      imageUrl: null,
+      runType: "rerun",
+      contentType: "event",
+      tags: [],
+    };
+    mockGetTimelineContents.mockResolvedValue([sourceEvent]);
+
+    const result = await getIntegratedPlannerData(env, null, ctx);
+
+    expect(result.timelineEventsStatus).toBe("available");
+    expect(result.timelineEvents).toEqual([sourceEvent]);
+    expect(mockGetTimelineContents).toHaveBeenCalledWith(env, undefined, { ctx });
+  });
+
   it("batch-loads multiple shop states, preferring canonical records and using legacy fallbacks", async () => {
     mockGetShopAvailableEvents.mockResolvedValue([
       { uid: "timeline-event-1", name: "Event 1" },

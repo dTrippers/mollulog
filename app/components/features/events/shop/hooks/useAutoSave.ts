@@ -23,6 +23,35 @@ type SaveActionData = {
   requestId?: string;
 };
 
+type AccountSaveResolution =
+  | { status: "pending" }
+  | { status: "success" }
+  | { status: "failure"; error: string }
+  | { status: "mismatch"; error: string };
+
+export function resolveAccountSaveResponse({
+  fetcherState,
+  fetcherData,
+  requestId,
+}: {
+  fetcherState: "idle" | "submitting" | "loading";
+  fetcherData: SaveActionData | undefined;
+  requestId: string;
+}): AccountSaveResolution {
+  if (fetcherState !== "idle") return { status: "pending" };
+  if (fetcherData?.requestId !== requestId) {
+    return {
+      status: "mismatch",
+      error: "저장 응답을 확인하지 못했어요. 현재 입력은 유지되어 있어요. 다시 시도해주세요.",
+    };
+  }
+  if (fetcherData.success === true) return { status: "success" };
+  return {
+    status: "failure",
+    error: fetcherData.error ?? "상점 계획을 저장하지 못했어요. 다시 시도해주세요.",
+  };
+}
+
 function toEventShopState(state: ShopState): EventShopState {
   return {
     itemQuantities: state.itemQuantities,
@@ -172,11 +201,18 @@ export function useAutoSave({
   }, [isInitialLoad, signedIn, timelineUid]);
 
   useEffect(() => {
-    if (fetcher.state !== "idle" || !pendingAccountSaveRef.current) return;
+    if (!pendingAccountSaveRef.current) return;
 
     const pendingSave = pendingAccountSaveRef.current;
+    const resolution = resolveAccountSaveResponse({
+      fetcherState: fetcher.state,
+      fetcherData: fetcher.data,
+      requestId: pendingSave.requestId,
+    });
+    if (resolution.status === "pending") return;
+
     pendingAccountSaveRef.current = null;
-    if (fetcher.data?.success === true && fetcher.data.requestId === pendingSave.requestId) {
+    if (resolution.status === "success") {
       lastSavedStateRef.current = pendingSave.state;
       initialAccountSavePendingRef.current = false;
       accountSaveFailedRef.current = false;
@@ -185,11 +221,7 @@ export function useAutoSave({
     }
 
     accountSaveFailedRef.current = true;
-    setSaveError(
-      fetcher.data?.requestId === pendingSave.requestId
-        ? (fetcher.data.error ?? "상점 계획을 저장하지 못했어요. 다시 시도해주세요.")
-        : "저장 응답을 확인하지 못했어요. 현재 입력은 유지되어 있어요. 다시 시도해주세요.",
-    );
+    setSaveError(resolution.error);
   }, [fetcher.data, fetcher.state]);
 
   const retrySave = useCallback(() => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { resolveSaveSubmitOutcome } from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
+import { resolveAccountSaveResponse } from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
 import {
   getInitialLastSavedState,
   type ShopState,
@@ -95,85 +95,86 @@ describe("getInitialLastSavedState", () => {
   });
 });
 
-describe("resolveSaveSubmitOutcome", () => {
-  const submittedState = createSavedShopState({ minigamePlayCount: 4 });
+describe("resolveAccountSaveResponse", () => {
+  const requestId = "save-1";
 
-  it("confirms the submitted state on a first-attempt success", () => {
-    const data = { success: true };
-    const resolution = resolveSaveSubmitOutcome({
+  it("accepts an idle success only when the response requestId matches", () => {
+    const resolution = resolveAccountSaveResponse({
       fetcherState: "idle",
-      fetcherData: data,
-      acknowledgedData: undefined,
-      submittedState,
+      fetcherData: { success: true, requestId },
+      requestId,
     });
 
-    expect(resolution.confirmedSavedState).toBe(submittedState);
-    expect(resolution.acknowledgedData).toBe(data);
+    expect(resolution).toEqual({ status: "success" });
   });
 
-  it("does not confirm while a submit is still in flight", () => {
+  it("stays pending while a submit is in flight even if matching or stale success data is present", () => {
     for (const fetcherState of ["submitting", "loading"] as const) {
-      const data = { success: true };
-      const resolution = resolveSaveSubmitOutcome({
+      const resolution = resolveAccountSaveResponse({
         fetcherState,
-        fetcherData: data,
-        acknowledgedData: undefined,
-        submittedState,
+        fetcherData: { success: true, requestId },
+        requestId,
       });
 
-      expect(resolution.confirmedSavedState).toBeNull();
-      expect(resolution.acknowledgedData).toBe(undefined);
+      expect(resolution).toEqual({ status: "pending" });
+      expect(
+        resolveAccountSaveResponse({
+          fetcherState,
+          fetcherData: { success: true, requestId: "save-old" },
+          requestId,
+        }),
+      ).toEqual({ status: "pending" });
     }
   });
 
-  it("ignores a first-attempt failure with no fetcher data", () => {
-    const resolution = resolveSaveSubmitOutcome({
-      fetcherState: "idle",
-      fetcherData: undefined,
-      acknowledgedData: undefined,
-      submittedState,
+  it("rejects stale, mismatched, or missing response ids without confirming a save", () => {
+    expect(
+      resolveAccountSaveResponse({
+        fetcherState: "idle",
+        fetcherData: { success: true, requestId: "save-old" },
+        requestId,
+      }),
+    ).toEqual({
+      status: "mismatch",
+      error: "저장 응답을 확인하지 못했어요. 현재 입력은 유지되어 있어요. 다시 시도해주세요.",
     });
-
-    expect(resolution.confirmedSavedState).toBeNull();
-    expect(resolution.acknowledgedData).toBe(undefined);
+    expect(
+      resolveAccountSaveResponse({
+        fetcherState: "idle",
+        fetcherData: { success: true },
+        requestId,
+      }).status,
+    ).toBe("mismatch");
+    expect(
+      resolveAccountSaveResponse({
+        fetcherState: "idle",
+        fetcherData: undefined,
+        requestId,
+      }).status,
+    ).toBe("mismatch");
   });
 
-  it("keeps the save dirty when a failure after a success replays the previous data", () => {
-    const data = { success: true };
-    const resolution = resolveSaveSubmitOutcome({
+  it("surfaces a matching failure and permits a retry with a new matching request id", () => {
+    const failure = resolveAccountSaveResponse({
       fetcherState: "idle",
-      fetcherData: data,
-      acknowledgedData: data,
-      submittedState,
+      fetcherData: { success: false, error: "저장 충돌", requestId },
+      requestId,
     });
+    expect(failure).toEqual({ status: "failure", error: "저장 충돌" });
 
-    expect(resolution.confirmedSavedState).toBeNull();
-    expect(resolution.acknowledgedData).toBe(data);
-  });
+    expect(
+      resolveAccountSaveResponse({
+        fetcherState: "idle",
+        fetcherData: { success: false, requestId },
+        requestId,
+      }),
+    ).toEqual({ status: "failure", error: "상점 계획을 저장하지 못했어요. 다시 시도해주세요." });
 
-  it("confirms a retry that succeeds after a failure with a fresh result", () => {
-    const data = { success: true };
-    const resolution = resolveSaveSubmitOutcome({
+    const retry = resolveAccountSaveResponse({
       fetcherState: "idle",
-      fetcherData: data,
-      acknowledgedData: { success: true },
-      submittedState,
+      fetcherData: { success: true, requestId: "save-2" },
+      requestId: "save-2",
     });
-
-    expect(resolution.confirmedSavedState).toBe(submittedState);
-    expect(resolution.acknowledgedData).toBe(data);
-  });
-
-  it("acknowledges a fresh failure result without confirming", () => {
-    const data = { success: false };
-    const resolution = resolveSaveSubmitOutcome({
-      fetcherState: "idle",
-      fetcherData: data,
-      acknowledgedData: undefined,
-      submittedState,
-    });
-
-    expect(resolution.confirmedSavedState).toBeNull();
-    expect(resolution.acknowledgedData).toBe(data);
+    expect(retry).toEqual({ status: "success" });
   });
 });

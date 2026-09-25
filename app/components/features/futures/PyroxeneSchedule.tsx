@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyView, Section, SectionCard, Toggle } from "~/components/primitives";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
@@ -17,6 +17,7 @@ import PyroxeneTimelineResources from "./PyroxeneTimelineResources";
 import { usePyroxeneTimeline } from "./usePyroxeneTimeline";
 
 type PyroxeneScheduleProps = {
+  selectedEventUid?: string | null;
   initialDate: Date | null;
   initialResources: PickupResources;
   eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
@@ -67,6 +68,7 @@ function getAvailablePackageDate({
 }
 
 export default function PyroxeneSchedule({
+  selectedEventUid = null,
   initialDate,
   initialResources,
   eventDataMap,
@@ -83,6 +85,8 @@ export default function PyroxeneSchedule({
   onFavoriteChange,
 }: PyroxeneScheduleProps) {
   const [hideUnfavoritedEvents, setHideUnfavoritedEvents] = useState(false);
+  const [selectedEventMissing, setSelectedEventMissing] = useState(false);
+  const selectedEventRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     try {
@@ -137,10 +141,34 @@ export default function PyroxeneSchedule({
     return displayTimeline.filter(({ source }) => {
       const event = source.event;
       if (!event) return true;
+      if (event.uid === selectedEventUid) return true;
       if (eventDataMap.get(event.uid)?.completed) return true;
       return event.recruitments.some(({ favorited, pickup, student }) => pickup && student && favorited);
     });
-  }, [displayTimeline, eventDataMap, hideUnfavoritedEvents]);
+  }, [displayTimeline, eventDataMap, hideUnfavoritedEvents, selectedEventUid]);
+  const selectedEventIsVisible =
+    selectedEventUid !== null && visibleDisplayTimeline.some(({ source }) => source.event?.uid === selectedEventUid);
+
+  useEffect(() => {
+    if (!selectedEventUid) {
+      setSelectedEventMissing(false);
+      return;
+    }
+    setSelectedEventMissing(false);
+    if (isTimelinePending) return;
+    if (!selectedEventIsVisible) {
+      setSelectedEventMissing(true);
+      return;
+    }
+    const target = selectedEventRef.current;
+    if (!target) {
+      setSelectedEventMissing(true);
+      return;
+    }
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    target.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "center" });
+    requestAnimationFrame(() => target.focus({ preventScroll: true }));
+  }, [isTimelinePending, selectedEventIsVisible, selectedEventUid]);
 
   // 적용 중인 패키지는 삭제가 가능하도록 별도 레이아웃에서 표시
   const availableOneTimePackages = useMemo(() => {
@@ -299,6 +327,11 @@ export default function PyroxeneSchedule({
           />
         </div>
         <div className="mt-4 space-y-2">
+          {selectedEventMissing ? (
+            <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+              선택한 이벤트를 현재 청휘석 타임라인에서 찾을 수 없어요.
+            </p>
+          ) : null}
           {!isTimelinePending &&
             visibleDisplayTimeline.every(
               ({ source }) => source.type !== "event" && !options.timeline.display.includes(source.type),
@@ -319,7 +352,16 @@ export default function PyroxeneSchedule({
                 !displayedRecruitmentReworkDivider && event.recruitmentRuleSet === "call_charge_v1";
               displayedRecruitmentReworkDivider ||= showRecruitmentReworkDivider;
               return (
-                <div key={`event-${event.uid}`}>
+                <div
+                  key={`event-${event.uid}`}
+                  ref={selectedEventUid === event.uid ? selectedEventRef : undefined}
+                  tabIndex={selectedEventUid === event.uid ? -1 : undefined}
+                  className={
+                    selectedEventUid === event.uid
+                      ? "rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      : undefined
+                  }
+                >
                   {showYearDivider ? <TimelineYearDivider year={year} /> : null}
                   {showRecruitmentReworkDivider ? <TimelineRecruitmentReworkDivider /> : null}
                   <PyroxeneTimelineEvent

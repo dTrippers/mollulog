@@ -30,6 +30,7 @@ import {
   formatPlannerPeriodEndDate,
   getPlannerMonthEndInstant,
   getPlannerTodayMonth,
+  type PlannerScheduleContentInput,
   projectPlannerCalendarResources,
   shiftPlannerMonth,
   summarizePyroxeneTimeline,
@@ -133,14 +134,11 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   const date = formData.get("dateInstant");
   if (intent === "save-recruitment") {
     const eventUid = formData.get("eventUid");
-    const rawTrials = formData.get("expectedTrials");
-    const expectedTrials = rawTrials === "" ? null : integerField(formData, "expectedTrials", 0, 10_000);
     const rawStudentUids = formData.getAll("studentUid");
     if (
       typeof eventUid !== "string" ||
       eventUid.length === 0 ||
       eventUid.length > 512 ||
-      (rawTrials !== "" && expectedTrials === null) ||
       !rawStudentUids.every((value) => typeof value === "string" && value.length > 0 && value.length <= 512) ||
       new Set(rawStudentUids).size !== rawStudentUids.length
     ) {
@@ -169,7 +167,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         return response(false, "선택한 학생을 해당 모집 일정에서 찾을 수 없어요.", 400);
       }
 
-      await saveIntegratedPlannerRecruitmentPlan(env, currentUser.id, eventUid, studentUids, expectedTrials, ctx);
+      await saveIntegratedPlannerRecruitmentPlan(env, currentUser.id, eventUid, studentUids, ctx);
       return response(true);
     } catch {
       return response(false, "모집 계획을 저장하지 못했어요. 입력을 보존했으니 다시 시도해주세요.", 500);
@@ -618,6 +616,47 @@ export default function IntegratedPlannerRoute() {
     () => (loaderData.pyroxeneSchedulesStatus === "available" ? loaderData.pyroxeneSchedules : []),
     [loaderData.pyroxeneSchedules, loaderData.pyroxeneSchedulesStatus],
   );
+  const plannerContents = useMemo<PlannerScheduleContentInput[]>(() => {
+    if (loaderData.timelineEventsStatus !== "available") return [];
+    const timelineEventsByUid = new Map(loaderData.timelineEvents.map((event) => [event.uid, event]));
+    const scheduleEventUids = new Set(
+      loaderData.pyroxeneSchedules.flatMap((content) =>
+        content.kind === "event" && !content.uid.startsWith("group:") && !content.tags.includes("main_story_reward")
+          ? [content.uid]
+          : [],
+      ),
+    );
+    const scheduleContents = loaderData.pyroxeneSchedules.flatMap((content) => {
+      if (content.kind !== "event" || content.uid.startsWith("group:") || content.tags.includes("main_story_reward")) {
+        return [content];
+      }
+      const event = timelineEventsByUid.get(content.uid);
+      if (!event) return [];
+      return [
+        {
+          ...content,
+          actualEndAt: event.endAt,
+          endless: event.endless,
+          runType: event.runType,
+        },
+      ];
+    });
+    const supplementalStartOnlyEvents = loaderData.timelineEvents
+      .filter((event) => (event.endless || event.endAt === null) && !scheduleEventUids.has(event.uid))
+      .map((event) => ({
+        kind: "event" as const,
+        uid: event.uid,
+        name: event.name,
+        imageUrl: event.imageUrl,
+        since: event.startAt,
+        until: event.endAt ?? event.startAt,
+        actualEndAt: event.endAt,
+        endless: event.endless,
+        runType: event.runType,
+        tags: event.tags,
+      }));
+    return [...scheduleContents, ...supplementalStartOnlyEvents];
+  }, [loaderData.pyroxeneSchedules, loaderData.timelineEvents, loaderData.timelineEventsStatus]);
   const scheduleItems = usePyroxeneScheduleItems(pyroxeneScheduleContents, favoritedStudents, localTimelineItems);
   const calculationOptions = useMemo(() => defaultCalculationOptions(selectedPlannerOptions), [selectedPlannerOptions]);
   const accountRecruitmentSaveResult = useMemo<PlannerRecruitmentSaveResult | null>(() => {
@@ -639,7 +678,6 @@ export default function IntegratedPlannerRoute() {
         formData.set("intent", "save-recruitment");
         formData.set("submissionId", submissionId);
         formData.set("eventUid", input.eventUid);
-        formData.set("expectedTrials", input.expectedTrials === null ? "" : String(input.expectedTrials));
         for (const studentUid of input.favoriteStudentUids) formData.append("studentUid", studentUid);
         recruitmentFetcher.submit(formData, { method: "post" });
         return;
@@ -660,12 +698,8 @@ export default function IntegratedPlannerRoute() {
       setGuestRecruitmentIsSaving(true);
       void updateGuestPyroxenePlanner((current) => {
         const selectedStudentUids = new Set(input.favoriteStudentUids);
-        const eventTrials = { ...current.eventTrials };
-        if (input.expectedTrials === null) delete eventTrials[input.eventUid];
-        else eventTrials[input.eventUid] = input.expectedTrials;
         return {
           ...current,
-          eventTrials,
           favoriteStudents: [
             ...current.favoriteStudents.filter((favorite) => favorite.contentUid !== input.eventUid),
             ...[...selectedStudentUids].map((studentUid) => ({ contentUid: input.eventUid, studentUid })),
@@ -752,17 +786,15 @@ export default function IntegratedPlannerRoute() {
     () => compareGuestEventShopPlans(guestShopPlans, guestShopLookups, shopComparisonDefaults),
     [guestShopLookups, guestShopPlans, shopComparisonDefaults],
   );
-  const unresolvedGuestShopPlanCount = loaderData.signedIn
-    ? countUnresolvedGuestEventShopPlans(guestShopPlans, guestShopLookups, shopComparisonDefaults)
-    : 0;
   const guestShopComparisonPending =
     loaderData.signedIn && guestShopPlans.length > 0 && currentGuestShopComparison === null;
   const hasUnavailableGuestShopComparison =
     !guestShopComparisonPending && guestShopComparisons.some(({ status }) => status === "unavailable");
-  const guestShopComparisonByStateUid = useMemo(
-    () => new Map(guestShopComparisons.map((comparison) => [comparison.plan.shopStateUid, comparison.status])),
-    [guestShopComparisons],
-  );
+  const unresolvedGuestShopPlanCount = !loaderData.signedIn
+    ? 0
+    : guestShopComparisonPending || hasUnavailableGuestShopComparison
+      ? null
+      : countUnresolvedGuestEventShopPlans(guestShopPlans, guestShopLookups, shopComparisonDefaults);
   const calendarShopPlans = useMemo<PlannerCalendarShopPlan[]>(() => {
     const guestPlansByShopStateUid = new Map(guestShopPlans.map((plan) => [plan.shopStateUid, plan]));
     return loaderData.shopEvents.map((event) => {
@@ -787,16 +819,11 @@ export default function IntegratedPlannerRoute() {
         content: event.content,
         state,
         defaultState,
-        conflict:
-          isSignedIn && event.shopStateUid
-            ? guestShopComparisonByStateUid.get(event.shopStateUid) === "different"
-            : false,
       };
     });
   }, [
     baseShopDefaultsByStateUid,
     displayTimeZone,
-    guestShopComparisonByStateUid,
     guestShopPlans,
     isSignedIn,
     loaderData.shopEvents,
@@ -821,7 +848,6 @@ export default function IntegratedPlannerRoute() {
         startAt: plan.startAt,
         endAt: plan.endAt,
         planned: Boolean(plan.state && plan.defaultState && !isDefaultEventShopState(plan.state, plan.defaultState)),
-        conflict: plan.conflict,
       })),
     [calendarShopPlans],
   );
@@ -829,7 +855,7 @@ export default function IntegratedPlannerRoute() {
   const periods = useMemo(
     () =>
       buildPlannerPeriods({
-        contents: loaderData.pyroxeneSchedules,
+        contents: plannerContents,
         scheduleItems,
         favorites: favoritedStudents,
         eventTrials,
@@ -847,7 +873,7 @@ export default function IntegratedPlannerRoute() {
       displayTimeZone,
       eventTrials,
       favoritedStudents,
-      loaderData.pyroxeneSchedules,
+      plannerContents,
       pyroxeneForecastStatus,
       scheduleItems,
       shopPeriods,
@@ -857,18 +883,19 @@ export default function IntegratedPlannerRoute() {
   const publicPeriods = useMemo(
     () =>
       buildPublicPlannerPeriods({
-        contents: loaderData.pyroxeneSchedules,
+        contents: plannerContents,
         scheduleItems,
         shopPeriods: shopPeriods.map((period) => ({ ...period, planned: false })),
         timeZone: displayTimeZone,
       }),
-    [displayTimeZone, loaderData.pyroxeneSchedules, scheduleItems, shopPeriods],
+    [displayTimeZone, plannerContents, scheduleItems, shopPeriods],
   );
 
   const statusMessages = useMemo(() => {
     const messages: string[] = [];
     if (loaderData.pyroxeneSchedulesStatus === "unavailable")
       messages.push("모집과 공개 일정 일부를 확인할 수 없어요.");
+    if (loaderData.timelineEventsStatus === "unavailable") messages.push("이벤트 원본 일정 정보를 확인할 수 없어요.");
     if (loaderData.recruitmentGroupsStatus === "unavailable") messages.push("모집 기간을 확인할 수 없어요.");
     if (loaderData.shopEventsStatus === "unavailable") messages.push("이벤트 상점 일정을 확인할 수 없어요.");
     else if (loaderData.shopEvents.some((event) => event.status === "unavailable")) {
@@ -956,24 +983,20 @@ export default function IntegratedPlannerRoute() {
               },
             ]
           : []),
-        ...(isSignedIn && unresolvedGuestShopPlanCount > 0
+      ]}
+      links={
+        isSignedIn && unresolvedGuestShopPlanCount !== null && unresolvedGuestShopPlanCount > 0
           ? [
               {
-                title: `게스트 계획 확인 · ${unresolvedGuestShopPlanCount}개`,
-                description: "계정에 아직 반영되지 않았거나 내용이 다른 이벤트 상점 계획을 확인할 수 있어요.",
+                title: `로그인 전 상점 계획 차이 · ${unresolvedGuestShopPlanCount}개`,
+                shortTitle: "상점 비교",
+                description: "로그인 전에 입력한 계획이 계정에 없거나 내용이 달라요.",
                 Icon: ShoppingBagIcon,
-                children: (
-                  <Link
-                    className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
-                    to="/utils/planner/import"
-                  >
-                    게스트 계획 비교·가져오기
-                  </Link>
-                ),
+                to: "/utils/planner/import",
               },
             ]
-          : []),
-      ]}
+          : []
+      }
     >
       <PlannerCalendar
         initialMonth={initialMonth}
@@ -989,6 +1012,8 @@ export default function IntegratedPlannerRoute() {
         oneOffEntries={oneOffEntries}
         guestStorageStatus={pyroxeneGuestPlanner.status}
         recruitmentSavedStates={recruitmentSavedStates}
+        completedRecruitmentEventUids={recruitmentCompletions.map(({ eventUid }) => eventUid)}
+        recruitmentPickupChance={selectedPlannerOptions.event.pickupChance}
         recruitmentIsSaving={recruitmentIsSaving}
         recruitmentSaveResult={recruitmentSaveResult}
         onSaveRecruitment={handleSaveRecruitment}

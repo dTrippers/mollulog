@@ -1,6 +1,7 @@
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline } from "~/domain/pyroxene-timeline";
+import type { RunType } from "~/domain/timeline-content";
 import { formatInstantDateKey, getInstantTime, type LocalDateString, normalizeTimeZone } from "~/lib/date-time";
 import dayjs from "~/lib/dayjs";
 
@@ -15,6 +16,7 @@ export type PlannerTimelineSource = {
   key: string;
   type: string;
   label: string | null;
+  eventUid?: string;
   changes: PlannerResourceChange[];
 };
 
@@ -34,10 +36,12 @@ export type PlannerPeriod = {
   startAt?: string | null;
   imageUrl?: string | null;
   endAt?: string | null;
+  runType?: RunType;
+  endless?: boolean;
+  calendarStartOnly?: boolean;
   eventUid?: string;
   students?: PlannerPeriodStudent[];
   expectedTrials?: number;
-  conflict?: boolean;
 };
 
 export type PlannerPeriodGroup = {
@@ -45,6 +49,12 @@ export type PlannerPeriodGroup = {
   eventUid?: string;
   name: string;
   periods: PlannerPeriod[];
+};
+
+export type PlannerEventScheduleGroup = {
+  group: PlannerPeriodGroup;
+  isPersonal: boolean;
+  publicRecruitmentPeriods: PlannerPeriod[];
 };
 
 export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPeriodGroup[] {
@@ -79,6 +89,125 @@ export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerP
   });
 }
 
+export function groupPlannerPeriodsWithEventMetadata(
+  periods: readonly PlannerPeriod[],
+  metadataPeriods: readonly PlannerPeriod[] = periods,
+): PlannerPeriodGroup[] {
+  return groupPlannerPeriods(periods).map((group) => {
+    if (!group.eventUid || group.periods.some((period) => period.kind === "event")) return group;
+
+    const eventMetadata = metadataPeriods.find(
+      (period) => period.kind === "event" && period.eventUid === group.eventUid,
+    );
+    return eventMetadata ? { ...group, name: eventMetadata.name, periods: [...group.periods, eventMetadata] } : group;
+  });
+}
+
+export function mergePlannerEventScheduleGroups(
+  personalGroups: readonly PlannerPeriodGroup[],
+  publicGroups: readonly PlannerPeriodGroup[],
+): PlannerEventScheduleGroup[] {
+  const publicGroupsByUid = new Map(
+    publicGroups.flatMap((group) => (group.eventUid ? [[group.eventUid, group] as const] : [])),
+  );
+  const personalEventUids = new Set(personalGroups.flatMap((group) => (group.eventUid ? [group.eventUid] : [])));
+
+  const personalScheduleGroups = personalGroups.map((group) => {
+    const matchingPublicGroup = group.eventUid ? publicGroupsByUid.get(group.eventUid) : undefined;
+    if (!matchingPublicGroup) {
+      return { group, isPersonal: true, publicRecruitmentPeriods: [] };
+    }
+
+    const missingEventMetadata = !group.periods.some((period) => period.kind === "event")
+      ? matchingPublicGroup.periods.find((period) => period.kind === "event")
+      : undefined;
+    const missingShopMetadata = !group.periods.some((period) => period.kind === "shop")
+      ? matchingPublicGroup.periods.find((period) => period.kind === "shop")
+      : undefined;
+    const metadataPeriods = [missingEventMetadata, missingShopMetadata].filter((period): period is PlannerPeriod =>
+      Boolean(period),
+    );
+
+    return {
+      group: metadataPeriods.length > 0 ? { ...group, periods: [...group.periods, ...metadataPeriods] } : group,
+      isPersonal: true,
+      publicRecruitmentPeriods: matchingPublicGroup.periods.filter((period) => period.kind === "recruitment"),
+    };
+  });
+
+  const publicOnlyGroups = publicGroups
+    .filter((group) => !group.eventUid || !personalEventUids.has(group.eventUid))
+    .map((group) => ({
+      group,
+      isPersonal: false,
+      publicRecruitmentPeriods: group.periods.filter((period) => period.kind === "recruitment"),
+    }));
+
+  return [...personalScheduleGroups, ...publicOnlyGroups];
+}
+
+export function getPlannerEventScheduleGroupsForDate(
+  personalPeriods: readonly PlannerPeriod[],
+  publicPeriods: readonly PlannerPeriod[],
+  dateKey: LocalDateString,
+  todayDateKey: LocalDateString,
+  plannedPeriodKeys?: ReadonlySet<string>,
+): PlannerEventScheduleGroup[] {
+  const personalGroups = groupPlannerPeriodsWithEventMetadata(
+    getPlannerPeriodsForDate(personalPeriods, dateKey, todayDateKey),
+    personalPeriods,
+  );
+  const publicCandidates = getPlannerPeriodsForDate(publicPeriods, dateKey, todayDateKey).filter(
+    (period) => !plannedPeriodKeys?.has(period.key),
+  );
+  const publicGroups = groupPlannerPeriodsWithEventMetadata(publicCandidates, publicPeriods);
+  return mergePlannerEventScheduleGroups(personalGroups, publicGroups);
+}
+
+export function getPlannerPeriodsForDate(
+  periods: readonly PlannerPeriod[],
+  dateKey: LocalDateString,
+  todayDateKey: LocalDateString,
+): PlannerPeriod[] {
+  const todayMonth = todayDateKey.slice(0, 7);
+  const activePeriods = periods.filter((period) => {
+    if (period.startDate > dateKey) return false;
+    if (period.kind !== "event") return period.endDate >= dateKey;
+
+    const isOpenEnded = period.endAt == null || period.endless === true;
+    if (isOpenEnded) {
+      return period.startDate.slice(0, 7) >= todayMonth;
+    }
+    return period.endDate >= dateKey;
+  });
+  const relatedEventUids = new Set(
+    activePeriods.flatMap((period) => (period.kind !== "event" && period.eventUid ? [period.eventUid] : [])),
+  );
+
+  return periods.filter(
+    (period) =>
+      activePeriods.includes(period) ||
+      (period.kind === "event" && Boolean(period.eventUid && relatedEventUids.has(period.eventUid))),
+  );
+}
+
+export function getPlannerEventNamesForDate(
+  periods: readonly PlannerPeriod[],
+  dateKey: LocalDateString,
+  todayDateKey: LocalDateString,
+  excludedPeriodKeys?: ReadonlySet<string>,
+): string[] {
+  const datePeriods = getPlannerPeriodsForDate(periods, dateKey, todayDateKey).filter(
+    (period) => !excludedPeriodKeys?.has(period.key),
+  );
+  const groups = groupPlannerPeriods(datePeriods);
+  return groups.map((group) => {
+    if (!group.eventUid || group.periods.some((period) => period.kind === "event")) return group.name;
+    const eventMetadata = periods.find((period) => period.kind === "event" && period.eventUid === group.eventUid);
+    return eventMetadata?.name ?? group.name;
+  });
+}
+
 export type PlannerPeriodStudent = {
   uid: string;
   imageUid: string | null;
@@ -89,6 +218,11 @@ export type PlannerRecruitmentCandidatePeriod = {
   eventUid: string;
   eventName: string;
   startDate: LocalDateString;
+  endDate: LocalDateString;
+  startAt: string | null;
+  endAt: string | null;
+  imageUrl: string | null;
+  runType?: RunType;
   students: PlannerPeriodStudent[];
 };
 
@@ -99,6 +233,9 @@ export type PlannerScheduleContentInput = {
   imageUrl?: string | null;
   since: string;
   until: string;
+  actualEndAt?: string | null;
+  endless?: boolean;
+  runType?: RunType;
   tags?: readonly string[];
   recruitmentGroupUid?: string | null;
   recruitments?: {
@@ -117,7 +254,6 @@ export type PlannerShopPeriodInput = {
   startAt: string | null;
   endAt: string | null;
   planned: boolean;
-  conflict?: boolean;
 };
 
 export type PlannerCalendarDay = {
@@ -127,7 +263,7 @@ export type PlannerCalendarDay = {
 
 export type PlannerPeriodTimingStatus = "exact" | "date-only" | "invalid";
 
-export type PlannerCalendarLaneHeight = "compact" | "wrapped";
+export type PlannerCalendarLaneHeight = "compact";
 
 export type PlannerCalendarStrip = {
   key: string;
@@ -140,12 +276,19 @@ export type PlannerCalendarStrip = {
   continuesBefore: boolean;
   continuesAfter: boolean;
   timingStatus: PlannerPeriodTimingStatus;
-  hasStudentRow: boolean;
-  hasShopConflict: boolean;
+};
+
+export type PlannerCalendarStartMarker = {
+  key: string;
+  period: PlannerPeriod;
+  track: number;
+  leftPercent: number;
+  widthPercent: number;
 };
 
 export type PlannerWeekLayout = {
   eventStrips: PlannerCalendarStrip[];
+  eventStartMarkers: PlannerCalendarStartMarker[];
   recruitmentStrips: PlannerCalendarStrip[];
   eventLaneCount: number;
   recruitmentLaneCount: number;
@@ -161,8 +304,38 @@ export type PlannerMonthLayout = {
 };
 
 const RESOURCE_KEYS: readonly PlannerResourceKey[] = ["pyroxene", "oneTimeTicket", "tenTimeTicket"];
-export const CALENDAR_FORECAST_SOURCE_TYPES = ["event_reward", "raid", "buy", "other"] as const;
+export const CALENDAR_FORECAST_SOURCE_TYPES = ["event_reward", "raid", "buy", "other", "event"] as const;
 const CALENDAR_FORECAST_SOURCE_TYPE_SET: ReadonlySet<string> = new Set(CALENDAR_FORECAST_SOURCE_TYPES);
+
+export type PlannerDayResourceBreakdown = {
+  calendarSources: PlannerTimelineSource[];
+  otherSources: PlannerTimelineSource[];
+  otherChanges: PlannerResourceChange[];
+};
+
+function sumSourceChanges(sources: readonly PlannerTimelineSource[]): PlannerResourceChange[] {
+  const changes: PlannerResourceChange[] = [];
+  for (const source of sources) {
+    for (const change of source.changes) {
+      const aggregate = changes.find(({ key }) => key === change.key);
+      if (aggregate) aggregate.quantity += change.quantity;
+      else changes.push({ ...change });
+    }
+  }
+  return changes.sort((left, right) => RESOURCE_KEYS.indexOf(left.key) - RESOURCE_KEYS.indexOf(right.key));
+}
+
+export function partitionPlannerDayResources(day: PlannerDayResources): PlannerDayResourceBreakdown {
+  const calendarSources = day.sources.filter((source) => CALENDAR_FORECAST_SOURCE_TYPE_SET.has(source.type));
+  const otherSources = day.sources.filter(
+    (source) => !CALENDAR_FORECAST_SOURCE_TYPE_SET.has(source.type) && source.changes.length > 0,
+  );
+  return {
+    calendarSources,
+    otherSources,
+    otherChanges: sumSourceChanges(otherSources),
+  };
+}
 
 function toInstantKey(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
@@ -172,6 +345,11 @@ function isNavigablePlannerEvent(
   content: PlannerScheduleContentInput,
 ): content is PlannerScheduleContentInput & { kind: "event" } {
   return content.kind === "event" && !content.uid.startsWith("group:") && !content.tags?.includes("main_story_reward");
+}
+
+function getPlannerActualEventEndAt(content: PlannerScheduleContentInput): string | null {
+  if (content.endless === true) return null;
+  return content.actualEndAt !== undefined ? content.actualEndAt : content.until;
 }
 
 export function buildPlannerMonthDays(monthKey: string): PlannerCalendarDay[][] {
@@ -244,14 +422,17 @@ export function summarizePyroxeneTimeline(timeline: Timeline, timeZone: string):
     }
 
     const label =
-      entry.source.description?.trim() ||
-      entry.source.event?.name ||
-      PYROXENE_SOURCE_DEFINITIONS.find((source) => source.type === entry.source.type)?.label ||
-      null;
+      entry.source.type === "event"
+        ? "모집 소비"
+        : entry.source.description?.trim() ||
+          entry.source.event?.name ||
+          PYROXENE_SOURCE_DEFINITIONS.find((source) => source.type === entry.source.type)?.label ||
+          null;
     day.sources.push({
       key: entry.source.uid ?? `${entry.source.type}:${dateKey}:${index}`,
       type: entry.source.type,
       label,
+      ...(entry.source.event?.uid ? { eventUid: entry.source.event.uid } : {}),
       changes: sourceChanges,
     });
   }
@@ -267,17 +448,9 @@ export function projectPlannerCalendarResources(
 ): Record<string, PlannerDayResources> {
   return Object.fromEntries(
     Object.entries(resources).map(([dateKey, day]) => {
-      const sources = day.sources.filter((source) => CALENDAR_FORECAST_SOURCE_TYPE_SET.has(source.type));
-      const changes: PlannerResourceChange[] = [];
-      for (const source of sources) {
-        for (const change of source.changes) {
-          const aggregate = changes.find(({ key }) => key === change.key);
-          if (aggregate) aggregate.quantity += change.quantity;
-          else changes.push({ ...change });
-        }
-      }
-      changes.sort((left, right) => RESOURCE_KEYS.indexOf(left.key) - RESOURCE_KEYS.indexOf(right.key));
-      return [dateKey, { dateKey: day.dateKey, changes, sources }];
+      const { calendarSources } = partitionPlannerDayResources(day);
+      const changes = sumSourceChanges(calendarSources);
+      return [dateKey, { dateKey: day.dateKey, changes, sources: calendarSources }];
     }),
   );
 }
@@ -489,6 +662,7 @@ export function buildPlannerWeekLayout(
   if (week.length !== 7) {
     return {
       eventStrips: [],
+      eventStartMarkers: [],
       recruitmentStrips: [],
       eventLaneCount: 0,
       recruitmentLaneCount: 0,
@@ -496,13 +670,19 @@ export function buildPlannerWeekLayout(
   }
 
   const context = createPlannerWeekTemporalContext(week, timeZone);
-  const eventPeriods = periods.filter((period) => period.kind === "event");
+  const eventPeriods = periods.filter((period) => period.kind === "event" && !period.calendarStartOnly);
+  const startOnlyEventPeriods = periods
+    .filter((period) => period.kind === "event" && period.calendarStartOnly)
+    .filter((period) => period.startDate >= week[0].dateKey && period.startDate <= week[6].dateKey)
+    .flatMap((period) => {
+      if (!period.startAt) return [];
+      const startMs = getInstantTime(period.startAt);
+      if (!Number.isFinite(startMs) || startMs >= context.weekEndMs) return [];
+      const leftPercent = plannerInstantPosition(Math.max(startMs, context.weekStartMs), context.dayStartsMs) * 100;
+      return [{ period, startMs, leftPercent, widthPercent: Math.max(0, 100 - leftPercent) }];
+    })
+    .sort((left, right) => left.startMs - right.startMs || left.period.key.localeCompare(right.period.key));
   const recruitmentPeriods = periods.filter((period) => period.kind === "recruitment");
-  const shopConflictEventUids = new Set(
-    periods
-      .filter((period) => period.kind === "shop" && period.conflict && period.eventUid)
-      .map((period) => period.eventUid as string),
-  );
   const mergedRecruitmentKeys = new Set<string>();
   const eventDrafts: PlannerCalendarStripDraft[] = [];
 
@@ -523,8 +703,6 @@ export function buildPlannerWeekLayout(
       period: eventPeriod,
       recruitmentPeriods: matchingRecruitments,
       ...interval,
-      hasStudentRow: matchingRecruitments.some((period) => (period.students?.length ?? 0) > 0),
-      hasShopConflict: eventPeriod.eventUid ? shopConflictEventUids.has(eventPeriod.eventUid) : false,
     });
   }
 
@@ -539,17 +717,26 @@ export function buildPlannerWeekLayout(
       period: recruitmentPeriod,
       recruitmentPeriods: [],
       ...interval,
-      hasStudentRow: false,
-      hasShopConflict: false,
     });
   }
 
   const eventStrips = packPlannerCalendarStrips(eventDrafts);
+  const eventStripLaneCount = eventStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0);
+  const eventStartMarkers: PlannerCalendarStartMarker[] = startOnlyEventPeriods.map(
+    ({ period, leftPercent, widthPercent }, index) => ({
+      key: period.key,
+      period,
+      track: eventStripLaneCount + index,
+      leftPercent,
+      widthPercent,
+    }),
+  );
   const recruitmentStrips = packPlannerCalendarStrips(recruitmentDrafts);
   return {
     eventStrips,
+    eventStartMarkers,
     recruitmentStrips,
-    eventLaneCount: eventStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0),
+    eventLaneCount: eventStripLaneCount + eventStartMarkers.length,
     recruitmentLaneCount: recruitmentStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0),
   };
 }
@@ -563,13 +750,7 @@ export function buildPlannerMonthLayout(
   const weekLayouts = weeks.map((week) => buildPlannerWeekLayout(periods, week, timeZone));
   const maxEventLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.eventLaneCount), 0);
   const maxRecruitmentLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.recruitmentLaneCount), 0);
-  const eventLaneHeights: PlannerCalendarLaneHeight[] = Array.from({ length: maxEventLaneCount }, (_, track) =>
-    weekLayouts.some((layout) =>
-      layout.eventStrips.some((strip) => strip.kind === "combined" && strip.track === track && strip.hasStudentRow),
-    )
-      ? "wrapped"
-      : "compact",
-  );
+  const eventLaneHeights: PlannerCalendarLaneHeight[] = Array.from({ length: maxEventLaneCount }, () => "compact");
   return {
     monthKey,
     weeks,
@@ -642,16 +823,22 @@ export function buildPlannerPeriods({
 
   for (const content of contents) {
     if (!isNavigablePlannerEvent(content) || !relatedEventUids.has(content.uid)) continue;
+    const actualEndAt = getPlannerActualEventEndAt(content);
+    const calendarStartOnly = actualEndAt === null;
+    const startDate = formatPlannerPeriodDate(content.since, timeZone);
     periods.push({
       key: `event:${content.uid}`,
       kind: "event",
       name: content.name,
-      startDate: formatPlannerPeriodDate(content.since, timeZone),
-      endDate: formatPlannerPeriodEndDate(content.until, timeZone),
+      startDate,
+      endDate: actualEndAt ? formatPlannerPeriodEndDate(actualEndAt, timeZone) : startDate,
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
-      endAt: content.until,
+      endAt: actualEndAt,
+      runType: content.runType,
+      endless: content.endless,
+      calendarStartOnly,
       eventUid: content.uid,
     });
   }
@@ -718,7 +905,6 @@ export function buildPlannerPeriods({
       startAt: shop.startAt,
       endAt: shop.endAt,
       eventUid: shop.timelineUid,
-      conflict: shop.conflict,
     });
   }
 
@@ -745,16 +931,22 @@ export function buildPublicPlannerPeriods({
   const periods: PlannerPeriod[] = [];
 
   for (const content of eventContents.values()) {
+    const actualEndAt = getPlannerActualEventEndAt(content);
+    const calendarStartOnly = actualEndAt === null;
+    const startDate = formatPlannerPeriodDate(content.since, timeZone);
     periods.push({
       key: `event:${content.uid}`,
       kind: "event",
       name: content.name,
-      startDate: formatPlannerPeriodDate(content.since, timeZone),
-      endDate: formatPlannerPeriodEndDate(content.until, timeZone),
+      startDate,
+      endDate: actualEndAt ? formatPlannerPeriodEndDate(actualEndAt, timeZone) : startDate,
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
-      endAt: content.until,
+      endAt: actualEndAt,
+      runType: content.runType,
+      endless: content.endless,
+      calendarStartOnly,
       eventUid: content.uid,
     });
   }
@@ -840,14 +1032,31 @@ export function buildPlannerRecruitmentCandidatesForDate(
       continue;
     }
 
+    const eventPeriod = periods.find(
+      (candidatePeriod) => candidatePeriod.kind === "event" && candidatePeriod.eventUid === period.eventUid,
+    );
     const candidate =
       candidatesByEventUid.get(period.eventUid) ??
       ({
         eventUid: period.eventUid,
         eventName: period.name,
         startDate: period.startDate,
+        endDate: period.endDate,
+        startAt: period.startAt ?? null,
+        endAt: period.endAt ?? null,
+        imageUrl: eventPeriod?.imageUrl ?? null,
+        ...(eventPeriod?.runType ? { runType: eventPeriod.runType } : {}),
         students: [],
       } satisfies PlannerRecruitmentCandidatePeriod);
+    if (period.startDate < candidate.startDate) {
+      candidate.startDate = period.startDate;
+      candidate.startAt = period.startAt ?? null;
+    }
+    if (period.endDate > candidate.endDate) {
+      candidate.endDate = period.endDate;
+      candidate.endAt = period.endAt ?? null;
+    }
+    if (!candidate.imageUrl && eventPeriod?.imageUrl) candidate.imageUrl = eventPeriod.imageUrl;
     const existingStudentUids = new Set(candidate.students.map((student) => student.uid));
     for (const student of period.students ?? []) {
       if (existingStudentUids.has(student.uid)) continue;

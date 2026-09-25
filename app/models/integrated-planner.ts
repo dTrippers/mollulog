@@ -5,8 +5,7 @@ export function saveIntegratedPlannerRecruitmentPlan(
   userId: number,
   eventUid: string,
   studentUids: readonly string[],
-  expectedTrials: number | null,
   ctx?: ExecutionContext,
 ): Promise<void> {
-  return savePostgresIntegratedRecruitmentPlan(env, userId, eventUid, studentUids, expectedTrials, { ctx });
+  return savePostgresIntegratedRecruitmentPlan(env, userId, eventUid, studentUids, { ctx });
 }

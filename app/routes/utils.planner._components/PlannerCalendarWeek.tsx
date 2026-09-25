@@ -1,11 +1,12 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
-import type {
-  PlannerCalendarDay,
-  PlannerCalendarLaneHeight,
-  PlannerCalendarStrip,
-  PlannerDayResources,
-  PlannerPeriod,
-  PlannerWeekLayout,
+import {
+  getPlannerEventScheduleGroupsForDate,
+  type PlannerCalendarDay,
+  type PlannerCalendarLaneHeight,
+  type PlannerCalendarStrip,
+  type PlannerDayResources,
+  type PlannerPeriod,
+  type PlannerWeekLayout,
 } from "~/domain/integrated-planner";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import { formatInstant, getInstantTime } from "~/lib/date-time";
@@ -14,18 +15,27 @@ import { resourceImageUrl, studentImageUrl } from "~/models/assets";
 export type PlannerForecastStatus = "ready" | "pending" | "input-needed" | "unavailable";
 
 export const RESOURCE_PRESENTATION = {
-  pyroxene: { label: "청휘석", uid: PYROXENE_RESOURCE_UIDS.pyroxene },
-  oneTimeTicket: { label: "1회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.oneTimeTicket },
-  tenTimeTicket: { label: "10회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.tenTimeTicket },
+  pyroxene: { label: "청휘석", uid: PYROXENE_RESOURCE_UIDS.pyroxene, imageType: "currency" },
+  oneTimeTicket: { label: "1회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.oneTimeTicket, imageType: "item" },
+  tenTimeTicket: { label: "10회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.tenTimeTicket, imageType: "item" },
 } as const;
 
-const COMPACT_LANE_CLASS = "h-6 sm:h-7";
-const WRAPPED_LANE_CLASS = "h-[38px] sm:h-7";
+const PLANNER_LANE_CLASS = "h-7";
 
 export function formatSignedQuantity(quantity: number): string {
   if (quantity === 0) return "0";
   const sign = quantity > 0 ? "+" : "−";
   return `${sign}${new Intl.NumberFormat("ko-KR").format(Math.abs(quantity))}`;
+}
+
+export function formatCompactSignedQuantity(quantity: number): string {
+  if (Math.abs(quantity) < 10_000) return formatSignedQuantity(quantity);
+  const sign = quantity > 0 ? "+" : "−";
+  const compactValue = new Intl.NumberFormat("ko-KR", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(Math.abs(quantity));
+  return `${sign}${compactValue}`;
 }
 
 export function DailyResourceChanges({
@@ -43,8 +53,8 @@ export function DailyResourceChanges({
       className={
         compact
           ? calendarCell
-            ? "mt-1 flex min-w-0 max-w-full flex-nowrap items-start gap-x-1 overflow-x-auto overscroll-x-contain text-xs"
-            : "mt-1 flex min-w-0 flex-wrap items-start gap-x-1 gap-y-0.5 text-xs"
+            ? "mt-1.5 flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 py-1.5 text-xs max-sm:mt-1.5 max-sm:w-full max-sm:flex-col max-sm:items-center max-sm:justify-start max-sm:gap-x-0 max-sm:gap-y-1 max-sm:overflow-visible"
+            : "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs"
           : "flex flex-wrap items-center gap-2"
       }
     >
@@ -53,16 +63,27 @@ export function DailyResourceChanges({
         return (
           <span
             key={key}
-            className={`inline-flex ${calendarCell ? "shrink-0" : "min-w-0"} items-center gap-0.5 whitespace-nowrap`}
+            className={`inline-flex ${
+              calendarCell ? "shrink-0 max-sm:flex-col max-sm:items-center max-sm:gap-0" : "min-w-0"
+            } items-center gap-0.5 whitespace-nowrap`}
             title={resource.label}
           >
             <img
-              src={resourceImageUrl("currency", resource.uid)}
+              src={resourceImageUrl(resource.imageType, resource.uid)}
               alt={resource.label}
               className={compact ? "size-4 shrink-0 object-contain" : "size-5 shrink-0 object-contain"}
               loading="lazy"
             />
-            <span className="tabular-nums">{formatSignedQuantity(quantity)}</span>
+            <span className="tabular-nums text-xs leading-none">
+              {calendarCell ? (
+                <>
+                  <span className="max-[380px]:hidden">{formatSignedQuantity(quantity)}</span>
+                  <span className="hidden max-[380px]:inline">{formatCompactSignedQuantity(quantity)}</span>
+                </>
+              ) : (
+                formatSignedQuantity(quantity)
+              )}
+            </span>
           </span>
         );
       })}
@@ -85,11 +106,15 @@ function formatShortDate(dateKey: string): string {
   return `${Number(month)}/${Number(day)}`;
 }
 
-function stripClasses(period: PlannerPeriod, timingStatus: PlannerCalendarStrip["timingStatus"]): string {
-  const base =
-    period.kind === "recruitment"
-      ? "bg-primary/15 text-primary hover:bg-primary/20"
-      : "bg-muted text-foreground hover:bg-muted/80";
+function plannerRunTypeLabel(period: PlannerPeriod): string | null {
+  if (period.runType === "first") return "최초";
+  if (period.runType === "rerun") return "복각";
+  if (period.runType === "permanent") return "상설";
+  return null;
+}
+
+function stripClasses(timingStatus: PlannerCalendarStrip["timingStatus"]): string {
+  const base = "bg-muted text-foreground hover:bg-muted/80";
   return timingStatus === "exact" ? base : `${base} ring-1 ring-inset ring-amber-500/50`;
 }
 
@@ -146,17 +171,16 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): str
   const studentNames = students.length > 0 ? ` · 모집 목표: ${students.map(({ name }) => name).join(", ")}` : "";
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
-  const conflict = strip.hasShopConflict ? " · 상점 계획 비교 필요" : "";
-  return `${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${conflict}${timing}`;
+  return `${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
 }
 
 function visualStripTitle(strip: PlannerCalendarStrip): string {
-  if (strip.kind === "combined") return `${strip.period.name} · 모집`;
+  if (strip.kind === "combined") return strip.period.name;
   return strip.kind === "recruitment" ? "모집" : strip.period.name;
 }
 
-function laneClassName(height: PlannerCalendarLaneHeight): string {
-  return height === "wrapped" ? WRAPPED_LANE_CLASS : COMPACT_LANE_CLASS;
+function laneClassName(_height: PlannerCalendarLaneHeight): string {
+  return PLANNER_LANE_CLASS;
 }
 
 function stripStartOrder(strip: PlannerCalendarStrip): number {
@@ -168,6 +192,8 @@ function stripStartOrder(strip: PlannerCalendarStrip): number {
 export default function PlannerCalendarWeek({
   week,
   periods,
+  publicPeriods,
+  plannedPeriodKeys,
   calendarResources,
   forecastStatus,
   weekLayout,
@@ -184,6 +210,8 @@ export default function PlannerCalendarWeek({
 }: {
   week: PlannerCalendarDay[];
   periods: PlannerPeriod[];
+  publicPeriods: PlannerPeriod[];
+  plannedPeriodKeys: ReadonlySet<string>;
   calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
   weekLayout: PlannerWeekLayout;
@@ -207,10 +235,12 @@ export default function PlannerCalendarWeek({
       left.strip.period.name.localeCompare(right.strip.period.name) ||
       left.strip.key.localeCompare(right.strip.key),
   );
+  const eventStartMarkers = weekLayout.eventStartMarkers.map((marker) => ({ marker, laneIndex: marker.track }));
   const weekLabel = `${formatDate(week[0].dateKey)}부터 ${formatDate(week[6].dateKey)} 주간 일정`;
-  const gridTemplateRows = laneHeights.length > 0 ? `40px repeat(${laneHeights.length}, auto)` : "40px";
+  const gridTemplateRows =
+    laneHeights.length > 0 ? `minmax(40px, auto) repeat(${laneHeights.length}, 28px)` : "minmax(40px, auto)";
   const boundaryClasses = [
-    "relative grid grid-cols-7 border-x border-border/70",
+    "relative grid grid-cols-7 border-x border-border/70 max-sm:border-x-0",
     isFirstWeek ? "border-t-2" : "border-t",
     isLastWeek ? "border-b-2" : "",
   ].join(" ");
@@ -236,17 +266,24 @@ export default function PlannerCalendarWeek({
         />
       ))}
       {week.map((day, index) => {
-        const dayPeriods = periods.filter((period) => period.startDate <= day.dateKey && period.endDate >= day.dateKey);
-        const students = uniqueStudents(
-          periods.filter((period) => period.kind === "recruitment" && period.startDate === day.dateKey),
-        );
         const daySummary = calendarResources[day.dateKey];
         const isToday = day.inMonth && day.dateKey === todayDateKey;
-        const eventNames = [...new Set(dayPeriods.map((period) => period.name))];
+        const eventDescriptions = getPlannerEventScheduleGroupsForDate(
+          periods,
+          publicPeriods,
+          day.dateKey,
+          todayDateKey,
+          plannedPeriodKeys,
+        ).flatMap(({ group, isPersonal, publicRecruitmentPeriods }) => {
+          const recruitmentPeriods = [
+            ...(isPersonal ? group.periods.filter((period) => period.kind === "recruitment") : []),
+            ...publicRecruitmentPeriods,
+          ];
+          return [group.name, ...uniqueStudents(recruitmentPeriods).map(({ name }) => `모집 ${name}`)];
+        });
         const accessibleSummary = [
           formatDate(day.dateKey),
-          ...eventNames,
-          ...students.map(({ name }) => `모집 ${name}`),
+          ...eventDescriptions,
           ...(daySummary?.changes.map(
             ({ key, quantity }) => `${RESOURCE_PRESENTATION[key].label} ${formatSignedQuantity(quantity)}`,
           ) ?? []),
@@ -259,13 +296,13 @@ export default function PlannerCalendarWeek({
             aria-label={`${accessibleSummary} 일정 보기`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={selectedDate === day.dateKey}
-            className={`relative z-10 flex h-10 min-w-0 flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+            className={`relative z-10 flex h-auto min-h-10 min-w-0 flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:min-h-16 max-sm:px-0 ${
               day.inMonth ? "hover:bg-muted/60" : "text-muted-foreground hover:bg-muted/60"
             }`}
             style={{ gridColumn: index + 1, gridRow: 1 }}
             onClick={(event) => onSelectDate(day.dateKey, event.currentTarget)}
           >
-            <span className="flex w-full justify-end text-xs leading-none tabular-nums">
+            <span className="flex w-full justify-end px-1.5 pt-1.5 text-xs leading-none tabular-nums">
               <span
                 className={
                   isToday
@@ -302,9 +339,9 @@ export default function PlannerCalendarWeek({
                   type="button"
                   aria-label={stripAccessibleName(strip, timeZone)}
                   title={stripAccessibleName(strip, timeZone)}
-                  className={`absolute inset-y-0 z-10 flex min-h-6 min-w-6 flex-wrap content-center items-center gap-1 overflow-hidden rounded-sm border border-border/60 px-1 py-0.5 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
-                    strip.kind === "combined" ? "flex-wrap sm:flex-nowrap" : "flex-wrap"
-                  } ${stripClasses(strip.period, strip.timingStatus)}`}
+                  className={`absolute inset-y-0.5 z-10 flex min-h-6 min-w-6 flex-nowrap content-center items-center gap-1 overflow-hidden rounded-sm border border-border/60 px-1.5 py-0.5 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    strip.continuesBefore ? "rounded-l-none" : ""
+                  } ${strip.continuesAfter ? "rounded-r-none" : ""} ${stripClasses(strip.timingStatus)}`}
                   style={{ left: `${strip.leftPercent}%`, width: `${strip.widthPercent}%` }}
                   onClick={(event) => {
                     const dateKey = strip.period.startDate < week[0].dateKey ? week[0].dateKey : strip.period.startDate;
@@ -312,20 +349,8 @@ export default function PlannerCalendarWeek({
                   }}
                 >
                   {strip.continuesBefore ? <span aria-hidden="true">←</span> : null}
-                  <span
-                    className={`min-w-0 truncate ${
-                      strip.kind === "combined" ? "flex-[1_1_7rem] sm:flex-[1_1_0%]" : "flex-[1_1_7rem]"
-                    }`}
-                  >
-                    {visualStripTitle(strip)}
-                  </span>
+                  <span className="min-w-0 flex-[0_1_auto] truncate">{visualStripTitle(strip)}</span>
                   {students.length > 0 ? <PlannerRecruitmentAvatars students={students} maxVisible={3} /> : null}
-                  {strip.hasShopConflict ? (
-                    <ExclamationTriangleIcon
-                      className="size-3.5 shrink-0 text-amber-700 dark:text-amber-300"
-                      aria-hidden="true"
-                    />
-                  ) : null}
                   {strip.timingStatus !== "exact" ? (
                     <ExclamationTriangleIcon
                       className="size-3.5 shrink-0 text-amber-700 dark:text-amber-300"
@@ -343,6 +368,29 @@ export default function PlannerCalendarWeek({
                       {compactEndLabel ? <span>{formatShortDate(strip.period.endDate)}</span> : null}
                     </span>
                   ) : null}
+                </button>
+              );
+            })}
+          {eventStartMarkers
+            .filter(({ laneIndex }) => laneIndex === gridRow - 2)
+            .map(({ marker }) => {
+              const runType = plannerRunTypeLabel(marker.period);
+              const label = `${runType ? `${runType} · ` : ""}${marker.period.name}`;
+              const startsAt = marker.period.startAt
+                ? formatInstant(marker.period.startAt, { timeZone, format: "M/D HH:mm" })
+                : null;
+              const accessibleName = `${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
+              return (
+                <button
+                  key={`${marker.key}:${week[0].dateKey}`}
+                  type="button"
+                  aria-label={accessibleName}
+                  title={accessibleName}
+                  className="absolute inset-y-0.5 z-10 flex min-w-0 items-center overflow-hidden border-l-2 border-muted-foreground/50 px-1 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  style={{ left: `${marker.leftPercent}%`, width: `${marker.widthPercent}%` }}
+                  onClick={(event) => onSelectPeriod(marker.period.startDate, event.currentTarget, marker.period)}
+                >
+                  <span className="min-w-0 truncate">{label}</span>
                 </button>
               );
             })}
