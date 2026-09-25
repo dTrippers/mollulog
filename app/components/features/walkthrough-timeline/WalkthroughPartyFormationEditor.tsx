@@ -1,11 +1,18 @@
-import { MagnifyingGlassIcon, UserPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, NumberedListIcon, UserPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { StudentCard, TierSelector } from "~/components/features/students";
-import { type NumberInputFlowNavigationInputProps, useNumberInputFlowNavigation } from "~/components/primitives";
+import {
+  BottomSheet,
+  Button,
+  type NumberInputFlowNavigationInputProps,
+  useNumberInputFlowNavigation,
+} from "~/components/primitives";
 import { ABILITY_RELEASE_MAX_LEVEL, getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import type { WalkthroughParty, WalkthroughUnit } from "~/domain/walkthrough-timeline";
 import type { ImportStudent } from "~/domain/walkthrough-timeline-import";
 import { filterStudentByName } from "~/filters/student";
+import WalkthroughStartingSkillSequence from "./WalkthroughStartingSkillSequence";
+import { getWalkthroughEquipmentLabel } from "./walkthrough-equipment-label";
 
 type Props = {
   party: WalkthroughParty;
@@ -22,11 +29,7 @@ const GROWTH_FIELDS = [
   { field: "skillSub", label: "서브", min: 1, max: 10 },
 ] as const;
 
-const EQUIPMENT_FIELDS = [
-  { field: "equip1", label: "1슬롯" },
-  { field: "equip2", label: "2슬롯" },
-  { field: "equip3", label: "3슬롯" },
-] as const;
+const EQUIPMENT_FIELDS = ["equip1", "equip2", "equip3"] as const;
 
 const ABILITY_FIELDS = [
   { field: "abilityHp", label: "체력" },
@@ -90,6 +93,16 @@ function strikerCount(size: 6 | 10) {
   return size === 6 ? 4 : 6;
 }
 
+function startingSkillLimit(size: 6 | 10) {
+  return size - 1;
+}
+
+export function toggleStartingSkillStudentUid(order: string[], studentUid: string, limit: number) {
+  if (order.includes(studentUid)) return order.filter((uid) => uid !== studentUid);
+  if (order.length >= limit) return order;
+  return [...order, studentUid];
+}
+
 export function resizeWalkthroughParty(party: WalkthroughParty, currentSize: 6 | 10, size: 6 | 10): WalkthroughParty {
   if (currentSize === size) return party;
   const remappedUnits = party.units.flatMap((unit) => {
@@ -105,7 +118,9 @@ export function resizeWalkthroughParty(party: WalkthroughParty, currentSize: 6 |
   return {
     ...party,
     units: remappedUnits,
-    startingSkillStudentUids: party.startingSkillStudentUids.filter((uid) => selectedStudentUids.has(uid)),
+    startingSkillStudentUids: party.startingSkillStudentUids
+      .filter((uid) => selectedStudentUids.has(uid))
+      .slice(0, startingSkillLimit(size)),
   };
 }
 
@@ -119,14 +134,23 @@ export default function WalkthroughPartyFormationEditor({
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [search, setSearch] = useState("");
   const [activeResultIndex, setActiveResultIndex] = useState(0);
+  const [startingSkillAnnouncement, setStartingSkillAnnouncement] = useState("");
+  const [startingSkillSheetOpen, setStartingSkillSheetOpen] = useState(false);
+  const [stagedStartingSkillStudentUids, setStagedStartingSkillStudentUids] = useState<string[]>([]);
+  const [startingSkillSheetAnnouncement, setStartingSkillSheetAnnouncement] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const selectingSlotRef = useRef<number | null>(null);
   const slotRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const resultRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const strikers = strikerCount(partySize);
   const selectedUnit = party.units.find((unit) => unit.slot === selectedSlot);
-  const selectedStudent = students.find((student) => student.uid === selectedUnit?.studentUid);
   const requiredRole = selectedSlot < strikers ? "striker" : "special";
+  const startingSkillMaximum = startingSkillLimit(partySize);
+  const stagedStartingSkillLimitReached = stagedStartingSkillStudentUids.length >= startingSkillMaximum;
+  const studentsByUid = useMemo(
+    () => Object.fromEntries(students.map((student) => [student.uid, student])),
+    [students],
+  );
   const hasSearch = search.trim().length > 0;
   const occupiedStudentUids = useMemo(
     () => new Set(party.units.flatMap((unit) => unit.studentUid ?? [])),
@@ -216,79 +240,146 @@ export default function WalkthroughPartyFormationEditor({
   const removeStudentAtSlot = (slot: number) => {
     const unit = party.units.find((candidate) => candidate.slot === slot);
     if (!unit) return;
+    const studentName = unit.studentUid ? students.find((student) => student.uid === unit.studentUid)?.name : undefined;
+    const removedStartingSkill = Boolean(unit.studentUid && party.startingSkillStudentUids.includes(unit.studentUid));
     selectingSlotRef.current = null;
     onChange({
       ...party,
       units: party.units.filter((candidate) => candidate.slot !== slot),
       startingSkillStudentUids: party.startingSkillStudentUids.filter((uid) => uid !== unit.studentUid),
     });
+    setStartingSkillAnnouncement(
+      `${studentName ? `${studentName} 학생` : "선택한 학생"}을 편성에서 제외했어요.${removedStartingSkill ? " 시작 스킬 순서에서도 제외하고 뒤 번호를 갱신했어요." : ""}`,
+    );
   };
+
+  const openStartingSkillSettings = () => {
+    setStagedStartingSkillStudentUids([...party.startingSkillStudentUids]);
+    setStartingSkillSheetAnnouncement("");
+    setStartingSkillAnnouncement("");
+    setStartingSkillSheetOpen(true);
+  };
+
+  const closeStartingSkillSettings = () => setStartingSkillSheetOpen(false);
+
+  const resetStagedStartingSkills = () => {
+    setStagedStartingSkillStudentUids([]);
+    setStartingSkillSheetAnnouncement("시작 스킬 순서를 모두 비웠어요.");
+  };
+
+  const confirmStartingSkillSettings = () => {
+    const hasChanged =
+      stagedStartingSkillStudentUids.length !== party.startingSkillStudentUids.length ||
+      stagedStartingSkillStudentUids.some((uid, index) => uid !== party.startingSkillStudentUids[index]);
+    if (hasChanged) {
+      onChange({ ...party, startingSkillStudentUids: [...stagedStartingSkillStudentUids] });
+      setStartingSkillAnnouncement("시작 스킬 순서를 적용했어요.");
+    }
+    closeStartingSkillSettings();
+  };
+
+  const toggleStagedStartingSkill = (studentUid: string) => {
+    const index = stagedStartingSkillStudentUids.indexOf(studentUid);
+    if (index >= 0) {
+      setStagedStartingSkillStudentUids((current) =>
+        toggleStartingSkillStudentUid(current, studentUid, startingSkillMaximum),
+      );
+      const studentName = students.find((student) => student.uid === studentUid)?.name ?? "학생 정보 없음";
+      setStartingSkillSheetAnnouncement(`${studentName}: 시작 스킬 순서에서 제외했어요. 뒤 번호가 갱신됐어요.`);
+      return;
+    }
+    const nextOrder = stagedStartingSkillStudentUids.length + 1;
+    setStagedStartingSkillStudentUids((current) =>
+      toggleStartingSkillStudentUid(current, studentUid, startingSkillMaximum),
+    );
+    const studentName = students.find((student) => student.uid === studentUid)?.name ?? "학생 정보 없음";
+    setStartingSkillSheetAnnouncement(`${studentName}: 시작 스킬 ${nextOrder}번으로 추가했어요.`);
+  };
+
+  const renderSlot = (slot: number) => {
+    const unit = party.units.find((candidate) => candidate.slot === slot);
+    const student = students.find((candidate) => candidate.uid === unit?.studentUid);
+    const roleLabel = slot < strikers ? "스트라이커" : "스페셜";
+    const roleIndex = slot < strikers ? slot + 1 : slot - strikers + 1;
+    return (
+      <div
+        // Slots have stable numeric identities within a party, even when the party size changes.
+        key={`${party.uid}-slot-${slot}`}
+        className="group relative min-w-0"
+      >
+        <button
+          ref={(element) => {
+            slotRefs.current[slot] = element;
+          }}
+          type="button"
+          aria-label={`${roleLabel} ${roleIndex}${student ? `, ${student.name}` : ", 비어 있음"}`}
+          aria-pressed={selectedSlot === slot}
+          className={`relative w-full min-w-0 overflow-hidden rounded-lg text-left outline-none transition hover:brightness-95 ${
+            student ? "bg-transparent" : "bg-muted"
+          }`}
+          onFocus={() => setSelectedSlot(slot)}
+          onKeyDown={(event) => handleSlotNavigation(event, slot)}
+          onClick={() => setSelectedSlot(slot)}
+        >
+          {student ? (
+            <StudentCard uid={student.uid} name={student.name} role={student.role} namePlacement="overlay" flush />
+          ) : (
+            <div className="flex aspect-5/6 items-center justify-center text-muted-foreground">
+              <UserPlusIcon className="size-6" />
+            </div>
+          )}
+          {selectedSlot === slot ? (
+            <span
+              className="pointer-events-none absolute inset-0 rounded-lg border-2 border-primary"
+              aria-hidden="true"
+            />
+          ) : null}
+        </button>
+        {student ? (
+          <button
+            type="button"
+            aria-label={`${student.name} 슬롯에서 제외`}
+            className="absolute top-1 right-1 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive hover:text-white"
+            onClick={() => removeStudentAtSlot(slot)}
+          >
+            <XMarkIcon className="size-4" />
+          </button>
+        ) : null}
+      </div>
+    );
+  };
+
+  const formationGroups = [
+    {
+      label: "스트라이커",
+      slots: Array.from({ length: strikers }, (_, slot) => slot),
+      groupClass: partySize === 6 ? "col-span-4" : "col-span-6",
+      gridClass: partySize === 6 ? "grid-cols-4" : "grid-cols-6",
+    },
+    {
+      label: "스페셜",
+      slots: Array.from({ length: partySize - strikers }, (_, index) => strikers + index),
+      groupClass: partySize === 6 ? "col-span-2" : "col-span-4",
+      gridClass: partySize === 6 ? "grid-cols-2" : "grid-cols-4",
+    },
+  ];
 
   return (
     <div className="space-y-5">
-      <div>
-        <div className="grid grid-cols-10 gap-1">
-          {Array.from({ length: partySize }, (_, slot) => {
-            const unit = party.units.find((candidate) => candidate.slot === slot);
-            const student = students.find((candidate) => candidate.uid === unit?.studentUid);
-            const roleLabel = slot < strikers ? "스트라이커" : "스페셜";
-            const roleIndex = slot < strikers ? slot + 1 : slot - strikers + 1;
-            const isStartingSkill = Boolean(student && party.startingSkillStudentUids.includes(student.uid));
-            return (
-              <div
-                // Slots have stable numeric identities within a party, even when the party size changes.
-                // biome-ignore lint/suspicious/noArrayIndexKey: the index is the persisted slot identifier.
-                key={`${party.uid}-slot-${slot}`}
-                className="group relative min-w-0"
-              >
-                <button
-                  ref={(element) => {
-                    slotRefs.current[slot] = element;
-                  }}
-                  type="button"
-                  aria-label={`${roleLabel} ${roleIndex}${student ? `, ${student.name}` : ", 비어 있음"}`}
-                  aria-pressed={selectedSlot === slot}
-                  className={`relative w-full min-w-0 overflow-hidden rounded-lg text-left outline-none transition hover:brightness-95 ${
-                    student ? "bg-transparent" : "bg-muted"
-                  }`}
-                  onFocus={() => setSelectedSlot(slot)}
-                  onKeyDown={(event) => handleSlotNavigation(event, slot)}
-                  onClick={() => setSelectedSlot(slot)}
-                >
-                  {student ? (
-                    <StudentCard
-                      uid={student.uid}
-                      name={student.name}
-                      role={student.role}
-                      namePlacement="overlay"
-                      label={isStartingSkill ? <span className="whitespace-nowrap">시작 스킬</span> : undefined}
-                      flush
-                    />
-                  ) : (
-                    <div className="flex aspect-5/6 items-center justify-center text-muted-foreground">
-                      <UserPlusIcon className="size-6" />
-                    </div>
-                  )}
-                  {selectedSlot === slot && (
-                    <span
-                      className="pointer-events-none absolute inset-0 rounded-lg border-2 border-primary"
-                      aria-hidden="true"
-                    />
-                  )}
-                </button>
-                {student && (
-                  <button
-                    type="button"
-                    aria-label={`${student.name} 슬롯에서 제외`}
-                    className="absolute top-1 right-1 z-10 rounded-full bg-background/90 p-1 text-muted-foreground opacity-0 shadow-sm transition group-hover:opacity-100 group-focus-within:opacity-100 hover:bg-destructive hover:text-white"
-                    onClick={() => removeStudentAtSlot(slot)}
-                  >
-                    <XMarkIcon className="size-4" />
-                  </button>
-                )}
-              </div>
-            );
-          })}
+      <div className={`@container w-full min-w-0 ${partySize === 6 ? "sm:max-w-80" : "sm:max-w-[34rem]"}`}>
+        <div className={`grid w-full min-w-0 grid-cols-6 gap-2 ${partySize === 10 ? "@min-[544px]:grid-cols-10" : ""}`}>
+          {formationGroups.map((group) => (
+            <section
+              key={group.label}
+              className={`min-w-0 space-y-2 ${group.groupClass}`}
+              aria-label={`${group.label} 편성`}
+            >
+              <h3 className="text-xs font-semibold text-muted-foreground">
+                {group.label} {group.slots.length}명
+              </h3>
+              <div className={`grid gap-2 ${group.gridClass}`}>{group.slots.map(renderSlot)}</div>
+            </section>
+          ))}
         </div>
       </div>
 
@@ -328,7 +419,7 @@ export default function WalkthroughPartyFormationEditor({
                 id={`${party.uid}-student-results`}
                 role="listbox"
                 aria-label="학생 검색 결과"
-                className="grid grid-cols-10 gap-1"
+                className="grid grid-cols-5 gap-2 sm:grid-cols-10"
               >
                 {visibleStudents.map((student, index) => (
                   <button
@@ -369,27 +460,155 @@ export default function WalkthroughPartyFormationEditor({
         </div>
       )}
 
-      {selectedUnit?.studentUid && selectedStudent && (
-        <label className="flex min-h-8 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={party.startingSkillStudentUids.includes(selectedUnit.studentUid)}
-            disabled={
-              !party.startingSkillStudentUids.includes(selectedUnit.studentUid) &&
-              party.startingSkillStudentUids.length >= 3
-            }
-            onChange={(event) =>
-              onChange({
-                ...party,
-                startingSkillStudentUids: event.target.checked
-                  ? [...new Set([...party.startingSkillStudentUids, selectedUnit.studentUid as string])]
-                  : party.startingSkillStudentUids.filter((uid) => uid !== selectedUnit.studentUid),
-              })
-            }
+      <section className="space-y-2" aria-labelledby={`${party.uid}-starting-skills-heading`}>
+        <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 id={`${party.uid}-starting-skills-heading`} className="text-sm font-semibold">
+              시작 스킬 순서
+            </h3>
+            <span className="text-xs tabular-nums text-muted-foreground">
+              {party.startingSkillStudentUids.length} / {startingSkillMaximum}
+            </span>
+          </div>
+          <Button
+            text="시작 스킬 설정"
+            icon={NumberedListIcon}
+            variant="secondary"
+            size="sm"
+            className="sm:ml-auto"
+            onClick={openStartingSkillSettings}
           />
-          <span>시작 스킬로 설정</span>
-        </label>
-      )}
+        </div>
+        <WalkthroughStartingSkillSequence
+          partyUid={party.uid}
+          studentUids={party.startingSkillStudentUids}
+          studentsByUid={studentsByUid}
+          label="시작 스킬 순서"
+          emptyMessage="지정된 시작 스킬이 없어요."
+        />
+      </section>
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {startingSkillAnnouncement}
+      </p>
+
+      {startingSkillSheetOpen ? (
+        <BottomSheet
+          Icon={NumberedListIcon}
+          title="시작 스킬 설정"
+          description="학생을 누르면 순서에 추가되고, 다시 누르면 제외돼요."
+          onClose={closeStartingSkillSettings}
+        >
+          <div className="space-y-5 px-2 pb-4">
+            <div
+              className={`grid w-full min-w-0 grid-cols-6 gap-2 ${partySize === 10 ? "md:grid-cols-10" : ""} ${
+                partySize === 6 ? "sm:max-w-80" : "sm:max-w-[34rem]"
+              }`}
+            >
+              {formationGroups.map((group) => {
+                const occupiedSlots = group.slots.flatMap((slot) => {
+                  const unit = party.units.find((candidate) => candidate.slot === slot);
+                  return unit?.studentUid ? [unit] : [];
+                });
+                return (
+                  <section
+                    key={group.label}
+                    className={`min-w-0 space-y-3 ${group.groupClass}`}
+                    aria-label={`시작 스킬 설정 - ${group.label} 편성`}
+                  >
+                    <h3 className="text-xs font-semibold text-muted-foreground">
+                      {group.label} {occupiedSlots.length}명
+                    </h3>
+                    <div className={`grid gap-2 ${group.gridClass}`}>
+                      {occupiedSlots.map((unit) => {
+                        const uid = unit.studentUid;
+                        if (!uid) return null;
+
+                        const student = students.find((candidate) => candidate.uid === uid);
+                        const orderIndex = stagedStartingSkillStudentUids.indexOf(uid);
+                        const selected = orderIndex >= 0;
+                        const unavailableAtLimit = !selected && stagedStartingSkillLimitReached;
+                        const buttonLabel = student?.name ?? "학생 정보 없음";
+                        return (
+                          <button
+                            key={uid}
+                            type="button"
+                            aria-label={`${buttonLabel}, ${selected ? `시작 스킬 ${orderIndex + 1}번, 선택됨` : "시작 스킬에 선택 안 됨"}`}
+                            aria-pressed={selected}
+                            aria-describedby={
+                              unavailableAtLimit ? `${party.uid}-starting-skill-sheet-limit` : undefined
+                            }
+                            disabled={unavailableAtLimit}
+                            onClick={() => toggleStagedStartingSkill(uid)}
+                            className="relative min-w-0 rounded-lg text-left outline-none transition hover:brightness-95 focus-visible:-translate-y-1 focus-visible:z-20 focus-visible:ring-3 focus-visible:ring-ring focus-visible:ring-offset-3 focus-visible:ring-offset-popover disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {student ? (
+                              <StudentCard
+                                uid={student.uid}
+                                name={student.name}
+                                role={student.role}
+                                namePlacement="overlay"
+                                flush
+                              />
+                            ) : (
+                              <span className="flex aspect-5/6 items-center justify-center rounded-lg bg-muted px-1 text-center text-xs text-muted-foreground">
+                                학생 정보 없음
+                              </span>
+                            )}
+                            {selected ? (
+                              <span
+                                className="pointer-events-none absolute inset-0 z-10 rounded-lg border-[3px] border-background outline outline-2 outline-foreground"
+                                aria-hidden="true"
+                              />
+                            ) : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+
+            <section className="space-y-2" aria-labelledby={`${party.uid}-starting-skill-staged-heading`}>
+              <div className="flex items-baseline justify-between gap-2">
+                <h3 id={`${party.uid}-starting-skill-staged-heading`} className="text-sm font-semibold">
+                  선택한 시작 스킬 순서
+                </h3>
+                <span className="text-xs tabular-nums text-muted-foreground">
+                  {stagedStartingSkillStudentUids.length} / {startingSkillMaximum}
+                </span>
+              </div>
+              {stagedStartingSkillLimitReached ? (
+                <p id={`${party.uid}-starting-skill-sheet-limit`} className="text-sm text-muted-foreground">
+                  {partySize}인 편성은 시작 스킬을 최대 {startingSkillMaximum}명까지 지정할 수 있어요.
+                </p>
+              ) : null}
+              <WalkthroughStartingSkillSequence
+                partyUid={`${party.uid}-staged`}
+                studentUids={stagedStartingSkillStudentUids}
+                studentsByUid={studentsByUid}
+                label="선택한 시작 스킬 순서"
+                emptyMessage="선택한 학생이 없어요."
+              />
+              <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {startingSkillSheetAnnouncement}
+              </p>
+            </section>
+          </div>
+          <div className="sticky bottom-0 mt-auto flex shrink-0 items-center gap-2 bg-popover pt-3 pb-1">
+            <Button
+              text="초기화"
+              variant="danger-subtle"
+              disabled={stagedStartingSkillStudentUids.length === 0}
+              onClick={resetStagedStartingSkills}
+            />
+            <div className="ml-auto grid min-w-0 flex-1 grid-cols-2 gap-2">
+              <Button text="취소" variant="secondary" fullWidth onClick={closeStartingSkillSettings} />
+              <Button text="순서 적용" variant="inverse" fullWidth onClick={confirmStartingSkillSettings} />
+            </div>
+          </div>
+        </BottomSheet>
+      ) : null}
     </div>
   );
 }
@@ -451,13 +670,7 @@ export function WalkthroughPartyGrowthEditor({ party, students, onChange }: Grow
             </th>
             <th scope="col" className="w-36 border-l border-border px-2 py-2 font-semibold">
               <span>장비</span>
-              <span className="mt-1 flex font-medium">
-                {EQUIPMENT_FIELDS.map(({ field, label }) => (
-                  <span key={field} className="min-w-0 flex-1">
-                    {label}
-                  </span>
-                ))}
-              </span>
+              <span className="mt-1 block font-medium">종류별 레벨</span>
             </th>
             <th scope="col" className="w-36 border-l border-border px-2 py-2 font-semibold">
               <span>능력 해방</span>
@@ -544,21 +757,39 @@ export function WalkthroughPartyGrowthEditor({ party, students, onChange }: Grow
                       </div>
                     </td>
                     <td className="border-l border-border px-2 py-2">
-                      <div className="flex h-9 overflow-hidden rounded-md border border-input bg-background">
-                        {EQUIPMENT_FIELDS.map(({ field, label }, index) => (
-                          <div key={field} className={`min-w-0 flex-1 ${index === 0 ? "" : "border-l border-input"}`}>
-                            <CompactGrowthInput
-                              label={`${student.name} 장비 ${label}`}
-                              hideLabel
-                              grouped
-                              min={1}
-                              max={10}
-                              value={unit.snapshot?.[field] ?? null}
-                              inputProps={growthInputNavigation.getInputProps()}
-                              onChange={(value) => updateSnapshotField(unit, field, value)}
-                            />
-                          </div>
-                        ))}
+                      <div className="space-y-1">
+                        <div className="grid grid-cols-3 gap-1 text-center text-xs text-muted-foreground">
+                          {EQUIPMENT_FIELDS.map((field, index) => {
+                            const equipmentLabel = getWalkthroughEquipmentLabel(student.equipments, index);
+                            return (
+                              <span key={field} className="min-w-0 break-words leading-tight" title={equipmentLabel}>
+                                {equipmentLabel}
+                              </span>
+                            );
+                          })}
+                        </div>
+                        <div className="flex h-9 overflow-hidden rounded-md border border-input bg-background">
+                          {EQUIPMENT_FIELDS.map((field, index) => {
+                            const equipmentLabel = getWalkthroughEquipmentLabel(student.equipments, index);
+                            return (
+                              <div
+                                key={field}
+                                className={`min-w-0 flex-1 ${index === 0 ? "" : "border-l border-input"}`}
+                              >
+                                <CompactGrowthInput
+                                  label={`${student.name} ${equipmentLabel} 레벨`}
+                                  hideLabel
+                                  grouped
+                                  min={1}
+                                  max={10}
+                                  value={unit.snapshot?.[field] ?? null}
+                                  inputProps={growthInputNavigation.getInputProps()}
+                                  onChange={(value) => updateSnapshotField(unit, field, value)}
+                                />
+                              </div>
+                            );
+                          })}
+                        </div>
                       </div>
                     </td>
                     <td className="border-l border-border px-2 py-2">

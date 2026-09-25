@@ -13,7 +13,7 @@ import type { TimelineAction, TimelineStep, WalkthroughParty } from "~/domain/wa
 import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
 
-export type TimelineViewerStudent = { name: string };
+export type TimelineViewerStudent = { name: string; equipments?: string[] };
 
 export type TimelineViewerItem = {
   partyNumber: number;

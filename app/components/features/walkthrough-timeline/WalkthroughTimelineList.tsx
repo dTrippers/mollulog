@@ -1,9 +1,10 @@
 import { ArrowRightIcon, PlusIcon } from "@heroicons/react/24/outline";
-import dayjs from "dayjs";
 import { Link } from "react-router";
 import LikeButton from "~/components/features/engagement/LikeButton";
+import { AttributeBadge } from "~/components/primitives";
 import Button from "~/components/primitives/Button";
 import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
+import { formatInstant } from "~/lib/date-time";
 import { TimelineStudentImage } from "./WalkthroughTimelineViewer";
 
 export function WalkthroughTimelineList({
@@ -47,6 +48,7 @@ export function WalkthroughTimelineList({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate font-semibold">{timeline.title}</h2>
+                      {timeline.isAuto ? <AttributeBadge text="오토" color={null} /> : null}
                       {timeline.visibility !== "public" && (
                         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                           {timeline.visibility === "unlisted" ? "목록 미노출" : "나만 보기"}
@@ -57,7 +59,7 @@ export function WalkthroughTimelineList({
                       {authorsById[timeline.userId] ? `@${authorsById[timeline.userId]} · ` : ""}
                       {timeline.document.parties.length}파티 ·{" "}
                       {timeline.document.parties.reduce((count, party) => count + party.steps.length, 0)}단계 ·{" "}
-                      {dayjs(timeline.updatedAt).format("YYYY.MM.DD")}
+                      {formatInstant(timeline.updatedAt, { timeZone: "Asia/Seoul" })}
                     </p>
                     {usedStudentUids.length > 0 && (
                       <fieldset className="mt-3 flex -space-x-1">

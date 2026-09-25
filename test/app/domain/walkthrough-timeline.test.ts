@@ -4,6 +4,7 @@ import {
   isWalkthroughTimelineVisibility,
   parseWalkthroughTimelineDocument,
   WALKTHROUGH_TIMELINE_DIFFICULTIES,
+  WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
   type WalkthroughTimelineDocument,
 } from "~/domain/walkthrough-timeline";
 
@@ -17,7 +18,7 @@ describe("walkthrough timeline visibility", () => {
 function validDocument(): WalkthroughTimelineDocument {
   return {
     type: "walkthrough_timeline",
-    schemaVersion: 1,
+    schemaVersion: WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
     partySize: 6,
     context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
     parties: [
@@ -41,9 +42,48 @@ function validDocument(): WalkthroughTimelineDocument {
   };
 }
 
+function legacyDocument(): unknown {
+  return {
+    ...validDocument(),
+    schemaVersion: 1,
+    parties: [
+      {
+        uid: "party-1",
+        order: 0,
+        startingSkillStudentUids: ["student-2", "student-1"],
+        units: [
+          { slot: 1, studentUid: "student-1" },
+          { slot: 4, studentUid: "student-2" },
+        ],
+        steps: [],
+      },
+    ],
+  };
+}
+
 describe("parseWalkthroughTimelineDocument", () => {
-  it("accepts a version 1 walkthrough timeline", () => {
+  it("accepts a current walkthrough timeline", () => {
     expect(parseWalkthroughTimelineDocument(validDocument())).toEqual(validDocument());
+  });
+
+  it("converts version 1 starting skills to left-to-right slot order", () => {
+    expect(parseWalkthroughTimelineDocument(legacyDocument())).toMatchObject({
+      schemaVersion: WALKTHROUGH_TIMELINE_SCHEMA_VERSION,
+      parties: [{ startingSkillStudentUids: ["student-1", "student-2"] }],
+    });
+  });
+
+  it("preserves the new explicit starting skill order", () => {
+    const document = validDocument();
+    document.parties[0].units = [
+      { slot: 1, studentUid: "student-1" },
+      { slot: 4, studentUid: "student-2" },
+    ];
+    document.parties[0].startingSkillStudentUids = ["student-2", "student-1"];
+    expect(parseWalkthroughTimelineDocument(document).parties[0].startingSkillStudentUids).toEqual([
+      "student-2",
+      "student-1",
+    ]);
   });
 
   it("accepts every raid difficulty", () => {
@@ -55,9 +95,37 @@ describe("parseWalkthroughTimelineDocument", () => {
   });
 
   it("rejects unknown schema versions instead of applying a fallback", () => {
-    expect(() => parseWalkthroughTimelineDocument({ ...validDocument(), schemaVersion: 2 })).toThrow(
+    expect(() => parseWalkthroughTimelineDocument({ ...validDocument(), schemaVersion: 999 })).toThrow(
       InvalidWalkthroughTimelineDocumentError,
     );
+  });
+
+  it("allows empty timelines and validates ordered skill limits by party size", () => {
+    const six = validDocument();
+    six.parties[0].steps = [];
+    six.parties[0].units = Array.from({ length: 6 }, (_, slot) => ({ slot, studentUid: `s${slot}` }));
+    six.parties[0].startingSkillStudentUids = ["s0", "s1", "s2", "s3", "s4"];
+    expect(parseWalkthroughTimelineDocument(six)).toEqual(six);
+    six.parties[0].startingSkillStudentUids = ["s0", "s1", "s2", "s3", "s4", "s5"];
+    expect(() => parseWalkthroughTimelineDocument(six)).toThrow("5개");
+
+    const ten = { ...six, partySize: 10 as const, parties: [{ ...six.parties[0] }] };
+    ten.parties[0].units = Array.from({ length: 10 }, (_, slot) => ({ slot, studentUid: `s${slot}` }));
+    ten.parties[0].startingSkillStudentUids = Array.from({ length: 9 }, (_, index) => `s${index}`);
+    expect(parseWalkthroughTimelineDocument(ten)).toEqual(ten);
+
+    ten.parties[0].startingSkillStudentUids = Array.from({ length: 10 }, (_, index) => `s${index}`);
+    expect(() => parseWalkthroughTimelineDocument(ten)).toThrow("9개");
+  });
+
+  it("rejects duplicate ordered students and references outside the formation", () => {
+    const duplicate = validDocument();
+    duplicate.parties[0].units = [{ slot: 0, studentUid: "student-1" }];
+    duplicate.parties[0].startingSkillStudentUids = ["student-1", "student-1"];
+    expect(() => parseWalkthroughTimelineDocument(duplicate)).toThrow("중복");
+
+    duplicate.parties[0].startingSkillStudentUids = ["student-2"];
+    expect(() => parseWalkthroughTimelineDocument(duplicate)).toThrow("편성되지 않은 학생");
   });
 
   it("rejects an unsupported terrain", () => {

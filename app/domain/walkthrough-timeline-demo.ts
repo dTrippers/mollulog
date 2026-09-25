@@ -20,13 +20,14 @@ export const DEMO_WALKTHROUGH_TIMELINE = {
   description:
     "공략 타임라인 데모 예시입니다. 시작 스킬, 학생 성장도, 여러 시점과 연속 행동, 대상 지정이 어떻게 표시되는지 확인해보세요.",
   visibility: "public",
+  isAuto: false,
   bossUid: "binah",
   terrain: "street",
   defenseType: "heavy",
   maxDifficulty: "torment",
   document: {
     type: "walkthrough_timeline",
-    schemaVersion: 1,
+    schemaVersion: 2,
     partySize: 6,
     context: {
       bossUid: "binah",

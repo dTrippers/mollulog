@@ -32,7 +32,7 @@ const env = {} as Env;
 const ctx = {} as ExecutionContext;
 const document = {
   type: "walkthrough_timeline",
-  schemaVersion: 1,
+  schemaVersion: 2,
   partySize: 6,
   context: { bossUid: "boss-1", terrain: "indoor", defenseType: "heavy", maxDifficulty: "torment" },
   parties: [],
@@ -57,6 +57,7 @@ function validFields(overrides: Record<string, string> = {}) {
     title: "공략",
     description: "설명",
     visibility: "public",
+    isAuto: "false",
     document: JSON.stringify(document),
     ...overrides,
   };
@@ -71,6 +72,20 @@ beforeEach(() => {
 });
 
 describe("walkthrough timeline create action", () => {
+  it("persists an explicitly selected auto declaration", async () => {
+    const response = await createAction(actionArgs(requestWithForm(validFields({ isAuto: "true" }))));
+
+    expect(response).toMatchObject({ status: 302 });
+    expect(mockCreateTimeline).toHaveBeenCalledWith(env, 7, expect.objectContaining({ isAuto: true }), { ctx });
+  });
+
+  it("rejects an invalid auto declaration instead of treating it as unmarked", async () => {
+    const response = await createAction(actionArgs(requestWithForm(validFields({ isAuto: "yes" }))));
+
+    expect(response).toMatchObject({ data: { error: "오토 여부를 확인해주세요." }, init: { status: 400 } });
+    expect(mockCreateTimeline).not.toHaveBeenCalled();
+  });
+
   it("keeps validation errors actionable as 400 responses", async () => {
     const response = await createAction(actionArgs(requestWithForm(validFields({ visibility: "invalid" }))));
 
@@ -99,6 +114,17 @@ describe("walkthrough timeline create action", () => {
 });
 
 describe("walkthrough timeline edit action", () => {
+  it("persists a changed auto declaration", async () => {
+    const response = await editAction(
+      actionArgs(requestWithForm(validFields({ isAuto: "true" })), { uid: "timeline-1" }),
+    );
+
+    expect(response).toMatchObject({ status: 302 });
+    expect(mockUpdateTimeline).toHaveBeenCalledWith(env, "timeline-1", 7, expect.objectContaining({ isAuto: true }), {
+      ctx,
+    });
+  });
+
   it("keeps validation errors actionable as 400 responses", async () => {
     const response = await editAction(
       actionArgs(requestWithForm(validFields({ visibility: "invalid" })), { uid: "timeline-1" }),
