@@ -1,4 +1,4 @@
-import { BoltIcon, MagnifyingGlassIcon, UserPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { MagnifyingGlassIcon, NumberedListIcon, UserPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { StudentCard, TierSelector } from "~/components/features/students";
 import {
@@ -262,6 +262,11 @@ export default function WalkthroughPartyFormationEditor({
 
   const closeStartingSkillSettings = () => setStartingSkillSheetOpen(false);
 
+  const resetStagedStartingSkills = () => {
+    setStagedStartingSkillStudentUids([]);
+    setStartingSkillSheetAnnouncement("시작 스킬 순서를 모두 비웠어요.");
+  };
+
   const confirmStartingSkillSettings = () => {
     const hasChanged =
       stagedStartingSkillStudentUids.length !== party.startingSkillStudentUids.length ||
@@ -467,7 +472,7 @@ export default function WalkthroughPartyFormationEditor({
           </div>
           <Button
             text="시작 스킬 설정"
-            icon={BoltIcon}
+            icon={NumberedListIcon}
             variant="secondary"
             size="sm"
             className="sm:ml-auto"
@@ -488,7 +493,7 @@ export default function WalkthroughPartyFormationEditor({
 
       {startingSkillSheetOpen ? (
         <BottomSheet
-          Icon={BoltIcon}
+          Icon={NumberedListIcon}
           title="시작 스킬 설정"
           description="학생을 누르면 순서에 추가되고, 다시 누르면 제외돼요."
           onClose={closeStartingSkillSettings}
@@ -590,9 +595,17 @@ export default function WalkthroughPartyFormationEditor({
               </p>
             </section>
           </div>
-          <div className="sticky bottom-0 mt-auto flex shrink-0 gap-2 border-t border-border bg-popover/95 pt-3 pb-1">
-            <Button text="취소" variant="secondary" fullWidth onClick={closeStartingSkillSettings} />
-            <Button text="순서 적용" variant="inverse" fullWidth onClick={confirmStartingSkillSettings} />
+          <div className="sticky bottom-0 mt-auto flex shrink-0 items-center gap-2 bg-popover pt-3 pb-1">
+            <Button
+              text="초기화"
+              variant="danger-subtle"
+              disabled={stagedStartingSkillStudentUids.length === 0}
+              onClick={resetStagedStartingSkills}
+            />
+            <div className="ml-auto grid min-w-0 flex-1 grid-cols-2 gap-2">
+              <Button text="취소" variant="secondary" fullWidth onClick={closeStartingSkillSettings} />
+              <Button text="순서 적용" variant="inverse" fullWidth onClick={confirmStartingSkillSettings} />
+            </div>
           </div>
         </BottomSheet>
       ) : null}

@@ -391,6 +391,7 @@ function WalkthroughTimelineCard({
         summaryItems={[]}
         popupIdPrefix={`walkthrough-${timeline.uid}`}
         slotCount={timeline.document.partySize}
+        tierPlacement="below"
         centerRowLabels
         emptyText="편성 정보가 없어요"
         className="grow rounded-none pt-0 md:pt-0"

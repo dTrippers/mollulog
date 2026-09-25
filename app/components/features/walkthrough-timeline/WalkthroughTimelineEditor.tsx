@@ -617,6 +617,15 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
                 </Field>
               </div>
 
+              <Textarea
+                name="description"
+                label="공략 설명"
+                value={description}
+                onChange={setDescription}
+                rows={5}
+                placeholder="공략의 특징이나 주의사항을 입력해주세요."
+              />
+
               <label className="flex min-h-10 items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -626,15 +635,6 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
                 />
                 <span>오토로 클리어하는 공략이에요</span>
               </label>
-
-              <Textarea
-                name="description"
-                label="공략 설명"
-                value={description}
-                onChange={setDescription}
-                rows={5}
-                placeholder="공략의 특징이나 주의사항을 입력해주세요."
-              />
 
               <div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,1fr))]">
                 <Field label="보스">

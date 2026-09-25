@@ -1,4 +1,4 @@
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, ChevronUpIcon, StarIcon } from "@heroicons/react/16/solid";
 import type { ElementType, ReactNode } from "react";
 import { useState } from "react";
 import { StudentCard } from "~/components/features/students";
@@ -51,6 +51,7 @@ type RaidPartyCardProps = {
   className?: string;
   summaryClassName?: string;
   slotCount?: 6 | 10;
+  tierPlacement?: "overlay" | "below";
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
@@ -69,6 +70,7 @@ export default function RaidPartyCard({
   className,
   summaryClassName,
   slotCount = PARTY_SLOT_COUNT,
+  tierPlacement = "overlay",
   getStudentActions,
 }: RaidPartyCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -105,6 +107,7 @@ export default function RaidPartyCard({
                   popupIdPrefix={popupIdPrefix}
                   centerRowLabel={centerRowLabels}
                   slotCount={slotCount}
+                  tierPlacement={tierPlacement}
                   getStudentActions={getStudentActions}
                 />
               ))}
@@ -151,6 +154,7 @@ function PartyRow({
   popupIdPrefix,
   centerRowLabel,
   slotCount,
+  tierPlacement,
   getStudentActions,
 }: {
   row: RaidPartyRow;
@@ -158,6 +162,7 @@ function PartyRow({
   popupIdPrefix: string;
   centerRowLabel: boolean;
   slotCount: 6 | 10;
+  tierPlacement: "overlay" | "below";
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
   const slots = getFixedPartySlots(row.slots, slotCount);
@@ -187,6 +192,7 @@ function PartyRow({
             slot={slot}
             popupId={`${popupIdPrefix}-${rowIndex}-${slotIndex}-${slot.uid ?? "empty"}`}
             actions={getStudentActions?.(slot, rowIndex, slotIndex) ?? []}
+            tierPlacement={tierPlacement}
           />
         ))}
       </div>
@@ -205,15 +211,20 @@ function PartyStudentCard({
   slot,
   popupId,
   actions,
+  tierPlacement,
 }: {
   slot: RaidPartySlot;
   popupId: string;
   actions: RaidPartyStudentAction[];
+  tierPlacement: "overlay" | "below";
 }) {
+  const tierBelowImage = tierPlacement === "below";
+
   if (!slot.uid) {
     return (
       <div className="min-w-0">
         <div className="aspect-square w-full rounded-lg bg-muted/60" />
+        {tierBelowImage ? <PartyStudentTier tier={null} /> : null}
       </div>
     );
   }
@@ -228,19 +239,44 @@ function PartyStudentCard({
         attackType={slot.attackType}
         defenseType={slot.defenseType}
         role={slot.role}
-        tier={slot.tier}
+        tier={tierBelowImage ? undefined : slot.tier}
         level={slot.level}
         isAssist={slot.isAssist ?? undefined}
         grayscale={slot.grayscale}
         popups={slot.name && actions.length > 0 ? actions : undefined}
         popupId={slot.name && actions.length > 0 ? popupId : undefined}
       />
+      {tierBelowImage ? <PartyStudentTier tier={slot.tier} /> : null}
       {slot.badge ??
         (slot.unrecruited ? (
           <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
             미모집
           </span>
         ) : null)}
+    </div>
+  );
+}
+
+function PartyStudentTier({ tier }: { tier?: number | null }) {
+  if (tier == null) {
+    return <div className="mt-0.5 h-3.5" aria-hidden="true" />;
+  }
+
+  const usesUniqueWeapon = tier > 5;
+  const visibleTier = usesUniqueWeapon ? tier - 5 : tier;
+
+  return (
+    <div
+      className="mt-0.5 flex h-3.5 items-center justify-center gap-0.5 text-xs font-semibold leading-none tabular-nums"
+      role="img"
+      aria-label={`${usesUniqueWeapon ? "고유 장비" : "티어"} ${visibleTier}`}
+    >
+      {usesUniqueWeapon ? (
+        <img src="/icons/exclusive_weapon.png" alt="" aria-hidden="true" className="size-3.5 shrink-0" />
+      ) : (
+        <StarIcon className="size-3 shrink-0 text-yellow-500" aria-hidden="true" />
+      )}
+      <span className="text-foreground">{visibleTier}</span>
     </div>
   );
 }
