@@ -1,174 +1,386 @@
-import { AdjustmentsHorizontalIcon } from "@heroicons/react/24/outline";
-import { Button, Callout, ProfileImage } from "~/components/primitives";
-import type { StudentCalculatedStat, StudentCalculatorCatalog } from "~/domain/student-calculator";
-import type {
-  StudentComparisonSettingField,
-  StudentComparisonSettings,
-  StudentComparisonSide,
-} from "~/domain/student-comparison";
+import { ChevronDownIcon, StarIcon } from "@heroicons/react/16/solid";
+import { Fragment, type ReactNode } from "react";
+import { Button, ProfileImage } from "~/components/primitives";
+import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
+import {
+  getAbilityReleaseDisabledReason,
+  getEquipmentSlotUnlockLevel,
+  resolveStudentCalculatorState,
+  type StudentCalculatorCatalog,
+} from "~/domain/student-calculator";
+import type { StudentComparisonSettings, StudentComparisonSide } from "~/domain/student-comparison";
+import { ABILITY_RELEASE_MAX_LEVEL } from "~/domain/student-growth-state";
 import type { StudentComparisonStudent } from "~/models/student-comparison";
-import StudentComparisonSettingsEditor from "./StudentComparisonSettingsEditor";
 
 type StudentComparisonStudentSlotProps = {
   side: StudentComparisonSide;
-  isMobile: boolean;
   student: StudentComparisonStudent | null;
   uidError: string | null;
   chooserOpen: boolean;
-  settingsOpen: boolean;
   settings: StudentComparisonSettings | null;
-  invalidFields: StudentComparisonSettingField[];
+  equipmentCatalog: StudentCalculatorCatalog["equipment"] | null;
   settingsErrors: string[];
-  calculatorCatalog: StudentCalculatorCatalog | null;
-  stats: StudentCalculatedStat[] | null;
-  calculationFailed: boolean;
   onOpenChooser: () => void;
-  onToggleSettings: () => void;
-  onSettingChange: <K extends StudentComparisonSettingField>(field: K, value: StudentComparisonSettings[K]) => void;
-  onResetSettings: () => void;
+  onOpenSettings: () => void;
 };
 
-type SettingsSummary = { text: string; isError: boolean } | null;
+type SummaryValue = { label: string; value: string };
+type SummaryGroup = { title: string; values: SummaryValue[]; note?: string };
 
-function getSettingsSummary(settings: StudentComparisonSettings | null, settingsErrors: string[]): SettingsSummary {
-  if (!settings || settingsErrors.length > 0) {
-    return { text: "성장도 설정 확인 필요", isError: true };
-  }
+function showValue(value: number | null, format: (value: number) => string = String): string {
+  return value === null ? "자료 없음" : format(value);
+}
 
-  const changed: string[] = [];
-  if (settings.level !== 90) changed.push(`레벨 ${settings.level}`);
-  if (settings.tier !== 7) changed.push(`${settings.tier}성`);
-  if (settings.bond !== 100) changed.push(`인연 ${settings.bond}`);
-  if (settings.equipmentTier !== null) changed.push(`장비 T${settings.equipmentTier}`);
-  if (settings.includeSkillEffects) changed.push("스킬 효과 반영");
+function getGrowthSummary(student: StudentComparisonStudent, settings: StudentComparisonSettings): SummaryGroup[] {
+  const resolved = resolveStudentCalculatorState(student, settings);
+  const abilityReleaseReason = getAbilityReleaseDisabledReason(resolved.tier, resolved.level);
+  const weaponLevel = showValue(settings.weaponLevel, (value) => `Lv.${value}`);
+  const equipmentName = (index: number) => {
+    const category = student.equipments[index];
+    return category ? (EQUIPMENT_TYPE_LABELS[category] ?? `장비 ${index + 1}`) : `장비 ${index + 1}`;
+  };
+  const lockedEquipment = student.catalog
+    ? student.equipments.flatMap((category, index) => {
+        const unlockLevel = getEquipmentSlotUnlockLevel(index);
+        const label = category ? EQUIPMENT_TYPE_LABELS[category] : undefined;
+        return label && resolved.level < unlockLevel ? [`${label} · Lv.${unlockLevel}부터`] : [];
+      })
+    : [];
+  const selectedGear =
+    settings.equipSpecial === null
+      ? undefined
+      : student.catalog?.gear?.tiers.find((tier) => tier.tier === settings.equipSpecial);
+  const lockedGear =
+    selectedGear && resolved.bond < selectedGear.openFavorLevel
+      ? `미적용: 애용품 · 인연 Lv.${selectedGear.openFavorLevel}부터`
+      : null;
+  const abilityReleaseNote = abilityReleaseReason
+    ? `미적용 · ${resolved.tier <= 5 ? "고유무기 1성부터" : "Lv.90부터"}`
+    : null;
+  return [
+    {
+      title: "기본 성장",
+      note:
+        settings.tier !== null && settings.tier <= 5 && settings.weaponLevel !== null
+          ? "미적용 · 고유무기 1성부터"
+          : undefined,
+      values: [
+        { label: "레벨", value: showValue(settings.level, (value) => `Lv.${value}`) },
+        { label: "신비 해방", value: showValue(settings.tier, (value) => `${value}성`) },
+        { label: "인연 랭크", value: showValue(settings.bond, (value) => `Lv.${value}`) },
+        { label: "고유무기 레벨", value: weaponLevel },
+      ],
+    },
+    {
+      title: "스킬",
+      values: [
+        { label: "EX", value: showValue(settings.skillEx, (value) => `Lv.${value}`) },
+        { label: "기본", value: showValue(settings.skillNormal, (value) => `Lv.${value}`) },
+        { label: "강화", value: showValue(settings.skillEnhanced, (value) => `Lv.${value}`) },
+        { label: "서브", value: showValue(settings.skillSub, (value) => `Lv.${value}`) },
+      ],
+    },
+    {
+      title: "장비",
+      note: lockedEquipment.length > 0 ? `미적용: ${lockedEquipment.join(" · ")}` : undefined,
+      values: [
+        { label: `${equipmentName(0)} 티어`, value: showValue(settings.equip1, (value) => `T${value}`) },
+        { label: `${equipmentName(0)} 레벨`, value: showValue(settings.equip1Level, (value) => `Lv.${value}`) },
+        { label: `${equipmentName(1)} 티어`, value: showValue(settings.equip2, (value) => `T${value}`) },
+        { label: `${equipmentName(1)} 레벨`, value: showValue(settings.equip2Level, (value) => `Lv.${value}`) },
+        { label: `${equipmentName(2)} 티어`, value: showValue(settings.equip3, (value) => `T${value}`) },
+        { label: `${equipmentName(2)} 레벨`, value: showValue(settings.equip3Level, (value) => `Lv.${value}`) },
+        { label: "애용품 티어", value: showValue(settings.equipSpecial, (value) => `T${value}`) },
+      ],
+    },
+    {
+      title: "추가 성장",
+      note: [lockedGear, abilityReleaseNote].filter((note): note is string => note !== null).join(" · ") || undefined,
+      values: [
+        {
+          label: "능력 개방 체력",
+          value: showValue(settings.abilityHp, (value) => `Lv.${value}`),
+        },
+        {
+          label: "능력 개방 공격력",
+          value: showValue(settings.abilityAtk, (value) => `Lv.${value}`),
+        },
+        {
+          label: "능력 개방 치유력",
+          value: showValue(settings.abilityHeal, (value) => `Lv.${value}`),
+        },
+      ],
+    },
+  ];
+}
 
-  return changed.length > 0 ? { text: changed.join(" · "), isError: false } : null;
+function getQuickSummary(
+  student: StudentComparisonStudent,
+  settings: StudentComparisonSettings,
+  groups: SummaryGroup[],
+  equipmentCatalog: StudentCalculatorCatalog["equipment"] | null,
+): [ReactNode, ReactNode] {
+  const level = showValue(settings.level, (value) => `Lv.${value}`);
+  const bond = showValue(settings.bond, (value) => `인연 ${value}`);
+  const skillAtMaximum =
+    settings.skillEx === 5 && settings.skillNormal === 10 && settings.skillEnhanced === 10 && settings.skillSub === 10;
+  const skills = skillAtMaximum
+    ? "스킬 최대"
+    : `스킬 ${[settings.skillEx, settings.skillNormal, settings.skillEnhanced, settings.skillSub]
+        .map((value) => showValue(value))
+        .join("/")}`;
+  const equipmentTierFields = ["equip1", "equip2", "equip3"] as const;
+  const equipmentLevelFields = ["equip1Level", "equip2Level", "equip3Level"] as const;
+  const equipmentTiers = equipmentTierFields
+    .map((field, index) => {
+      const category = student.equipments[index];
+      return category ? showValue(settings[field], (tier) => `T${tier}`) : "자료 없음";
+    })
+    .join("/");
+  const equipmentAtMaximum =
+    equipmentCatalog !== null &&
+    student.catalog !== null &&
+    settings.level !== null &&
+    equipmentTierFields.every((tierField, index) => {
+      const levelField = equipmentLevelFields[index];
+      const category = student.equipments[index];
+      if (
+        levelField === undefined ||
+        category === undefined ||
+        category === null ||
+        settings.level === null ||
+        settings.level < getEquipmentSlotUnlockLevel(index)
+      ) {
+        return false;
+      }
+      const categoryEquipment = equipmentCatalog.filter((equipment) => equipment.category === category);
+      if (categoryEquipment.length === 0) return false;
+      const maxTier = Math.max(...categoryEquipment.map((equipment) => equipment.tier));
+      const selectedTier = settings[tierField];
+      const selectedEquipment = categoryEquipment.find((equipment) => equipment.tier === selectedTier);
+      return (
+        selectedTier === maxTier &&
+        selectedEquipment !== undefined &&
+        settings[levelField] === selectedEquipment.maxLevel
+      );
+    });
+  const equipmentSummary = equipmentAtMaximum ? "장비 최대" : `장비 ${equipmentTiers}`;
+  const abilityAtMaximum =
+    settings.abilityHp === ABILITY_RELEASE_MAX_LEVEL &&
+    settings.abilityAtk === ABILITY_RELEASE_MAX_LEVEL &&
+    settings.abilityHeal === ABILITY_RELEASE_MAX_LEVEL;
+  const abilityValues = [settings.abilityHp, settings.abilityAtk, settings.abilityHeal]
+    .map((value) => showValue(value))
+    .join("/");
+  const abilitySummary = abilityAtMaximum ? "능력 개방 최대" : `능력 개방 ${abilityValues}`;
+  const hasUnapplied = groups.some((group) => group.note !== undefined);
+  const tierSummary =
+    settings.tier === null ? (
+      "신비 해방 자료 없음"
+    ) : settings.tier <= 5 ? (
+      <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+        <span className="sr-only">신비 해방 </span>
+        <StarIcon aria-hidden="true" className="size-3.5 shrink-0 text-yellow-500" />
+        <span className="tabular-nums">{settings.tier}</span>
+        <span className="sr-only">성</span>
+      </span>
+    ) : (
+      <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+        <span className="sr-only">고유무기 </span>
+        <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="" aria-hidden="true" />
+        <span className="tabular-nums">{settings.tier - 5}</span>
+        <span className="sr-only">성</span>
+      </span>
+    );
+
+  return [
+    <>
+      {level} · {tierSummary} · {bond}
+    </>,
+    <>
+      <span className="whitespace-nowrap">{skills}</span>
+      {"\u00a0· "}
+      <span className="whitespace-nowrap">{equipmentSummary}</span>
+      {"\u00a0· "}
+      <span className="whitespace-nowrap">{abilitySummary}</span>
+      {hasUnapplied ? (
+        <>
+          {"\u00a0· "}
+          <span className="whitespace-nowrap">미적용 있음</span>
+        </>
+      ) : null}
+    </>,
+  ];
+}
+
+function withoutLevelPrefix(value: string): string {
+  return value.startsWith("Lv.") ? value.slice(3) : value;
+}
+
+function getGrowthDetails(summary: SummaryGroup[]): SummaryGroup[] {
+  const basicGrowth = summary.find((group) => group.title === "기본 성장");
+  const skills = summary.find((group) => group.title === "스킬");
+  const equipment = summary.find((group) => group.title === "장비");
+  const additionalGrowth = summary.find((group) => group.title === "추가 성장");
+  const valueFor = (group: SummaryGroup | undefined, label: string) =>
+    group?.values.find((value) => value.label === label)?.value ?? "자료 없음";
+  const skillDetails =
+    skills?.values.map(({ label, value }) => `${label} ${withoutLevelPrefix(value)}`).join(" · ") ?? "자료 없음";
+  const equipmentDetails = [0, 1, 2]
+    .map((index) => {
+      const tier = equipment?.values[index * 2];
+      const level = equipment?.values[index * 2 + 1];
+      const label = tier?.label.replace(/ 티어$/, "") ?? `장비 ${index + 1}`;
+      return `${label} ${tier?.value ?? "자료 없음"}/${level?.value ?? "자료 없음"}`;
+    })
+    .join(" · ");
+  const favoriteGearLabel =
+    equipment?.values.find((value) => value.label === "애용품 티어")?.label.replace(/ 티어$/, "") ?? "애용품";
+  const favoriteGearValue = valueFor(equipment, "애용품 티어");
+  const abilityLabels = ["체력", "공격", "치유"] as const;
+  const abilityDetails =
+    additionalGrowth?.values
+      .map(({ value }, index) => `${abilityLabels[index] ?? "자료 없음"} ${withoutLevelPrefix(value)}`)
+      .join(" / ") ?? "자료 없음";
+  const additionalNotes = [basicGrowth?.note, additionalGrowth?.note].filter(
+    (note): note is string => note !== undefined,
+  );
+
+  return [
+    { title: "스킬", values: [{ label: "", value: skillDetails }] },
+    {
+      title: "장비",
+      values: [{ label: "", value: equipmentDetails }],
+      note: equipment?.note,
+    },
+    {
+      title: "추가 성장",
+      values: [{ label: "", value: `${favoriteGearLabel} ${favoriteGearValue} · 능력 개방 ${abilityDetails}` }],
+      note: additionalNotes.length > 0 ? additionalNotes.join(" · ") : undefined,
+    },
+    { title: "스킬 효과", values: [{ label: "", value: "반영" }] },
+  ];
 }
 
 export default function StudentComparisonStudentSlot({
   side,
-  isMobile,
   student,
   uidError,
   chooserOpen,
-  settingsOpen,
   settings,
-  invalidFields,
+  equipmentCatalog,
   settingsErrors,
-  calculatorCatalog,
-  stats,
-  calculationFailed,
   onOpenChooser,
-  onToggleSettings,
-  onSettingChange,
-  onResetSettings,
+  onOpenSettings,
 }: StudentComparisonStudentSlotProps) {
   const sideLabel = side === "left" ? "첫 번째 학생" : "두 번째 학생";
   const studentName = student?.name ?? sideLabel;
-  const summary = student ? getSettingsSummary(settings, settingsErrors) : null;
-  const summaryId = `${side}-growth-settings-cue`;
-  const growthSettingsId = `${side}-growth-settings`;
+  const titleId = `${side}-student-title`;
+  const sideLabelId = `${side}-student-side-label`;
   const slotErrorId = `${side}-student-slot-error`;
+  const growthId = `${side}-growth-summary`;
+  const summary = student && settings ? getGrowthSummary(student, settings) : null;
+  const quickSummary =
+    student && settings && summary ? getQuickSummary(student, settings, summary, equipmentCatalog) : null;
+  const growthDetails = settings && summary ? getGrowthDetails(summary) : null;
 
   return (
-    <section aria-labelledby={`${side}-student-title`} className={`min-w-0 ${side === "left" ? "pr-2" : ""}`}>
-      <div className="min-w-0">
-        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-2">
-          <span aria-hidden="true" className="shrink-0">
-            <ProfileImage studentUid={student?.uid ?? null} imageSize={12} />
-          </span>
-          <div className="min-w-0">
-            <h2
-              id={`${side}-student-title`}
-              className="line-clamp-2 break-keep text-sm font-semibold text-foreground [overflow-wrap:anywhere] md:text-base"
-            >
-              {studentName}
-            </h2>
-          </div>
-        </div>
-
-        <div className="mt-2 grid gap-1">
-          <Button
-            text={student ? "다른 학생 선택" : "학생 선택"}
-            variant="secondary"
-            size="xs"
-            fullWidth
-            className={chooserOpen ? "bg-muted dark:bg-background" : ""}
-            aria-label={student ? `${student.name} 다른 학생 선택` : `${sideLabel} 선택`}
-            aria-describedby={uidError && !chooserOpen ? slotErrorId : undefined}
-            aria-expanded={chooserOpen}
-            aria-controls={!isMobile && chooserOpen ? "student-comparison-chooser" : undefined}
-            aria-haspopup={isMobile ? "dialog" : undefined}
-            onClick={onOpenChooser}
-          />
-          {student?.catalog ? (
-            <>
-              <Button
-                text="성장도 설정"
-                icon={AdjustmentsHorizontalIcon}
-                variant="secondary"
-                size="xs"
-                fullWidth
-                className={settingsOpen ? "bg-muted dark:bg-background" : ""}
-                aria-label={`${student.name} 성장도 설정`}
-                aria-describedby={summary ? summaryId : undefined}
-                aria-expanded={!isMobile ? settingsOpen : undefined}
-                aria-controls={!isMobile ? growthSettingsId : undefined}
-                aria-haspopup={isMobile ? "dialog" : undefined}
-                onClick={onToggleSettings}
-              />
-              {summary ? (
-                <p
-                  id={summaryId}
-                  className={`line-clamp-2 text-xs ${summary.isError ? "text-destructive" : "text-foreground"}`}
-                >
-                  {summary.text}
-                </p>
-              ) : null}
-            </>
-          ) : null}
-        </div>
-
-        {uidError && !chooserOpen ? (
-          <p id={slotErrorId} className="mt-1 text-xs leading-tight text-destructive" role="alert">
-            학생 정보 오류
+    <section
+      aria-labelledby={`${sideLabelId} ${titleId}`}
+      className="min-w-0 rounded-lg border border-border/70 bg-card p-3 sm:p-4"
+    >
+      <div className="flex min-h-12 min-w-0 items-center gap-[11px]">
+        <span aria-hidden="true" className="shrink-0 [&>*]:!size-12 [&_svg]:!size-10">
+          <ProfileImage studentUid={student?.uid ?? null} imageSize={12} />
+        </span>
+        <div className="min-w-0">
+          <p id={sideLabelId} className="text-[11px] leading-tight text-muted-foreground">
+            {sideLabel}
           </p>
-        ) : null}
-        {student && !student.catalog ? (
-          <p className="mt-1 text-xs text-muted-foreground">학생 능력치 자료 없음</p>
-        ) : null}
-        {student && settingsErrors.length > 0 ? (
-          <p className="sr-only" role="alert">
-            {settingsErrors.join(" ")}
-          </p>
-        ) : null}
+          <h2
+            id={titleId}
+            className="mt-0.5 min-w-0 break-keep text-[17px] font-semibold leading-tight text-foreground [overflow-wrap:anywhere]"
+          >
+            {student ? student.name : "학생 선택"}
+          </h2>
+        </div>
       </div>
 
-      {student?.catalog ? (
-        <div
-          id={growthSettingsId}
-          className={settingsOpen ? "mt-3 hidden rounded-md bg-muted/50 p-3 md:block md:p-4" : "hidden"}
-        >
-          {settingsOpen ? (
-            calculatorCatalog ? (
-              <StudentComparisonSettingsEditor
-                student={student}
-                catalog={calculatorCatalog}
-                settings={settings}
-                invalidFields={invalidFields}
-                settingsErrors={settingsErrors}
-                stats={stats}
-                calculationFailed={calculationFailed}
-                showStatsPreview={false}
-                onChange={onSettingChange}
-                onReset={onResetSettings}
-              />
-            ) : (
-              <Callout tone="destructive" title="능력치 카탈로그를 불러오지 못했어요" />
-            )
-          ) : null}
-        </div>
+      {uidError ? (
+        <p id={slotErrorId} className="mt-2 text-xs leading-tight text-destructive" role="alert">
+          학생 정보 오류 · 바꾸기에서 학생을 다시 선택해 주세요.
+        </p>
       ) : null}
+      {student && !student.catalog ? (
+        <p className="mt-2 text-xs text-muted-foreground">학생 능력치 자료가 없어 성장도를 편집할 수 없어요.</p>
+      ) : null}
+      {settingsErrors.length > 0 ? (
+        <p className="mt-2 text-xs text-destructive" role="alert">
+          {settingsErrors.join(" ")}
+        </p>
+      ) : null}
+
+      {student && settings && summary && quickSummary ? (
+        <>
+          <div id={growthId} className="mt-3 min-h-[43px] space-y-0.5 text-xs leading-[1.55]">
+            <p className="font-medium text-foreground">{quickSummary[0]}</p>
+            <p className="text-muted-foreground">{quickSummary[1]}</p>
+          </div>
+          <details className="group mt-[7px] text-xs">
+            <summary className="inline-flex w-fit cursor-pointer list-none items-center gap-1 rounded-sm text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+              <span>적용된 성장도 전체 보기</span>
+              <ChevronDownIcon
+                aria-hidden="true"
+                className="size-3.5 shrink-0 transition-transform group-open:rotate-180"
+              />
+            </summary>
+            <dl className="mt-2 grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-x-2 gap-y-1 border-t border-border/70 pt-2 text-xs leading-[1.5]">
+              {growthDetails?.map((group) => (
+                <Fragment key={group.title}>
+                  <dt className="text-muted-foreground">{group.title}</dt>
+                  <dd className="min-w-0 break-words text-foreground">
+                    {group.values.map(({ value }) => (
+                      <span key={value}>{value}</span>
+                    ))}
+                    {group.note ? <span className="block text-muted-foreground">{group.note}</span> : null}
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
+          </details>
+        </>
+      ) : student ? (
+        <p id={growthId} className="mt-3 text-xs text-destructive" role="alert">
+          성장도 링크를 확인해 주세요. 설정을 열어 초기화하면 다시 조절할 수 있어요.
+        </p>
+      ) : null}
+
+      <div className="mt-3 grid grid-cols-2 gap-[7px]">
+        <Button
+          text={student ? "다른 학생 선택" : "학생 선택"}
+          variant="secondary"
+          size="xs"
+          fullWidth
+          className="min-h-[34px] rounded-md border-border"
+          aria-label={student ? `${student.name} 다른 학생 선택` : `${sideLabel} 선택`}
+          aria-describedby={uidError ? slotErrorId : undefined}
+          aria-expanded={chooserOpen}
+          aria-haspopup="dialog"
+          onClick={onOpenChooser}
+        />
+        <Button
+          text="성장도 설정"
+          variant="secondary"
+          size="xs"
+          fullWidth
+          className="min-h-[34px] rounded-md border-border"
+          disabled={!student?.catalog}
+          aria-label={`${studentName} 성장도 설정`}
+          aria-describedby={student?.catalog ? growthId : undefined}
+          aria-haspopup="dialog"
+          onClick={onOpenSettings}
+        />
+      </div>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { memo } from "react";
-import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import { resourceImageUrl } from "~/models/assets";
 import HoverTooltip from "./HoverTooltip";
@@ -37,8 +37,10 @@ function ResourceCard({
   size = "md",
 }: ResourceCardProps) {
   let imageUrl = imageUrlProp;
-  if (itemUid) {
-    imageUrl = resourceImageUrl(resourceType ?? "item", itemUid);
+  if (itemUid && resourceType !== ResourceTypeEnum.Emblem) {
+    imageUrl = resourceImageUrl(resourceType ?? ResourceTypeEnum.Item, itemUid);
+  } else if (itemUid) {
+    imageUrl = undefined;
   }
 
   let sizeClass = "size-10";
@@ -57,12 +59,22 @@ function ResourceCard({
         <div
           className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
         >
-          <img
-            alt="아이템 이미지"
-            src={imageUrl}
-            className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
-            loading="lazy"
-          />
+          {imageUrl ? (
+            <img
+              alt="아이템 이미지"
+              src={imageUrl}
+              className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
+              loading="lazy"
+            />
+          ) : (
+            <span
+              aria-label={`${name ?? "자원"}: 이미지 없음`}
+              className="flex h-full w-full items-center justify-center px-0.5 text-center text-[9px] leading-tight text-muted-foreground"
+              role="img"
+            >
+              이미지 없음
+            </span>
+          )}
         </div>
         {label != null && (
           <div

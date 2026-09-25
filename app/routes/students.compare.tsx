@@ -1,10 +1,11 @@
 import { AdjustmentsHorizontalIcon, MagnifyingGlassIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunctionArgs } from "react-router";
-import { useLoaderData, useLocation, useNavigate, useNavigation } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunctionArgs } from "react-router";
+import { data, useFetcher, useLoaderData, useLocation, useNavigate, useNavigation } from "react-router";
+import { getActiveSensei } from "~/auth/authenticator.server";
 import { RouteErrorBoundary } from "~/components/features/layout";
 import { StudentSearchInput } from "~/components/features/students";
-import { BottomSheet, Button, Callout, SectionCard, SubTitle } from "~/components/primitives";
+import { BottomSheet, Callout, SectionCard, SubTitle } from "~/components/primitives";
 import type {
   StudentCalculatedStat,
   StudentCalculatorCatalog,
@@ -12,29 +13,35 @@ import type {
 } from "~/domain/student-calculator";
 import {
   calculateStudentComparisonStats,
+  DEFAULT_STUDENT_COMPARISON_SETTINGS,
+  getDefaultStudentComparisonSettings,
+  getStudentComparisonSettingsAfterTierChange,
   getStudentComparisonSettingsErrors,
+  getStudentComparisonTerrainAdaptations,
   parseStudentComparisonSettings,
+  resolveImportedStudentComparisonSettings,
+  STUDENT_COMPARISON_SETTING_FIELDS,
   type StudentComparisonSettingField,
   type StudentComparisonSettings,
   type StudentComparisonSide,
+  stripLegacyStudentComparisonSkillEffectParams,
 } from "~/domain/student-comparison";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import type { StudentComparisonStudent } from "~/models/student-comparison";
-import { getStudentComparisonData } from "~/models/student-comparison";
+import type { StudentComparisonSavedGrowth, StudentComparisonStudent } from "~/models/student-comparison";
+import { getStudentComparisonData, getStudentComparisonSavedGrowth } from "~/models/student-comparison";
 import StudentComparisonSettingsEditor from "./students.compare._components/StudentComparisonSettingsEditor";
 import StudentComparisonStudentSlot from "./students.compare._components/StudentComparisonStudentSlot";
 import StudentComparisonTable from "./students.compare._components/StudentComparisonTable";
 
 const sideKeys: readonly StudentComparisonSide[] = ["left", "right"];
-const settingFields: readonly StudentComparisonSettingField[] = [
-  "level",
-  "tier",
-  "bond",
-  "equipmentTier",
-  "includeSkillEffects",
-];
+const settingFields = STUDENT_COMPARISON_SETTING_FIELDS;
+
+type StudentComparisonImportResult =
+  | { kind: "success"; side: StudentComparisonSide; studentUid: string; state: StudentComparisonSavedGrowth }
+  | { kind: "unavailable"; side: StudentComparisonSide; studentUid: string; message: string }
+  | { kind: "error"; side: StudentComparisonSide | null; studentUid: string | null; message: string };
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const url = new URL(request.url);
@@ -53,7 +60,80 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   }
 };
 
-export function shouldRevalidate({ currentUrl, nextUrl, defaultShouldRevalidate }: ShouldRevalidateFunctionArgs) {
+export const action = async ({ context, request }: ActionFunctionArgs) => {
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "students.compare.action" });
+  if (request.method !== "POST") {
+    return data<StudentComparisonImportResult>(
+      { kind: "error", side: null, studentUid: null, message: "지원하지 않는 요청 방식이에요." },
+      { status: 405 },
+    );
+  }
+
+  const currentUser = await getActiveSensei(env, request, ctx);
+  if (!currentUser) {
+    return data<StudentComparisonImportResult>(
+      { kind: "error", side: null, studentUid: null, message: "내 학생 성장도를 가져오려면 로그인이 필요해요." },
+      { status: 401 },
+    );
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return data<StudentComparisonImportResult>(
+      { kind: "error", side: null, studentUid: null, message: "요청 정보를 확인해 주세요." },
+      { status: 400 },
+    );
+  }
+
+  const record = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : null;
+  const side = record?.side;
+  const studentUid = record?.studentUid;
+  if (
+    (side !== "left" && side !== "right") ||
+    typeof studentUid !== "string" ||
+    studentUid.length === 0 ||
+    studentUid.length > 128 ||
+    studentUid.trim() !== studentUid
+  ) {
+    return data<StudentComparisonImportResult>(
+      { kind: "error", side: null, studentUid: null, message: "학생 정보를 확인해 주세요." },
+      { status: 400 },
+    );
+  }
+
+  try {
+    const state = await getStudentComparisonSavedGrowth(env, currentUser.id, studentUid);
+    if (!state) {
+      return data<StudentComparisonImportResult>(
+        { kind: "unavailable", side, studentUid, message: "보유 학생의 저장된 성장도가 없어요." },
+        { status: 404 },
+      );
+    }
+    return data<StudentComparisonImportResult>({ kind: "success", side, studentUid, state });
+  } catch (error) {
+    logger.error("Failed to load saved student growth for comparison", error, {
+      currentUserId: currentUser.id,
+      studentUid,
+    });
+    return data<StudentComparisonImportResult>(
+      { kind: "error", side, studentUid, message: "저장된 성장도를 불러오지 못했어요." },
+      { status: 500 },
+    );
+  }
+};
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  defaultShouldRevalidate,
+  formMethod,
+}: ShouldRevalidateFunctionArgs) {
+  if (currentUrl.pathname === nextUrl.pathname && currentUrl.search === nextUrl.search && formMethod === "POST") {
+    return false;
+  }
   if (currentUrl.pathname === nextUrl.pathname && currentUrl.search !== nextUrl.search) {
     const selectionChanged = sideKeys.some(
       (side) => currentUrl.searchParams.get(side) !== nextUrl.searchParams.get(side),
@@ -130,18 +210,13 @@ export default function StudentComparisonPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const navigation = useNavigation();
+  const importFetcher = useFetcher<typeof action>();
+  const handledImportResult = useRef<StudentComparisonImportResult | undefined>(undefined);
   const params = useMemo(() => new URLSearchParams(location.search), [location.search]);
   const [choosingSide, setChoosingSide] = useState<StudentComparisonSide | null>(null);
   const [settingsSide, setSettingsSide] = useState<StudentComparisonSide | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia("(max-width: 767px)");
-    const update = () => setIsMobile(mediaQuery.matches);
-    update();
-    mediaQuery.addEventListener("change", update);
-    return () => mediaQuery.removeEventListener("change", update);
-  }, []);
+  const [importMessage, setImportMessage] = useState<{ side: StudentComparisonSide; message: string } | null>(null);
+  const [pendingImportSide, setPendingImportSide] = useState<StudentComparisonSide | null>(null);
 
   const directoryByUid = useMemo(
     () => new Map(data.students.map((student) => [student.uid, student])),
@@ -155,11 +230,28 @@ export default function StudentComparisonPage() {
     const leftUid = getSlotUid(params, "left");
     const rightUid = getSlotUid(params, "right");
     const duplicate = leftUid.uid !== null && rightUid.uid !== null && leftUid.uid === rightUid.uid;
+    const leftStudent = leftUid.uid ? (detailsByUid.get(leftUid.uid) ?? null) : null;
+    const rightStudent = rightUid.uid && !duplicate ? (detailsByUid.get(rightUid.uid) ?? null) : null;
+    const leftDefaults =
+      leftStudent?.catalog && data.catalog
+        ? getDefaultStudentComparisonSettings(
+            leftStudent as StudentCalculatorSource,
+            data.catalog as StudentCalculatorCatalog,
+          )
+        : DEFAULT_STUDENT_COMPARISON_SETTINGS;
+    const rightDefaults =
+      rightStudent?.catalog && data.catalog
+        ? getDefaultStudentComparisonSettings(
+            rightStudent as StudentCalculatorSource,
+            data.catalog as StudentCalculatorCatalog,
+          )
+        : DEFAULT_STUDENT_COMPARISON_SETTINGS;
     return {
       left: {
         ...leftUid,
-        settings: parseStudentComparisonSettings(params, "left"),
-        student: leftUid.uid ? (detailsByUid.get(leftUid.uid) ?? null) : null,
+        defaults: leftDefaults,
+        settings: parseStudentComparisonSettings(params, "left", leftDefaults),
+        student: leftStudent,
         uidError:
           leftUid.error ??
           (leftUid.uid && !directoryByUid.has(leftUid.uid) ? "학생을 찾지 못했어요." : null) ??
@@ -169,8 +261,9 @@ export default function StudentComparisonPage() {
       },
       right: {
         ...rightUid,
-        settings: parseStudentComparisonSettings(params, "right"),
-        student: rightUid.uid && !duplicate ? (detailsByUid.get(rightUid.uid) ?? null) : null,
+        defaults: rightDefaults,
+        settings: parseStudentComparisonSettings(params, "right", rightDefaults),
+        student: rightStudent,
         uidError:
           rightUid.error ??
           (duplicate ? "같은 학생은 두 칸에 선택할 수 없어요." : null) ??
@@ -180,7 +273,7 @@ export default function StudentComparisonPage() {
         duplicate,
       },
     };
-  }, [detailsByUid, directoryByUid, params]);
+  }, [data.catalog, detailsByUid, directoryByUid, params]);
 
   const calculated = useMemo(() => {
     const calculate = (side: StudentComparisonSide) => {
@@ -188,7 +281,13 @@ export default function StudentComparisonPage() {
       const settings = slot.settings.settings;
       const student = slot.student;
       const settingsErrors =
-        student && settings ? getStudentComparisonSettingsErrors(student as StudentCalculatorSource, settings) : [];
+        student && settings && data.catalog
+          ? getStudentComparisonSettingsErrors(
+              student as StudentCalculatorSource,
+              data.catalog as StudentCalculatorCatalog,
+              settings,
+            )
+          : [];
       if (!student || !settings || slot.uidError || settingsErrors.length > 0 || !data.catalog || !student.catalog) {
         return { stats: null, failed: false, settingsErrors };
       }
@@ -230,6 +329,31 @@ export default function StudentComparisonPage() {
     student: slotState.right.student,
     calculationFailed: calculated.right.failed,
   });
+  const terrainAdaptations = useMemo(() => {
+    const getAdaptations = (side: StudentComparisonSide) => {
+      const slot = slotState[side];
+      const settings = slot.settings.settings;
+      if (
+        !slot.student?.catalog ||
+        !data.catalog ||
+        !settings ||
+        slot.uidError ||
+        calculated[side].settingsErrors.length > 0
+      ) {
+        return null;
+      }
+      try {
+        return getStudentComparisonTerrainAdaptations(
+          slot.student as StudentCalculatorSource,
+          data.catalog as StudentCalculatorCatalog,
+          settings,
+        );
+      } catch {
+        return null;
+      }
+    };
+    return { left: getAdaptations("left"), right: getAdaptations("right") };
+  }, [calculated, data.catalog, slotState]);
   const isNavigatingToSelection = navigation.state === "loading" && navigation.location?.search !== location.search;
   const chooserSide = choosingSide;
   const chooserSlot = chooserSide ? slotState[chooserSide] : null;
@@ -241,31 +365,27 @@ export default function StudentComparisonPage() {
     return data.students.filter((student) => student.uid !== excludedUid);
   }, [chooserSide, data.students, slotState]);
 
-  const closeChooser = useCallback(() => {
-    if (!isMobile && choosingSide) {
-      document.querySelector<HTMLButtonElement>('[aria-controls="student-comparison-chooser"]')?.focus();
-    }
-    setChoosingSide(null);
-  }, [choosingSide, isMobile]);
-
-  useEffect(() => {
-    if (isMobile || choosingSide === null) return;
-
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      closeChooser();
-    };
-
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [choosingSide, closeChooser, isMobile]);
+  const closeChooser = () => setChoosingSide(null);
 
   const writeSearch = (nextParams: URLSearchParams, replace = true) => {
-    const search = nextParams.toString();
+    const search = stripLegacyStudentComparisonSkillEffectParams(nextParams).toString();
     void navigate(`${location.pathname}${search ? `?${search}` : ""}`, { replace });
   };
+
+  const writeSideSettings = useCallback(
+    (side: StudentComparisonSide, nextSettings: StudentComparisonSettings, replace = true) => {
+      const next = new URLSearchParams(location.search);
+      const defaults = slotState[side].defaults;
+      for (const field of settingFields) {
+        const value = nextSettings[field];
+        if (Object.is(value, defaults[field])) next.delete(`${side}.${field}`);
+        else next.set(`${side}.${field}`, value === null ? "none" : String(value));
+      }
+      const search = stripLegacyStudentComparisonSkillEffectParams(next).toString();
+      void navigate(`${location.pathname}${search ? `?${search}` : ""}`, { replace });
+    },
+    [location.pathname, location.search, navigate, slotState],
+  );
 
   const selectStudent = (side: StudentComparisonSide, uid: string) => {
     const next = new URLSearchParams(location.search);
@@ -274,6 +394,7 @@ export default function StudentComparisonPage() {
     writeSearch(next, false);
     setChoosingSide(null);
     setSettingsSide(null);
+    setImportMessage(null);
   };
 
   const updateSetting = <K extends StudentComparisonSettingField>(
@@ -281,63 +402,107 @@ export default function StudentComparisonPage() {
     field: K,
     value: StudentComparisonSettings[K],
   ) => {
-    const next = new URLSearchParams(location.search);
-    const key = `${side}.${field}`;
-    const defaultValue =
-      field === "equipmentTier"
-        ? null
-        : field === "includeSkillEffects"
-          ? false
-          : field === "level"
-            ? 90
-            : field === "tier"
-              ? 7
-              : 100;
-    if (value === defaultValue) next.delete(key);
-    else next.set(key, String(value));
-    writeSearch(next, true);
+    const currentSettings = slotState[side].settings.settings ?? slotState[side].defaults;
+    const nextSettings =
+      field === "tier" && typeof value === "number"
+        ? getStudentComparisonSettingsAfterTierChange({ ...currentSettings, [field]: value }, value)
+        : { ...currentSettings, [field]: value };
+    const equipmentLevelField = {
+      equip1: "equip1Level",
+      equip2: "equip2Level",
+      equip3: "equip3Level",
+    } as const;
+    if (field in equipmentLevelField && typeof value === "number") {
+      const index = Number(field.at(-1)) - 1;
+      const category = slotState[side].student?.equipments[index];
+      const equipment = category
+        ? (data.catalog as StudentCalculatorCatalog | null)?.equipment.find(
+            (candidate) => candidate.category === category && candidate.tier === value,
+          )
+        : undefined;
+      const levelField = equipmentLevelField[field as keyof typeof equipmentLevelField];
+      nextSettings[levelField] = equipment?.maxLevel ?? null;
+    }
+    writeSideSettings(side, nextSettings, true);
   };
 
   const resetSettings = (side: StudentComparisonSide) => {
     const next = new URLSearchParams(location.search);
     for (const field of settingFields) next.delete(`${side}.${field}`);
     writeSearch(next, true);
+    setImportMessage(null);
+  };
+
+  const importSavedGrowth = (side: StudentComparisonSide) => {
+    const student = slotState[side].student;
+    if (!student) return;
+    setPendingImportSide(side);
+    setImportMessage({ side, message: "내 학생 성장도를 불러오고 있어요." });
+    importFetcher.submit(
+      { side, studentUid: student.studentVariant.primaryStudent.uid },
+      { method: "post", encType: "application/json" },
+    );
   };
 
   const renderSlot = (side: StudentComparisonSide) => {
     const slot = slotState[side];
     const calculatedSide = calculated[side];
     const student = slot.student;
-    const settingsOpen = settingsSide === side;
     const settings = slot.settings.settings;
     return (
       <StudentComparisonStudentSlot
         key={side}
         side={side}
-        isMobile={isMobile}
         student={student}
         uidError={slot.uidError}
         chooserOpen={choosingSide === side}
-        settingsOpen={settingsOpen}
         settings={settings}
-        invalidFields={slot.settings.invalidFields}
+        equipmentCatalog={data.catalog?.equipment ?? null}
         settingsErrors={calculatedSide.settingsErrors}
-        calculatorCatalog={data.catalog as StudentCalculatorCatalog | null}
-        stats={calculatedSide.stats}
-        calculationFailed={calculatedSide.failed}
         onOpenChooser={() => {
           setChoosingSide(side);
           setSettingsSide(null);
+          setImportMessage(null);
         }}
-        onToggleSettings={() => {
+        onOpenSettings={() => {
           setChoosingSide(null);
-          setSettingsSide((current) => (current === side ? null : side));
+          setSettingsSide(side);
         }}
-        onSettingChange={(field, value) => updateSetting(side, field, value)}
-        onResetSettings={() => resetSettings(side)}
       />
     );
   };
+
+  useEffect(() => {
+    const result = importFetcher.data;
+    if (!result || result === handledImportResult.current) return;
+    handledImportResult.current = result;
+    const side = result.kind === "error" ? (result.side ?? pendingImportSide) : result.side;
+    setPendingImportSide(null);
+    if (!side) return;
+
+    if (result.kind === "unavailable" || result.kind === "error") {
+      setImportMessage({ side, message: result.message });
+      return;
+    }
+
+    const slot = slotState[side];
+    const student = slot.student;
+    if (!student || student.studentVariant.primaryStudent.uid !== result.studentUid) {
+      setImportMessage({ side, message: "학생 선택이 바뀌어 성장도를 적용하지 않았어요. 다시 시도해 주세요." });
+      return;
+    }
+    if (!data.catalog || !student.catalog) {
+      setImportMessage({ side, message: "학생 능력치 자료를 불러오지 못해 성장도를 적용하지 않았어요." });
+      return;
+    }
+    const settings = resolveImportedStudentComparisonSettings(
+      student as StudentCalculatorSource,
+      data.catalog as StudentCalculatorCatalog,
+      result.state,
+    );
+    writeSideSettings(side, settings, true);
+    setImportMessage({ side, message: "내 학생 성장도를 적용했어요." });
+  }, [data.catalog, importFetcher.data, pendingImportSide, slotState, writeSideSettings]);
 
   const activeSheetSide = settingsSide;
   const activeSheetSlot = activeSheetSide ? slotState[activeSheetSide] : null;
@@ -348,54 +513,23 @@ export default function StudentComparisonPage() {
   return (
     <>
       <SubTitle text="학생 비교" description="두 학생을 선택하고 각자의 성장도 설정을 조절해 능력치를 비교해보세요." />
-      <SectionCard className="min-w-0 overflow-hidden p-3 md:p-5">
-        <div className="grid grid-cols-[5rem_minmax(0,1fr)_minmax(0,1fr)] border-b border-border pb-3 sm:grid-cols-[8rem_minmax(0,1fr)_minmax(0,1fr)]">
-          <div aria-hidden="true" />
+      <div className="mt-4 min-w-0 space-y-4">
+        <div className="grid min-w-0 grid-cols-1 gap-3 md:grid-cols-2 md:gap-4">
           {renderSlot("left")}
           {renderSlot("right")}
         </div>
-        {!isMobile && chooserSide && chooserSlot ? (
-          <section
-            id="student-comparison-chooser"
-            aria-labelledby="student-comparison-chooser-title"
-            className="mt-4 rounded-md bg-muted/50 p-3 md:p-4"
-          >
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 id="student-comparison-chooser-title" className="text-sm font-semibold text-foreground">
-                {chooserSideLabel} 선택
-              </h3>
-              <Button text="취소" variant="secondary" size="xs" onClick={closeChooser} />
-            </div>
-            {chooserSlot.uidError ? (
-              <Callout tone="destructive" title={chooserSlot.uidError} className="mb-3">
-                학생을 선택하면 링크를 바로잡을 수 있어요.
-              </Callout>
-            ) : null}
-            <StudentSearchInput
-              key={chooserSide}
-              ariaLabel={`${chooserSideLabel} 검색`}
-              placeholder="학생 이름으로 찾기"
-              size="sm"
-              grid={6}
-              mobileGrid={4}
-              layout="responsive-wrap"
-              cardSize="md"
-              showNoResults
-              students={chooserStudents}
-              onSelect={(uid) => selectStudent(chooserSide, uid)}
-            />
-          </section>
-        ) : null}
         {isNavigatingToSelection ? (
-          <p role="status" className="mt-3 text-sm text-muted-foreground">
+          <p role="status" className="text-sm text-muted-foreground">
             학생 정보를 불러오고 있어요.
           </p>
         ) : null}
         {hasSelectedStudent && !data.catalog ? (
           <Callout tone="destructive" title="능력치 카탈로그를 불러오지 못했어요" />
         ) : null}
-        <div className="mt-3 min-w-0">
+        <SectionCard className="min-w-0 p-3 md:p-5">
           <StudentComparisonTable
+            leftUid={slotState.left.student?.uid ?? null}
+            rightUid={slotState.right.student?.uid ?? null}
             leftName={leftName}
             rightName={rightName}
             leftTypes={
@@ -414,25 +548,26 @@ export default function StudentComparisonPage() {
                   }
                 : null
             }
+            leftAdaptations={terrainAdaptations.left}
+            rightAdaptations={terrainAdaptations.right}
             leftStats={formatStudentStatMap(calculated.left.stats)}
             rightStats={formatStudentStatMap(calculated.right.stats)}
             leftUnavailableReason={leftUnavailableReason}
             rightUnavailableReason={rightUnavailableReason}
           />
-        </div>
-      </SectionCard>
+        </SectionCard>
+      </div>
 
-      {isMobile && chooserSide && chooserSlot ? (
+      {chooserSide && chooserSlot ? (
         <BottomSheet
           Icon={MagnifyingGlassIcon}
           title={`${chooserSideLabel} 선택`}
           description="비교할 학생을 검색해 선택하세요."
-          headerAction={<Button text="취소" variant="secondary" size="xs" onClick={closeChooser} />}
           onClose={closeChooser}
         >
           {chooserSlot.uidError ? (
             <Callout tone="destructive" title={chooserSlot.uidError} className="mb-3">
-              학생을 선택하면 링크를 바로잡을 수 있어요.
+              학생을 선택하면 비교 링크를 바로잡을 수 있어요.
             </Callout>
           ) : null}
           <StudentSearchInput
@@ -440,7 +575,7 @@ export default function StudentComparisonPage() {
             ariaLabel={`${chooserSideLabel} 검색`}
             placeholder="학생 이름으로 찾기"
             size="sm"
-            grid={6}
+            grid={4}
             mobileGrid={4}
             layout="responsive-wrap"
             cardSize="md"
@@ -451,11 +586,10 @@ export default function StudentComparisonPage() {
         </BottomSheet>
       ) : null}
 
-      {isMobile && activeSheetSide && activeSheetSlot && activeSheetStudent && activeSheetCalculated ? (
+      {activeSheetSide && activeSheetSlot && activeSheetStudent && activeSheetCalculated ? (
         <BottomSheet
           Icon={AdjustmentsHorizontalIcon}
           title={activeSheetStudent.name}
-          description="성장도 설정"
           onClose={() => setSettingsSide(null)}
         >
           {data.catalog ? (
@@ -465,9 +599,9 @@ export default function StudentComparisonPage() {
               settings={activeSheetSettings}
               invalidFields={activeSheetSlot.settings.invalidFields}
               settingsErrors={activeSheetCalculated.settingsErrors}
-              stats={activeSheetCalculated.stats}
-              calculationFailed={activeSheetCalculated.failed}
-              showStatsPreview
+              importMessage={importMessage?.side === activeSheetSide ? importMessage.message : null}
+              isImporting={pendingImportSide === activeSheetSide && importFetcher.state !== "idle"}
+              onImportSaved={() => importSavedGrowth(activeSheetSide)}
               onChange={(field, value) => updateSetting(activeSheetSide, field, value)}
               onReset={() => resetSettings(activeSheetSide)}
               onClose={() => setSettingsSide(null)}

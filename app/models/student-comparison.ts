@@ -1,6 +1,9 @@
+import type { StudentCalculatorState } from "~/domain/student-calculator";
 import { graphql } from "~/graphql";
 import type { StudentComparisonQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
+import { getRecruitedStudents } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import { getStudentDirectoryStudents, type StudentDirectoryStudent } from "~/models/student-directory";
 
 const studentComparisonQuery = graphql(`
@@ -108,6 +111,8 @@ export type StudentComparisonData = {
   catalog: StudentComparisonCatalog;
 };
 
+export type StudentComparisonSavedGrowth = StudentCalculatorState;
+
 export async function getStudentComparisonData(
   env: Env,
   selectedUids: readonly string[],
@@ -127,5 +132,38 @@ export async function getStudentComparisonData(
     students: [...directoryStudents].sort((left, right) => right.order - left.order),
     selectedStudents: comparisonResult?.data?.selectedStudents ?? [],
     catalog: comparisonResult?.data?.studentCatalog ?? null,
+  };
+}
+
+export async function getStudentComparisonSavedGrowth(
+  env: Env,
+  senseiId: number,
+  primaryStudentUid: string,
+): Promise<StudentComparisonSavedGrowth | null> {
+  const recruitedStudents = await getRecruitedStudents(env, senseiId, [primaryStudentUid]);
+  const recruited = recruitedStudents.find((student) => student.studentUid === primaryStudentUid);
+  if (!recruited) return null;
+
+  const relationshipLevels = await getRelationshipLevels(env, senseiId, [primaryStudentUid]);
+  const relationship = relationshipLevels.find((level) => level.studentId === primaryStudentUid);
+  return {
+    level: recruited.level,
+    tier: recruited.tier,
+    bond: relationship?.currentLevel ?? null,
+    skillEx: recruited.skillEx,
+    skillNormal: recruited.skillNormal,
+    skillEnhanced: recruited.skillEnhanced,
+    skillSub: recruited.skillSub,
+    equip1: recruited.equip1,
+    equip2: recruited.equip2,
+    equip3: recruited.equip3,
+    equip1Level: recruited.equip1Level ?? null,
+    equip2Level: recruited.equip2Level ?? null,
+    equip3Level: recruited.equip3Level ?? null,
+    equipSpecial: recruited.equipSpecial,
+    weaponLevel: recruited.weaponLevel,
+    abilityHp: recruited.abilityHp,
+    abilityAtk: recruited.abilityAtk,
+    abilityHeal: recruited.abilityHeal,
   };
 }

@@ -1,37 +1,256 @@
 import { describe, expect, it } from "@jest/globals";
 import type { StudentCalculatorCatalog, StudentCalculatorSource } from "~/domain/student-calculator";
 import {
-  buildStudentComparisonCalculatorState,
   calculateStudentComparisonStats,
   compareStudentStats,
   DEFAULT_STUDENT_COMPARISON_SETTINGS,
-  getStudentComparisonEquipmentStatus,
+  getDefaultStudentComparisonSettings,
+  getStudentComparisonSettingsAfterTierChange,
+  getStudentComparisonSettingsErrors,
+  getStudentComparisonTerrainAdaptations,
   parseStudentComparisonSettings,
+  resolveImportedStudentComparisonSettings,
+  STUDENT_COMPARISON_STATS,
+  stripLegacyStudentComparisonSkillEffectParams,
 } from "~/domain/student-comparison";
-import { StudentCatalogStat } from "~/graphql/graphql";
+import {
+  StudentCatalogStat,
+  StudentCatalogStatGrowthType,
+  StudentCatalogStatModifierKind,
+  StudentSkillModifierActivation,
+  StudentSkillModifierPersistence,
+} from "~/graphql/graphql";
 
 describe("student comparison", () => {
   it("starts at the agreed growth state and uses every catalog maximum", () => {
     const student = createStudent();
     const catalog = createCatalog();
-    const state = buildStudentComparisonCalculatorState(student, catalog, DEFAULT_STUDENT_COMPARISON_SETTINGS);
+    const defaults = getDefaultStudentComparisonSettings(student, catalog);
 
-    expect(state).toMatchObject({
+    expect(defaults).toMatchObject({
       level: 90,
       tier: 7,
       bond: 100,
       equip1: 1,
       equip2: 2,
       equip3: 3,
-      equip1Level: null,
-      equip2Level: null,
-      equip3Level: null,
+      equip1Level: 10,
+      equip2Level: 20,
+      equip3Level: 30,
       weaponLevel: 40,
       abilityHp: 25,
       abilityAtk: 25,
       abilityHeal: 25,
       skillEx: 5,
     });
+    expect(defaults).toMatchObject({ skillNormal: null, skillEnhanced: null, skillSub: null });
+    expect(defaults).not.toHaveProperty("includeSkillEffects");
+    expect(STUDENT_COMPARISON_STATS.reduce((count, group) => count + group.stats.length, 0)).toBe(22);
+  });
+
+  it("uses each independently encoded growth field and keeps malformed fields invalid", () => {
+    const defaults = getDefaultStudentComparisonSettings(createStudent(), createCatalog());
+    const parsed = parseStudentComparisonSettings(
+      new URLSearchParams(
+        "left.level=81&left.skillEx=4&left.equip2=1&left.equip2Level=10&left.includeSkillEffects=false",
+      ),
+      "left",
+      defaults,
+    );
+
+    expect(parsed.settings).toMatchObject({
+      level: 81,
+      skillEx: 4,
+      equip1: 1,
+      equip2: 1,
+      equip2Level: 10,
+      equip3: 3,
+    });
+    expect(parsed.invalidFields).toEqual([]);
+
+    const invalid = parseStudentComparisonSettings(
+      new URLSearchParams("left.level=91&left.equip2Level=abc"),
+      "left",
+      defaults,
+    );
+    expect(invalid.settings).toBeNull();
+    expect(invalid.invalidFields).toEqual(["level", "equip2Level"]);
+  });
+
+  it("rejects syntactically valid equipment tiers absent from the student's catalog", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    const parsed = parseStudentComparisonSettings(new URLSearchParams("left.equip1=9"), "left");
+
+    expect(parsed.invalidFields).toEqual([]);
+    const settings = parsed.settings;
+    if (settings === null) throw new Error("the equipment tier URL value should be syntactically valid");
+
+    const errors = getStudentComparisonSettingsErrors(student, catalog, settings);
+    expect(errors).toContain("첫 번째 장비 T9 자료를 찾을 수 없어요.");
+    expect(() => calculateStudentComparisonStats(student, catalog, settings)).toThrow(
+      "첫 번째 장비 T9 자료를 찾을 수 없어요.",
+    );
+  });
+
+  it("rejects non-null skill levels for slots with no selected skill", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    const parsed = parseStudentComparisonSettings(new URLSearchParams("left.skillNormal=5"), "left");
+
+    expect(parsed.invalidFields).toEqual([]);
+    const settings = parsed.settings;
+    if (settings === null) throw new Error("the skill URL value should be syntactically valid");
+
+    const errors = getStudentComparisonSettingsErrors(student, catalog, settings);
+    expect(errors).toContain("기본 스킬 자료가 없어 설정을 적용할 수 없어요.");
+    expect(() => calculateStudentComparisonStats(student, catalog, settings)).toThrow(
+      "기본 스킬 자료가 없어 설정을 적용할 수 없어요.",
+    );
+  });
+
+  it("rejects a special-gear tier missing from a catalog with a gap", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.gear = {
+      name: "애용품",
+      description: null,
+      tiers: [
+        {
+          tier: 1,
+          openFavorLevel: 1,
+          maxLevel: 1,
+          growthType: "STANDARD",
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [],
+        },
+        {
+          tier: 3,
+          openFavorLevel: 100,
+          maxLevel: 1,
+          growthType: "STANDARD",
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [],
+        },
+      ],
+    } as unknown as NonNullable<typeof student.catalog.gear>;
+    const parsed = parseStudentComparisonSettings(new URLSearchParams("left.equipSpecial=2"), "left");
+
+    expect(parsed.invalidFields).toEqual([]);
+    const settings = parsed.settings;
+    if (settings === null) throw new Error("the special-gear URL value should be syntactically valid");
+
+    const errors = getStudentComparisonSettingsErrors(student, catalog, settings);
+    expect(errors).toContain("애용품 단계 자료를 찾을 수 없어요.");
+    expect(() => calculateStudentComparisonStats(student, catalog, settings)).toThrow(
+      "애용품 단계 자료를 찾을 수 없어요.",
+    );
+  });
+
+  it("keeps supported equipment and gear tiers valid while their slots or favor level are locked", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.gear = {
+      name: "애용품",
+      description: null,
+      tiers: [
+        {
+          tier: 1,
+          openFavorLevel: 1,
+          maxLevel: 1,
+          growthType: "STANDARD",
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [],
+        },
+        {
+          tier: 2,
+          openFavorLevel: 100,
+          maxLevel: 1,
+          growthType: "STANDARD",
+          learnSkillSlot: null,
+          learnSkillPosition: null,
+          modifiers: [],
+        },
+      ],
+    } as unknown as NonNullable<typeof student.catalog.gear>;
+    const settings = {
+      ...getDefaultStudentComparisonSettings(student, catalog),
+      level: 1,
+      bond: 30,
+    };
+
+    expect(getStudentComparisonSettingsErrors(student, catalog, settings)).toEqual([]);
+    expect(() => calculateStudentComparisonStats(student, catalog, settings)).not.toThrow();
+  });
+
+  it("stores closed weapon and ability levels as zero and restores an adjustable weapon level", () => {
+    const settings = {
+      ...DEFAULT_STUDENT_COMPARISON_SETTINGS,
+      weaponLevel: 40,
+      abilityHp: 25,
+      abilityAtk: 25,
+      abilityHeal: 25,
+    };
+    const closed = getStudentComparisonSettingsAfterTierChange(settings, 5);
+    const reopened = getStudentComparisonSettingsAfterTierChange(closed, 6);
+    const restoredFromNull = getStudentComparisonSettingsAfterTierChange({ ...settings, weaponLevel: null }, 6);
+    const preserved = getStudentComparisonSettingsAfterTierChange({ ...settings, weaponLevel: 20 }, 6);
+
+    expect(closed).toMatchObject({ tier: 5, weaponLevel: 0, abilityHp: 0, abilityAtk: 0, abilityHeal: 0 });
+    expect(reopened).toMatchObject({ tier: 6, weaponLevel: 1, abilityHp: 0, abilityAtk: 0, abilityHeal: 0 });
+    expect(restoredFromNull.weaponLevel).toBe(1);
+    expect(preserved.weaponLevel).toBe(20);
+    expect(getStudentComparisonSettingsAfterTierChange(settings, 6).weaponLevel).toBe(30);
+  });
+
+  it("rejects an absent or zero weapon level when the selected tier unlocks it", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    for (const weaponLevel of [null, 0]) {
+      const parsed = parseStudentComparisonSettings(
+        new URLSearchParams(`left.tier=7&left.weaponLevel=${weaponLevel === null ? "none" : weaponLevel}`),
+        "left",
+      );
+      const settings = parsed.settings;
+      if (settings === null) throw new Error("the weapon-level URL value should be syntactically valid");
+
+      expect(getStudentComparisonSettingsErrors(student, catalog, settings)).toContain(
+        "고유무기 레벨을 1 이상 설정해 주세요.",
+      );
+      expect(() => calculateStudentComparisonStats(student, catalog, settings)).toThrow(
+        "고유무기 레벨을 1 이상 설정해 주세요.",
+      );
+    }
+  });
+
+  it("requires ability levels only when ability release is applicable", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    const applicable = parseStudentComparisonSettings(
+      new URLSearchParams("left.tier=7&left.level=90&left.abilityAtk=none"),
+      "left",
+    ).settings;
+    if (applicable === null) throw new Error("the ability URL value should be syntactically valid");
+
+    expect(getStudentComparisonSettingsErrors(student, catalog, applicable)).toContain(
+      "능력 개방 공격력 설정을 확인해 주세요.",
+    );
+    expect(() => calculateStudentComparisonStats(student, catalog, applicable)).toThrow(
+      "능력 개방 공격력 설정을 확인해 주세요.",
+    );
+
+    const notYetApplicable = {
+      ...applicable,
+      level: 89,
+    };
+    expect(getStudentComparisonSettingsErrors(student, catalog, notYetApplicable)).not.toContain(
+      "능력 개방 공격력 설정을 확인해 주세요.",
+    );
   });
 
   it("preserves a real zero while leaving absent stats missing", () => {
@@ -46,16 +265,74 @@ describe("student comparison", () => {
     expect(values.has(StudentCatalogStat.AccuracyPoint)).toBe(false);
   });
 
-  it("reports whether a selected equipment tier applies to each slot", () => {
-    const settings = { ...DEFAULT_STUDENT_COMPARISON_SETTINGS, level: 1, equipmentTier: 3 };
-    const statuses = getStudentComparisonEquipmentStatus(createStudent(), createCatalog(), settings, {
-      hat: "모자",
-      bag: "가방",
-      watch: "시계",
+  it("normalizes saved nullable fields with the student-detail calculator semantics", () => {
+    const settings = resolveImportedStudentComparisonSettings(createStudent(), createCatalog(), {
+      level: null,
+      tier: 4,
+      bond: null,
+      skillEx: null,
+      skillNormal: null,
+      skillEnhanced: null,
+      skillSub: null,
+      equip1: null,
+      equip2: null,
+      equip3: null,
+      equip1Level: null,
+      equip2Level: null,
+      equip3Level: null,
+      equipSpecial: null,
+      weaponLevel: null,
+      abilityHp: null,
+      abilityAtk: null,
+      abilityHeal: null,
     });
 
-    expect(statuses.map(({ status }) => status)).toEqual(["unsupported", "locked", "locked"]);
-    expect(statuses.map(({ label }) => label)).toEqual(["모자", "가방", "시계"]);
+    expect(settings).toMatchObject({
+      level: 1,
+      tier: 4,
+      bond: 1,
+      skillEx: 1,
+      equip1: 1,
+      equip1Level: 10,
+      equipSpecial: 0,
+      weaponLevel: 0,
+      abilityHp: 0,
+    });
+    expect(settings).not.toHaveProperty("includeSkillEffects");
+  });
+
+  it("applies unlocked weapon terrain modifiers to adaptation ranks", () => {
+    const student = createStudent();
+    const studentCatalog = student.catalog;
+    if (!studentCatalog) throw new Error("student catalog fixture is required");
+    studentCatalog.weapon.stages = [
+      {
+        stage: 2,
+        unlocked: true,
+        maxLevel: 40,
+        learnSkillSlot: null,
+        learnSkillPosition: null,
+        modifiers: [{ stat: StudentCatalogStat.StreetBattleAdaptation, kind: "BASE", value: 1 }],
+      },
+      {
+        stage: 3,
+        unlocked: true,
+        maxLevel: 50,
+        learnSkillSlot: null,
+        learnSkillPosition: null,
+        modifiers: [{ stat: StudentCatalogStat.IndoorBattleAdaptation, kind: "BASE", value: 2 }],
+      },
+    ] as unknown as typeof studentCatalog.weapon.stages;
+    const defaults = getDefaultStudentComparisonSettings(student, createCatalog());
+    const twoStar = getStudentComparisonTerrainAdaptations(student, createCatalog(), defaults);
+    const threeStar = getStudentComparisonTerrainAdaptations(student, createCatalog(), {
+      ...defaults,
+      tier: 8,
+      weaponLevel: 50,
+    });
+
+    expect(twoStar.map(({ rank }) => rank)).toEqual(["A", "B", "B"]);
+    expect(threeStar.map(({ rank }) => rank)).toEqual(["A", "B", "S"]);
   });
 
   it("parses shareable settings and rejects malformed values without defaults", () => {
@@ -69,7 +346,68 @@ describe("student comparison", () => {
       "left",
     );
     expect(invalid.settings).toBeNull();
-    expect(invalid.invalidFields).toEqual(["level", "includeSkillEffects"]);
+    expect(invalid.invalidFields).toEqual(["level"]);
+  });
+
+  it("strips obsolete skill-effect URL fields without losing growth values", () => {
+    const params = new URLSearchParams(
+      "left=student&right=other&left.level=81&left.includeSkillEffects=false&right.includeSkillEffects=invalid",
+    );
+
+    const sanitized = stripLegacyStudentComparisonSkillEffectParams(params);
+
+    expect(sanitized.get("left")).toBe("student");
+    expect(sanitized.get("right")).toBe("other");
+    expect(sanitized.get("left.level")).toBe("81");
+    expect(sanitized.has("left.includeSkillEffects")).toBe(false);
+    expect(sanitized.has("right.includeSkillEffects")).toBe(false);
+    expect(params.has("left.includeSkillEffects")).toBe(true);
+    expect(parseStudentComparisonSettings(params, "left").settings).toMatchObject({ level: 81 });
+  });
+
+  it("always includes selected permanent skill modifiers in comparison stats", () => {
+    const student = createStudent();
+    const catalog = createCatalog();
+    if (!student.catalog) throw new Error("student catalog fixture is required");
+    student.catalog.statProfile.levelStats = [{ stat: StudentCatalogStat.AttackPower, level1: 255, level100: 255 }];
+    catalog.statLevelInterpolations = catalog.statLevelInterpolations.map((row) => ({
+      ...row,
+      ratios: [{ growthType: StudentCatalogStatGrowthType.Standard, value: 10_000 }],
+    }));
+    const skill = student.skills[0];
+    if (!skill) throw new Error("EX skill fixture is required");
+    skill.levels = [
+      {
+        level: 5,
+        cost: null,
+        statModifiers: [
+          {
+            stat: StudentCatalogStat.AttackPower,
+            kind: StudentCatalogStatModifierKind.Base,
+            value: 117,
+            activation: StudentSkillModifierActivation.Unconditional,
+            persistence: StudentSkillModifierPersistence.Permanent,
+          },
+        ],
+      },
+    ] as unknown as typeof skill.levels;
+
+    const stats = calculateStudentComparisonStats(
+      student,
+      catalog,
+      getDefaultStudentComparisonSettings(student, catalog),
+    );
+
+    expect(stats.find(({ stat }) => stat === StudentCatalogStat.AttackPower)?.value).toBe(372);
+  });
+
+  it("reports missing skill data because permanent skill effects are always applied", () => {
+    const student = createStudent();
+    student.skills = [] as unknown as typeof student.skills;
+
+    expect(getStudentComparisonSettingsErrors(student, createCatalog(), DEFAULT_STUDENT_COMPARISON_SETTINGS)).toContain(
+      "스킬 자료가 없어 스킬 효과를 계산할 수 없어요.",
+    );
   });
 
   it("shows the absolute difference only for the larger available value", () => {

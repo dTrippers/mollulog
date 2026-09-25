@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, ShopResource } from "~/domain/event-shop";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatResourceAmount } from "~/locales/ko";
 import { resourceImageUrl } from "~/models/assets";
 import {
@@ -105,7 +106,11 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       <Tabs
         tabs={collectableResources
           .filter(({ forPayment }) => forPayment)
-          .map(({ type, uid, name }) => ({ tabId: uid, name, imageUrl: resourceImageUrl(type, uid) }))}
+          .map(({ type, uid, name }) => ({
+            tabId: uid,
+            name,
+            imageUrl: type === ResourceTypeEnum.Emblem ? undefined : resourceImageUrl(type, uid),
+          }))}
         activeTabId={selectedPaymentResourceUid}
         setActiveTabId={setSelectedPaymentResourceUid}
       />
@@ -133,12 +138,22 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                 />
                 <div className="grow">
                   <div className="flex items-center justify-center gap-1">
-                    <img
-                      alt={paymentResource.name}
-                      src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
-                      className="-m-1 size-6 md:size-8 object-contain"
-                      loading="lazy"
-                    />
+                    {paymentResource.type === ResourceTypeEnum.Emblem ? (
+                      <span
+                        aria-label={`${paymentResource.name}: 이미지 없음`}
+                        className="-m-1 inline-flex size-6 items-center justify-center text-center text-[8px] leading-tight text-muted-foreground md:size-8"
+                        role="img"
+                      >
+                        이미지 없음
+                      </span>
+                    ) : (
+                      <img
+                        alt={paymentResource.name}
+                        src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
+                        className="-m-1 size-6 md:size-8 object-contain"
+                        loading="lazy"
+                      />
+                    )}
                     <span className="mr-2 text-sm font-medium text-foreground">{unitPriceLabel}</span>
                   </div>
                   <p className="text-center text-xs text-muted-foreground">
