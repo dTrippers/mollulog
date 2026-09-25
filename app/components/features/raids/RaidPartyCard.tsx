@@ -230,7 +230,7 @@ function PartyStudentCard({
   }
 
   return (
-    <div className="relative min-w-0">
+    <div className={cn("relative min-w-0", tierBelowImage && "[&_img[loading=lazy]]:aspect-square")}>
       <StudentCard
         uid={slot.uid}
         name={slot.name}
