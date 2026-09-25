@@ -99,7 +99,9 @@ type StudentComparisonSettingsEditorProps = {
   settingsErrors: string[];
   importMessage: string | null;
   isImporting: boolean;
+  canCopyComparisonGrowth?: boolean;
   onImportSaved: () => void;
+  onCopyComparisonGrowth?: () => void;
   onChange: <K extends StudentComparisonSettingField>(field: K, value: StudentComparisonSettings[K]) => void;
   onReset: () => void;
   onClose?: () => void;
@@ -113,21 +115,35 @@ export default function StudentComparisonSettingsEditor({
   settingsErrors,
   importMessage,
   isImporting,
+  canCopyComparisonGrowth = false,
   onImportSaved,
+  onCopyComparisonGrowth,
   onChange,
   onReset,
   onClose,
 }: StudentComparisonSettingsEditorProps) {
   const importButton = (
     <div className="space-y-1">
-      <Button
-        text={isImporting ? "내 학생 성장도 불러오는 중" : "내 학생 성장도 반영"}
-        variant="secondary"
-        size="sm"
-        fullWidth
-        disabled={isImporting}
-        onClick={onImportSaved}
-      />
+      <div className="grid grid-cols-2 gap-2">
+        <Button
+          text={isImporting ? "내 학생 성장도 불러오는 중" : "내 학생 성장도 반영"}
+          variant="secondary"
+          size="sm"
+          fullWidth
+          className="h-auto min-h-10 whitespace-normal leading-tight"
+          disabled={isImporting}
+          onClick={onImportSaved}
+        />
+        <Button
+          text="비교 학생과 동일한 성장도 반영"
+          variant="secondary"
+          size="sm"
+          fullWidth
+          className="h-auto min-h-10 whitespace-normal leading-tight"
+          disabled={!canCopyComparisonGrowth || isImporting}
+          onClick={onCopyComparisonGrowth}
+        />
+      </div>
       {importMessage ? (
         <p className="text-xs text-muted-foreground" role="status" aria-live="polite">
           {importMessage}

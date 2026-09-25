@@ -178,14 +178,14 @@ function getQuickSummary(
     settings.tier === null ? (
       "신비 해방 자료 없음"
     ) : settings.tier <= 5 ? (
-      <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+      <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
         <span className="sr-only">신비 해방 </span>
         <StarIcon aria-hidden="true" className="size-3.5 shrink-0 text-yellow-500" />
         <span className="tabular-nums">{settings.tier}</span>
         <span className="sr-only">성</span>
       </span>
     ) : (
-      <span className="inline-flex items-center gap-0.5 align-middle whitespace-nowrap">
+      <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
         <span className="sr-only">고유무기 </span>
         <img className="size-3.5 shrink-0" src="/icons/exclusive_weapon.png" alt="" aria-hidden="true" />
         <span className="tabular-nums">{settings.tier - 5}</span>
@@ -195,7 +195,11 @@ function getQuickSummary(
 
   return [
     <>
-      {level} · {tierSummary} · {bond}
+      <span className="whitespace-nowrap">{level}</span>
+      <span aria-hidden="true">·</span>
+      <span className="inline-flex items-center gap-0.5 whitespace-nowrap">{tierSummary}</span>
+      <span aria-hidden="true">·</span>
+      <span className="whitespace-nowrap">{bond}</span>
     </>,
     <>
       <span className="whitespace-nowrap">{skills}</span>
@@ -322,8 +326,10 @@ export default function StudentComparisonStudentSlot({
 
       {student && settings && summary && quickSummary ? (
         <>
-          <div id={growthId} className="mt-3 min-h-[43px] space-y-0.5 text-xs leading-[1.55]">
-            <p className="font-medium text-foreground">{quickSummary[0]}</p>
+          <div id={growthId} className="mt-3 min-h-[43px] space-y-0.5 text-xs">
+            <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 font-medium leading-tight text-foreground">
+              {quickSummary[0]}
+            </p>
             <p className="text-muted-foreground">{quickSummary[1]}</p>
           </div>
           <details className="group mt-[7px] text-xs">

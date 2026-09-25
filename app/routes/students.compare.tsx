@@ -509,6 +509,35 @@ export default function StudentComparisonPage() {
   const activeSheetStudent = activeSheetSlot?.student ?? null;
   const activeSheetSettings = activeSheetSlot?.settings.settings ?? null;
   const activeSheetCalculated = activeSheetSide ? calculated[activeSheetSide] : null;
+  const comparisonGrowthSide = activeSheetSide === "left" ? "right" : "left";
+  const comparisonGrowthSlot = activeSheetSide ? slotState[comparisonGrowthSide] : null;
+  const canCopyComparisonGrowth = Boolean(
+    activeSheetStudent?.catalog &&
+      data.catalog &&
+      comparisonGrowthSlot?.student?.catalog &&
+      comparisonGrowthSlot.settings.settings &&
+      !comparisonGrowthSlot.uidError &&
+      calculated[comparisonGrowthSide].settingsErrors.length === 0,
+  );
+
+  const copyComparisonGrowth = () => {
+    if (
+      !activeSheetSide ||
+      !activeSheetStudent?.catalog ||
+      !data.catalog ||
+      !comparisonGrowthSlot?.settings.settings ||
+      !canCopyComparisonGrowth
+    ) {
+      return;
+    }
+    const settings = resolveImportedStudentComparisonSettings(
+      activeSheetStudent as StudentCalculatorSource,
+      data.catalog as StudentCalculatorCatalog,
+      comparisonGrowthSlot.settings.settings as StudentCalculatorState,
+    );
+    writeSideSettings(activeSheetSide, settings, true);
+    setImportMessage({ side: activeSheetSide, message: "비교 학생과 같은 성장도를 반영했어요." });
+  };
 
   return (
     <>
@@ -590,6 +619,7 @@ export default function StudentComparisonPage() {
         <BottomSheet
           Icon={AdjustmentsHorizontalIcon}
           title={activeSheetStudent.name}
+          description="계산에 사용할 성장도를 설정해주세요"
           onClose={() => setSettingsSide(null)}
         >
           {data.catalog ? (
@@ -601,7 +631,9 @@ export default function StudentComparisonPage() {
               settingsErrors={activeSheetCalculated.settingsErrors}
               importMessage={importMessage?.side === activeSheetSide ? importMessage.message : null}
               isImporting={pendingImportSide === activeSheetSide && importFetcher.state !== "idle"}
+              canCopyComparisonGrowth={canCopyComparisonGrowth}
               onImportSaved={() => importSavedGrowth(activeSheetSide)}
+              onCopyComparisonGrowth={copyComparisonGrowth}
               onChange={(field, value) => updateSetting(activeSheetSide, field, value)}
               onReset={() => resetSettings(activeSheetSide)}
               onClose={() => setSettingsSide(null)}
