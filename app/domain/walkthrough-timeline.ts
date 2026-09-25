@@ -331,7 +331,9 @@ export function parseWalkthroughTimelineDocument(value: unknown): WalkthroughTim
       return {
         ...party,
         startingSkillStudentUids: [...party.startingSkillStudentUids].sort(
-          (left, right) => (slotByStudentUid.get(left) ?? Number.MAX_SAFE_INTEGER) - (slotByStudentUid.get(right) ?? Number.MAX_SAFE_INTEGER),
+          (left, right) =>
+            (slotByStudentUid.get(left) ?? Number.MAX_SAFE_INTEGER) -
+            (slotByStudentUid.get(right) ?? Number.MAX_SAFE_INTEGER),
         ),
       };
     });
