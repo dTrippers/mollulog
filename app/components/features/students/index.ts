@@ -16,6 +16,7 @@ export { default as StudentInfo } from "./StudentInfo";
 export { default as StudentSearchInput } from "./StudentSearchInput";
 export type { StudentSkillIconProps } from "./StudentSkillIcon";
 export { default as StudentSkillIcon } from "./StudentSkillIcon";
+export { default as StudentTierLabel } from "./StudentTierLabel";
 export { default as TierCounts } from "./TierCounts";
 export { default as TierSelector } from "./TierSelector";
 export type { PersistentStudentFilterStateOptions } from "./usePersistentStudentFilterState";

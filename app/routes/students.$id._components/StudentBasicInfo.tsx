@@ -1,25 +1,9 @@
-import {
-  ArrowTopRightOnSquareIcon,
-  ArrowTrendingUpIcon,
-  HeartIcon,
-  LockClosedIcon,
-  SparklesIcon,
-  StarIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowTopRightOnSquareIcon, LockClosedIcon, PencilSquareIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
-import { StudentSkillIcon, TierSelector } from "~/components/features/students";
-import {
-  Button,
-  Callout,
-  EmptyView,
-  HoverTooltip,
-  NumberInput,
-  SectionCard,
-  SubTitle,
-  Toggle,
-} from "~/components/primitives";
+import { StudentSkillIcon, StudentTierLabel } from "~/components/features/students";
+import { Button, Callout, EmptyView, SectionCard, SubTitle, Toggle } from "~/components/primitives";
 import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import {
   calculateStudentStats,
@@ -45,6 +29,7 @@ import {
   type StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";
+import GrowthEditorSheet from "./GrowthEditorSheet";
 
 type StudentBasicInfoProps = {
   student: StudentCalculatorSource;
@@ -110,6 +95,7 @@ export default function StudentBasicInfo({
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const [state, setState] = useState<StudentCalculatorState>(savedState);
   const [skillEffectsState, setSkillEffectsState] = useState({ studentUid: student.uid, enabled: false });
+  const [growthSheetOpen, setGrowthSheetOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [draftReady, setDraftReady] = useState(false);
   const [, setDraftStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
@@ -139,6 +125,12 @@ export default function StudentBasicInfo({
   );
   const selectedSkills = useMemo(() => selectStudentSkills(student, state), [student, state]);
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
+  const abilityReleaseDisabledReason = getAbilityReleaseDisabledReason(resolved.tier, resolved.level);
+  const saveAvailable = signedIn && released;
+  const saveDisabled = fetcher.state !== "idle" || (!recruited && !draftReady);
+  const saving = fetcher.state !== "idle";
+  const saveLabel = "내 프로필에 반영";
+  const saveError = fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
 
   useEffect(() => {
     if (hash !== "#student-basic-info" || navigationType !== "PUSH") return;
@@ -243,107 +235,6 @@ export default function StudentBasicInfo({
     <div className="space-y-6 md:space-y-8">
       <section id="student-basic-info" className="scroll-mt-[calc(var(--mobile-header-height)+3.75rem)] lg:scroll-mt-4">
         <h2 className="text-lg font-semibold">학생 기본 정보</h2>
-        <SectionCard className="mt-3 space-y-0 p-2.5 md:mt-4 md:p-4">
-          <div className="grid gap-2 md:grid-cols-2 md:items-start">
-            <div className="grid gap-2">
-              <BasicField title="레벨" icon={<ArrowTrendingUpIcon className="size-4" />}>
-                <div className="ml-auto w-full max-w-56">
-                  <NumberInput
-                    fullWidth
-                    size="sm"
-                    minValue={1}
-                    maxValue={90}
-                    value={resolved.level}
-                    showMax
-                    controlClassName="border-0 bg-card shadow-sm"
-                    onChange={(value) => updateState("level", value)}
-                  />
-                </div>
-              </BasicField>
-
-              <BasicField title="인연 랭크" icon={<HeartIcon className="size-4" />}>
-                <div className="ml-auto w-full max-w-56">
-                  <NumberInput
-                    fullWidth
-                    size="sm"
-                    minValue={1}
-                    maxValue={100}
-                    value={resolved.bond}
-                    showMax
-                    controlClassName="border-0 bg-card shadow-sm"
-                    onChange={(value) => updateState("bond", value)}
-                  />
-                </div>
-              </BasicField>
-
-              <BasicField title="신비 해방" icon={<StarIcon className="size-4" />}>
-                <div className="flex items-center justify-end">
-                  <TierSelector
-                    initialTier={student.initialTier}
-                    currentTier={resolved.tier}
-                    iconSize="sm"
-                    onTierChange={updateTier}
-                  />
-                </div>
-              </BasicField>
-            </div>
-
-            <div className="grid gap-2">
-              <BasicField title="능력 개방" icon={<SparklesIcon className="size-4" />} stackOnMobile>
-                <div className="grid grid-cols-3 gap-2">
-                  <CompactNumber
-                    label="최대 체력"
-                    value={resolved.abilityHp}
-                    min={0}
-                    max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
-                    onChange={(value) => updateState("abilityHp", value)}
-                  />
-                  <CompactNumber
-                    label="공격력"
-                    value={resolved.abilityAtk}
-                    min={0}
-                    max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
-                    onChange={(value) => updateState("abilityAtk", value)}
-                  />
-                  <CompactNumber
-                    label="치유력"
-                    value={resolved.abilityHeal}
-                    min={0}
-                    max={25}
-                    disabledReason={getAbilityReleaseDisabledReason(resolved.tier, resolved.level)}
-                    onChange={(value) => updateState("abilityHeal", value)}
-                  />
-                </div>
-              </BasicField>
-            </div>
-          </div>
-          {signedIn ? (
-            <div className="flex items-center justify-end gap-2 px-1 pt-1">
-              {released && (
-                <>
-                  {saved ? <span className="text-xs font-medium text-primary">저장됨</span> : null}
-                  <Button
-                    variant="secondary"
-                    size="xs"
-                    className="bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                    disabled={fetcher.state !== "idle" || (!recruited && !draftReady)}
-                    onClick={handleSave}
-                  >
-                    {fetcher.state !== "idle" ? "저장 중" : recruited ? "성장도 저장" : "모집 학생에 등록 후 저장"}
-                  </Button>
-                </>
-              )}
-            </div>
-          ) : null}
-        </SectionCard>
-        {fetcher.data && !fetcher.data.ok ? (
-          <div className="mt-3" role="alert">
-            <Callout tone="destructive" title={fetcher.data.error} />
-          </div>
-        ) : null}
-
         <SectionCard
           title="능력치"
           action={
@@ -355,7 +246,7 @@ export default function StudentBasicInfo({
               onChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
             />
           }
-          className="mt-2.5 space-y-3 py-3 md:mt-3 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
+          className="mt-3 space-y-3 py-3 md:mt-4 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
         >
           <div className="grid grid-cols-4 gap-3">
             {primaryStats.map(({ stat, label }) => (
@@ -367,11 +258,80 @@ export default function StudentBasicInfo({
               </div>
             ))}
           </div>
+          <div className="flex flex-col gap-y-1.5 md:flex-row md:items-end md:justify-between md:gap-x-3">
+            <div className="min-w-0 md:grow">
+              <span className="sr-only">현재 성장도</span>
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
+                <span className="inline-flex items-center whitespace-nowrap gap-x-1 tabular-nums">
+                  <StudentTierLabel tier={resolved.tier} />
+                  <span aria-hidden="true" className="text-muted-foreground">
+                    ·
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">Lv. </span>
+                    <span className="font-medium text-foreground tabular-nums">{resolved.level}</span>
+                  </span>
+                  <span aria-hidden="true" className="text-muted-foreground">
+                    ·
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground">인연 </span>
+                    <span className="font-medium text-foreground tabular-nums">{resolved.bond}</span>
+                  </span>
+                </span>
+                {abilityReleaseDisabledReason === null ? (
+                  <span className="inline-flex items-center whitespace-nowrap gap-x-1">
+                    <span className="text-muted-foreground">능력 개방</span>
+                    <span>
+                      <span className="text-muted-foreground">체력 </span>
+                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityHp}</span>
+                    </span>
+                    <span aria-hidden="true" className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span>
+                      <span className="text-muted-foreground">공격력 </span>
+                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityAtk}</span>
+                    </span>
+                    <span aria-hidden="true" className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span>
+                      <span className="text-muted-foreground">치유력 </span>
+                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityHeal}</span>
+                    </span>
+                  </span>
+                ) : null}
+              </div>
+            </div>
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              {saveAvailable && saved ? <span className="text-xs font-medium text-primary">반영됨</span> : null}
+              <Button
+                icon={PencilSquareIcon}
+                text="성장도 편집"
+                variant="secondary"
+                size="xs"
+                className="bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
+                onClick={() => setGrowthSheetOpen(true)}
+              />
+              {saveAvailable ? (
+                <Button
+                  variant="secondary"
+                  size="xs"
+                  className="bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
+                  disabled={saveDisabled}
+                  onClick={handleSave}
+                >
+                  {saving ? "반영 중" : saveLabel}
+                </Button>
+              ) : null}
+            </div>
+          </div>
         </SectionCard>
         {schaleDbId ? (
-          <div className="mt-2.5 flex justify-end">
+          <div className="mt-2.5 flex items-center justify-end gap-2">
             <Button
-              text="Schale DB에서 보기"
+              text="Schale DB"
               icon={ArrowTopRightOnSquareIcon}
               variant="secondary"
               size="xs"
@@ -380,6 +340,32 @@ export default function StudentBasicInfo({
             />
           </div>
         ) : null}
+        {saveError ? (
+          <div className="mt-3" role="alert">
+            <Callout tone="destructive" title={saveError} />
+          </div>
+        ) : null}
+
+        <GrowthEditorSheet
+          open={growthSheetOpen}
+          onClose={() => setGrowthSheetOpen(false)}
+          initialTier={student.initialTier}
+          growth={resolved}
+          abilityReleaseDisabledReason={abilityReleaseDisabledReason}
+          onTierChange={updateTier}
+          onLevelChange={(value) => updateState("level", value)}
+          onBondChange={(value) => updateState("bond", value)}
+          onAbilityHpChange={(value) => updateState("abilityHp", value)}
+          onAbilityAtkChange={(value) => updateState("abilityAtk", value)}
+          onAbilityHealChange={(value) => updateState("abilityHeal", value)}
+          saveAvailable={saveAvailable}
+          saved={saved}
+          saving={saving}
+          saveDisabled={saveDisabled}
+          saveLabel={saveLabel}
+          saveError={saveError}
+          onSave={handleSave}
+        />
       </section>
 
       {gradingSummary ? (
@@ -587,74 +573,6 @@ export default function StudentBasicInfo({
         </section>
       </div>
     </div>
-  );
-}
-
-function BasicField({
-  title,
-  icon,
-  children,
-  stackOnMobile = false,
-}: {
-  title: string;
-  icon: React.ReactNode;
-  children: React.ReactNode;
-  stackOnMobile?: boolean;
-}) {
-  return (
-    <div
-      className={`grid min-w-0 items-center rounded-md bg-muted/50 p-2 ${
-        stackOnMobile ? "grid-cols-1 gap-1.5" : "grid-cols-[6rem_minmax(0,1fr)] gap-2"
-      }`}
-    >
-      <div className="flex min-w-0 items-center gap-2">
-        <span className="flex size-6 shrink-0 items-center justify-center rounded-sm bg-primary/10 text-primary">
-          {icon}
-        </span>
-        <strong className="truncate text-sm">{title}</strong>
-      </div>
-      <div className="min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function CompactNumber({
-  label,
-  value,
-  min,
-  max,
-  disabledReason,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  disabledReason: string | null;
-  onChange: (value: number) => void;
-}) {
-  return (
-    <HoverTooltip
-      as="div"
-      content={disabledReason ?? ""}
-      disabled={disabledReason === null}
-      focusable={disabledReason !== null}
-      className="min-w-0"
-      contentClassName="max-w-64 text-center"
-    >
-      <NumberInput
-        label={label}
-        fullWidth
-        size="sm"
-        minValue={min}
-        maxValue={max}
-        value={value}
-        showMax
-        disabled={disabledReason !== null}
-        controlClassName="border-0 bg-card shadow-sm"
-        onChange={onChange}
-      />
-    </HoverTooltip>
   );
 }
 

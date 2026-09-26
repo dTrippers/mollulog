@@ -60,6 +60,8 @@ jest.mock("~/lib/observability.server", () => ({
 }));
 
 import { StudentSkillSelectionCondition } from "~/graphql/graphql";
+import { shouldShowStickyFooterSurface } from "~/routes/students.$id._components/GrowthEditorSheet";
+import { getGrowthProgressPercent } from "~/routes/students.$id._components/GrowthFieldRow";
 import {
   getAbilityReleaseDisabledReason,
   getSkillSelectionConditionLabel,
@@ -139,6 +141,10 @@ describe("student basic info ability release", () => {
     expect(getAbilityReleaseDisabledReason(6)).toBeNull();
   });
 
+  it("reports the level requirement after equipping the unique weapon", () => {
+    expect(getAbilityReleaseDisabledReason(6, 89)).toBe("학생 레벨 90부터 능력 개방을 설정할 수 있어요");
+  });
+
   it("preserves omitted equipment levels while retaining explicit null", () => {
     const withoutEquipmentLevels = toStudentBasicInfoCurrentStateInput({ level: 80 });
     const withExplicitNull = toStudentBasicInfoCurrentStateInput({ level: 80, equip1Level: null });
@@ -147,6 +153,34 @@ describe("student basic info ability release", () => {
     expect(withoutEquipmentLevels).not.toHaveProperty("equip2Level");
     expect(withoutEquipmentLevels).not.toHaveProperty("equip3Level");
     expect(withExplicitNull).toHaveProperty("equip1Level", null);
+  });
+});
+
+describe("growth field progress", () => {
+  it.each([
+    [1, 1, 90, 0],
+    [90, 1, 90, 100],
+    [45, 1, 90, ((45 - 1) / 89) * 100],
+    [1, 1, 100, 0],
+    [100, 1, 100, 100],
+    [0, 0, 25, 0],
+    [25, 0, 25, 100],
+    [-1, 0, 25, 0],
+    [26, 0, 25, 100],
+  ])("maps %s in [%s, %s] to %s percent", (value, min, max, expected) => {
+    expect(getGrowthProgressPercent(value, min, max)).toBeCloseTo(expected as number);
+  });
+});
+
+describe("growth sheet sticky footer surface", () => {
+  it.each([
+    [0, 400, 400, false],
+    [0, 900, 600, true],
+    [298, 900, 600, true],
+    [299, 900, 600, false],
+    [300, 900, 600, false],
+  ])("scrollTop=%s, scrollHeight=%s, clientHeight=%s shows the surface: %s", (scrollTop, scrollHeight, clientHeight, expected) => {
+    expect(shouldShowStickyFooterSurface(scrollTop, scrollHeight, clientHeight)).toBe(expected);
   });
 });
 
