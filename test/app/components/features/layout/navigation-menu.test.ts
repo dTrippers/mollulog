@@ -29,6 +29,17 @@ function getMenuItems({ hasOngoingRaid = false, isSignedIn = false } = {}) {
 }
 
 describe("getNavigationSections", () => {
+  it("puts furniture at the end of content and activates that section at its new route", () => {
+    const sections = getNavigationSections({ ...navigationOptions, pathname: "/furniture" });
+    const content = sections.find((section) => section.name === "컨텐츠");
+    const planner = sections.find((section) => section.name === "플래너 & 계산기");
+
+    expect(content?.items.at(-1)).toMatchObject({ name: "가구 도감", to: "/furniture", isActive: true });
+    expect(content?.isActive).toBe(true);
+    expect(planner?.items.some((item) => item.name === "가구 도감")).toBe(false);
+    expect(planner?.isActive).toBe(false);
+  });
+
   it("labels the raid menu only while a raid is ongoing", () => {
     expect(getMenuItems({ hasOngoingRaid: true }).find((item) => item.to === "/raids")?.badgeLabel).toBe("진행중");
     expect(getMenuItems().find((item) => item.to === "/raids")?.badgeLabel).toBeUndefined();
@@ -82,13 +93,14 @@ describe("navigation surface projections", () => {
   it("exposes exactly the approved mobile candidates and labels in order", () => {
     const options = getMobileNavigationOptions(navigationOptions);
 
-    expect(options).toHaveLength(12);
+    expect(options).toHaveLength(13);
     expect(options.map((item) => item.mobileNavigationId)).toEqual([
       "feed",
       "students",
       "events",
       "raids",
       "main-story",
+      "furniture-catalog",
       "pyroxene-planner",
       "student-growth-planner",
       "resource-planner",
@@ -103,6 +115,7 @@ describe("navigation surface projections", () => {
       "이벤트",
       "총력전",
       "메인 스토리",
+      "가구 도감",
       "청휘석 플래너",
       "성장 플래너",
       "재화 관리",
@@ -137,6 +150,7 @@ describe("navigation surface projections", () => {
       "/raids",
       "/students",
       "/mainstory",
+      "/furniture",
       "/utils/pyroxene",
       "/utils/growth/students",
       "/utils/resources/inventory",
@@ -154,6 +168,7 @@ describe("navigation surface projections", () => {
       "총력전 / 대결전",
       "학생부",
       "메인 스토리",
+      "가구 도감",
       "청휘석 플래너",
       "학생 성장 플래너",
       "재화 관리/파밍 계산기",

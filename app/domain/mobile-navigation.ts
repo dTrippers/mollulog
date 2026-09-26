@@ -4,6 +4,7 @@ export const MOBILE_NAVIGATION_IDS = [
   "events",
   "raids",
   "main-story",
+  "furniture-catalog",
   "pyroxene-planner",
   "student-growth-planner",
   "resource-planner",

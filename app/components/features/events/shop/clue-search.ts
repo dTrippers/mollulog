@@ -39,12 +39,14 @@ export type ClueSearchRoundDetail = {
     resourceType: ShopResource["resource"]["type"];
     resourceUid: string;
     resourceName?: string;
+    imageUrl?: string | null;
     quantity: number;
   }[];
   rewards: {
     resourceType: ShopResource["resource"]["type"];
     resourceUid: string;
     resourceName?: string;
+    imageUrl?: string | null;
     quantity: number;
     rarity?: number;
   }[];
@@ -287,10 +289,17 @@ export function convertClueSearchCostsToPoints(
     resourceType: ShopResource["resource"]["type"];
     resourceUid: string;
     resourceName?: string;
+    imageUrl?: string | null;
     quantity: number;
   }[],
   exchange: ClueSearchExchange | null,
-): { resourceType: ShopResource["resource"]["type"]; resourceUid: string; resourceName?: string; quantity: number }[] {
+): {
+  resourceType: ShopResource["resource"]["type"];
+  resourceUid: string;
+  resourceName?: string;
+  imageUrl?: string | null;
+  quantity: number;
+}[] {
   if (!exchange?.supported || !exchange.pointResource) {
     return costs;
   }
@@ -312,6 +321,7 @@ export function convertClueSearchCostsToPoints(
       resourceType: exchange.pointResource.type,
       resourceUid: exchange.pointResource.uid,
       resourceName: exchange.pointResource.name,
+      imageUrl: exchange.pointResource.imageUrl,
       quantity: Number(pointQuantity.toFixed(9)),
     },
   ];
@@ -351,6 +361,7 @@ function aggregateResources<
     resourceUid: string;
     quantity: number;
     resourceName?: string;
+    imageUrl?: string | null;
     rarity?: number;
   },
 >(resources: T[]): T[] {
@@ -401,6 +412,7 @@ function buildRoundDetail(
           resourceType: payment.resourceType,
           resourceUid: payment.resourceUid,
           resourceName: payment.resourceName,
+          imageUrl: payment.imageUrl,
           quantity: payment.quantityExpected,
         })),
       ),

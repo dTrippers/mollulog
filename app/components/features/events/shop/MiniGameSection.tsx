@@ -95,11 +95,12 @@ export function MiniGameSection({ config, state, actions, exchange = null }: Min
         <div className="mt-4 rounded-md bg-card p-3">
           <p className="text-sm font-semibold text-foreground">필요 재화</p>
           <div className="mt-2 flex flex-wrap gap-1">
-            {paymentCosts.map(({ resourceType, resourceUid, resourceName, quantity }) => (
+            {paymentCosts.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity }) => (
               <ResourceCard
                 key={`${resourceType}:${resourceUid}`}
                 resourceType={resourceType}
                 itemUid={resourceUid}
+                imageUrl={imageUrl ?? undefined}
                 label={resourceCountLabel(quantity)}
                 name={resourceName}
               />
@@ -117,12 +118,13 @@ export function MiniGameSection({ config, state, actions, exchange = null }: Min
         )}
         {state.minigamePlayCount > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1">
-            {rewards.map(({ resourceType, resourceUid, resourceName, quantity, rarity }) => {
+            {rewards.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity, rarity }) => {
               return (
                 <ResourceCard
                   key={`${resourceType}:${resourceUid}:${rarity ?? ""}`}
                   resourceType={resourceType}
                   itemUid={resourceUid}
+                  imageUrl={imageUrl ?? undefined}
                   rarity={rarity}
                   label={resourceCountLabel(quantity)}
                   name={resourceName}

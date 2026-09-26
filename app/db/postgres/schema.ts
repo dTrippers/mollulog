@@ -999,6 +999,24 @@ export const pgGrowthResourceInventoryTable = pgTable(
   ],
 );
 
+export const pgUserFurnitureInventoryTable = pgTable(
+  "user_furniture_inventory",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    furnitureUid: text("furniture_uid").notNull(),
+    quantity: integer().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("user_furniture_inventory_uid_uidx").on(table.uid),
+    uniqueIndex("user_furniture_inventory_user_furniture_uidx").on(table.userId, table.furnitureUid),
+    index("user_furniture_inventory_user_id_idx").on(table.userId),
+  ],
+);
+
 export const pgSyncDraftsTable = pgTable(
   "sync_drafts",
   {

@@ -102,7 +102,7 @@ export function calculateMinigamePaymentCosts(
 
   const costMap = new Map<string, MinigamePayment>();
   const addCost = (payment: MinigamePayment, multiplier: number) => {
-    const { resourceType, resourceUid, resourceName, quantity } = payment;
+    const { resourceType, resourceUid, resourceName, imageUrl, quantity } = payment;
     const key = `${payment.resourceType}:${payment.resourceUid}`;
     const existing = costMap.get(key);
     if (existing) {
@@ -112,6 +112,7 @@ export function calculateMinigamePaymentCosts(
         resourceType,
         resourceUid,
         resourceName,
+        imageUrl,
         quantity: quantity * multiplier,
       });
     }

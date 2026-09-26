@@ -1,6 +1,7 @@
 import { memo, useMemo, useState } from "react";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, ShopResource } from "~/domain/event-shop";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatResourceAmount } from "~/locales/ko";
 import { resourceImageUrl } from "~/models/assets";
 import {
@@ -105,7 +106,11 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       <Tabs
         tabs={collectableResources
           .filter(({ forPayment }) => forPayment)
-          .map(({ type, uid, name }) => ({ tabId: uid, name, imageUrl: resourceImageUrl(type, uid) }))}
+          .map((resource) => ({
+            tabId: resource.uid,
+            name: resource.name,
+            imageUrl: getEventResourceImageUrl(resource),
+          }))}
         activeTabId={selectedPaymentResourceUid}
         setActiveTabId={setSelectedPaymentResourceUid}
       />
@@ -118,6 +123,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
           const dailyReset = isDailyResetShopResource(shopResource);
           const purchaseDaysLimit = getShopResourcePurchaseDaysLimit(eventUid, uid, availablePurchaseDays);
           const totalPurchaseCount = calculateEffectiveShopPurchaseCount(shopResource, quantity, purchaseDays);
+          const paymentImageUrl = getEventResourceImageUrl(paymentResource);
 
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
@@ -127,18 +133,25 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                 <ResourceCard
                   itemUid={resource.uid}
                   resourceType={resource.type}
+                  imageUrl={resource.imageUrl ?? undefined}
                   rarity={resource.rarity}
                   label={resourceAmount === 1 ? undefined : formattedResourceAmount}
                   name={resource.name}
                 />
                 <div className="grow">
                   <div className="flex items-center justify-center gap-1">
-                    <img
-                      alt={paymentResource.name}
-                      src={resourceImageUrl(paymentResource.type, paymentResource.uid)}
-                      className="-m-1 size-6 md:size-8 object-contain"
-                      loading="lazy"
-                    />
+                    {paymentImageUrl ? (
+                      <img
+                        alt={paymentResource.name}
+                        src={paymentImageUrl}
+                        className="-m-1 size-6 object-contain md:size-8"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <span role="img" aria-label={`${paymentResource.name} 이미지 없음`} className="text-xs">
+                        이미지 없음
+                      </span>
+                    )}
                     <span className="mr-2 text-sm font-medium text-foreground">{unitPriceLabel}</span>
                   </div>
                   <p className="text-center text-xs text-muted-foreground">
@@ -198,3 +211,18 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
     </Section>
   );
 });
+
+function getEventResourceImageUrl(resource: CollectableResource | ShopResource["paymentResource"]): string | undefined {
+  switch (resource.type) {
+    case ResourceTypeEnum.Emblem:
+      return resource.imageUrl ?? undefined;
+    case ResourceTypeEnum.Currency:
+      return resourceImageUrl("currency", resource.uid);
+    case ResourceTypeEnum.Equipment:
+      return resourceImageUrl("equipment", resource.uid);
+    case ResourceTypeEnum.Furniture:
+      return resourceImageUrl("furniture", resource.uid);
+    case ResourceTypeEnum.Item:
+      return resourceImageUrl("item", resource.uid);
+  }
+}

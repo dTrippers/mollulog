@@ -11,6 +11,7 @@ export const SOURCE_CACHE_REFRESH_TASK_NAMES = [
   "warmStudentGearData",
   "warmActiveUpcomingEventContent",
   "getItemCatalogResources",
+  "getFurnitureCatalogSource",
   "getCampaignFarmingStages",
 ] as const;
 
@@ -74,6 +75,7 @@ export const CACHE_REFRESH_TASK_LABELS: Record<CacheRefreshTaskName, string> = {
   warmStudentGearData: "학생 장비 데이터",
   warmActiveUpcomingEventContent: "진행·예정 이벤트",
   getItemCatalogResources: "아이템 카탈로그",
+  getFurnitureCatalogSource: "가구 카탈로그",
   getCampaignFarmingStages: "캠페인 파밍 스테이지",
   getEventList: "이벤트 목록 화면",
   getIndexContents: "홈 화면",

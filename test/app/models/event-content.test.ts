@@ -463,6 +463,176 @@ describe("getEventShopContent", () => {
       ],
     });
   });
+
+  it("preserves BAQL localized emblem URLs for shop resources and payment resources", async () => {
+    const emblemImageUrl = "https://assets.baql.net/images/resources/emblems/3000845/background/ko.webp";
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          stages: [],
+          shopResources: [
+            {
+              uid: "emblem-offer",
+              resourceAmount: 1,
+              shopAmount: 1,
+              resource: {
+                type: "emblem",
+                uid: "3000845",
+                name: "이벤트 문양",
+                rarity: 1,
+                imageUrl: emblemImageUrl,
+              },
+              paymentResource: {
+                type: "emblem",
+                uid: "3000845",
+                name: "이벤트 문양",
+                imageUrl: emblemImageUrl,
+              },
+              purchaseTiers: [
+                {
+                  tierIndex: 0,
+                  startQuantity: 1,
+                  quantity: 1,
+                  unitPrice: 1,
+                  paymentResource: {
+                    type: "emblem",
+                    uid: "3000845",
+                    name: "이벤트 문양",
+                    imageUrl: emblemImageUrl,
+                  },
+                },
+              ],
+            },
+          ],
+          bonuses: [],
+          minigameConfigs: [
+            {
+              minigameType: "prize_exchange",
+              payment: {
+                quantity: 1,
+                resource: {
+                  type: "emblem",
+                  uid: "3000845",
+                  name: "이벤트 문양",
+                  imageUrl: emblemImageUrl,
+                },
+              },
+              payments: [
+                {
+                  quantity: 2,
+                  resource: {
+                    type: "emblem",
+                    uid: "3000845",
+                    name: "이벤트 문양",
+                    imageUrl: emblemImageUrl,
+                  },
+                },
+              ],
+              rewardGroups: [],
+            },
+          ],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      shopResources: [
+        {
+          resource: { type: "emblem", uid: "3000845", imageUrl: emblemImageUrl },
+          paymentResource: { type: "emblem", uid: "3000845", imageUrl: emblemImageUrl },
+          purchaseTiers: [{ paymentResource: { type: "emblem", uid: "3000845", imageUrl: emblemImageUrl } }],
+        },
+      ],
+      minigameConfig: {
+        payment: { resourceType: "emblem", resourceUid: "3000845", imageUrl: emblemImageUrl },
+        payments: [{ resourceType: "emblem", resourceUid: "3000845", imageUrl: emblemImageUrl }],
+      },
+    });
+  });
+
+  it("preserves Emblem resource type and image URL from stage rewards", async () => {
+    const emblemImageUrl = "https://assets.baql.net/images/resources/emblems/3000845/background/ko.webp";
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          stages: [
+            {
+              uid: "event-stage-1",
+              stageNumber: "1",
+              stageIndex: 0,
+              stageType: "stage",
+              enterCostAmount: 10,
+              rewards: [
+                {
+                  amount: 1,
+                  probability: "1.0",
+                  tag: "Default",
+                  resource: {
+                    __typename: "Emblem",
+                    uid: "3000845",
+                    name: "이벤트 문양",
+                    rarity: 1,
+                    imageUrl: emblemImageUrl,
+                  },
+                },
+                {
+                  amount: 1_000,
+                  probability: "1.0",
+                  tag: "Default",
+                  resource: {
+                    __typename: "Item",
+                    uid: "100000",
+                    name: "크레딧",
+                    rarity: 1,
+                    category: "coin",
+                  },
+                },
+              ],
+            },
+          ],
+          shopResources: [],
+          bonuses: [],
+          minigameConfigs: [],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    });
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      stages: [
+        {
+          uid: "event-stage-1",
+          rewards: [
+            {
+              item: {
+                uid: "3000845",
+                resourceType: "emblem",
+                imageUrl: emblemImageUrl,
+              },
+            },
+            {
+              item: {
+                uid: "100000",
+                resourceType: "item",
+                category: "coin",
+              },
+            },
+          ],
+        },
+      ],
+    });
+  });
 });
 
 describe("getEventContentSchedule", () => {

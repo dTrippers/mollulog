@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  CACHE_REFRESH_TASK_LABELS,
   CACHE_REFRESH_TASK_NAMES,
   countCompletedCacheRefreshTasks,
   createPendingCacheRefreshTaskResults,
@@ -11,6 +12,8 @@ describe("cache refresh domain", () => {
 
     expect(Object.keys(results)).toEqual(CACHE_REFRESH_TASK_NAMES);
     expect(countCompletedCacheRefreshTasks(results)).toBe(0);
+    expect(CACHE_REFRESH_TASK_NAMES).toContain("getFurnitureCatalogSource");
+    expect(CACHE_REFRESH_TASK_LABELS.getFurnitureCatalogSource).toBe("가구 카탈로그");
   });
 
   it("counts succeeded, failed, and skipped tasks as completed", () => {

@@ -147,7 +147,10 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   const mergedBoughtResources = useMemo(() => {
     const resourceMap = new Map<
       string,
-      { resource: { uid: string; type: ResourceTypeEnum; rarity: number; name: string }; totalQuantity: number }
+      {
+        resource: { uid: string; type: ResourceTypeEnum; rarity: number; name: string; imageUrl?: string | null };
+        totalQuantity: number;
+      }
     >();
 
     // Helper to add/update resource in map
@@ -157,6 +160,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
       quantity: number,
       rarity: number,
       name: string,
+      imageUrl?: string | null,
     ) => {
       const resourceKey = `${resourceType}:${resourceUid}:${rarity}`;
       const existingResource = resourceMap.get(resourceKey);
@@ -164,7 +168,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
         existingResource.totalQuantity += quantity;
       } else {
         resourceMap.set(resourceKey, {
-          resource: { uid: resourceUid, type: resourceType, rarity, name },
+          resource: { uid: resourceUid, type: resourceType, rarity, name, imageUrl },
           totalQuantity: quantity,
         });
       }
@@ -172,14 +176,14 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
     // Add shop resources
     for (const { resource, totalQuantity } of boughtShopResources) {
-      addResource(resource.type, resource.uid, totalQuantity, resource.rarity, resource.name);
+      addResource(resource.type, resource.uid, totalQuantity, resource.rarity, resource.name, resource.imageUrl);
     }
 
     // Add minigame rewards
     if (minigameConfig && state.minigamePlayCount > 0) {
       const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount, state.minigameStartRound);
-      for (const { resourceType, resourceUid, resourceName, quantity, rarity } of rewards) {
-        addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceName ?? "재화");
+      for (const { resourceType, resourceUid, resourceName, imageUrl, quantity, rarity } of rewards) {
+        addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceName ?? "재화", imageUrl);
       }
     }
 
@@ -240,7 +244,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                 구매할 아이템과 스테이지를 선택하세요
               </p>
             )}
-            {collectableResources.map(({ type: resourceType, uid: itemUid, name: itemName }) => {
+            {collectableResources.map(({ type: resourceType, uid: itemUid, name: itemName, imageUrl }) => {
               // Gather all counts
               const existingCount = existing[itemUid] || 0;
               const firstRunCount = fromFirstRun[itemUid] || 0;
@@ -277,7 +281,13 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 
               return (
                 <div key={itemUid} className="relative flex items-start gap-2 rounded-md bg-card p-3">
-                  <ResourceCard itemUid={itemUid} resourceType={resourceType} rarity={1} name={itemName} />
+                  <ResourceCard
+                    itemUid={itemUid}
+                    resourceType={resourceType}
+                    imageUrl={imageUrl ?? undefined}
+                    rarity={1}
+                    name={itemName}
+                  />
                   <div className="grow space-y-3 text-sm relative">
                     {/* 필요 수량 */}
                     {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
@@ -400,6 +410,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     key={`${resource.type}:${resource.uid}`}
                     itemUid={resource.uid}
                     resourceType={resource.type}
+                    imageUrl={resource.imageUrl ?? undefined}
                     rarity={resource.rarity}
                     label={resourceCountLabel(totalQuantity)}
                     name={resource.name}

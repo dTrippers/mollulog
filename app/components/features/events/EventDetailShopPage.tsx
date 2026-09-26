@@ -70,6 +70,7 @@ export default function EventDetailShopPage({
           type: paymentResource.type,
           uid: paymentResource.uid,
           name: paymentResource.name,
+          imageUrl: paymentResource.imageUrl,
           forPayment: true,
         });
       }
@@ -89,20 +90,26 @@ export default function EventDetailShopPage({
         ...minigameConfig.payments,
         ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
       ];
-      for (const { resourceType, resourceUid, resourceName } of minigamePaymentResources) {
+      for (const { resourceType, resourceUid, resourceName, imageUrl } of minigamePaymentResources) {
         if (clueSearchExchange?.supported && clueSearchExchange.clueUids.includes(resourceUid)) {
           continue;
         }
 
         if (!items.some(({ uid }) => uid === resourceUid)) {
-          items.push({ type: resourceType, uid: resourceUid, name: resourceName ?? "재화", forPayment: false });
+          items.push({
+            type: resourceType,
+            uid: resourceUid,
+            name: resourceName ?? "재화",
+            imageUrl,
+            forPayment: false,
+          });
         }
       }
 
       if (clueSearchExchange?.supported && clueSearchExchange.pointResource) {
-        const { type, uid, name } = clueSearchExchange.pointResource;
+        const { type, uid, name, imageUrl } = clueSearchExchange.pointResource;
         if (!items.some((item) => item.uid === uid)) {
-          items.push({ type, uid, name, forPayment: false });
+          items.push({ type, uid, name, imageUrl, forPayment: false });
         }
       }
     }
