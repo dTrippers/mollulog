@@ -74,7 +74,7 @@ export default function Button({
   const content =
     children ??
     (Icon ? (
-      <div className="flex items-center gap-2">
+      <div className={`flex items-center ${size === "xs" ? "gap-1.5" : "gap-2"}`}>
         <Icon className="size-4 shrink-0" strokeWidth={2} />
         <span>{text}</span>
       </div>
