@@ -37,6 +37,20 @@ describe("knowledge annotation", () => {
     expect(segments.slice(1)).toEqual([{ kind: "text", text: "를 설명하고 CC 효과" }]);
   });
 
+  it("prefers a longer entry alias over a shorter alias at the same position", () => {
+    const enhancedCrowdControl: PublicKnowledgeEntry = {
+      title: "군중제어 강화력",
+      aliases: ["군중제어 강화력"],
+      body: "군중제어 강화력 설명",
+    };
+    const source = "군중제어 강화력 증가";
+
+    expect(annotateKnowledgeText(source, [crowdControl, enhancedCrowdControl])).toEqual([
+      { kind: "term", text: "군중제어 강화력", noWrapTailLength: 0, entry: enhancedCrowdControl },
+      { kind: "text", text: " 증가" },
+    ]);
+  });
+
   it("matches aliases inside longer words but does not match across line breaks", () => {
     const source = "극공포와 공포증";
     const segments = annotateKnowledgeText(source, [fear]);
