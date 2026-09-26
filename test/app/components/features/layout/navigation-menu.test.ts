@@ -108,7 +108,7 @@ describe("navigation surface projections", () => {
   it("exposes exactly the approved mobile candidates and labels in order", () => {
     const options = getMobileNavigationOptions(navigationOptions);
 
-    expect(options).toHaveLength(13);
+    expect(options).toHaveLength(14);
     expect(options.map((item) => item.mobileNavigationId)).toEqual([
       "feed",
       "students",
