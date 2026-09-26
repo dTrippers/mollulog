@@ -1,13 +1,10 @@
 import { sql } from "drizzle-orm";
 import {
-  type AnyPgColumn,
   bigint,
   boolean,
-  foreignKey,
   index,
   integer,
   jsonb,
-  type PgTableExtraConfigValue,
   pgTable,
   text,
   timestamp,
@@ -1323,9 +1320,7 @@ export const pgKnowledgeEntryRevisionsTable = pgTable(
   "knowledge_entry_revisions",
   {
     id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    entryId: integer("entry_id")
-      .notNull()
-      .references((): AnyPgColumn => pgKnowledgeEntriesTable.id, { onDelete: "restrict" }),
+    entryId: integer("entry_id").notNull(),
     title: text().notNull(),
     aliases: jsonb().$type<string[]>().notNull(),
     meaningContext: text("meaning_context"),
@@ -1344,8 +1339,8 @@ export const pgKnowledgeEntryRevisionsTable = pgTable(
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    uniqueIndex("knowledge_entry_revisions_entry_id_id_uidx").on(table.entryId, table.id),
-    uniqueIndex("knowledge_entry_revisions_one_draft_per_entry_uidx")
+    index("knowledge_entry_revisions_entry_id_id_idx").on(table.entryId, table.id),
+    index("knowledge_entry_revisions_draft_entry_idx")
       .on(table.entryId)
       .where(sql`${table.status} = 'draft'`),
     index("knowledge_entry_revisions_entry_status_updated_idx").on(table.entryId, table.status, table.updatedAt.desc()),
@@ -1362,12 +1357,7 @@ export const pgKnowledgeEntriesTable = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
   },
-  (table): PgTableExtraConfigValue[] => [
-    foreignKey({
-      name: "knowledge_entries_published_revision_entry_fk",
-      columns: [table.id, table.publishedRevisionId],
-      foreignColumns: [pgKnowledgeEntryRevisionsTable.entryId, pgKnowledgeEntryRevisionsTable.id],
-    }).onDelete("restrict"),
+  (table) => [
     index("knowledge_entries_kind_id_idx").on(table.kind, table.id),
     index("knowledge_entries_active_published_idx")
       .on(table.kind, table.id)
