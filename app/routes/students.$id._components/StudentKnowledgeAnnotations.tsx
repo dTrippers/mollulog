@@ -441,7 +441,7 @@ function renderAnnotatedSegments(segments: readonly KnowledgeAnnotationSegment[]
     }
 
     const group: React.ReactNode[] = [renderTermTrigger(segment, key)];
-    sourceOffset += segment.text.length + segment.suffix.length;
+    sourceOffset += segment.text.length;
     let remaining = segment.noWrapTailLength;
     let nextIndex = segmentIndex + 1;
     let nextTextOffset = 0;
@@ -464,7 +464,7 @@ function renderAnnotatedSegments(segments: readonly KnowledgeAnnotationSegment[]
         }
       } else {
         group.push(renderTermTrigger(next, `${keyPrefix}-${sourceOffset}`));
-        const termLength = next.text.length + next.suffix.length;
+        const termLength = next.text.length;
         sourceOffset += termLength;
         remaining -= termLength;
         nextIndex += 1;
@@ -488,18 +488,10 @@ function renderAnnotatedSegments(segments: readonly KnowledgeAnnotationSegment[]
 }
 
 function renderTermTrigger(segment: Extract<KnowledgeAnnotationSegment, { kind: "term" }>, key: string) {
-  return <KnowledgeTermTrigger key={key} termText={segment.text} suffix={segment.suffix} entry={segment.entry} />;
+  return <KnowledgeTermTrigger key={key} termText={segment.text} entry={segment.entry} />;
 }
 
-function KnowledgeTermTrigger({
-  termText,
-  suffix,
-  entry,
-}: {
-  termText: string;
-  suffix: string;
-  entry: PublicKnowledgeEntry;
-}) {
+function KnowledgeTermTrigger({ termText, entry }: { termText: string; entry: PublicKnowledgeEntry }) {
   const context = useContext(StudentKnowledgePopoverContext);
   if (!context) throw new Error("StudentKnowledgePopoverProvider is required");
 
@@ -605,9 +597,6 @@ function KnowledgeTermTrigger({
           className="relative -top-1 -mr-0.5 inline-block h-3 w-3 text-muted-foreground/65 group-hover:text-foreground group-data-[open=true]:text-foreground"
         />
       </button>
-      {suffix ? (
-        <span className="group-hover:text-foreground group-data-[open=true]:text-foreground">{suffix}</span>
-      ) : null}
     </span>
   );
 }

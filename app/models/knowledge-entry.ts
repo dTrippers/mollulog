@@ -59,4 +59,4 @@ export type PublicKnowledgeEntry = {
 
 export type KnowledgeAnnotationSegment =
   | { kind: "text"; text: string }
-  | { kind: "term"; text: string; suffix: string; noWrapTailLength: number; entry: PublicKnowledgeEntry };
+  | { kind: "term"; text: string; noWrapTailLength: number; entry: PublicKnowledgeEntry };

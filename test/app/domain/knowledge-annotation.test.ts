@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { annotateKnowledgeDescriptionParts, annotateKnowledgeText } from "~/domain/knowledge-annotation";
-import type { PublicKnowledgeEntry } from "~/models/knowledge-entry";
+import type { KnowledgeAnnotationSegment, PublicKnowledgeEntry } from "~/models/knowledge-entry";
 
 const fear: PublicKnowledgeEntry = {
   title: "공포",
@@ -14,59 +14,58 @@ const crowdControl: PublicKnowledgeEntry = {
   body: "군중제어 설명",
 };
 
+function originalText(segments: readonly KnowledgeAnnotationSegment[]): string {
+  return segments.map((segment) => segment.text).join("");
+}
+
 describe("knowledge annotation", () => {
-  it("preserves source text and groups a recognized postposition with the first match", () => {
-    const segments = annotateKnowledgeText("공포를 부여하고 공포 상태", [fear]);
+  it("finds a registered alias without consuming the letters after it", () => {
+    const source = "공포를 부여하고 공포 상태";
+    const segments = annotateKnowledgeText(source, [fear]);
 
     expect(segments).toEqual([
-      { kind: "term", text: "공포", suffix: "를", noWrapTailLength: 0, entry: fear },
-      { kind: "text", text: " 부여하고 공포 상태" },
+      { kind: "term", text: "공포", noWrapTailLength: 1, entry: fear },
+      { kind: "text", text: "를 부여하고 공포 상태" },
     ]);
-    expect(segments.map((segment) => segment.text + (segment.kind === "term" ? segment.suffix : "")).join("")).toBe(
-      "공포를 부여하고 공포 상태",
-    );
+    expect(originalText(segments)).toBe(source);
   });
 
   it("prefers the longest matching alias and accepts registered spacing variants", () => {
     const segments = annotateKnowledgeText("군중 제어를 설명하고 CC 효과", [crowdControl]);
 
-    expect(segments[0]).toEqual({
-      kind: "term",
-      text: "군중 제어",
-      suffix: "를",
-      noWrapTailLength: 0,
-      entry: crowdControl,
-    });
-    expect(segments.slice(1)).toEqual([{ kind: "text", text: " 설명하고 CC 효과" }]);
+    expect(segments[0]).toEqual({ kind: "term", text: "군중 제어", noWrapTailLength: 1, entry: crowdControl });
+    expect(segments.slice(1)).toEqual([{ kind: "text", text: "를 설명하고 CC 효과" }]);
   });
 
-  it("does not annotate arbitrary substrings or match across line breaks", () => {
-    expect(annotateKnowledgeText("극공포 상태공포\n상태", [fear])).toEqual([
-      { kind: "text", text: "극공포 상태공포\n상태" },
+  it("matches aliases inside longer words but does not match across line breaks", () => {
+    const source = "극공포와 공포증";
+    const segments = annotateKnowledgeText(source, [fear]);
+
+    expect(segments).toEqual([
+      { kind: "text", text: "극" },
+      { kind: "term", text: "공포", noWrapTailLength: 1, entry: fear },
+      { kind: "text", text: "와 공포증" },
     ]);
+    expect(originalText(segments)).toBe(source);
+    expect(annotateKnowledgeText("공\n포", [fear])).toEqual([{ kind: "text", text: "공\n포" }]);
   });
 
-  it("binds punctuation through the next whitespace or static-part end without changing matches", () => {
-    const withWhitespace = "공포(3.9초간 적용";
-    const spacedSegments = annotateKnowledgeText(withWhitespace, [fear]);
-    const firstTerm = spacedSegments[0];
+  it("binds trailing text through the next whitespace or static-part end without changing matches", () => {
+    const source = "공포(3.9초간 적용";
+    const segments = annotateKnowledgeText(source, [fear]);
+    const firstTerm = segments[0];
 
-    expect(firstTerm).toMatchObject({ kind: "term", text: "공포", suffix: "" });
+    expect(firstTerm).toMatchObject({ kind: "term", text: "공포" });
     if (firstTerm.kind !== "term") throw new Error("Expected a term segment");
-    const trailingStart = firstTerm.text.length + firstTerm.suffix.length;
-    expect(withWhitespace.slice(trailingStart, trailingStart + firstTerm.noWrapTailLength)).toBe("(3.9초간");
-
-    const atPartEnd = annotateKnowledgeText("공포(", [fear]);
-    expect(atPartEnd[0]).toMatchObject({ kind: "term", noWrapTailLength: 1 });
+    expect(source.slice(firstTerm.text.length, firstTerm.text.length + firstTerm.noWrapTailLength)).toBe("(3.9초간");
+    expect(annotateKnowledgeText("공포(", [fear])[0]).toMatchObject({ kind: "term", noWrapTailLength: 1 });
 
     const multipleMatches = annotateKnowledgeText("공포(군중제어 효과", [fear, crowdControl]);
     expect(multipleMatches.filter((segment) => segment.kind === "term").map((segment) => segment.entry.title)).toEqual([
       "공포",
       "군중제어",
     ]);
-    expect(
-      multipleMatches.map((segment) => segment.text + (segment.kind === "term" ? segment.suffix : "")).join(""),
-    ).toBe("공포(군중제어 효과");
+    expect(originalText(multipleMatches)).toBe("공포(군중제어 효과");
   });
 
   it("does not extend a static no-wrap tail into a dynamic description part", () => {
@@ -98,46 +97,21 @@ describe("knowledge annotation", () => {
     ]);
   });
 
-  it("matches regex punctuation literally", () => {
+  it("matches punctuation in aliases literally", () => {
     const special: PublicKnowledgeEntry = { title: "A+B", aliases: ["A+B"], body: "문자 그대로" };
 
     expect(annotateKnowledgeText("A+B와 AB", [special])).toEqual([
-      { kind: "term", text: "A+B", suffix: "와", noWrapTailLength: 0, entry: special },
-      { kind: "text", text: " AB" },
+      { kind: "term", text: "A+B", noWrapTailLength: 1, entry: special },
+      { kind: "text", text: "와 AB" },
     ]);
   });
 
-  it.each([
-    "라도",
-    "에는",
-    "에서는",
-    "로서",
-    "로써",
-    "로서는",
-    "로는",
-    "와는",
-    "과는",
-    "랑은",
-    "이랑은",
-    "에도",
-    "으로도",
-    "로도",
-    "이란",
-    "란",
-  ])("recognizes the noun particle %s", (particle) => {
-    const source = `공포${particle} 설명`;
+  it.each(["를", "에게서는", "증", "고", "며", "이고"])("matches without a suffix list: %s", (suffix) => {
+    const source = `공포${suffix} 설명`;
     const segments = annotateKnowledgeText(source, [fear]);
 
-    expect(segments[0]).toMatchObject({ kind: "term", text: "공포", suffix: particle });
-    expect(segments.map((segment) => segment.text + (segment.kind === "term" ? segment.suffix : "")).join("")).toBe(
-      source,
-    );
-  });
-
-  it("does not treat word continuation or copula endings as postpositions", () => {
-    const source = "공포증 공포고 공포며 공포이고";
-
-    expect(annotateKnowledgeText(source, [fear])).toEqual([{ kind: "text", text: source }]);
+    expect(segments[0]).toMatchObject({ kind: "term", text: "공포", noWrapTailLength: suffix.length });
+    expect(originalText(segments)).toBe(source);
   });
 
   it("keeps dynamic skill values untouched and annotates only the first static occurrence", () => {
@@ -150,15 +124,9 @@ describe("knowledge annotation", () => {
       [fear],
     );
 
-    expect(parts[0].segments[0]).toMatchObject({ kind: "term", text: "공포", suffix: "를" });
+    expect(parts[0].segments[0]).toMatchObject({ kind: "term", text: "공포" });
     expect(parts[1].segments).toEqual([{ kind: "text", text: "30%" }]);
     expect(parts[2].segments).toEqual([{ kind: "text", text: "공포 상태" }]);
-    expect(
-      parts
-        .map((part) =>
-          part.segments.map((segment) => segment.text + (segment.kind === "term" ? segment.suffix : "")).join(""),
-        )
-        .join(""),
-    ).toBe("공포를 부여30%공포 상태");
+    expect(parts.map((part) => originalText(part.segments)).join("")).toBe("공포를 부여30%공포 상태");
   });
 });
