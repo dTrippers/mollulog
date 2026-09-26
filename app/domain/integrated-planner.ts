@@ -2,8 +2,15 @@ import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline } from "~/domain/pyroxene-timeline";
 import type { RunType } from "~/domain/timeline-content";
-import { formatInstantDateKey, getInstantTime, type LocalDateString, normalizeTimeZone } from "~/lib/date-time";
+import {
+  formatInstant,
+  formatInstantDateKey,
+  getInstantTime,
+  type LocalDateString,
+  normalizeTimeZone,
+} from "~/lib/date-time";
 import dayjs from "~/lib/dayjs";
+import type { RaidType } from "~/models/content.d";
 
 export type PlannerResourceKey = keyof PickupResources;
 
@@ -16,7 +23,9 @@ export type PlannerTimelineSource = {
   key: string;
   type: string;
   label: string | null;
+  at?: string;
   eventUid?: string;
+  raidUid?: string;
   changes: PlannerResourceChange[];
 };
 
@@ -28,11 +37,11 @@ export type PlannerDayResources = {
 
 export type PlannerPeriod = {
   key: string;
-  kind: "event" | "recruitment" | "shop";
+  kind: "event" | "recruitment" | "shop" | "raid";
   name: string;
   startDate: LocalDateString;
   endDate: LocalDateString;
-  href: string;
+  href?: string;
   startAt?: string | null;
   imageUrl?: string | null;
   endAt?: string | null;
@@ -40,7 +49,17 @@ export type PlannerPeriod = {
   endless?: boolean;
   calendarStartOnly?: boolean;
   eventUid?: string;
+  raidUid?: string;
+  raidType?: RaidType;
+  seasonIndex?: number | null;
   students?: PlannerPeriodStudent[];
+  /**
+   * Full recruitment roster (every recruitable student, not narrowed to saved favorites).
+   * Only set on merged/display recruitment periods; used to build the recruitment editor's
+   * candidate list so registering a favorite never hides the event's other students. The
+   * card/strip-facing `students` field keeps its existing favorites-only-when-planned meaning.
+   */
+  allRecruitmentStudents?: PlannerPeriodStudent[];
   expectedTrials?: number;
   isPlanned?: boolean;
   hasRecruitmentPlan?: boolean;
@@ -64,7 +83,11 @@ export type PlannerScheduleFactKind =
   | "event-end"
   | "recruitment-start"
   | "recruitment-end"
-  | "shop-deadline";
+  | "shop-deadline"
+  | "raid-start"
+  | "raid-end"
+  | "raid-reward"
+  | "raid-ticket-expiry";
 
 export type PlannerScheduleFact = {
   kind: PlannerScheduleFactKind;
@@ -75,13 +98,22 @@ export type PlannerDateScheduleItem = {
   key: string;
   period: PlannerPeriod;
   eventPeriod?: PlannerPeriod;
+  shopPeriod?: PlannerPeriod;
   ongoingRecruitmentPeriods?: PlannerPeriod[];
+  recruitmentPeriods?: PlannerPeriod[];
   facts: PlannerScheduleFact[];
 };
 
 export type PlannerDateSchedule = {
   onDate: PlannerDateScheduleItem[];
   ongoing: PlannerDateScheduleItem[];
+  items: PlannerDateScheduleItem[];
+};
+
+export type PlannerRaidScheduleFact = {
+  raidUid: string;
+  kind: "raid-reward" | "raid-ticket-expiry";
+  at: string;
 };
 
 export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPeriodGroup[] {
@@ -136,7 +168,7 @@ export function getPlannerPeriodsForDate(
 ): PlannerPeriod[] {
   return periods.filter((period) => {
     if (period.kind === "shop") return false;
-    if (period.kind === "event" && (period.endAt == null || period.endless === true)) {
+    if (period.kind === "event" && period.endAt == null) {
       return period.startDate === dateKey;
     }
     return period.startDate <= dateKey && period.endDate >= dateKey;
@@ -191,19 +223,22 @@ export type PlannerShopPeriodInput = {
   planned: boolean;
 };
 
+/**
+ * 2026-09-26 decision A5: event-level "내 계획" no longer counts non-default shop input.
+ * Planned = has target students (favorites) or a saved recruitment count (expectedTrials
+ * non-null) only. Shop plan data itself is unaffected and still drives the shop calculator,
+ * forecast, and S7 amounts via its own `planned` (non-default state) gate elsewhere.
+ */
 export function getPlannerPlannedEventUids({
   favorites,
   eventTrials,
-  shopPeriods,
 }: {
   favorites: readonly PlannerFavoriteInput[];
   eventTrials: readonly PlannerEventTrialInput[];
-  shopPeriods: readonly PlannerShopPeriodInput[];
 }): Set<string> {
   return new Set([
     ...favorites.map(({ contentUid }) => contentUid),
     ...eventTrials.filter(({ expectedTrials }) => expectedTrials !== null).map(({ eventUid }) => eventUid),
-    ...shopPeriods.filter(({ planned }) => planned).map(({ timelineUid }) => timelineUid),
   ]);
 }
 
@@ -223,7 +258,7 @@ export type PlannerPeriodTimingStatus = "exact" | "date-only" | "invalid";
 
 export type PlannerCalendarStrip = {
   key: string;
-  kind: "event" | "recruitment" | "combined";
+  kind: "event" | "recruitment" | "combined" | "raid";
   period: PlannerPeriod;
   recruitmentPeriods: PlannerPeriod[];
   track: number;
@@ -247,6 +282,8 @@ export type PlannerWeekLayout = {
   eventStartMarkers: PlannerCalendarStartMarker[];
   recruitmentStrips: PlannerCalendarStrip[];
   laneCount: number;
+  raidStrips: PlannerCalendarStrip[];
+  raidLaneCount: number;
 };
 
 export type PlannerMonthLayout = {
@@ -263,6 +300,15 @@ export type PlannerDayResourceBreakdown = {
   calendarSources: PlannerTimelineSource[];
   otherSources: PlannerTimelineSource[];
   otherChanges: PlannerResourceChange[];
+};
+
+export type PlannerDateResourceAttribution = {
+  eventChanges: Record<string, PlannerResourceChange[]>;
+  raidChanges: Record<string, PlannerResourceChange[]>;
+  directSources: PlannerTimelineSource[];
+  unmatchedEventSources: PlannerTimelineSource[];
+  unmatchedEventRewardSources: PlannerTimelineSource[];
+  unmatchedRaidSources: PlannerTimelineSource[];
 };
 
 function sumSourceChanges(sources: readonly PlannerTimelineSource[]): PlannerResourceChange[] {
@@ -289,6 +335,87 @@ export function partitionPlannerDayResources(day: PlannerDayResources): PlannerD
   };
 }
 
+export function attributePlannerDateResources(
+  day: PlannerDayResources | undefined,
+  periods: readonly PlannerPeriod[],
+  dateItems: readonly PlannerDateScheduleItem[],
+): PlannerDateResourceAttribution {
+  const eventUids = new Set(
+    periods.flatMap((period) => (period.kind === "event" && period.eventUid ? [period.eventUid] : [])),
+  );
+  const raidUids = new Set(
+    periods.flatMap((period) => (period.kind === "raid" && period.raidUid ? [period.raidUid] : [])),
+  );
+  const visibleEventUids = new Set(
+    dateItems.flatMap((item) => (item.period.kind === "event" && item.period.eventUid ? [item.period.eventUid] : [])),
+  );
+  const visibleRaidUids = new Set(
+    dateItems.flatMap((item) => (item.period.kind === "raid" && item.period.raidUid ? [item.period.raidUid] : [])),
+  );
+  const eventSources = new Map<string, PlannerTimelineSource[]>();
+  const raidSources = new Map<string, PlannerTimelineSource[]>();
+  const directSources: PlannerTimelineSource[] = [];
+  const unmatchedEventSources: PlannerTimelineSource[] = [];
+  const unmatchedEventRewardSources: PlannerTimelineSource[] = [];
+  const unmatchedRaidSources: PlannerTimelineSource[] = [];
+
+  for (const source of day?.sources ?? []) {
+    if (source.type === "event_reward" || source.type === "event") {
+      const eventUid = source.eventUid;
+      if (!eventUid || !eventUids.has(eventUid) || !visibleEventUids.has(eventUid)) {
+        if (source.type === "event_reward") unmatchedEventRewardSources.push(source);
+        else unmatchedEventSources.push(source);
+        continue;
+      }
+      const sources = eventSources.get(eventUid) ?? [];
+      sources.push(source);
+      eventSources.set(eventUid, sources);
+      continue;
+    }
+    if (source.type === "raid") {
+      const raidUid = source.raidUid;
+      if (!raidUid || !raidUids.has(raidUid) || !visibleRaidUids.has(raidUid)) {
+        unmatchedRaidSources.push(source);
+        continue;
+      }
+      const sources = raidSources.get(raidUid) ?? [];
+      sources.push(source);
+      raidSources.set(raidUid, sources);
+      continue;
+    }
+    if (source.type === "buy" || source.type === "other") directSources.push(source);
+  }
+
+  const changesByIdentity = (sourcesByIdentity: ReadonlyMap<string, readonly PlannerTimelineSource[]>) =>
+    Object.fromEntries(
+      [...sourcesByIdentity].map(([identity, sources]) => [
+        identity,
+        sumSourceChanges(sources).filter(({ quantity }) => quantity !== 0),
+      ]),
+    );
+
+  return {
+    eventChanges: changesByIdentity(eventSources),
+    raidChanges: changesByIdentity(raidSources),
+    directSources,
+    unmatchedEventSources,
+    unmatchedEventRewardSources,
+    unmatchedRaidSources,
+  };
+}
+
+export function getPlannerReadOnlyBuySources(
+  directSources: readonly PlannerTimelineSource[],
+  editableSourceKeys: ReadonlySet<string>,
+): PlannerTimelineSource[] {
+  return directSources.filter((source) => source.type === "buy" && !editableSourceKeys.has(source.key));
+}
+
+export function getPlannerUnmatchedEventRewardLabel(source: PlannerTimelineSource): string | null {
+  if (!source.label) return null;
+  return source.eventUid?.startsWith("main-story-reward:") ? `메인 스토리 보상 · ${source.label}` : source.label;
+}
+
 function toInstantKey(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : value;
 }
@@ -300,8 +427,34 @@ function isNavigablePlannerEvent(
 }
 
 function getPlannerActualEventEndAt(content: PlannerScheduleContentInput): string | null {
-  if (content.endless === true) return null;
-  return content.actualEndAt !== undefined ? content.actualEndAt : content.until;
+  if (content.actualEndAt !== undefined) return content.actualEndAt;
+  return content.endless === true ? null : content.until;
+}
+
+function buildPlannerRaidPeriods(scheduleItems: readonly PyroxeneScheduleItem[], timeZone: string): PlannerPeriod[] {
+  return scheduleItems.flatMap((item) => {
+    const raid = item.raid;
+    if (!raid || (raid.type !== "total_assault" && raid.type !== "elimination")) return [];
+    const startAt = toInstantKey(raid.since);
+    const endAt = toInstantKey(raid.until);
+    return [
+      {
+        key: `raid:${raid.uid}`,
+        kind: "raid" as const,
+        name: raid.name,
+        startDate: formatPlannerPeriodDate(startAt, timeZone),
+        endDate: formatPlannerPeriodEndDate(endAt, timeZone),
+        ...(raid.seasonIndex == null ? {} : { href: `/raids/${raid.type}/${raid.seasonIndex}` }),
+        startAt,
+        endAt,
+        imageUrl: raid.imageUrl ?? null,
+        raidUid: raid.uid,
+        raidType: raid.type,
+        seasonIndex: raid.seasonIndex ?? null,
+        isPlanned: false,
+      },
+    ];
+  });
 }
 
 export function buildPlannerMonthDays(monthKey: string): PlannerCalendarDay[][] {
@@ -352,6 +505,73 @@ export function formatPlannerPeriodEndDate(instant: string | Date, timeZone: str
   return formatInstantDateKey(end.toDate(), normalizedTimeZone) as LocalDateString;
 }
 
+/**
+ * Single shared "M/D HH:mm" point formatter (no zero-padding on month/day). Used for the
+ * planner period range, raid reward/ticket-expiry lines, and accessible names alike.
+ */
+export function formatPlannerPeriodPoint(at: string, timeZone: string): string {
+  return formatInstant(at, { timeZone, format: "M/D HH:mm" });
+}
+
+export type PlannerPeriodRangeParts = {
+  start: string;
+  /** null means an endless (open-ended) range: "M/D HH:mm ~". */
+  end: string | null;
+};
+
+/** Builds the shared "M/D HH:mm ~ M/D HH:mm" (or "M/D HH:mm ~" when endless) range parts. */
+export function formatPlannerPeriodRangeParts(
+  startAt: string | null | undefined,
+  endAt: string | null | undefined,
+  timeZone: string,
+): PlannerPeriodRangeParts | null {
+  if (!startAt) return null;
+  return {
+    start: formatPlannerPeriodPoint(startAt, timeZone),
+    end: endAt ? formatPlannerPeriodPoint(endAt, timeZone) : null,
+  };
+}
+
+/** Plain-text label for the range parts, for accessible names / titles. */
+export function plannerPeriodRangeLabel(parts: PlannerPeriodRangeParts): string {
+  return parts.end ? `${parts.start} ~ ${parts.end}` : `${parts.start} ~`;
+}
+
+export type PlannerPeriodBoldEndpoint = "start" | "end" | null;
+
+/**
+ * Determines which endpoint of a range (if any) should be bolded, from the facts already
+ * computed for the selected date. Matches by fact kind, and — when `at` values are given —
+ * also by exact instant, so a shared facts array (e.g. an event card that also carries its
+ * nested recruitment periods' facts) can be used to resolve the bold endpoint for one
+ * specific period among several.
+ */
+export function plannerPeriodBoldEndpoint(
+  facts: readonly PlannerScheduleFact[],
+  startKind: PlannerScheduleFactKind | null,
+  endKind: PlannerScheduleFactKind,
+  at?: { startAt?: string | null; endAt?: string | null },
+): PlannerPeriodBoldEndpoint {
+  const matches = (kind: PlannerScheduleFactKind, factAt?: string | null) =>
+    facts.some((fact) => fact.kind === kind && (factAt == null || fact.at === factAt));
+  // Some kinds (e.g. a shop period's deadline) have no matching "start" fact kind; a null
+  // startKind means that endpoint can never be bolded, without inventing a fact kind for it.
+  if (startKind !== null && matches(startKind, at?.startAt)) return "start";
+  if (matches(endKind, at?.endAt)) return "end";
+  return null;
+}
+
+/** Whether two periods share exactly the same start/end instant (used to collapse a recruitment's own period line when it matches its event's). */
+export function plannerPeriodsShareRange(
+  a: Pick<PlannerPeriod, "startAt" | "endAt">,
+  b: Pick<PlannerPeriod, "startAt" | "endAt">,
+): boolean {
+  if (!a.startAt || !b.startAt || getInstantTime(a.startAt) !== getInstantTime(b.startAt)) return false;
+  if (!a.endAt && !b.endAt) return true;
+  if (!a.endAt || !b.endAt) return false;
+  return getInstantTime(a.endAt) === getInstantTime(b.endAt);
+}
+
 export function summarizePyroxeneTimeline(timeline: Timeline, timeZone: string): Record<string, PlannerDayResources> {
   const byDate: Record<string, PlannerDayResources> = {};
 
@@ -384,7 +604,15 @@ export function summarizePyroxeneTimeline(timeline: Timeline, timeZone: string):
       key: entry.source.uid ?? `${entry.source.type}:${dateKey}:${index}`,
       type: entry.source.type,
       label,
-      ...(entry.source.event?.uid ? { eventUid: entry.source.event.uid } : {}),
+      at: entry.date.toDate().toISOString(),
+      ...(entry.source.event?.uid
+        ? { eventUid: entry.source.event.uid }
+        : entry.source.type === "event_reward" && entry.source.uid
+          ? { eventUid: entry.source.uid }
+          : {}),
+      ...(entry.source.type === "raid" && entry.source.uid
+        ? { raidUid: entry.source.uid.replace(/::ten-time-ticket-expiry$/, "") }
+        : {}),
       changes: sourceChanges,
     });
   }
@@ -578,7 +806,12 @@ function hasSamePlannerBoundary(left: string | null | undefined, right: string |
 }
 
 function hasSamePlannerPeriod(left: PlannerPeriod, right: PlannerPeriod): boolean {
-  if (left.kind !== right.kind || !left.eventUid || left.eventUid !== right.eventUid) return false;
+  if (left.kind !== right.kind) return false;
+  if (left.kind === "raid" || right.kind === "raid") {
+    if (!left.raidUid || left.raidUid !== right.raidUid) return false;
+  } else if (!left.eventUid || left.eventUid !== right.eventUid) {
+    return false;
+  }
   if (left.startAt || left.endAt || right.startAt || right.endAt) {
     return hasSamePlannerBoundary(left.startAt, right.startAt) && hasSamePlannerBoundary(left.endAt, right.endAt);
   }
@@ -592,6 +825,7 @@ function mergeDuplicatePlannerPeriods(existing: PlannerPeriod, incoming: Planner
   const students = studentSources
     .flatMap((period) => period.students ?? [])
     .filter((student, index, list) => list.findIndex((candidate) => candidate.uid === student.uid) === index);
+  const allRecruitmentStudents = unionPlannerStudents(existing.allRecruitmentStudents, incoming.allRecruitmentStudents);
 
   return {
     ...existing,
@@ -601,6 +835,7 @@ function mergeDuplicatePlannerPeriods(existing: PlannerPeriod, incoming: Planner
       ? { hasRecruitmentPlan: true }
       : {}),
     ...(students.length > 0 ? { students } : {}),
+    ...(allRecruitmentStudents.length > 0 ? { allRecruitmentStudents } : {}),
     ...(preferred.expectedTrials === undefined
       ? { expectedTrials: existing.expectedTrials ?? incoming.expectedTrials }
       : {}),
@@ -618,25 +853,6 @@ function deduplicatePlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPe
     uniquePeriods[duplicateIndex] = mergeDuplicatePlannerPeriods(uniquePeriods[duplicateIndex], period);
   }
   return uniquePeriods;
-}
-
-export function hasPlannerExactEventHandoff(left: PlannerPeriod, right: PlannerPeriod): boolean {
-  if (
-    left.kind !== "event" ||
-    right.kind !== "event" ||
-    !left.eventUid ||
-    !right.eventUid ||
-    left.eventUid === right.eventUid
-  ) {
-    return false;
-  }
-  const leftInterval = getPlannerExactInterval(left);
-  const rightInterval = getPlannerExactInterval(right);
-  return (
-    leftInterval !== null &&
-    rightInterval !== null &&
-    (leftInterval.endMs === rightInterval.startMs || leftInterval.startMs === rightInterval.endMs)
-  );
 }
 
 type PlannerCalendarLaneItemDraft = {
@@ -662,6 +878,8 @@ export function buildPlannerWeekLayout(
       eventStartMarkers: [],
       recruitmentStrips: [],
       laneCount: 0,
+      raidStrips: [],
+      raidLaneCount: 0,
     };
   }
 
@@ -699,6 +917,7 @@ export function buildPlannerWeekLayout(
       ];
     });
   const recruitmentPeriods = uniquePeriods.filter((period) => period.kind === "recruitment");
+  const raidPeriods = uniquePeriods.filter((period) => period.kind === "raid");
   const mergedRecruitmentPeriods = new Set<PlannerPeriod>();
   const eventDrafts: PlannerCalendarStripDraft[] = [];
 
@@ -836,11 +1055,47 @@ export function buildPlannerWeekLayout(
     const rightPercent = nextLaneItem ? nextLaneItem.leftPercent : 100;
     return [{ ...marker, track, widthPercent: Math.max(0, rightPercent - leftPercent) }];
   });
+  const raidDrafts = raidPeriods.flatMap((period) => {
+    const interval = buildPlannerWeekInterval(period, context);
+    if (!interval) return [];
+    return [
+      {
+        key: period.key,
+        kind: "raid" as const,
+        period,
+        recruitmentPeriods: [],
+        ...interval,
+      },
+    ];
+  });
+  const raidLaneIntervals: { startMs: number; endMs: number }[][] = [];
+  const raidStrips = [...raidDrafts]
+    .sort(
+      (left, right) =>
+        left.occupancyStartMs - right.occupancyStartMs || left.period.name.localeCompare(right.period.name),
+    )
+    .map((draft) => {
+      let track = 0;
+      for (; track < raidLaneIntervals.length; track += 1) {
+        if (
+          raidLaneIntervals[track].every(
+            (interval) => interval.endMs <= draft.occupancyStartMs || interval.startMs >= draft.occupancyEndMs,
+          )
+        ) {
+          break;
+        }
+      }
+      while (raidLaneIntervals.length <= track) raidLaneIntervals.push([]);
+      raidLaneIntervals[track].push({ startMs: draft.occupancyStartMs, endMs: draft.occupancyEndMs });
+      return { ...draft, track };
+    });
   return {
     eventStrips,
     eventStartMarkers,
     recruitmentStrips,
     laneCount,
+    raidStrips,
+    raidLaneCount: raidLaneIntervals.length,
   };
 }
 
@@ -917,7 +1172,7 @@ export function buildPlannerPeriods({
       .filter((entry): entry is PlannerEventTrialInput & { expectedTrials: number } => entry.expectedTrials !== null)
       .map((entry) => [entry.eventUid, entry.expectedTrials]),
   );
-  const relatedEventUids = getPlannerPlannedEventUids({ favorites, eventTrials, shopPeriods });
+  const relatedEventUids = getPlannerPlannedEventUids({ favorites, eventTrials });
   const periods: PlannerPeriod[] = [];
 
   for (const content of contents) {
@@ -1006,6 +1261,8 @@ export function buildPlannerPeriods({
       eventUid: shop.timelineUid,
     });
   }
+
+  periods.push(...buildPlannerRaidPeriods(scheduleItems, timeZone));
 
   return periods.sort(
     (left, right) =>
@@ -1112,12 +1369,29 @@ export function buildPublicPlannerPeriods({
     });
   }
 
+  periods.push(...buildPlannerRaidPeriods(scheduleItems, timeZone));
+
   return periods.sort(
     (left, right) =>
       left.startDate.localeCompare(right.startDate) ||
       left.name.localeCompare(right.name) ||
       left.key.localeCompare(right.key),
   );
+}
+
+function unionPlannerStudents(
+  ...studentLists: readonly (readonly PlannerPeriodStudent[] | undefined)[]
+): PlannerPeriodStudent[] {
+  const students: PlannerPeriodStudent[] = [];
+  const seenUids = new Set<string>();
+  for (const list of studentLists) {
+    for (const student of list ?? []) {
+      if (seenUids.has(student.uid)) continue;
+      seenUids.add(student.uid);
+      students.push(student);
+    }
+  }
+  return students;
 }
 
 export function buildPlannerDisplayPeriods(
@@ -1127,8 +1401,14 @@ export function buildPlannerDisplayPeriods(
 ): PlannerPeriod[] {
   const plannedEventUids = new Set([
     ...plannedEventUidsInput,
+    // Only event-kind personal periods (favorites/saved-trial gated, A5) and recruitment periods
+    // with actual plan data mark an event as planned here; a "shop" kind personal period (built
+    // whenever shop input is non-default, independent of A5) must not.
     ...personalPeriods.flatMap((period) =>
-      period.eventUid && (period.kind !== "recruitment" || hasPlannerRecruitmentPlan(period)) ? [period.eventUid] : [],
+      period.eventUid &&
+      (period.kind === "event" || (period.kind === "recruitment" && hasPlannerRecruitmentPlan(period)))
+        ? [period.eventUid]
+        : [],
     ),
   ]);
   const appendUnique = (period: PlannerPeriod) => {
@@ -1156,6 +1436,9 @@ export function buildPlannerDisplayPeriods(
           ? hasRecruitmentPlan
           : Boolean(period.eventUid && plannedEventUids.has(period.eventUid)),
       hasRecruitmentPlan,
+      ...(period.kind === "recruitment"
+        ? { allRecruitmentStudents: unionPlannerStudents(publicPeriod.students, personalMatch?.students) }
+        : {}),
     });
   }
 
@@ -1169,6 +1452,9 @@ export function buildPlannerDisplayPeriods(
           ? hasRecruitmentPlan
           : Boolean(personalPeriod.eventUid && plannedEventUids.has(personalPeriod.eventUid)),
       hasRecruitmentPlan,
+      ...(personalPeriod.kind === "recruitment"
+        ? { allRecruitmentStudents: unionPlannerStudents(personalPeriod.students) }
+        : {}),
     });
   }
 
@@ -1185,10 +1471,33 @@ function plannerDateScheduleItemKey(period: PlannerPeriod): string {
   const interval = getPlannerExactInterval(period);
   return [
     period.kind,
-    period.eventUid ?? period.key,
+    period.eventUid ?? period.raidUid ?? period.key,
     interval?.startMs ?? period.startDate,
     interval?.endMs ?? period.endDate,
   ].join(":");
+}
+
+export function getPlannerRaidScheduleFacts(
+  resourcesByDate: Readonly<Record<string, PlannerDayResources>>,
+): PlannerRaidScheduleFact[] {
+  return Object.values(resourcesByDate)
+    .flatMap((day) =>
+      day.sources.flatMap((source) => {
+        if (source.type !== "raid" || !source.raidUid || !source.at) return [];
+        return [
+          {
+            raidUid: source.raidUid,
+            kind: source.key.endsWith("::ten-time-ticket-expiry")
+              ? ("raid-ticket-expiry" as const)
+              : ("raid-reward" as const),
+            at: source.at,
+          },
+        ];
+      }),
+    )
+    .sort(
+      (left, right) => getInstantTime(left.at) - getInstantTime(right.at) || left.raidUid.localeCompare(right.raidUid),
+    );
 }
 
 function findPlannerEventForRecruitment(
@@ -1210,6 +1519,7 @@ export function getPlannerDateScheduleForDate(
   periods: readonly PlannerPeriod[],
   dateKey: LocalDateString,
   timeZone: string,
+  raidFacts: readonly PlannerRaidScheduleFact[] = [],
 ): PlannerDateSchedule {
   const eventsByUid = new Map<string, PlannerPeriod[]>();
   for (const period of periods) {
@@ -1230,7 +1540,7 @@ export function getPlannerDateScheduleForDate(
     onDateByKey.set(key, {
       key,
       period,
-      ...(period.eventUid && period.kind !== "event"
+      ...(period.eventUid && period.kind !== "event" && period.kind !== "raid"
         ? { eventPeriod: findPlannerEventForRecruitment(period, eventsByUid) }
         : {}),
       facts: [{ kind, at }],
@@ -1240,22 +1550,22 @@ export function getPlannerDateScheduleForDate(
   for (const period of periods) {
     if (period.kind === "event") {
       if (period.startDate === dateKey && period.startAt) addFact(period, "event-start", period.startAt);
-      if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey && period.endless !== true) {
+      if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
         addFact(period, "event-end", period.endAt);
       }
       continue;
     }
 
+    if (period.kind === "raid") {
+      if (period.startDate === dateKey && period.startAt) addFact(period, "raid-start", period.startAt);
+      if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
+        addFact(period, "raid-end", period.endAt);
+      }
+      continue;
+    }
+
     if (period.kind === "recruitment") {
-      const eventPeriod = findPlannerEventForRecruitment(period, eventsByUid);
-      const hasDifferentStartTime =
-        period.startDate === dateKey &&
-        Boolean(
-          period.startAt &&
-            eventPeriod?.startAt &&
-            getInstantTime(period.startAt) !== getInstantTime(eventPeriod.startAt),
-        );
-      if (hasDifferentStartTime && period.startAt) addFact(period, "recruitment-start", period.startAt);
+      if (period.startDate === dateKey && period.startAt) addFact(period, "recruitment-start", period.startAt);
       if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
         addFact(period, "recruitment-end", period.endAt);
       }
@@ -1265,6 +1575,12 @@ export function getPlannerDateScheduleForDate(
     if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
       addFact(period, "shop-deadline", period.endAt);
     }
+  }
+
+  for (const raidFact of raidFacts) {
+    if (formatPlannerPeriodDate(raidFact.at, timeZone) !== dateKey) continue;
+    const raidPeriod = periods.find((period) => period.kind === "raid" && period.raidUid === raidFact.raidUid);
+    if (raidPeriod) addFact(raidPeriod, raidFact.kind, raidFact.at);
   }
 
   const compareFacts = (left: PlannerScheduleFact, right: PlannerScheduleFact) =>
@@ -1283,7 +1599,7 @@ export function getPlannerDateScheduleForDate(
   const ongoingCandidates = periods
     .filter((period) => {
       if (period.kind === "shop" || factKeys.has(plannerDateScheduleItemKey(period))) return false;
-      if (period.kind === "event" && (period.endAt == null || period.endless === true)) return false;
+      if (period.kind === "event" && period.endAt == null) return false;
       return period.startDate < dateKey && period.endDate > dateKey;
     })
     .map((period) => ({
@@ -1301,31 +1617,116 @@ export function getPlannerDateScheduleForDate(
       return visibleEventKeys.has(plannerDateScheduleItemKey(item.eventPeriod)) ? [item.key] : [];
     }),
   );
-  const ongoingRecruitmentPeriodsByEventKey = new Map<string, PlannerPeriod[]>();
-  for (const item of ongoingCandidates) {
-    if (!mergedOngoingRecruitmentKeys.has(item.key) || !item.eventPeriod) continue;
-    const eventKey = plannerDateScheduleItemKey(item.eventPeriod);
-    const recruitments = ongoingRecruitmentPeriodsByEventKey.get(eventKey) ?? [];
-    recruitments.push(item.period);
-    ongoingRecruitmentPeriodsByEventKey.set(eventKey, recruitments);
-  }
-  const attachOngoingRecruitments = (items: PlannerDateScheduleItem[]) =>
-    items.map((item) => {
-      if (item.period.kind !== "event") return item;
-      const recruitments = ongoingRecruitmentPeriodsByEventKey.get(item.key);
-      return recruitments ? { ...item, ongoingRecruitmentPeriods: recruitments } : item;
-    });
-  const onDateWithRecruitments = attachOngoingRecruitments(onDate);
   const ongoing = ongoingCandidates.filter(
     (item) => item.period.kind !== "recruitment" || !mergedOngoingRecruitmentKeys.has(item.key),
   );
-  ongoing.sort((left, right) => {
-    const leftEnd = left.period.endAt ? getInstantTime(left.period.endAt) : Number.POSITIVE_INFINITY;
-    const rightEnd = right.period.endAt ? getInstantTime(right.period.endAt) : Number.POSITIVE_INFINITY;
-    return leftEnd - rightEnd || left.period.name.localeCompare(right.period.name);
-  });
+  const itemsByKey = new Map<string, PlannerDateScheduleItem>();
+  for (const item of [...onDate, ...ongoing]) itemsByKey.set(item.key, item);
+  const allItems = [...itemsByKey.values()];
+  const eventItemsByUid = new Map<string, PlannerDateScheduleItem>();
+  const eventItemsByKey = new Map<string, PlannerDateScheduleItem>();
+  for (const item of allItems) {
+    if (item.period.kind !== "event" || !item.period.eventUid) continue;
+    eventItemsByUid.set(item.period.eventUid, item);
+    eventItemsByKey.set(item.key, item);
+  }
+  const parentEventItem = (item: PlannerDateScheduleItem) =>
+    item.eventPeriod
+      ? eventItemsByKey.get(plannerDateScheduleItemKey(item.eventPeriod))
+      : item.period.eventUid
+        ? eventItemsByUid.get(item.period.eventUid)
+        : undefined;
+  for (const item of ongoingCandidates) {
+    if (item.period.kind !== "recruitment" || !mergedOngoingRecruitmentKeys.has(item.key) || !item.eventPeriod)
+      continue;
+    const eventItem = eventItemsByKey.get(plannerDateScheduleItemKey(item.eventPeriod));
+    if (!eventItem) continue;
+    eventItem.recruitmentPeriods = [...(eventItem.recruitmentPeriods ?? []), item.period];
+    eventItem.ongoingRecruitmentPeriods = [...(eventItem.ongoingRecruitmentPeriods ?? []), item.period];
+  }
 
-  return { onDate: onDateWithRecruitments, ongoing: attachOngoingRecruitments(ongoing) };
+  const visibleItems: PlannerDateScheduleItem[] = [];
+  for (const item of allItems) {
+    const { period } = item;
+    if (period.kind === "recruitment" && period.eventUid) {
+      const eventItem = parentEventItem(item);
+      if (eventItem) {
+        eventItem.facts.push(...item.facts);
+        eventItem.recruitmentPeriods = [...(eventItem.recruitmentPeriods ?? []), period];
+        if (ongoingCandidates.some((candidate) => candidate.key === item.key)) {
+          eventItem.ongoingRecruitmentPeriods = [...(eventItem.ongoingRecruitmentPeriods ?? []), period];
+        }
+        continue;
+      }
+      item.recruitmentPeriods = [period];
+    }
+    if (period.kind === "shop" && period.eventUid) {
+      const eventItem = eventItemsByUid.get(period.eventUid);
+      if (eventItem) {
+        eventItem.facts.push(...item.facts);
+        eventItem.shopPeriod = period;
+        continue;
+      }
+      item.shopPeriod = period;
+    }
+    visibleItems.push(item);
+  }
+
+  for (const item of visibleItems) {
+    // A standalone shop item (e.g. the shop deadline outlives the event, so there is no visible
+    // event card) needs the same recruitmentPeriods filtering as an event item, so its card never
+    // falls back to an unfiltered list that could show an already-ended recruitment.
+    if ((item.period.kind !== "event" && item.period.kind !== "shop") || !item.period.eventUid) continue;
+    const eventRecruitments = periods.filter(
+      (period) =>
+        period.kind === "recruitment" && period.eventUid === item.period.eventUid && period.endDate >= dateKey,
+    );
+    const merged = new Map(
+      [...(item.recruitmentPeriods ?? []), ...eventRecruitments]
+        .filter((period) => period.endDate >= dateKey)
+        .map((period) => [period.key, period]),
+    );
+    item.recruitmentPeriods = [...merged.values()].sort(
+      (left, right) =>
+        left.startDate.localeCompare(right.startDate) ||
+        left.name.localeCompare(right.name) ||
+        left.key.localeCompare(right.key),
+    );
+    const ongoingRecruitments = (item.ongoingRecruitmentPeriods ?? []).filter(
+      (period, index, list) => list.findIndex((candidate) => candidate.key === period.key) === index,
+    );
+    if (ongoingRecruitments.length > 0) item.ongoingRecruitmentPeriods = ongoingRecruitments;
+    item.shopPeriod ??= periods.find((period) => period.kind === "shop" && period.eventUid === item.period.eventUid);
+    item.facts = item.facts.filter(
+      (fact, index, facts) =>
+        facts.findIndex((candidate) => candidate.kind === fact.kind && candidate.at === fact.at) === index,
+    );
+  }
+
+  const sortFacts = (items: PlannerDateScheduleItem[]) => {
+    for (const item of items) item.facts.sort(compareFacts);
+    items.sort((left, right) => {
+      const leftFactAt = left.facts[0] ? getInstantTime(left.facts[0].at) : null;
+      const rightFactAt = right.facts[0] ? getInstantTime(right.facts[0].at) : null;
+      if (leftFactAt !== null && rightFactAt !== null) {
+        return leftFactAt - rightFactAt || left.period.name.localeCompare(right.period.name);
+      }
+      if (leftFactAt !== null) return -1;
+      if (rightFactAt !== null) return 1;
+      const leftEnd = left.period.endAt ? getInstantTime(left.period.endAt) : Number.POSITIVE_INFINITY;
+      const rightEnd = right.period.endAt ? getInstantTime(right.period.endAt) : Number.POSITIVE_INFINITY;
+      return leftEnd - rightEnd || left.period.name.localeCompare(right.period.name);
+    });
+    return items;
+  };
+
+  const sortedItems = sortFacts(visibleItems);
+  const factKeysSorted = new Set(onDate.map((item) => item.key));
+  const sortedOnDate = sortFacts(sortedItems.filter((item) => item.facts.length > 0));
+  const sortedOngoing = sortFacts(
+    sortedItems.filter((item) => item.facts.length === 0 && !factKeysSorted.has(item.key)),
+  );
+  return { onDate: sortedOnDate, ongoing: sortedOngoing, items: sortedItems };
 }
 
 export function buildPlannerRecruitmentCandidatesForDate(
@@ -1368,7 +1769,10 @@ export function buildPlannerRecruitmentCandidatesForDate(
     }
     if (!candidate.imageUrl && eventPeriod?.imageUrl) candidate.imageUrl = eventPeriod.imageUrl;
     const existingStudentUids = new Set(candidate.students.map((student) => student.uid));
-    for (const student of period.students ?? []) {
+    // Prefer the full recruitment roster (allRecruitmentStudents) so the editor still lists every
+    // student once a favorite is saved; fall back to `students` for periods built outside
+    // buildPlannerDisplayPeriods (e.g. constructed directly, as in tests).
+    for (const student of period.allRecruitmentStudents ?? period.students ?? []) {
       if (existingStudentUids.has(student.uid)) continue;
       candidate.students.push(student);
       existingStudentUids.add(student.uid);

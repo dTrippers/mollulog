@@ -1,12 +1,16 @@
-import { BookmarkIcon } from "@heroicons/react/16/solid";
+import { StarIcon } from "@heroicons/react/16/solid";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import {
+  formatPlannerPeriodPoint,
+  formatPlannerPeriodRangeParts,
   getPlannerEventScheduleGroupsForDate,
   type PlannerCalendarDay,
   type PlannerCalendarStrip,
   type PlannerDayResources,
   type PlannerPeriod,
+  type PlannerRaidScheduleFact,
   type PlannerWeekLayout,
+  plannerPeriodRangeLabel,
 } from "~/domain/integrated-planner";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import { formatInstant, getInstantTime } from "~/lib/date-time";
@@ -111,6 +115,16 @@ function plannerRunTypeLabel(period: PlannerPeriod): string | null {
   return null;
 }
 
+function plannerRaidTypeLabel(period: PlannerPeriod): string {
+  return period.raidType === "elimination" ? "대결전" : "총력전";
+}
+
+function calendarStripKindLabel(strip: PlannerCalendarStrip): string | null {
+  if (strip.kind === "recruitment") return "모집";
+  if (strip.kind === "raid") return plannerRaidTypeLabel(strip.period);
+  return plannerRunTypeLabel(strip.period);
+}
+
 function stripClasses(timingStatus: PlannerCalendarStrip["timingStatus"]): string {
   return timingStatus === "exact" ? "" : "ring-1 ring-inset ring-amber-500/50";
 }
@@ -151,8 +165,9 @@ function PlannerRecruitmentAvatars({
 }
 
 function formatStripInterval(strip: PlannerCalendarStrip, timeZone: string): string {
-  if (strip.timingStatus === "exact" && strip.period.startAt && strip.period.endAt) {
-    return `${formatInstant(strip.period.startAt, { timeZone, format: "YYYY-MM-DD HH:mm" })}–${formatInstant(strip.period.endAt, { timeZone, format: "YYYY-MM-DD HH:mm" })}`;
+  if (strip.timingStatus === "exact" && strip.period.startAt) {
+    const parts = formatPlannerPeriodRangeParts(strip.period.startAt, strip.period.endAt, timeZone);
+    if (parts) return plannerPeriodRangeLabel(parts);
   }
   return `${formatDate(strip.period.startDate)}부터 ${formatDate(strip.period.endDate)} · 시간 확인 불가`;
 }
@@ -166,10 +181,12 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): str
         : [];
   const title =
     strip.kind === "combined"
-      ? `${strip.period.name} · 모집`
+      ? `${plannerRunTypeLabel(strip.period) ? `${plannerRunTypeLabel(strip.period)} · ` : ""}${strip.period.name} · 모집`
       : strip.kind === "recruitment"
         ? `모집 · ${strip.period.name}`
-        : strip.period.name;
+        : strip.kind === "raid"
+          ? `${plannerRaidTypeLabel(strip.period)} · ${strip.period.name}`
+          : `${plannerRunTypeLabel(strip.period) ? `${plannerRunTypeLabel(strip.period)} · ` : ""}${strip.period.name}`;
   const studentNames = students.length > 0 ? ` · 모집 목표: ${students.map(({ name }) => name).join(", ")}` : "";
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
@@ -177,9 +194,9 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): str
   return `${plan}${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
 }
 
-function visualStripTitle(strip: PlannerCalendarStrip): string {
+function visualStripTitle(strip: PlannerCalendarStrip): string | null {
   if (strip.kind === "combined") return strip.period.name;
-  return strip.kind === "recruitment" ? "모집" : strip.period.name;
+  return strip.kind === "recruitment" ? null : strip.period.name;
 }
 
 function stripStartOrder(strip: PlannerCalendarStrip): number {
@@ -194,6 +211,7 @@ export default function PlannerCalendarWeek({
   calendarResources,
   forecastStatus,
   weekLayout,
+  raidScheduleFacts,
   timeZone,
   todayDateKey,
   selectedDate,
@@ -208,6 +226,7 @@ export default function PlannerCalendarWeek({
   calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
   weekLayout: PlannerWeekLayout;
+  raidScheduleFacts: readonly PlannerRaidScheduleFact[];
   timeZone: string;
   todayDateKey: string;
   selectedDate: string | null;
@@ -220,6 +239,7 @@ export default function PlannerCalendarWeek({
   const strips: { strip: PlannerCalendarStrip; laneIndex: number }[] = [
     ...weekLayout.eventStrips.map((strip) => ({ strip, laneIndex: strip.track })),
     ...weekLayout.recruitmentStrips.map((strip) => ({ strip, laneIndex: strip.track })),
+    ...weekLayout.raidStrips.map((strip) => ({ strip, laneIndex: weekLayout.laneCount + strip.track })),
   ].sort(
     (left, right) =>
       stripStartOrder(left.strip) - stripStartOrder(right.strip) ||
@@ -229,13 +249,18 @@ export default function PlannerCalendarWeek({
   const eventStartMarkers = weekLayout.eventStartMarkers.map((marker) => ({ marker, laneIndex: marker.track }));
   const weekLabel = `${formatDate(week[0].dateKey)}부터 ${formatDate(week[6].dateKey)} 주간 일정`;
   const gridTemplateRows =
-    weekLayout.laneCount > 0 ? `minmax(40px, auto) repeat(${weekLayout.laneCount}, 28px)` : "minmax(40px, auto)";
+    weekLayout.laneCount + weekLayout.raidLaneCount > 0
+      ? `minmax(40px, auto) repeat(${weekLayout.laneCount + weekLayout.raidLaneCount}, 28px)`
+      : "minmax(40px, auto)";
   const boundaryClasses = [
     "relative grid grid-cols-7 border-x border-border/70 max-sm:border-x-0",
     isFirstWeek ? "border-t-2" : "border-t",
     isLastWeek ? "border-b-2" : "",
   ].join(" ");
-  const laneRows = Array.from({ length: weekLayout.laneCount }, (_, index) => ({ key: index, gridRow: index + 2 }));
+  const laneRows = Array.from({ length: weekLayout.laneCount + weekLayout.raidLaneCount }, (_, index) => ({
+    key: index,
+    gridRow: index + 2,
+  }));
 
   return (
     <section aria-label={weekLabel} className={boundaryClasses} style={{ gridTemplateRows }}>
@@ -252,19 +277,38 @@ export default function PlannerCalendarWeek({
       {week.map((day, index) => {
         const daySummary = calendarResources[day.dateKey];
         const isToday = day.inMonth && day.dateKey === todayDateKey;
-        const eventDescriptions = getPlannerEventScheduleGroupsForDate(periods, day.dateKey, todayDateKey).flatMap(
-          ({ group, isPlanned, recruitmentPeriods }) => {
-            const eventPeriod = group.periods.find((period) => period.kind === "event");
-            const eventPlanned = eventPeriod ? eventPeriod.isPlanned === true : isPlanned;
-            return [
-              `${group.name}${eventPlanned ? " · 내 계획" : ""}`,
-              ...recruitmentPeriods.map((period) => `모집${period.isPlanned ? " · 내 계획" : ""}`),
-            ];
-          },
+        const scheduleGroups = getPlannerEventScheduleGroupsForDate(periods, day.dateKey, todayDateKey);
+        const eventDescriptions = scheduleGroups.flatMap(({ group, isPlanned, recruitmentPeriods }) => {
+          const raidPeriod = group.periods.find((period) => period.kind === "raid");
+          if (raidPeriod) return [`${plannerRaidTypeLabel(raidPeriod)} · ${group.name}`];
+          const eventPeriod = group.periods.find((period) => period.kind === "event");
+          const eventPlanned = eventPeriod ? eventPeriod.isPlanned === true : isPlanned;
+          return [
+            `${group.name}${eventPlanned ? " · 내 계획" : ""}`,
+            ...recruitmentPeriods.map((period) => `모집${period.isPlanned ? " · 내 계획" : ""}`),
+          ];
+        });
+        const describedRaidUids = new Set(
+          scheduleGroups.flatMap(({ group }) =>
+            group.periods.flatMap((period) => (period.kind === "raid" && period.raidUid ? [period.raidUid] : [])),
+          ),
         );
+        const raidFactDescriptions = raidScheduleFacts
+          .filter((fact) => formatInstant(fact.at, { timeZone, format: "YYYY-MM-DD" }) === day.dateKey)
+          .flatMap((fact) => {
+            if (describedRaidUids.has(fact.raidUid)) return [];
+            const raid = periods.find((period) => period.kind === "raid" && period.raidUid === fact.raidUid);
+            if (!raid) return [];
+            const factLabel =
+              fact.kind === "raid-reward"
+                ? `보상 지급 ${formatPlannerPeriodPoint(fact.at, timeZone)}`
+                : `10회 모집 티켓 만료 ${formatPlannerPeriodPoint(fact.at, timeZone)}`;
+            return [`${plannerRaidTypeLabel(raid)} · ${raid.name}, ${factLabel}`];
+          });
         const accessibleSummary = [
           formatDate(day.dateKey),
           ...eventDescriptions,
+          ...raidFactDescriptions,
           ...(daySummary?.changes.map(
             ({ key, quantity }) => `${RESOURCE_PRESENTATION[key].label} ${formatSignedQuantity(quantity)}`,
           ) ?? []),
@@ -312,6 +356,12 @@ export default function PlannerCalendarWeek({
                     ? uniqueStudents([strip.period])
                     : [];
               const isPlanned = strip.period.isPlanned === true;
+              const kindLabel = calendarStripKindLabel(strip);
+              const visualTitle = visualStripTitle(strip);
+              const hideStripTextOnMobile = strip.widthPercent < 30;
+              const kindLabelClasses = isPlanned
+                ? "shrink-0 whitespace-nowrap font-normal text-foreground/70"
+                : "shrink-0 whitespace-nowrap font-normal text-muted-foreground/80";
               const endsThisWeek = strip.period.endDate >= week[0].dateKey && strip.period.endDate <= week[6].dateKey;
               const compactEndLabel = strip.widthPercent >= 28;
               return (
@@ -334,8 +384,21 @@ export default function PlannerCalendarWeek({
                   }}
                 >
                   {strip.continuesBefore ? <span aria-hidden="true">←</span> : null}
-                  {isPlanned ? <BookmarkIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
-                  <span className="min-w-0 flex-[0_1_auto] truncate">{visualStripTitle(strip)}</span>
+                  {isPlanned ? (
+                    <StarIcon aria-hidden="true" className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                  ) : null}
+                  {kindLabel ? (
+                    <span className={`${kindLabelClasses} ${hideStripTextOnMobile ? "max-sm:hidden" : ""}`}>
+                      {kindLabel}
+                    </span>
+                  ) : null}
+                  {visualTitle ? (
+                    <span
+                      className={`min-w-0 flex-[0_1_auto] truncate ${hideStripTextOnMobile ? "max-sm:hidden" : ""}`}
+                    >
+                      {visualTitle}
+                    </span>
+                  ) : null}
                   {students.length > 0 ? <PlannerRecruitmentAvatars students={students} maxVisible={3} /> : null}
                   {strip.timingStatus !== "exact" ? (
                     <ExclamationTriangleIcon
@@ -362,9 +425,7 @@ export default function PlannerCalendarWeek({
             .map(({ marker }) => {
               const runType = plannerRunTypeLabel(marker.period);
               const label = `${runType ? `${runType} · ` : ""}${marker.period.name}`;
-              const startsAt = marker.period.startAt
-                ? formatInstant(marker.period.startAt, { timeZone, format: "M/D HH:mm" })
-                : null;
+              const startsAt = marker.period.startAt ? formatPlannerPeriodPoint(marker.period.startAt, timeZone) : null;
               const isPlanned = marker.period.isPlanned === true;
               const accessibleName = `${isPlanned ? "내 계획 · " : ""}${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
               return (
@@ -381,8 +442,21 @@ export default function PlannerCalendarWeek({
                   style={{ left: `${marker.leftPercent}%`, width: `${marker.widthPercent}%` }}
                   onClick={(event) => onSelectPeriod(marker.period.startDate, event.currentTarget, marker.period)}
                 >
-                  {isPlanned ? <BookmarkIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
-                  <span className="min-w-0 truncate">{label}</span>
+                  {isPlanned ? (
+                    <StarIcon aria-hidden="true" className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
+                  ) : null}
+                  {runType ? (
+                    <span
+                      className={
+                        isPlanned
+                          ? "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-foreground/70"
+                          : "min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-normal text-muted-foreground/80"
+                      }
+                    >
+                      {runType} ·
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 truncate">{marker.period.name}</span>
                 </button>
               );
             })}

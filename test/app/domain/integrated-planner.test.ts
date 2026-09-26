@@ -1,5 +1,6 @@
 import { describe, expect, test } from "@jest/globals";
 import {
+  attributePlannerDateResources,
   buildPlannerDisplayPeriods,
   buildPlannerMonthDays,
   buildPlannerMonthLayout,
@@ -8,16 +9,25 @@ import {
   buildPlannerWeekLayout,
   buildPublicPlannerPeriods,
   formatPlannerPeriodEndDate,
+  formatPlannerPeriodPoint,
+  formatPlannerPeriodRangeParts,
   getPlannerDateScheduleForDate,
   getPlannerEventScheduleGroupsForDate,
   getPlannerMonthEndInstant,
   getPlannerPeriodsForDate,
   getPlannerPlannedEventUids,
+  getPlannerRaidScheduleFacts,
+  getPlannerReadOnlyBuySources,
   getPlannerTodayMonth,
+  getPlannerUnmatchedEventRewardLabel,
   groupPlannerPeriods,
-  hasPlannerExactEventHandoff,
+  type PlannerDayResources,
   type PlannerPeriod,
+  type PlannerScheduleContentInput,
   partitionPlannerDayResources,
+  plannerPeriodBoldEndpoint,
+  plannerPeriodRangeLabel,
+  plannerPeriodsShareRange,
   projectPlannerCalendarResources,
   shiftPlannerMonth,
   summarizePyroxeneTimeline,
@@ -28,6 +38,208 @@ import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import dayjs from "~/lib/dayjs";
 
 describe("integrated planner calendar domain", () => {
+  test("adds only forecasted total assault and elimination raids to a separate weekly lane", () => {
+    const week = buildPlannerMonthDays("2026-09").find((days) => days[0].dateKey === "2026-09-14");
+    if (!week) throw new Error("test week missing");
+    const scheduleItems = [
+      {
+        raid: {
+          uid: "total-assault-1",
+          type: "total_assault",
+          seasonIndex: 41,
+          name: "시로&쿠로",
+          since: "2026-09-15T03:00:00.000Z",
+          until: "2026-09-20T02:59:59.000Z",
+        },
+      },
+      {
+        raid: {
+          uid: "elimination-1",
+          type: "elimination",
+          seasonIndex: 12,
+          name: "고즈",
+          since: "2026-09-18T03:00:00.000Z",
+          until: "2026-09-24T02:59:59.000Z",
+        },
+      },
+      {
+        raid: {
+          uid: "unlimit-1",
+          type: "unlimit",
+          seasonIndex: 2,
+          name: "제약해제결전",
+          since: "2026-09-15T03:00:00.000Z",
+          until: "2026-09-20T02:59:59.000Z",
+        },
+      },
+    ] satisfies PyroxeneScheduleItem[];
+    const periods = buildPlannerPeriods({
+      contents: [],
+      scheduleItems,
+      favorites: [],
+      eventTrials: [],
+      shopPeriods: [],
+      timeZone: "Asia/Seoul",
+    });
+
+    expect(periods.filter((period) => period.kind === "raid")).toMatchObject([
+      { raidUid: "total-assault-1", raidType: "total_assault", href: "/raids/total_assault/41", isPlanned: false },
+      { raidUid: "elimination-1", raidType: "elimination", href: "/raids/elimination/12", isPlanned: false },
+    ]);
+    const layout = buildPlannerWeekLayout(periods, week, "Asia/Seoul");
+    expect(layout.raidStrips).toHaveLength(2);
+    expect(layout.raidStrips.map((strip) => strip.track)).toEqual([0, 1]);
+    expect(layout.raidLaneCount).toBe(2);
+    expect(layout.laneCount).toBe(0);
+
+    const emptyWeek = buildPlannerMonthDays("2026-09").find((days) => days[0].dateKey === "2026-09-28");
+    if (!emptyWeek) throw new Error("test week missing");
+    expect(buildPlannerWeekLayout(periods, emptyWeek, "Asia/Seoul").raidLaneCount).toBe(0);
+  });
+
+  test("keeps raid reward and ticket expiry dates attached to the raid outside its active period", () => {
+    const resources = summarizePyroxeneTimeline(
+      [
+        {
+          date: dayjs.utc("2026-09-30T19:00:00.000Z"),
+          source: { type: "raid" as const, uid: "elimination-1", description: "대결전 고즈" },
+          accumulatedResources: { pyroxene: 650, oneTimeTicket: 0, tenTimeTicket: 1 },
+          resourceDelta: { pyroxene: 650, oneTimeTicket: 0, tenTimeTicket: 1 },
+        },
+        {
+          date: dayjs.utc("2026-10-31T14:59:59.999Z"),
+          source: {
+            type: "raid" as const,
+            uid: "elimination-1::ten-time-ticket-expiry",
+            description: "대결전 10회 모집 티켓 만료",
+          },
+          accumulatedResources: { pyroxene: 650, oneTimeTicket: 0, tenTimeTicket: 0 },
+          resourceDelta: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: -1 },
+        },
+      ],
+      "Asia/Seoul",
+    );
+    const raidFacts = getPlannerRaidScheduleFacts(resources);
+    const raidPeriod: PlannerPeriod = {
+      key: "raid:elimination-1",
+      kind: "raid",
+      name: "고즈",
+      raidUid: "elimination-1",
+      raidType: "elimination",
+      startDate: "2026-09-15",
+      endDate: "2026-09-21",
+      startAt: "2026-09-15T03:00:00.000Z",
+      endAt: "2026-09-22T03:00:00.000Z",
+      href: "/raids/elimination/12",
+    };
+
+    expect(raidFacts).toEqual([
+      { raidUid: "elimination-1", kind: "raid-reward", at: "2026-09-30T19:00:00.000Z" },
+      { raidUid: "elimination-1", kind: "raid-ticket-expiry", at: "2026-10-31T14:59:59.999Z" },
+    ]);
+    expect(getPlannerDateScheduleForDate([raidPeriod], "2026-10-01", "Asia/Seoul", raidFacts).items).toMatchObject([
+      { period: { raidUid: "elimination-1" }, facts: [{ kind: "raid-reward" }] },
+    ]);
+    expect(getPlannerDateScheduleForDate([raidPeriod], "2026-10-31", "Asia/Seoul", raidFacts).items).toMatchObject([
+      { period: { raidUid: "elimination-1" }, facts: [{ kind: "raid-ticket-expiry" }] },
+    ]);
+  });
+
+  test("builds one date list with facts first and running items ordered by earliest end", () => {
+    const periods: PlannerPeriod[] = [
+      {
+        key: "raid:reward-date",
+        kind: "raid",
+        raidUid: "reward-date",
+        raidType: "total_assault",
+        name: "레이드 보스",
+        startDate: "2026-09-01",
+        endDate: "2026-09-05",
+      },
+      {
+        key: "event:starts-today",
+        kind: "event",
+        eventUid: "starts-today",
+        name: "오늘 시작",
+        startDate: "2026-09-20",
+        endDate: "2026-10-01",
+        startAt: "2026-09-20T12:00:00.000Z",
+        endAt: "2026-10-01T12:00:00.000Z",
+        href: "/events/starts-today",
+      },
+      {
+        key: "event:ends-first",
+        kind: "event",
+        eventUid: "ends-first",
+        name: "먼저 종료",
+        startDate: "2026-09-10",
+        endDate: "2026-09-22",
+        startAt: "2026-09-10T00:00:00.000Z",
+        endAt: "2026-09-22T04:00:00.000Z",
+        href: "/events/ends-first",
+      },
+      {
+        key: "recruitment:no-end",
+        kind: "recruitment",
+        name: "종료일 없는 모집",
+        startDate: "2026-09-10",
+        endDate: "2026-12-31",
+        href: "/events/no-end/recruitment-simulator",
+      },
+    ];
+
+    const schedule = getPlannerDateScheduleForDate(periods, "2026-09-20", "Asia/Seoul", [
+      { raidUid: "reward-date", kind: "raid-reward", at: "2026-09-20T08:00:00.000Z" },
+    ]);
+
+    expect(schedule.items.map(({ period }) => period.key)).toEqual([
+      "raid:reward-date",
+      "event:starts-today",
+      "event:ends-first",
+      "recruitment:no-end",
+    ]);
+    expect(new Set(schedule.items.map(({ key }) => key)).size).toBe(schedule.items.length);
+  });
+
+  test("hides ended recruitment details after its end date while preserving the end-day fact", () => {
+    const periods: PlannerPeriod[] = [
+      {
+        key: "event:baek",
+        kind: "event",
+        eventUid: "baek",
+        name: "백에서 피어난 한 송이",
+        startDate: "2026-09-22",
+        endDate: "2026-10-13",
+        startAt: "2026-09-22T02:00:00.000Z",
+        endAt: "2026-10-13T02:00:00.000Z",
+        href: "/events/baek",
+      },
+      {
+        key: "recruitment:baek",
+        kind: "recruitment",
+        eventUid: "baek",
+        name: "백에서 피어난 한 송이",
+        startDate: "2026-09-29",
+        endDate: "2026-10-06",
+        startAt: "2026-09-29T02:00:00.000Z",
+        endAt: "2026-10-06T02:00:00.000Z",
+        href: "/events/baek/recruitment-simulator",
+      },
+    ];
+
+    const running = getPlannerDateScheduleForDate(periods, "2026-10-05", "Asia/Seoul").items[0];
+    expect(running.recruitmentPeriods).toEqual([expect.objectContaining({ key: "recruitment:baek" })]);
+    expect(running.ongoingRecruitmentPeriods).toEqual([expect.objectContaining({ key: "recruitment:baek" })]);
+
+    const recruitmentEnd = getPlannerDateScheduleForDate(periods, "2026-10-06", "Asia/Seoul").items[0];
+    expect(recruitmentEnd.facts).toEqual([{ kind: "recruitment-end", at: "2026-10-06T02:00:00.000Z" }]);
+    expect(recruitmentEnd.recruitmentPeriods).toEqual([expect.objectContaining({ key: "recruitment:baek" })]);
+
+    const eventEnd = getPlannerDateScheduleForDate(periods, "2026-10-13", "Asia/Seoul").items[0];
+    expect(eventEnd.facts).toEqual([{ kind: "event-end", at: "2026-10-13T02:00:00.000Z" }]);
+    expect(eventEnd.recruitmentPeriods).toEqual([]);
+  });
+
   test("groups phases by canonical event uid, prefers the event name, and sorts by earliest phase", () => {
     const periods: PlannerPeriod[] = [
       {
@@ -148,6 +360,19 @@ describe("integrated planner calendar domain", () => {
         eventUid: "endless",
       },
       {
+        key: "event:endless-ended",
+        kind: "event",
+        name: "종료일이 있는 상설 이벤트",
+        startDate: "2026-09-15",
+        endDate: "2026-09-29",
+        startAt: "2026-09-15T04:00:00.000Z",
+        endAt: "2026-09-29T02:00:00.000Z",
+        endless: true,
+        calendarStartOnly: false,
+        href: "/events/endless-ended",
+        eventUid: "endless-ended",
+      },
+      {
         key: "recruitment:finite",
         kind: "recruitment",
         name: "유한 이벤트",
@@ -174,14 +399,63 @@ describe("integrated planner calendar domain", () => {
     expect(getPlannerPeriodsForDate(periods, "2026-09-15").map(({ key }) => key)).toEqual([
       "event:finite",
       "event:endless",
+      "event:endless-ended",
     ]);
     expect(getPlannerPeriodsForDate(periods, "2026-09-22").map(({ key }) => key)).toEqual([
       "event:finite",
+      "event:endless-ended",
       "recruitment:finite",
     ]);
     expect(getPlannerPeriodsForDate(periods, "2026-09-30").map(({ key }) => key)).toEqual(["event:finite"]);
     expect(getPlannerPeriodsForDate(periods, "2026-09-16").some(({ key }) => key === "event:endless")).toBe(false);
+    expect(getPlannerPeriodsForDate(periods, "2026-09-22").some(({ key }) => key === "event:endless-ended")).toBe(true);
     expect(getPlannerPeriodsForDate(periods, "2026-10-07")).toEqual([]);
+  });
+
+  test("keeps endless content without end_at limited to its actual start date across months", () => {
+    const periods: PlannerPeriod[] = [
+      {
+        key: "event:open-current-month",
+        kind: "event",
+        name: "이번 달 상설 콘텐츠",
+        startDate: "2026-09-15",
+        endDate: "2026-09-15",
+        endAt: null,
+        endless: true,
+        calendarStartOnly: true,
+        eventUid: "open-current-month",
+      },
+      {
+        key: "event:open-future-month",
+        kind: "event",
+        name: "다음 달 상설 콘텐츠",
+        startDate: "2026-10-01",
+        endDate: "2026-10-01",
+        endAt: null,
+        endless: true,
+        calendarStartOnly: true,
+        eventUid: "open-future-month",
+      },
+      {
+        key: "event:open-prior-month",
+        kind: "event",
+        name: "지난달 시작 상설 콘텐츠",
+        startDate: "2026-08-20",
+        endDate: "2026-08-20",
+        endAt: null,
+        endless: true,
+        calendarStartOnly: true,
+        eventUid: "open-prior-month",
+      },
+    ];
+
+    expect(getPlannerPeriodsForDate(periods, "2026-09-15", "2026-09-15").map(({ key }) => key)).toEqual([
+      "event:open-current-month",
+    ]);
+    expect(getPlannerPeriodsForDate(periods, "2026-09-29", "2026-09-15")).toEqual([]);
+    expect(getPlannerPeriodsForDate(periods, "2026-10-01", "2026-09-15").map(({ key }) => key)).toEqual([
+      "event:open-future-month",
+    ]);
   });
 
   test("replaces public recruitment only by the same event uid and exact interval", () => {
@@ -339,7 +613,7 @@ describe("integrated planner calendar domain", () => {
     });
   });
 
-  test("marks only favorite, saved-trial, and non-default shop event uids as planned", () => {
+  test("marks only favorite and saved-trial event uids as planned; non-default shop input no longer counts (A5)", () => {
     const contents = ["favorite", "trials", "shop", "unplanned", "completed-only"].map((uid) => ({
       kind: "event" as const,
       uid,
@@ -391,7 +665,8 @@ describe("integrated planner calendar domain", () => {
         .filter(({ kind }) => kind === "event")
         .map(({ eventUid }) => eventUid)
         .sort(),
-    ).toEqual(["favorite", "shop", "trials"]);
+    ).toEqual(["favorite", "trials"]);
+    expect(personalPeriods.find(({ kind }) => kind === "shop")).toMatchObject({ eventUid: "shop" });
     expect(
       displayPeriods
         .filter(({ kind }) => kind === "event")
@@ -400,7 +675,7 @@ describe("integrated planner calendar domain", () => {
     ).toEqual([
       ["completed-only", false],
       ["favorite", true],
-      ["shop", true],
+      ["shop", false],
       ["trials", true],
       ["unplanned", false],
     ]);
@@ -467,12 +742,8 @@ describe("integrated planner calendar domain", () => {
       hasRecruitmentPlan: true,
       expectedTrials: 0,
     });
-    const shopPlanUids = getPlannerPlannedEventUids({
-      favorites: [],
-      eventTrials: [],
-      shopPeriods: [{ timelineUid: "event-a", name: "공개 모집 이벤트", startAt: null, endAt: null, planned: true }],
-    });
-    expect(buildPlannerDisplayPeriods([], periods, shopPlanUids)).toMatchObject([
+    const emptyPlanUids = getPlannerPlannedEventUids({ favorites: [], eventTrials: [] });
+    expect(buildPlannerDisplayPeriods([], periods, emptyPlanUids)).toMatchObject([
       expect.objectContaining({
         kind: "recruitment",
         eventUid: "event-a",
@@ -508,8 +779,10 @@ describe("integrated planner calendar domain", () => {
       students: [{ uid: "public-student", imageUid: "public-student", name: "공개 학생" }],
     };
 
-    const shopOnlyPeriods = buildPlannerDisplayPeriods([], [event, publicRecruitment], new Set(["shop-only"]));
-    expect(shopOnlyPeriods.find(({ kind }) => kind === "event")).toMatchObject({ isPlanned: true });
+    // A shop-only event (no favorites, no saved trial count) is no longer planned (A5).
+    const noRecruitmentPlanUids = getPlannerPlannedEventUids({ favorites: [], eventTrials: [] });
+    const shopOnlyPeriods = buildPlannerDisplayPeriods([], [event, publicRecruitment], noRecruitmentPlanUids);
+    expect(shopOnlyPeriods.find(({ kind }) => kind === "event")).toMatchObject({ isPlanned: false });
     expect(shopOnlyPeriods.find(({ kind }) => kind === "recruitment")).toMatchObject({
       key: publicRecruitment.key,
       isPlanned: false,
@@ -666,10 +939,10 @@ describe("integrated planner calendar domain", () => {
 
     const onStart = getPlannerDateScheduleForDate(periods, "2026-09-15", "Asia/Seoul");
     expect(onStart.onDate.map(({ period, facts }) => [period.key, facts.map(({ kind }) => kind)])).toEqual([
-      ["event:endless", ["event-start"]],
+      ["event:endless", ["event-start", "recruitment-start"]],
       ["recruitment:same-day-running", ["recruitment-start"]],
-      ["recruitment:endless", ["recruitment-start"]],
     ]);
+    expect(onStart.onDate[0].recruitmentPeriods).toEqual([expect.objectContaining({ key: "recruitment:endless" })]);
     expect(onStart.ongoing).toEqual([]);
 
     const during = getPlannerDateScheduleForDate(periods, "2026-09-22", "Asia/Seoul");
@@ -699,6 +972,114 @@ describe("integrated planner calendar domain", () => {
     expect(november.ongoing[0].ongoingRecruitmentPeriods).toEqual([
       expect.objectContaining({ key: "recruitment:november" }),
     ]);
+  });
+
+  test("[external review 1] a standalone shop item (event already ended) hides an already-ended recruitment and keeps a still-active one", () => {
+    // The event itself ended before the shop deadline, so there is no visible event card on the
+    // shop deadline date: the shop item is the only surface for this eventUid on that date.
+    const shopOnly: PlannerPeriod = {
+      key: "shop:shop-standalone",
+      kind: "shop",
+      name: "상점 일정",
+      startDate: "2026-09-20",
+      endDate: "2026-09-29",
+      startAt: "2026-09-20T02:00:00.000Z",
+      endAt: "2026-09-29T02:00:00.000Z",
+      href: "/events/shop-standalone/shop",
+      eventUid: "shop-standalone",
+    };
+    const endedRecruitment: PlannerPeriod = {
+      key: "recruitment:shop-standalone-ended",
+      kind: "recruitment",
+      name: "상점 일정",
+      startDate: "2026-09-01",
+      endDate: "2026-09-08",
+      startAt: "2026-09-01T02:00:00.000Z",
+      endAt: "2026-09-08T02:00:00.000Z",
+      eventUid: "shop-standalone",
+    };
+    const activeRecruitment: PlannerPeriod = {
+      key: "recruitment:shop-standalone-active",
+      kind: "recruitment",
+      name: "상점 일정",
+      startDate: "2026-09-22",
+      endDate: "2026-10-06",
+      startAt: "2026-09-22T02:00:00.000Z",
+      endAt: "2026-10-06T02:00:00.000Z",
+      eventUid: "shop-standalone",
+    };
+    const periods = [shopOnly, endedRecruitment, activeRecruitment];
+
+    const deadline = getPlannerDateScheduleForDate(periods, "2026-09-29", "Asia/Seoul");
+    const shopItem = deadline.onDate.find(({ period }) => period.key === "shop:shop-standalone");
+
+    expect(shopItem).toBeDefined();
+    expect(shopItem?.recruitmentPeriods).toEqual([
+      expect.objectContaining({ key: "recruitment:shop-standalone-active" }),
+    ]);
+    expect(shopItem?.recruitmentPeriods?.some((period) => period.key === "recruitment:shop-standalone-ended")).toBe(
+      false,
+    );
+  });
+
+  test("treats endless content with an end_at as an active period and folds its recruitment", () => {
+    const event: PlannerPeriod = {
+      key: "event:endless-ended",
+      kind: "event",
+      name: "상설 이벤트",
+      startDate: "2026-09-15",
+      endDate: "2026-09-29",
+      startAt: "2026-09-15T02:00:00.000Z",
+      endAt: "2026-09-29T02:00:00.000Z",
+      runType: "permanent",
+      endless: true,
+      calendarStartOnly: false,
+      eventUid: "endless-ended",
+    };
+    const recruitment: PlannerPeriod = {
+      key: "recruitment:endless-ended",
+      kind: "recruitment",
+      name: event.name,
+      startDate: "2026-09-15",
+      endDate: "2026-09-29",
+      startAt: "2026-09-15T03:00:00.000Z",
+      endAt: "2026-09-29T02:00:00.000Z",
+      eventUid: "endless-ended",
+    };
+    const periods = [event, recruitment];
+    const week = buildPlannerMonthDays("2026-09").find((days) => days[0].dateKey === "2026-09-14");
+    if (!week) throw new Error("test week missing");
+    const layout = buildPlannerWeekLayout(periods, week, "Asia/Seoul");
+
+    expect(layout.eventStrips).toMatchObject([
+      expect.objectContaining({ period: expect.objectContaining({ eventUid: "endless-ended" }) }),
+    ]);
+    expect(layout.eventStartMarkers).toEqual([]);
+
+    const start = getPlannerDateScheduleForDate(periods, "2026-09-15", "Asia/Seoul");
+    expect(start.items).toHaveLength(1);
+    expect(start.items[0]).toMatchObject({
+      period: { key: "event:endless-ended", runType: "permanent" },
+      facts: [{ kind: "event-start" }, { kind: "recruitment-start" }],
+      recruitmentPeriods: [{ key: "recruitment:endless-ended" }],
+    });
+
+    const during = getPlannerDateScheduleForDate(periods, "2026-09-22", "Asia/Seoul");
+    expect(during.onDate).toEqual([]);
+    expect(during.ongoing).toHaveLength(1);
+    expect(during.ongoing[0]).toMatchObject({
+      period: { key: "event:endless-ended" },
+      recruitmentPeriods: [{ key: "recruitment:endless-ended" }],
+      ongoingRecruitmentPeriods: [{ key: "recruitment:endless-ended" }],
+    });
+
+    const end = getPlannerDateScheduleForDate(periods, "2026-09-29", "Asia/Seoul");
+    expect(end.items).toHaveLength(1);
+    expect(end.items[0]).toMatchObject({
+      period: { key: "event:endless-ended" },
+      facts: [{ kind: "event-end" }, { kind: "recruitment-end" }],
+      recruitmentPeriods: [{ key: "recruitment:endless-ended" }],
+    });
   });
 
   test("places exact midnight deadline facts on their actual local date", () => {
@@ -794,9 +1175,9 @@ describe("integrated planner calendar domain", () => {
       expect.objectContaining({
         eventUid: "event-endless",
         startDate: "2026-09-08",
-        endDate: "2026-09-08",
-        endAt: null,
-        calendarStartOnly: true,
+        endDate: "2026-09-25",
+        endAt: "2026-09-25T14:59:00.000Z",
+        calendarStartOnly: false,
         runType: "permanent",
         endless: true,
       }),
@@ -810,19 +1191,25 @@ describe("integrated planner calendar domain", () => {
         endless: false,
       }),
     ]);
-    expect(layout.eventStrips).toEqual([]);
-    expect(layout.eventStartMarkers).toHaveLength(3);
-    expect(layout.eventStartMarkers.map(({ track }) => track)).toEqual([0, 0, 0]);
+    expect(layout.eventStrips).toMatchObject([
+      expect.objectContaining({ period: expect.objectContaining({ eventUid: "event-endless" }) }),
+    ]);
+    expect(layout.eventStartMarkers).toHaveLength(2);
+    expect(layout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual(["event-undated", "event-unrelated"]);
     expect(layout.eventStartMarkers[0].leftPercent).toBeCloseTo((11 / 24 / 7) * 100);
     expect(getPlannerPeriodsForDate(periods, "2026-10-01", "2026-09-15")).toEqual([]);
     const personalLayout = buildPlannerWeekLayout(personalPeriods, week, "Asia/Seoul");
-    expect(personalLayout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual([
-      "event-undated",
-      "event-endless",
-    ]);
+    expect(personalLayout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual(["event-undated"]);
+    expect(personalLayout.eventStrips.map(({ period }) => period.eventUid)).toEqual(["event-endless"]);
     expect(personalPeriods.filter(({ kind }) => kind === "event")).toMatchObject([
       { runType: "rerun", endDate: "2026-09-07", endAt: null, endless: false },
-      { runType: "permanent", endDate: "2026-09-08", endAt: null, endless: true },
+      {
+        runType: "permanent",
+        endDate: "2026-09-25",
+        endAt: "2026-09-25T14:59:00.000Z",
+        calendarStartOnly: false,
+        endless: true,
+      },
     ]);
   });
 
@@ -876,7 +1263,7 @@ describe("integrated planner calendar domain", () => {
     expect(layout.eventStrips.map(({ track }) => track)).toEqual([0, 0]);
   });
 
-  test("keeps a planned shop event without recruitment in the personal calendar marker range", () => {
+  test("excludes a shop-only event without recruitment from personal periods and its calendar marker (A5)", () => {
     const periods = buildPlannerPeriods({
       contents: [
         {
@@ -906,14 +1293,11 @@ describe("integrated planner calendar domain", () => {
     });
     const week = buildPlannerMonthDays("2026-09")[1];
 
-    expect(periods.find(({ kind }) => kind === "event")).toMatchObject({
-      eventUid: "planned-shop-event",
-      endAt: null,
-      calendarStartOnly: true,
-    });
-    expect(buildPlannerWeekLayout(periods, week, "Asia/Seoul").eventStartMarkers).toEqual([
-      expect.objectContaining({ period: expect.objectContaining({ eventUid: "planned-shop-event" }) }),
-    ]);
+    // Non-default shop input alone no longer makes the event "related" (A5); the shop period
+    // itself is unaffected and still built, since it drives the shop calculator independently.
+    expect(periods.find(({ kind }) => kind === "event")).toBeUndefined();
+    expect(periods.find(({ kind }) => kind === "shop")).toMatchObject({ eventUid: "planned-shop-event" });
+    expect(buildPlannerWeekLayout(periods, week, "Asia/Seoul").eventStartMarkers).toEqual([]);
   });
 
   test("chooses the initial month in the supplied display timezone", () => {
@@ -1133,6 +1517,65 @@ describe("integrated planner calendar domain", () => {
     expect(buildPlannerRecruitmentCandidatesForDate(periods, "2026-09-30")).toEqual([]);
   });
 
+  test("C2: lists every recruitment student as an editor candidate once the recruitment is planned, while the card row keeps favorites only", () => {
+    const event: PlannerPeriod = {
+      key: "event:event-0068",
+      kind: "event",
+      name: "0068",
+      startDate: "2026-09-15",
+      endDate: "2026-09-15",
+      href: "/events/event-0068",
+      eventUid: "event-0068",
+      imageUrl: "https://example.test/0068.webp",
+      runType: "permanent",
+      endless: true,
+      calendarStartOnly: true,
+    };
+    const publicRecruitment: PlannerPeriod = {
+      key: "recruitment:event-0068:2026-09-29",
+      kind: "recruitment",
+      name: "0068",
+      startDate: "2026-09-22",
+      endDate: "2026-09-29",
+      href: "/events/event-0068/recruitment-simulator",
+      eventUid: "event-0068",
+      startAt: "2026-09-22T02:00:00.000Z",
+      endAt: "2026-09-29T02:00:00.000Z",
+      students: [
+        { uid: "mutsuki", imageUid: "mutsuki", name: "무츠키" },
+        { uid: "haruka", imageUid: "haruka", name: "하루카" },
+        { uid: "hanako", imageUid: "hanako", name: "하나코" },
+      ],
+    };
+    const personalRecruitment: PlannerPeriod = {
+      ...publicRecruitment,
+      hasRecruitmentPlan: true,
+      students: [{ uid: "mutsuki", imageUid: "mutsuki", name: "무츠키" }],
+    };
+
+    const displayPeriods = buildPlannerDisplayPeriods([event, personalRecruitment], [event, publicRecruitment]);
+    const displayedRecruitment = displayPeriods.find((period) => period.kind === "recruitment");
+
+    // Card row / strip: favorites only, unchanged.
+    expect(displayedRecruitment).toMatchObject({
+      hasRecruitmentPlan: true,
+      students: [{ uid: "mutsuki", imageUid: "mutsuki", name: "무츠키" }],
+    });
+
+    // Editor candidates: every recruitment student, not just the saved favorite.
+    const candidates = buildPlannerRecruitmentCandidatesForDate(displayPeriods, "2026-09-23");
+    expect(candidates).toEqual([
+      expect.objectContaining({
+        eventUid: "event-0068",
+        students: [
+          { uid: "mutsuki", imageUid: "mutsuki", name: "무츠키" },
+          { uid: "haruka", imageUid: "haruka", name: "하루카" },
+          { uid: "hanako", imageUid: "hanako", name: "하나코" },
+        ],
+      }),
+    ]);
+  });
+
   test("groups favorite students sharing a recruitment period and keeps different periods separate", () => {
     const periods = buildPlannerPeriods({
       contents: [
@@ -1220,7 +1663,7 @@ describe("integrated planner calendar domain", () => {
     ]);
   });
 
-  test("keeps an undated planned shop reachable through its event without creating a shop period", () => {
+  test("builds no personal period for an undated shop-only event with no other plan signal (A5)", () => {
     const periods = buildPlannerPeriods({
       contents: [
         {
@@ -1246,14 +1689,10 @@ describe("integrated planner calendar domain", () => {
       timeZone: "Asia/Seoul",
     });
 
-    expect(periods).toEqual([
-      expect.objectContaining({
-        kind: "event",
-        eventUid: "event-undated-shop",
-        name: "상점 이벤트",
-      }),
-    ]);
-    expect(periods.some(({ kind }) => kind === "shop")).toBe(false);
+    // Non-default shop input alone no longer makes the event "related" (A5), and this shop plan
+    // has no dates so no "shop" period is built either; the event still displays and its shop
+    // editing stays reachable via the route's own shopPlans data, independent of this list.
+    expect(periods).toEqual([]);
   });
 
   test("packs exact-time handoffs into one lane and overlaps into separate lanes", () => {
@@ -1284,7 +1723,6 @@ describe("integrated planner calendar domain", () => {
     ];
 
     const handoff = buildPlannerWeekLayout(periods, week, "Asia/Seoul");
-    expect(hasPlannerExactEventHandoff(periods[0], periods[1])).toBe(true);
     expect(handoff.laneCount).toBe(1);
     expect(handoff.eventStrips.map(({ track }) => track)).toEqual([0, 0]);
     expect(handoff.eventStrips[1].leftPercent).toBeCloseTo(
@@ -1602,6 +2040,264 @@ describe("integrated planner calendar domain", () => {
     });
   });
 
+  test("attributes the calendar total to event, raid, direct, and unmatched source identities", () => {
+    const day = summarizePyroxeneTimeline(
+      [
+        { type: "event_reward", uid: "event-1", label: "보상" },
+        {
+          type: "event",
+          label: "모집 소비",
+          event: {
+            uid: "event-1",
+            name: "이벤트",
+            since: "2026-09-10T00:00:00.000Z",
+            until: "2026-09-20T00:00:00.000Z",
+            earnablePyroxene: null,
+            tags: [],
+            recruitments: [],
+          },
+        },
+        { type: "raid", uid: "raid-1", label: "총력전 보상" },
+        { type: "buy", uid: "buy-1", label: "청휘석 구매" },
+        { type: "other", uid: "other-1", label: "직접 재화" },
+        { type: "raid", uid: "missing-raid", label: "대결전 보상" },
+        { type: "event_reward", uid: "main-story-reward:1", label: "메인 스토리 보상" },
+      ].map((source, index) => ({
+        date: dayjs.utc(`2026-09-10T${String(index).padStart(2, "0")}:00:00.000Z`),
+        source:
+          source.type === "event"
+            ? { type: "event" as const, event: source.event }
+            : {
+                type: source.type as TimelineSourceType,
+                uid: "uid" in source ? source.uid : undefined,
+                description: source.label,
+              },
+        accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: {
+          pyroxene: [100, -40, 20, 10, -5, 7, 3][index],
+          oneTimeTicket: [1, -1, 0, 1, 0, 0, 2][index],
+          tenTimeTicket: [0, 0, 1, 0, -1, 1, 0][index],
+        },
+      })),
+      "Asia/Seoul",
+    )["2026-09-10"];
+    const event: PlannerPeriod = {
+      key: "event:event-1",
+      kind: "event",
+      eventUid: "event-1",
+      name: "이벤트",
+      startDate: "2026-09-01",
+      endDate: "2026-09-20",
+      href: "/events/event-1",
+    };
+    const raid: PlannerPeriod = {
+      key: "raid:raid-1",
+      kind: "raid",
+      raidUid: "raid-1",
+      raidType: "total_assault",
+      name: "보스",
+      startDate: "2026-09-01",
+      endDate: "2026-09-20",
+    };
+    const attribution = attributePlannerDateResources(
+      day,
+      [event, raid],
+      [
+        { key: event.key, period: event, facts: [] },
+        { key: raid.key, period: raid, facts: [] },
+      ],
+    );
+
+    expect(attribution.eventChanges["event-1"]).toEqual([{ key: "pyroxene", quantity: 60 }]);
+    expect(attribution.raidChanges["raid-1"]).toEqual([
+      { key: "pyroxene", quantity: 20 },
+      { key: "tenTimeTicket", quantity: 1 },
+    ]);
+    expect(attribution.directSources.map(({ key }) => key)).toEqual(["buy-1", "other-1"]);
+    expect(attribution.unmatchedRaidSources).toMatchObject([{ raidUid: "missing-raid" }]);
+    expect(attribution.unmatchedEventRewardSources).toMatchObject([{ eventUid: "main-story-reward:1" }]);
+    const attributedChanges = [
+      ...Object.values(attribution.eventChanges).flat(),
+      ...Object.values(attribution.raidChanges).flat(),
+      ...attribution.directSources.flatMap(({ changes }) => changes),
+      ...attribution.unmatchedEventSources.flatMap(({ changes }) => changes),
+      ...attribution.unmatchedRaidSources.flatMap(({ changes }) => changes),
+      ...attribution.unmatchedEventRewardSources.flatMap(({ changes }) => changes),
+    ];
+    const rowTotals: Record<string, number> = {};
+    for (const change of attributedChanges) {
+      rowTotals[change.key] = (rowTotals[change.key] ?? 0) + change.quantity;
+    }
+    expect(rowTotals).toEqual(Object.fromEntries((day?.changes ?? []).map(({ key, quantity }) => [key, quantity])));
+  });
+
+  test("keeps recurring buy amounts in a read-only row alongside editable direct inputs", () => {
+    const day = summarizePyroxeneTimeline(
+      [
+        { uid: "one-off-buy", label: "청휘석 구매", amount: 120 },
+        { uid: "monthly-buy", label: "월정액 청휘석 구매", amount: 90 },
+      ].map(({ uid, label, amount }, index) => ({
+        date: dayjs.utc(`2026-09-10T${String(index).padStart(2, "0")}:00:00.000Z`),
+        source: { type: "buy" as const, uid, description: label },
+        accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: amount, oneTimeTicket: 0, tenTimeTicket: 0 },
+      })),
+      "Asia/Seoul",
+    )["2026-09-10"];
+    const attribution = attributePlannerDateResources(day, [], []);
+    const editableSourceKeys = new Set(["one-off-buy"]);
+    const readOnlySources = getPlannerReadOnlyBuySources(attribution.directSources, editableSourceKeys);
+    const editableSources = attribution.directSources.filter((source) => editableSourceKeys.has(source.key));
+    const displayedChanges = [...editableSources, ...readOnlySources].flatMap(({ changes }) => changes);
+
+    expect(readOnlySources).toMatchObject([{ key: "monthly-buy", label: "월정액 청휘석 구매" }]);
+    expect(displayedChanges.reduce((total, { quantity }) => total + quantity, 0)).toBe(day?.changes[0].quantity);
+  });
+
+  test("attaches main story content rewards to the event and labels only unmatched reading rewards", () => {
+    const eventUid = "main-story-s2-ex-2-1";
+    const partName = "2부 Ex. 로어추적 편 제2장: 드럼통 속에 숨은 것";
+    const timeline = [
+      {
+        date: dayjs.utc("2026-09-29T02:00:00.000Z"),
+        source: { type: "event_reward" as const, uid: eventUid, description: partName },
+        accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: 2_120, oneTimeTicket: 0, tenTimeTicket: 0 },
+      },
+      {
+        date: dayjs.utc("2026-09-15T02:00:00.000Z"),
+        source: { type: "event_reward" as const, uid: "main-story-reward:part-2-1", description: partName },
+        accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: 660, oneTimeTicket: 0, tenTimeTicket: 0 },
+      },
+    ];
+    const dailyResources = projectPlannerCalendarResources(summarizePyroxeneTimeline(timeline, "Asia/Seoul"));
+    const event: PlannerPeriod = {
+      key: `event:${eventUid}`,
+      kind: "event",
+      eventUid,
+      name: partName,
+      startDate: "2026-09-15",
+      endDate: "2026-09-29",
+      startAt: "2026-09-15T02:00:00.000Z",
+      endAt: "2026-09-29T02:00:00.000Z",
+      href: `/events/${eventUid}`,
+    };
+    const visibleEventItem = { key: event.key, period: event, facts: [] };
+    const contentRewardAttribution = attributePlannerDateResources(
+      dailyResources["2026-09-29"],
+      [event],
+      [visibleEventItem],
+    );
+    const readingRewardAttribution = attributePlannerDateResources(
+      dailyResources["2026-09-15"],
+      [event],
+      [visibleEventItem],
+    );
+    const readingReward = readingRewardAttribution.unmatchedEventRewardSources[0];
+
+    expect(contentRewardAttribution.eventChanges[eventUid]).toEqual([{ key: "pyroxene", quantity: 2_120 }]);
+    expect(contentRewardAttribution.eventChanges[eventUid]).toEqual(dailyResources["2026-09-29"].changes);
+    expect(getPlannerUnmatchedEventRewardLabel(readingReward)).toBe(`메인 스토리 보상 · ${partName}`);
+    expect(readingReward.changes).toEqual(dailyResources["2026-09-15"].changes);
+    expect(
+      getPlannerUnmatchedEventRewardLabel({
+        key: "other-event-reward",
+        type: "event_reward",
+        eventUid: "ordinary-event",
+        label: "일반 이벤트 보상",
+        changes: [{ key: "pyroxene", quantity: 10 }],
+      }),
+    ).toBe("일반 이벤트 보상");
+  });
+
+  test("keeps non-calendar event reward content out of periods and attributes its amount to a source row", () => {
+    const mainStory: PlannerScheduleContentInput = {
+      kind: "event",
+      uid: "main-story-reward:part-1",
+      name: "메인 스토리 1편",
+      since: "2026-09-10T00:00:00.000Z",
+      until: "2026-09-11T00:00:00.000Z",
+      tags: ["main_story_reward"],
+    };
+    const publicPeriods = buildPublicPlannerPeriods({
+      contents: [mainStory],
+      scheduleItems: [],
+      shopPeriods: [],
+      timeZone: "Asia/Seoul",
+    });
+    const day = summarizePyroxeneTimeline(
+      [
+        {
+          date: dayjs.utc("2026-09-10T00:00:00.000Z"),
+          source: { type: "event_reward", uid: mainStory.uid, description: mainStory.name },
+          accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+          resourceDelta: { pyroxene: 40, oneTimeTicket: 0, tenTimeTicket: 0 },
+        },
+      ],
+      "Asia/Seoul",
+    )["2026-09-10"];
+    const attribution = attributePlannerDateResources(day, publicPeriods, []);
+
+    expect(publicPeriods).toEqual([]);
+    expect(attribution.unmatchedEventRewardSources).toMatchObject([
+      { eventUid: mainStory.uid, label: mainStory.name, changes: [{ key: "pyroxene", quantity: 40 }] },
+    ]);
+    expect(attribution.unmatchedEventRewardSources.flatMap(({ changes }) => changes)).toEqual(day?.changes);
+  });
+
+  test("shows resources as unmatched rows when an endless event has no card on its reward date", () => {
+    const eventUid = "main-story-s2-ex-2-1";
+    const event: PlannerPeriod = {
+      key: `event:${eventUid}`,
+      kind: "event",
+      eventUid,
+      name: "2부 Ex. 로어추적 편 제2장",
+      startDate: "2026-09-15",
+      endDate: "2026-09-15",
+      startAt: "2026-09-15T02:00:00.000Z",
+      endAt: null,
+      endless: true,
+      calendarStartOnly: true,
+    };
+    const dateSchedule = getPlannerDateScheduleForDate([event], "2026-09-29", "Asia/Seoul");
+    const day: PlannerDayResources = {
+      dateKey: "2026-09-29",
+      changes: [{ key: "pyroxene", quantity: 2_040 }],
+      sources: [
+        {
+          key: "story-content-reward",
+          type: "event_reward",
+          eventUid,
+          label: "2부 Ex. 로어추적 편 제2장",
+          changes: [{ key: "pyroxene", quantity: 2_120 }],
+        },
+        {
+          key: "endless-recruitment-spend",
+          type: "event",
+          eventUid,
+          label: "모집 소비",
+          changes: [{ key: "pyroxene", quantity: -80 }],
+        },
+      ],
+    };
+
+    expect(dateSchedule.items).toEqual([]);
+    const attribution = attributePlannerDateResources(day, [event], dateSchedule.items);
+    expect(attribution.eventChanges).toEqual({});
+    expect(attribution.unmatchedEventRewardSources).toMatchObject([
+      { label: "2부 Ex. 로어추적 편 제2장", changes: [{ key: "pyroxene", quantity: 2_120 }] },
+    ]);
+    expect(attribution.unmatchedEventSources).toMatchObject([
+      { label: "모집 소비", changes: [{ key: "pyroxene", quantity: -80 }] },
+    ]);
+    const unmatchedChanges = [
+      ...attribution.unmatchedEventRewardSources.flatMap(({ changes }) => changes),
+      ...attribution.unmatchedEventSources.flatMap(({ changes }) => changes),
+    ];
+    expect(unmatchedChanges.reduce((total, change) => total + change.quantity, 0)).toBe(day.changes[0].quantity);
+  });
+
   test("groups non-calendar sources by source count and preserves separate resource totals including zero", () => {
     const breakdown = partitionPlannerDayResources({
       dateKey: "2026-09-11",
@@ -1673,11 +2369,143 @@ describe("integrated planner calendar domain", () => {
         key: "event:2026-09-11:0",
         type: "event",
         label: "모집 소비",
+        at: "2026-09-10T15:00:00.000Z",
         eventUid: "pickup-event",
         changes: [],
       },
     ]);
     expect(day && partitionPlannerDayResources(day).calendarSources).toEqual(day?.sources);
     expect(day && partitionPlannerDayResources(day).otherSources).toEqual([]);
+  });
+
+  describe("planner period range formatting (addendum T)", () => {
+    test("formats a same-year range as M/D HH:mm ~ M/D HH:mm without zero-padding", () => {
+      const parts = formatPlannerPeriodRangeParts("2026-10-13T02:00:00.000Z", "2026-10-27T02:00:00.000Z", "Asia/Seoul");
+      expect(parts).toEqual({ start: "10/13 11:00", end: "10/27 11:00" });
+      expect(parts && plannerPeriodRangeLabel(parts)).toBe("10/13 11:00 ~ 10/27 11:00");
+    });
+
+    test("marks recruitment-start for an unplanned recruitment starting today even with no matching event in the list", () => {
+      const publicRecruitment: PlannerPeriod = {
+        key: "recruitment:public-only",
+        kind: "recruitment",
+        name: "미확인 소녀",
+        startDate: "2026-09-29",
+        endDate: "2026-10-06",
+        startAt: "2026-09-29T02:00:00.000Z",
+        endAt: "2026-10-06T02:00:00.000Z",
+        eventUid: "no-matching-event",
+        students: [{ uid: "student-1", imageUid: null, name: "미확인 소녀" }],
+      };
+
+      const schedule = getPlannerDateScheduleForDate([publicRecruitment], "2026-09-29", "Asia/Seoul");
+      expect(schedule.onDate).toMatchObject([
+        {
+          period: { key: "recruitment:public-only" },
+          facts: [{ kind: "recruitment-start", at: "2026-09-29T02:00:00.000Z" }],
+        },
+      ]);
+      expect(
+        plannerPeriodBoldEndpoint(schedule.onDate[0].facts, "recruitment-start", "recruitment-end", {
+          startAt: publicRecruitment.startAt,
+          endAt: publicRecruitment.endAt,
+        }),
+      ).toBe("start");
+    });
+
+    test("does not zero-pad single-digit months or days", () => {
+      const parts = formatPlannerPeriodRangeParts("2026-09-29T02:00:00.000Z", "2026-10-13T02:00:00.000Z", "Asia/Seoul");
+      expect(parts).toEqual({ start: "9/29 11:00", end: "10/13 11:00" });
+      expect(parts && plannerPeriodRangeLabel(parts)).toBe("9/29 11:00 ~ 10/13 11:00");
+    });
+
+    test("represents an endless (no end_at) period as an open range", () => {
+      const parts = formatPlannerPeriodRangeParts("2026-10-13T02:00:00.000Z", null, "Asia/Seoul");
+      expect(parts).toEqual({ start: "10/13 11:00", end: null });
+      expect(parts && plannerPeriodRangeLabel(parts)).toBe("10/13 11:00 ~");
+    });
+
+    test("returns null when there is no start instant", () => {
+      expect(formatPlannerPeriodRangeParts(null, "2026-10-27T02:00:00.000Z", "Asia/Seoul")).toBeNull();
+      expect(formatPlannerPeriodRangeParts(undefined, undefined, "Asia/Seoul")).toBeNull();
+    });
+
+    test("formats a single point as M/D HH:mm", () => {
+      expect(formatPlannerPeriodPoint("2026-10-13T02:00:00.000Z", "Asia/Seoul")).toBe("10/13 11:00");
+    });
+
+    test("bolds the start endpoint when the selected date's facts include the start fact", () => {
+      const facts = [{ kind: "event-start" as const, at: "2026-10-13T02:00:00.000Z" }];
+      expect(plannerPeriodBoldEndpoint(facts, "event-start", "event-end")).toBe("start");
+    });
+
+    test("bolds the end endpoint when the selected date's facts include the end fact", () => {
+      const facts = [{ kind: "event-end" as const, at: "2026-10-27T02:00:00.000Z" }];
+      expect(plannerPeriodBoldEndpoint(facts, "event-start", "event-end")).toBe("end");
+    });
+
+    test("bolds nothing when neither endpoint's fact is present", () => {
+      const facts = [{ kind: "shop-deadline" as const, at: "2026-10-20T02:00:00.000Z" }];
+      expect(plannerPeriodBoldEndpoint(facts, "event-start", "event-end")).toBeNull();
+    });
+
+    test("D2 [2]: a null startKind never bolds the start endpoint, but the end endpoint (e.g. a shop deadline) still bolds normally", () => {
+      const facts = [{ kind: "shop-deadline" as const, at: "2026-10-20T02:00:00.000Z" }];
+      expect(plannerPeriodBoldEndpoint(facts, null, "shop-deadline")).toBe("end");
+      expect(plannerPeriodBoldEndpoint([], null, "shop-deadline")).toBeNull();
+    });
+
+    test("matches by exact instant to disambiguate multiple nested recruitment periods sharing one facts array", () => {
+      const facts = [
+        { kind: "recruitment-end" as const, at: "2026-10-20T02:00:00.000Z" },
+        { kind: "recruitment-end" as const, at: "2026-10-25T02:00:00.000Z" },
+      ];
+      expect(
+        plannerPeriodBoldEndpoint(facts, "recruitment-start", "recruitment-end", {
+          endAt: "2026-10-20T02:00:00.000Z",
+        }),
+      ).toBe("end");
+      expect(
+        plannerPeriodBoldEndpoint(facts, "recruitment-start", "recruitment-end", {
+          endAt: "2026-10-25T02:00:00.000Z",
+        }),
+      ).toBe("end");
+      expect(
+        plannerPeriodBoldEndpoint(facts, "recruitment-start", "recruitment-end", {
+          endAt: "2026-10-30T02:00:00.000Z",
+        }),
+      ).toBeNull();
+    });
+
+    test("treats a recruitment period as sharing its event's range only on exact instant equality", () => {
+      const event: Pick<PlannerPeriod, "startAt" | "endAt"> = {
+        startAt: "2026-10-13T02:00:00.000Z",
+        endAt: "2026-10-27T02:00:00.000Z",
+      };
+      expect(
+        plannerPeriodsShareRange({ startAt: "2026-10-13T02:00:00.000Z", endAt: "2026-10-27T02:00:00.000Z" }, event),
+      ).toBe(true);
+      expect(
+        plannerPeriodsShareRange({ startAt: "2026-10-13T02:00:00.000Z", endAt: "2026-10-20T02:00:00.000Z" }, event),
+      ).toBe(false);
+    });
+
+    test("treats two endless (no end_at) periods with the same start as sharing their range", () => {
+      expect(
+        plannerPeriodsShareRange(
+          { startAt: "2026-10-13T02:00:00.000Z", endAt: null },
+          { startAt: "2026-10-13T02:00:00.000Z", endAt: null },
+        ),
+      ).toBe(true);
+    });
+
+    test("does not treat an endless period and a bounded period as sharing a range even with the same start", () => {
+      expect(
+        plannerPeriodsShareRange(
+          { startAt: "2026-10-13T02:00:00.000Z", endAt: null },
+          { startAt: "2026-10-13T02:00:00.000Z", endAt: "2026-10-27T02:00:00.000Z" },
+        ),
+      ).toBe(false);
+    });
   });
 });

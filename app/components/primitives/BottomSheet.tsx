@@ -5,11 +5,13 @@ import { cn } from "~/lib/utils";
 
 type BottomSheetProps = {
   children: React.ReactNode | React.ReactNode[];
-
-  Icon: React.ElementType;
+  Icon?: React.ElementType;
+  id?: string;
   title: string;
   description?: string;
   headerAction?: React.ReactNode;
+  footer?: React.ReactNode;
+  fitContent?: boolean;
   onClose: () => void;
   open?: boolean;
   onExited?: () => void;
@@ -18,9 +20,12 @@ type BottomSheetProps = {
 export default function BottomSheet({
   children,
   Icon,
+  id,
   title,
   description,
   headerAction,
+  footer,
+  fitContent = false,
   onClose,
   open = true,
   onExited,
@@ -61,18 +66,27 @@ export default function BottomSheet({
             leaveTo="translate-y-full"
           >
             <DialogPanel
+              id={id}
               className={cn(`
-              w-screen lg:max-w-3xl h-dvh max-h-120 md:max-h-144 px-4 pt-6 lg:px-8 lg:pt-8 pb-[var(--pb-safe-or-6)] flex flex-col
+              w-screen lg:max-w-3xl ${fitContent ? "h-auto max-h-[85dvh]" : "h-dvh max-h-120 md:max-h-144"} px-4 pt-6 lg:px-8 lg:pt-8 pb-[var(--pb-safe-or-6)] flex flex-col
               rounded-t-lg bg-popover/90 shadow-t-xl backdrop-blur-sm
             `)}
             >
-              <div className="mb-4 flex items-center justify-between gap-3">
+              <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div className="flex items-center justify-center rounded-lg bg-muted p-2 lg:p-3">
-                    <Icon className="size-5 text-muted-foreground lg:size-6" strokeWidth={2} />
-                  </div>
-                  <div>
-                    <DialogTitle className="font-bold text-lg">{title}</DialogTitle>
+                  {Icon ? (
+                    <div className="flex shrink-0 items-center justify-center rounded-lg bg-muted p-2 lg:p-3">
+                      <Icon className="size-5 text-muted-foreground lg:size-6" strokeWidth={2} aria-hidden="true" />
+                    </div>
+                  ) : null}
+                  <div className="min-w-0">
+                    {/* Dialog associates this title as the panel's accessible name automatically.
+                        tabIndex={-1} keeps it script-focusable (but out of the tab order) so the
+                        planner's own view-transition focus management (PlannerCalendar.tsx) can
+                        move focus to it directly when switching between the sheet's internal views. */}
+                    <DialogTitle as="h2" tabIndex={-1} className="font-bold text-lg focus:outline-none">
+                      {title}
+                    </DialogTitle>
                     {description && <p className="text-xs text-muted-foreground">{description}</p>}
                   </div>
                 </div>
@@ -80,15 +94,23 @@ export default function BottomSheet({
                   {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
                   <button
                     type="button"
-                    className="rounded-md p-1 transition-colors hover:bg-muted"
+                    className="rounded-md p-1 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     onClick={onClose}
                     aria-label="바텀시트 닫기"
                   >
-                    <XMarkIcon className="size-6 text-muted-foreground" />
+                    <XMarkIcon className="size-6 text-muted-foreground" aria-hidden="true" />
                   </button>
                 </div>
               </div>
-              <div className="flex min-h-0 flex-1 flex-col overflow-y-auto no-scrollbar">{children}</div>
+              <div
+                className={cn(
+                  "min-h-0 overflow-y-auto overscroll-contain no-scrollbar",
+                  fitContent ? "flex-initial" : "flex flex-1 flex-col",
+                )}
+              >
+                {children}
+              </div>
+              {footer ? <div className="shrink-0">{footer}</div> : null}
             </DialogPanel>
           </TransitionChild>
         </div>

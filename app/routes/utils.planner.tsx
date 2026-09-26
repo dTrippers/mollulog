@@ -31,6 +31,7 @@ import {
   formatPlannerPeriodEndDate,
   getPlannerMonthEndInstant,
   getPlannerPlannedEventUids,
+  getPlannerRaidScheduleFacts,
   getPlannerTodayMonth,
   type PlannerScheduleContentInput,
   projectPlannerCalendarResources,
@@ -337,10 +338,6 @@ export default function IntegratedPlannerRoute() {
     requestFailed: boolean;
   } | null>(null);
   const [visibleMonthCount, setVisibleMonthCount] = useState(1);
-  const [shopStateOverrides, setShopStateOverrides] = useState<{
-    signedIn: boolean;
-    states: Record<string, EventShopState>;
-  }>(() => ({ signedIn: loaderData.signedIn, states: {} }));
   const [guestRecruitmentIsSaving, setGuestRecruitmentIsSaving] = useState(false);
   const [guestRecruitmentSaveResult, setGuestRecruitmentSaveResult] = useState<PlannerRecruitmentSaveResult | null>(
     null,
@@ -351,12 +348,6 @@ export default function IntegratedPlannerRoute() {
     refresh();
     return subscribeGuestEventShopPlanner(refresh);
   }, []);
-
-  useEffect(() => {
-    setShopStateOverrides((current) =>
-      current.signedIn === loaderData.signedIn ? current : { signedIn: loaderData.signedIn, states: {} },
-    );
-  }, [loaderData.signedIn]);
 
   const guestShopPlans = useMemo(() => getGuestShopPlans(guestShopSnapshot), [guestShopSnapshot]);
   const guestShopPlanSignature = useMemo(
@@ -437,7 +428,6 @@ export default function IntegratedPlannerRoute() {
 
   const accountState = loaderData.accountState;
   const isSignedIn = loaderData.signedIn;
-  const activeShopStateOverrides = shopStateOverrides.signedIn === isSignedIn ? shopStateOverrides.states : {};
   const guestData =
     !isSignedIn && (pyroxeneGuestPlanner.status === "ready" || pyroxeneGuestPlanner.status === "memory")
       ? pyroxeneGuestPlanner.data
@@ -619,7 +609,9 @@ export default function IntegratedPlannerRoute() {
     [loaderData.pyroxeneSchedules, loaderData.pyroxeneSchedulesStatus],
   );
   const plannerContents = useMemo<PlannerScheduleContentInput[]>(() => {
-    if (loaderData.timelineEventsStatus !== "available") return [];
+    if (loaderData.timelineEventsStatus !== "available") {
+      return loaderData.pyroxeneSchedules.filter((content) => content.kind === "raid");
+    }
     const timelineEventsByUid = new Map(loaderData.timelineEvents.map((event) => [event.uid, event]));
     const scheduleEventUids = new Set(
       loaderData.pyroxeneSchedules.flatMap((content) =>
@@ -769,11 +761,13 @@ export default function IntegratedPlannerRoute() {
     pyroxeneGuestPlanner.status,
     pyroxeneInputAvailable,
   ]);
-  const dailyResources = useMemo(
-    () => (pyroxeneForecastStatus === "ready" ? summarizePyroxeneTimeline(calculation.timeline, displayTimeZone) : {}),
-    [calculation.timeline, displayTimeZone, pyroxeneForecastStatus],
+  const timelineResources = useMemo(
+    () => summarizePyroxeneTimeline(calculation.timeline, displayTimeZone),
+    [calculation.timeline, displayTimeZone],
   );
+  const dailyResources = pyroxeneForecastStatus === "ready" ? timelineResources : {};
   const calendarResources = useMemo(() => projectPlannerCalendarResources(dailyResources), [dailyResources]);
+  const raidScheduleFacts = useMemo(() => getPlannerRaidScheduleFacts(timelineResources), [timelineResources]);
 
   const currentGuestShopComparison =
     guestShopComparison?.signature === guestShopPlanSignature ? guestShopComparison : null;
@@ -813,9 +807,7 @@ export default function IntegratedPlannerRoute() {
           ? event.accountState
           : null
         : (guestPlan?.state ?? null);
-      const override = event.shopStateUid ? activeShopStateOverrides[event.shopStateUid] : undefined;
-      const state =
-        override ?? (isSignedIn && event.accountStateStatus === "unavailable" ? null : (savedState ?? defaultState));
+      const state = isSignedIn && event.accountStateStatus === "unavailable" ? null : (savedState ?? defaultState);
       return {
         timelineUid: event.timelineUid,
         shopStateUid: event.shopStateUid,
@@ -824,29 +816,11 @@ export default function IntegratedPlannerRoute() {
         endAt: event.endAt,
         startDate: event.startAt ? formatPlannerPeriodDate(event.startAt, displayTimeZone) : null,
         endDate: event.endAt ? formatPlannerPeriodEndDate(event.endAt, displayTimeZone) : null,
-        content: event.content,
         state,
         defaultState,
       };
     });
-  }, [
-    baseShopDefaultsByStateUid,
-    displayTimeZone,
-    guestShopPlans,
-    isSignedIn,
-    loaderData.shopEvents,
-    activeShopStateOverrides,
-  ]);
-
-  const handleShopSaved = useCallback(
-    (shopStateUid: string, state: EventShopState) => {
-      setShopStateOverrides((current) => {
-        if (current.signedIn !== isSignedIn) return current;
-        return { ...current, states: { ...current.states, [shopStateUid]: state } };
-      });
-    },
-    [isSignedIn],
-  );
+  }, [baseShopDefaultsByStateUid, displayTimeZone, guestShopPlans, isSignedIn, loaderData.shopEvents]);
 
   const shopPeriods = useMemo(
     () =>
@@ -885,8 +859,8 @@ export default function IntegratedPlannerRoute() {
   );
 
   const plannedEventUids = useMemo(
-    () => getPlannerPlannedEventUids({ favorites: favoritedStudents, eventTrials, shopPeriods }),
-    [eventTrials, favoritedStudents, shopPeriods],
+    () => getPlannerPlannedEventUids({ favorites: favoritedStudents, eventTrials }),
+    [eventTrials, favoritedStudents],
   );
   const displayPeriods = useMemo(
     () => buildPlannerDisplayPeriods(periods, publicPeriods, plannedEventUids),
@@ -1025,6 +999,7 @@ export default function IntegratedPlannerRoute() {
         periods={displayPeriods}
         scheduleAvailability={scheduleAvailability}
         calendarResources={calendarResources}
+        raidScheduleFacts={raidScheduleFacts}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
         isSignedIn={isSignedIn}
@@ -1032,12 +1007,10 @@ export default function IntegratedPlannerRoute() {
         oneOffEntries={oneOffEntries}
         guestStorageStatus={pyroxeneGuestPlanner.status}
         recruitmentSavedStates={recruitmentSavedStates}
-        completedRecruitmentEventUids={recruitmentCompletions.map(({ eventUid }) => eventUid)}
         recruitmentIsSaving={recruitmentIsSaving}
         recruitmentSaveResult={recruitmentSaveResult}
         onSaveRecruitment={handleSaveRecruitment}
         shopPlans={calendarShopPlans}
-        onShopSaved={handleShopSaved}
         monthCount={visibleMonthCount}
         onLoadMore={handleLoadMore}
       />

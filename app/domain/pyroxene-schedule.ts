@@ -41,6 +41,7 @@ export type PyroxeneScheduleContent =
       name: string;
       imageUrl?: string | null;
       type: RaidType;
+      seasonIndex?: number | null;
       since: UtcIsoString;
       until: UtcIsoString;
     };
@@ -78,6 +79,7 @@ export type PyroxeneScheduleItem = {
   raid?: {
     uid: string;
     type: RaidType;
+    seasonIndex?: number | null;
     name: string;
     imageUrl?: string | null;
     since: UtcIsoString | Date;
@@ -193,6 +195,7 @@ export function buildPyroxeneScheduleItems(
         name: content.name,
         imageUrl: content.imageUrl ?? null,
         type: content.type,
+        seasonIndex: content.seasonIndex,
         since: content.since,
         until: content.until,
       },

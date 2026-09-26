@@ -75,13 +75,13 @@ beforeEach(() => {
 });
 
 describe("integrated planner view", () => {
-  it("returns original event timing and run type separately from pyroxene schedules", async () => {
+  it("preserves an endless event's actual end_at separately from pyroxene schedules", async () => {
     const sourceEvent = {
-      uid: "event-open-ended",
-      name: "Open ended event",
+      uid: "event-endless-ended",
+      name: "End-dated permanent event",
       startAt: "2026-09-03T11:00:00.000Z",
-      endAt: null,
-      endless: false,
+      endAt: "2026-09-29T02:00:00.000Z",
+      endless: true,
       imageUrl: null,
       runType: "rerun",
       contentType: "event",

@@ -60,6 +60,7 @@ describe("buildPyroxeneScheduleItems favorited resolution", () => {
         name: "레이드 이미지",
         imageUrl: "https://cdn.example.test/raid.webp",
         type: "total_assault",
+        seasonIndex: 41,
         since: "2026-11-10T02:00:00.000Z",
         until: "2026-11-24T02:00:00.000Z",
       },
@@ -69,7 +70,7 @@ describe("buildPyroxeneScheduleItems favorited resolution", () => {
 
     expect(items).toMatchObject([
       { event: { uid: "event-image", imageUrl: "https://cdn.example.test/event.webp" } },
-      { raid: { uid: "raid-image", imageUrl: "https://cdn.example.test/raid.webp" } },
+      { raid: { uid: "raid-image", imageUrl: "https://cdn.example.test/raid.webp", seasonIndex: 41 } },
     ]);
   });
 

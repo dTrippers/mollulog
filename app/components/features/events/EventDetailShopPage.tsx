@@ -221,7 +221,7 @@ export default function EventDetailShopPage({
         {saveError && (
           <div
             aria-live="polite"
-            className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
+            className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
             role="alert"
           >
             <span>{saveError}</span>

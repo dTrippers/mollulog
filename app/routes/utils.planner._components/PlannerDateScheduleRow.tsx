@@ -1,14 +1,23 @@
-import { BookmarkIcon } from "@heroicons/react/16/solid";
-import { ChevronRightIcon } from "@heroicons/react/24/outline";
-import type {
-  PlannerDateScheduleItem,
-  PlannerPeriod,
-  PlannerPeriodStudent,
-  PlannerScheduleFact,
+import { StarIcon } from "@heroicons/react/16/solid";
+import { useEffect, useRef } from "react";
+import { Button } from "~/components/primitives";
+import {
+  formatPlannerPeriodPoint,
+  formatPlannerPeriodRangeParts,
+  type PlannerDateScheduleItem,
+  type PlannerDayResources,
+  type PlannerPeriod,
+  type PlannerScheduleFact,
+  plannerPeriodBoldEndpoint,
+  plannerPeriodRangeLabel,
 } from "~/domain/integrated-planner";
-import { formatInstant } from "~/lib/date-time";
-import { studentImageUrl } from "~/models/assets";
-import { PlannerEventThumbnail } from "./PlannerCalendarParts";
+import { PlannerEventThumbnail, PlannerPeriodRange } from "./PlannerCalendarParts";
+import { DailyResourceChanges, formatSignedQuantity, RESOURCE_PRESENTATION } from "./PlannerCalendarWeek";
+import PlannerEventCardDetails from "./PlannerEventCardDetails";
+
+type PlannerDateScheduleShopPlan = {
+  timelineUid: string;
+};
 
 function runTypeLabel(period?: PlannerPeriod): string | null {
   if (period?.runType === "first") return "최초";
@@ -17,171 +26,212 @@ function runTypeLabel(period?: PlannerPeriod): string | null {
   return null;
 }
 
-function shortDate(dateKey: string): string {
-  const [, month, day] = dateKey.split("-");
-  return `${Number(month)}/${Number(day)}`;
+function labelForPeriod(period: PlannerPeriod): string | null {
+  if (period.kind === "recruitment") return "모집";
+  if (period.kind === "raid") return period.raidType === "elimination" ? "대결전" : "총력전";
+  return null;
 }
 
-function dateRange(period: PlannerPeriod): string {
-  if (period.startDate === period.endDate) return `${shortDate(period.startDate)}부터`;
-  return `${shortDate(period.startDate)} – ${shortDate(period.endDate)}`;
+/** The row's own period range endpoints + which fact kinds mark "today" for bolding. */
+function rowRangeFactKinds(
+  period: PlannerPeriod,
+): { startKind: PlannerScheduleFact["kind"] | null; endKind: PlannerScheduleFact["kind"] } | null {
+  if (period.kind === "event") return { startKind: "event-start", endKind: "event-end" };
+  if (period.kind === "raid") return { startKind: "raid-start", endKind: "raid-end" };
+  if (period.kind === "recruitment") return { startKind: "recruitment-start", endKind: "recruitment-end" };
+  // A shop period has no "start" fact kind (only its deadline is ever marked); a null startKind
+  // means that endpoint is simply never bolded, per plannerPeriodBoldEndpoint's semantics.
+  if (period.kind === "shop") return { startKind: null, endKind: "shop-deadline" };
+  return null;
 }
 
-function eventEndDate(period?: PlannerPeriod): string | null {
-  if (!period || period.endless || !period.endAt) return null;
-  return `${shortDate(period.endDate)}까지`;
+function raidPointFactLabel(fact: PlannerScheduleFact, timeZone: string): string | null {
+  const point = formatPlannerPeriodPoint(fact.at, timeZone);
+  if (fact.kind === "raid-reward") return `보상 지급 ${point}`;
+  if (fact.kind === "raid-ticket-expiry") return `10회 모집 티켓 만료 ${point}`;
+  return null;
 }
 
-function factLabel(fact: PlannerScheduleFact, timeZone: string): string {
-  const time = formatInstant(fact.at, { timeZone, format: "HH:mm" });
-  switch (fact.kind) {
-    case "event-start":
-      return `시작 ${time}`;
-    case "event-end":
-      return `종료 ${time}`;
-    case "recruitment-start":
-      return `모집 시작 ${time}`;
-    case "recruitment-end":
-      return `모집 종료 ${time}`;
-    case "shop-deadline":
-      return `상점 교환 마감 ${time}`;
-  }
-}
-
-function PlannerSchedulePortraits({ students }: { students: readonly PlannerPeriodStudent[] }) {
-  if (students.length === 0) return null;
-  const visible = students.slice(0, 3);
-  return (
-    <span aria-hidden="true" className="inline-flex shrink-0 items-center pl-1">
-      {visible.map((student, index) => (
-        <img
-          key={student.uid}
-          src={studentImageUrl(student.imageUid ?? student.uid)}
-          alt=""
-          className={`size-5 shrink-0 rounded-full bg-muted object-contain object-top ring-1 ring-card ${index > 0 ? "-ml-1.5" : ""}`}
-          loading="lazy"
-        />
-      ))}
-      {students.length > visible.length ? (
-        <span className="ml-1 shrink-0 text-[10px] text-muted-foreground">+{students.length - visible.length}</span>
-      ) : null}
-    </span>
+function accessibleName(
+  item: PlannerDateScheduleItem,
+  rangeLabel: string | null,
+  raidPointLabels: readonly string[],
+  recruitmentStudentNames: readonly string[],
+  selected: boolean,
+  changes: PlannerDayResources["changes"],
+) {
+  const titleLabel = labelForPeriod(item.period);
+  const resourceText = changes.map(
+    (change) => `${RESOURCE_PRESENTATION[change.key].label} ${formatSignedQuantity(change.quantity)}`,
   );
+  const typePrefix = item.period.kind === "event" ? runTypeLabel(item.period) : null;
+  return [
+    ...(selected ? ["선택한 일정"] : []),
+    ...(titleLabel ? [titleLabel] : []),
+    item.period.name,
+    ...(item.period.isPlanned ? ["내 계획"] : []),
+    ...(typePrefix ? [typePrefix] : []),
+    ...(rangeLabel ? [rangeLabel] : []),
+    ...raidPointLabels,
+    ...(recruitmentStudentNames.length > 0 ? [recruitmentStudentNames.join(", ")] : []),
+    ...resourceText,
+  ].join(", ");
 }
 
 export default function PlannerDateScheduleRow({
   item,
   allPeriods,
   timeZone,
-  mode,
-  onOpen,
+  shopPlans,
+  resourceChanges = [],
+  showResourceChanges,
+  highlighted,
+  focusOnMount,
+  onHighlightedFocusComplete,
+  onAddRecruitment,
+  onEditRecruitment,
 }: {
   item: PlannerDateScheduleItem;
   allPeriods: readonly PlannerPeriod[];
   timeZone: string;
-  mode: "on-date" | "ongoing";
-  onOpen: (item: PlannerDateScheduleItem, trigger: HTMLButtonElement) => void;
+  shopPlans: readonly PlannerDateScheduleShopPlan[];
+  resourceChanges?: PlannerDayResources["changes"];
+  showResourceChanges: boolean;
+  highlighted: boolean;
+  focusOnMount: boolean;
+  onHighlightedFocusComplete: () => void;
+  onAddRecruitment: (eventUid: string, focusKey: string) => void;
+  onEditRecruitment: (eventUid: string, focusKey: string) => void;
 }) {
   const { period } = item;
   const eventPeriod =
-    item.eventPeriod ??
-    (period.kind === "event"
+    period.kind === "event"
       ? period
-      : allPeriods.find((candidate) => candidate.kind === "event" && candidate.eventUid === period.eventUid));
-  const isRecruitmentPeriod = period.kind === "recruitment";
-  const isPlanned = period.isPlanned === true;
-  const recruitmentPeriods = period.eventUid
-    ? allPeriods.filter((candidate) => candidate.kind === "recruitment" && candidate.eventUid === period.eventUid)
-    : [];
-  const recruitmentDeadline = !isRecruitmentPeriod
-    ? recruitmentPeriods
-        .map((candidate) => candidate.endDate)
-        .sort()
-        .at(-1)
-    : undefined;
-  const typeLabel = isRecruitmentPeriod ? null : runTypeLabel(eventPeriod);
-  const eventDateRange = !isRecruitmentPeriod && eventPeriod ? dateRange(eventPeriod) : null;
-  const onDateFacts = item.facts.map((fact) => factLabel(fact, timeZone));
-  const ongoingFact = period.kind === "recruitment" && period.endAt ? `모집 · ${shortDate(period.endDate)}까지` : null;
-  const eventEnd = isRecruitmentPeriod ? null : eventEndDate(eventPeriod);
-  const secondaryParts =
-    mode === "on-date"
-      ? [
-          ...onDateFacts,
-          ...(typeLabel ? [typeLabel] : []),
-          ...(eventEnd ? [eventEnd] : []),
-          ...(recruitmentDeadline ? [`모집 ${shortDate(recruitmentDeadline)}까지`] : []),
-        ]
-      : [
-          ...(ongoingFact ? [ongoingFact] : []),
-          ...(typeLabel ? [typeLabel] : []),
-          ...(eventDateRange ? [eventDateRange] : []),
-          ...(recruitmentDeadline ? [`모집 ${shortDate(recruitmentDeadline)}까지`] : []),
-        ];
-  const uniqueSecondaryParts = secondaryParts.filter((part, index) => secondaryParts.indexOf(part) === index);
-  const factText = mode === "on-date" ? onDateFacts.join("\u00a0·\u00a0") : ongoingFact;
-  const metadataText = uniqueSecondaryParts
-    .filter((part) => (mode === "on-date" ? !onDateFacts.includes(part) : part !== factText))
-    .join("\u00a0·\u00a0");
-  const students =
-    period.kind === "recruitment"
-      ? period.hasRecruitmentPlan
-        ? (period.students ?? [])
-        : []
-      : (item.ongoingRecruitmentPeriods ?? [])
-          .filter((candidate) => candidate.hasRecruitmentPlan)
-          .flatMap((candidate) => candidate.students ?? [])
-          .filter((student, index, students) => students.findIndex((other) => other.uid === student.uid) === index);
-  const showStudents =
-    students.length > 0 &&
-    (mode === "ongoing" || isRecruitmentPeriod || (item.ongoingRecruitmentPeriods?.length ?? 0) > 0);
-  const accessibleName = [
-    period.name,
-    ...(isRecruitmentPeriod ? ["모집"] : []),
-    ...(isPlanned ? ["내 계획"] : []),
-    ...onDateFacts,
-    ...(mode === "ongoing" && ongoingFact ? [ongoingFact] : []),
-    ...(typeLabel ? [typeLabel] : []),
-    ...(mode === "on-date" ? (eventEnd ? [eventEnd] : []) : eventDateRange ? [eventDateRange] : []),
-    ...(recruitmentDeadline ? [`모집 ${shortDate(recruitmentDeadline)}까지`] : []),
-    ...(showStudents ? [students.map(({ name }) => name).join(", ")] : []),
-    "자세히 보기",
-  ].join(", ");
+      : (item.eventPeriod ??
+        (period.eventUid
+          ? allPeriods.find((candidate) => candidate.kind === "event" && candidate.eventUid === period.eventUid)
+          : undefined));
+  const shopPeriod =
+    item.shopPeriod ??
+    (period.kind === "shop"
+      ? period
+      : period.eventUid
+        ? allPeriods.find((candidate) => candidate.kind === "shop" && candidate.eventUid === period.eventUid)
+        : undefined);
+  const recruitmentPeriods =
+    item.recruitmentPeriods ??
+    (period.kind === "recruitment"
+      ? [period]
+      : // The domain always sets recruitmentPeriods (already end-date filtered) for event and shop
+        // items; this unfiltered fallback exists only for other period kinds and must never apply
+        // to a shop period, or an already-ended recruitment could reappear on its own card.
+        period.eventUid && period.kind !== "shop"
+        ? allPeriods.filter((candidate) => candidate.kind === "recruitment" && candidate.eventUid === period.eventUid)
+        : []);
+  const recruitmentStudentNames = recruitmentPeriods
+    .flatMap((recruitment) => recruitment.students ?? [])
+    .filter((student, index, students) => students.findIndex((candidate) => candidate.uid === student.uid) === index)
+    .map(({ name }) => name);
+
+  const rangeKinds = rowRangeFactKinds(period);
+  const rangeParts = formatPlannerPeriodRangeParts(period.startAt, period.endAt, timeZone);
+  const boldEndpoint = rangeKinds
+    ? plannerPeriodBoldEndpoint(item.facts, rangeKinds.startKind, rangeKinds.endKind)
+    : null;
+  const rangeLabel = rangeParts ? plannerPeriodRangeLabel(rangeParts) : null;
+  const typePrefix = period.kind === "event" ? runTypeLabel(eventPeriod) : null;
+  const raidPointFacts =
+    period.kind === "raid"
+      ? item.facts.filter((fact) => fact.kind === "raid-reward" || fact.kind === "raid-ticket-expiry")
+      : [];
+  const raidPointLabels = raidPointFacts
+    .map((fact) => raidPointFactLabel(fact, timeZone))
+    .filter((label): label is string => label !== null);
+
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const typeLabel = labelForPeriod(period);
+  const articleLabel = accessibleName(
+    item,
+    rangeLabel,
+    raidPointLabels,
+    recruitmentStudentNames,
+    highlighted,
+    resourceChanges,
+  );
+
+  useEffect(() => {
+    if (!focusOnMount) return;
+    const frame = requestAnimationFrame(() => {
+      titleRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      titleRef.current?.focus({ preventScroll: true });
+      onHighlightedFocusComplete();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [focusOnMount, onHighlightedFocusComplete]);
 
   return (
-    <li>
-      <button
-        type="button"
-        data-planner-focus-key={item.key}
-        aria-label={accessibleName}
-        className="grid min-h-11 w-full grid-cols-[2.5rem_minmax(0,1fr)_1.5rem] items-center gap-2 rounded-md py-1 text-left hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        onClick={(event) => onOpen(item, event.currentTarget)}
-      >
-        <PlannerEventThumbnail period={eventPeriod ?? period} size="small" />
-        <span className="min-w-0">
-          <span className="flex min-w-0 items-start gap-1 text-sm font-medium text-foreground">
-            {isPlanned ? <BookmarkIcon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-            <span className="break-keep wrap-anywhere">{period.name}</span>
-          </span>
-          <span
-            className={`mt-0.5 flex min-w-0 flex-wrap items-baseline text-xs ${mode === "ongoing" ? "gap-x-1" : ""}`}
+    <article
+      aria-label={articleLabel}
+      className={`-mx-2 -my-2 rounded-md p-2 ${highlighted ? "bg-muted/60" : ""}`}
+      data-planner-schedule-item={item.key}
+    >
+      <div className="grid min-w-0 grid-cols-[2.5rem_minmax(0,1fr)_auto] items-start gap-x-2">
+        <PlannerEventThumbnail period={period.kind === "raid" ? period : (eventPeriod ?? period)} />
+        <div className="min-w-0">
+          <h3
+            ref={titleRef}
+            tabIndex={highlighted ? -1 : undefined}
+            aria-label={articleLabel}
+            className="line-clamp-2 break-keep text-sm font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {factText ? (
-              <span className={mode === "on-date" ? "font-semibold text-foreground" : "text-muted-foreground"}>
-                {factText}
-              </span>
+            {period.isPlanned ? (
+              <StarIcon
+                aria-hidden="true"
+                className="mr-1 inline size-4 align-[-2px] text-amber-700 dark:text-amber-400"
+              />
             ) : null}
-            {metadataText ? (
-              <span className="text-muted-foreground">
-                {mode === "on-date" && factText ? "\u00a0·\u00a0" : ""}
-                {metadataText}
-              </span>
-            ) : null}
-            {showStudents ? <PlannerSchedulePortraits students={students} /> : null}
-          </span>
-        </span>
-        <ChevronRightIcon aria-hidden="true" className="size-5 justify-self-end text-muted-foreground" />
-      </button>
-    </li>
+            {typeLabel ? <span className="mr-1 text-muted-foreground">{typeLabel} ·</span> : null}
+            {period.name}
+          </h3>
+          {rangeParts ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {typePrefix ? <span className="mr-1 whitespace-nowrap">{typePrefix} ·</span> : null}
+              <PlannerPeriodRange parts={rangeParts} boldEndpoint={boldEndpoint} />
+            </p>
+          ) : null}
+          {raidPointLabels.map((label, index) => (
+            <p key={raidPointFacts[index].kind} className="mt-0.5 text-xs font-semibold text-foreground">
+              {label}
+            </p>
+          ))}
+        </div>
+        {showResourceChanges && resourceChanges.length > 0 ? (
+          <div className="min-w-0 justify-self-end">
+            <DailyResourceChanges changes={resourceChanges} />
+          </div>
+        ) : null}
+      </div>
+
+      {period.kind === "raid" ? (
+        period.href && period.seasonIndex != null ? (
+          <div className="mt-3 pl-0 min-[360px]:pl-[3rem]">
+            <Button text="레이드 정보" to={period.href} size="xs" variant="secondary" />
+          </div>
+        ) : null
+      ) : (
+        <div className="mt-3 pl-0 min-[360px]:pl-[3rem]">
+          <PlannerEventCardDetails
+            eventPeriod={eventPeriod}
+            shopPeriod={shopPeriod}
+            recruitmentPeriods={recruitmentPeriods}
+            shopPlans={shopPlans}
+            facts={item.facts}
+            timeZone={timeZone}
+            onAddRecruitment={onAddRecruitment}
+            onEditRecruitment={onEditRecruitment}
+          />
+        </div>
+      )}
+    </article>
   );
 }

@@ -167,7 +167,7 @@ function formatRecruitmentRange(candidate: PlannerRecruitmentCandidate, referenc
   const end = candidate.endAt
     ? formatRecruitmentEndpoint(candidate.endDate, candidate.endAt, referenceDateKey, timeZone)
     : "종료 시각을 확인할 수 없어요";
-  return `${start} – ${end}`;
+  return `${start} ~ ${end}`;
 }
 
 function formatRecruitmentMetadata(
@@ -492,7 +492,7 @@ export function PlannerRecruitmentEditor({
 
           <div className="space-y-3">
             <fieldset className="space-y-2" disabled={isPending}>
-              <legend className="text-sm font-medium text-foreground">목표 학생</legend>
+              <legend className="text-sm font-medium text-foreground">관심 학생</legend>
               {selectedCandidate.students.length === 0 ? (
                 <p className="text-sm text-muted-foreground">선택할 학생 정보가 없어요.</p>
               ) : (
@@ -527,7 +527,7 @@ export function PlannerRecruitmentEditor({
               onClick={(event) => {
                 if (
                   hasUnsavedRecruitmentChanges &&
-                  !window.confirm("저장하지 않은 목표 학생 선택을 버리고 이동할까요?")
+                  !window.confirm("저장하지 않은 관심 학생 선택을 버리고 이동할까요?")
                 ) {
                   event.preventDefault();
                 }

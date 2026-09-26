@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { bossImageUrl } from "~/models/assets";
 import type { MainStoryVolume } from "~/models/main-story";
 import type { TimelineContent } from "~/models/timeline-content.server";
 import { buildMainStoryRewardContents, getPyroxenePlannerContents } from "~/views/pyroxene";
@@ -103,6 +104,77 @@ describe("buildMainStoryRewardContents", () => {
     ]);
 
     expect(contents).toEqual([]);
+  });
+});
+
+describe("getPyroxenePlannerContents main story rewards", () => {
+  it("keeps content rewards at the event end and story-reading rewards at part release", async () => {
+    const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
+    const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
+    const { getFutureRaidContents, getTimelineContent, getTimelineContents } = jest.requireMock<
+      typeof import("~/models/timeline-content.server")
+    >("~/models/timeline-content.server");
+    const endAt = "2026-09-29T02:00:00.000Z";
+
+    (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([
+      timelineContent({
+        uid: "main-story-s2-ex-2-1",
+        name: "2부 Ex. 로어추적 편 제2장: 드럼통 속에 숨은 것",
+        contentType: "main_story",
+        startAt: "2026-09-15T02:00:00.000Z",
+        endAt,
+        earnablePyroxene: 2_120,
+      }),
+      timelineContent({
+        uid: "main-story-no-reward",
+        contentType: "main_story",
+        endAt,
+        earnablePyroxene: null,
+      }),
+    ]);
+    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({ uid: "pandemonium-cruise" }),
+    );
+    (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([
+      mainStoryVolume({
+        chapters: [
+          {
+            uid: "chapter-2",
+            name: "로어추적 편",
+            chapterNumber: 2,
+            parts: [
+              {
+                uid: "part-2-1",
+                name: "드럼통 속에 숨은 것",
+                episodeStart: 1,
+                episodeEnd: 11,
+                sortOrder: 1,
+                schedules: [{ region: "gl", releasedAt: new Date("2026-09-15T02:00:00.000Z"), confirmed: true }],
+              },
+            ],
+          },
+        ],
+      }),
+    ]);
+    (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
+    (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
+    (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockResolvedValue([]);
+
+    const contents = await getPyroxenePlannerContents({} as Env);
+    const contentReward = contents.find((content) => content.uid === "main-story-s2-ex-2-1");
+    const noRewardContent = contents.find((content) => content.uid === "main-story-no-reward");
+    const readingReward = contents.find((content) => content.uid === "main-story-reward:part-2-1");
+
+    expect(contentReward).toMatchObject({ until: endAt, earnablePyroxene: 2_120 });
+    expect(noRewardContent).toMatchObject({ until: endAt, earnablePyroxene: null });
+    expect(readingReward).toMatchObject({
+      rewardAt: "2026-09-15T02:00:00.000Z",
+      earnablePyroxene: 660,
+    });
+    expect(contentReward?.uid).not.toBe(readingReward?.uid);
   });
 });
 
@@ -237,6 +309,92 @@ describe("getPyroxenePlannerContents with a recruitment group shared by two even
       ["c", "event-b"],
       ["d", "event-b"],
     ]);
+  });
+});
+
+describe("getPyroxenePlannerContents raid season identity", () => {
+  it("forwards the raid schedule seasonIndex for the planner information link", async () => {
+    const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
+    const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
+    const { getFutureRaidContents, getRaidSchedule, getTimelineContent, getTimelineContents } = {
+      ...jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
+      ...jest.requireMock<typeof import("~/models/raid")>("~/models/raid"),
+    };
+
+    (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([]);
+    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([
+      timelineContent({
+        uid: "raid-content-uid",
+        contentType: "raid",
+        contentUid: "raid-schedule-uid",
+        startAt: "2026-11-10T02:00:00.000Z",
+        endAt: "2026-11-17T02:00:00.000Z",
+        imageUrl: "https://cdn.example.test/raid-content.webp",
+      }),
+    ]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({ uid: "pandemonium-cruise" }),
+    );
+    (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([]);
+    (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
+    (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
+    (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockResolvedValue([]);
+    (getRaidSchedule as jest.MockedFunction<typeof getRaidSchedule>).mockResolvedValue({
+      raidBoss: { uid: "shirokuro", name: "시로&쿠로" },
+      raidType: "total_assault",
+      seasonIndex: 41,
+      endAt: "2026-11-17T02:00:00.000Z",
+    } as Awaited<ReturnType<typeof getRaidSchedule>>);
+
+    const contents = await getPyroxenePlannerContents({} as Env);
+
+    expect(contents.find((content) => content.kind === "raid")).toMatchObject({
+      uid: "raid-content-uid",
+      type: "total_assault",
+      seasonIndex: 41,
+      name: "시로&쿠로",
+      imageUrl: bossImageUrl("shirokuro"),
+    });
+  });
+
+  it("falls back to the content image when the raid boss is unknown", async () => {
+    const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
+      jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
+    const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
+    const { getMainStories } = jest.requireMock<typeof import("~/models/main-story")>("~/models/main-story");
+    const { getFutureRaidContents, getRaidSchedule, getTimelineContent, getTimelineContents } = {
+      ...jest.requireMock<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
+      ...jest.requireMock<typeof import("~/models/raid")>("~/models/raid"),
+    };
+
+    (getTimelineContents as jest.MockedFunction<typeof getTimelineContents>).mockResolvedValue([]);
+    (getFutureRaidContents as jest.MockedFunction<typeof getFutureRaidContents>).mockResolvedValue([
+      timelineContent({
+        uid: "raid-content-uid-2",
+        contentType: "raid",
+        contentUid: null,
+        startAt: "2026-11-10T02:00:00.000Z",
+        endAt: "2026-11-17T02:00:00.000Z",
+        imageUrl: "https://cdn.example.test/raid-content.webp",
+      }),
+    ]);
+    (getTimelineContent as jest.MockedFunction<typeof getTimelineContent>).mockResolvedValue(
+      timelineContent({ uid: "pandemonium-cruise" }),
+    );
+    (getMainStories as jest.MockedFunction<typeof getMainStories>).mockResolvedValue([]);
+    (getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>).mockResolvedValue({});
+    (getRecruitmentPoolStudents as jest.MockedFunction<typeof getRecruitmentPoolStudents>).mockResolvedValue([]);
+    (getRecruitmentGroupsByUids as jest.MockedFunction<typeof getRecruitmentGroupsByUids>).mockResolvedValue([]);
+    (getRaidSchedule as jest.MockedFunction<typeof getRaidSchedule>).mockResolvedValue(null);
+
+    const contents = await getPyroxenePlannerContents({} as Env);
+
+    expect(contents.find((content) => content.kind === "raid")).toMatchObject({
+      uid: "raid-content-uid-2",
+      imageUrl: "https://cdn.example.test/raid-content.webp",
+    });
   });
 });
 

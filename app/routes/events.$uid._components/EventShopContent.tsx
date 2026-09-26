@@ -45,7 +45,7 @@ function ConnectedEventShopContent(props: Extract<EventShopContentProps, { empty
     return (
       <div
         aria-busy="true"
-        className="my-8 rounded-xl border border-neutral-200 p-4 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
+        className="my-8 rounded-lg border border-neutral-200 p-4 text-sm text-neutral-600 dark:border-neutral-700 dark:text-neutral-300"
         role="status"
       >
         상점 계획을 불러오고 있어요…
