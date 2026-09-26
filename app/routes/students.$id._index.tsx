@@ -19,12 +19,13 @@ import { getStudentDetailData } from "~/models/student";
 import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
 import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
-import { getPublishedStudentSummary } from "~/models/student-summary.server";
 import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
+import { getStudentDetailContent } from "~/views/student-detail-content.server";
 import { getStudentRelevantTimelineContents } from "./students.$id";
 import StudentAiSummaryCard from "./students.$id._components/StudentAiSummaryCard";
 import StudentBasicInfo from "./students.$id._components/StudentBasicInfo";
 import StudentGradingChart from "./students.$id._components/StudentGradingChart";
+import { StudentKnowledgePopoverProvider } from "./students.$id._components/StudentKnowledgeAnnotations";
 import StudentRaidUsageChart from "./students.$id._components/StudentRaidUsageChart";
 
 const currentStateFieldKeys = [
@@ -136,10 +137,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
 
-  const publishedSummaryPromise = getPublishedStudentSummary(publicReadEnv, uid, { ctx }).catch((error) => {
-    logger.error("Failed to load published student summary", error, { studentUid: uid });
-    return null;
-  });
+  const studentDetailContentPromise = getStudentDetailContent(publicReadEnv, uid, { ctx });
 
   const currentUser = await currentUserPromise;
   const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
@@ -149,16 +147,34 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     ? getRelationshipLevels(env, currentUser.id, variantPrimaryStudentUids)
     : Promise.resolve(null);
 
-  const [timelineContents, tagCounts, allGradings, allRaids, recruitedStudents, relationshipLevels, publishedSummary] =
-    await Promise.all([
-      getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
-      getTagCountsByStudent(env, uid),
-      getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id),
-      allRaidsPromise,
-      recruitedStudentsPromise,
-      relationshipLevelsPromise,
-      publishedSummaryPromise,
-    ]);
+  const [
+    timelineContents,
+    tagCounts,
+    allGradings,
+    allRaids,
+    recruitedStudents,
+    relationshipLevels,
+    studentDetailContent,
+  ] = await Promise.all([
+    getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
+    getTagCountsByStudent(env, uid),
+    getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id),
+    allRaidsPromise,
+    recruitedStudentsPromise,
+    relationshipLevelsPromise,
+    studentDetailContentPromise,
+  ]);
+
+  if (studentDetailContent.publishedSummaryError) {
+    logger.error("Failed to load published student summary", studentDetailContent.publishedSummaryError, {
+      studentUid: uid,
+    });
+  }
+  if (studentDetailContent.knowledgeLookupStatus === "failed") {
+    logger.error("Failed to load published knowledge terms", studentDetailContent.knowledgeLookupError, {
+      studentUid: uid,
+    });
+  }
 
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   const myStudentState =
@@ -196,7 +212,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       ...grading,
       student: { uid: student.uid, name: student.name },
     })),
-    publishedSummary,
+    publishedSummary: studentDetailContent.publishedSummary,
+    knowledgeEntries: studentDetailContent.knowledgeEntries,
+    knowledgeLookupStatus: studentDetailContent.knowledgeLookupStatus,
     currentUser,
     allRaids,
   };
@@ -311,6 +329,8 @@ export default function StudentDetail() {
     myStudentState,
     myRelationshipLevels,
     publishedSummary,
+    knowledgeEntries,
+    knowledgeLookupStatus,
   } = useLoaderData<typeof loader>();
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
@@ -345,55 +365,61 @@ export default function StudentDetail() {
   return (
     <>
       <div className="mt-6 md:mt-8">
-        {studentCatalog && student.catalog ? (
-          <StudentBasicInfo
-            key={student.uid}
-            student={student}
-            schaleDbId={student.schaleDbId}
-            catalog={studentCatalog}
-            signedIn={currentUser !== null}
-            currentUserId={currentUser?.id ?? null}
-            released={student.released}
-            recruited={myStudentState !== null}
-            relatedRelationshipLevels={myRelationshipLevels}
-            aiSummary={
-              publishedSummary ? <StudentAiSummaryCard summary={publishedSummary.summary} /> : null
-            }
-            gradingSummary={
-              <StudentGradingChart
-                student={student}
-                tagCounts={tagCounts}
-                noGrading={allGradings.length === 0}
-                signedIn={currentUser !== null}
-                recentReview={recentReview}
-                currentUserReview={currentUserReview}
-                variant="embedded"
-              />
-            }
-            savedState={{
-              level: myStudentState?.level ?? null,
-              tier: myStudentState?.tier ?? null,
-              bond: myRelationshipLevels[student.studentVariant.primaryStudent.uid] ?? null,
-              skillEx: myStudentState?.skillEx ?? null,
-              skillNormal: myStudentState?.skillNormal ?? null,
-              skillEnhanced: myStudentState?.skillEnhanced ?? null,
-              skillSub: myStudentState?.skillSub ?? null,
-              equip1: myStudentState?.equip1 ?? null,
-              equip2: myStudentState?.equip2 ?? null,
-              equip3: myStudentState?.equip3 ?? null,
-              equip1Level: myStudentState?.equip1Level ?? null,
-              equip2Level: myStudentState?.equip2Level ?? null,
-              equip3Level: myStudentState?.equip3Level ?? null,
-              equipSpecial: myStudentState?.equipSpecial ?? null,
-              weaponLevel: myStudentState?.weaponLevel ?? null,
-              abilityHp: myStudentState?.abilityHp ?? null,
-              abilityAtk: myStudentState?.abilityAtk ?? null,
-              abilityHeal: myStudentState?.abilityHeal ?? null,
-            }}
-          />
-        ) : (
-          <Callout tone="warning" title="학생 기본 정보를 준비하고 있어요" />
-        )}
+        <StudentKnowledgePopoverProvider>
+          {studentCatalog && student.catalog ? (
+            <StudentBasicInfo
+              key={student.uid}
+              student={student}
+              schaleDbId={student.schaleDbId}
+              catalog={studentCatalog}
+              signedIn={currentUser !== null}
+              currentUserId={currentUser?.id ?? null}
+              released={student.released}
+              recruited={myStudentState !== null}
+              relatedRelationshipLevels={myRelationshipLevels}
+              knowledgeEntries={knowledgeEntries}
+              knowledgeLookupStatus={knowledgeLookupStatus}
+              aiSummary={
+                publishedSummary ? (
+                  <StudentAiSummaryCard summary={publishedSummary.summary} entries={knowledgeEntries} />
+                ) : null
+              }
+              gradingSummary={
+                <StudentGradingChart
+                  student={student}
+                  tagCounts={tagCounts}
+                  noGrading={allGradings.length === 0}
+                  signedIn={currentUser !== null}
+                  recentReview={recentReview}
+                  currentUserReview={currentUserReview}
+                  variant="embedded"
+                />
+              }
+              savedState={{
+                level: myStudentState?.level ?? null,
+                tier: myStudentState?.tier ?? null,
+                bond: myRelationshipLevels[student.studentVariant.primaryStudent.uid] ?? null,
+                skillEx: myStudentState?.skillEx ?? null,
+                skillNormal: myStudentState?.skillNormal ?? null,
+                skillEnhanced: myStudentState?.skillEnhanced ?? null,
+                skillSub: myStudentState?.skillSub ?? null,
+                equip1: myStudentState?.equip1 ?? null,
+                equip2: myStudentState?.equip2 ?? null,
+                equip3: myStudentState?.equip3 ?? null,
+                equip1Level: myStudentState?.equip1Level ?? null,
+                equip2Level: myStudentState?.equip2Level ?? null,
+                equip3Level: myStudentState?.equip3Level ?? null,
+                equipSpecial: myStudentState?.equipSpecial ?? null,
+                weaponLevel: myStudentState?.weaponLevel ?? null,
+                abilityHp: myStudentState?.abilityHp ?? null,
+                abilityAtk: myStudentState?.abilityAtk ?? null,
+                abilityHeal: myStudentState?.abilityHeal ?? null,
+              }}
+            />
+          ) : (
+            <Callout tone="warning" title="학생 기본 정보를 준비하고 있어요" />
+          )}
+        </StudentKnowledgePopoverProvider>
       </div>
 
       <div className="mt-8 md:mt-10">
