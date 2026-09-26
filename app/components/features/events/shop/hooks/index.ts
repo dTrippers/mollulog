@@ -1,3 +1,4 @@
+export type { GuestPlannerStatus } from "./useAutoSave";
 export { useAutoSave } from "./useAutoSave";
 export type { BonusCalculationResult, BonusSummary } from "./useBonusCalculation";
 export { useBonusCalculation } from "./useBonusCalculation";

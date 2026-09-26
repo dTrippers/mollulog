@@ -7,6 +7,7 @@ import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/do
 import { buildRecruitmentPoolSnapshot } from "~/domain/recruitment-simulator";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { compareInstantAsc, compareInstantDesc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { bossImageUrl } from "~/models/assets";
 import type { RaidType } from "~/models/content.d";
 import {
   formatMainStoryVolumeTitle,
@@ -37,6 +38,7 @@ export type PyroxenePlannerContent =
       uid: string;
       recruitmentGroupUid: string | null;
       name: string;
+      imageUrl?: string | null;
       since: UtcIsoString;
       until: UtcIsoString;
       rewardAt?: UtcIsoString;
@@ -63,7 +65,9 @@ export type PyroxenePlannerContent =
       kind: "raid";
       uid: string;
       name: string;
+      imageUrl?: string | null;
       type: RaidType;
+      seasonIndex?: number | null;
       since: UtcIsoString;
       until: UtcIsoString;
     };
@@ -87,6 +91,7 @@ export function buildMainStoryRewardContents(volumes: MainStoryVolume[]): Pyroxe
           uid: `main-story-reward:${part.uid}`,
           recruitmentGroupUid: null,
           name: formatMainStoryRewardName(volumeTitle, chapter.chapterNumber, chapter.name, part.name),
+          imageUrl: null,
           since: rewardAt,
           until: toUtcIso(new Date(new Date(rewardAt).getTime() + MAIN_STORY_REWARD_ACTIVE_MS)),
           rewardAt,
@@ -228,7 +233,7 @@ export async function getPyroxenePlannerContents(
           );
         if (!until) return [];
 
-        const earnablePyroxene = content.contentType === "main_story" ? null : (content.earnablePyroxene ?? null);
+        const earnablePyroxene = content.earnablePyroxene ?? null;
         const siblingEvents = content.recruitmentGroupUid
           ? (eventsByRecruitmentGroupUid.get(content.recruitmentGroupUid) ?? [])
           : [];
@@ -245,6 +250,7 @@ export async function getPyroxenePlannerContents(
               uid: content.uid,
               recruitmentGroupUid: content.recruitmentGroupUid,
               name: content.name,
+              imageUrl: content.imageUrl,
               since: content.startAt,
               until,
               earnablePyroxene,
@@ -263,6 +269,7 @@ export async function getPyroxenePlannerContents(
           uid: content.uid,
           recruitmentGroupUid: content.recruitmentGroupUid,
           name: content.name,
+          imageUrl: content.imageUrl,
           since: content.startAt,
           until,
           earnablePyroxene,
@@ -293,6 +300,7 @@ export async function getPyroxenePlannerContents(
             uid: `group:${recruitmentGroupUid}`,
             recruitmentGroupUid,
             name: sortedSiblings.map((sibling) => sibling.name).join(" / "),
+            imageUrl: null,
             since: group?.startAt ? toUtcIso(group.startAt) : content.startAt,
             until: group?.endAt ? toUtcIso(group.endAt) : until,
             earnablePyroxene: null,
@@ -308,14 +316,18 @@ export async function getPyroxenePlannerContents(
       if (content.contentType === "raid") {
         let raidName = content.name;
         let raidType = content.contentType as RaidType;
+        let seasonIndex: number | null = null;
         let until: UtcIsoString | null = content.endAt;
+        let raidBossImageUrl: string | null = null;
 
         if (content.contentUid) {
           const schedule = await getRaidSchedule(env, content.contentUid, forceRefresh);
           if (schedule) {
             raidName = schedule.raidBoss.name;
             raidType = schedule.raidType as RaidType;
+            seasonIndex = schedule.seasonIndex ?? null;
             until = until ?? schedule.endAt;
+            raidBossImageUrl = bossImageUrl(schedule.raidBoss.uid);
           }
         }
 
@@ -326,7 +338,9 @@ export async function getPyroxenePlannerContents(
             kind: "raid" as const,
             uid: content.uid,
             name: raidName,
+            imageUrl: raidBossImageUrl ?? content.imageUrl,
             type: raidType,
+            seasonIndex,
             since: content.startAt,
             until,
           },

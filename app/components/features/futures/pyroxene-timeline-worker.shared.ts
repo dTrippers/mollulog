@@ -24,6 +24,7 @@ export type PyroxeneTimelineWorkerRequest = {
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
+  endDate?: Date;
 };
 
 export type PyroxeneTimelineWorkerResponse = {

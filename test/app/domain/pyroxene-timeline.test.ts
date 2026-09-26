@@ -60,6 +60,7 @@ function eventItem({
   uid,
   since = "2026-07-02T00:00:00.000Z",
   until = "2026-07-03T00:00:00.000Z",
+  rewardAt,
   earnablePyroxene = null,
   recruitments = [pickupRecruitment()],
   recruitmentPool = { tier2Count: 150, tier3Count: 202 },
@@ -69,6 +70,7 @@ function eventItem({
   uid: string;
   since?: string;
   until?: string;
+  rewardAt?: string;
   earnablePyroxene?: number | null;
   recruitments?: NonNullable<PyroxeneScheduleItem["event"]>["recruitments"];
   recruitmentPool?: NonNullable<PyroxeneScheduleItem["event"]>["recruitmentPool"];
@@ -81,6 +83,7 @@ function eventItem({
       name: uid,
       since,
       until,
+      rewardAt,
       earnablePyroxene,
       tags,
       recruitmentRuleSet,
@@ -312,6 +315,66 @@ describe("buildTimeline collected sources", () => {
     expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-07-03");
   });
 
+  it("counts main story content and reading rewards as separate end and release date sources", () => {
+    const contentUid = "main-story-s2-ex-2-1";
+    const readingRewardUid = "main-story-reward:part-2-1";
+    const scheduleItems = [
+      eventItem({
+        uid: contentUid,
+        since: "2026-09-15T02:00:00.000Z",
+        until: "2026-09-29T02:00:00.000Z",
+        earnablePyroxene: 2_120,
+        recruitments: [],
+        recruitmentPool: undefined,
+      }),
+      eventItem({
+        uid: readingRewardUid,
+        since: "2026-09-29T02:00:00.000Z",
+        until: "2026-09-30T02:00:00.000Z",
+        rewardAt: "2026-09-29T02:00:00.000Z",
+        earnablePyroxene: 660,
+        recruitments: [],
+        recruitmentPool: undefined,
+      }),
+      eventItem({
+        uid: "main-story-no-reward",
+        until: "2026-09-29T02:00:00.000Z",
+        earnablePyroxene: null,
+        recruitments: [],
+        recruitmentPool: undefined,
+      }),
+    ];
+    const timeline = buildTestTimeline({
+      initialDate: new Date("2026-09-15T02:00:00.000Z"),
+      scheduleItems,
+    });
+    const rewardEntries = timeline.filter((entry) => entry.source.type === "event_reward");
+    const contentReward = rewardEntries.find((entry) => entry.source.uid === contentUid);
+    const readingReward = rewardEntries.find((entry) => entry.source.uid === readingRewardUid);
+
+    expect(rewardEntries).toHaveLength(2);
+    expect(contentReward?.date.toISOString()).toBe("2026-09-29T02:00:00.000Z");
+    expect(contentReward).toMatchObject({
+      source: { collectedSourceKey: "event_reward:main-story-s2-ex-2-1" },
+      resourceDelta: { pyroxene: 2_120, oneTimeTicket: 0, tenTimeTicket: 0 },
+    });
+    expect(readingReward?.date.toISOString()).toBe("2026-09-29T02:00:00.000Z");
+    expect(readingReward).toMatchObject({
+      source: { collectedSourceKey: "event_reward:main-story-reward:part-2-1" },
+      resourceDelta: { pyroxene: 660, oneTimeTicket: 0, tenTimeTicket: 0 },
+    });
+    expect(contentReward?.source.uid).not.toBe(readingReward?.source.uid);
+
+    const collectedTimeline = buildTestTimeline({
+      initialDate: new Date("2026-09-15T02:00:00.000Z"),
+      scheduleItems,
+      collectedSourceKeys: ["event_reward:main-story-s2-ex-2-1"],
+    });
+    expect(collectedTimeline.find((entry) => entry.source.uid === contentUid)?.resourceDelta.pyroxene).toBe(0);
+    expect(collectedTimeline.find((entry) => entry.source.uid === readingRewardUid)?.resourceDelta.pyroxene).toBe(660);
+    expect(collectedTimeline.some((entry) => entry.source.uid === "main-story-no-reward")).toBe(false);
+  });
+
   it("keeps existing raid and event reward behavior when sources are not collected", () => {
     const timeline = buildTestTimeline({
       initialResources: { pyroxene: 10_000, oneTimeTicket: 0, tenTimeTicket: 0 },
@@ -349,6 +412,32 @@ describe("buildTimeline collected sources", () => {
       oneTimeTicket: 0,
       tenTimeTicket: 0,
     });
+  });
+});
+
+describe("D2: raid reward time (00:00 KST, 4 hours earlier than before)", () => {
+  it("delivers the total assault reward at 00:00 KST on the raid's ending month's last day", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [raidItem({ uid: "raid-total", type: "total_assault", name: "비나" })],
+      options: { ...defaultOptions, raid: { tier: "gold" } },
+    });
+
+    const rewardEntry = timeline.find((entry) => entry.source.uid === "raid-total");
+    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-31 00:00");
+  });
+
+  it("delivers the elimination reward at 00:00 KST and leaves the ten-time ticket expiry unaffected", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [raidItem({ uid: "raid-elimination", type: "elimination", name: "고즈" })],
+    });
+
+    const rewardEntry = timeline.find((entry) => entry.source.uid === "raid-elimination");
+    const ticketExpiryEntry = timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry");
+
+    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-31 00:00");
+    // getEliminationTicketExpiresAt always normalizes to endOf("month"), so it lands on the same
+    // instant regardless of whether the reward it is derived from is at 00:00 or 04:00.
+    expect(ticketExpiryEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm:ss.SSS")).toBe("2026-08-31 23:59:59.999");
   });
 });
 

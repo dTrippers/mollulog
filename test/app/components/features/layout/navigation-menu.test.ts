@@ -1,3 +1,4 @@
+import { CalendarIcon as CalendarIconOutline } from "@heroicons/react/24/outline";
 import { describe, expect, it } from "@jest/globals";
 import {
   getDesktopNavigation,
@@ -71,6 +72,20 @@ describe("getNavigationSections", () => {
     });
     expect(eventShop?.disabled).toBeUndefined();
   });
+
+  it("adds the integrated planner while preserving detailed planner entries", () => {
+    const items = getMenuItems();
+
+    expect(items.find((item) => item.to === "/utils/planner")).toMatchObject({
+      name: "통합 플래너",
+      favoriteId: "integrated-planner",
+      mobileNavigationId: "integrated-planner",
+      OutlineIcon: CalendarIconOutline,
+    });
+    expect(items.map((item) => item.to)).toEqual(
+      expect.arrayContaining(["/utils/planner", "/utils/pyroxene", "/utils/event-shop"]),
+    );
+  });
 });
 
 describe("navigation surface projections", () => {
@@ -93,7 +108,7 @@ describe("navigation surface projections", () => {
   it("exposes exactly the approved mobile candidates and labels in order", () => {
     const options = getMobileNavigationOptions(navigationOptions);
 
-    expect(options).toHaveLength(13);
+    expect(options).toHaveLength(14);
     expect(options.map((item) => item.mobileNavigationId)).toEqual([
       "feed",
       "students",
@@ -101,6 +116,7 @@ describe("navigation surface projections", () => {
       "raids",
       "main-story",
       "furniture-catalog",
+      "integrated-planner",
       "pyroxene-planner",
       "student-growth-planner",
       "resource-planner",
@@ -116,6 +132,7 @@ describe("navigation surface projections", () => {
       "총력전",
       "메인 스토리",
       "가구 도감",
+      "통합 플래너",
       "청휘석 플래너",
       "성장 플래너",
       "재화 관리",
@@ -151,6 +168,7 @@ describe("navigation surface projections", () => {
       "/students",
       "/mainstory",
       "/furniture",
+      "/utils/planner",
       "/utils/pyroxene",
       "/utils/growth/students",
       "/utils/resources/inventory",
@@ -169,6 +187,7 @@ describe("navigation surface projections", () => {
       "학생부",
       "메인 스토리",
       "가구 도감",
+      "통합 플래너",
       "청휘석 플래너",
       "학생 성장 플래너",
       "재화 관리/파밍 계산기",
