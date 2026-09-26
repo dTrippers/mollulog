@@ -1,12 +1,20 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle } from "@headlessui/react";
-import { ArchiveBoxIcon, MagnifyingGlassIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/24/outline";
+import {
+  ArchiveBoxIcon,
+  ExclamationTriangleIcon,
+  MagnifyingGlassIcon,
+  Squares2X2Icon,
+  XMarkIcon,
+} from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
 import {
   Button,
   EmptyView,
+  FilterButtons,
   NumberInput,
+  PanelActionRow,
   PanelBody,
   PanelSearchField,
   ResourceCard,
@@ -15,7 +23,9 @@ import {
 import {
   FURNITURE_CATEGORY_LABELS,
   FURNITURE_RARITY_LABELS,
+  type FurnitureCategory,
   type FurnitureCatalogItem,
+  type FurnitureRarity,
   filterFurnitureCatalogItems,
   getFurnitureCatalogProgress,
   getFurnitureInventoryStatus,
@@ -33,6 +43,22 @@ type SaveState =
 
 const MAX_FURNITURE_INVENTORY_QUANTITY = 2_147_483_647;
 const FURNITURE_INVENTORY_QUANTITY_ERROR = "보유 수량은 0 이상 2,147,483,647 이하의 정수로 입력해 주세요.";
+const furnitureCategoryFilterOptions: { text: string; value: FurnitureCategory }[] = [
+  { text: FURNITURE_CATEGORY_LABELS.furnitures, value: "furnitures" },
+  { text: FURNITURE_CATEGORY_LABELS.decorations, value: "decorations" },
+  { text: FURNITURE_CATEGORY_LABELS.interiors, value: "interiors" },
+];
+const furnitureRarityFilterOptions: { text: string; value: FurnitureRarity }[] = [
+  { text: FURNITURE_RARITY_LABELS[1], value: 1 },
+  { text: FURNITURE_RARITY_LABELS[2], value: 2 },
+  { text: FURNITURE_RARITY_LABELS[3], value: 3 },
+  { text: FURNITURE_RARITY_LABELS[4], value: 4 },
+];
+
+function toggleFurnitureFilterValue<T>(current: T[], value: T, selected: boolean): T[] {
+  if (selected) return current.includes(value) ? current : [...current, value];
+  return current.filter((currentValue) => currentValue !== value);
+}
 
 export function isValidFurnitureInventoryQuantityInput(value: string): boolean {
   const normalizedValue = value.trim();
@@ -71,6 +97,8 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const [activeThemeUid, setActiveThemeUid] = useState<string | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<FurnitureCatalogViewTheme["previews"][number] | null>(null);
   const [query, setQuery] = useState("");
+  const [selectedCategories, setSelectedCategories] = useState<FurnitureCategory[]>([]);
+  const [selectedRarities, setSelectedRarities] = useState<FurnitureRarity[]>([]);
   const [ownedQuantities, setOwnedQuantities] = useState(view?.ownedQuantities ?? {});
   const [draftValues, setDraftValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -230,7 +258,12 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     );
   }, [liveView, query]);
   const itemsToFilter = mode === "themes" && activeTheme ? activeTheme.items : (liveView?.items ?? []);
-  const visibleItems = filterFurnitureCatalogItems(itemsToFilter, { query });
+  const visibleItems = filterFurnitureCatalogItems(itemsToFilter, {
+    query,
+    categories: mode === "all" ? selectedCategories : undefined,
+    rarities: mode === "all" ? selectedRarities : undefined,
+  });
+  const hasActiveAllFilters = query.trim().length > 0 || selectedCategories.length > 0 || selectedRarities.length > 0;
 
   const handleQuantityChange = (furnitureUid: string, value: string) => {
     if (value !== "") pendingUnregisteredClearUidsRef.current.delete(furnitureUid);
@@ -291,6 +324,12 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     setQuery(nextQuery);
   };
 
+  const clearAllFilters = () => {
+    setQuery("");
+    setSelectedCategories([]);
+    setSelectedRarities([]);
+  };
+
   const handleModeChange = (nextMode: "themes" | "all") => {
     setSelectedPreview(null);
     setMode(nextMode);
@@ -342,7 +381,20 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
       }
       panels={[
         {
-          title: "검색",
+          title: mode === "all" ? "검색 및 필터" : "검색",
+          description:
+            mode === "all" && liveView
+              ? `전체 ${liveView.items.length.toLocaleString()}종 중 ${visibleItems.length.toLocaleString()}종 표시 중`
+              : undefined,
+          headerAction:
+            mode === "all" && hasActiveAllFilters ? (
+              <Button
+                text="필터 해제"
+                size="xs"
+                variant="danger-subtle"
+                onClick={clearAllFilters}
+              />
+            ) : undefined,
           Icon: MagnifyingGlassIcon,
           children: (
             <PanelBody>
@@ -353,6 +405,50 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
                 value={query}
                 onChange={handleQueryChange}
               />
+              {mode === "all" ? (
+                <>
+                  <PanelActionRow
+                    title="분류"
+                    className="my-1 py-0"
+                    actions={
+                      <fieldset aria-label="분류" className="m-0 min-w-0 border-0 p-0">
+                        <FilterButtons
+                          size="sm"
+                          className="my-0 shrink-0"
+                          buttonProps={furnitureCategoryFilterOptions.map(({ text, value }) => ({
+                            text,
+                            active: selectedCategories.includes(value),
+                            onToggle: (selected) =>
+                              setSelectedCategories((current) =>
+                                toggleFurnitureFilterValue(current, value, selected),
+                              ),
+                          }))}
+                        />
+                      </fieldset>
+                    }
+                  />
+                  <PanelActionRow
+                    title="희귀도"
+                    className="my-1 py-0"
+                    actions={
+                      <fieldset aria-label="희귀도" className="m-0 min-w-0 border-0 p-0">
+                        <FilterButtons
+                          size="sm"
+                          className="my-0 shrink-0"
+                          buttonProps={furnitureRarityFilterOptions.map(({ text, value }) => ({
+                            text,
+                            active: selectedRarities.includes(value),
+                            onToggle: (selected) =>
+                              setSelectedRarities((current) =>
+                                toggleFurnitureFilterValue(current, value, selected),
+                              ),
+                          }))}
+                        />
+                      </fieldset>
+                    }
+                  />
+                </>
+              ) : null}
             </PanelBody>
           ),
         },
@@ -667,12 +763,13 @@ function FurnitureCard({
     <div
       role="img"
       aria-label={`${item.name}: 이미지를 불러올 수 없음`}
-      className="flex h-12 w-full items-center justify-center rounded-lg bg-muted px-2 text-center text-xs leading-tight text-muted-foreground md:h-14"
+      title="이미지를 불러올 수 없어요."
+      className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-muted md:h-14 md:w-14"
     >
-      이미지를 불러올 수 없어요.
+      <ExclamationTriangleIcon className="size-5 text-muted-foreground" aria-hidden="true" />
     </div>
   ) : (
-    <ResourceCard imageUrl={item.imageUrl} rarity={item.rarity} size="lg" />
+    <ResourceCard imageUrl={item.imageUrl} rarity={item.rarity} size="lg" expandImageArea />
   );
 
   return (

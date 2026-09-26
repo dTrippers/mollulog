@@ -38,6 +38,28 @@ describe("furniture catalog inventory state", () => {
     expect(filterFurnitureCatalogItems(items, { themeUid: "cafe" })).toEqual(items.slice(0, 2));
     expect(filterFurnitureCatalogItems(items, { query: "LAMP" })).toEqual([items[2]]);
   });
+
+  it("matches selected categories and rarities as unions, then combines them with the name query", () => {
+    const items = [
+      { name: "Bronze Trophy", themeUids: [], category: "decorations" as const, rarity: 1 as const },
+      { name: "Silver Trophy", themeUids: [], category: "decorations" as const, rarity: 2 as const },
+      { name: "Cafe Chair", themeUids: ["cafe"], category: "furnitures" as const, rarity: 3 as const },
+      { name: "Cafe Wallpaper", themeUids: ["cafe"], category: "interiors" as const, rarity: 4 as const },
+    ];
+
+    expect(filterFurnitureCatalogItems(items, { categories: ["decorations"] })).toEqual(items.slice(0, 2));
+    expect(filterFurnitureCatalogItems(items, { categories: ["furnitures", "interiors"] })).toEqual(items.slice(2));
+    expect(filterFurnitureCatalogItems(items, { rarities: [1, 3] })).toEqual([items[0], items[2]]);
+    expect(
+      filterFurnitureCatalogItems(items, {
+        query: "cafe",
+        categories: ["decorations", "furnitures"],
+        rarities: [2, 3],
+      }),
+    ).toEqual([items[2]]);
+    expect(filterFurnitureCatalogItems(items, { categories: [], rarities: [] })).toEqual(items);
+    expect(filterFurnitureCatalogItems(items, { query: "missing", categories: ["interiors"] })).toEqual([]);
+  });
 });
 
 describe("furniture catalog display data", () => {

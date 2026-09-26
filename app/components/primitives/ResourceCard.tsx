@@ -13,6 +13,7 @@ type ResourceCardProps = {
   labelBgColor?: "black" | "red";
   name?: string;
   size?: "sm" | "md" | "lg";
+  expandImageArea?: boolean;
 } & (
   | {
       itemUid: string;
@@ -35,6 +36,7 @@ function ResourceCard({
   labelBgColor = "black",
   name,
   size = "md",
+  expandImageArea = false,
 }: ResourceCardProps) {
   const imageUrl =
     imageUrlProp || (itemUid ? resourceImageUrlForCard(resourceType ?? ResourceTypeEnum.Item, itemUid) : undefined);
@@ -48,6 +50,10 @@ function ResourceCard({
     sizeClass = "size-12 md:size-14";
     imageSizeClass = "size-10";
   }
+  const imageClassName =
+    expandImageArea && imageUrlProp
+      ? "w-full h-full object-contain"
+      : `${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`;
 
   return (
     <HoverTooltip as="div" className="group shrink-0 pr-1 pb-1" content={name} disabled={!name}>
@@ -59,7 +65,7 @@ function ResourceCard({
             <img
               alt="아이템 이미지"
               src={imageUrl}
-              className={`${imageUrlProp ? imageSizeClass : "w-full h-full"} scale-110 object-contain`}
+              className={imageClassName}
               loading="lazy"
             />
           ) : (

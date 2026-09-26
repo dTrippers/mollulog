@@ -64,6 +64,8 @@ export type FurnitureCatalogProgress = {
 export type FurnitureCatalogFilter = {
   query?: string;
   themeUid?: string | null;
+  categories?: FurnitureCategory[];
+  rarities?: FurnitureRarity[];
 };
 
 export function getFurnitureInventoryStatus(quantity: number | undefined): FurnitureInventoryStatus {
@@ -99,7 +101,10 @@ export function getFurnitureCatalogProgress(
   };
 }
 
-export function filterFurnitureCatalogItems<T extends Pick<FurnitureCatalogItem, "name" | "themeUids">>(
+export function filterFurnitureCatalogItems<
+  T extends Pick<FurnitureCatalogItem, "name" | "themeUids"> &
+    Partial<Pick<FurnitureCatalogItem, "category" | "rarity">>,
+>(
   items: T[],
   filter: FurnitureCatalogFilter,
 ): T[] {
@@ -107,6 +112,8 @@ export function filterFurnitureCatalogItems<T extends Pick<FurnitureCatalogItem,
   return items.filter((item) => {
     if (query && !item.name.toLocaleLowerCase().includes(query)) return false;
     if (filter.themeUid && !item.themeUids.includes(filter.themeUid)) return false;
+    if (filter.categories?.length && (!item.category || !filter.categories.includes(item.category))) return false;
+    if (filter.rarities?.length && (item.rarity === undefined || !filter.rarities.includes(item.rarity))) return false;
     return true;
   });
 }
