@@ -404,7 +404,11 @@ export default function WalkthroughTimelineDetailPage() {
   );
 }
 
-function TimelineConditionBadges({ timeline }: { timeline: WalkthroughTimelineRecord }) {
+function TimelineConditionBadges({
+  timeline,
+}: {
+  timeline: Pick<WalkthroughTimelineRecord, "terrain" | "defenseType" | "maxDifficulty" | "isAuto">;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       <AttributeBadge text={terrainLocale[timeline.terrain]} color={null} />
