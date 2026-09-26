@@ -24,11 +24,13 @@ import {
   pyroxeneTimelineItemFingerprint,
 } from "~/domain/guest-pyroxene-planner";
 import {
+  buildPlannerDisplayPeriods,
   buildPlannerPeriods,
   buildPublicPlannerPeriods,
   formatPlannerPeriodDate,
   formatPlannerPeriodEndDate,
   getPlannerMonthEndInstant,
+  getPlannerPlannedEventUids,
   getPlannerTodayMonth,
   type PlannerScheduleContentInput,
   projectPlannerCalendarResources,
@@ -641,8 +643,14 @@ export default function IntegratedPlannerRoute() {
         },
       ];
     });
-    const supplementalStartOnlyEvents = loaderData.timelineEvents
-      .filter((event) => (event.endless || event.endAt === null) && !scheduleEventUids.has(event.uid))
+    const supplementalEvents = loaderData.timelineEvents
+      .filter(
+        (event) =>
+          event.contentType === "event" &&
+          !event.uid.startsWith("group:") &&
+          !event.tags.includes("main_story_reward") &&
+          !scheduleEventUids.has(event.uid),
+      )
       .map((event) => ({
         kind: "event" as const,
         uid: event.uid,
@@ -655,7 +663,7 @@ export default function IntegratedPlannerRoute() {
         runType: event.runType,
         tags: event.tags,
       }));
-    return [...scheduleContents, ...supplementalStartOnlyEvents];
+    return [...scheduleContents, ...supplementalEvents];
   }, [loaderData.pyroxeneSchedules, loaderData.timelineEvents, loaderData.timelineEventsStatus]);
   const scheduleItems = usePyroxeneScheduleItems(pyroxeneScheduleContents, favoritedStudents, localTimelineItems);
   const calculationOptions = useMemo(() => defaultCalculationOptions(selectedPlannerOptions), [selectedPlannerOptions]);
@@ -859,25 +867,10 @@ export default function IntegratedPlannerRoute() {
         scheduleItems,
         favorites: favoritedStudents,
         eventTrials,
-        eventRewardUids:
-          pyroxeneForecastStatus === "ready"
-            ? calculation.timeline.flatMap((entry) =>
-                entry.source.type === "event_reward" && entry.source.uid ? [entry.source.uid] : [],
-              )
-            : [],
         shopPeriods,
         timeZone: displayTimeZone,
       }),
-    [
-      calculation.timeline,
-      displayTimeZone,
-      eventTrials,
-      favoritedStudents,
-      plannerContents,
-      pyroxeneForecastStatus,
-      scheduleItems,
-      shopPeriods,
-    ],
+    [displayTimeZone, eventTrials, favoritedStudents, plannerContents, scheduleItems, shopPeriods],
   );
 
   const publicPeriods = useMemo(
@@ -890,6 +883,34 @@ export default function IntegratedPlannerRoute() {
       }),
     [displayTimeZone, plannerContents, scheduleItems, shopPeriods],
   );
+
+  const plannedEventUids = useMemo(
+    () => getPlannerPlannedEventUids({ favorites: favoritedStudents, eventTrials, shopPeriods }),
+    [eventTrials, favoritedStudents, shopPeriods],
+  );
+  const displayPeriods = useMemo(
+    () => buildPlannerDisplayPeriods(periods, publicPeriods, plannedEventUids),
+    [periods, plannedEventUids, publicPeriods],
+  );
+
+  const scheduleAvailability = useMemo(() => {
+    const shopsAvailable =
+      loaderData.shopEventsStatus === "available" &&
+      !loaderData.shopEvents.some((event) => event.status === "unavailable");
+    const eventsAvailable = loaderData.timelineEventsStatus === "available";
+    const recruitmentAvailable =
+      loaderData.pyroxeneSchedulesStatus === "available" && loaderData.recruitmentGroupsStatus === "available";
+    return {
+      dateFacts: eventsAvailable && recruitmentAvailable && shopsAvailable,
+      ongoing: eventsAvailable && recruitmentAvailable,
+    };
+  }, [
+    loaderData.pyroxeneSchedulesStatus,
+    loaderData.recruitmentGroupsStatus,
+    loaderData.shopEvents,
+    loaderData.shopEventsStatus,
+    loaderData.timelineEventsStatus,
+  ]);
 
   const statusMessages = useMemo(() => {
     const messages: string[] = [];
@@ -1001,9 +1022,8 @@ export default function IntegratedPlannerRoute() {
       <PlannerCalendar
         initialMonth={initialMonth}
         todayDateKey={todayDateKey}
-        periods={periods}
-        publicPeriods={publicPeriods}
-        dailyResources={dailyResources}
+        periods={displayPeriods}
+        scheduleAvailability={scheduleAvailability}
         calendarResources={calendarResources}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
@@ -1013,7 +1033,6 @@ export default function IntegratedPlannerRoute() {
         guestStorageStatus={pyroxeneGuestPlanner.status}
         recruitmentSavedStates={recruitmentSavedStates}
         completedRecruitmentEventUids={recruitmentCompletions.map(({ eventUid }) => eventUid)}
-        recruitmentPickupChance={selectedPlannerOptions.event.pickupChance}
         recruitmentIsSaving={recruitmentIsSaving}
         recruitmentSaveResult={recruitmentSaveResult}
         onSaveRecruitment={handleSaveRecruitment}

@@ -1,8 +1,8 @@
+import { BookmarkIcon } from "@heroicons/react/16/solid";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import {
   getPlannerEventScheduleGroupsForDate,
   type PlannerCalendarDay,
-  type PlannerCalendarLaneHeight,
   type PlannerCalendarStrip,
   type PlannerDayResources,
   type PlannerPeriod,
@@ -19,8 +19,6 @@ export const RESOURCE_PRESENTATION = {
   oneTimeTicket: { label: "1회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.oneTimeTicket, imageType: "item" },
   tenTimeTicket: { label: "10회 모집 티켓", uid: PYROXENE_RESOURCE_UIDS.tenTimeTicket, imageType: "item" },
 } as const;
-
-const PLANNER_LANE_CLASS = "h-7";
 
 export function formatSignedQuantity(quantity: number): string {
   if (quantity === 0) return "0";
@@ -114,8 +112,7 @@ function plannerRunTypeLabel(period: PlannerPeriod): string | null {
 }
 
 function stripClasses(timingStatus: PlannerCalendarStrip["timingStatus"]): string {
-  const base = "bg-muted text-foreground hover:bg-muted/80";
-  return timingStatus === "exact" ? base : `${base} ring-1 ring-inset ring-amber-500/50`;
+  return timingStatus === "exact" ? "" : "ring-1 ring-inset ring-amber-500/50";
 }
 
 function uniqueStudents(periods: readonly PlannerPeriod[]) {
@@ -161,7 +158,12 @@ function formatStripInterval(strip: PlannerCalendarStrip, timeZone: string): str
 }
 
 function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): string {
-  const students = uniqueStudents(strip.recruitmentPeriods.length > 0 ? strip.recruitmentPeriods : [strip.period]);
+  const students =
+    strip.kind === "combined"
+      ? uniqueStudents(strip.recruitmentPeriods.filter((period) => period.hasRecruitmentPlan))
+      : strip.period.hasRecruitmentPlan
+        ? uniqueStudents([strip.period])
+        : [];
   const title =
     strip.kind === "combined"
       ? `${strip.period.name} · 모집`
@@ -171,16 +173,13 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): str
   const studentNames = students.length > 0 ? ` · 모집 목표: ${students.map(({ name }) => name).join(", ")}` : "";
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
-  return `${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
+  const plan = strip.period.isPlanned ? "내 계획 · " : "";
+  return `${plan}${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
 }
 
 function visualStripTitle(strip: PlannerCalendarStrip): string {
   if (strip.kind === "combined") return strip.period.name;
   return strip.kind === "recruitment" ? "모집" : strip.period.name;
-}
-
-function laneClassName(_height: PlannerCalendarLaneHeight): string {
-  return PLANNER_LANE_CLASS;
 }
 
 function stripStartOrder(strip: PlannerCalendarStrip): number {
@@ -192,13 +191,9 @@ function stripStartOrder(strip: PlannerCalendarStrip): number {
 export default function PlannerCalendarWeek({
   week,
   periods,
-  publicPeriods,
-  plannedPeriodKeys,
   calendarResources,
   forecastStatus,
   weekLayout,
-  maxEventLaneCount,
-  laneHeights,
   timeZone,
   todayDateKey,
   selectedDate,
@@ -210,13 +205,9 @@ export default function PlannerCalendarWeek({
 }: {
   week: PlannerCalendarDay[];
   periods: PlannerPeriod[];
-  publicPeriods: PlannerPeriod[];
-  plannedPeriodKeys: ReadonlySet<string>;
   calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
   weekLayout: PlannerWeekLayout;
-  maxEventLaneCount: number;
-  laneHeights: PlannerCalendarLaneHeight[];
   timeZone: string;
   todayDateKey: string;
   selectedDate: string | null;
@@ -228,7 +219,7 @@ export default function PlannerCalendarWeek({
 }) {
   const strips: { strip: PlannerCalendarStrip; laneIndex: number }[] = [
     ...weekLayout.eventStrips.map((strip) => ({ strip, laneIndex: strip.track })),
-    ...weekLayout.recruitmentStrips.map((strip) => ({ strip, laneIndex: maxEventLaneCount + strip.track })),
+    ...weekLayout.recruitmentStrips.map((strip) => ({ strip, laneIndex: strip.track })),
   ].sort(
     (left, right) =>
       stripStartOrder(left.strip) - stripStartOrder(right.strip) ||
@@ -238,20 +229,13 @@ export default function PlannerCalendarWeek({
   const eventStartMarkers = weekLayout.eventStartMarkers.map((marker) => ({ marker, laneIndex: marker.track }));
   const weekLabel = `${formatDate(week[0].dateKey)}부터 ${formatDate(week[6].dateKey)} 주간 일정`;
   const gridTemplateRows =
-    laneHeights.length > 0 ? `minmax(40px, auto) repeat(${laneHeights.length}, 28px)` : "minmax(40px, auto)";
+    weekLayout.laneCount > 0 ? `minmax(40px, auto) repeat(${weekLayout.laneCount}, 28px)` : "minmax(40px, auto)";
   const boundaryClasses = [
     "relative grid grid-cols-7 border-x border-border/70 max-sm:border-x-0",
     isFirstWeek ? "border-t-2" : "border-t",
     isLastWeek ? "border-b-2" : "",
   ].join(" ");
-  const laneRows = laneHeights.reduce<{ height: PlannerCalendarLaneHeight; key: string; gridRow: number }[]>(
-    (rows, height) => {
-      const ordinal = rows.filter((row) => row.height === height).length;
-      rows.push({ height, key: `${height}:${ordinal}`, gridRow: rows.length + 2 });
-      return rows;
-    },
-    [],
-  );
+  const laneRows = Array.from({ length: weekLayout.laneCount }, (_, index) => ({ key: index, gridRow: index + 2 }));
 
   return (
     <section aria-label={weekLabel} className={boundaryClasses} style={{ gridTemplateRows }}>
@@ -268,19 +252,16 @@ export default function PlannerCalendarWeek({
       {week.map((day, index) => {
         const daySummary = calendarResources[day.dateKey];
         const isToday = day.inMonth && day.dateKey === todayDateKey;
-        const eventDescriptions = getPlannerEventScheduleGroupsForDate(
-          periods,
-          publicPeriods,
-          day.dateKey,
-          todayDateKey,
-          plannedPeriodKeys,
-        ).flatMap(({ group, isPersonal, publicRecruitmentPeriods }) => {
-          const recruitmentPeriods = [
-            ...(isPersonal ? group.periods.filter((period) => period.kind === "recruitment") : []),
-            ...publicRecruitmentPeriods,
-          ];
-          return [group.name, ...uniqueStudents(recruitmentPeriods).map(({ name }) => `모집 ${name}`)];
-        });
+        const eventDescriptions = getPlannerEventScheduleGroupsForDate(periods, day.dateKey, todayDateKey).flatMap(
+          ({ group, isPlanned, recruitmentPeriods }) => {
+            const eventPeriod = group.periods.find((period) => period.kind === "event");
+            const eventPlanned = eventPeriod ? eventPeriod.isPlanned === true : isPlanned;
+            return [
+              `${group.name}${eventPlanned ? " · 내 계획" : ""}`,
+              ...recruitmentPeriods.map((period) => `모집${period.isPlanned ? " · 내 계획" : ""}`),
+            ];
+          },
+        );
         const accessibleSummary = [
           formatDate(day.dateKey),
           ...eventDescriptions,
@@ -319,18 +300,18 @@ export default function PlannerCalendarWeek({
           </button>
         );
       })}
-      {laneRows.map(({ height, key, gridRow }) => (
-        <div
-          key={`lane:${key}`}
-          className={`relative col-span-7 ${laneClassName(height)} border-t border-border/30`}
-          style={{ gridColumn: "1 / -1", gridRow }}
-        >
+      {laneRows.map(({ key, gridRow }) => (
+        <div key={`lane:${key}`} className="relative col-span-7 h-7" style={{ gridColumn: "1 / -1", gridRow }}>
           {strips
             .filter(({ laneIndex }) => laneIndex === gridRow - 2)
             .map(({ strip }) => {
-              const students = uniqueStudents(
-                strip.recruitmentPeriods.length > 0 ? strip.recruitmentPeriods : [strip.period],
-              );
+              const students =
+                strip.kind === "combined"
+                  ? uniqueStudents(strip.recruitmentPeriods.filter((period) => period.hasRecruitmentPlan))
+                  : strip.period.hasRecruitmentPlan
+                    ? uniqueStudents([strip.period])
+                    : [];
+              const isPlanned = strip.period.isPlanned === true;
               const endsThisWeek = strip.period.endDate >= week[0].dateKey && strip.period.endDate <= week[6].dateKey;
               const compactEndLabel = strip.widthPercent >= 28;
               return (
@@ -339,7 +320,11 @@ export default function PlannerCalendarWeek({
                   type="button"
                   aria-label={stripAccessibleName(strip, timeZone)}
                   title={stripAccessibleName(strip, timeZone)}
-                  className={`absolute inset-y-0.5 z-10 flex min-h-6 min-w-6 flex-nowrap content-center items-center gap-1 overflow-hidden rounded-sm border border-border/60 px-1.5 py-0.5 text-left text-xs font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                  className={`absolute inset-y-0.5 z-10 flex min-h-6 min-w-6 flex-nowrap content-center items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    isPlanned
+                      ? "border-transparent bg-muted font-semibold text-foreground hover:bg-muted/80"
+                      : "border-border bg-transparent font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  } ${
                     strip.continuesBefore ? "rounded-l-none" : ""
                   } ${strip.continuesAfter ? "rounded-r-none" : ""} ${stripClasses(strip.timingStatus)}`}
                   style={{ left: `${strip.leftPercent}%`, width: `${strip.widthPercent}%` }}
@@ -349,6 +334,7 @@ export default function PlannerCalendarWeek({
                   }}
                 >
                   {strip.continuesBefore ? <span aria-hidden="true">←</span> : null}
+                  {isPlanned ? <BookmarkIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
                   <span className="min-w-0 flex-[0_1_auto] truncate">{visualStripTitle(strip)}</span>
                   {students.length > 0 ? <PlannerRecruitmentAvatars students={students} maxVisible={3} /> : null}
                   {strip.timingStatus !== "exact" ? (
@@ -379,17 +365,23 @@ export default function PlannerCalendarWeek({
               const startsAt = marker.period.startAt
                 ? formatInstant(marker.period.startAt, { timeZone, format: "M/D HH:mm" })
                 : null;
-              const accessibleName = `${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
+              const isPlanned = marker.period.isPlanned === true;
+              const accessibleName = `${isPlanned ? "내 계획 · " : ""}${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
               return (
                 <button
                   key={`${marker.key}:${week[0].dateKey}`}
                   type="button"
                   aria-label={accessibleName}
                   title={accessibleName}
-                  className="absolute inset-y-0.5 z-10 flex min-w-0 items-center overflow-hidden border-l-2 border-muted-foreground/50 px-1 text-left text-xs font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+                  className={`absolute inset-y-0.5 z-10 flex min-w-0 items-center gap-1 overflow-hidden border-l-2 px-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                    isPlanned
+                      ? "border-foreground font-semibold text-foreground"
+                      : "border-muted-foreground/50 font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  }`}
                   style={{ left: `${marker.leftPercent}%`, width: `${marker.widthPercent}%` }}
                   onClick={(event) => onSelectPeriod(marker.period.startDate, event.currentTarget, marker.period)}
                 >
+                  {isPlanned ? <BookmarkIcon aria-hidden="true" className="size-4 shrink-0" /> : null}
                   <span className="min-w-0 truncate">{label}</span>
                 </button>
               );

@@ -42,6 +42,8 @@ export type PlannerPeriod = {
   eventUid?: string;
   students?: PlannerPeriodStudent[];
   expectedTrials?: number;
+  isPlanned?: boolean;
+  hasRecruitmentPlan?: boolean;
 };
 
 export type PlannerPeriodGroup = {
@@ -53,8 +55,33 @@ export type PlannerPeriodGroup = {
 
 export type PlannerEventScheduleGroup = {
   group: PlannerPeriodGroup;
-  isPersonal: boolean;
-  publicRecruitmentPeriods: PlannerPeriod[];
+  isPlanned: boolean;
+  recruitmentPeriods: PlannerPeriod[];
+};
+
+export type PlannerScheduleFactKind =
+  | "event-start"
+  | "event-end"
+  | "recruitment-start"
+  | "recruitment-end"
+  | "shop-deadline";
+
+export type PlannerScheduleFact = {
+  kind: PlannerScheduleFactKind;
+  at: string;
+};
+
+export type PlannerDateScheduleItem = {
+  key: string;
+  period: PlannerPeriod;
+  eventPeriod?: PlannerPeriod;
+  ongoingRecruitmentPeriods?: PlannerPeriod[];
+  facts: PlannerScheduleFact[];
+};
+
+export type PlannerDateSchedule = {
+  onDate: PlannerDateScheduleItem[];
+  ongoing: PlannerDateScheduleItem[];
 };
 
 export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPeriodGroup[] {
@@ -89,122 +116,30 @@ export function groupPlannerPeriods(periods: readonly PlannerPeriod[]): PlannerP
   });
 }
 
-export function groupPlannerPeriodsWithEventMetadata(
-  periods: readonly PlannerPeriod[],
-  metadataPeriods: readonly PlannerPeriod[] = periods,
-): PlannerPeriodGroup[] {
-  return groupPlannerPeriods(periods).map((group) => {
-    if (!group.eventUid || group.periods.some((period) => period.kind === "event")) return group;
-
-    const eventMetadata = metadataPeriods.find(
-      (period) => period.kind === "event" && period.eventUid === group.eventUid,
-    );
-    return eventMetadata ? { ...group, name: eventMetadata.name, periods: [...group.periods, eventMetadata] } : group;
-  });
-}
-
-export function mergePlannerEventScheduleGroups(
-  personalGroups: readonly PlannerPeriodGroup[],
-  publicGroups: readonly PlannerPeriodGroup[],
-): PlannerEventScheduleGroup[] {
-  const publicGroupsByUid = new Map(
-    publicGroups.flatMap((group) => (group.eventUid ? [[group.eventUid, group] as const] : [])),
-  );
-  const personalEventUids = new Set(personalGroups.flatMap((group) => (group.eventUid ? [group.eventUid] : [])));
-
-  const personalScheduleGroups = personalGroups.map((group) => {
-    const matchingPublicGroup = group.eventUid ? publicGroupsByUid.get(group.eventUid) : undefined;
-    if (!matchingPublicGroup) {
-      return { group, isPersonal: true, publicRecruitmentPeriods: [] };
-    }
-
-    const missingEventMetadata = !group.periods.some((period) => period.kind === "event")
-      ? matchingPublicGroup.periods.find((period) => period.kind === "event")
-      : undefined;
-    const missingShopMetadata = !group.periods.some((period) => period.kind === "shop")
-      ? matchingPublicGroup.periods.find((period) => period.kind === "shop")
-      : undefined;
-    const metadataPeriods = [missingEventMetadata, missingShopMetadata].filter((period): period is PlannerPeriod =>
-      Boolean(period),
-    );
-
-    return {
-      group: metadataPeriods.length > 0 ? { ...group, periods: [...group.periods, ...metadataPeriods] } : group,
-      isPersonal: true,
-      publicRecruitmentPeriods: matchingPublicGroup.periods.filter((period) => period.kind === "recruitment"),
-    };
-  });
-
-  const publicOnlyGroups = publicGroups
-    .filter((group) => !group.eventUid || !personalEventUids.has(group.eventUid))
-    .map((group) => ({
-      group,
-      isPersonal: false,
-      publicRecruitmentPeriods: group.periods.filter((period) => period.kind === "recruitment"),
-    }));
-
-  return [...personalScheduleGroups, ...publicOnlyGroups];
-}
-
 export function getPlannerEventScheduleGroupsForDate(
-  personalPeriods: readonly PlannerPeriod[],
-  publicPeriods: readonly PlannerPeriod[],
+  periods: readonly PlannerPeriod[],
   dateKey: LocalDateString,
-  todayDateKey: LocalDateString,
-  plannedPeriodKeys?: ReadonlySet<string>,
+  todayDateKey?: LocalDateString,
 ): PlannerEventScheduleGroup[] {
-  const personalGroups = groupPlannerPeriodsWithEventMetadata(
-    getPlannerPeriodsForDate(personalPeriods, dateKey, todayDateKey),
-    personalPeriods,
-  );
-  const publicCandidates = getPlannerPeriodsForDate(publicPeriods, dateKey, todayDateKey).filter(
-    (period) => !plannedPeriodKeys?.has(period.key),
-  );
-  const publicGroups = groupPlannerPeriodsWithEventMetadata(publicCandidates, publicPeriods);
-  return mergePlannerEventScheduleGroups(personalGroups, publicGroups);
+  const groups = groupPlannerPeriods(getPlannerPeriodsForDate(periods, dateKey, todayDateKey));
+  return groups.map((group) => ({
+    group,
+    isPlanned: group.periods.some((period) => period.isPlanned),
+    recruitmentPeriods: group.periods.filter((period) => period.kind === "recruitment"),
+  }));
 }
 
 export function getPlannerPeriodsForDate(
   periods: readonly PlannerPeriod[],
   dateKey: LocalDateString,
-  todayDateKey: LocalDateString,
+  _todayDateKey?: LocalDateString,
 ): PlannerPeriod[] {
-  const todayMonth = todayDateKey.slice(0, 7);
-  const activePeriods = periods.filter((period) => {
-    if (period.startDate > dateKey) return false;
-    if (period.kind !== "event") return period.endDate >= dateKey;
-
-    const isOpenEnded = period.endAt == null || period.endless === true;
-    if (isOpenEnded) {
-      return period.startDate.slice(0, 7) >= todayMonth;
+  return periods.filter((period) => {
+    if (period.kind === "shop") return false;
+    if (period.kind === "event" && (period.endAt == null || period.endless === true)) {
+      return period.startDate === dateKey;
     }
-    return period.endDate >= dateKey;
-  });
-  const relatedEventUids = new Set(
-    activePeriods.flatMap((period) => (period.kind !== "event" && period.eventUid ? [period.eventUid] : [])),
-  );
-
-  return periods.filter(
-    (period) =>
-      activePeriods.includes(period) ||
-      (period.kind === "event" && Boolean(period.eventUid && relatedEventUids.has(period.eventUid))),
-  );
-}
-
-export function getPlannerEventNamesForDate(
-  periods: readonly PlannerPeriod[],
-  dateKey: LocalDateString,
-  todayDateKey: LocalDateString,
-  excludedPeriodKeys?: ReadonlySet<string>,
-): string[] {
-  const datePeriods = getPlannerPeriodsForDate(periods, dateKey, todayDateKey).filter(
-    (period) => !excludedPeriodKeys?.has(period.key),
-  );
-  const groups = groupPlannerPeriods(datePeriods);
-  return groups.map((group) => {
-    if (!group.eventUid || group.periods.some((period) => period.kind === "event")) return group.name;
-    const eventMetadata = periods.find((period) => period.kind === "event" && period.eventUid === group.eventUid);
-    return eventMetadata?.name ?? group.name;
+    return period.startDate <= dateKey && period.endDate >= dateKey;
   });
 }
 
@@ -256,14 +191,35 @@ export type PlannerShopPeriodInput = {
   planned: boolean;
 };
 
+export function getPlannerPlannedEventUids({
+  favorites,
+  eventTrials,
+  shopPeriods,
+}: {
+  favorites: readonly PlannerFavoriteInput[];
+  eventTrials: readonly PlannerEventTrialInput[];
+  shopPeriods: readonly PlannerShopPeriodInput[];
+}): Set<string> {
+  return new Set([
+    ...favorites.map(({ contentUid }) => contentUid),
+    ...eventTrials.filter(({ expectedTrials }) => expectedTrials !== null).map(({ eventUid }) => eventUid),
+    ...shopPeriods.filter(({ planned }) => planned).map(({ timelineUid }) => timelineUid),
+  ]);
+}
+
+function hasPlannerRecruitmentPlan(period: PlannerPeriod | undefined): boolean {
+  return Boolean(
+    period?.kind === "recruitment" &&
+      ((period.students?.length ?? 0) > 0 || (period.expectedTrials !== undefined && period.expectedTrials !== null)),
+  );
+}
+
 export type PlannerCalendarDay = {
   dateKey: LocalDateString;
   inMonth: boolean;
 };
 
 export type PlannerPeriodTimingStatus = "exact" | "date-only" | "invalid";
-
-export type PlannerCalendarLaneHeight = "compact";
 
 export type PlannerCalendarStrip = {
   key: string;
@@ -290,17 +246,13 @@ export type PlannerWeekLayout = {
   eventStrips: PlannerCalendarStrip[];
   eventStartMarkers: PlannerCalendarStartMarker[];
   recruitmentStrips: PlannerCalendarStrip[];
-  eventLaneCount: number;
-  recruitmentLaneCount: number;
+  laneCount: number;
 };
 
 export type PlannerMonthLayout = {
   monthKey: string;
   weeks: PlannerCalendarDay[][];
   weekLayouts: PlannerWeekLayout[];
-  maxEventLaneCount: number;
-  maxRecruitmentLaneCount: number;
-  laneHeights: PlannerCalendarLaneHeight[];
 };
 
 const RESOURCE_KEYS: readonly PlannerResourceKey[] = ["pyroxene", "oneTimeTicket", "tenTimeTicket"];
@@ -617,6 +569,57 @@ function hasSamePlannerExactInterval(left: PlannerPeriod, right: PlannerPeriod):
   );
 }
 
+function hasSamePlannerBoundary(left: string | null | undefined, right: string | null | undefined): boolean {
+  if (!left || !right) return !left && !right;
+  const leftMs = getInstantTime(left);
+  const rightMs = getInstantTime(right);
+  if (Number.isFinite(leftMs) && Number.isFinite(rightMs)) return leftMs === rightMs;
+  return left === right;
+}
+
+function hasSamePlannerPeriod(left: PlannerPeriod, right: PlannerPeriod): boolean {
+  if (left.kind !== right.kind || !left.eventUid || left.eventUid !== right.eventUid) return false;
+  if (left.startAt || left.endAt || right.startAt || right.endAt) {
+    return hasSamePlannerBoundary(left.startAt, right.startAt) && hasSamePlannerBoundary(left.endAt, right.endAt);
+  }
+  return left.startDate === right.startDate && left.endDate === right.endDate;
+}
+
+function mergeDuplicatePlannerPeriods(existing: PlannerPeriod, incoming: PlannerPeriod): PlannerPeriod {
+  const preferred = incoming.isPlanned === true && existing.isPlanned !== true ? incoming : existing;
+  const plannedRecruitmentPeriods = [existing, incoming].filter((period) => period.hasRecruitmentPlan === true);
+  const studentSources = plannedRecruitmentPeriods.length > 0 ? plannedRecruitmentPeriods : [preferred];
+  const students = studentSources
+    .flatMap((period) => period.students ?? [])
+    .filter((student, index, list) => list.findIndex((candidate) => candidate.uid === student.uid) === index);
+
+  return {
+    ...existing,
+    ...preferred,
+    ...(existing.isPlanned === true || incoming.isPlanned === true ? { isPlanned: true } : {}),
+    ...(existing.hasRecruitmentPlan === true || incoming.hasRecruitmentPlan === true
+      ? { hasRecruitmentPlan: true }
+      : {}),
+    ...(students.length > 0 ? { students } : {}),
+    ...(preferred.expectedTrials === undefined
+      ? { expectedTrials: existing.expectedTrials ?? incoming.expectedTrials }
+      : {}),
+  };
+}
+
+function deduplicatePlannerPeriods(periods: readonly PlannerPeriod[]): PlannerPeriod[] {
+  const uniquePeriods: PlannerPeriod[] = [];
+  for (const period of periods) {
+    const duplicateIndex = uniquePeriods.findIndex((existing) => hasSamePlannerPeriod(existing, period));
+    if (duplicateIndex < 0) {
+      uniquePeriods.push(period);
+      continue;
+    }
+    uniquePeriods[duplicateIndex] = mergeDuplicatePlannerPeriods(uniquePeriods[duplicateIndex], period);
+  }
+  return uniquePeriods;
+}
+
 export function hasPlannerExactEventHandoff(left: PlannerPeriod, right: PlannerPeriod): boolean {
   if (
     left.kind !== "event" ||
@@ -636,23 +639,17 @@ export function hasPlannerExactEventHandoff(left: PlannerPeriod, right: PlannerP
   );
 }
 
-function packPlannerCalendarStrips(drafts: PlannerCalendarStripDraft[]): PlannerCalendarStrip[] {
-  const laneEnds: number[] = [];
-  return [...drafts]
-    .sort(
-      (left, right) =>
-        left.occupancyStartMs - right.occupancyStartMs ||
-        left.occupancyEndMs - right.occupancyEndMs ||
-        left.key.localeCompare(right.key),
-    )
-    .map((draft) => {
-      const availableLane = laneEnds.findIndex((endMs) => endMs <= draft.occupancyStartMs);
-      const track = availableLane >= 0 ? availableLane : laneEnds.length;
-      laneEnds[track] = draft.occupancyEndMs;
-      const { occupancyStartMs: _occupancyStartMs, occupancyEndMs: _occupancyEndMs, ...strip } = draft;
-      return { ...strip, track };
-    });
-}
+type PlannerCalendarLaneItemDraft = {
+  kind: "strip" | "marker";
+  key: string;
+  period: PlannerPeriod;
+  startMs: number;
+  endMs: number;
+  leftPercent: number;
+  strip?: PlannerCalendarStripDraft;
+  marker?: PlannerCalendarStartMarker;
+  track?: number;
+};
 
 export function buildPlannerWeekLayout(
   periods: readonly PlannerPeriod[],
@@ -664,26 +661,45 @@ export function buildPlannerWeekLayout(
       eventStrips: [],
       eventStartMarkers: [],
       recruitmentStrips: [],
-      eventLaneCount: 0,
-      recruitmentLaneCount: 0,
+      laneCount: 0,
     };
   }
 
   const context = createPlannerWeekTemporalContext(week, timeZone);
-  const eventPeriods = periods.filter((period) => period.kind === "event" && !period.calendarStartOnly);
-  const startOnlyEventPeriods = periods
+  const uniquePeriods = deduplicatePlannerPeriods(periods);
+  const eventPeriods = uniquePeriods.filter((period) => period.kind === "event" && !period.calendarStartOnly);
+  const markerDrafts = uniquePeriods
     .filter((period) => period.kind === "event" && period.calendarStartOnly)
     .filter((period) => period.startDate >= week[0].dateKey && period.startDate <= week[6].dateKey)
     .flatMap((period) => {
       if (!period.startAt) return [];
       const startMs = getInstantTime(period.startAt);
       if (!Number.isFinite(startMs) || startMs >= context.weekEndMs) return [];
+      const dayIndex = week.findIndex(({ dateKey }) => dateKey === period.startDate);
+      const nextDayStartMs = context.dayStartsMs[dayIndex + 1];
+      if (dayIndex < 0 || nextDayStartMs === undefined) return [];
       const leftPercent = plannerInstantPosition(Math.max(startMs, context.weekStartMs), context.dayStartsMs) * 100;
-      return [{ period, startMs, leftPercent, widthPercent: Math.max(0, 100 - leftPercent) }];
-    })
-    .sort((left, right) => left.startMs - right.startMs || left.period.key.localeCompare(right.period.key));
-  const recruitmentPeriods = periods.filter((period) => period.kind === "recruitment");
-  const mergedRecruitmentKeys = new Set<string>();
+      const marker: PlannerCalendarStartMarker = {
+        key: period.key,
+        period,
+        track: 0,
+        leftPercent,
+        widthPercent: Math.max(0, 100 - leftPercent),
+      };
+      return [
+        {
+          kind: "marker" as const,
+          key: marker.key,
+          period,
+          startMs,
+          endMs: nextDayStartMs,
+          leftPercent,
+          marker,
+        },
+      ];
+    });
+  const recruitmentPeriods = uniquePeriods.filter((period) => period.kind === "recruitment");
+  const mergedRecruitmentPeriods = new Set<PlannerPeriod>();
   const eventDrafts: PlannerCalendarStripDraft[] = [];
 
   for (const eventPeriod of eventPeriods) {
@@ -694,7 +710,7 @@ export function buildPlannerWeekLayout(
             hasSamePlannerExactInterval(eventPeriod, recruitmentPeriod),
         )
       : [];
-    for (const recruitmentPeriod of matchingRecruitments) mergedRecruitmentKeys.add(recruitmentPeriod.key);
+    for (const recruitmentPeriod of matchingRecruitments) mergedRecruitmentPeriods.add(recruitmentPeriod);
     const interval = buildPlannerWeekInterval(eventPeriod, context);
     if (!interval) continue;
     eventDrafts.push({
@@ -708,7 +724,7 @@ export function buildPlannerWeekLayout(
 
   const recruitmentDrafts: PlannerCalendarStripDraft[] = [];
   for (const recruitmentPeriod of recruitmentPeriods) {
-    if (mergedRecruitmentKeys.has(recruitmentPeriod.key)) continue;
+    if (mergedRecruitmentPeriods.has(recruitmentPeriod)) continue;
     const interval = buildPlannerWeekInterval(recruitmentPeriod, context);
     if (!interval) continue;
     recruitmentDrafts.push({
@@ -720,24 +736,111 @@ export function buildPlannerWeekLayout(
     });
   }
 
-  const eventStrips = packPlannerCalendarStrips(eventDrafts);
-  const eventStripLaneCount = eventStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0);
-  const eventStartMarkers: PlannerCalendarStartMarker[] = startOnlyEventPeriods.map(
-    ({ period, leftPercent, widthPercent }, index) => ({
-      key: period.key,
-      period,
-      track: eventStripLaneCount + index,
-      leftPercent,
-      widthPercent,
-    }),
+  const eventLaneDrafts: PlannerCalendarLaneItemDraft[] = [
+    ...eventDrafts.map((strip) => ({
+      kind: "strip" as const,
+      key: strip.key,
+      period: strip.period,
+      startMs: strip.occupancyStartMs,
+      endMs: strip.occupancyEndMs,
+      leftPercent: strip.leftPercent,
+      strip,
+    })),
+    ...markerDrafts,
+  ];
+  const recruitmentLaneDrafts = recruitmentDrafts.map((strip) => ({
+    kind: "strip" as const,
+    key: strip.key,
+    period: strip.period,
+    startMs: strip.occupancyStartMs,
+    endMs: strip.occupancyEndMs,
+    leftPercent: strip.leftPercent,
+    strip,
+  }));
+  const parentByEventUid = new Map<string, PlannerCalendarLaneItemDraft>();
+  for (const draft of eventLaneDrafts) {
+    if (draft.period.eventUid && !parentByEventUid.has(draft.period.eventUid)) {
+      parentByEventUid.set(draft.period.eventUid, draft);
+    }
+  }
+  const recruitmentByParent = new Map<string, PlannerCalendarLaneItemDraft[]>();
+  const independentRecruitmentDrafts: PlannerCalendarLaneItemDraft[] = [];
+  for (const draft of recruitmentLaneDrafts) {
+    const parent = draft.period.eventUid ? parentByEventUid.get(draft.period.eventUid) : undefined;
+    if (!parent) {
+      independentRecruitmentDrafts.push(draft);
+      continue;
+    }
+    const children = recruitmentByParent.get(parent.key) ?? [];
+    children.push(draft);
+    recruitmentByParent.set(parent.key, children);
+  }
+
+  const parentTasks = eventLaneDrafts.map((parent) => ({
+    startMs: parent.startMs,
+    eventUid: parent.period.eventUid ?? parent.period.key,
+    priority: 0,
+    parent,
+    children: recruitmentByParent.get(parent.key) ?? [],
+  }));
+  const independentTasks = independentRecruitmentDrafts.map((draft) => ({
+    startMs: draft.startMs,
+    eventUid: draft.period.eventUid ?? draft.period.key,
+    priority: 1,
+    parent: null,
+    children: [draft],
+  }));
+  const allocationTasks = [...parentTasks, ...independentTasks].sort(
+    (left, right) =>
+      left.startMs - right.startMs || left.eventUid.localeCompare(right.eventUid) || left.priority - right.priority,
   );
-  const recruitmentStrips = packPlannerCalendarStrips(recruitmentDrafts);
+  const laneIntervals: { startMs: number; endMs: number }[][] = [];
+  const trackedLaneDrafts: (PlannerCalendarLaneItemDraft & { track: number })[] = [];
+  const allocateLane = (draft: PlannerCalendarLaneItemDraft, firstLane = 0) => {
+    let track = firstLane;
+    for (; track < laneIntervals.length; track += 1) {
+      if (
+        laneIntervals[track].every((interval) => interval.endMs <= draft.startMs || interval.startMs >= draft.endMs)
+      ) {
+        break;
+      }
+    }
+    while (laneIntervals.length <= track) laneIntervals.push([]);
+    laneIntervals[track].push({ startMs: draft.startMs, endMs: draft.endMs });
+    trackedLaneDrafts.push({ ...draft, track });
+    return track;
+  };
+  for (const task of allocationTasks) {
+    if (!task.parent) {
+      for (const draft of task.children) allocateLane(draft);
+      continue;
+    }
+    const parentTrack = allocateLane(task.parent);
+    const children = task.children.sort(
+      (left, right) => left.startMs - right.startMs || left.key.localeCompare(right.key),
+    );
+    for (const child of children) allocateLane(child, parentTrack + 1);
+  }
+  const laneCount = laneIntervals.length;
+  const eventStrips = trackedLaneDrafts.flatMap(({ period, strip, track }) =>
+    strip && period.kind === "event" ? [{ ...strip, track }] : [],
+  );
+  const recruitmentStrips = trackedLaneDrafts.flatMap(({ period, strip, track }) =>
+    strip && period.kind === "recruitment" ? [{ ...strip, track }] : [],
+  );
+  const eventStartMarkers = trackedLaneDrafts.flatMap(({ kind, marker, track, startMs, leftPercent }) => {
+    if (kind !== "marker" || !marker) return [];
+    const nextLaneItem = trackedLaneDrafts
+      .filter((candidate) => candidate.track === track && candidate.startMs > startMs)
+      .sort((left, right) => left.startMs - right.startMs)[0];
+    const rightPercent = nextLaneItem ? nextLaneItem.leftPercent : 100;
+    return [{ ...marker, track, widthPercent: Math.max(0, rightPercent - leftPercent) }];
+  });
   return {
     eventStrips,
     eventStartMarkers,
     recruitmentStrips,
-    eventLaneCount: eventStripLaneCount + eventStartMarkers.length,
-    recruitmentLaneCount: recruitmentStrips.reduce((max, strip) => Math.max(max, strip.track + 1), 0),
+    laneCount,
   };
 }
 
@@ -748,16 +851,10 @@ export function buildPlannerMonthLayout(
 ): PlannerMonthLayout {
   const weeks = buildPlannerMonthDays(monthKey);
   const weekLayouts = weeks.map((week) => buildPlannerWeekLayout(periods, week, timeZone));
-  const maxEventLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.eventLaneCount), 0);
-  const maxRecruitmentLaneCount = weekLayouts.reduce((max, layout) => Math.max(max, layout.recruitmentLaneCount), 0);
-  const eventLaneHeights: PlannerCalendarLaneHeight[] = Array.from({ length: maxEventLaneCount }, () => "compact");
   return {
     monthKey,
     weeks,
     weekLayouts,
-    maxEventLaneCount,
-    maxRecruitmentLaneCount,
-    laneHeights: [...eventLaneHeights, ...Array.from({ length: maxRecruitmentLaneCount }, () => "compact" as const)],
   };
 }
 
@@ -781,7 +878,6 @@ export function buildPlannerPeriods({
   scheduleItems,
   favorites,
   eventTrials,
-  eventRewardUids,
   shopPeriods,
   timeZone,
 }: {
@@ -789,7 +885,6 @@ export function buildPlannerPeriods({
   scheduleItems: readonly PyroxeneScheduleItem[];
   favorites: readonly PlannerFavoriteInput[];
   eventTrials: readonly PlannerEventTrialInput[];
-  eventRewardUids: readonly string[];
   shopPeriods: readonly PlannerShopPeriodInput[];
   timeZone: string;
 }): PlannerPeriod[] {
@@ -800,6 +895,16 @@ export function buildPlannerPeriods({
   const scheduleEvents = scheduleItems.flatMap((item) => (item.event ? [item.event] : []));
   const scheduleEventByUid = new Map(scheduleEvents.map((event) => [event.uid, event]));
   const scheduleEventByContentUid = new Map<string, (typeof scheduleEvents)[number]>();
+  for (const scheduleEvent of scheduleEvents) {
+    if (!scheduleEventByContentUid.has(scheduleEvent.uid)) {
+      scheduleEventByContentUid.set(scheduleEvent.uid, scheduleEvent);
+    }
+    for (const recruitment of scheduleEvent.recruitments) {
+      if (recruitment.sourceContentUid && !scheduleEventByContentUid.has(recruitment.sourceContentUid)) {
+        scheduleEventByContentUid.set(recruitment.sourceContentUid, scheduleEvent);
+      }
+    }
+  }
   for (const content of contents) {
     if (content.kind !== "event") continue;
     const scheduleEvent =
@@ -812,13 +917,7 @@ export function buildPlannerPeriods({
       .filter((entry): entry is PlannerEventTrialInput & { expectedTrials: number } => entry.expectedTrials !== null)
       .map((entry) => [entry.eventUid, entry.expectedTrials]),
   );
-  const plannedShopUids = new Set(shopPeriods.filter((period) => period.planned).map((period) => period.timelineUid));
-  const relatedEventUids = new Set([
-    ...favorites.map((favorite) => favorite.contentUid),
-    ...eventTrials.filter((entry) => entry.expectedTrials !== null).map((entry) => entry.eventUid),
-    ...eventRewardUids,
-    ...plannedShopUids,
-  ]);
+  const relatedEventUids = getPlannerPlannedEventUids({ favorites, eventTrials, shopPeriods });
   const periods: PlannerPeriod[] = [];
 
   for (const content of contents) {
@@ -867,8 +966,8 @@ export function buildPlannerPeriods({
   const plannedRecruitmentEventUids = new Set([...plannedStudentsByEventUid.keys(), ...eventTrialByUid.keys()]);
   for (const eventUid of plannedRecruitmentEventUids) {
     const content = contentByUid.get(eventUid);
-    const scheduleEvent = content ? scheduleEventByContentUid.get(content.uid) : undefined;
-    if (!content || !scheduleEvent) continue;
+    const scheduleEvent = scheduleEventByContentUid.get(eventUid);
+    if (!scheduleEvent) continue;
     const studentsByEndAt = plannedStudentsByEventUid.get(eventUid) ?? new Map<string, PlannerPeriodStudent[]>();
     const trialCount = eventTrialByUid.get(eventUid);
     const periodEndAts = new Set(studentsByEndAt.keys());
@@ -880,7 +979,7 @@ export function buildPlannerPeriods({
       periods.push({
         key: `recruitment:${eventUid}:${endAt}`,
         kind: "recruitment",
-        name: content.name,
+        name: content?.name ?? scheduleEvent.name,
         startDate: formatPlannerPeriodDate(scheduleEvent.since, timeZone),
         endDate: formatPlannerPeriodEndDate(endAt, timeZone),
         href: `/events/${encodeURIComponent(eventUid)}/recruitment-simulator`,
@@ -953,7 +1052,7 @@ export function buildPublicPlannerPeriods({
 
   const studentsByEventAndEnd = new Map<
     string,
-    { eventUid: string; startAt: string | Date; endAt: string | Date; students: PlannerPeriodStudent[] }
+    { eventUid: string; name: string; startAt: string | Date; endAt: string | Date; students: PlannerPeriodStudent[] }
   >();
   for (const item of scheduleItems) {
     const event = item.event;
@@ -961,10 +1060,16 @@ export function buildPublicPlannerPeriods({
     for (const recruitment of event.recruitments) {
       const eventUid = recruitment.sourceContentUid ?? event.uid;
       const content = eventContents.get(eventUid);
-      if (!content) continue;
+      if (!content && (eventUid.startsWith("group:") || eventUid.startsWith("main_story_reward:"))) continue;
       const endAt = recruitment.until ?? event.until;
       const key = `${eventUid}\u0000${toInstantKey(endAt)}`;
-      const plan = studentsByEventAndEnd.get(key) ?? { eventUid, startAt: event.since, endAt, students: [] };
+      const plan = studentsByEventAndEnd.get(key) ?? {
+        eventUid,
+        name: content?.name ?? event.name,
+        startAt: event.since,
+        endAt,
+        students: [],
+      };
       if (recruitment.student) {
         const student: PlannerPeriodStudent = {
           uid: recruitment.student.uid,
@@ -977,13 +1082,11 @@ export function buildPublicPlannerPeriods({
     }
   }
 
-  for (const { eventUid, startAt, endAt, students } of studentsByEventAndEnd.values()) {
-    const content = eventContents.get(eventUid);
-    if (!content) continue;
+  for (const { eventUid, name, startAt, endAt, students } of studentsByEventAndEnd.values()) {
     periods.push({
       key: `recruitment:${eventUid}:${endAt}`,
       kind: "recruitment",
-      name: content.name,
+      name,
       startDate: formatPlannerPeriodDate(startAt, timeZone),
       endDate: formatPlannerPeriodEndDate(endAt, timeZone),
       href: `/events/${encodeURIComponent(eventUid)}/recruitment-simulator`,
@@ -1017,16 +1120,223 @@ export function buildPublicPlannerPeriods({
   );
 }
 
+export function buildPlannerDisplayPeriods(
+  personalPeriods: readonly PlannerPeriod[],
+  publicPeriods: readonly PlannerPeriod[],
+  plannedEventUidsInput: ReadonlySet<string> = new Set<string>(),
+): PlannerPeriod[] {
+  const plannedEventUids = new Set([
+    ...plannedEventUidsInput,
+    ...personalPeriods.flatMap((period) =>
+      period.eventUid && (period.kind !== "recruitment" || hasPlannerRecruitmentPlan(period)) ? [period.eventUid] : [],
+    ),
+  ]);
+  const appendUnique = (period: PlannerPeriod) => {
+    const index = displayPeriods.findIndex((existing) => hasSamePlannerPeriod(existing, period));
+    if (index < 0) {
+      displayPeriods.push(period);
+      return;
+    }
+    displayPeriods[index] = mergeDuplicatePlannerPeriods(displayPeriods[index], period);
+  };
+  const displayPeriods: PlannerPeriod[] = [];
+
+  for (const publicPeriod of publicPeriods) {
+    const personalMatch = personalPeriods.find(
+      (period) =>
+        hasSamePlannerPeriod(period, publicPeriod) &&
+        (publicPeriod.kind !== "recruitment" || hasPlannerRecruitmentPlan(period)),
+    );
+    const period = publicPeriod.kind === "recruitment" && personalMatch ? personalMatch : publicPeriod;
+    const hasRecruitmentPlan = publicPeriod.kind === "recruitment" && hasPlannerRecruitmentPlan(personalMatch);
+    appendUnique({
+      ...period,
+      isPlanned:
+        period.kind === "recruitment"
+          ? hasRecruitmentPlan
+          : Boolean(period.eventUid && plannedEventUids.has(period.eventUid)),
+      hasRecruitmentPlan,
+    });
+  }
+
+  for (const personalPeriod of personalPeriods) {
+    if (publicPeriods.some((period) => hasSamePlannerPeriod(period, personalPeriod))) continue;
+    const hasRecruitmentPlan = personalPeriod.kind === "recruitment" && hasPlannerRecruitmentPlan(personalPeriod);
+    appendUnique({
+      ...personalPeriod,
+      isPlanned:
+        personalPeriod.kind === "recruitment"
+          ? hasRecruitmentPlan
+          : Boolean(personalPeriod.eventUid && plannedEventUids.has(personalPeriod.eventUid)),
+      hasRecruitmentPlan,
+    });
+  }
+
+  return displayPeriods.sort(
+    (left, right) =>
+      left.startDate.localeCompare(right.startDate) ||
+      (left.startAt && right.startAt ? getInstantTime(left.startAt) - getInstantTime(right.startAt) : 0) ||
+      left.name.localeCompare(right.name) ||
+      left.key.localeCompare(right.key),
+  );
+}
+
+function plannerDateScheduleItemKey(period: PlannerPeriod): string {
+  const interval = getPlannerExactInterval(period);
+  return [
+    period.kind,
+    period.eventUid ?? period.key,
+    interval?.startMs ?? period.startDate,
+    interval?.endMs ?? period.endDate,
+  ].join(":");
+}
+
+function findPlannerEventForRecruitment(
+  period: PlannerPeriod,
+  eventsByUid: ReadonlyMap<string, readonly PlannerPeriod[]>,
+): PlannerPeriod | undefined {
+  if (!period.eventUid) return undefined;
+  const events = eventsByUid.get(period.eventUid) ?? [];
+  return (
+    events.find(
+      (event) => event.startAt && period.startAt && getInstantTime(event.startAt) === getInstantTime(period.startAt),
+    ) ??
+    events.find((event) => event.startDate <= period.startDate && event.endDate >= period.startDate) ??
+    events[0]
+  );
+}
+
+export function getPlannerDateScheduleForDate(
+  periods: readonly PlannerPeriod[],
+  dateKey: LocalDateString,
+  timeZone: string,
+): PlannerDateSchedule {
+  const eventsByUid = new Map<string, PlannerPeriod[]>();
+  for (const period of periods) {
+    if (period.kind !== "event" || !period.eventUid) continue;
+    const events = eventsByUid.get(period.eventUid) ?? [];
+    events.push(period);
+    eventsByUid.set(period.eventUid, events);
+  }
+
+  const onDateByKey = new Map<string, PlannerDateScheduleItem>();
+  const addFact = (period: PlannerPeriod, kind: PlannerScheduleFactKind, at: string) => {
+    const key = plannerDateScheduleItemKey(period);
+    const existing = onDateByKey.get(key);
+    if (existing) {
+      if (!existing.facts.some((fact) => fact.kind === kind && fact.at === at)) existing.facts.push({ kind, at });
+      return;
+    }
+    onDateByKey.set(key, {
+      key,
+      period,
+      ...(period.eventUid && period.kind !== "event"
+        ? { eventPeriod: findPlannerEventForRecruitment(period, eventsByUid) }
+        : {}),
+      facts: [{ kind, at }],
+    });
+  };
+
+  for (const period of periods) {
+    if (period.kind === "event") {
+      if (period.startDate === dateKey && period.startAt) addFact(period, "event-start", period.startAt);
+      if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey && period.endless !== true) {
+        addFact(period, "event-end", period.endAt);
+      }
+      continue;
+    }
+
+    if (period.kind === "recruitment") {
+      const eventPeriod = findPlannerEventForRecruitment(period, eventsByUid);
+      const hasDifferentStartTime =
+        period.startDate === dateKey &&
+        Boolean(
+          period.startAt &&
+            eventPeriod?.startAt &&
+            getInstantTime(period.startAt) !== getInstantTime(eventPeriod.startAt),
+        );
+      if (hasDifferentStartTime && period.startAt) addFact(period, "recruitment-start", period.startAt);
+      if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
+        addFact(period, "recruitment-end", period.endAt);
+      }
+      continue;
+    }
+
+    if (period.endAt && formatPlannerPeriodDate(period.endAt, timeZone) === dateKey) {
+      addFact(period, "shop-deadline", period.endAt);
+    }
+  }
+
+  const compareFacts = (left: PlannerScheduleFact, right: PlannerScheduleFact) =>
+    getInstantTime(left.at) - getInstantTime(right.at) || left.kind.localeCompare(right.kind);
+  const onDate = [...onDateByKey.values()].map((item) => ({
+    ...item,
+    facts: [...item.facts].sort(compareFacts),
+  }));
+  onDate.sort(
+    (left, right) =>
+      getInstantTime(left.facts[0].at) - getInstantTime(right.facts[0].at) ||
+      left.period.name.localeCompare(right.period.name),
+  );
+
+  const factKeys = new Set(onDate.map((item) => item.key));
+  const ongoingCandidates = periods
+    .filter((period) => {
+      if (period.kind === "shop" || factKeys.has(plannerDateScheduleItemKey(period))) return false;
+      if (period.kind === "event" && (period.endAt == null || period.endless === true)) return false;
+      return period.startDate < dateKey && period.endDate > dateKey;
+    })
+    .map((period) => ({
+      key: plannerDateScheduleItemKey(period),
+      period,
+      ...(period.kind === "recruitment" ? { eventPeriod: findPlannerEventForRecruitment(period, eventsByUid) } : {}),
+      facts: [],
+    }));
+  const visibleEventKeys = new Set(
+    [...onDate, ...ongoingCandidates].filter((item) => item.period.kind === "event").map((item) => item.key),
+  );
+  const mergedOngoingRecruitmentKeys = new Set(
+    ongoingCandidates.flatMap((item) => {
+      if (item.period.kind !== "recruitment" || !item.period.eventUid || !item.eventPeriod) return [];
+      return visibleEventKeys.has(plannerDateScheduleItemKey(item.eventPeriod)) ? [item.key] : [];
+    }),
+  );
+  const ongoingRecruitmentPeriodsByEventKey = new Map<string, PlannerPeriod[]>();
+  for (const item of ongoingCandidates) {
+    if (!mergedOngoingRecruitmentKeys.has(item.key) || !item.eventPeriod) continue;
+    const eventKey = plannerDateScheduleItemKey(item.eventPeriod);
+    const recruitments = ongoingRecruitmentPeriodsByEventKey.get(eventKey) ?? [];
+    recruitments.push(item.period);
+    ongoingRecruitmentPeriodsByEventKey.set(eventKey, recruitments);
+  }
+  const attachOngoingRecruitments = (items: PlannerDateScheduleItem[]) =>
+    items.map((item) => {
+      if (item.period.kind !== "event") return item;
+      const recruitments = ongoingRecruitmentPeriodsByEventKey.get(item.key);
+      return recruitments ? { ...item, ongoingRecruitmentPeriods: recruitments } : item;
+    });
+  const onDateWithRecruitments = attachOngoingRecruitments(onDate);
+  const ongoing = ongoingCandidates.filter(
+    (item) => item.period.kind !== "recruitment" || !mergedOngoingRecruitmentKeys.has(item.key),
+  );
+  ongoing.sort((left, right) => {
+    const leftEnd = left.period.endAt ? getInstantTime(left.period.endAt) : Number.POSITIVE_INFINITY;
+    const rightEnd = right.period.endAt ? getInstantTime(right.period.endAt) : Number.POSITIVE_INFINITY;
+    return leftEnd - rightEnd || left.period.name.localeCompare(right.period.name);
+  });
+
+  return { onDate: onDateWithRecruitments, ongoing: attachOngoingRecruitments(ongoing) };
+}
+
 export function buildPlannerRecruitmentCandidatesForDate(
   periods: readonly PlannerPeriod[],
-  selectedDate: LocalDateString,
+  selectedDate?: LocalDateString,
 ): PlannerRecruitmentCandidatePeriod[] {
   const candidatesByEventUid = new Map<string, PlannerRecruitmentCandidatePeriod>();
   for (const period of periods) {
     if (
       period.kind !== "recruitment" ||
-      period.startDate > selectedDate ||
-      period.endDate < selectedDate ||
+      (selectedDate !== undefined && (period.startDate > selectedDate || period.endDate < selectedDate)) ||
       !period.eventUid
     ) {
       continue;

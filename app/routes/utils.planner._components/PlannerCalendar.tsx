@@ -1,33 +1,23 @@
-import { ChevronDownIcon as ChevronDownSolidIcon } from "@heroicons/react/16/solid";
 import { ChevronRightIcon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/primitives";
-import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
+import type { EventShopState } from "~/domain/event-shop-state";
 import type {
+  PlannerDateScheduleItem,
   PlannerDayResources,
   PlannerMonthLayout,
   PlannerPeriod,
-  PlannerPeriodStudent,
 } from "~/domain/integrated-planner";
 import {
   buildPlannerMonthLayout,
   buildPlannerRecruitmentCandidatesForDate,
+  getPlannerDateScheduleForDate,
   getPlannerPeriodsForDate,
-  groupPlannerPeriods,
-  groupPlannerPeriodsWithEventMetadata,
-  hasPlannerExactEventHandoff,
-  mergePlannerEventScheduleGroups,
-  partitionPlannerDayResources,
   shiftPlannerMonth,
 } from "~/domain/integrated-planner";
-import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
-import { formatInstant } from "~/lib/date-time";
-import { resourceImageUrl, studentImageUrl } from "~/models/assets";
-import PlannerCalendarWeek, {
-  formatSignedQuantity,
-  type PlannerForecastStatus,
-  RESOURCE_PRESENTATION,
-} from "./PlannerCalendarWeek";
+import PlannerCalendarWeek, { type PlannerForecastStatus } from "./PlannerCalendarWeek";
+import PlannerDateScheduleRow from "./PlannerDateScheduleRow";
+import PlannerEventSubview from "./PlannerEventSubview";
 import PlannerQuickEdit, { type PlannerQuickEditEntry, type PlannerQuickEditKind } from "./PlannerQuickEdit";
 import PlannerRecruitmentEditor, {
   type PlannerRecruitmentSavedState,
@@ -35,7 +25,6 @@ import PlannerRecruitmentEditor, {
   type PlannerRecruitmentSaveResult,
 } from "./PlannerRecruitmentEditor";
 import PlannerShopOwnedQuantityEditor, { type PlannerShopContent } from "./PlannerShopOwnedQuantityEditor";
-import PlannerShopSummary from "./PlannerShopSummary";
 
 export type PlannerCalendarShopPlan = {
   timelineUid: string;
@@ -54,8 +43,7 @@ type PlannerCalendarProps = {
   initialMonth: string;
   todayDateKey: string;
   periods: PlannerPeriod[];
-  publicPeriods: PlannerPeriod[];
-  dailyResources: Record<string, PlannerDayResources>;
+  scheduleAvailability: { dateFacts: boolean; ongoing: boolean };
   calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
   statusMessages: string[];
@@ -65,7 +53,6 @@ type PlannerCalendarProps = {
   guestStorageStatus: "ready" | "memory" | "corrupt" | "loading";
   recruitmentSavedStates: PlannerRecruitmentSavedState[];
   completedRecruitmentEventUids: string[];
-  recruitmentPickupChance: PyroxenePickupChance;
   recruitmentIsSaving: boolean;
   recruitmentSaveResult: PlannerRecruitmentSaveResult | null;
   onSaveRecruitment: (input: PlannerRecruitmentSaveInput) => void;
@@ -77,6 +64,7 @@ type PlannerCalendarProps = {
 
 type PlannerCalendarDialogView =
   | "summary"
+  | "event"
   | "actions"
   | "quick-edit"
   | "recruitment-edit"
@@ -110,339 +98,22 @@ function formatDetailHeadingDateKey(dateKey: string): string {
   return `${date.month}월 ${date.day}일 ${weekday}`;
 }
 
-function isOnDate(period: PlannerPeriod, dateKey: string): boolean {
-  return period.startDate <= dateKey && period.endDate >= dateKey;
-}
-
-function formatPeriodEndpoint(
-  dateKey: string,
-  instant: string | null | undefined,
-  referenceDateKey: string,
-  timeZone: string,
-) {
-  const endpointYear = instant
-    ? Number(formatInstant(instant, { timeZone, format: "YYYY" }))
-    : parseDateKey(dateKey)?.year;
-  const referenceYear = parseDateKey(referenceDateKey)?.year;
-  const includeYear = endpointYear !== undefined && referenceYear !== undefined && endpointYear !== referenceYear;
-  if (instant) {
-    return formatInstant(instant, { timeZone, format: includeYear ? "YYYY/M/D HH:mm" : "M/D HH:mm" });
-  }
-  const date = parseDateKey(dateKey);
-  if (!date) return dateKey;
-  return includeYear ? `${date.year}/${date.month}/${date.day}` : `${date.month}/${date.day}`;
-}
-
-function formatDateOnly(dateKey: string, referenceDateKey: string): string {
-  const date = parseDateKey(dateKey);
-  const referenceYear = parseDateKey(referenceDateKey)?.year;
-  if (!date) return dateKey;
-  return date.year !== referenceYear ? `${date.year}/${date.month}/${date.day}` : `${date.month}/${date.day}`;
-}
-
-function formatEventRange(period: PlannerPeriod, referenceDateKey: string, timeZone: string): string {
-  const start = formatPeriodEndpoint(period.startDate, period.startAt, referenceDateKey, timeZone);
-  if (period.endless) return `${start}부터`;
-  if (!period.endAt) return `${start} · 종료 미정`;
-  const end = formatPeriodEndpoint(period.endDate, period.endAt, referenceDateKey, timeZone);
-  return `${start} – ${end}`;
-}
-
-function plannerRunTypeLabel(period: PlannerPeriod): string | null {
-  if (period.runType === "first") return "최초";
-  if (period.runType === "rerun") return "복각";
-  if (period.runType === "permanent") return "상설";
-  return null;
-}
-
-function formatShopDeadline(period: PlannerPeriod, referenceDateKey: string): string {
-  return `${formatDateOnly(period.endDate, referenceDateKey)}까지`;
-}
-
-function formatRecruitmentEnd(period: PlannerPeriod, referenceDateKey: string, timeZone: string): string {
-  return period.endAt
-    ? `${formatPeriodEndpoint(period.endDate, period.endAt, referenceDateKey, timeZone)} 종료`
-    : "종료 시각을 확인할 수 없어요";
-}
-
 function recruitmentBasisLabel(
   eventUid: string | undefined,
   savedStates: readonly PlannerRecruitmentSavedState[],
   completedEventUids: ReadonlySet<string>,
-  pickupChance: PyroxenePickupChance,
 ): string {
   if (eventUid && completedEventUids.has(eventUid)) return "모집 완료";
   const expectedTrials = savedStates.find((state) => state.eventUid === eventUid)?.expectedTrials;
   if (expectedTrials != null) return `직접 입력 ${expectedTrials.toLocaleString("ko-KR")}회`;
-  if (pickupChance === "ceil") return "모두 천장";
   return "자동 추정";
-}
-
-function hasExactEventHandoff(period: PlannerPeriod, dateKey: string, periods: readonly PlannerPeriod[]): boolean {
-  return periods.some((other) => {
-    return isOnDate(other, dateKey) && hasPlannerExactEventHandoff(period, other);
-  });
-}
-
-function PlannerRecruitmentAvatar({ student }: { student: PlannerPeriodStudent }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  return (
-    <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-muted ring-2 ring-popover">
-      {!imageFailed ? (
-        <img
-          src={studentImageUrl(student.imageUid ?? student.uid)}
-          alt=""
-          aria-hidden="true"
-          className="size-full object-cover object-top"
-          loading="lazy"
-          onError={() => setImageFailed(true)}
-        />
-      ) : null}
-    </span>
-  );
-}
-
-function PlannerRecruitmentPortraits({ students }: { students: readonly PlannerPeriodStudent[] }) {
-  const visibleStudents = students.slice(0, 3);
-  return (
-    <span className="inline-flex shrink-0 items-center pl-1" aria-hidden="true">
-      {visibleStudents.map((student, index) => (
-        <span key={student.uid} className={index > 0 ? "-ml-2.5" : ""}>
-          <PlannerRecruitmentAvatar student={student} />
-        </span>
-      ))}
-      {students.length > visibleStudents.length ? (
-        <span className="-ml-2.5 grid size-9 shrink-0 place-items-center rounded-full bg-muted text-xs font-medium text-foreground ring-2 ring-popover">
-          +{students.length - visibleStudents.length}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-function PlannerRecruitmentRow({
-  students,
-  eventName,
-  status,
-  deadline,
-  actionText,
-  actionFocusKey,
-  onAction,
-}: {
-  students: readonly PlannerPeriodStudent[];
-  eventName?: string;
-  status: string;
-  deadline: string;
-  actionText?: string;
-  actionFocusKey?: string;
-  onAction?: () => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-2">
-      <div className="flex min-w-0 grow basis-64 items-center gap-3">
-        {students.length > 0 ? <PlannerRecruitmentPortraits students={students} /> : null}
-        <div className="min-w-0 flex-1">
-          {eventName ? <p className="text-xs text-muted-foreground">{eventName}</p> : null}
-          <p className="break-keep wrap-anywhere text-sm font-medium text-foreground">
-            {students.length > 0 ? students.map(({ name }) => name).join(", ") : "관심 학생을 선택하지 않았어요."}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            <span className="font-semibold text-foreground">{status}</span> · {deadline}
-          </p>
-        </div>
-      </div>
-      {actionText && actionFocusKey && onAction ? (
-        <span className="inline-flex shrink-0" data-planner-focus-key={actionFocusKey}>
-          <Button
-            text={actionText}
-            size="xs"
-            variant="secondary"
-            className="bg-muted shadow-xs hover:bg-muted/70 dark:shadow-none"
-            onClick={onAction}
-          />
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function shopPlanHasInput(plan: PlannerCalendarShopPlan): boolean {
-  if (!plan.state || !plan.defaultState) return false;
-  return !eventShopStatesEqual(plan.state, plan.defaultState);
-}
-
-function sourceChangesForDetail(source: PlannerDayResources["sources"][number]) {
-  if (source.changes.length > 0) return source.changes;
-  return source.type === "event" ? [{ key: "pyroxene" as const, quantity: 0 }] : [];
-}
-
-function recruitmentCostExplanation(
-  eventUid: string | undefined,
-  savedStates: readonly PlannerRecruitmentSavedState[],
-  completedEventUids: ReadonlySet<string>,
-  pickupChance: PyroxenePickupChance,
-): string {
-  if (eventUid && completedEventUids.has(eventUid)) {
-    return "모집 완료로 처리되어 향후 소비를 0으로 계산했어요.";
-  }
-  const expectedTrials = savedStates.find((state) => state.eventUid === eventUid)?.expectedTrials;
-  if (expectedTrials != null) {
-    return `직접 입력 기준이에요. 입력한 모집 횟수는 ${expectedTrials.toLocaleString("ko-KR")}회예요.`;
-  }
-  if (pickupChance === "ceil") {
-    return "모두 천장까지 진행한다는 가정으로 계산했어요.";
-  }
-  return pickupChance === "average_pity"
-    ? "픽업 확률과 천장 규칙을 반영한 평균 예상치예요. 실제 결과에 따라 달라질 수 있어요."
-    : "픽업 확률을 반영한 평균 예상치예요. 실제 결과에 따라 달라질 수 있어요.";
-}
-
-function headingIdForShopPlan(groupKey: string, plan: PlannerCalendarShopPlan): string {
-  const value = `${groupKey}-${plan.shopStateUid ?? plan.timelineUid}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-  return `planner-shop-summary-${value}`;
-}
-
-function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  return period?.imageUrl && !imageFailed ? (
-    <img
-      src={period.imageUrl}
-      alt=""
-      className="size-16 shrink-0 rounded-md object-cover sm:size-20"
-      loading="lazy"
-      onError={() => setImageFailed(true)}
-    />
-  ) : (
-    <div aria-hidden="true" className="size-16 shrink-0 rounded-md bg-muted sm:size-20" />
-  );
-}
-
-function PlannerEventDates({
-  eventPeriod,
-  shopPeriod,
-  referenceDateKey,
-  timeZone,
-}: {
-  eventPeriod?: PlannerPeriod;
-  shopPeriod?: PlannerPeriod;
-  referenceDateKey: string;
-  timeZone: string;
-}) {
-  if (!eventPeriod && !shopPeriod) return null;
-  const eventRange = eventPeriod ? formatEventRange(eventPeriod, referenceDateKey, timeZone) : null;
-  return (
-    <dl className="mt-1 grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
-      {eventPeriod && eventRange ? (
-        <>
-          <dt className="text-muted-foreground">{plannerRunTypeLabel(eventPeriod) ?? "이벤트"}</dt>
-          <dd className="min-w-0 tabular-nums">{eventRange}</dd>
-        </>
-      ) : null}
-      {shopPeriod ? (
-        <>
-          <dt className="text-muted-foreground">상점 교환</dt>
-          <dd className="tabular-nums">{formatShopDeadline(shopPeriod, referenceDateKey)}</dd>
-        </>
-      ) : null}
-    </dl>
-  );
-}
-
-function PlannerEventCardActions({
-  eventPeriod,
-  shopCalculatorHref,
-  editableShopPlans = [],
-  shopEditFocusKey,
-  onEditShop,
-  className,
-}: {
-  eventPeriod?: PlannerPeriod;
-  shopCalculatorHref?: string;
-  editableShopPlans?: readonly PlannerCalendarShopPlan[];
-  shopEditFocusKey?: string;
-  onEditShop?: () => void;
-  className?: string;
-}) {
-  if (!eventPeriod && !shopCalculatorHref && editableShopPlans.length === 0) return null;
-
-  return (
-    <div className={`flex flex-wrap gap-2 max-[359px]:flex-nowrap max-[359px]:gap-1 ${className ?? ""}`.trim()}>
-      {eventPeriod ? (
-        <Button
-          text="이벤트 상세"
-          size="xs"
-          variant="secondary"
-          className="shadow-xs dark:shadow-none"
-          to={eventPeriod.href}
-        />
-      ) : null}
-      {shopCalculatorHref ? (
-        <Button
-          text="상점 계산기"
-          size="xs"
-          variant="secondary"
-          className="shadow-xs dark:shadow-none"
-          to={shopCalculatorHref}
-        />
-      ) : null}
-      {editableShopPlans.length > 0 && shopEditFocusKey && onEditShop ? (
-        <span className="inline-flex shrink-0" data-planner-focus-key={shopEditFocusKey}>
-          <Button
-            text="보유 재화 수정"
-            size="xs"
-            variant="secondary"
-            className="shadow-xs dark:shadow-none"
-            onClick={onEditShop}
-          />
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function PlannerDetailResourceValues({
-  changes,
-  emphasized = false,
-}: {
-  changes: PlannerDayResources["changes"];
-  emphasized?: boolean;
-}) {
-  if (changes.length === 0) return null;
-  return (
-    <span className={`flex flex-col items-end ${emphasized ? "gap-1" : "gap-0.5"}`}>
-      {changes.map(({ key, quantity }) => {
-        const resource = RESOURCE_PRESENTATION[key];
-        return (
-          <span
-            key={key}
-            className={`grid w-24 grid-cols-[1rem_4.75rem] items-center gap-1 ${emphasized ? "leading-6" : "leading-5"}`}
-          >
-            <img
-              src={resourceImageUrl(resource.imageType, resource.uid)}
-              alt={resource.label}
-              className="size-4 shrink-0 object-contain"
-              loading="lazy"
-            />
-            <span
-              className={`text-right tabular-nums ${
-                emphasized ? "text-base font-semibold text-foreground" : "text-sm text-muted-foreground"
-              }`}
-            >
-              {formatSignedQuantity(quantity)}
-            </span>
-          </span>
-        );
-      })}
-    </span>
-  );
 }
 
 export default function PlannerCalendar({
   initialMonth,
   todayDateKey,
   periods,
-  publicPeriods,
-  dailyResources,
+  scheduleAvailability,
   calendarResources,
   forecastStatus,
   statusMessages,
@@ -452,7 +123,6 @@ export default function PlannerCalendar({
   guestStorageStatus,
   recruitmentSavedStates,
   completedRecruitmentEventUids,
-  recruitmentPickupChance,
   recruitmentIsSaving,
   recruitmentSaveResult,
   onSaveRecruitment,
@@ -462,18 +132,12 @@ export default function PlannerCalendar({
   onLoadMore,
 }: PlannerCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [focusedPeriodKey, setFocusedPeriodKey] = useState<string | null>(null);
-  const [eventContextUid, setEventContextUid] = useState<string | null>(null);
+  const [selectedEventUid, setSelectedEventUid] = useState<string | null>(null);
   const [dialogView, setDialogView] = useState<PlannerCalendarDialogView>("summary");
-  const [isOtherExpanded, setIsOtherExpanded] = useState(false);
-  const [recruitmentHelpKey, setRecruitmentHelpKey] = useState<string | null>(null);
-  const [pinnedRecruitmentHelpKey, setPinnedRecruitmentHelpKey] = useState<string | null>(null);
-  const [hoveredRecruitmentHelpKey, setHoveredRecruitmentHelpKey] = useState<string | null>(null);
-  const [focusedRecruitmentHelpKey, setFocusedRecruitmentHelpKey] = useState<string | null>(null);
-  const [dismissedRecruitmentHelpKey, setDismissedRecruitmentHelpKey] = useState<string | null>(null);
   const [quickEditKind, setQuickEditKind] = useState<PlannerQuickEditKind>("buy");
   const [editingEntry, setEditingEntry] = useState<PlannerQuickEditEntry | null>(null);
   const [editingShopPlanKey, setEditingShopPlanKey] = useState<string | null>(null);
+  const [preferredRecruitmentEventUid, setPreferredRecruitmentEventUid] = useState<string | null>(null);
   const [savedNotice, setSavedNotice] = useState<string | null>(null);
   const dialogRef = useRef<HTMLDialogElement>(null);
   const dialogHeadingRef = useRef<HTMLHeadingElement>(null);
@@ -483,48 +147,11 @@ export default function PlannerCalendar({
   const monthRefs = useRef(new Map<string, HTMLElement>());
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const previousSelectedDateRef = useRef<string | null>(null);
-  const summaryScopeRef = useRef<{
-    focusedPeriodKey: string | null;
-    eventContextUid: string | null;
-  } | null>(null);
-  const summaryFocusTargetKeyRef = useRef("planner-add-plan");
-  const restoreSummaryFocusRef = useRef(false);
+  const parentViewRef = useRef<"summary" | "event">("summary");
+  const parentFocusTargetKeyRef = useRef("planner-add-plan");
+  const restoreParentFocusRef = useRef(false);
   const [activeMonth, setActiveMonth] = useState(initialMonth);
   const [showMonthToolbar, setShowMonthToolbar] = useState(false);
-  const isRecruitmentHelpOpen = Boolean(
-    recruitmentHelpKey &&
-      (pinnedRecruitmentHelpKey === recruitmentHelpKey ||
-        (dismissedRecruitmentHelpKey !== recruitmentHelpKey &&
-          (hoveredRecruitmentHelpKey === recruitmentHelpKey || focusedRecruitmentHelpKey === recruitmentHelpKey))),
-  );
-
-  function resetRecruitmentHelp() {
-    setRecruitmentHelpKey(null);
-    setPinnedRecruitmentHelpKey(null);
-    setHoveredRecruitmentHelpKey(null);
-    setFocusedRecruitmentHelpKey(null);
-    setDismissedRecruitmentHelpKey(null);
-  }
-
-  function dismissRecruitmentHelp(helpKey = recruitmentHelpKey) {
-    if (!helpKey) return;
-    setPinnedRecruitmentHelpKey(null);
-    setHoveredRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-    setFocusedRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-    setDismissedRecruitmentHelpKey(helpKey);
-  }
-
-  useEffect(() => {
-    if (!isRecruitmentHelpOpen || !recruitmentHelpKey) return;
-    const activeKey = recruitmentHelpKey;
-    const handleOutsidePointer = (event: PointerEvent) => {
-      if (event.target instanceof Element && event.target.closest("[data-planner-recruitment-help]")) return;
-      setPinnedRecruitmentHelpKey(null);
-      setDismissedRecruitmentHelpKey(activeKey);
-    };
-    document.addEventListener("pointerdown", handleOutsidePointer);
-    return () => document.removeEventListener("pointerdown", handleOutsidePointer);
-  }, [isRecruitmentHelpOpen, recruitmentHelpKey]);
 
   const months = useMemo(
     () => Array.from({ length: monthCount }, (_, index) => shiftPlannerMonth(initialMonth, index)),
@@ -596,16 +223,20 @@ export default function PlannerCalendar({
     previousSelectedDateRef.current = selectedDate;
   }, [selectedDate]);
 
+  // Focus the heading whenever the date detail changes view; the dependency triggers this transition.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dialog view changes must move focus to its heading.
   useEffect(() => {
     if (!selectedDate) return;
 
-    if (dialogView === "summary" && restoreSummaryFocusRef.current) {
-      restoreSummaryFocusRef.current = false;
+    if (restoreParentFocusRef.current) {
+      restoreParentFocusRef.current = false;
       const targets = dialogRef.current?.querySelectorAll<HTMLElement>("[data-planner-focus-key]");
       const wrapper = Array.from(targets ?? []).find(
-        (target) => target.dataset.plannerFocusKey === summaryFocusTargetKeyRef.current,
+        (target) => target.dataset.plannerFocusKey === parentFocusTargetKeyRef.current,
       );
-      const trigger = wrapper?.querySelector<HTMLElement>("button, a[href]");
+      const trigger = wrapper?.matches("button, a[href]")
+        ? wrapper
+        : wrapper?.querySelector<HTMLElement>("button, a[href]");
       if (trigger?.isConnected) {
         trigger.focus();
         return;
@@ -615,159 +246,137 @@ export default function PlannerCalendar({
     dialogHeadingRef.current?.focus();
   }, [dialogView, selectedDate]);
 
-  const plannedPeriodKeys = useMemo(() => new Set(periods.map((period) => period.key)), [periods]);
-  const datePeriods = selectedDate ? getPlannerPeriodsForDate(periods, selectedDate, todayDateKey) : [];
-  const selectedPeriods = eventContextUid
-    ? periods.filter((period) => period.eventUid === eventContextUid)
-    : datePeriods;
-  const datePublicPeriods = selectedDate ? getPlannerPeriodsForDate(publicPeriods, selectedDate, todayDateKey) : [];
-  const publicCandidates = selectedDate
-    ? datePublicPeriods.filter(
-        (period) => !plannedPeriodKeys.has(period.key) && (!eventContextUid || period.eventUid === eventContextUid),
-      )
-    : [];
+  const dateSchedule = useMemo(
+    () => (selectedDate ? getPlannerDateScheduleForDate(periods, selectedDate, timeZone) : { onDate: [], ongoing: [] }),
+    [periods, selectedDate, timeZone],
+  );
+  const datePeriods = useMemo(
+    () => (selectedDate ? getPlannerPeriodsForDate(periods, selectedDate, todayDateKey) : []),
+    [periods, selectedDate, todayDateKey],
+  );
   const dateRecruitmentCandidates = useMemo(
-    () => (selectedDate ? buildPlannerRecruitmentCandidatesForDate(publicPeriods, selectedDate) : []),
-    [publicPeriods, selectedDate],
+    () => (selectedDate ? buildPlannerRecruitmentCandidatesForDate(periods, selectedDate) : []),
+    [periods, selectedDate],
   );
-  const recruitmentCandidates = useMemo(() => {
-    if (!eventContextUid) return dateRecruitmentCandidates;
-    const firstRecruitmentPeriod = publicPeriods
-      .filter((period) => period.kind === "recruitment" && period.eventUid === eventContextUid)
-      .sort((left, right) => left.startDate.localeCompare(right.startDate))[0];
-    return firstRecruitmentPeriod
-      ? buildPlannerRecruitmentCandidatesForDate(publicPeriods, firstRecruitmentPeriod.startDate).filter(
-          (candidate) => candidate.eventUid === eventContextUid,
-        )
-      : [];
-  }, [dateRecruitmentCandidates, eventContextUid, publicPeriods]);
-  const preferredRecruitmentEventUid =
-    eventContextUid ?? periods.find((period) => period.key === focusedPeriodKey)?.eventUid;
-  const selectedResources = selectedDate ? dailyResources[selectedDate] : undefined;
+  const eventRecruitmentCandidates = useMemo(
+    () =>
+      selectedEventUid
+        ? buildPlannerRecruitmentCandidatesForDate(periods).filter(
+            (candidate) => candidate.eventUid === selectedEventUid,
+          )
+        : [],
+    [periods, selectedEventUid],
+  );
+  const recruitmentCandidates = selectedEventUid ? eventRecruitmentCandidates : dateRecruitmentCandidates;
   const selectedOneOffEntries = selectedDate ? oneOffEntries.filter((entry) => entry.date === selectedDate) : [];
-  const selectedResourceBreakdown = selectedResources ? partitionPlannerDayResources(selectedResources) : null;
-  const calendarSourceRows = selectedResourceBreakdown?.calendarSources.filter(
-    (source) => source.changes.length > 0 || source.type === "event",
-  );
-  const otherSourceRows = selectedResourceBreakdown?.otherSources ?? [];
   const completedRecruitmentEventUidSet = useMemo(
     () => new Set(completedRecruitmentEventUids),
     [completedRecruitmentEventUids],
   );
-  const representedOneOffIds = new Set(selectedResources?.sources.map((source) => source.key) ?? []);
-  const unrepresentedOneOffEntries = selectedOneOffEntries.filter((entry) => !representedOneOffIds.has(entry.id));
-  const hasLedgerEditActions = selectedOneOffEntries.length > 0;
-  const resourceRowGridClass = hasLedgerEditActions
-    ? "grid-cols-[minmax(0,1fr)_auto_3.25rem]"
-    : "grid-cols-[minmax(0,1fr)_auto]";
-  const recruitmentHelpPopoverWidthClass = hasLedgerEditActions
-    ? "w-[min(20rem,calc(100%_-_10.5rem))]"
-    : "w-[min(20rem,calc(100%_-_7.25rem))]";
-  const summaryGroups = useMemo(() => groupPlannerPeriods(selectedPeriods), [selectedPeriods]);
-  const personalRecruitments = useMemo(
-    () =>
-      summaryGroups.flatMap((group) =>
-        group.periods
-          .filter((period) => period.kind === "recruitment")
-          .map((period) => ({ eventName: group.name, period })),
-      ),
-    [summaryGroups],
-  );
-  const summaryEventUids = useMemo(
-    () => new Set(summaryGroups.flatMap((group) => (group.eventUid ? [group.eventUid] : []))),
-    [summaryGroups],
-  );
+  const eventPeriod = selectedEventUid
+    ? periods.find((period) => period.kind === "event" && period.eventUid === selectedEventUid)
+    : undefined;
+  const eventShopPeriod = selectedEventUid
+    ? periods.find((period) => period.kind === "shop" && period.eventUid === selectedEventUid)
+    : undefined;
+  const selectedDateEventUids = new Set(datePeriods.flatMap((period) => (period.eventUid ? [period.eventUid] : [])));
   const selectedShopPlans = selectedDate
     ? shopPlans.filter(
         (plan) =>
-          (eventContextUid && plan.timelineUid === eventContextUid) ||
-          (!eventContextUid &&
-            (summaryEventUids.has(plan.timelineUid) ||
+          (selectedEventUid && plan.timelineUid === selectedEventUid) ||
+          (!selectedEventUid &&
+            (selectedDateEventUids.has(plan.timelineUid) ||
               (plan.startDate !== null &&
                 plan.endDate !== null &&
                 plan.startDate <= selectedDate &&
                 plan.endDate >= selectedDate))),
       )
     : [];
-  const publicGroups = useMemo(
-    () => groupPlannerPeriodsWithEventMetadata(publicCandidates, publicPeriods),
-    [publicCandidates, publicPeriods],
-  );
-  const eventScheduleGroups = useMemo(
-    () => mergePlannerEventScheduleGroups(summaryGroups, publicGroups),
-    [publicGroups, summaryGroups],
-  );
   const editingShopPlan = editingShopPlanKey
     ? selectedShopPlans.find(
         (plan) => plan.shopStateUid === editingShopPlanKey || plan.timelineUid === editingShopPlanKey,
       )
     : null;
   const editingShopStateUid = editingShopPlan?.shopStateUid;
-  const contextEventName = eventContextUid
-    ? (selectedPeriods.find((period) => period.kind === "event")?.name ?? selectedPeriods[0]?.name)
-    : undefined;
+  const dateFactItems = dateSchedule.onDate;
+  const ongoingItems = dateSchedule.ongoing;
 
-  function openDate(dateKey: string, trigger: HTMLButtonElement, period?: PlannerPeriod) {
-    resetRecruitmentHelp();
-    setIsOtherExpanded(false);
+  function openDate(dateKey: string, trigger: HTMLButtonElement) {
     triggerRef.current = trigger;
-    summaryFocusTargetKeyRef.current = "planner-add-plan";
-    restoreSummaryFocusRef.current = false;
+    parentViewRef.current = "summary";
+    parentFocusTargetKeyRef.current = "planner-add-plan";
+    restoreParentFocusRef.current = false;
     setSelectedDate(dateKey);
-    const nextFocusedPeriodKey = period?.key ?? null;
-    const nextEventContextUid =
-      period && !hasExactEventHandoff(period, dateKey, periods) ? (period.eventUid ?? null) : null;
-    summaryScopeRef.current = {
-      focusedPeriodKey: nextFocusedPeriodKey,
-      eventContextUid: nextEventContextUid,
-    };
-    setFocusedPeriodKey(nextFocusedPeriodKey);
-    setEventContextUid(nextEventContextUid);
+    setSelectedEventUid(null);
     setDialogView("summary");
     setSavedNotice(null);
+  }
+
+  function openPeriod(dateKey: string, trigger: HTMLButtonElement, period: PlannerPeriod) {
+    openDate(dateKey, trigger);
+    if (!period.eventUid) return;
+    const schedule = getPlannerDateScheduleForDate(periods, dateKey, timeZone);
+    const items = schedule.onDate.concat(schedule.ongoing);
+    const item =
+      items.find((candidate) => candidate.period === period) ??
+      items.find((candidate) => candidate.period.eventUid === period.eventUid);
+    parentFocusTargetKeyRef.current = item?.key ?? "planner-add-plan";
+    parentViewRef.current = "summary";
+    setSelectedEventUid(period.eventUid);
+    setPreferredRecruitmentEventUid(period.eventUid);
+    setDialogView("event");
+  }
+
+  function openEventView(item: PlannerDateScheduleItem, _trigger: HTMLButtonElement) {
+    if (!item.period.eventUid) return;
+    parentViewRef.current = "summary";
+    parentFocusTargetKeyRef.current = item.key;
+    restoreParentFocusRef.current = false;
+    setSelectedEventUid(item.period.eventUid);
+    setPreferredRecruitmentEventUid(item.period.eventUid);
+    setSavedNotice(null);
+    setDialogView("event");
+  }
+
+  function backFromEvent() {
+    parentViewRef.current = "summary";
+    restoreParentFocusRef.current = true;
+    setSelectedEventUid(null);
+    setDialogView("summary");
   }
 
   function closeDialog() {
-    resetRecruitmentHelp();
-    setIsOtherExpanded(false);
-    summaryFocusTargetKeyRef.current = "planner-add-plan";
-    restoreSummaryFocusRef.current = false;
+    parentFocusTargetKeyRef.current = "planner-add-plan";
+    restoreParentFocusRef.current = false;
     setSelectedDate(null);
-    setFocusedPeriodKey(null);
-    setEventContextUid(null);
-    summaryScopeRef.current = null;
+    setSelectedEventUid(null);
+    setPreferredRecruitmentEventUid(null);
     setDialogView("summary");
     setEditingEntry(null);
     setEditingShopPlanKey(null);
     setSavedNotice(null);
   }
 
-  function returnToSummary() {
-    resetRecruitmentHelp();
-    restoreSummaryFocusRef.current = true;
-    const summaryScope = summaryScopeRef.current;
-    if (summaryScope) {
-      setFocusedPeriodKey(summaryScope.focusedPeriodKey);
-      setEventContextUid(summaryScope.eventContextUid);
-    }
-    setDialogView("summary");
+  function returnToParentView() {
+    restoreParentFocusRef.current = true;
+    if (parentViewRef.current === "summary") setSelectedEventUid(null);
+    setDialogView(parentViewRef.current);
     setEditingEntry(null);
     setEditingShopPlanKey(null);
   }
 
-  function rememberSummaryFocusTarget(targetKey: string) {
-    if (dialogView === "summary") summaryFocusTargetKeyRef.current = targetKey;
+  function rememberParentFocusTarget(targetKey: string) {
+    parentViewRef.current = dialogView === "event" ? "event" : "summary";
+    parentFocusTargetKeyRef.current = targetKey;
   }
 
   function beginActionChoice() {
-    resetRecruitmentHelp();
-    rememberSummaryFocusTarget("planner-add-plan");
+    rememberParentFocusTarget("planner-add-plan");
     setDialogView("actions");
   }
 
   function beginQuickEdit(kind: PlannerQuickEditKind, entry?: PlannerQuickEditEntry, focusTargetKey?: string) {
-    resetRecruitmentHelp();
-    rememberSummaryFocusTarget(focusTargetKey ?? "planner-add-plan");
+    rememberParentFocusTarget(focusTargetKey ?? "planner-add-plan");
     setQuickEditKind(kind);
     setEditingEntry(entry ?? null);
     setSavedNotice(null);
@@ -775,19 +384,18 @@ export default function PlannerCalendar({
   }
 
   function beginRecruitmentEdit(period?: PlannerPeriod, focusTargetKey?: string) {
-    resetRecruitmentHelp();
-    rememberSummaryFocusTarget(focusTargetKey ?? "planner-add-plan");
-    if (period) {
-      setFocusedPeriodKey(period.key);
-      setEventContextUid(period.eventUid ?? null);
-    }
+    rememberParentFocusTarget(focusTargetKey ?? "planner-add-plan");
+    const eventUid = period?.eventUid ?? selectedEventUid;
+    setPreferredRecruitmentEventUid(eventUid ?? null);
+    if (eventUid) setSelectedEventUid(eventUid);
     setSavedNotice(null);
     setDialogView("recruitment-edit");
   }
 
   function beginShopEdit(plan?: PlannerCalendarShopPlan, focusTargetKey?: string) {
-    resetRecruitmentHelp();
-    rememberSummaryFocusTarget(focusTargetKey ?? "planner-add-plan");
+    if (dialogView !== "shop-choice") {
+      rememberParentFocusTarget(focusTargetKey ?? "planner-add-plan");
+    }
     setSavedNotice(null);
     if (selectedShopPlans.length > 1 && !plan) {
       setDialogView("shop-choice");
@@ -798,163 +406,39 @@ export default function PlannerCalendar({
     setDialogView("shop-edit");
   }
 
-  function renderSourceRows(sources: PlannerDayResources["sources"], groupKey: string) {
-    if (sources.length === 0) return null;
+  function renderDirectPlanEntries() {
+    if (selectedOneOffEntries.length === 0) return null;
     return (
-      <ul className="space-y-0">
-        {sources.map((source, index) => {
-          const editEntry = selectedOneOffEntries.find((entry) => entry.id === source.key);
-          const focusTargetKey = editEntry ? `quick-edit-${editEntry.id}` : undefined;
-          const helpKey = `${groupKey}:${source.key}`;
-          const helpId = `planner-recruitment-help-${groupKey}-${index}`;
-          const isHelpOpen = source.type === "event" && isRecruitmentHelpOpen && recruitmentHelpKey === helpKey;
-          const helpText = recruitmentCostExplanation(
-            source.eventUid,
-            recruitmentSavedStates,
-            completedRecruitmentEventUidSet,
-            recruitmentPickupChance,
-          );
-
-          return (
-            <li
-              key={source.key}
-              className={`relative grid ${resourceRowGridClass} min-h-8 items-start gap-x-2 py-1 text-sm text-muted-foreground`}
-              onMouseLeave={
-                source.type === "event"
-                  ? () => {
-                      setHoveredRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                      if (focusedRecruitmentHelpKey !== helpKey && pinnedRecruitmentHelpKey !== helpKey) {
-                        setRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                        setDismissedRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                      }
-                    }
-                  : undefined
-              }
-            >
-              <div
-                className={`flex min-w-0 flex-wrap items-center gap-x-1 leading-5 ${groupKey === "other" ? "pl-7" : "pl-3"}`}
-              >
-                <span className="min-w-0 break-keep">{source.label ?? "예상 항목 이름을 확인할 수 없어요"}</span>
-                {source.type === "event" ? (
-                  <span className="inline-flex shrink-0" data-planner-recruitment-help>
-                    <button
-                      type="button"
-                      aria-label="모집 소비 계산 안내"
-                      aria-expanded={isHelpOpen}
-                      aria-describedby={isHelpOpen ? helpId : undefined}
-                      aria-controls={isHelpOpen ? helpId : undefined}
-                      className="grid size-6 place-items-center rounded-full text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                      onMouseEnter={() => {
-                        setRecruitmentHelpKey(helpKey);
-                        setDismissedRecruitmentHelpKey(null);
-                        setHoveredRecruitmentHelpKey(helpKey);
-                      }}
-                      onFocus={() => {
-                        setRecruitmentHelpKey(helpKey);
-                        setDismissedRecruitmentHelpKey(null);
-                        setFocusedRecruitmentHelpKey(helpKey);
-                      }}
-                      onBlur={() => {
-                        setFocusedRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                        if (hoveredRecruitmentHelpKey !== helpKey && pinnedRecruitmentHelpKey !== helpKey) {
-                          setRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                          setDismissedRecruitmentHelpKey((current) => (current === helpKey ? null : current));
-                        }
-                      }}
-                      onClick={() => {
-                        if (pinnedRecruitmentHelpKey === helpKey) {
-                          dismissRecruitmentHelp(helpKey);
-                          return;
-                        }
-                        setRecruitmentHelpKey(helpKey);
-                        setPinnedRecruitmentHelpKey(helpKey);
-                        setDismissedRecruitmentHelpKey(null);
-                      }}
-                    >
-                      <span
-                        className={`grid size-4 place-items-center rounded-full bg-muted text-[11px] font-semibold leading-none ${
-                          isHelpOpen ? "ring-1 ring-inset ring-muted-foreground/30" : ""
-                        }`}
-                      >
-                        ?
-                      </span>
-                    </button>
-                  </span>
-                ) : null}
-              </div>
-              <PlannerDetailResourceValues changes={sourceChangesForDetail(source)} />
-              {hasLedgerEditActions ? (
-                <span className="-mt-1 flex min-h-8 items-start justify-center">
-                  {editEntry && focusTargetKey ? (
-                    <span className="inline-flex" data-planner-focus-key={focusTargetKey}>
-                      <Button
-                        text="수정"
-                        size="xs"
-                        variant="secondary"
-                        className="bg-muted shadow-xs hover:bg-muted/70 dark:shadow-none"
-                        onClick={() => beginQuickEdit(editEntry.kind, editEntry, focusTargetKey)}
-                      />
-                    </span>
-                  ) : null}
-                </span>
-              ) : null}
-              {isHelpOpen ? (
-                <div
-                  id={helpId}
-                  role="tooltip"
-                  data-planner-recruitment-help
-                  className={`absolute left-3 top-full z-20 mt-0.5 ${recruitmentHelpPopoverWidthClass} min-w-28 max-w-[20rem] break-words rounded-md bg-popover px-2.5 py-2 text-[13px] font-normal leading-normal text-popover-foreground shadow-lg dark:bg-muted dark:shadow-md dark:shadow-black/20`}
-                >
-                  {helpText}
-                </div>
-              ) : null}
-            </li>
-          );
-        })}
-      </ul>
-    );
-  }
-
-  function renderUnrepresentedOneOffEntries() {
-    if (unrepresentedOneOffEntries.length === 0) return null;
-    return (
-      <div className="max-w-md">
-        <h4 className="mb-1 text-xs font-semibold text-muted-foreground">직접 입력한 계획</h4>
-        <ul className="space-y-0">
-          {unrepresentedOneOffEntries.map((entry) => {
-            const entryChanges = (Object.keys(RESOURCE_PRESENTATION) as (keyof typeof RESOURCE_PRESENTATION)[])
-              .filter((key) => entry.resources[key] !== 0)
-              .map((key) => ({ key, quantity: entry.resources[key] }));
-            const focusTargetKey = `quick-edit-${entry.id}`;
+      <section aria-labelledby="planner-direct-plans-title" className="space-y-2">
+        <h3 id="planner-direct-plans-title" className="text-base font-semibold">
+          직접 입력한 계획
+        </h3>
+        <ul className="space-y-1">
+          {selectedOneOffEntries.map((entry) => {
+            const focusTargetKey = `planner-quick-edit-${entry.id}`;
+            const entryName = entry.description?.trim() || (entry.kind === "buy" ? "청휘석 구매" : "직접 재화");
             return (
-              <li
-                key={entry.id}
-                className={`grid ${resourceRowGridClass} min-h-8 items-start gap-x-2 py-1 text-sm text-muted-foreground`}
-              >
-                <span className="min-w-0 break-keep pl-3 leading-5">{entry.description || "직접 입력"}</span>
-                <PlannerDetailResourceValues changes={entryChanges} />
-                <span className="-mt-1 flex min-h-8 items-start justify-center">
-                  <span className="inline-flex" data-planner-focus-key={focusTargetKey}>
-                    <Button
-                      text="수정"
-                      size="xs"
-                      variant="secondary"
-                      className="bg-muted shadow-xs hover:bg-muted/70 dark:shadow-none"
-                      onClick={() => beginQuickEdit(entry.kind, entry, focusTargetKey)}
-                    />
-                  </span>
+              <li key={entry.id} className="flex min-h-10 items-center justify-between gap-3">
+                <span className="min-w-0 break-keep text-sm">{entryName}</span>
+                <span className="inline-flex shrink-0" data-planner-focus-key={focusTargetKey}>
+                  <Button
+                    text="수정"
+                    size="xs"
+                    variant="secondary"
+                    onClick={() => beginQuickEdit(entry.kind, entry, focusTargetKey)}
+                  />
                 </span>
               </li>
             );
           })}
         </ul>
-      </div>
+      </section>
     );
   }
 
   function finishSavedEdit(message: string) {
     setSavedNotice(message);
-    returnToSummary();
+    returnToParentView();
   }
 
   function scrollToToday() {
@@ -966,7 +450,7 @@ export default function PlannerCalendar({
   }
 
   function renderMonth(monthLayout: PlannerMonthLayout) {
-    const { monthKey, weeks, weekLayouts, maxEventLaneCount, laneHeights } = monthLayout;
+    const { monthKey, weeks, weekLayouts } = monthLayout;
     return (
       <section
         key={monthKey}
@@ -995,20 +479,16 @@ export default function PlannerCalendar({
                 key={week[0].dateKey}
                 week={week}
                 periods={periods}
-                publicPeriods={publicPeriods}
-                plannedPeriodKeys={plannedPeriodKeys}
                 calendarResources={calendarResources}
                 forecastStatus={forecastStatus}
                 weekLayout={weekLayouts[index]}
-                maxEventLaneCount={maxEventLaneCount}
-                laneHeights={laneHeights}
                 timeZone={timeZone}
                 todayDateKey={todayDateKey}
                 selectedDate={selectedDate}
                 isFirstWeek={index === 0}
                 isLastWeek={index === weeks.length - 1}
                 onSelectDate={(dateKey, trigger) => openDate(dateKey, trigger)}
-                onSelectPeriod={(dateKey, trigger, period) => openDate(dateKey, trigger, period)}
+                onSelectPeriod={(dateKey, trigger, period) => openPeriod(dateKey, trigger, period)}
                 onTodayCellRef={(element) => {
                   todayCellRef.current = element;
                 }}
@@ -1065,22 +545,24 @@ export default function PlannerCalendar({
         aria-labelledby="planner-day-title"
         className="fixed inset-x-0 top-auto bottom-0 m-0 max-h-[85dvh] w-full max-w-3xl overflow-hidden rounded-t-lg border-0 bg-popover p-0 text-popover-foreground shadow-t-xl backdrop:bg-black/50 lg:inset-0 lg:m-auto lg:max-h-[80vh] lg:rounded-lg"
         onClose={closeDialog}
-        onCancel={(event) => {
-          if (!isRecruitmentHelpOpen) return;
-          event.preventDefault();
-          dismissRecruitmentHelp();
-        }}
       >
         {selectedDate ? (
           <div className="flex max-h-[85dvh] flex-col lg:max-h-[80vh]">
             <header className="flex shrink-0 items-start justify-between gap-4 px-4 pb-3 pt-5 lg:px-6 lg:pt-6">
               <div className="min-w-0">
-                <h2 ref={dialogHeadingRef} id="planner-day-title" tabIndex={-1} className="text-lg font-semibold">
+                <h2
+                  ref={dialogHeadingRef}
+                  id="planner-day-title"
+                  tabIndex={-1}
+                  className="break-keep text-lg font-semibold"
+                >
                   {dialogView === "summary" ? (
                     <>
                       <span aria-hidden="true">{formatDetailHeadingDateKey(selectedDate)}</span>
                       <span className="sr-only">{formatDateKey(selectedDate)}</span>
                     </>
+                  ) : dialogView === "event" ? (
+                    (eventPeriod?.name ?? "일정 정보를 확인할 수 없어요.")
                   ) : dialogView === "actions" ? (
                     "계획 추가"
                   ) : dialogView === "quick-edit" ? (
@@ -1100,14 +582,14 @@ export default function PlannerCalendar({
                   )}
                 </h2>
                 {dialogView !== "summary" && dialogView !== "recruitment-edit" ? (
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {`${formatDateKey(selectedDate)}${contextEventName ? ` · ${contextEventName}` : ""}`}
-                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">{formatDateKey(selectedDate)}</p>
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {dialogView === "actions" || dialogView === "shop-choice" ? (
-                  <Button text="뒤로" size="sm" variant="secondary" onClick={returnToSummary} />
+                {dialogView === "event" ? (
+                  <Button text="뒤로" size="sm" variant="secondary" onClick={backFromEvent} />
+                ) : dialogView === "actions" || dialogView === "shop-choice" ? (
+                  <Button text="뒤로" size="sm" variant="secondary" onClick={returnToParentView} />
                 ) : null}
                 {dialogView === "summary" ? (
                   <span className="inline-flex" data-planner-focus-key="planner-add-plan">
@@ -1122,7 +604,9 @@ export default function PlannerCalendar({
                       ? "모집 계획 닫기"
                       : dialogView === "summary"
                         ? "날짜 상세 닫기"
-                        : "계획 입력 닫기"
+                        : dialogView === "event"
+                          ? "이벤트 화면 닫기"
+                          : "계획 입력 닫기"
                   }
                   onClick={closeDialog}
                 >
@@ -1139,221 +623,82 @@ export default function PlannerCalendar({
 
               {dialogView === "summary" ? (
                 <>
-                  <section aria-labelledby="planner-day-resources" className="max-w-md">
-                    <h3 id="planner-day-resources" className="mb-2 text-base font-semibold">
-                      예상 재화 증감
+                  <section aria-labelledby="planner-day-schedule-title" className="space-y-2">
+                    <h3 id="planner-day-schedule-title" className="text-base font-semibold">
+                      {selectedDate === todayDateKey ? "오늘" : "이 날"}
                     </h3>
-                    {forecastStatus === "ready" && selectedResources ? (
-                      <div className="space-y-0">
-                        {calendarSourceRows && calendarSourceRows.length > 0
-                          ? renderSourceRows(calendarSourceRows, "calendar")
-                          : null}
-                        {otherSourceRows.length > 0 ? (
-                          <>
-                            <div className={`grid ${resourceRowGridClass} min-h-9 items-center gap-x-2 text-sm`}>
-                              <button
-                                type="button"
-                                aria-expanded={isOtherExpanded}
-                                aria-controls="planner-other-resource-sources"
-                                className="flex min-h-9 min-w-0 items-center gap-1 rounded-md pl-3 pr-1 text-left text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                                onClick={() => setIsOtherExpanded((expanded) => !expanded)}
-                              >
-                                <span>기타</span>
-                                <span className="text-xs">{otherSourceRows.length}건</span>
-                                <ChevronDownSolidIcon
-                                  aria-hidden="true"
-                                  className={`size-4 shrink-0 transition-transform ${isOtherExpanded ? "rotate-180" : ""}`}
-                                />
-                              </button>
-                              <PlannerDetailResourceValues changes={selectedResourceBreakdown?.otherChanges ?? []} />
-                              {hasLedgerEditActions ? <span aria-hidden="true" /> : null}
-                            </div>
-                            <div id="planner-other-resource-sources" hidden={!isOtherExpanded}>
-                              {renderSourceRows(otherSourceRows, "other")}
-                            </div>
-                          </>
-                        ) : null}
-                        {(!calendarSourceRows || calendarSourceRows.length === 0) && otherSourceRows.length === 0 ? (
-                          <p className="min-h-8 py-1 text-sm text-muted-foreground">예상 재화 변동이 없어요.</p>
-                        ) : null}
-                        {renderUnrepresentedOneOffEntries()}
-                        <div
-                          className={`mt-1.5 grid ${resourceRowGridClass} min-h-10 items-start gap-x-2 border-t border-border pt-1.5 text-foreground`}
-                        >
-                          <span className="pl-3 pt-0.5 text-sm font-semibold leading-6">이 날 전체 증감</span>
-                          <PlannerDetailResourceValues
-                            emphasized
-                            changes={
-                              selectedResources.changes.length > 0
-                                ? selectedResources.changes
-                                : [{ key: "pyroxene", quantity: 0 }]
-                            }
-                          />
-                          {hasLedgerEditActions ? <span aria-hidden="true" /> : null}
-                        </div>
-                      </div>
-                    ) : forecastStatus === "input-needed" ? (
-                      <p role="status" className="text-sm text-muted-foreground">
-                        현재 보유 재화를 입력하면 예상 변동을 확인할 수 있어요. 입력 전에는 0으로 계산하지 않습니다.
-                      </p>
-                    ) : forecastStatus === "pending" ? (
-                      <p role="status" className="text-sm text-muted-foreground">
-                        예상 재화 변동을 계산하고 있어요.
-                      </p>
-                    ) : forecastStatus === "unavailable" ? (
-                      <p role="alert" className="text-sm text-destructive">
-                        예상 재화 변동을 계산할 수 없어요. 입력을 확인하거나 다시 시도해주세요.
-                      </p>
-                    ) : null}
-                    {!selectedResources || forecastStatus !== "ready" ? renderUnrepresentedOneOffEntries() : null}
+                    <ul className="space-y-1">
+                      {dateFactItems.map((item) => (
+                        <PlannerDateScheduleRow
+                          key={item.key}
+                          item={item}
+                          allPeriods={periods}
+                          timeZone={timeZone}
+                          mode="on-date"
+                          onOpen={openEventView}
+                        />
+                      ))}
+                      {!scheduleAvailability.dateFacts ? (
+                        <li role="status" className="py-1 text-sm text-muted-foreground">
+                          일정 정보를 확인할 수 없어요.
+                        </li>
+                      ) : dateFactItems.length === 0 ? (
+                        <li className="py-1 text-sm text-muted-foreground">
+                          {selectedDate === todayDateKey
+                            ? "오늘은 시작하거나 끝나는 일정이 없어요."
+                            : "이 날 시작하거나 끝나는 일정이 없어요."}
+                        </li>
+                      ) : null}
+                    </ul>
                   </section>
 
-                  {personalRecruitments.length > 0 ? (
-                    <section aria-labelledby="planner-recruitment-summary">
-                      <h3 id="planner-recruitment-summary" className="mb-2 text-base font-semibold">
-                        관심 학생 모집
-                      </h3>
-                      <ul className="space-y-3">
-                        {personalRecruitments.map(({ eventName, period }) => {
-                          const focusTargetKey = `recruitment-edit-${period.key}`;
-                          return (
-                            <li key={period.key}>
-                              <PlannerRecruitmentRow
-                                students={period.students ?? []}
-                                eventName={personalRecruitments.length > 1 ? eventName : undefined}
-                                status={recruitmentBasisLabel(
-                                  period.eventUid,
-                                  recruitmentSavedStates,
-                                  completedRecruitmentEventUidSet,
-                                  recruitmentPickupChance,
-                                )}
-                                deadline={formatRecruitmentEnd(period, selectedDate ?? period.startDate, timeZone)}
-                                actionText="모집 수정"
-                                actionFocusKey={focusTargetKey}
-                                onAction={() => beginRecruitmentEdit(period, focusTargetKey)}
-                              />
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </section>
-                  ) : null}
+                  {renderDirectPlanEntries()}
 
-                  {eventScheduleGroups.length > 0 ? (
-                    <section aria-labelledby="planner-event-summary">
-                      <h3 id="planner-event-summary" className="mb-2 text-base font-semibold">
-                        이벤트 일정
-                      </h3>
-                      <div className="space-y-2">
-                        {eventScheduleGroups.map(({ group, isPersonal, publicRecruitmentPeriods }) => {
-                          const eventPeriod = group.periods.find((period) => period.kind === "event");
-                          const shopPeriod = group.periods.find((period) => period.kind === "shop");
-                          const groupShopPlans =
-                            isPersonal && group.eventUid
-                              ? shopPlans.filter(
-                                  (plan) => plan.timelineUid === group.eventUid && shopPlanHasInput(plan),
-                                )
-                              : [];
-                          const editableShopPlans = groupShopPlans.filter((plan) => plan.shopStateUid !== null);
-                          const shopEditFocusKey = `shop-edit-${editableShopPlans[0]?.shopStateUid ?? group.eventUid ?? group.key}`;
-                          const shopCalculatorHref = groupShopPlans[0]
-                            ? `/events/${encodeURIComponent(groupShopPlans[0].timelineUid)}/shop`
-                            : shopPeriod?.href;
-                          return (
-                            <div key={group.key} className="rounded-lg bg-muted/50 p-3 dark:bg-card">
-                              <div className="grid grid-cols-[4rem_minmax(0,1fr)] gap-x-3 gap-y-2 sm:grid-cols-[5rem_minmax(0,1fr)]">
-                                <div className="row-span-2">
-                                  <PlannerEventThumbnail
-                                    key={eventPeriod?.imageUrl ?? group.key}
-                                    period={eventPeriod}
-                                  />
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                  <p className="break-keep text-sm font-semibold">{group.name}</p>
-                                  <PlannerEventDates
-                                    eventPeriod={eventPeriod}
-                                    shopPeriod={shopPeriod}
-                                    referenceDateKey={
-                                      selectedDate ?? eventPeriod?.startDate ?? shopPeriod?.startDate ?? ""
-                                    }
-                                    timeZone={timeZone}
-                                  />
-                                </div>
-                                <PlannerEventCardActions
-                                  eventPeriod={eventPeriod}
-                                  shopCalculatorHref={shopCalculatorHref}
-                                  editableShopPlans={editableShopPlans}
-                                  shopEditFocusKey={shopEditFocusKey}
-                                  onEditShop={() =>
-                                    beginShopEdit(
-                                      editableShopPlans.length === 1 ? editableShopPlans[0] : undefined,
-                                      shopEditFocusKey,
-                                    )
-                                  }
-                                  className="col-span-2 min-[360px]:col-start-2 min-[360px]:col-span-1"
-                                />
-                              </div>
-                              {groupShopPlans.map((plan) => {
-                                const headingId = headingIdForShopPlan(group.key, plan);
-                                return (
-                                  <div key={plan.shopStateUid ?? plan.timelineUid} className="mt-2">
-                                    {plan.state && plan.defaultState ? (
-                                      <PlannerShopSummary
-                                        content={plan.content}
-                                        state={plan.state}
-                                        defaultState={plan.defaultState}
-                                        headingId={headingId}
-                                      />
-                                    ) : (
-                                      <p className="text-sm text-muted-foreground">
-                                        이벤트 상점의 기본 입력을 확인할 수 없어요.
-                                      </p>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                              {publicRecruitmentPeriods.length > 0 ? (
-                                <div className="mt-3 space-y-3">
-                                  {publicRecruitmentPeriods.map((period, index) => {
-                                    const firstRecruitmentPeriod = publicRecruitmentPeriods[0];
-                                    const recruitmentFocusKey = `recruitment-add-${group.key}`;
-                                    const isFirstRecruitment = index === 0;
-                                    return (
-                                      <PlannerRecruitmentRow
-                                        key={period.key}
-                                        students={period.students ?? []}
-                                        status="모집"
-                                        deadline={formatRecruitmentEnd(
-                                          period,
-                                          selectedDate ?? period.startDate,
-                                          timeZone,
-                                        )}
-                                        actionText={isFirstRecruitment ? "모집 계획 추가" : undefined}
-                                        actionFocusKey={isFirstRecruitment ? recruitmentFocusKey : undefined}
-                                        onAction={
-                                          isFirstRecruitment
-                                            ? () => beginRecruitmentEdit(firstRecruitmentPeriod, recruitmentFocusKey)
-                                            : undefined
-                                        }
-                                      />
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </section>
-                  ) : null}
-
-                  {selectedResources === undefined &&
-                  selectedOneOffEntries.length === 0 &&
-                  eventScheduleGroups.length === 0 &&
-                  selectedShopPlans.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">이 날짜에 표시할 계획이나 공개 일정이 없어요.</p>
-                  ) : null}
+                  <section aria-labelledby="planner-ongoing-title" className="space-y-2">
+                    <h3 id="planner-ongoing-title" className="text-base font-semibold">
+                      진행 중
+                    </h3>
+                    <ul className="space-y-1">
+                      {ongoingItems.map((item) => (
+                        <PlannerDateScheduleRow
+                          key={item.key}
+                          item={item}
+                          allPeriods={periods}
+                          timeZone={timeZone}
+                          mode="ongoing"
+                          onOpen={openEventView}
+                        />
+                      ))}
+                      {!scheduleAvailability.ongoing ? (
+                        <li role="status" className="py-1 text-sm text-muted-foreground">
+                          일정 정보를 확인할 수 없어요.
+                        </li>
+                      ) : ongoingItems.length === 0 ? (
+                        <li className="py-1 text-sm text-muted-foreground">진행 중인 다른 일정이 없어요.</li>
+                      ) : null}
+                    </ul>
+                  </section>
                 </>
+              ) : null}
+
+              {dialogView === "event" && eventPeriod && selectedDate ? (
+                <PlannerEventSubview
+                  eventPeriod={eventPeriod}
+                  shopPeriod={eventShopPeriod}
+                  periods={periods}
+                  shopPlans={selectedShopPlans}
+                  recruitmentStatus={recruitmentBasisLabel(
+                    selectedEventUid ?? undefined,
+                    recruitmentSavedStates,
+                    completedRecruitmentEventUidSet,
+                  )}
+                  recruitmentUnavailable={!scheduleAvailability.ongoing}
+                  referenceDateKey={selectedDate}
+                  timeZone={timeZone}
+                  onAddRecruitment={(focusKey) => beginRecruitmentEdit(undefined, focusKey)}
+                  onEditRecruitment={(focusKey) => beginRecruitmentEdit(undefined, focusKey)}
+                  onEditShop={(focusKey) => beginShopEdit(undefined, focusKey)}
+                />
               ) : null}
 
               {dialogView === "actions" ? (
@@ -1384,48 +729,32 @@ export default function PlannerCalendar({
                   initialKind={quickEditKind}
                   initialEntry={editingEntry ?? undefined}
                   onSaved={() => finishSavedEdit("계획을 저장했어요.")}
-                  onCancel={returnToSummary}
+                  onCancel={returnToParentView}
                 />
               ) : null}
 
               {dialogView === "recruitment-edit" && selectedDate ? (
                 recruitmentCandidates.length > 0 ? (
                   <PlannerRecruitmentEditor
-                    key={`${selectedDate}:${eventContextUid ?? "date"}`}
+                    key={`${selectedDate}:${selectedEventUid ?? "date"}`}
                     selectedDate={selectedDate}
                     candidates={recruitmentCandidates}
                     timeZone={timeZone}
                     savedStates={recruitmentSavedStates}
-                    preferredEventUid={preferredRecruitmentEventUid}
+                    preferredEventUid={preferredRecruitmentEventUid ?? undefined}
                     isSaving={recruitmentIsSaving}
                     saveResult={recruitmentSaveResult}
                     onSave={onSaveRecruitment}
                     onSaved={() => finishSavedEdit("모집 계획을 저장했어요.")}
-                    onCancel={returnToSummary}
+                    onCancel={returnToParentView}
                   />
                 ) : (
                   <section role="status" className="space-y-3 rounded-md bg-muted/50 p-4">
                     <p className="text-sm text-muted-foreground">
-                      {contextEventName
-                        ? "선택한 이벤트의 모집 대상을 확인할 수 없어요. 이벤트 상세에서 일정을 확인해주세요."
+                      {!scheduleAvailability.ongoing
+                        ? "일정 정보를 확인할 수 없어요."
                         : "이 날짜에 선택할 수 있는 모집 일정이 없어요. 관련 공개 일정을 확인해주세요."}
                     </p>
-                    <div className="flex flex-wrap gap-2">
-                      {eventScheduleGroups.flatMap(({ group }) =>
-                        group.periods
-                          .filter((period) => period.kind === "event")
-                          .slice(0, 1)
-                          .map((period) => (
-                            <Button
-                              key={period.key}
-                              text="이벤트 상세"
-                              size="xs"
-                              variant="secondary"
-                              to={period.href}
-                            />
-                          )),
-                      )}
-                    </div>
                   </section>
                 )
               ) : null}
@@ -1452,7 +781,7 @@ export default function PlannerCalendar({
               {dialogView === "shop-edit" ? (
                 editingShopPlan && editingShopStateUid && editingShopPlan.state && editingShopPlan.defaultState ? (
                   <section className="space-y-3">
-                    <Button text="취소" size="sm" variant="secondary" onClick={returnToSummary} />
+                    <Button text="취소" size="sm" variant="secondary" onClick={returnToParentView} />
                     <PlannerShopOwnedQuantityEditor
                       key={editingShopStateUid}
                       timelineUid={editingShopPlan.timelineUid}
@@ -1472,7 +801,7 @@ export default function PlannerCalendar({
                     <p role="status" className="rounded-md bg-muted/50 p-4 text-sm text-muted-foreground">
                       이벤트 상점 입력을 확인하거나 저장할 수 없어요.
                     </p>
-                    <Button text="뒤로" size="sm" variant="secondary" onClick={returnToSummary} />
+                    <Button text="뒤로" size="sm" variant="secondary" onClick={returnToParentView} />
                   </section>
                 )
               ) : null}
