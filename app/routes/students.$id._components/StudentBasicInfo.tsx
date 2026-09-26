@@ -45,6 +45,8 @@ import {
   type StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";
+import type { PublicKnowledgeEntry } from "~/models/knowledge-entry";
+import { KnowledgeAnnotatedDescription } from "./StudentKnowledgeAnnotations";
 
 type StudentBasicInfoProps = {
   student: StudentCalculatorSource;
@@ -56,6 +58,8 @@ type StudentBasicInfoProps = {
   recruited: boolean;
   savedState: StudentCalculatorState;
   relatedRelationshipLevels: Record<string, number>;
+  knowledgeEntries: PublicKnowledgeEntry[];
+  knowledgeLookupStatus: "available" | "failed";
   aiSummary?: React.ReactNode;
   gradingSummary?: React.ReactNode;
 };
@@ -101,6 +105,8 @@ export default function StudentBasicInfo({
   recruited,
   savedState,
   relatedRelationshipLevels,
+  knowledgeEntries,
+  knowledgeLookupStatus,
   aiSummary,
   gradingSummary,
 }: StudentBasicInfoProps) {
@@ -398,6 +404,12 @@ export default function StudentBasicInfo({
         </section>
       ) : null}
 
+      {knowledgeLookupStatus === "failed" ? (
+        <p role="status" className="text-xs text-muted-foreground">
+          용어 설명을 불러오지 못했어요.
+        </p>
+      ) : null}
+
       <section>
         <h2 className="text-lg font-semibold">스킬</h2>
         <SectionCard className="mt-3 space-y-0 overflow-hidden p-0 md:mt-4 md:p-0">
@@ -409,6 +421,7 @@ export default function StudentBasicInfo({
                 key={`${skill.slot}-${skill.position}-${skill.uid}`}
                 skill={skill}
                 allSkills={student.skills}
+                knowledgeEntries={knowledgeEntries}
                 attackType={student.attackType}
                 onLevelChange={(value) => updateState(skillFieldForSlot(skill.slot), value)}
               />
@@ -732,11 +745,13 @@ function LevelSlider({
 function SkillRow({
   skill,
   allSkills,
+  knowledgeEntries,
   attackType,
   onLevelChange,
 }: {
   skill: ReturnType<typeof selectStudentSkills>[number];
   allSkills: StudentCalculatorSource["skills"];
+  knowledgeEntries: PublicKnowledgeEntry[];
   attackType: Attack;
   onLevelChange: (value: number) => void;
 }) {
@@ -757,12 +772,12 @@ function SkillRow({
       <div className="min-w-0">
         <span className="block text-xs font-medium text-muted-foreground">{skillSlotLabels[skill.slot]}</span>
         <strong className="mt-0.5 block">{skill.name}</strong>
-        <SkillDescription skill={{ ...skill, selectedLevel: skill.selectedLevel }} />
+        <SkillDescription skill={{ ...skill, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
         {linkedSkills.map((linked) => (
           <div key={linked.uid} className="mt-3 border-l-2 border-border pl-3">
             <span className="text-xs font-medium text-muted-foreground">{linked.label}</span>
             <strong className="mt-0.5 block text-sm">{linked.name}</strong>
-            <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} />
+            <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
           </div>
         ))}
       </div>
@@ -773,20 +788,18 @@ function SkillRow({
   );
 }
 
-function SkillDescription({ skill }: { skill: Parameters<typeof renderStudentSkillDescriptionParts>[0] }) {
+function SkillDescription({
+  skill,
+  entries,
+}: {
+  skill: Parameters<typeof renderStudentSkillDescriptionParts>[0];
+  entries: PublicKnowledgeEntry[];
+}) {
   const parts = renderStudentSkillDescriptionParts(skill);
   if (!parts) return null;
   return (
     <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
-      {parts.map((part) =>
-        part.dynamic ? (
-          <span key={part.key} className={part.emphasized ? "font-semibold text-primary" : "text-primary"}>
-            {part.text}
-          </span>
-        ) : (
-          part.text
-        ),
-      )}
+      <KnowledgeAnnotatedDescription parts={parts} entries={entries} />
     </p>
   );
 }

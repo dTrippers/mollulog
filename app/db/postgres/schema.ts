@@ -1,5 +1,19 @@
 import { sql } from "drizzle-orm";
-import { bigint, boolean, index, integer, jsonb, pgTable, text, timestamp, unique, uniqueIndex } from "drizzle-orm/pg-core";
+import {
+  type AnyPgColumn,
+  bigint,
+  boolean,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  type PgTableExtraConfigValue,
+  pgTable,
+  text,
+  timestamp,
+  unique,
+  uniqueIndex,
+} from "drizzle-orm/pg-core";
 import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
@@ -23,6 +37,11 @@ import type {
   CommunityVisibility,
 } from "~/models/community";
 import type { EventShopState } from "~/models/event-shop-state";
+import type {
+  KnowledgeEntryKind,
+  KnowledgeEntryRevisionStatus,
+  KnowledgeGenerationMetadata,
+} from "~/models/knowledge-entry";
 import type { PickupHistory } from "~/models/pickup-history";
 import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
@@ -1297,5 +1316,61 @@ export const pgStudentSummaryRevisionsTable = pgTable(
       table.publishedAt.desc(),
       table.id.desc(),
     ),
+  ],
+);
+
+export const pgKnowledgeEntryRevisionsTable = pgTable(
+  "knowledge_entry_revisions",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    entryId: integer("entry_id")
+      .notNull()
+      .references((): AnyPgColumn => pgKnowledgeEntriesTable.id, { onDelete: "restrict" }),
+    title: text().notNull(),
+    aliases: jsonb().$type<string[]>().notNull(),
+    meaningContext: text("meaning_context"),
+    inlineEnabled: boolean("inline_enabled").notNull(),
+    generatedBody: text("generated_body"),
+    body: text(),
+    status: text().$type<KnowledgeEntryRevisionStatus>().notNull(),
+    generationMetadata: jsonb("generation_metadata").$type<KnowledgeGenerationMetadata>(),
+    generationRequestId: text("generation_request_id"),
+    generationStartedAt: timestamptz("generation_started_at"),
+    generatedAt: timestamptz("generated_at"),
+    publishedAt: timestamptz("published_at"),
+    rejectedAt: timestamptz("rejected_at"),
+    rejectionFeedback: text("rejection_feedback"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("knowledge_entry_revisions_entry_id_id_uidx").on(table.entryId, table.id),
+    uniqueIndex("knowledge_entry_revisions_one_draft_per_entry_uidx")
+      .on(table.entryId)
+      .where(sql`${table.status} = 'draft'`),
+    index("knowledge_entry_revisions_entry_status_updated_idx").on(table.entryId, table.status, table.updatedAt.desc()),
+  ],
+);
+
+export const pgKnowledgeEntriesTable = pgTable(
+  "knowledge_entries",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    kind: text().$type<KnowledgeEntryKind>().notNull(),
+    publishedRevisionId: integer("published_revision_id"),
+    archivedAt: timestamptz("archived_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table): PgTableExtraConfigValue[] => [
+    foreignKey({
+      name: "knowledge_entries_published_revision_entry_fk",
+      columns: [table.id, table.publishedRevisionId],
+      foreignColumns: [pgKnowledgeEntryRevisionsTable.entryId, pgKnowledgeEntryRevisionsTable.id],
+    }).onDelete("restrict"),
+    index("knowledge_entries_kind_id_idx").on(table.kind, table.id),
+    index("knowledge_entries_active_published_idx")
+      .on(table.kind, table.id)
+      .where(sql`${table.archivedAt} is null and ${table.publishedRevisionId} is not null`),
   ],
 );

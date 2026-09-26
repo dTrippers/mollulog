@@ -1,11 +1,14 @@
 import { useId } from "react";
 import { SectionCard } from "~/components/primitives";
+import type { PublicKnowledgeEntry } from "~/models/knowledge-entry";
+import { KnowledgeAnnotatedText } from "./StudentKnowledgeAnnotations";
 
 type StudentAiSummaryCardProps = {
   summary: string;
+  entries: PublicKnowledgeEntry[];
 };
 
-export default function StudentAiSummaryCard({ summary }: StudentAiSummaryCardProps) {
+export default function StudentAiSummaryCard({ summary, entries }: StudentAiSummaryCardProps) {
   const gradientId = useId();
   return (
     <SectionCard className="mt-3 space-y-2 p-2.5 md:mt-4 md:p-4">
@@ -28,7 +31,9 @@ export default function StudentAiSummaryCard({ summary }: StudentAiSummaryCardPr
         </svg>
         AI 요약
       </h3>
-      <p className="text-sm leading-relaxed text-foreground/80">{summary}</p>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-foreground/80">
+        <KnowledgeAnnotatedText text={summary} entries={entries} />
+      </p>
       <p className="text-xs text-muted-foreground">AI가 생성한 결과로 내용이 부정확할 수 있어요</p>
     </SectionCard>
   );

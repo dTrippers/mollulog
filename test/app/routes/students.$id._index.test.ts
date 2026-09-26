@@ -11,13 +11,19 @@ const mockGetStudentGradingsByStudentWithUsers =
 const mockGetTagCountsByStudent = jest.fn<(env: Env, studentUid: string) => Promise<unknown[]>>();
 const mockGetTimelineContentsByRecruitmentGroupUids =
   jest.fn<(env: Env, recruitmentGroupUids: string[], options: { ctx?: unknown }) => Promise<unknown[]>>();
-const mockGetPublishedStudentSummary =
+const mockGetStudentDetailContent =
   jest.fn<
     (
       env: Env,
       studentUid: string,
       options: { ctx?: unknown },
-    ) => Promise<{ summary: string; publishedAt: string } | null>
+    ) => Promise<{
+      publishedSummary: { summary: string; publishedAt: string } | null;
+      publishedSummaryError: unknown | null;
+      knowledgeEntries: Array<{ title: string; aliases: string[]; body: string }>;
+      knowledgeLookupStatus: "available" | "failed";
+      knowledgeLookupError: unknown | null;
+    }>
   >();
 const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn() };
 
@@ -53,8 +59,8 @@ jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContentsByRecruitmentGroupUids: mockGetTimelineContentsByRecruitmentGroupUids,
 }));
 
-jest.mock("~/models/student-summary.server", () => ({
-  getPublishedStudentSummary: mockGetPublishedStudentSummary,
+jest.mock("~/views/student-detail-content.server", () => ({
+  getStudentDetailContent: mockGetStudentDetailContent,
 }));
 
 jest.mock("~/lib/observability.server", () => ({
@@ -92,13 +98,25 @@ beforeEach(() => {
   mockGetStudentGradingsByStudentWithUsers.mockResolvedValue([]);
   mockGetTagCountsByStudent.mockResolvedValue([]);
   mockGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([]);
-  mockGetPublishedStudentSummary.mockResolvedValue(null);
+  mockGetStudentDetailContent.mockResolvedValue({
+    publishedSummary: null,
+    publishedSummaryError: null,
+    knowledgeEntries: [],
+    knowledgeLookupStatus: "available",
+    knowledgeLookupError: null,
+  });
 });
 
 describe("student detail loader published summary", () => {
   it("logs the read failure and omits the AI summary instead of failing the loader", async () => {
     const failure = new Error("Hyperdrive unavailable");
-    mockGetPublishedStudentSummary.mockRejectedValueOnce(failure);
+    mockGetStudentDetailContent.mockResolvedValueOnce({
+      publishedSummary: null,
+      publishedSummaryError: failure,
+      knowledgeEntries: [],
+      knowledgeLookupStatus: "available",
+      knowledgeLookupError: null,
+    });
 
     const result = await loader(createLoaderArgs());
 
@@ -111,11 +129,18 @@ describe("student detail loader published summary", () => {
   });
 
   it("omits the AI summary when no revision is published", async () => {
-    mockGetPublishedStudentSummary.mockResolvedValueOnce(null);
+    mockGetStudentDetailContent.mockResolvedValueOnce({
+      publishedSummary: null,
+      publishedSummaryError: null,
+      knowledgeEntries: [],
+      knowledgeLookupStatus: "available",
+      knowledgeLookupError: null,
+    });
 
     const result = await loader(createLoaderArgs());
 
     expect(result.publishedSummary).toBeNull();
+    expect(result.knowledgeLookupStatus).toBe("available");
     expect(logger.error).not.toHaveBeenCalled();
   });
 
@@ -124,11 +149,42 @@ describe("student detail loader published summary", () => {
       summary: "게릴라 유닛 운영이 뛰어난 학생이에요",
       publishedAt: "2026-09-18T09:00:00.000Z",
     };
-    mockGetPublishedStudentSummary.mockResolvedValueOnce(published);
+    const knowledgeEntries = [{ title: "공포", aliases: ["공포"], body: "행동을 막는 상태 효과예요." }];
+    mockGetStudentDetailContent.mockResolvedValueOnce({
+      publishedSummary: published,
+      publishedSummaryError: null,
+      knowledgeEntries,
+      knowledgeLookupStatus: "available",
+      knowledgeLookupError: null,
+    });
 
     const result = await loader(createLoaderArgs());
 
     expect(result.publishedSummary).toEqual(published);
-    expect(mockGetPublishedStudentSummary).toHaveBeenCalledWith(env, "student-a", { ctx: undefined });
+    expect(result.knowledgeEntries).toEqual(knowledgeEntries);
+    expect(mockGetStudentDetailContent).toHaveBeenCalledWith(env, "student-a", { ctx: undefined });
+  });
+
+  it("keeps the page and student text while exposing a distinct glossary read failure", async () => {
+    const failure = new Error("database details stay server-side");
+    mockGetStudentDetailContent.mockResolvedValueOnce({
+      publishedSummary: null,
+      publishedSummaryError: null,
+      knowledgeEntries: [],
+      knowledgeLookupStatus: "failed",
+      knowledgeLookupError: failure,
+    });
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result.student.uid).toBe("student-a");
+    expect(result.knowledgeEntries).toEqual([]);
+    expect(result.knowledgeLookupStatus).toBe("failed");
+    expect(JSON.stringify(result)).not.toContain("database details stay server-side");
+    expect(logger.error).toHaveBeenCalledWith(
+      "Failed to load published knowledge terms",
+      failure,
+      expect.objectContaining({ studentUid: "student-a" }),
+    );
   });
 });

@@ -19,6 +19,8 @@ Domain models and PostgreSQL repositories are separated by responsibility.
 - `app/db/postgres/*.ts` owns PostgreSQL queries, transforms, and operation spans.
 - `app/db/postgres/schema.ts` is the typed PostgreSQL schema source.
 - `app/domain` contains pure calculations and validation without database I/O.
+- The shared Admin/public knowledge-entry table and JSON contract is documented in
+  [Knowledge entries](./knowledge-entries.md); MolluLog owns its migration.
 
 Database access uses `withPostgresClient` from `app/lib/postgres.server.ts`. A repository creates and releases its client inside one operation; clients are never kept in module or request-global state. A transaction may span only the statements owned by that operation.
 
