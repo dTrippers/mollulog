@@ -2,12 +2,13 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
 import {
-  getPostgresEventShopStates,
   patchPostgresEventShopStateOwnedQuantities,
   upsertPostgresEventShopState,
 } from "~/db/postgres/event-shop-state";
 import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
 import { createDefaultEventShopState, type EventShopState } from "~/domain/event-shop-state";
+import { projectPlannerStateDocument } from "~/domain/planner-state";
+import { getEventShopStates } from "~/models/event-shop-state";
 import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
@@ -20,6 +21,7 @@ function createClient(options: { failOn?: string } = {}) {
     if (options.failOn && text.toLowerCase().includes(options.failOn.toLowerCase())) {
       throw new Error("query failed");
     }
+    if (text.includes('insert into "planner_states"')) return { rows: [[1]], rowCount: 1 };
     return { rows: [], rowCount: 1 };
   });
   const client = {
@@ -39,7 +41,7 @@ function findStatementValues(query: ReturnType<typeof createClient>["query"], ta
 }
 
 function createProjectionClient(eventShopStates: Record<string, unknown>[] = []) {
-  return new FakePostgresClient({
+  const tables = {
     pyroxene_owned_resources: [],
     pyroxene_collected_sources: [],
     pyroxene_timeline_items: [],
@@ -47,7 +49,25 @@ function createProjectionClient(eventShopStates: Record<string, unknown>[] = [])
     pyroxene_event_data: [],
     event_shop_states: eventShopStates,
     event_shop_state_history: [],
-  });
+  };
+  const plannerStates = eventShopStates.length
+    ? [
+        {
+          id: 1,
+          userId: 7,
+          revision: 1,
+          document: projectPlannerStateDocument({
+            resources: [],
+            timelineItems: [],
+            plannerOptions: [],
+            collectedSources: [],
+            eventData: [],
+            eventShops: eventShopStates,
+          }),
+        },
+      ]
+    : [];
+  return new FakePostgresClient({ ...tables, planner_states: plannerStates });
 }
 
 async function expectPlannerStateToMatchLegacyProjection(client: FakePostgresClient) {
@@ -60,22 +80,17 @@ async function expectPlannerStateToMatchLegacyProjection(client: FakePostgresCli
 }
 
 describe("PostgreSQL event shop state", () => {
-  it("loads a deduplicated batch of a user's canonical event shop states", async () => {
-    const { client, query } = createClient();
+  it("loads a deduplicated batch from planner_states without querying legacy shop rows", async () => {
+    const savedState = { ...createDefaultEventShopState([], ["student-1"]), itemQuantities: { "daily-ticket": 60 } };
+    const client = createProjectionClient([{ uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...savedState }]);
 
-    const states = await getPostgresEventShopStates(env, 7, ["shop-1", "shop-2", "shop-1"], {
-      createClient: () => client,
+    const states = await getEventShopStates(env, 7, ["shop-1", "shop-2", "shop-1"], {
+      createClient: () => client as unknown as Client,
     });
 
-    expect(states).toEqual({});
-    const calls = query.mock.calls.map(([config, parameters]) => {
-      if (typeof config === "string") return { text: config, values: parameters };
-      return { text: config.text, values: config.values ?? parameters };
-    });
-    const selection = calls.find(({ text }) => text.includes("select") && text.includes('from "event_shop_states"'));
-    expect(selection?.text.toLowerCase()).toContain('"user_id" =');
-    expect(selection?.text.toLowerCase()).toContain('"event_uid" in');
-    expect(selection?.values).toEqual(expect.arrayContaining([7, "shop-1", "shop-2"]));
+    expect(states).toEqual({ "shop-1": savedState });
+    expect(client.statements.some((statement) => statement.includes('from "planner_states"'))).toBe(true);
+    expect(client.statements.some((statement) => statement.includes('from "event_shop_states"'))).toBe(false);
   });
 
   it("atomically merges owned currencies without replacing other shop settings", async () => {
@@ -168,7 +183,7 @@ describe("PostgreSQL event shop state", () => {
 
     const upsertIndex = events.findIndex((event) => event.includes('insert into "event_shop_states"'));
     const historyIndex = events.findIndex((event) => event.includes('insert into "event_shop_state_history"'));
-    const documentIndex = events.findIndex((event) => event.includes('insert into "planner_states"'));
+    const documentIndex = events.findIndex((event) => event.includes('into "planner_states"'));
     const commitIndex = lowered.indexOf("commit");
     expect(upsertIndex).toBeGreaterThanOrEqual(0);
     expect(historyIndex).toBeGreaterThan(upsertIndex);

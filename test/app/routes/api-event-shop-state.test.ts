@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
+import { PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 const mockGetEventMetadata = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -76,6 +77,19 @@ describe("event shop full-plan save", () => {
     expect(result).toEqual({ success: true });
     expect(mockGetEventShopState).not.toHaveBeenCalled();
     expect(mockUpsertEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1", guestPlan);
+  });
+
+  it("returns the approved revision conflict message for a stale account write", async () => {
+    const conflict = new Error("database-specific details");
+    conflict.name = "PlannerStateRevisionConflictError";
+    mockUpsertEventShopState.mockRejectedValue(conflict);
+
+    const result = await action(actionArgs("timeline-1", { save: createDefaultEventShopState([], []), replace: true }));
+
+    expect(result).toMatchObject({
+      data: { success: false, error: PLANNER_STATE_REVISION_CONFLICT_MESSAGE, revisionConflict: true },
+      init: { status: 409 },
+    });
   });
 });
 

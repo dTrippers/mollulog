@@ -17,6 +17,20 @@ function fromPgField(field: string): string {
   return snakeToCamel(field.replaceAll('"', ""));
 }
 
+function compareValues(left: unknown, right: unknown): number {
+  const timestamp = (value: unknown): number | null => {
+    if (value instanceof Date) return value.getTime();
+    if (typeof value !== "string") return null;
+    const parsed = Date.parse(value);
+    return Number.isNaN(parsed) ? null : parsed;
+  };
+  const leftTimestamp = timestamp(left);
+  const rightTimestamp = timestamp(right);
+  if (leftTimestamp !== null && rightTimestamp !== null) return leftTimestamp - rightTimestamp;
+  if (typeof left === "number" && typeof right === "number") return left - right;
+  return String(left).localeCompare(String(right));
+}
+
 function getTableName(text: string): string {
   const match = text.match(/\b(?:from|into|update|delete\s+from)\s+"([^"]+)"/i);
   if (!match) throw new Error(`Unable to identify PostgreSQL table in query: ${text}`);
@@ -117,10 +131,6 @@ function matchesWhere(row: Row, text: string, values: unknown[]): boolean {
   return true;
 }
 
-function generatedId(rows: Row[]): number {
-  return rows.reduce((maximum, row) => Math.max(maximum, Number(row.id) || 0), 0) + 1;
-}
-
 function returningColumns(text: string): string[] | null {
   const match = text.match(/\breturning\b([\s\S]*)$/i);
   if (!match) return null;
@@ -151,6 +161,8 @@ export class FakePostgresClient {
   readonly statements: string[] = [];
   readonly parameters: unknown[][] = [];
   private readonly primaryTable: string;
+  private readonly transactionSnapshots: Record<string, Row[]>[] = [];
+  private readonly generatedIds = new Map<string, number>();
 
   constructor(initialTables: Record<string, Row[]> = {}, primaryTable = "recruited_students") {
     this.primaryTable = primaryTable;
@@ -201,9 +213,20 @@ export class FakePostgresClient {
     this.statements.push(text);
     this.parameters.push(values);
     const normalized = text.replace(/\s+/g, " ").trim();
-    if (/^(begin|commit|rollback|savepoint|release|set\b|select\s+set_config)/i.test(normalized)) {
+    if (/^begin\b/i.test(normalized) || /^savepoint\b/i.test(normalized)) {
+      this.transactionSnapshots.push(this.copyTables());
       return { rows: [], rowCount: 0 };
     }
+    if (/^rollback\b/i.test(normalized)) {
+      const snapshot = this.transactionSnapshots.pop();
+      if (snapshot) this.restoreTables(snapshot);
+      return { rows: [], rowCount: 0 };
+    }
+    if (/^(commit|release)\b/i.test(normalized)) {
+      this.transactionSnapshots.pop();
+      return { rows: [], rowCount: 0 };
+    }
+    if (/^(set\b|select\s+set_config)/i.test(normalized)) return { rows: [], rowCount: 0 };
     if (/^select\s+setval/i.test(normalized)) return { rows: [], rowCount: 0 };
     if (/^select\s+pg_advisory_xact_lock\(hashtextextended\(\$\d+,\s*0\)\)$/i.test(normalized)) {
       return { rows: [], rowCount: 1 };
@@ -217,22 +240,52 @@ export class FakePostgresClient {
     throw new Error(`Unsupported fake PostgreSQL query: ${text}`);
   }
 
+  private copyTables(): Record<string, Row[]> {
+    return Object.fromEntries(Object.entries(this.tables).map(([name, rows]) => [name, this.copyRows(rows)]));
+  }
+
+  private restoreTables(snapshot: Record<string, Row[]>): void {
+    for (const name of Object.keys(this.tables)) {
+      if (!(name in snapshot)) delete this.tables[name];
+    }
+    for (const [name, rows] of Object.entries(snapshot)) this.tables[name] = this.copyRows(rows);
+  }
+
+  private copyRows(rows: Row[]): Row[] {
+    const copyValue = (value: unknown): unknown => {
+      if (value instanceof Date) return new Date(value.getTime());
+      if (Array.isArray(value)) return value.map(copyValue);
+      if (typeof value === "object" && value !== null) {
+        return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, copyValue(nested)]));
+      }
+      return value;
+    };
+    return rows.map((row) => copyValue(row) as Row);
+  }
+
+  private nextGeneratedId(tableName: string, rows: Row[]): number {
+    const maximumExistingId = rows.reduce((maximum, row) => Math.max(maximum, Number(row.id) || 0), 0);
+    const nextId = Math.max(this.generatedIds.get(tableName) ?? 0, maximumExistingId) + 1;
+    this.generatedIds.set(tableName, nextId);
+    return nextId;
+  }
+
   private select(text: string, values: unknown[], rowModeArray: boolean): { rows: Row[]; rowCount: number } {
     const tableName = getTableName(text);
     const table = this.tables[tableName] ?? [];
     this.selectParameterCounts.push(values.length);
     let rows = table.filter((row) => matchesWhere(row, text, values));
     const orderClause = text.match(/\border\s+by\s+([\s\S]*?)(?:\blimit\b|\breturning\b|$)/i)?.[1] ?? "";
-    const orderTerms = [...orderClause.matchAll(/(?:"[a-z0-9_]+"\.)?"([a-z0-9_]+)"(?:\s+(asc|desc))?/gi)].map(
-      ([, field, direction]) => ({ field: fromPgField(field ?? ""), direction: direction?.toLowerCase() }),
-    );
+    const orderTerms = splitTopLevel(orderClause).flatMap((term) => {
+      const match = term.trim().match(/^(?:"[a-z0-9_]+"\.)?"([a-z0-9_]+)"(?:\s+(asc|desc))?/i);
+      return match ? [{ field: fromPgField(match[1]), direction: match[2]?.toLowerCase() }] : [];
+    });
     if (orderTerms.length > 0) {
       rows = [...rows].sort((left, right) => {
         for (const { field, direction } of orderTerms) {
           const leftValue = left[field];
           const rightValue = right[field];
-          let comparison = Number(leftValue) - Number(rightValue);
-          if (!Number.isFinite(comparison)) comparison = String(leftValue).localeCompare(String(rightValue));
+          const comparison = compareValues(leftValue, rightValue);
           if (comparison !== 0) return direction === "desc" ? -comparison : comparison;
         }
         return 0;
@@ -282,16 +335,18 @@ export class FakePostgresClient {
         row[fromPgField(column)] = value;
         if (placeholder) valueOffset = Math.max(valueOffset, Number(placeholder[1]));
       });
-      if (row.id == null) row.id = generatedId(table);
+      if (row.id == null) row.id = this.nextGeneratedId(tableName, table);
       if (row.createdAt == null) row.createdAt = new Date();
       if (row.updatedAt == null) row.updatedAt = row.createdAt;
       inserted.push(row);
     }
-    const conflict = text.match(/on\s+conflict\s*\(([^)]+)\)\s*do\s+update\s+set\s+([\s\S]*?)(?:\s+returning\s+|$)/i);
-    const conflictColumns = conflict
-      ? [...conflict[1].matchAll(/"([a-z0-9_]+)"/gi)].map(([, field]) => fromPgField(field))
+    const conflictClause = text.match(
+      /on\s+conflict\s*\(([^)]+)\)\s*do\s+(update|nothing)(?:\s+set\s+([\s\S]*?))?(?:\s+returning\s+|$)/i,
+    );
+    const conflictColumns = conflictClause
+      ? [...conflictClause[1].matchAll(/"([a-z0-9_]+)"/gi)].map(([, field]) => fromPgField(field))
       : [];
-    const conflictSets = conflict ? splitTopLevel(conflict[2]) : [];
+    const conflictSets = conflictClause?.[2]?.toLowerCase() === "update" ? splitTopLevel(conflictClause[3] ?? "") : [];
     const resulting: Row[] = [];
     for (const candidate of inserted) {
       const existing =
@@ -303,6 +358,7 @@ export class FakePostgresClient {
         resulting.push(candidate);
         continue;
       }
+      if (conflictClause?.[2]?.toLowerCase() === "nothing") continue;
       for (const assignment of conflictSets) {
         const match = assignment.match(/"([a-z0-9_]+)"\s*=\s*([\s\S]+)/i);
         if (!match) continue;

@@ -49,6 +49,7 @@ type ImportActionResult = {
   success: boolean;
   verified: VerifiedItems;
   failedLabels: string[];
+  revisionConflict?: boolean;
 };
 
 const emptyVerified = (): VerifiedItems => ({
@@ -250,7 +251,12 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     return label ? [label] : [];
   });
 
-  return { success: failedLabels.length === 0, verified, failedLabels } satisfies ImportActionResult;
+  return {
+    success: failedLabels.length === 0,
+    verified,
+    failedLabels,
+    revisionConflict: importResult.revisionConflict,
+  } satisfies ImportActionResult;
 };
 
 function describeRecord(record: GuestPyroxeneRecord): string {
@@ -576,14 +582,22 @@ export default function GuestPyroxeneImportPage() {
 
             {fetcher.data ? (
               <Callout
-                tone={fetcher.data.failedLabels.length ? "warning" : "success"}
-                Icon={CheckCircleIcon}
+                tone={
+                  fetcher.data.revisionConflict
+                    ? "destructive"
+                    : fetcher.data.failedLabels.length
+                      ? "warning"
+                      : "success"
+                }
+                Icon={fetcher.data.revisionConflict ? undefined : CheckCircleIcon}
                 title={
-                  fetcher.data.failedLabels.length
-                    ? "일부 항목을 가져오지 못했어요"
-                    : submittedDiscardedCount > 0
-                      ? "선택한 내용을 저장했어요"
-                      : "선택한 항목을 가져왔어요"
+                  fetcher.data.revisionConflict
+                    ? "다른 탭이나 기기에서 플래너가 바뀌었어요"
+                    : fetcher.data.failedLabels.length
+                      ? "일부 항목을 가져오지 못했어요"
+                      : submittedDiscardedCount > 0
+                        ? "선택한 내용을 저장했어요"
+                        : "선택한 항목을 가져왔어요"
                 }
                 description={
                   fetcher.data.failedLabels.length

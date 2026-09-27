@@ -1,5 +1,9 @@
 import { and, eq, like, or } from "drizzle-orm";
-import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
+import {
+  type PlannerStateMutation,
+  PlannerStateRevisionConflictError,
+  withPlannerStateUpdate,
+} from "~/db/postgres/planner-states";
 import {
   createAttendanceInDatabase,
   createBuyPyroxeneInDatabase,
@@ -10,12 +14,14 @@ import {
   ensureCollectedSourceInDatabase,
   type PostgresPyroxeneOptions,
   type PyroxeneDatabase,
+  sortPlannerStateTimelineRecords,
   upsertPyroxeneEventDataInDatabase,
   upsertPyroxenePlannerOptionsInDatabase,
   withPyroxeneDatabase,
 } from "~/db/postgres/pyroxene-planner";
 import type { GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
-import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { nowUtcIso } from "~/lib/date-time";
 import { pgPyroxeneGuestImportItemsTable, pgPyroxeneTimelineItemsTable } from "./schema";
 
@@ -43,7 +49,73 @@ export type GuestImportItem = {
 export type GuestPyroxeneImportResult = {
   verified: GuestImportItem[];
   failed: GuestImportItem[];
+  revisionConflict: boolean;
 };
+
+type ImportedTimelineRecord = PlannerStateDocumentV1["pyroxene"]["records"][number];
+type ImportedResource = PlannerStateDocumentV1["pyroxene"]["resources"];
+
+function withImportedResource(document: PlannerStateDocumentV1, resource: ImportedResource): PlannerStateDocumentV1 {
+  if (!resource || (document.pyroxene.resources && resource.inputAt < document.pyroxene.resources.inputAt)) {
+    return document;
+  }
+  return { ...document, pyroxene: { ...document.pyroxene, resources: resource } };
+}
+
+function withImportedRecords(
+  document: PlannerStateDocumentV1,
+  records: readonly ImportedTimelineRecord[],
+  replaceAttendance = false,
+): PlannerStateDocumentV1 {
+  const byUid = new Map(
+    document.pyroxene.records
+      .filter((record) => !replaceAttendance || record.source !== "attendance")
+      .map((record) => [record.uid, record]),
+  );
+  for (const record of records) byUid.set(record.uid, record);
+  return {
+    ...document,
+    pyroxene: {
+      ...document.pyroxene,
+      records: sortPlannerStateTimelineRecords([...byUid.values()]),
+    },
+  };
+}
+
+function withImportedSourceKey(document: PlannerStateDocumentV1, sourceKey: string): PlannerStateDocumentV1 {
+  return {
+    ...document,
+    pyroxene: {
+      ...document.pyroxene,
+      collectedSourceKeys: [...new Set([...document.pyroxene.collectedSourceKeys, sourceKey])].sort(),
+    },
+  };
+}
+
+function withImportedOptions(
+  document: PlannerStateDocumentV1,
+  options: PyroxenePlannerOptions,
+): PlannerStateDocumentV1 {
+  return {
+    ...document,
+    pyroxene: { ...document.pyroxene, options: normalizePyroxenePlannerOptions(options) },
+  };
+}
+
+function withImportedEventTrials(
+  document: PlannerStateDocumentV1,
+  eventUid: string,
+  expectedTrials: number,
+): PlannerStateDocumentV1 {
+  const current = document.pyroxene.eventData[eventUid] ?? { completed: false, expectedTrials: null };
+  return {
+    ...document,
+    pyroxene: {
+      ...document.pyroxene,
+      eventData: { ...document.pyroxene.eventData, [eventUid]: { ...current, expectedTrials } },
+    },
+  };
+}
 
 /**
  * PostgreSQL receipt keys are versioned UTF-8 bytes encoded as unpadded
@@ -201,8 +273,8 @@ export async function importGuestResourcesInDatabase(
   userId: number,
   datasetId: string,
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-): Promise<void> {
-  await createPyroxeneOwnedResourceInDatabase(db, userId, resources, {
+): Promise<ImportedResource> {
+  return createPyroxeneOwnedResourceInDatabase(db, userId, resources, {
     uid: deterministicImportUid(userId, datasetId, "resources"),
     ignoreUidConflict: true,
   });
@@ -213,7 +285,7 @@ export async function importGuestRecordInDatabase(
   userId: number,
   datasetId: string,
   record: GuestPyroxeneRecord,
-): Promise<void> {
+): Promise<ImportedTimelineRecord[]> {
   const uid = deterministicImportUid(userId, datasetId, record.recordId);
   const [existing] = await db
     .select({ id: pgPyroxeneTimelineItemsTable.id })
@@ -225,19 +297,18 @@ export async function importGuestRecordInDatabase(
       ),
     )
     .limit(1);
-  if (existing) return;
+  if (existing) return [];
 
   switch (record.kind) {
     case "buy":
-      await createBuyPyroxeneInDatabase(db, userId, record.date, record.quantity, {
+      return createBuyPyroxeneInDatabase(db, userId, record.date, record.quantity, {
         repeatType: record.repeatType,
         monthlyCount: record.monthlyCount,
         uid,
         ignoreUidConflict: true,
       });
-      break;
     case "monthlyPackage":
-      await createPyroxeneMonthlyPackageInDatabase(
+      return createPyroxeneMonthlyPackageInDatabase(
         db,
         userId,
         record.startDate,
@@ -246,15 +317,12 @@ export async function importGuestRecordInDatabase(
         uid,
         true,
       );
-      break;
     case "apPackage":
-      await createPyroxeneApPackageInDatabase(db, userId, record.startDate, record.autoRepurchase, uid, true);
-      break;
+      return createPyroxeneApPackageInDatabase(db, userId, record.startDate, record.autoRepurchase, uid, true);
     case "attendance":
-      await createAttendanceInDatabase(db, userId, record.startDate, uid, true);
-      break;
+      return createAttendanceInDatabase(db, userId, record.startDate, uid, true);
     case "other":
-      await createOtherPyroxeneGainInDatabase(
+      return createOtherPyroxeneGainInDatabase(
         db,
         userId,
         record.date,
@@ -265,7 +333,6 @@ export async function importGuestRecordInDatabase(
         uid,
         true,
       );
-      break;
   }
 }
 
@@ -276,7 +343,15 @@ export async function importGuestResourcesPostgres(
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
 ): Promise<void> {
   return withPyroxeneDatabase(env, "guest_import.resources", (db) =>
-    withPlannerStateDualWrite(db, userId, (tx) => importGuestResourcesInDatabase(tx, userId, datasetId, resources)),
+    withPlannerStateUpdate(
+      db,
+      userId,
+      async (tx, document) => {
+        const imported = await importGuestResourcesInDatabase(tx, userId, datasetId, resources);
+        return { document: withImportedResource(document, imported), result: undefined };
+      },
+      { retryable: true },
+    ),
   );
 }
 
@@ -287,7 +362,18 @@ export async function importGuestRecordPostgres(
   record: GuestPyroxeneRecord,
 ): Promise<void> {
   return withPyroxeneDatabase(env, "guest_import.record", (db) =>
-    withPlannerStateDualWrite(db, userId, (tx) => importGuestRecordInDatabase(tx, userId, datasetId, record)),
+    withPlannerStateUpdate(
+      db,
+      userId,
+      async (tx, document) => {
+        const imported = await importGuestRecordInDatabase(tx, userId, datasetId, record);
+        return {
+          document: withImportedRecords(document, imported, record.kind === "attendance" && imported.length > 0),
+          result: undefined,
+        };
+      },
+      { retryable: true },
+    ),
   );
 }
 
@@ -306,52 +392,77 @@ export async function runPostgresGuestPyroxeneImport(
       const verified: GuestImportItem[] = [];
       const failed: GuestImportItem[] = [];
       const pendingReceipts: GuestImportItem[] = [];
+      let revisionConflict = false;
 
-      const runItem = async (
-        item: GuestImportItem,
-        operation: (transaction: PyroxeneDatabase) => Promise<void>,
-        dualWrite = true,
-      ) => {
+      const runPlannerItem = async (item: GuestImportItem, mutation: PlannerStateMutation<void>) => {
         if (existingReceipts.has(receiptKey(item.type, item.key))) {
           verified.push(item);
           return;
         }
         try {
-          if (dualWrite) await withPlannerStateDualWrite(db, userId, operation);
-          else await operation(db);
+          await withPlannerStateUpdate(db, userId, mutation, { retryable: true });
           pendingReceipts.push(item);
-        } catch {
+        } catch (error) {
+          if (error instanceof PlannerStateRevisionConflictError) revisionConflict = true;
+          failed.push(item);
+        }
+      };
+
+      const runExternalItem = async (item: GuestImportItem, operation: () => Promise<void>) => {
+        if (existingReceipts.has(receiptKey(item.type, item.key))) {
+          verified.push(item);
+          return;
+        }
+        try {
+          await operation();
+          pendingReceipts.push(item);
+        } catch (error) {
+          if (error instanceof PlannerStateRevisionConflictError) revisionConflict = true;
           failed.push(item);
         }
       };
 
       if (plan.resources) {
-        await runItem({ type: "resources", key: "current" }, (tx) =>
-          importGuestResourcesInDatabase(tx, userId, datasetId, plan.resources as NonNullable<typeof plan.resources>),
-        );
+        await runPlannerItem({ type: "resources", key: "current" }, async (tx, document) => {
+          const imported = await importGuestResourcesInDatabase(
+            tx,
+            userId,
+            datasetId,
+            plan.resources as NonNullable<typeof plan.resources>,
+          );
+          return { document: withImportedResource(document, imported), result: undefined };
+        });
       }
       if (plan.options) {
-        await runItem({ type: "options", key: "current" }, (tx) =>
-          upsertPyroxenePlannerOptionsInDatabase(tx, userId, plan.options as PyroxenePlannerOptions),
-        );
+        await runPlannerItem({ type: "options", key: "current" }, async (tx, document) => {
+          const options = normalizePyroxenePlannerOptions(plan.options as PyroxenePlannerOptions);
+          await upsertPyroxenePlannerOptionsInDatabase(tx, userId, options);
+          return { document: withImportedOptions(document, options), result: undefined };
+        });
       }
       for (const record of plan.records) {
-        await runItem({ type: "record", key: record.recordId }, (tx) =>
-          importGuestRecordInDatabase(tx, userId, datasetId, record),
-        );
+        await runPlannerItem({ type: "record", key: record.recordId }, async (tx, document) => {
+          const imported = await importGuestRecordInDatabase(tx, userId, datasetId, record);
+          return {
+            document: withImportedRecords(document, imported, record.kind === "attendance" && imported.length > 0),
+            result: undefined,
+          };
+        });
       }
       for (const sourceKey of plan.sourceKeys) {
-        await runItem({ type: "source", key: sourceKey }, (tx) =>
-          ensureCollectedSourceInDatabase(tx, userId, sourceKey),
-        );
+        await runPlannerItem({ type: "source", key: sourceKey }, async (tx, document) => {
+          await ensureCollectedSourceInDatabase(tx, userId, sourceKey);
+          return { document: withImportedSourceKey(document, sourceKey), result: undefined };
+        });
       }
       for (const { eventUid, expectedTrials } of plan.eventTrials) {
-        await runItem({ type: "event", key: eventUid }, (tx) =>
-          upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, { expectedTrials }),
-        );
+        await runPlannerItem({ type: "event", key: eventUid }, async (tx, document) => {
+          await upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, { expectedTrials });
+          return { document: withImportedEventTrials(document, eventUid, expectedTrials), result: undefined };
+        });
       }
       for (const favorite of plan.favorites) {
-        await runItem({ type: "favorite", key: favorite.itemKey }, favorite.run, false);
+        await runExternalItem({ type: "favorite", key: favorite.itemKey }, favorite.run);
       }
 
       if (pendingReceipts.length > 0) {
@@ -381,7 +492,7 @@ export async function runPostgresGuestPyroxeneImport(
         }
       }
 
-      return { verified, failed };
+      return { verified, failed, revisionConflict };
     },
     options,
   );

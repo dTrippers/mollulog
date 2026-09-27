@@ -1,12 +1,11 @@
 import { and, asc, desc, eq, isNull, like, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
+import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
+import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import {
-  defaultPyroxenePlannerOptions,
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
-  type StoredPyroxenePlannerOptions,
   type TimelineSourceType,
 } from "~/domain/pyroxene-planner";
 import {
@@ -38,7 +37,6 @@ export type PostgresPyroxeneOptions = {
 };
 
 export type PyroxeneOwnedResource = {
-  uid: string;
   userId: number;
   inputAt: string;
   pyroxene: number;
@@ -64,12 +62,14 @@ export type PyroxeneTimelineItem = {
 };
 
 export type PyroxeneEventData = {
-  uid: string;
   userId: number;
   eventUid: string;
   completed: boolean;
   expectedTrials: number | null;
 };
+
+type PlannerStateResource = Omit<PyroxeneOwnedResource, "userId">;
+type PlannerStateTimelineRecord = Omit<PyroxeneTimelineItem, "userId">;
 
 export type PostgresPyroxeneUserState = {
   latestResources: PyroxeneOwnedResource | null;
@@ -90,6 +90,10 @@ type TimelineWriteOptions = {
   ignoreUidConflict?: boolean;
 };
 
+export function sortPlannerStateTimelineRecords<T extends { eventAt: string }>(records: readonly T[]): T[] {
+  return [...records].sort((left, right) => left.eventAt.localeCompare(right.eventAt));
+}
+
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);
 }
@@ -98,10 +102,8 @@ function toIso(value: Date | string): string {
   return normalizeInstant(value instanceof Date ? value.toISOString() : value);
 }
 
-function toOwnedResourceModel(resource: typeof pgPyroxeneOwnedResourcesTable.$inferSelect): PyroxeneOwnedResource {
+function toPlannerStateResource(resource: typeof pgPyroxeneOwnedResourcesTable.$inferSelect): PlannerStateResource {
   return {
-    uid: resource.uid,
-    userId: resource.userId,
     inputAt: toIso(resource.inputAt),
     pyroxene: resource.pyroxene,
     oneTimeTicket: resource.oneTimeTicket,
@@ -120,9 +122,9 @@ function toTimelineItemModel(item: typeof pgPyroxeneTimelineItemsTable.$inferSel
     eventAt: toIso(item.eventAt),
     source: item.source as TimelineSourceType,
     repeatType: toTimelineRepeatType(item.repeatType),
-    repeatIntervalDays: item.repeatIntervalDays,
-    repeatCount: item.repeatCount,
-    autoRepurchase: item.autoRepurchase,
+    repeatIntervalDays: item.repeatIntervalDays ?? null,
+    repeatCount: item.repeatCount ?? null,
+    autoRepurchase: item.autoRepurchase ?? false,
     description: item.description,
     pyroxeneDelta: item.pyroxeneDelta,
     oneTimeTicketDelta: item.oneTimeTicketDelta,
@@ -130,13 +132,95 @@ function toTimelineItemModel(item: typeof pgPyroxeneTimelineItemsTable.$inferSel
   };
 }
 
-function toEventDataModel(data: typeof pgPyroxeneEventDataTable.$inferSelect): PyroxeneEventData {
+function toPlannerStateTimelineRecord(
+  item: typeof pgPyroxeneTimelineItemsTable.$inferSelect,
+): PlannerStateTimelineRecord {
+  const model = toTimelineItemModel(item);
   return {
-    uid: data.uid,
-    userId: data.userId,
-    eventUid: data.eventUid,
-    completed: data.completed,
-    expectedTrials: data.expectedTrials,
+    uid: model.uid,
+    eventAt: model.eventAt,
+    source: model.source,
+    repeatType: model.repeatType,
+    repeatIntervalDays: model.repeatIntervalDays,
+    repeatCount: model.repeatCount,
+    autoRepurchase: model.autoRepurchase,
+    description: model.description,
+    pyroxeneDelta: model.pyroxeneDelta,
+    oneTimeTicketDelta: model.oneTimeTicketDelta,
+    tenTimeTicketDelta: model.tenTimeTicketDelta,
+  };
+}
+
+function withTimelineRecords(
+  document: PlannerStateDocumentV1,
+  records: readonly PlannerStateTimelineRecord[],
+): PlannerStateDocumentV1 {
+  return {
+    ...document,
+    pyroxene: {
+      ...document.pyroxene,
+      records: sortPlannerStateTimelineRecords(records),
+    },
+  };
+}
+
+async function withLegacyTimelineOrder(
+  db: PyroxeneDatabase,
+  userId: number,
+  document: PlannerStateDocumentV1,
+): Promise<PlannerStateDocumentV1> {
+  const legacyRows = await db
+    .select({ uid: pgPyroxeneTimelineItemsTable.uid })
+    .from(pgPyroxeneTimelineItemsTable)
+    .where(eq(pgPyroxeneTimelineItemsTable.userId, userId))
+    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id));
+  const recordsByUid = new Map(document.pyroxene.records.map((record) => [record.uid, record]));
+  const orderedRecords = legacyRows.map(({ uid }) => {
+    const record = recordsByUid.get(uid);
+    if (!record) throw new Error("Planner state timeline rows differ from legacy rows");
+    return record;
+  });
+  if (orderedRecords.length !== recordsByUid.size) {
+    throw new Error("Planner state timeline rows differ from legacy rows");
+  }
+  return withTimelineRecords(document, orderedRecords);
+}
+
+function mergeTimelineRecords(
+  document: PlannerStateDocumentV1,
+  records: readonly PlannerStateTimelineRecord[],
+): PlannerStateDocumentV1 {
+  const byUid = new Map(document.pyroxene.records.map((record) => [record.uid, record]));
+  for (const record of records) byUid.set(record.uid, record);
+  return withTimelineRecords(document, [...byUid.values()]);
+}
+
+function replaceTimelineRecords(
+  document: PlannerStateDocumentV1,
+  replace: (record: PlannerStateTimelineRecord) => boolean,
+  records: readonly PlannerStateTimelineRecord[],
+): PlannerStateDocumentV1 {
+  const kept = document.pyroxene.records.filter((record) => !replace(record));
+  return mergeTimelineRecords(withTimelineRecords(document, kept), records);
+}
+
+function removeTimelineItem(document: PlannerStateDocumentV1, uid: string): PlannerStateDocumentV1 {
+  const baseUid = extractPyroxeneTimelineBaseUid(uid);
+  return withTimelineRecords(
+    document,
+    document.pyroxene.records.filter((record) => record.uid !== baseUid && !record.uid.startsWith(baseUid)),
+  );
+}
+
+function withCollectedSourceKeys(
+  document: PlannerStateDocumentV1,
+  update: (keys: Set<string>) => void,
+): PlannerStateDocumentV1 {
+  const keys = new Set(document.pyroxene.collectedSourceKeys);
+  update(keys);
+  return {
+    ...document,
+    pyroxene: { ...document.pyroxene, collectedSourceKeys: [...keys].sort() },
   };
 }
 
@@ -163,25 +247,12 @@ export function withPyroxeneDatabase<T>(
   );
 }
 
-export async function getLatestPyroxeneOwnedResourceInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-): Promise<PyroxeneOwnedResource | null> {
-  const [resource] = await db
-    .select()
-    .from(pgPyroxeneOwnedResourcesTable)
-    .where(eq(pgPyroxeneOwnedResourcesTable.userId, userId))
-    .orderBy(desc(pgPyroxeneOwnedResourcesTable.inputAt))
-    .limit(1);
-  return resource ? toOwnedResourceModel(resource) : null;
-}
-
 export async function createPyroxeneOwnedResourceInDatabase(
   db: PyroxeneDatabase,
   userId: number,
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
   options: OwnedResourceWriteOptions = {},
-): Promise<void> {
+): Promise<PlannerStateResource | null> {
   const values = {
     uid: options.uid ?? nanoid(8),
     userId,
@@ -191,24 +262,10 @@ export async function createPyroxeneOwnedResourceInDatabase(
     tenTimeTicket: resources.tenTimeTicket,
   };
   const insert = db.insert(pgPyroxeneOwnedResourcesTable).values(values);
-  if (options.ignoreUidConflict) {
-    await insert.onConflictDoNothing({ target: pgPyroxeneOwnedResourcesTable.uid });
-    return;
-  }
-  await insert;
-}
-
-export async function getPostgresLatestPyroxeneOwnedResource(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PyroxeneOwnedResource | null> {
-  return withPyroxeneDatabase(
-    env,
-    "owned_resources.latest",
-    (db) => getLatestPyroxeneOwnedResourceInDatabase(db, userId),
-    options,
-  );
+  const rows = options.ignoreUidConflict
+    ? await insert.onConflictDoNothing({ target: pgPyroxeneOwnedResourcesTable.uid }).returning()
+    : await insert.returning();
+  return rows[0] ? toPlannerStateResource(rows[0]) : null;
 }
 
 export async function createPostgresPyroxeneOwnedResource(
@@ -221,8 +278,19 @@ export async function createPostgresPyroxeneOwnedResource(
     env,
     "owned_resources.create",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) =>
-        createPyroxeneOwnedResourceInDatabase(tx, userId, resources, options),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const inserted = await createPyroxeneOwnedResourceInDatabase(tx, userId, resources, options);
+          const current = document.pyroxene.resources;
+          const next = inserted && (!current || inserted.inputAt >= current.inputAt) ? inserted : current;
+          return {
+            document: { ...document, pyroxene: { ...document.pyroxene, resources: next } },
+            result: undefined,
+          };
+        },
+        { retryable: true },
       ),
     options,
   );
@@ -238,21 +306,33 @@ export async function deletePostgresPyroxeneOwnedResourceByUid(
     env,
     "owned_resources.delete",
     (db) =>
-      withPlannerStateDualWrite(db, userId, async (tx) => {
-        await tx
-          .delete(pgPyroxeneOwnedResourcesTable)
-          .where(and(eq(pgPyroxeneOwnedResourcesTable.userId, userId), eq(pgPyroxeneOwnedResourcesTable.uid, uid)));
-      }),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const removed = await tx
+            .delete(pgPyroxeneOwnedResourcesTable)
+            .where(and(eq(pgPyroxeneOwnedResourcesTable.userId, userId), eq(pgPyroxeneOwnedResourcesTable.uid, uid)))
+            .returning({ id: pgPyroxeneOwnedResourcesTable.id });
+          if (removed.length === 0) return { document, result: undefined };
+          const [latest] = await tx
+            .select()
+            .from(pgPyroxeneOwnedResourcesTable)
+            .where(eq(pgPyroxeneOwnedResourcesTable.userId, userId))
+            .orderBy(desc(pgPyroxeneOwnedResourcesTable.inputAt), desc(pgPyroxeneOwnedResourcesTable.id))
+            .limit(1);
+          return {
+            document: {
+              ...document,
+              pyroxene: { ...document.pyroxene, resources: latest ? toPlannerStateResource(latest) : null },
+            },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
-}
-
-export async function getCollectedSourceKeysInDatabase(db: PyroxeneDatabase, userId: number): Promise<Set<string>> {
-  const rows = await db
-    .select({ sourceKey: pgPyroxeneCollectedSourcesTable.sourceKey })
-    .from(pgPyroxeneCollectedSourcesTable)
-    .where(eq(pgPyroxeneCollectedSourcesTable.userId, userId));
-  return new Set(rows.map((row) => row.sourceKey));
 }
 
 export async function upsertCollectedSourceInDatabase(
@@ -307,19 +387,6 @@ export async function upsertCollectedSourcesInDatabase(
     });
 }
 
-export async function getPostgresCollectedSourceKeys(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<Set<string>> {
-  return withPyroxeneDatabase(
-    env,
-    "collected_sources.list",
-    (db) => getCollectedSourceKeysInDatabase(db, userId),
-    options,
-  );
-}
-
 export async function upsertPostgresCollectedSource(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -329,7 +396,19 @@ export async function upsertPostgresCollectedSource(
   return withPyroxeneDatabase(
     env,
     "collected_sources.upsert",
-    (db) => withPlannerStateDualWrite(db, userId, (tx) => upsertCollectedSourceInDatabase(tx, userId, sourceKey)),
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await upsertCollectedSourceInDatabase(tx, userId, sourceKey);
+          return {
+            document: withCollectedSourceKeys(document, (keys) => keys.add(sourceKey)),
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -343,7 +422,19 @@ export async function ensurePostgresCollectedSource(
   return withPyroxeneDatabase(
     env,
     "collected_sources.ensure",
-    (db) => withPlannerStateDualWrite(db, userId, (tx) => ensureCollectedSourceInDatabase(tx, userId, sourceKey)),
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await ensureCollectedSourceInDatabase(tx, userId, sourceKey);
+          return {
+            document: withCollectedSourceKeys(document, (keys) => keys.add(sourceKey)),
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -360,7 +451,20 @@ export async function upsertPostgresCollectedSources(
     env,
     "collected_sources.bulk_upsert",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) => upsertCollectedSourcesInDatabase(tx, userId, uniqueSourceKeys)),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await upsertCollectedSourcesInDatabase(tx, userId, uniqueSourceKeys);
+          return {
+            document: withCollectedSourceKeys(document, (keys) => {
+              for (const sourceKey of uniqueSourceKeys) keys.add(sourceKey);
+            }),
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -375,30 +479,27 @@ export async function deletePostgresCollectedSource(
     env,
     "collected_sources.delete",
     (db) =>
-      withPlannerStateDualWrite(db, userId, async (tx) => {
-        await tx
-          .delete(pgPyroxeneCollectedSourcesTable)
-          .where(
-            and(
-              eq(pgPyroxeneCollectedSourcesTable.userId, userId),
-              eq(pgPyroxeneCollectedSourcesTable.sourceKey, sourceKey),
-            ),
-          );
-      }),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await tx
+            .delete(pgPyroxeneCollectedSourcesTable)
+            .where(
+              and(
+                eq(pgPyroxeneCollectedSourcesTable.userId, userId),
+                eq(pgPyroxeneCollectedSourcesTable.sourceKey, sourceKey),
+              ),
+            );
+          return {
+            document: withCollectedSourceKeys(document, (keys) => keys.delete(sourceKey)),
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
-}
-
-export async function getPyroxeneTimelineItemsInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-): Promise<PyroxeneTimelineItem[]> {
-  const items = await db
-    .select()
-    .from(pgPyroxeneTimelineItemsTable)
-    .where(eq(pgPyroxeneTimelineItemsTable.userId, userId))
-    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id));
-  return items.map(toTimelineItemModel);
 }
 
 export async function createBuyPyroxeneInDatabase(
@@ -407,29 +508,32 @@ export async function createBuyPyroxeneInDatabase(
   date: Date | string,
   quantity: number,
   options: TimelineWriteOptions & { repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number } = {},
-): Promise<void> {
+): Promise<PlannerStateTimelineRecord[]> {
+  const { repeatType, monthlyCount } = options;
+  if (repeatType !== undefined && repeatType !== "fixed_days" && repeatType !== "monthly_first") {
+    throw new Error("Invalid Pyroxene purchase repeatType");
+  }
+  if (monthlyCount !== undefined && (!Number.isInteger(monthlyCount) || monthlyCount < 1)) {
+    throw new Error("Invalid Pyroxene purchase monthlyCount");
+  }
   const uid = options.uid ?? nanoid(8);
-  const repeatType = options.repeatType ?? "fixed_days";
-  const monthlyCount =
-    options.monthlyCount === undefined || !Number.isFinite(options.monthlyCount)
-      ? 1
-      : Math.max(1, Math.floor(options.monthlyCount));
+  const normalizedRepeatType = repeatType ?? "fixed_days";
+  const normalizedMonthlyCount = monthlyCount ?? 1;
   const insert = db.insert(pgPyroxeneTimelineItemsTable).values({
     uid,
     userId,
     eventAt: toDate(normalizePyroxeneTimelineEventAt(date)),
     source: "buy",
-    repeatType: repeatType === "fixed_days" ? null : repeatType,
+    repeatType: normalizedRepeatType === "fixed_days" ? null : normalizedRepeatType,
     description: "청휘석 구매",
-    pyroxeneDelta: quantity * monthlyCount,
+    pyroxeneDelta: quantity * normalizedMonthlyCount,
     oneTimeTicketDelta: 0,
     tenTimeTicketDelta: 0,
   });
-  if (options.ignoreUidConflict) {
-    await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid });
-    return;
-  }
-  await insert;
+  const rows = options.ignoreUidConflict
+    ? await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid }).returning()
+    : await insert.returning();
+  return rows.map(toPlannerStateTimelineRecord);
 }
 
 export async function deletePyroxeneTimelineItemInDatabase(
@@ -456,7 +560,7 @@ export async function createPyroxeneMonthlyPackageInDatabase(
   autoRepurchase = false,
   uid = nanoid(8),
   ignoreUidConflict = false,
-): Promise<void> {
+): Promise<PlannerStateTimelineRecord[]> {
   const eventAt = toDate(normalizePyroxeneTimelineEventAt(startDate));
   const {
     name: packageName,
@@ -494,11 +598,10 @@ export async function createPyroxeneMonthlyPackageInDatabase(
     },
   ];
   const insert = db.insert(pgPyroxeneTimelineItemsTable).values(values);
-  if (ignoreUidConflict) {
-    await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid });
-    return;
-  }
-  await insert;
+  const rows = ignoreUidConflict
+    ? await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid }).returning()
+    : await insert.returning();
+  return rows.map(toPlannerStateTimelineRecord);
 }
 
 export async function createPyroxeneApPackageInDatabase(
@@ -508,7 +611,7 @@ export async function createPyroxeneApPackageInDatabase(
   autoRepurchase = false,
   uid = nanoid(8),
   ignoreUidConflict = false,
-): Promise<void> {
+): Promise<PlannerStateTimelineRecord[]> {
   const insert = db.insert(pgPyroxeneTimelineItemsTable).values({
     uid: `${uid}::ap`,
     userId,
@@ -522,11 +625,10 @@ export async function createPyroxeneApPackageInDatabase(
     oneTimeTicketDelta: 0,
     tenTimeTicketDelta: 0,
   });
-  if (ignoreUidConflict) {
-    await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid });
-    return;
-  }
-  await insert;
+  const rows = ignoreUidConflict
+    ? await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid }).returning()
+    : await insert.returning();
+  return rows.map(toPlannerStateTimelineRecord);
 }
 
 export async function createAttendanceInDatabase(
@@ -535,9 +637,9 @@ export async function createAttendanceInDatabase(
   startDate: Date | string,
   uid = nanoid(8),
   ignoreUidConflict = false,
-): Promise<void> {
+): Promise<PlannerStateTimelineRecord[]> {
   const startAt = new Date(normalizePyroxeneTimelineEventAt(startDate));
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     await tx
       .delete(pgPyroxeneTimelineItemsTable)
       .where(
@@ -557,11 +659,10 @@ export async function createAttendanceInDatabase(
         repeatCount: null,
       })),
     );
-    if (ignoreUidConflict) {
-      await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid });
-    } else {
-      await insert;
-    }
+    const rows = ignoreUidConflict
+      ? await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid }).returning()
+      : await insert.returning();
+    return rows.map(toPlannerStateTimelineRecord);
   });
 }
 
@@ -575,7 +676,7 @@ export async function createOtherPyroxeneGainInDatabase(
   description: string,
   uid = nanoid(8),
   ignoreUidConflict = false,
-): Promise<void> {
+): Promise<PlannerStateTimelineRecord[]> {
   const insert = db.insert(pgPyroxeneTimelineItemsTable).values({
     uid,
     userId,
@@ -586,24 +687,10 @@ export async function createOtherPyroxeneGainInDatabase(
     oneTimeTicketDelta: oneTimeTicket,
     tenTimeTicketDelta: tenTimeTicket,
   });
-  if (ignoreUidConflict) {
-    await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid });
-    return;
-  }
-  await insert;
-}
-
-export async function getPostgresPyroxeneTimelineItems(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PyroxeneTimelineItem[]> {
-  return withPyroxeneDatabase(
-    env,
-    "timeline_items.list",
-    (db) => getPyroxeneTimelineItemsInDatabase(db, userId),
-    options,
-  );
+  const rows = ignoreUidConflict
+    ? await insert.onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid }).returning()
+    : await insert.returning();
+  return rows.map(toPlannerStateTimelineRecord);
 }
 
 export async function updatePyroxeneOneOffTimelineItemInDatabase(
@@ -618,7 +705,7 @@ export async function updatePyroxeneOneOffTimelineItemInDatabase(
     oneTimeTicketDelta: number;
     tenTimeTicketDelta: number;
   },
-): Promise<boolean> {
+): Promise<PlannerStateTimelineRecord | null> {
   const rows = await db
     .update(pgPyroxeneTimelineItemsTable)
     .set({
@@ -640,8 +727,8 @@ export async function updatePyroxeneOneOffTimelineItemInDatabase(
         eq(pgPyroxeneTimelineItemsTable.autoRepurchase, false),
       ),
     )
-    .returning({ uid: pgPyroxeneTimelineItemsTable.uid });
-  return rows.length === 1;
+    .returning();
+  return rows[0] ? toPlannerStateTimelineRecord(rows[0]) : null;
 }
 
 export async function createPostgresBuyPyroxene(
@@ -658,7 +745,15 @@ export async function createPostgresBuyPyroxene(
     env,
     "timeline_items.buy",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) => createBuyPyroxeneInDatabase(tx, userId, date, quantity, options)),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const records = await createBuyPyroxeneInDatabase(tx, userId, date, quantity, options);
+          return { document: mergeTimelineRecords(document, records), result: undefined };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -672,7 +767,16 @@ export async function deletePostgresPyroxeneTimelineItem(
   return withPyroxeneDatabase(
     env,
     "timeline_items.delete",
-    (db) => withPlannerStateDualWrite(db, userId, (tx) => deletePyroxeneTimelineItemInDatabase(tx, userId, uid)),
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await deletePyroxeneTimelineItemInDatabase(tx, userId, uid);
+          return { document: removeTimelineItem(document, uid), result: undefined };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -695,7 +799,20 @@ export async function updatePostgresPyroxeneOneOffTimelineItem(
     env,
     "timeline_items.update_one_off",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) => updatePyroxeneOneOffTimelineItemInDatabase(tx, userId, uid, input)),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const updated = await updatePyroxeneOneOffTimelineItemInDatabase(tx, userId, uid, input);
+          if (!updated) return { document, result: false };
+          const merged = mergeTimelineRecords(document, [updated]);
+          return {
+            document: await withLegacyTimelineOrder(tx, userId, merged),
+            result: true,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -713,8 +830,21 @@ export async function createPostgresPyroxeneMonthlyPackage(
     env,
     "timeline_items.monthly_package",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) =>
-        createPyroxeneMonthlyPackageInDatabase(tx, userId, startDate, packageType, autoRepurchase, uid),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const records = await createPyroxeneMonthlyPackageInDatabase(
+            tx,
+            userId,
+            startDate,
+            packageType,
+            autoRepurchase,
+            uid,
+          );
+          return { document: mergeTimelineRecords(document, records), result: undefined };
+        },
+        { retryable: true },
       ),
     options,
   );
@@ -732,8 +862,14 @@ export async function createPostgresPyroxeneApPackage(
     env,
     "timeline_items.ap_package",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) =>
-        createPyroxeneApPackageInDatabase(tx, userId, startDate, autoRepurchase, uid),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const records = await createPyroxeneApPackageInDatabase(tx, userId, startDate, autoRepurchase, uid);
+          return { document: mergeTimelineRecords(document, records), result: undefined };
+        },
+        { retryable: true },
       ),
     options,
   );
@@ -749,7 +885,19 @@ export async function createPostgresAttendance(
   return withPyroxeneDatabase(
     env,
     "timeline_items.attendance",
-    (db) => withPlannerStateDualWrite(db, userId, (tx) => createAttendanceInDatabase(tx, userId, startDate, uid)),
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const records = await createAttendanceInDatabase(tx, userId, startDate, uid);
+          return {
+            document: replaceTimelineRecords(document, (record) => record.source === "attendance", records),
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -769,28 +917,26 @@ export async function createPostgresOtherPyroxeneGain(
     env,
     "timeline_items.other",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) =>
-        createOtherPyroxeneGainInDatabase(tx, userId, date, pyroxene, oneTimeTicket, tenTimeTicket, description, uid),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const records = await createOtherPyroxeneGainInDatabase(
+            tx,
+            userId,
+            date,
+            pyroxene,
+            oneTimeTicket,
+            tenTimeTicket,
+            description,
+            uid,
+          );
+          return { document: mergeTimelineRecords(document, records), result: undefined };
+        },
+        { retryable: true },
       ),
     options,
   );
-}
-
-async function getPyroxenePlannerOptionsInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-): Promise<PyroxenePlannerOptions> {
-  const [record] = await db
-    .select()
-    .from(pgPyroxenePlannerOptionsTable)
-    .where(eq(pgPyroxenePlannerOptionsTable.userId, userId))
-    .limit(1);
-  if (!record) return defaultPyroxenePlannerOptions;
-  try {
-    return normalizePyroxenePlannerOptions(JSON.parse(record.options) as StoredPyroxenePlannerOptions);
-  } catch {
-    return defaultPyroxenePlannerOptions;
-  }
 }
 
 export async function upsertPyroxenePlannerOptionsInDatabase(
@@ -798,7 +944,8 @@ export async function upsertPyroxenePlannerOptionsInDatabase(
   userId: number,
   options: PyroxenePlannerOptions,
 ): Promise<void> {
-  const optionsJson = JSON.stringify(options);
+  const normalizedOptions = normalizePyroxenePlannerOptions(options);
+  const optionsJson = JSON.stringify(normalizedOptions);
   const updatedAt = toDate(nowUtcIso());
   await db
     .insert(pgPyroxenePlannerOptionsTable)
@@ -807,19 +954,6 @@ export async function upsertPyroxenePlannerOptionsInDatabase(
       target: pgPyroxenePlannerOptionsTable.userId,
       set: { options: optionsJson, updatedAt },
     });
-}
-
-export async function getPostgresPyroxenePlannerOptions(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PyroxenePlannerOptions> {
-  return withPyroxeneDatabase(
-    env,
-    "planner_options.get",
-    (db) => getPyroxenePlannerOptionsInDatabase(db, userId),
-    options,
-  );
 }
 
 export async function upsertPostgresPyroxenePlannerOptions(
@@ -831,30 +965,25 @@ export async function upsertPostgresPyroxenePlannerOptions(
   return withPyroxeneDatabase(
     env,
     "planner_options.upsert",
-    (db) => withPlannerStateDualWrite(db, userId, (tx) => upsertPyroxenePlannerOptionsInDatabase(tx, userId, options)),
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const normalizedOptions = normalizePyroxenePlannerOptions(options);
+          await upsertPyroxenePlannerOptionsInDatabase(tx, userId, normalizedOptions);
+          return {
+            document: {
+              ...document,
+              pyroxene: { ...document.pyroxene, options: normalizedOptions },
+            },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     repositoryOptions,
   );
-}
-
-export async function getPyroxeneEventDataInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-  eventUid: string,
-): Promise<PyroxeneEventData | null> {
-  const [data] = await db
-    .select()
-    .from(pgPyroxeneEventDataTable)
-    .where(and(eq(pgPyroxeneEventDataTable.userId, userId), eq(pgPyroxeneEventDataTable.eventUid, eventUid)))
-    .limit(1);
-  return data ? toEventDataModel(data) : null;
-}
-
-export async function getAllPyroxeneEventDataInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-): Promise<PyroxeneEventData[]> {
-  const data = await db.select().from(pgPyroxeneEventDataTable).where(eq(pgPyroxeneEventDataTable.userId, userId));
-  return data.map(toEventDataModel);
 }
 
 export async function upsertPyroxeneEventDataInDatabase(
@@ -884,28 +1013,6 @@ export async function upsertPyroxeneEventDataInDatabase(
   await onConflict;
 }
 
-export async function getPostgresPyroxeneEventData(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  eventUid: string,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PyroxeneEventData | null> {
-  return withPyroxeneDatabase(
-    env,
-    "event_data.get",
-    (db) => getPyroxeneEventDataInDatabase(db, userId, eventUid),
-    options,
-  );
-}
-
-export async function getPostgresAllPyroxeneEventData(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PyroxeneEventData[]> {
-  return withPyroxeneDatabase(env, "event_data.list", (db) => getAllPyroxeneEventDataInDatabase(db, userId), options);
-}
-
 export async function upsertPostgresPyroxeneEventData(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -917,7 +1024,31 @@ export async function upsertPostgresPyroxeneEventData(
     env,
     "event_data.upsert",
     (db) =>
-      withPlannerStateDualWrite(db, userId, (tx) => upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, data)),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, data);
+          const current = document.pyroxene.eventData[eventUid] ?? { completed: false, expectedTrials: null };
+          return {
+            document: {
+              ...document,
+              pyroxene: {
+                ...document.pyroxene,
+                eventData: {
+                  ...document.pyroxene.eventData,
+                  [eventUid]: {
+                    completed: data.completed ?? current.completed,
+                    expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : current.expectedTrials,
+                  },
+                },
+              },
+            },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -932,39 +1063,22 @@ export async function deletePostgresPyroxeneEventData(
     env,
     "event_data.delete",
     (db) =>
-      withPlannerStateDualWrite(db, userId, async (tx) => {
-        await tx
-          .delete(pgPyroxeneEventDataTable)
-          .where(and(eq(pgPyroxeneEventDataTable.userId, userId), eq(pgPyroxeneEventDataTable.eventUid, eventUid)));
-      }),
-    options,
-  );
-}
-
-export async function getPostgresPyroxeneUserState(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresPyroxeneOptions = {},
-): Promise<PostgresPyroxeneUserState> {
-  return withPyroxeneDatabase(
-    env,
-    "user_state",
-    async (db) => {
-      const [latestResources, plannerOptions, eventData, timelineItems, collectedSourceKeys] = await Promise.all([
-        getLatestPyroxeneOwnedResourceInDatabase(db, userId),
-        getPyroxenePlannerOptionsInDatabase(db, userId),
-        getAllPyroxeneEventDataInDatabase(db, userId),
-        getPyroxeneTimelineItemsInDatabase(db, userId),
-        getCollectedSourceKeysInDatabase(db, userId),
-      ]);
-      return {
-        latestResources,
-        options: plannerOptions,
-        eventData,
-        timelineItems,
-        collectedSourceKeys,
-      };
-    },
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          await tx
+            .delete(pgPyroxeneEventDataTable)
+            .where(and(eq(pgPyroxeneEventDataTable.userId, userId), eq(pgPyroxeneEventDataTable.eventUid, eventUid)));
+          const eventData = { ...document.pyroxene.eventData };
+          delete eventData[eventUid];
+          return {
+            document: { ...document, pyroxene: { ...document.pyroxene, eventData } },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }

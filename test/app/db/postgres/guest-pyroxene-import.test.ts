@@ -10,6 +10,8 @@ import {
   runPostgresGuestPyroxeneImport,
 } from "~/db/postgres/guest-pyroxene-import";
 import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
+import { projectPlannerStateDocument } from "~/domain/planner-state";
+import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
@@ -52,6 +54,44 @@ function createClient(options: { failBulk?: boolean; existingReceipt?: boolean }
     end: jest.fn(async () => undefined),
     query,
   } as unknown as Client;
+  return { client, events, query };
+}
+
+function createFakeClient(options: { failBulk?: boolean; existingReceipt?: boolean; failRevision?: boolean } = {}) {
+  const events: string[] = [];
+  const client = new FakePostgresClient({
+    pyroxene_owned_resources: [],
+    pyroxene_collected_sources: [],
+    pyroxene_timeline_items: [],
+    pyroxene_planner_options: [],
+    pyroxene_event_data: [],
+    event_shop_states: [],
+    pyroxene_guest_import_items:
+      options.existingReceipt === true
+        ? [
+            {
+              id: 1,
+              userId: 7,
+              datasetId: "dataset-1",
+              itemType: "favorite",
+              itemKey: encodePostgresPyroxeneReceiptItemKey("content-1\u0000student-1"),
+              importedAt: new Date("2026-08-01T00:00:00.000Z"),
+            },
+          ]
+        : [],
+  });
+  const originalQuery = client.query.bind(client);
+  const query = jest.spyOn(client, "query").mockImplementation(async (config, values) => {
+    const text = typeof config === "string" ? config : config.text;
+    events.push(text);
+    if (options.failBulk && text.includes('insert into "pyroxene_guest_import_items"')) {
+      throw new Error("receipt insert failed");
+    }
+    if (options.failRevision && /(?:insert into|update) "planner_states"/.test(text)) {
+      return { rows: [], rowCount: 0 };
+    }
+    return originalQuery(config, values);
+  });
   return { client, events, query };
 }
 
@@ -110,10 +150,12 @@ describe("PostgreSQL guest Pyroxene import", () => {
   });
 
   it("holds one client from the receipt read through Pyroxene writes and one bulk receipt insert", async () => {
-    const { client, events, query } = createClient();
+    const { client, events, query } = createFakeClient();
+    const connect = jest.spyOn(client, "connect");
+    const end = jest.spyOn(client, "end");
     const importPlan = plan(events);
     const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", importPlan, {
-      createClient: () => client,
+      createClient: () => client as unknown as Client,
     });
 
     const receiptReads = query.mock.calls.filter(([config]) => {
@@ -124,34 +166,38 @@ describe("PostgreSQL guest Pyroxene import", () => {
       const text = typeof config === "string" ? config : config.text;
       return text.includes('insert into "pyroxene_guest_import_items"');
     });
-    expect(client.connect).toHaveBeenCalledTimes(1);
-    expect(client.end).toHaveBeenCalledTimes(1);
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(end).toHaveBeenCalledTimes(1);
     expect(receiptReads).toHaveLength(1);
     expect(receiptWrites).toHaveLength(1);
     expect(
       query.mock.calls.filter(([config]) => {
         const text = typeof config === "string" ? config : config.text;
-        return text.includes('insert into "planner_states"');
+        return /(?:insert into|update) "planner_states"/.test(text);
       }),
     ).toHaveLength(3);
     expect(result.failed).toEqual([]);
+    expect(result.revisionConflict).toBe(false);
     expect(result.verified).toEqual([
       { type: "resources", key: "current" },
       { type: "source", key: "source-1" },
       { type: "event", key: "event-1" },
       { type: "favorite", key: "content-1\u0000student-1" },
     ]);
-    const receiptWrite = query.mock.calls.find(([config]) => {
+    const receiptWriteIndex = query.mock.calls.findIndex(([config]) => {
       const text = typeof config === "string" ? config : config.text;
       return text.includes('insert into "pyroxene_guest_import_items"');
     });
-    expect(receiptWrite?.[1]).toEqual(
+    const receiptWriteValues = client.parameters.find((values) =>
+      values.includes(encodePostgresPyroxeneReceiptItemKey("content-1\u0000student-1")),
+    );
+    expect(receiptWriteValues).toEqual(
       expect.arrayContaining([encodePostgresPyroxeneReceiptItemKey("content-1\u0000student-1")]),
     );
-    expect(receiptWrite?.[1]).not.toContain("content-1\u0000student-1");
-    expect(events.indexOf("favorite")).toBeLessThan(
-      events.findIndex((event) => event.includes('insert into "pyroxene_guest_import_items"')),
-    );
+    expect(receiptWriteValues).not.toContain("content-1\u0000student-1");
+    const receiptEventIndex = events.findIndex((event) => event.includes('insert into "pyroxene_guest_import_items"'));
+    expect(events.indexOf("favorite")).toBeLessThan(receiptEventIndex);
+    expect(receiptWriteIndex).toBeGreaterThanOrEqual(0);
   });
 
   it("dual-writes imported guest data equal to the legacy-table projection", async () => {
@@ -165,12 +211,28 @@ describe("PostgreSQL guest Pyroxene import", () => {
       pyroxene_guest_import_items: [],
     });
     const events: string[] = [];
+    const importPlan: GuestPyroxeneImportPlan = {
+      ...plan(events),
+      options: defaultPyroxenePlannerOptions,
+      records: [
+        {
+          recordId: "buy-1",
+          createdAt: "2026-08-01T00:00:00.000Z",
+          kind: "buy",
+          quantity: 100,
+          date: "2026-08-02T00:00:00.000Z",
+          repeatType: "fixed_days",
+          monthlyCount: 1,
+        },
+      ],
+    };
 
-    const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", plan(events), {
+    const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", importPlan, {
       createClient: () => client as unknown as Client,
     });
 
     expect(result.failed).toEqual([]);
+    expect(result.revisionConflict).toBe(false);
     const row = client.tables.planner_states?.[0];
     expect(row).toBeDefined();
     if (!row) throw new Error("Expected a dual-written planner state row");
@@ -179,10 +241,107 @@ describe("PostgreSQL guest Pyroxene import", () => {
     expect(document).toEqual(projected);
   });
 
+  it("keeps a same-date guest record after existing rows in legacy insertion order", async () => {
+    const date = new Date("2026-08-02T00:00:00.000Z");
+    const eventAt = new Date("2026-08-01T19:00:00.000Z");
+    const existingRecords = [
+      {
+        id: 39,
+        uid: "z-existing",
+        userId: 7,
+        eventAt,
+        source: "other",
+        repeatType: null,
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+        description: "Existing first",
+        pyroxeneDelta: 4,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      },
+      {
+        id: 40,
+        uid: "y-existing",
+        userId: 7,
+        eventAt,
+        source: "other",
+        repeatType: null,
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+        description: "Existing second",
+        pyroxeneDelta: 5,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      },
+    ];
+    const client = new FakePostgresClient({
+      pyroxene_owned_resources: [],
+      pyroxene_collected_sources: [],
+      pyroxene_timeline_items: [...existingRecords].reverse(),
+      pyroxene_planner_options: [],
+      pyroxene_event_data: [],
+      event_shop_states: [],
+      pyroxene_guest_import_items: [],
+      planner_states: [
+        {
+          id: 1,
+          userId: 7,
+          revision: 1,
+          document: projectPlannerStateDocument({
+            resources: [],
+            timelineItems: existingRecords,
+            plannerOptions: [],
+            collectedSources: [],
+            eventData: [],
+            eventShops: [],
+          }),
+        },
+      ],
+    });
+    const result = await runPostgresGuestPyroxeneImport(
+      env,
+      7,
+      "dataset-1",
+      {
+        records: [
+          {
+            recordId: "a-buy",
+            createdAt: "2026-08-01T00:00:00.000Z",
+            kind: "buy",
+            quantity: 100,
+            date: date.toISOString(),
+          },
+        ],
+        sourceKeys: [],
+        eventTrials: [],
+        favorites: [],
+      },
+      { createClient: () => client as unknown as Client },
+    );
+
+    expect(result.failed).toEqual([]);
+    const rows = client.tables.pyroxene_timeline_items ?? [];
+    expect(rows.at(-1)?.id).toBe(41);
+    expect(rows.at(-1)?.uid).toBe("guest-7-dataset-1-a-buy");
+    const storedRow = client.tables.planner_states?.[0];
+    expect(storedRow).toBeDefined();
+    if (!storedRow) throw new Error("Expected a planner state after guest import");
+    const storedDocument = typeof storedRow.document === "string" ? JSON.parse(storedRow.document) : storedRow.document;
+    const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(storedDocument).toEqual(projected);
+    expect(projected.pyroxene.records.map(({ uid }) => uid)).toEqual([
+      "z-existing",
+      "y-existing",
+      "guest-7-dataset-1-a-buy",
+    ]);
+  });
+
   it("does not verify newly operated items when the bulk receipt insert fails", async () => {
-    const { client, events } = createClient({ failBulk: true });
+    const { client, events } = createFakeClient({ failBulk: true });
     const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", plan(events), {
-      createClient: () => client,
+      createClient: () => client as unknown as Client,
     });
 
     expect(result.verified).toEqual([]);
@@ -192,14 +351,25 @@ describe("PostgreSQL guest Pyroxene import", () => {
       { type: "event", key: "event-1" },
       { type: "favorite", key: "content-1\u0000student-1" },
     ]);
+    expect(result.revisionConflict).toBe(false);
     expect(events).toContain("favorite");
   });
 
+  it("reports an explicit revision conflict when safe retry also conflicts", async () => {
+    const { client, events } = createFakeClient({ failRevision: true });
+    const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", plan(events), {
+      createClient: () => client as unknown as Client,
+    });
+
+    expect(result.revisionConflict).toBe(true);
+    expect(result.failed).toContainEqual({ type: "resources", key: "current" });
+  });
+
   it("verifies an existing receipt without repeating its external favorite write", async () => {
-    const { client, events } = createClient({ existingReceipt: true });
+    const { client, events } = createFakeClient({ existingReceipt: true });
     const importPlan = plan(events);
     const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", importPlan, {
-      createClient: () => client,
+      createClient: () => client as unknown as Client,
     });
 
     expect(result.verified).toEqual([

@@ -1,4 +1,4 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import {
   type PlannerStateDocumentV1,
@@ -17,7 +17,7 @@ import {
   pgPyroxeneTimelineItemsTable,
 } from "./schema";
 
-type PlannerStateDatabase = NodePgDatabase;
+export type PlannerStateDatabase = NodePgDatabase;
 type LegacyTableName = keyof PlannerStateProjectionRows;
 type MutableProjectionRows = { -readonly [Field in keyof PlannerStateProjectionRows]: unknown[] };
 type LegacyRowsByUser = Map<number, MutableProjectionRows>;
@@ -26,6 +26,24 @@ export type PlannerStateDatabaseOptions = {
   createClient?: PostgresClientFactory;
   ctx?: ExecutionContext;
 };
+
+export const PLANNER_STATE_REVISION_CONFLICT_MESSAGE = "다른 탭이나 기기에서 플래너가 바뀌었어요";
+
+export type PlannerStateMutation<T> = (
+  transaction: PlannerStateDatabase,
+  currentDocument: PlannerStateDocumentV1,
+) => Promise<{ document: PlannerStateDocumentV1; result: T }>;
+
+export class PlannerStateRevisionConflictError extends Error {
+  constructor() {
+    super(PLANNER_STATE_REVISION_CONFLICT_MESSAGE);
+    this.name = "PlannerStateRevisionConflictError";
+  }
+}
+
+class RevisionConflictSignal extends Error {}
+
+const plannerStateLockKey = (userId: number) => `mollulog:planner-state:user:${userId}`;
 
 export type PlannerStateConversionFailure = { userId: number; field: string };
 
@@ -131,46 +149,111 @@ export async function getPlannerStateDocumentFromLegacyInDatabase(
   return projectPlannerStateDocument(await readLegacyRows(db, userId));
 }
 
-async function upsertPlannerStateInDatabase(
-  db: PlannerStateDatabase,
-  userId: number,
-  document: PlannerStateDocumentV1,
-): Promise<void> {
-  const updatedAt = new Date();
-  await db
-    .insert(pgPlannerStatesTable)
-    .values({ userId, revision: 1, document, updatedAt })
-    .onConflictDoUpdate({
-      target: pgPlannerStatesTable.userId,
-      set: {
-        document,
-        revision: sql`${pgPlannerStatesTable.revision} + 1`,
-        updatedAt,
-      },
-    });
+function emptyPlannerStateDocument(): PlannerStateDocumentV1 {
+  return projectPlannerStateDocument({
+    resources: [],
+    timelineItems: [],
+    plannerOptions: [],
+    collectedSources: [],
+    eventData: [],
+    eventShops: [],
+  });
 }
 
-/**
- * Runs one legacy mutation and its projection in one database transaction.
- * A projection error aborts the transaction, so the legacy write cannot commit
- * without its matching planner document.
- */
-export async function withPlannerStateDualWrite<T>(
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readStoredPlannerStateDocument(value: unknown): PlannerStateDocumentV1 {
+  if (typeof value === "string") {
+    try {
+      value = JSON.parse(value) as unknown;
+    } catch {
+      throw new Error("Unable to read planner state document");
+    }
+  }
+  if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.pyroxene) || !isRecord(value.eventShops)) {
+    throw new Error("Unable to read planner state document");
+  }
+  const pyroxene = value.pyroxene;
+  if (
+    !(pyroxene.resources === null || isRecord(pyroxene.resources)) ||
+    !Array.isArray(pyroxene.records) ||
+    !isRecord(pyroxene.options) ||
+    !Array.isArray(pyroxene.collectedSourceKeys) ||
+    !isRecord(pyroxene.eventData) ||
+    Object.values(value.eventShops).some((state) => !isRecord(state))
+  ) {
+    throw new Error("Unable to read planner state document");
+  }
+  return value as unknown as PlannerStateDocumentV1;
+}
+
+export async function getPlannerStateDocumentInDatabase(
   db: PlannerStateDatabase,
   userId: number,
-  operation: (transaction: PlannerStateDatabase) => Promise<T>,
+): Promise<PlannerStateDocumentV1> {
+  const [row] = await db.select().from(pgPlannerStatesTable).where(eq(pgPlannerStatesTable.userId, userId)).limit(1);
+  return row ? readStoredPlannerStateDocument(row.document) : emptyPlannerStateDocument();
+}
+
+async function withPlannerStateRevisionUpdate<T>(
+  db: PlannerStateDatabase,
+  userId: number,
+  mutation: PlannerStateMutation<T>,
+  retryable: boolean,
 ): Promise<T> {
-  return db.transaction(async (transaction) => {
-    const tx = transaction as unknown as PlannerStateDatabase;
-    // Serialize same-user writes so later READ COMMITTED projection queries see prior commits.
-    await tx.execute(
-      sql`select pg_advisory_xact_lock(hashtextextended(${`mollulog:planner-state:user:${userId}`}, 0))`,
-    );
-    const result = await operation(tx);
-    const document = await getPlannerStateDocumentFromLegacyInDatabase(tx, userId);
-    await upsertPlannerStateInDatabase(tx, userId, document);
-    return result;
-  });
+  const attempts = retryable ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await db.transaction(async (transaction) => {
+        const tx = transaction as unknown as PlannerStateDatabase;
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${plannerStateLockKey(userId)}, 0))`);
+        const [row] = await tx
+          .select()
+          .from(pgPlannerStatesTable)
+          .where(eq(pgPlannerStatesTable.userId, userId))
+          .limit(1);
+        const currentDocument = row ? readStoredPlannerStateDocument(row.document) : emptyPlannerStateDocument();
+        const { document, result } = await mutation(tx, currentDocument);
+        const updatedAt = new Date();
+        const saved = row
+          ? await tx
+              .update(pgPlannerStatesTable)
+              .set({ document, revision: row.revision + 1, updatedAt })
+              .where(and(eq(pgPlannerStatesTable.userId, userId), eq(pgPlannerStatesTable.revision, row.revision)))
+              .returning({ id: pgPlannerStatesTable.id })
+          : await tx
+              .insert(pgPlannerStatesTable)
+              .values({ userId, revision: 1, document, updatedAt })
+              .onConflictDoNothing({ target: pgPlannerStatesTable.userId })
+              .returning({ id: pgPlannerStatesTable.id });
+        if (saved.length === 0) throw new RevisionConflictSignal();
+        return result;
+      });
+    } catch (error) {
+      if (!(error instanceof RevisionConflictSignal)) throw error;
+    }
+  }
+  throw new PlannerStateRevisionConflictError();
+}
+
+export async function updatePlannerStateDocumentInDatabase<T>(
+  db: PlannerStateDatabase,
+  userId: number,
+  mutation: PlannerStateMutation<T>,
+  options: { retryable?: boolean } = {},
+): Promise<T> {
+  return withPlannerStateRevisionUpdate(db, userId, mutation, options.retryable ?? false);
+}
+
+export async function withPlannerStateUpdate<T>(
+  db: PlannerStateDatabase,
+  userId: number,
+  mutation: PlannerStateMutation<T>,
+  options: { retryable?: boolean } = {},
+): Promise<T> {
+  return updatePlannerStateDocumentInDatabase(db, userId, mutation, options);
 }
 
 export function withPlannerStatesDatabase<T>(
@@ -187,6 +270,28 @@ export function withPlannerStatesDatabase<T>(
     },
     createClient,
     ctx,
+  );
+}
+
+export function getPostgresPlannerStateDocument(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<PlannerStateDocumentV1> {
+  return withPlannerStatesDatabase(env, (db) => getPlannerStateDocumentInDatabase(db, userId), options);
+}
+
+export function updatePostgresPlannerStateDocument<T>(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  mutation: PlannerStateMutation<T>,
+  options: PlannerStateDatabaseOptions & { retryable?: boolean } = {},
+): Promise<T> {
+  const { retryable = false, ...databaseOptions } = options;
+  return withPlannerStatesDatabase(
+    env,
+    (db) => updatePlannerStateDocumentInDatabase(db, userId, mutation, { retryable }),
+    databaseOptions,
   );
 }
 

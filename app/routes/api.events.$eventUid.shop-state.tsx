@@ -8,6 +8,7 @@ import {
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import { getEventMetadata } from "~/models/event-content";
 import { getEventShopState, upsertEventShopState } from "~/models/event-shop-state";
+import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import { updateEventShopOwnedQuantities } from "~/views/event-shop-state";
 
 export type ActionData = {
@@ -59,8 +60,18 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
         return data({ success: false, error: "입력한 이벤트 재화를 확인할 수 없어요" }, { status: 400 });
       }
       return { success: true };
-    } catch {
-      return data({ success: false, error: "보유 재화를 저장하지 못했어요. 다시 시도해주세요" }, { status: 500 });
+    } catch (error) {
+      const revisionConflict = isPlannerStateRevisionConflictError(error);
+      return data(
+        {
+          success: false,
+          error: revisionConflict
+            ? PLANNER_STATE_REVISION_CONFLICT_MESSAGE
+            : "보유 재화를 저장하지 못했어요. 다시 시도해주세요",
+          ...(revisionConflict ? { revisionConflict: true } : {}),
+        },
+        { status: revisionConflict ? 409 : 500 },
+      );
     }
   }
 
@@ -108,14 +119,18 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
       const stateToSave = baseState && latestState ? mergeEventShopStateChanges(baseState, state, latestState) : state;
       await upsertEventShopState(env, currentUser.id, identity.shopStateUid, stateToSave);
       return { success: true, ...(requestId ? { requestId } : {}) };
-    } catch {
+    } catch (error) {
+      const revisionConflict = isPlannerStateRevisionConflictError(error);
       return data(
         {
           success: false,
-          error: "상점 계획을 저장하지 못했어요. 다시 시도해주세요",
+          error: revisionConflict
+            ? PLANNER_STATE_REVISION_CONFLICT_MESSAGE
+            : "상점 계획을 저장하지 못했어요. 다시 시도해주세요",
+          ...(revisionConflict ? { revisionConflict: true } : {}),
           ...(requestId ? { requestId } : {}),
         },
-        { status: 500 },
+        { status: revisionConflict ? 409 : 500 },
       );
     }
   }
