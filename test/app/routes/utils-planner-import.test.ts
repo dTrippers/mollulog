@@ -11,6 +11,7 @@ import {
   mergeGuestPlannerLegacyChanges,
 } from "~/domain/guest-planner";
 import { createEmptyGuestPyroxenePlanner, type GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
+import dayjs from "~/lib/dayjs";
 
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
 const mockGetActiveSensei = jest.fn<AsyncMock>();
@@ -223,14 +224,16 @@ describe("unified planner import action", () => {
     };
     const conflictEnvelope = createGuestPlannerConflictEnvelope(conflict, "pyroxene");
     if (!conflictEnvelope) throw new Error("Conflict fixture did not create a pyroxene source.");
+    // Guest dates are normalized to the 04:00 KST daily reset and shown in the viewer's local time.
+    const day = (date: string) => dayjs(`${date}T04:00:00+09:00`).format("MM/DD");
     const expected = [
-      "청휘석 구매 · 02/08",
-      "월정액 · 02/01",
-      "반정액 · 02/03",
-      "AP 패키지 · 02/04",
-      "출석 시작일 · 02/02",
-      "기타 수급 · 02/09",
-      "이벤트 보상 · 02/10",
+      `청휘석 구매 · ${day("2026-02-08")}`,
+      `월정액 · ${day("2026-02-01")}`,
+      `반정액 · ${day("2026-02-03")}`,
+      `AP 패키지 · ${day("2026-02-04")}`,
+      `출석 시작일 · ${day("2026-02-02")}`,
+      `기타 수급 · ${day("2026-02-09")}`,
+      `이벤트 보상 · ${day("2026-02-10")}`,
     ];
     const labels = (sourceEnvelope: typeof envelope) => {
       const byId = guestPyroxeneRecordsById(sourceEnvelope);
