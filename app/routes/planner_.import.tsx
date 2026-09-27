@@ -333,12 +333,12 @@ export default function EventShopPlanImportPage() {
         ? {
             tone: "success",
             text: result.imported
-              ? `${result.eventName} 게스트 계획을 계정에 저장하고 이 브라우저에서 정리했어요.`
+              ? `${result.eventName} 미로그인 상태의 계획을 계정에 저장하고 이 브라우저에서 정리했어요.`
               : `${result.eventName} 계정 계획을 유지하고 이 브라우저의 사본을 정리했어요.`,
           }
         : {
             tone: "warning",
-            text: `${result.eventName} 계획을 저장소에서 정리하지 못했어요. 게스트 입력은 유지했어요.`,
+            text: `${result.eventName} 계획을 저장소에서 정리하지 못했어요. 미로그인 상태의 입력은 유지했어요.`,
           },
     );
   }, []);
@@ -374,7 +374,7 @@ export default function EventShopPlanImportPage() {
           <Callout
             tone="destructive"
             Icon={ExclamationCircleIcon}
-            title="게스트 상점 계획을 읽을 수 없어요"
+            title="미로그인 상태의 상점 계획을 읽을 수 없어요"
             description="저장된 데이터가 손상되어 계획을 읽지 못했어요. 원본 데이터는 브라우저에 그대로 남아 있어요."
           />
         )}
@@ -383,17 +383,17 @@ export default function EventShopPlanImportPage() {
             tone="destructive"
             Icon={ExclamationCircleIcon}
             title="브라우저 상점 계획 저장소를 사용할 수 없어요"
-            description="저장 공간에 접근할 수 없어 게스트 계획을 확인하지 못했어요."
+            description="저장 공간에 접근할 수 없어 미로그인 상태의 계획을 확인하지 못했어요."
           />
         )}
         {lastMessage && <Callout tone={lastMessage.tone} Icon={CheckCircleIcon} description={lastMessage.text} />}
 
         <SectionCard
-          title={`검토할 게스트 상점 계획 · ${response?.success ? comparisons.length : plans.length}개`}
+          title={`검토할 미로그인 상태의 상점 계획 · ${response?.success ? comparisons.length : plans.length}개`}
           description={
             response?.success
               ? `검토가 필요한 계획 ${unresolvedCount}개. 같은 이벤트의 상점 계획은 한 번만 셉니다.`
-              : "계정 계획과 비교할 수 없는 경우에도 게스트 입력은 그대로 보존돼요."
+              : "계정 계획과 비교할 수 없는 경우에도 미로그인 상태의 입력은 그대로 보존돼요."
           }
           action={
             <Button
@@ -408,10 +408,10 @@ export default function EventShopPlanImportPage() {
         >
           {snapshot === null ? (
             <div aria-busy="true" className="text-sm text-muted-foreground" role="status">
-              게스트 계획을 불러오고 있어요…
+              미로그인 상태의 계획을 불러오고 있어요…
             </div>
           ) : plans.length === 0 ? (
-            <p className="text-sm text-muted-foreground">비교할 게스트 상점 계획이 없어요.</p>
+            <p className="text-sm text-muted-foreground">비교할 미로그인 상태의 상점 계획이 없어요.</p>
           ) : (
             <div className="space-y-3">
               {compareError && <Callout tone="warning" Icon={ExclamationCircleIcon} description={compareError} />}
@@ -421,7 +421,7 @@ export default function EventShopPlanImportPage() {
                 </div>
               )}
               {response?.success && comparisons.length === 0 && (
-                <p className="text-sm text-muted-foreground">아직 입력된 게스트 상점 계획이 없어요.</p>
+                <p className="text-sm text-muted-foreground">미로그인 상태에서 입력한 상점 계획이 없어요.</p>
               )}
               {comparisons.map((comparison) => (
                 <GuestEventShopPlanRow
@@ -474,8 +474,8 @@ function GuestEventShopPlanRow({
           removed
             ? null
             : imported
-              ? "계정에는 저장됐지만 이 브라우저 계획은 지워지지 않았어요. 게스트 입력은 유지했어요."
-              : "이 브라우저 계획을 지우지 못했어요. 게스트 입력은 유지했어요.",
+              ? "계정에는 저장됐지만 이 브라우저 계획은 지워지지 않았어요. 미로그인 상태의 입력은 유지했어요."
+              : "이 브라우저 계획을 지우지 못했어요. 미로그인 상태의 입력은 유지했어요.",
         );
         onResolved({ ok: removed, imported, eventName: name });
       } finally {
@@ -491,7 +491,7 @@ function GuestEventShopPlanRow({
     if (fetcher.data?.success) {
       void clearGuestCopy(true);
     } else {
-      setRowError(fetcher.data?.error ?? "요청을 완료하지 못했어요. 게스트 계획은 그대로 남아 있어요.");
+      setRowError(fetcher.data?.error ?? "요청을 완료하지 못했어요. 미로그인 상태의 계획은 그대로 남아 있어요.");
     }
   }, [clearGuestCopy, fetcher.data, fetcher.state]);
 
@@ -559,7 +559,7 @@ function GuestEventShopPlanRow({
         ) : null}
         {comparison.status === "different" || comparison.status === "guest-only" ? (
           <Button
-            text={busy ? "저장 중…" : "게스트 계획 가져오기"}
+            text={busy ? "저장 중…" : "미로그인 상태의 계획 가져오기"}
             size="sm"
             variant="primary"
             onClick={importGuestPlan}

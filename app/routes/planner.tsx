@@ -700,10 +700,10 @@ export default function IntegratedPlannerRoute() {
       if (pyroxeneGuestPlanner.status !== "ready") {
         const error =
           pyroxeneGuestPlanner.status === "corrupt"
-            ? "게스트 계획을 읽을 수 없어 모집 계획을 저장하지 못했어요."
+            ? "미로그인 상태의 계획을 읽을 수 없어 모집 계획을 저장하지 못했어요."
             : pyroxeneGuestPlanner.status === "memory"
               ? "브라우저 저장을 사용할 수 없어 모집 계획을 저장하지 못했어요."
-              : "게스트 계획을 불러오는 중이에요. 잠시 후 다시 시도해주세요.";
+              : "미로그인 상태의 계획을 불러오는 중이에요. 잠시 후 다시 시도해주세요.";
         setGuestRecruitmentSaveResult({ submissionId, success: false, error });
         return;
       }
@@ -728,7 +728,7 @@ export default function IntegratedPlannerRoute() {
                   success: false,
                   error:
                     snapshot.status === "corrupt"
-                      ? "게스트 계획을 읽을 수 없어 모집 계획을 저장하지 못했어요."
+                      ? "미로그인 상태의 계획을 읽을 수 없어 모집 계획을 저장하지 못했어요."
                       : "브라우저 저장에 실패했어요. 입력은 유지했으니 다시 시도해주세요.",
                 },
           );
@@ -918,18 +918,14 @@ export default function IntegratedPlannerRoute() {
     if (isSignedIn && accountState?.recruitedStudentUids === null) {
       messages.push("계정 모집 정보가 없어 기본 이벤트 상점 계획을 확인할 수 없어요.");
     }
-    if (isSignedIn && pyroxeneGuestPlanner.status === "loading") {
-      messages.push("게스트 청휘석 계획을 확인하고 있어요.");
-    }
     if (isSignedIn && pyroxeneGuestPlanner.status === "corrupt") {
-      messages.push("게스트 청휘석 계획 저장을 읽지 못해 가져오기 항목을 확인할 수 없어요.");
+      messages.push("미로그인 상태의 청휘석 계획을 읽지 못해 가져오기 항목을 확인할 수 없어요.");
     }
     if (isSignedIn && pyroxeneGuestPlanner.status === "memory") {
-      messages.push("게스트 청휘석 계획은 브라우저 저장소에 기록되지 않은 임시 상태예요.");
+      messages.push("미로그인 상태의 청휘석 계획은 브라우저 저장소에 기록되지 않은 임시 상태예요.");
     }
-    if (isSignedIn && guestShopComparisonPending) messages.push("게스트 상점 계획과 계정 계획을 비교하고 있어요.");
     if (isSignedIn && hasUnavailableGuestShopComparison) {
-      messages.push("일부 게스트 상점 계획과 계정 계획을 비교할 수 없어요.");
+      messages.push("미로그인 상태의 일부 상점 계획을 계정 계획과 비교할 수 없어요.");
     }
     if (!isSignedIn && pyroxeneGuestPlanner.status === "corrupt") {
       messages.push("이 브라우저의 청휘석 계획을 읽지 못했어요. 저장 내용을 확인해주세요.");
@@ -955,7 +951,6 @@ export default function IntegratedPlannerRoute() {
     }
     return messages;
   }, [
-    guestShopComparisonPending,
     guestShopSnapshot?.status,
     hasUnavailableGuestShopComparison,
     isSignedIn,
@@ -964,12 +959,22 @@ export default function IntegratedPlannerRoute() {
     pyroxeneGuestPlanner.status,
   ]);
 
+  const progressMessages = useMemo(() => {
+    const messages: string[] = [];
+    if (isSignedIn && pyroxeneGuestPlanner.status === "loading") {
+      messages.push("미로그인 상태의 청휘석 계획을 확인하고 있어요.");
+    }
+    if (isSignedIn && guestShopComparisonPending)
+      messages.push("미로그인 상태의 상점 계획을 계정 계획과 비교하고 있어요.");
+    return messages;
+  }, [guestShopComparisonPending, isSignedIn, pyroxeneGuestPlanner.status]);
+
   const handleLoadMore = useCallback(() => setVisibleMonthCount((count) => count + 1), []);
 
   return (
     <Page
       title="통합 플래너"
-      description="모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요. 재화 증감은 기존 계산 기준의 예상이에요."
+      description="모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요."
       contentWidth="full"
       maxWidth="wide"
       layout="vertical"
@@ -977,7 +982,7 @@ export default function IntegratedPlannerRoute() {
         ...(isSignedIn && unresolvedGuestPyroxeneUnitCount > 0
           ? [
               {
-                title: `게스트 청휘석 계획 확인 · ${unresolvedGuestPyroxeneUnitCount}개`,
+                title: `미로그인 상태의 청휘석 계획 확인 · ${unresolvedGuestPyroxeneUnitCount}개`,
                 description: "계정에 반영되지 않았거나 내용이 다른 청휘석 계획을 확인할 수 있어요.",
                 Icon: CreditCardIcon,
                 children: (
@@ -985,7 +990,7 @@ export default function IntegratedPlannerRoute() {
                     className="flex items-center gap-2 rounded-md px-2 py-2 text-sm hover:bg-muted"
                     to="/utils/pyroxene/import"
                   >
-                    게스트 계획 비교·가져오기
+                    미로그인 상태의 계획 비교·가져오기
                   </Link>
                 ),
               },
@@ -1015,6 +1020,7 @@ export default function IntegratedPlannerRoute() {
         raidScheduleFacts={raidScheduleFacts}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
+        progressMessages={progressMessages}
         isSignedIn={isSignedIn}
         timeZone={displayTimeZone}
         oneOffEntries={oneOffEntries}

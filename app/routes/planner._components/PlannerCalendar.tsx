@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, Button } from "~/components/primitives";
 import type { EventShopState } from "~/domain/event-shop-state";
@@ -47,6 +47,7 @@ type PlannerCalendarProps = {
   raidScheduleFacts: readonly PlannerRaidScheduleFact[];
   forecastStatus: PlannerForecastStatus;
   statusMessages: string[];
+  progressMessages: string[];
   isSignedIn: boolean;
   timeZone: string;
   oneOffEntries: PlannerQuickEditEntry[];
@@ -98,6 +99,7 @@ export default function PlannerCalendar({
   raidScheduleFacts,
   forecastStatus,
   statusMessages,
+  progressMessages,
   isSignedIn,
   timeZone,
   oneOffEntries,
@@ -382,23 +384,32 @@ export default function PlannerCalendar({
     );
   }
 
+  const toastMessages =
+    forecastStatus === "pending" ? [...progressMessages, "예상 재화를 계산하고 있어요."] : progressMessages;
+
   return (
     <div ref={calendarRootRef} className="space-y-5">
+      {/* Transient progress lives in a fixed toast so the calendar does not shift when it clears. */}
+      <div role="status" aria-live="polite" className="contents">
+        {toastMessages.length > 0 ? (
+          <div className="fixed right-4 bottom-[var(--mobile-bottom-offset)] z-layer-toast flex max-w-[calc(100vw-2rem)] items-start gap-2 rounded-lg bg-neutral-900 px-4 py-2 text-white shadow-lg dark:bg-neutral-100 dark:text-neutral-900 md:right-8 lg:bottom-4">
+            <ArrowPathIcon
+              className="mt-0.5 size-4 shrink-0 animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            <div className="space-y-0.5 text-sm font-medium">
+              {toastMessages.map((message) => (
+                <p key={message}>{message}</p>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
       {statusMessages.map((message) => (
         <div key={message} role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
           {message}
         </div>
       ))}
-      {forecastStatus === "input-needed" ? (
-        <div role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-          예상 재화 변동을 보려면 현재 보유 재화를 먼저 입력해주세요. 입력 전에는 0으로 계산하지 않습니다.
-        </div>
-      ) : null}
-      {forecastStatus === "pending" ? (
-        <div role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-          같은 입력 기준의 예상 재화를 계산하고 있어요.
-        </div>
-      ) : null}
       {forecastStatus === "unavailable" ? (
         <div role="alert" className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           예상 재화 변동을 계산할 수 없어요. 입력을 확인하거나 다시 시도해주세요.
@@ -464,7 +475,7 @@ export default function PlannerCalendar({
             ) : null}
 
             {dialogView === "summary" ? (
-              <ul className="space-y-4 px-2">
+              <ul className="space-y-4 p-2">
                 {dateSchedule.items.map((item) => (
                   <li key={item.key}>
                     <PlannerDateScheduleRow

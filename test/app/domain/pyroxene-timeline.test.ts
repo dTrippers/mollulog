@@ -278,7 +278,7 @@ describe("buildTimeline collected sources", () => {
         accumulatedResources: { pyroxene: 100_650, oneTimeTicket: 0, tenTimeTicket: 1 },
       }),
     );
-    expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-07-31");
+    expect(rewardEntry?.date.format("YYYY-MM-DD")).toBe("2026-07-04");
     expect(rewardEntry?.source.collectedSourceKey).toBeUndefined();
     expect(timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry")).toBeDefined();
   });
@@ -415,15 +415,15 @@ describe("buildTimeline collected sources", () => {
   });
 });
 
-describe("D2: raid reward time (00:00 KST, 4 hours earlier than before)", () => {
-  it("delivers the total assault reward at 00:00 KST on the raid's ending month's last day", () => {
+describe("D2: raid reward time (00:00 KST on the day after the raid ends)", () => {
+  it("delivers the total assault reward at 00:00 KST on the day after the raid ends", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [raidItem({ uid: "raid-total", type: "total_assault", name: "비나" })],
       options: { ...defaultOptions, raid: { tier: "gold" } },
     });
 
     const rewardEntry = timeline.find((entry) => entry.source.uid === "raid-total");
-    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-31 00:00");
+    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-04 00:00");
   });
 
   it("delivers the elimination reward at 00:00 KST and leaves the ten-time ticket expiry unaffected", () => {
@@ -434,9 +434,8 @@ describe("D2: raid reward time (00:00 KST, 4 hours earlier than before)", () => 
     const rewardEntry = timeline.find((entry) => entry.source.uid === "raid-elimination");
     const ticketExpiryEntry = timeline.find((entry) => entry.source.uid === "raid-elimination::ten-time-ticket-expiry");
 
-    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-31 00:00");
-    // getEliminationTicketExpiresAt always normalizes to endOf("month"), so it lands on the same
-    // instant regardless of whether the reward it is derived from is at 00:00 or 04:00.
+    expect(rewardEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm")).toBe("2026-07-04 00:00");
+    // The ten-time ticket expires at the end of the month following the reward month.
     expect(ticketExpiryEntry?.date.tz("Asia/Seoul").format("YYYY-MM-DD HH:mm:ss.SSS")).toBe("2026-08-31 23:59:59.999");
   });
 });
