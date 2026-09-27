@@ -125,7 +125,44 @@ afterEach(() => {
 });
 
 describe("unified guest planner storage", () => {
-  it("flushes a pending shop plan to the envelope and both legacy mirrors synchronously", () => {
+  it("keeps opaque AP data through async guest updates", async () => {
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const initial = createEmptyGuestPlanner();
+    initial.document.ap = ap;
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const snapshot = await updateGuestPlanner((current) => ({
+      ...current,
+      document: {
+        ...current.document,
+        ap: null,
+        pyroxene: {
+          ...current.document.pyroxene,
+          resources: {
+            inputAt: "2026-09-02T00:00:00.000Z",
+            pyroxene: 1200,
+            oneTimeTicket: 0,
+            tenTimeTicket: 0,
+          },
+        },
+      },
+    }));
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    expect(snapshot.envelope.document.ap).toEqual(ap);
+    expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.ap).toEqual(ap);
+  });
+
+  it("flushes a pending shop plan while retaining opaque AP data in all canonical envelope writes", async () => {
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const initial = createEmptyGuestPlanner();
+    initial.document.ap = ap;
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+    operations = [];
+
     const plan = {
       timelineUid: "event-timeline-1",
       shopStateUid: "shop-content-1",
@@ -138,7 +175,7 @@ describe("unified guest planner storage", () => {
     if (snapshot.status !== "ready") return;
     const storedEnvelope = JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null") as {
       datasetId: string;
-      document: { eventShops: Record<string, unknown> };
+      document: { ap: unknown; eventShops: Record<string, unknown> };
     };
     const storedPyroxene = parseGuestPyroxenePlanner(stored.get(GUEST_PYROXENE_PLANNER_STORAGE_KEY) ?? "");
     const storedEventShops = normalizeGuestEventShopPlanner(
@@ -146,13 +183,12 @@ describe("unified guest planner storage", () => {
     );
 
     expect(storedEnvelope.document.eventShops[plan.shopStateUid]).toEqual(plan.state);
+    expect(snapshot.envelope.document.ap).toEqual(ap);
+    expect(storedEnvelope.document.ap).toEqual(ap);
     expect(storedEventShops?.data.plans[plan.shopStateUid]).toEqual(plan);
     expect(storedPyroxene?.datasetId).toBe(snapshot.envelope.legacyMirror?.pyroxene.datasetId);
     expect(storedEventShops?.datasetId).toBe(snapshot.envelope.legacyMirror?.eventShops.datasetId);
     expect(operations).toEqual([
-      `set:${GUEST_PYROXENE_PLANNER_STORAGE_KEY}`,
-      `set:${GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY}`,
-      `set:${GUEST_PLANNER_STORAGE_KEY}`,
       `set:${GUEST_PYROXENE_PLANNER_STORAGE_KEY}`,
       `set:${GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY}`,
       `set:${GUEST_PLANNER_STORAGE_KEY}`,
@@ -280,6 +316,20 @@ describe("unified guest planner storage", () => {
     stored.set(GUEST_PYROXENE_PLANNER_STORAGE_KEY, JSON.stringify(oldPyroxene));
     readGuestPlanner();
     await flushQueuedStorageWork();
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const beforeAp = readGuestPlanner();
+    expect(beforeAp.status).toBe("ready");
+    if (beforeAp.status !== "ready") return;
+    stored.set(
+      GUEST_PLANNER_STORAGE_KEY,
+      JSON.stringify({
+        ...beforeAp.envelope,
+        document: { ...beforeAp.envelope.document, ap },
+      }),
+    );
+    const withAp = readGuestPlanner();
+    expect(withAp.status).toBe("ready");
+    await flushQueuedStorageWork();
 
     const oldTabWrite = parseGuestPyroxenePlanner(stored.get(GUEST_PYROXENE_PLANNER_STORAGE_KEY) ?? "");
     expect(oldTabWrite).not.toBeNull();
@@ -299,6 +349,7 @@ describe("unified guest planner storage", () => {
       true,
     );
     expect(snapshot.envelope.document.pyroxene.resources?.pyroxene).toBe(1200);
+    expect(snapshot.envelope.document.ap).toEqual(ap);
     const mirrored = parseGuestPyroxenePlanner(stored.get(GUEST_PYROXENE_PLANNER_STORAGE_KEY) ?? "");
     expect(mirrored?.datasetId).toBe(oldPyroxene.datasetId);
     expect(mirrored?.data.records).toContainEqual(expect.objectContaining({ recordId: added.recordId }));

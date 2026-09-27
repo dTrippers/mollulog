@@ -32,7 +32,7 @@ import {
   type GuestPyroxeneRecord,
   pyroxeneTimelineItemFingerprint,
 } from "~/domain/guest-pyroxene-planner";
-import type { PlannerStateTimelineRecord } from "~/domain/planner-state";
+import type { PlannerStateDocumentV1, PlannerStateTimelineRecord } from "~/domain/planner-state";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
@@ -624,7 +624,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     sources.push({
       sourceId: rawSource.id,
       datasetId: validEnvelope.datasetId,
-      document: validEnvelope.document,
+      document: { ...validEnvelope.document, ap: null } satisfies PlannerStateDocumentV1,
       selection: {
         resources: selection.resources,
         options: selection.options,

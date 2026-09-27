@@ -46,6 +46,8 @@ import dayjs from "~/lib/dayjs";
 
 export const GUEST_PLANNER_STORAGE_KEY = "mollulog::guest-planner::v1";
 
+const MAX_GUEST_PLANNER_AP_JSON_LENGTH = 65_536;
+
 const MAX_GUEST_PLANNER_RECORDS = 500;
 const MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS = 1_000;
 const MAX_GUEST_PLANNER_FAVORITES = 1_000;
@@ -55,11 +57,21 @@ const MAX_GUEST_PLANNER_LEGACY_CONFLICTS = 20;
 const MAX_GUEST_PLANNER_ID_LENGTH = 200;
 const MAX_EVENT_SHOP_STATE_ENTRIES = 5_000;
 
+export interface GuestPlannerJsonObject {
+  [key: string]: GuestPlannerJsonValue;
+}
+
+export type GuestPlannerJsonValue = string | number | boolean | null | GuestPlannerJsonObject | GuestPlannerJsonValue[];
+
+export type GuestPlannerDocument = Omit<PlannerStateDocumentV1, "ap"> & {
+  ap: GuestPlannerJsonObject | null;
+};
+
 export type GuestPlannerEnvelope = {
   datasetId: string;
   revision: number;
   updatedAt: string;
-  document: PlannerStateDocumentV1;
+  document: GuestPlannerDocument;
   pyroxeneOptionsChanged: boolean;
   favorites: GuestPyroxeneFavorite[];
   eventShopTimelineUids: Record<string, string>;
@@ -119,6 +131,21 @@ export type GuestPlannerLegacySources = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function cloneGuestPlannerAp(value: unknown): GuestPlannerJsonObject | null | undefined {
+  if (value === null) return null;
+  if (!isRecord(value)) return undefined;
+  try {
+    const prototype = Object.getPrototypeOf(value) as unknown;
+    if (prototype !== Object.prototype && prototype !== null) return undefined;
+    const serialized = JSON.stringify(value);
+    if (typeof serialized !== "string" || serialized.length > MAX_GUEST_PLANNER_AP_JSON_LENGTH) return undefined;
+    const clone: unknown = JSON.parse(serialized);
+    return isRecord(clone) ? (clone as GuestPlannerJsonObject) : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function isStableId(value: unknown): value is string {
@@ -298,7 +325,7 @@ function normalizeLegacyConflict(value: unknown): GuestPlannerLegacyConflict | n
   };
 }
 
-function emptyPlannerDocument(): PlannerStateDocumentV1 {
+function emptyPlannerDocument(): GuestPlannerDocument {
   return {
     schemaVersion: 1,
     pyroxene: {
@@ -335,10 +362,12 @@ export function createEmptyGuestPlanner(datasetId = nanoid(16)): GuestPlannerEnv
   };
 }
 
-function projectDocument(value: unknown): PlannerStateDocumentV1 | null {
+function projectDocument(value: unknown): GuestPlannerDocument | null {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.pyroxene) || !isRecord(value.eventShops)) {
     return null;
   }
+  const ap = cloneGuestPlannerAp(value.ap);
+  if (ap === undefined) return null;
   const pyroxene = value.pyroxene;
   if (
     !(pyroxene.resources === null || isRecord(pyroxene.resources)) ||
@@ -368,14 +397,13 @@ function projectDocument(value: unknown): PlannerStateDocumentV1 | null {
     Object.entries(value.eventShops).some(
       ([eventUid, state]) =>
         eventUid.length === 0 || eventUid.length > MAX_GUEST_PLANNER_ID_LENGTH || !hasBoundedEventShopState(state),
-    ) ||
-    value.ap !== null
+    )
   ) {
     return null;
   }
 
   try {
-    return projectPlannerStateDocument({
+    const projected = projectPlannerStateDocument({
       resources: pyroxene.resources ? [pyroxene.resources] : [],
       timelineItems: pyroxene.records,
       plannerOptions: [{ options: pyroxene.options }],
@@ -383,6 +411,7 @@ function projectDocument(value: unknown): PlannerStateDocumentV1 | null {
       eventData: Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
       eventShops: Object.entries(value.eventShops).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
     });
+    return { ...projected, ap };
   } catch {
     return null;
   }
@@ -870,7 +899,7 @@ export function mergeGuestPlannerLegacyChanges(
     else if (expectedTrials === null) delete nextEventData[eventUid];
     else nextEventData[eventUid] = { completed: false, expectedTrials };
   }
-  const document: PlannerStateDocumentV1 = {
+  const document: GuestPlannerDocument = {
     ...current.document,
     pyroxene: {
       ...current.document.pyroxene,

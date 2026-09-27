@@ -23,7 +23,36 @@ describe("guest planner envelope", () => {
       document: { schemaVersion: 1, pyroxene: { records: [] }, eventShops: {}, ap: null },
     });
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, schemaVersion: 2 } })).toBeNull();
-    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: {} } })).toBeNull();
+    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: [] } })).toBeNull();
+  });
+
+  it("accepts and preserves null or opaque JSON object AP data", () => {
+    const envelope = createEmptyGuestPlanner();
+    expect(normalizeGuestPlanner(envelope)?.document.ap).toBeNull();
+
+    const ap = { profile: { level: 85, cafeRank: 8 }, plans: [{ timelineUid: "event-1", accessAt: "2026-10-01" }] };
+    const normalized = normalizeGuestPlanner({
+      ...envelope,
+      document: { ...envelope.document, ap },
+    });
+
+    expect(normalized).not.toBeNull();
+    expect(normalized?.document.ap).toEqual(ap);
+    expect(JSON.stringify(normalized?.document.ap)).toBe(JSON.stringify(ap));
+    expect(normalized?.document.ap).not.toBe(ap);
+  });
+
+  it("rejects non-object or oversized opaque AP data and accepts the exact size limit", () => {
+    const envelope = createEmptyGuestPlanner();
+    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: [] } })).toBeNull();
+    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: "ap" } })).toBeNull();
+
+    const emptyPayloadLength = JSON.stringify({ payload: "" }).length;
+    const exactLimitAp = { payload: "x".repeat(65_536 - emptyPayloadLength) };
+    expect(JSON.stringify(exactLimitAp)).toHaveLength(65_536);
+    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: exactLimitAp } })).not.toBeNull();
+    const oversizedAp = { payload: `${exactLimitAp.payload}x` };
+    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: oversizedAp } })).toBeNull();
   });
 
   it("ignores the retired legacy acknowledgement field when reading stored envelopes", () => {
@@ -280,6 +309,8 @@ describe("guest planner envelope", () => {
     pyroxene.data.records = [record("record000001", "기존 1"), record("record000002", "기존 2")];
     const shops = createEmptyGuestEventShopPlanner();
     const base = createGuestPlannerFromLegacySources({ pyroxene, eventShops: shops });
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    base.document.ap = ap;
     base.legacyMirror = createGuestPlannerLegacyMirror(base, { pyroxene, eventShops: shops });
     const submittedPyroxene = {
       ...pyroxene,
@@ -296,6 +327,7 @@ describe("guest planner envelope", () => {
     expect(descriptions).toContain("수정된 값");
     expect(descriptions).toContain("새 계획");
     expect(descriptions).not.toContain("기존 2");
+    expect(result.envelope.document.ap).toEqual(ap);
     expect(result.conflict).toBeNull();
   });
 

@@ -448,6 +448,64 @@ describe("unified planner import action", () => {
     });
   });
 
+  it("accepts an AP-bearing guest envelope but excludes AP from the milestone-2 import write", async () => {
+    const envelope = createEmptyGuestPlanner();
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    envelope.document.ap = ap;
+    envelope.document.pyroxene.resources = {
+      inputAt: "2026-09-01T00:00:00.000Z",
+      pyroxene: 1200,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    mockImportGuestPlannerState.mockImplementationOnce(async (...args: unknown[]) => {
+      const plan = args[2] as {
+        sources: Array<{ document: { ap: unknown }; selection: { resources: boolean } }>;
+      };
+      expect(plan.sources[0]?.selection.resources).toBe(true);
+      expect(plan.sources[0]?.document.ap).toBeNull();
+      return {
+        verified: [{ sourceId: "current", datasetId: envelope.datasetId, type: "resources", key: "current" }],
+        failed: [],
+        revisionConflict: false,
+      };
+    });
+
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope,
+                selection: {
+                  resources: true,
+                  options: false,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(mockImportGuestPlannerState).toHaveBeenCalledTimes(1);
+    expect(result).toMatchObject({
+      success: true,
+      verified: 1,
+      failedLabels: [],
+      successfulSections: { current: ["resources"] },
+    });
+  });
+
   it("rejects a selected item that is not present in its submitted guest envelope", async () => {
     const envelope = createEmptyGuestPlanner();
     const result = await action(

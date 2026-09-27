@@ -45,6 +45,13 @@ export type GuestPlannerSnapshot =
 type GuestPlannerUpdate = (current: GuestPlannerEnvelope) => GuestPlannerEnvelope;
 type RawStorage = { envelope: string | null; pyroxene: string | null; eventShops: string | null };
 
+function preserveGuestPlannerAp(current: GuestPlannerEnvelope, updated: GuestPlannerEnvelope): GuestPlannerEnvelope {
+  return {
+    ...updated,
+    document: { ...updated.document, ap: current.document.ap },
+  };
+}
+
 let memorySnapshot: GuestPlannerSnapshot | null = null;
 let memoryBaseEnvelope: GuestPlannerEnvelope | null = null;
 let publicSnapshotCache: GuestPlannerSnapshot | null = null;
@@ -389,7 +396,7 @@ function reconcileCurrentStorage(): GuestPlannerSnapshot {
         ? mirror.eventShops
         : (legacy.eventShops ?? mirror.eventShops);
   const merged = mergeGuestPlannerLegacyChanges(envelope, submittedPyroxene, submittedEventShops);
-  let next = merged.envelope;
+  let next = preserveGuestPlannerAp(envelope, merged.envelope);
   const unreadableChanged =
     envelope.legacyUnreadable.pyroxene !== oldUnreadable.pyroxene ||
     envelope.legacyUnreadable.eventShops !== oldUnreadable.eventShops;
@@ -445,7 +452,7 @@ export function updateGuestPlanner(update: GuestPlannerUpdate): Promise<GuestPla
     if (!("envelope" in reconciled) || reconciled.status === "conflict") {
       return reconciled;
     }
-    const nextFromUpdate = update(reconciled.envelope);
+    const nextFromUpdate = preserveGuestPlannerAp(reconciled.envelope, update(reconciled.envelope));
     if (guestPlannerEnvelopeEqual(nextFromUpdate, reconciled.envelope)) return reconciled;
     const envelope: GuestPlannerEnvelope = {
       ...nextFromUpdate,
@@ -487,7 +494,7 @@ function updateGuestPlannerImmediately(update: GuestPlannerUpdate): GuestPlanner
   const reconciled = reconcileCurrentStorage();
   if (!("envelope" in reconciled) || reconciled.status === "conflict") return reconciled;
 
-  const nextFromUpdate = update(reconciled.envelope);
+  const nextFromUpdate = preserveGuestPlannerAp(reconciled.envelope, update(reconciled.envelope));
   if (guestPlannerEnvelopeEqual(nextFromUpdate, reconciled.envelope)) return reconciled;
   const envelope: GuestPlannerEnvelope = {
     ...nextFromUpdate,
@@ -544,9 +551,9 @@ export function resetGuestPlanner(): Promise<GuestPlannerSnapshot> {
       return snapshot;
     }
     const current = reconcileCurrentStorage();
-    const envelope = createEmptyGuestPlanner(
-      "envelope" in current ? current.envelope.datasetId : createEmptyGuestPlanner().datasetId,
-    );
+    const currentEnvelope = "envelope" in current ? current.envelope : null;
+    const emptyEnvelope = createEmptyGuestPlanner(currentEnvelope?.datasetId ?? createEmptyGuestPlanner().datasetId);
+    const envelope = currentEnvelope ? preserveGuestPlannerAp(currentEnvelope, emptyEnvelope) : emptyEnvelope;
     envelope.revision = "envelope" in current ? current.envelope.revision + 1 : 1;
     envelope.updatedAt = new Date().toISOString();
     if ("envelope" in current) envelope.legacyMirror = current.envelope.legacyMirror;
