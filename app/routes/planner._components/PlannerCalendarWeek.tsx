@@ -1,5 +1,5 @@
-import { StarIcon } from "@heroicons/react/16/solid";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
+import { useRef, useState } from "react";
 import {
   formatPlannerPeriodPoint,
   formatPlannerPeriodRangeParts,
@@ -15,6 +15,13 @@ import {
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import { formatInstant, getInstantTime } from "~/lib/date-time";
 import { resourceImageUrl, studentImageUrl } from "~/models/assets";
+import {
+  hasPlannerPlanMark,
+  type PlannerPlanMarkState,
+  PlannerPlanMarks,
+  plannerPlanMarkLabels,
+  plannerPlanMarkState,
+} from "./PlannerPlanMarks";
 
 export type PlannerForecastStatus = "ready" | "pending" | "input-needed" | "unavailable";
 
@@ -172,7 +179,18 @@ function formatStripInterval(strip: PlannerCalendarStrip, timeZone: string): str
   return `${formatDate(strip.period.startDate)}부터 ${formatDate(strip.period.endDate)} · 시간 확인 불가`;
 }
 
-function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): string {
+/**
+ * A standalone event strip or start marker leaves the recruitment mark to its own recruitment
+ * strip, so a plan with differing event/recruitment periods shows one heart, not two.
+ */
+function calendarEventPlanMarkState(
+  period: PlannerPeriod,
+  shopPlannedEventUids: ReadonlySet<string>,
+): PlannerPlanMarkState {
+  return { ...plannerPlanMarkState(period, shopPlannedEventUids), recruitment: false };
+}
+
+function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string, planLabels: readonly string[]): string {
   const students =
     strip.kind === "combined"
       ? uniqueStudents(strip.recruitmentPeriods.filter((period) => period.hasRecruitmentPlan))
@@ -190,7 +208,7 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string): str
   const studentNames = students.length > 0 ? ` · 모집 목표: ${students.map(({ name }) => name).join(", ")}` : "";
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
-  const plan = strip.period.isPlanned ? "내 계획 · " : "";
+  const plan = planLabels.map((label) => `${label} · `).join("");
   return `${plan}${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
 }
 
@@ -220,6 +238,7 @@ export default function PlannerCalendarWeek({
   onSelectDate,
   onSelectPeriod,
   onTodayCellRef,
+  shopPlannedEventUids,
 }: {
   week: PlannerCalendarDay[];
   periods: PlannerPeriod[];
@@ -235,6 +254,7 @@ export default function PlannerCalendarWeek({
   onSelectDate: (dateKey: string, trigger: HTMLButtonElement) => void;
   onSelectPeriod: (dateKey: string, trigger: HTMLButtonElement, period: PlannerPeriod) => void;
   onTodayCellRef?: (element: HTMLButtonElement | null) => void;
+  shopPlannedEventUids: ReadonlySet<string>;
 }) {
   const strips: { strip: PlannerCalendarStrip; laneIndex: number }[] = [
     ...weekLayout.eventStrips.map((strip) => ({ strip, laneIndex: strip.track })),
@@ -262,18 +282,40 @@ export default function PlannerCalendarWeek({
     gridRow: index + 2,
   }));
 
+  // The date button stays in row 1 so its content keeps sizing that row; a hidden hit area below it
+  // extends the click target through the strip lanes, and hover state shades the whole column.
+  const dayButtonRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [hoveredDateKey, setHoveredDateKey] = useState<string | null>(null);
+
   return (
     <section aria-label={weekLabel} className={boundaryClasses} style={{ gridTemplateRows }}>
       {week.map((day, index) => (
         <div
           key={`background:${day.dateKey}`}
           aria-hidden="true"
-          className={`pointer-events-none z-0 ${index < 6 ? "border-r border-border/70" : ""} ${
+          className={`pointer-events-none relative z-0 ${index < 6 ? "border-r border-border/70" : ""} ${
             day.inMonth ? "bg-card" : "bg-muted/30"
           }`}
           style={{ gridColumn: index + 1, gridRow: "1 / -1" }}
-        />
+        >
+          {hoveredDateKey === day.dateKey ? <span className="absolute inset-0 bg-muted/60" /> : null}
+        </div>
       ))}
+      {laneRows.length > 0
+        ? week.map((day, index) => (
+            <button
+              key={`hit-area:${day.dateKey}`}
+              type="button"
+              tabIndex={-1}
+              aria-hidden="true"
+              className="relative z-10 cursor-pointer bg-transparent"
+              style={{ gridColumn: index + 1, gridRow: "2 / -1" }}
+              onClick={() => dayButtonRefs.current[index]?.click()}
+              onPointerEnter={() => setHoveredDateKey(day.dateKey)}
+              onPointerLeave={() => setHoveredDateKey(null)}
+            />
+          ))
+        : null}
       {week.map((day, index) => {
         const daySummary = calendarResources[day.dateKey];
         const isToday = day.inMonth && day.dateKey === todayDateKey;
@@ -282,10 +324,14 @@ export default function PlannerCalendarWeek({
           const raidPeriod = group.periods.find((period) => period.kind === "raid");
           if (raidPeriod) return [`${plannerRaidTypeLabel(raidPeriod)} · ${group.name}`];
           const eventPeriod = group.periods.find((period) => period.kind === "event");
-          const eventPlanned = eventPeriod ? eventPeriod.isPlanned === true : isPlanned;
+          const eventPlanLabels = plannerPlanMarkLabels(
+            eventPeriod
+              ? calendarEventPlanMarkState(eventPeriod, shopPlannedEventUids)
+              : { recruitment: isPlanned, shop: false },
+          );
           return [
-            `${group.name}${eventPlanned ? " · 내 계획" : ""}`,
-            ...recruitmentPeriods.map((period) => `모집${period.isPlanned ? " · 내 계획" : ""}`),
+            [group.name, ...eventPlanLabels].join(" · "),
+            ...recruitmentPeriods.map((period) => (period.isPlanned ? "모집 · 모집 계획" : "모집")),
           ];
         });
         const describedRaidUids = new Set(
@@ -316,18 +362,26 @@ export default function PlannerCalendarWeek({
         return (
           <button
             key={day.dateKey}
-            ref={isToday ? onTodayCellRef : undefined}
+            ref={(element) => {
+              dayButtonRefs.current[index] = element;
+              if (isToday) onTodayCellRef?.(element);
+            }}
             type="button"
             aria-label={`${accessibleSummary} 일정 보기`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={selectedDate === day.dateKey}
-            className={`relative z-10 flex h-auto min-h-10 min-w-0 flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:min-h-16 max-sm:px-0 ${
-              day.inMonth ? "hover:bg-muted/60" : "text-muted-foreground hover:bg-muted/60"
+            className={`relative z-10 flex h-auto min-h-10 min-w-0 cursor-pointer flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:min-h-16 max-sm:px-0 ${
+              day.inMonth ? "" : "text-muted-foreground"
             }`}
             style={{ gridColumn: index + 1, gridRow: 1 }}
+            onPointerEnter={() => setHoveredDateKey(day.dateKey)}
+            onPointerLeave={() => setHoveredDateKey(null)}
             onClick={(event) => onSelectDate(day.dateKey, event.currentTarget)}
           >
-            <span className="flex w-full justify-end px-1.5 pt-1.5 text-xs leading-none tabular-nums">
+            <span className="flex w-full items-center justify-end gap-1 px-1.5 pt-1.5 text-xs leading-none tabular-nums">
+              {day.dateKey.endsWith("-01") ? (
+                <span className="font-semibold">{Number(day.dateKey.slice(5, 7))}월</span>
+              ) : null}
               <span
                 className={
                   isToday
@@ -345,7 +399,11 @@ export default function PlannerCalendarWeek({
         );
       })}
       {laneRows.map(({ key, gridRow }) => (
-        <div key={`lane:${key}`} className="relative col-span-7 h-7" style={{ gridColumn: "1 / -1", gridRow }}>
+        <div
+          key={`lane:${key}`}
+          className="pointer-events-none relative col-span-7 h-7"
+          style={{ gridColumn: "1 / -1", gridRow }}
+        >
           {strips
             .filter(({ laneIndex }) => laneIndex === gridRow - 2)
             .map(({ strip }) => {
@@ -355,7 +413,12 @@ export default function PlannerCalendarWeek({
                   : strip.period.hasRecruitmentPlan
                     ? uniqueStudents([strip.period])
                     : [];
-              const isPlanned = strip.period.isPlanned === true;
+              const planMarks =
+                strip.kind === "event"
+                  ? calendarEventPlanMarkState(strip.period, shopPlannedEventUids)
+                  : plannerPlanMarkState(strip.period, shopPlannedEventUids);
+              const isPlanned = hasPlannerPlanMark(planMarks);
+              const accessibleName = stripAccessibleName(strip, timeZone, plannerPlanMarkLabels(planMarks));
               const kindLabel = calendarStripKindLabel(strip);
               const visualTitle = visualStripTitle(strip);
               const hideStripTextOnMobile = strip.widthPercent < 30;
@@ -368,12 +431,12 @@ export default function PlannerCalendarWeek({
                 <button
                   key={`${strip.key}:${week[0].dateKey}`}
                   type="button"
-                  aria-label={stripAccessibleName(strip, timeZone)}
-                  title={stripAccessibleName(strip, timeZone)}
-                  className={`absolute inset-y-0.5 z-10 flex min-h-6 min-w-6 flex-nowrap content-center items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                  aria-label={accessibleName}
+                  title={accessibleName}
+                  className={`pointer-events-auto absolute inset-y-0.5 z-10 flex min-h-6 min-w-6 cursor-pointer flex-nowrap content-center items-center gap-1 overflow-hidden rounded-sm border px-1.5 py-0.5 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     isPlanned
                       ? "border-transparent bg-muted font-semibold text-foreground hover:bg-muted/80"
-                      : "border-border bg-transparent font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      : "border-border bg-transparent font-normal text-foreground hover:bg-muted/50"
                   } ${
                     strip.continuesBefore ? "rounded-l-none" : ""
                   } ${strip.continuesAfter ? "rounded-r-none" : ""} ${stripClasses(strip.timingStatus)}`}
@@ -384,9 +447,7 @@ export default function PlannerCalendarWeek({
                   }}
                 >
                   {strip.continuesBefore ? <span aria-hidden="true">←</span> : null}
-                  {isPlanned ? (
-                    <StarIcon aria-hidden="true" className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
-                  ) : null}
+                  <PlannerPlanMarks state={planMarks} />
                   {kindLabel ? (
                     <span className={`${kindLabelClasses} ${hideStripTextOnMobile ? "max-sm:hidden" : ""}`}>
                       {kindLabel}
@@ -426,25 +487,27 @@ export default function PlannerCalendarWeek({
               const runType = plannerRunTypeLabel(marker.period);
               const label = `${runType ? `${runType} · ` : ""}${marker.period.name}`;
               const startsAt = marker.period.startAt ? formatPlannerPeriodPoint(marker.period.startAt, timeZone) : null;
-              const isPlanned = marker.period.isPlanned === true;
-              const accessibleName = `${isPlanned ? "내 계획 · " : ""}${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
+              const planMarks = calendarEventPlanMarkState(marker.period, shopPlannedEventUids);
+              const isPlanned = hasPlannerPlanMark(planMarks);
+              const planPrefix = plannerPlanMarkLabels(planMarks)
+                .map((planLabel) => `${planLabel} · `)
+                .join("");
+              const accessibleName = `${planPrefix}${label}${startsAt ? `, ${startsAt} 시작` : ""}`;
               return (
                 <button
                   key={`${marker.key}:${week[0].dateKey}`}
                   type="button"
                   aria-label={accessibleName}
                   title={accessibleName}
-                  className={`absolute inset-y-0.5 z-10 flex min-w-0 items-center gap-1 overflow-hidden border-l-2 px-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
+                  className={`pointer-events-auto absolute inset-y-0.5 z-10 flex min-w-0 cursor-pointer items-center gap-1 overflow-hidden border-l-2 px-1 text-left text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 ${
                     isPlanned
                       ? "border-foreground font-semibold text-foreground"
-                      : "border-muted-foreground/50 font-normal text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                      : "border-muted-foreground/50 font-normal text-foreground hover:bg-muted/50"
                   }`}
                   style={{ left: `${marker.leftPercent}%`, width: `${marker.widthPercent}%` }}
                   onClick={(event) => onSelectPeriod(marker.period.startDate, event.currentTarget, marker.period)}
                 >
-                  {isPlanned ? (
-                    <StarIcon aria-hidden="true" className="size-4 shrink-0 text-amber-700 dark:text-amber-400" />
-                  ) : null}
+                  <PlannerPlanMarks state={planMarks} />
                   {runType ? (
                     <span
                       className={

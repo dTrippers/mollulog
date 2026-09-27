@@ -2,6 +2,7 @@ import { ArrowPathIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BottomSheet, Button } from "~/components/primitives";
 import type { EventShopState } from "~/domain/event-shop-state";
+import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
 import type {
   PlannerDayResources,
   PlannerMonthLayout,
@@ -19,6 +20,7 @@ import {
 } from "~/domain/integrated-planner";
 import PlannerCalendarWeek, { DailyResourceChanges, type PlannerForecastStatus } from "./PlannerCalendarWeek";
 import PlannerDateScheduleRow from "./PlannerDateScheduleRow";
+import { PlannerPlanLegend } from "./PlannerPlanMarks";
 import PlannerQuickEdit, { type PlannerQuickEditEntry, type PlannerQuickEditKind } from "./PlannerQuickEdit";
 import PlannerRecruitmentEditor, {
   type PlannerRecruitmentSavedState,
@@ -137,6 +139,18 @@ export default function PlannerCalendar({
   const monthLayouts = useMemo(
     () => months.map((monthKey) => buildPlannerMonthLayout(monthKey, periods, timeZone)),
     [months, periods, timeZone],
+  );
+  // Same non-default gate as the shop forecast; kept separate from `isPlanned` (decision A5).
+  const shopPlannedEventUids = useMemo(
+    () =>
+      new Set(
+        shopPlans
+          .filter(({ state, defaultState }) =>
+            Boolean(state && defaultState && !isDefaultEventShopState(state, defaultState)),
+          )
+          .map(({ timelineUid }) => timelineUid),
+      ),
+    [shopPlans],
   );
 
   useEffect(() => {
@@ -332,8 +346,18 @@ export default function PlannerCalendar({
     requestAnimationFrame(() => todayCell.focus());
   }
 
-  function renderMonth(monthLayout: PlannerMonthLayout) {
-    const { monthKey, weeks, weekLayouts } = monthLayout;
+  function renderMonth(monthLayout: PlannerMonthLayout, monthIndex: number) {
+    const { monthKey } = monthLayout;
+    // Weeks flow continuously across months: a week spanning two months is drawn once, under the
+    // later month, so its leading days render as regular days and the earlier month drops it.
+    const hasNextMonth = monthIndex < monthLayouts.length - 1;
+    const rows = monthLayout.weeks
+      .map((week, index) => ({ week, weekLayout: monthLayout.weekLayouts[index] }))
+      .filter(({ week }) => !(hasNextMonth && week.at(-1)?.inMonth === false))
+      .map(({ week, weekLayout }, index) => ({
+        week: monthIndex > 0 && index === 0 ? week.map((day) => ({ ...day, inMonth: true })) : week,
+        weekLayout,
+      }));
     return (
       <section
         key={monthKey}
@@ -345,9 +369,12 @@ export default function PlannerCalendar({
         aria-labelledby={`planner-month-${monthKey}`}
         className="space-y-3"
       >
-        <h2 id={`planner-month-${monthKey}`} className="text-lg font-semibold text-foreground">
-          {formatMonth(monthKey)}
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <h2 id={`planner-month-${monthKey}`} className="text-lg font-semibold text-foreground">
+            {formatMonth(monthKey)}
+          </h2>
+          {monthIndex === 0 ? <PlannerPlanLegend /> : null}
+        </div>
         <div className="space-y-2 max-sm:-mx-4">
           <div className="grid grid-cols-7">
             {WEEKDAYS.map((weekday) => (
@@ -357,25 +384,26 @@ export default function PlannerCalendar({
             ))}
           </div>
           <div className="space-y-0">
-            {weeks.map((week, index) => (
+            {rows.map(({ week, weekLayout }, index) => (
               <PlannerCalendarWeek
                 key={week[0].dateKey}
                 week={week}
                 periods={periods}
                 calendarResources={calendarResources}
                 forecastStatus={forecastStatus}
-                weekLayout={weekLayouts[index]}
+                weekLayout={weekLayout}
                 raidScheduleFacts={raidScheduleFacts}
                 timeZone={timeZone}
                 todayDateKey={todayDateKey}
                 selectedDate={selectedDate}
                 isFirstWeek={index === 0}
-                isLastWeek={index === weeks.length - 1}
+                isLastWeek={index === rows.length - 1}
                 onSelectDate={(dateKey) => openDate(dateKey)}
                 onSelectPeriod={(dateKey, _trigger, period) => openPeriod(dateKey, period)}
                 onTodayCellRef={(element) => {
                   todayCellRef.current = element;
                 }}
+                shopPlannedEventUids={shopPlannedEventUids}
               />
             ))}
           </div>
@@ -483,6 +511,7 @@ export default function PlannerCalendar({
                       allPeriods={periods}
                       timeZone={timeZone}
                       shopPlans={shopPlans}
+                      shopPlannedEventUids={shopPlannedEventUids}
                       showResourceChanges={forecastStatus === "ready"}
                       resourceChanges={
                         item.period.kind === "raid"

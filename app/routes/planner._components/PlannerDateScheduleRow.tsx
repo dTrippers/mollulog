@@ -1,4 +1,3 @@
-import { StarIcon } from "@heroicons/react/16/solid";
 import { useEffect, useRef } from "react";
 import { Button } from "~/components/primitives";
 import {
@@ -14,6 +13,7 @@ import {
 import { PlannerEventThumbnail, PlannerPeriodRange } from "./PlannerCalendarParts";
 import { DailyResourceChanges, formatSignedQuantity, RESOURCE_PRESENTATION } from "./PlannerCalendarWeek";
 import PlannerEventCardDetails from "./PlannerEventCardDetails";
+import { PlannerPlanMarks, plannerPlanMarkLabels, plannerPlanMarkState } from "./PlannerPlanMarks";
 
 type PlannerDateScheduleShopPlan = {
   timelineUid: string;
@@ -59,6 +59,7 @@ function accessibleName(
   recruitmentStudentNames: readonly string[],
   selected: boolean,
   changes: PlannerDayResources["changes"],
+  planLabels: readonly string[],
 ) {
   const titleLabel = labelForPeriod(item.period);
   const resourceText = changes.map(
@@ -69,7 +70,7 @@ function accessibleName(
     ...(selected ? ["선택한 일정"] : []),
     ...(titleLabel ? [titleLabel] : []),
     item.period.name,
-    ...(item.period.isPlanned ? ["내 계획"] : []),
+    ...planLabels,
     ...(typePrefix ? [typePrefix] : []),
     ...(rangeLabel ? [rangeLabel] : []),
     ...raidPointLabels,
@@ -83,6 +84,7 @@ export default function PlannerDateScheduleRow({
   allPeriods,
   timeZone,
   shopPlans,
+  shopPlannedEventUids,
   resourceChanges = [],
   showResourceChanges,
   highlighted,
@@ -95,6 +97,7 @@ export default function PlannerDateScheduleRow({
   allPeriods: readonly PlannerPeriod[];
   timeZone: string;
   shopPlans: readonly PlannerDateScheduleShopPlan[];
+  shopPlannedEventUids: ReadonlySet<string>;
   resourceChanges?: PlannerDayResources["changes"];
   showResourceChanges: boolean;
   highlighted: boolean;
@@ -150,6 +153,7 @@ export default function PlannerDateScheduleRow({
 
   const titleRef = useRef<HTMLHeadingElement>(null);
   const typeLabel = labelForPeriod(period);
+  const planMarks = plannerPlanMarkState(period, shopPlannedEventUids);
   const articleLabel = accessibleName(
     item,
     rangeLabel,
@@ -157,6 +161,7 @@ export default function PlannerDateScheduleRow({
     recruitmentStudentNames,
     highlighted,
     resourceChanges,
+    plannerPlanMarkLabels(planMarks),
   );
 
   useEffect(() => {
@@ -184,12 +189,7 @@ export default function PlannerDateScheduleRow({
             aria-label={articleLabel}
             className="line-clamp-2 whitespace-pre-line break-keep text-sm font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {period.isPlanned ? (
-              <StarIcon
-                aria-hidden="true"
-                className="mr-1 inline size-4 align-[-2px] text-amber-700 dark:text-amber-400"
-              />
-            ) : null}
+            <PlannerPlanMarks state={planMarks} className="mr-1 align-[-2px]" />
             {typeLabel ? <span className="mr-1 text-muted-foreground">{typeLabel} ·</span> : null}
             {period.name}
           </h3>
