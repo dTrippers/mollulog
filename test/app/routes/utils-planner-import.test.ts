@@ -33,9 +33,14 @@ jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: mockGetPyroxe
 
 import {
   action,
+  applyGuestPlannerImportCleanup,
   buildSources,
   countSourceItems,
+  countUnselectedItemsToCleanup,
+  describeImportCleanup,
   describeImportFailure,
+  describeImportSelectionSummary,
+  describeImportSuccess,
   describeTimelineGroup,
   formatStudents,
   getGuestPlannerImportDisplayState,
@@ -187,12 +192,84 @@ describe("unified planner import action", () => {
     expect(mockImportGuestPlannerState).not.toHaveBeenCalled();
   });
 
-  it("uses particle-neutral wording for failed sections", () => {
-    expect(describeImportFailure(["현재 보유 재화"], 0)).toBe(
-      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 현재 보유 재화. 다시 시도할 수 있어요.",
+  it("uses truthful, particle-neutral wording for failed sections", () => {
+    expect(describeImportFailure(["현재 보유 재화"])).toBe(
+      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 현재 보유 재화. 다시 시도할 수 있어요. 브라우저 계획 정리를 확인하고 있어요.",
     );
-    expect(describeImportFailure(["수급/소비 계획"], 2)).toBe(
-      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 수급/소비 계획. 다시 시도할 수 있어요. 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요.",
+    expect(describeImportFailure(["수급/소비 계획"], { deletedCount: 1, hasRemainingItems: true })).toBe(
+      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 수급/소비 계획. 다시 시도할 수 있어요. 이 브라우저에서 항목 1개를 삭제했어요. 가져오지 않은 항목은 이 브라우저에 남아 있어요.",
+    );
+  });
+
+  it("does not report a wholly unselected section as deleted", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.resources = {
+      inputAt: "2026-09-28T00:00:00.000Z",
+      pyroxene: 1200,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    const source = {
+      id: "current",
+      label: "비로그인 시 등록한 값",
+      kind: "current" as const,
+      envelope,
+      selection: {
+        resources: false,
+        options: false,
+        recordUids: [],
+        sourceKeys: [],
+        eventUids: [],
+        eventShopUids: [],
+        favorites: [],
+      },
+    };
+
+    expect(countUnselectedItemsToCleanup([source])).toBe(0);
+    expect(describeImportSelectionSummary(0, countUnselectedItemsToCleanup([source]))).toBe("0개 항목 선택");
+
+    const cleanup = applyGuestPlannerImportCleanup(envelope, [source], { current: [] }, true);
+    expect(cleanup.deletedCount).toBe(0);
+    expect(countSourceItems(cleanup.envelope, new Set())).toBe(1);
+    expect(describeImportSuccess({ deletedCount: cleanup.deletedCount, hasRemainingItems: true })).toBe(
+      "가져오지 않은 항목은 이 브라우저에 남아 있어요.",
+    );
+  });
+
+  it("counts only unselected record groups before submit and reports the cleanup actually applied", () => {
+    const { envelope } = createPlannerWithGuestRecords();
+    const uids = [...recordGroups(envelope).keys()];
+    const source = {
+      id: "current",
+      label: "비로그인 시 등록한 값",
+      kind: "current" as const,
+      envelope,
+      selection: {
+        resources: false,
+        options: false,
+        recordUids: uids.slice(0, 1),
+        sourceKeys: [],
+        eventUids: [],
+        eventShopUids: [],
+        favorites: [],
+      },
+    };
+    const unselectedCount = uids.length - 1;
+    expect(countUnselectedItemsToCleanup([source])).toBe(unselectedCount);
+    expect(describeImportSelectionSummary(1, unselectedCount)).toBe(
+      `1개 항목 선택 · 저장에 성공하면 삭제할 미선택 항목 ${unselectedCount}개`,
+    );
+
+    const cleanup = applyGuestPlannerImportCleanup(
+      envelope,
+      [source],
+      { current: uids.map((key) => ({ type: "record", key })) },
+      true,
+    );
+    expect(cleanup.deletedCount).toBe(uids.length);
+    expect(cleanup.envelope.document.pyroxene.records).toHaveLength(0);
+    expect(describeImportCleanup({ deletedCount: cleanup.deletedCount, hasRemainingItems: false })).toBe(
+      `이 브라우저에서 항목 ${uids.length}개를 삭제했어요.`,
     );
   });
 

@@ -26,6 +26,7 @@ import {
   type GuestPlannerLegacyConflict,
   type GuestPlannerSection,
   guestPlannerEventShopPlans,
+  guestPlannerHasData,
   guestPlannerHasPrimaryData,
   guestPlannerPyroxeneDataForLegacyMirror,
   normalizeGuestPlanner,
@@ -115,8 +116,39 @@ async function readImportRequestText(request: Request): Promise<string> {
   return new TextDecoder().decode(bytes);
 }
 
-export function describeImportFailure(failedLabels: readonly string[], discardedCount: number): string {
-  return `가져오지 못한 항목은 이 브라우저에 남겨뒀어요: ${failedLabels.join(", ")}. 다시 시도할 수 있어요.${discardedCount > 0 ? " 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요." : ""}`;
+export type GuestPlannerCleanupOutcome = {
+  deletedCount: number;
+  hasRemainingItems: boolean;
+};
+
+export function describeImportSelectionSummary(selectedCount: number, unselectedCleanupCount: number): string {
+  return `${selectedCount}개 항목 선택${unselectedCleanupCount > 0 ? ` · 저장에 성공하면 삭제할 미선택 항목 ${unselectedCleanupCount}개` : ""}`;
+}
+
+export function describeImportCleanup(outcome: GuestPlannerCleanupOutcome): string {
+  const deletion =
+    outcome.deletedCount > 0
+      ? `이 브라우저에서 항목 ${outcome.deletedCount}개를 삭제했어요.`
+      : outcome.hasRemainingItems
+        ? ""
+        : "가져온 항목을 이 브라우저에서 정리했어요.";
+  const remaining = outcome.hasRemainingItems ? "가져오지 않은 항목은 이 브라우저에 남아 있어요." : "";
+  return [deletion, remaining].filter(Boolean).join(" ");
+}
+
+export function describeImportFailure(
+  failedLabels: readonly string[],
+  cleanupOutcome: GuestPlannerCleanupOutcome | null = null,
+): string {
+  const failure = `가져오지 못한 항목은 이 브라우저에 남겨뒀어요: ${failedLabels.join(", ")}. 다시 시도할 수 있어요.`;
+  const cleanup = cleanupOutcome ? describeImportCleanup(cleanupOutcome) : "브라우저 계획 정리를 확인하고 있어요.";
+  return [failure, cleanup].filter(Boolean).join(" ");
+}
+
+export function describeImportSuccess(cleanupOutcome: GuestPlannerCleanupOutcome | null): string {
+  return cleanupOutcome
+    ? describeImportCleanup(cleanupOutcome)
+    : "계정에 저장했고, 브라우저 계획 정리를 확인하고 있어요.";
 }
 
 export function getGuestPlannerImportDisplayState({
@@ -455,6 +487,25 @@ export function countSourceItems(
   return seen.size - before;
 }
 
+export function countUnselectedItemsToCleanup(
+  sources: readonly (GuestImportSource & { selection: GuestPlannerSelection })[],
+): number {
+  let count = 0;
+  for (const source of sources) {
+    const allBySection = importItemsBySection(source.envelope);
+    const selectedBySection = selectedImportItemsBySection(source.selection);
+    for (const section of Object.keys(allBySection) as GuestPlannerSection[]) {
+      const selected = selectedBySection[section];
+      if (selected.length === 0) continue;
+      const selectedKeys = new Set(selected.map(({ type, key }) => `${type}\u0000${key}`));
+      count += allBySection[section].filter(({ type, key }) => !selectedKeys.has(`${type}\u0000${key}`)).length;
+    }
+    // Conflict tombstones are explicitly shown as items that are removed after a successful save.
+    count += source.conflictDeletionCount ?? 0;
+  }
+  return count;
+}
+
 export function getMissingGuestCollectedSourceKeys(
   guestKeys: readonly string[],
   accountSourceKeys: ReadonlySet<string>,
@@ -518,6 +569,111 @@ function getSourceCleanupItems(
     for (const item of allBySection[section]) cleanup.set(`${item.type}\u0000${item.key}`, item);
   }
   return [...cleanup.values()];
+}
+
+function hasGuestPlannerItem(envelope: GuestPlannerEnvelope | null, item: GuestPlannerItemReference): boolean {
+  if (!envelope) return false;
+  switch (item.type) {
+    case "resources":
+      return envelope.document.pyroxene.resources !== null;
+    case "options":
+      return envelope.pyroxeneOptionsChanged;
+    case "record":
+      return groupTimelineRecords(envelope.document.pyroxene.records).has(item.key);
+    case "source":
+      return envelope.document.pyroxene.collectedSourceKeys.includes(item.key);
+    case "event":
+      return Object.hasOwn(envelope.document.pyroxene.eventData, item.key);
+    case "eventShop":
+      return Object.hasOwn(envelope.document.eventShops, item.key);
+    case "favorite":
+      return envelope.favorites.some((favorite) => favoriteKey(favorite) === item.key);
+  }
+}
+
+function countRemovedItems(
+  before: GuestPlannerEnvelope | null,
+  after: GuestPlannerEnvelope | null,
+  items: readonly GuestPlannerItemReference[],
+): number {
+  return items.filter((item) => hasGuestPlannerItem(before, item) && !hasGuestPlannerItem(after, item)).length;
+}
+
+function getConflictSourceEnvelope(
+  envelope: GuestPlannerEnvelope,
+  conflictId: string,
+  source: "pyroxene" | "eventShops",
+): GuestPlannerEnvelope | null {
+  const conflict = envelope.legacyConflicts.find((item) => item.id === conflictId);
+  return conflict ? createGuestPlannerConflictEnvelope(conflict, source) : null;
+}
+
+function countConflictDeletionItems(
+  envelope: GuestPlannerEnvelope,
+  conflictId: string,
+  source: "pyroxene" | "eventShops",
+): number {
+  const conflict = envelope.legacyConflicts.find((item) => item.id === conflictId);
+  if (!conflict) return 0;
+  const removed = conflict.keys.removed;
+  if (source === "eventShops") return removed.eventShopUids.length;
+  return (
+    Number(removed.resources) +
+    removed.records.length +
+    removed.eventTrials.length +
+    removed.favorites.length +
+    removed.collectedSourceKeys.length
+  );
+}
+
+export function applyGuestPlannerImportCleanup(
+  current: GuestPlannerEnvelope,
+  submitted: readonly GuestImportSource[],
+  cleanupItems: Record<string, GuestPlannerItemReference[]>,
+  clearConflictTombstones: boolean,
+): { envelope: GuestPlannerEnvelope; deletedCount: number } {
+  let envelope = current;
+  let deletedCount = 0;
+  for (const source of submitted) {
+    const items = cleanupItems[source.id] ?? [];
+    if (source.kind === "current") {
+      const before = envelope;
+      envelope = clearGuestPlannerItemsIfUnchanged(envelope, source.envelope, items);
+      deletedCount += countRemovedItems(before, envelope, items);
+    } else if (source.legacyConflict && source.conflictSource) {
+      const before = envelope;
+      const beforeSource = getConflictSourceEnvelope(before, source.legacyConflict.id, source.conflictSource);
+      envelope = clearGuestPlannerLegacyConflictItemsIfUnchanged(
+        envelope,
+        source.legacyConflict.id,
+        source.conflictSource,
+        source.envelope,
+        items,
+      );
+      const afterSource = getConflictSourceEnvelope(envelope, source.legacyConflict.id, source.conflictSource);
+      deletedCount += countRemovedItems(beforeSource, afterSource, items);
+      if (clearConflictTombstones && source.conflictResolutionSections?.length) {
+        const beforeTombstones = countConflictDeletionItems(envelope, source.legacyConflict.id, source.conflictSource);
+        envelope = clearGuestPlannerLegacyConflictSections(
+          envelope,
+          source.legacyConflict.id,
+          source.conflictSource,
+          source.conflictResolutionSections,
+        );
+        const afterTombstones = countConflictDeletionItems(envelope, source.legacyConflict.id, source.conflictSource);
+        deletedCount += Math.max(0, beforeTombstones - afterTombstones);
+      }
+    }
+  }
+  return { envelope, deletedCount };
+}
+
+function hasGuestPlannerItemsRemaining(envelope: GuestPlannerEnvelope): boolean {
+  return (
+    guestPlannerHasData(envelope) ||
+    envelope.legacyUnreadable.pyroxene !== null ||
+    envelope.legacyUnreadable.eventShops !== null
+  );
 }
 
 function accountPyroxeneItems(contents: Awaited<ReturnType<typeof getPyroxenePlannerContents>>) {
@@ -751,6 +907,7 @@ export default function UnifiedGuestPlannerImportPage() {
   const [comparisonResponse, setComparisonResponse] = useState<EventShopStateLookupResponse | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
+  const [cleanupOutcome, setCleanupOutcome] = useState<GuestPlannerCleanupOutcome | null>(null);
   const initializedSignature = useRef<string | null>(null);
   const processedResult = useRef<ImportActionResult | null>(null);
   const submittedSources = useRef<GuestImportSource[]>([]);
@@ -875,32 +1032,22 @@ export default function UnifiedGuestPlannerImportPage() {
     if (!result || result === processedResult.current) return;
     processedResult.current = result;
     const submitted = submittedSources.current;
-    void guestPlanner.update((current) => {
-      let next = current;
-      for (const source of submitted) {
-        const items = result.cleanupItems?.[source.id] ?? [];
-        if (source.kind === "current") {
-          next = clearGuestPlannerItemsIfUnchanged(next, source.envelope, items);
-        } else if (source.legacyConflict && source.conflictSource) {
-          next = clearGuestPlannerLegacyConflictItemsIfUnchanged(
-            next,
-            source.legacyConflict.id,
-            source.conflictSource,
-            source.envelope,
-            items,
-          );
-          if (result.success && source.conflictResolutionSections?.length) {
-            next = clearGuestPlannerLegacyConflictSections(
-              next,
-              source.legacyConflict.id,
-              source.conflictSource,
-              source.conflictResolutionSections,
-            );
-          }
-        }
-      }
-      return next;
-    });
+    let deletedCount = 0;
+    void guestPlanner
+      .update((current) => {
+        const cleanup = applyGuestPlannerImportCleanup(current, submitted, result.cleanupItems ?? {}, result.success);
+        deletedCount = cleanup.deletedCount;
+        return cleanup.envelope;
+      })
+      .then((snapshot) => {
+        const storageConfirmed = snapshot.status === "ready";
+        setCleanupOutcome({
+          deletedCount: storageConfirmed ? deletedCount : 0,
+          hasRemainingItems:
+            !storageConfirmed || !("envelope" in snapshot) || hasGuestPlannerItemsRemaining(snapshot.envelope),
+        });
+      })
+      .catch(() => setCleanupOutcome({ deletedCount: 0, hasRemainingItems: true }));
   }, [fetcher.data, guestPlanner.update]);
 
   const toggleUnique = useCallback(
@@ -957,7 +1104,9 @@ export default function UnifiedGuestPlannerImportPage() {
     (count, source) => count + countSelection(selectionBySource[source.id] ?? emptySelection()),
     0,
   );
-  const discardedCount = Math.max(0, totalCount - selectedCount);
+  const unselectedCleanupCount = countUnselectedItemsToCleanup(
+    sources.map((source) => ({ ...source, selection: selectionBySource[source.id] ?? emptySelection() })),
+  );
   const isSubmitting = fetcher.state !== "idle";
   const failedLabels = fetcher.data?.failedLabels ?? [];
   const currentResourceSource = sources.find(
@@ -1000,6 +1149,7 @@ export default function UnifiedGuestPlannerImportPage() {
 
   const submit = () => {
     submittedSources.current = sources;
+    setCleanupOutcome(null);
     const bodySources = sources.map((source) => ({
       id: source.id,
       envelope: source.envelope,
@@ -1029,13 +1179,13 @@ export default function UnifiedGuestPlannerImportPage() {
   const importFooter = (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <p className="text-sm text-muted-foreground">
-        {selectedCount}개 항목 선택{discardedCount > 0 && ` · 삭제할 항목 ${discardedCount}개`}
+        {describeImportSelectionSummary(selectedCount, unselectedCleanupCount)}
       </p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row">
         <Button text={`${back.title}로 돌아가기`} to={back.to} variant="secondary" />
         <Button
           variant="primary"
-          disabled={isSubmitting || isComparing || (selectedCount === 0 && discardedCount === 0)}
+          disabled={isSubmitting || isComparing || (selectedCount === 0 && unselectedCleanupCount === 0)}
           onClick={submit}
         >
           {isSubmitting && <ArrowPathIcon className="size-4 animate-spin" />}
@@ -1127,10 +1277,10 @@ export default function UnifiedGuestPlannerImportPage() {
             }
             description={
               failedLabels.length > 0
-                ? describeImportFailure(failedLabels, discardedCount)
-                : discardedCount > 0
-                  ? `선택한 항목은 계정에 가져오고, 선택하지 않은 계획 ${discardedCount}개는 이 브라우저에서 삭제했어요.`
-                  : "가져온 항목을 이 브라우저에서 정리했어요."
+                ? describeImportFailure(failedLabels, cleanupOutcome)
+                : fetcher.data.revisionConflict
+                  ? describeImportFailure(["선택한 항목"], cleanupOutcome)
+                  : describeImportSuccess(cleanupOutcome)
             }
           />
         )}
