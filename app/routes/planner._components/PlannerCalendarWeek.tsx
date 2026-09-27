@@ -100,6 +100,9 @@ export function DailyResourceChanges({
   );
 }
 
+/** Keeps a start marker's left rule visually separate from a strip that ends right before it. */
+const START_MARKER_GAP_PX = 3;
+
 function formatDate(dateKey: string): string {
   const [year, month, day] = dateKey.split("-").map(Number);
   return new Intl.DateTimeFormat("ko-KR", {
@@ -504,7 +507,10 @@ export default function PlannerCalendarWeek({
                       ? "border-foreground font-semibold text-foreground"
                       : "border-muted-foreground/50 font-normal text-foreground hover:bg-muted/50"
                   }`}
-                  style={{ left: `${marker.leftPercent}%`, width: `${marker.widthPercent}%` }}
+                  style={{
+                    left: `calc(${marker.leftPercent}% + ${START_MARKER_GAP_PX}px)`,
+                    width: `calc(${marker.widthPercent}% - ${START_MARKER_GAP_PX}px)`,
+                  }}
                   onClick={(event) => onSelectPeriod(marker.period.startDate, event.currentTarget, marker.period)}
                 >
                   <PlannerPlanMarks state={planMarks} />

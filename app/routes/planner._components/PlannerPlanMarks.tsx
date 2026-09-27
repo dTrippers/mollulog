@@ -3,8 +3,8 @@ import type { PlannerPeriod } from "~/domain/integrated-planner";
 
 export type PlannerPlanMarkState = { recruitment: boolean; shop: boolean };
 
-const RECRUITMENT_ICON_CLASS = "text-rose-600 dark:text-rose-400";
-const SHOP_ICON_CLASS = "text-sky-700 dark:text-sky-400";
+const RECRUITMENT_ICON_CLASS = "text-rose-500 dark:text-rose-400";
+const SHOP_ICON_CLASS = "text-sky-500 dark:text-sky-400";
 
 /** Shop plans attach to the event itself (or its shop period), never to recruitment or raid rows. */
 export function plannerPlanMarkState(

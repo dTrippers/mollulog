@@ -442,8 +442,9 @@ function isNavigablePlannerEvent(
 }
 
 function getPlannerActualEventEndAt(content: PlannerScheduleContentInput): string | null {
-  if (content.actualEndAt !== undefined) return content.actualEndAt;
-  return content.endless === true ? null : content.until;
+  // An endless content's end_at is only when it leaves the timeline, not when the content ends.
+  if (content.endless === true) return null;
+  return content.actualEndAt !== undefined ? content.actualEndAt : content.until;
 }
 
 function buildPlannerRaidPeriods(scheduleItems: readonly PyroxeneScheduleItem[], timeZone: string): PlannerPeriod[] {

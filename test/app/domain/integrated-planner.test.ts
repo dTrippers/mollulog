@@ -368,7 +368,7 @@ describe("integrated planner calendar domain", () => {
         endDate: "2026-09-29",
         startAt: "2026-09-15T04:00:00.000Z",
         endAt: "2026-09-29T02:00:00.000Z",
-        endless: true,
+        runType: "permanent",
         calendarStartOnly: false,
         href: "/events/endless-ended",
         eventUid: "endless-ended",
@@ -1023,7 +1023,7 @@ describe("integrated planner calendar domain", () => {
     );
   });
 
-  test("treats endless content with an end_at as an active period and folds its recruitment", () => {
+  test("treats a permanent-run event with an end_at as an active period and folds its recruitment", () => {
     const event: PlannerPeriod = {
       key: "event:endless-ended",
       kind: "event",
@@ -1033,7 +1033,6 @@ describe("integrated planner calendar domain", () => {
       startAt: "2026-09-15T02:00:00.000Z",
       endAt: "2026-09-29T02:00:00.000Z",
       runType: "permanent",
-      endless: true,
       calendarStartOnly: false,
       eventUid: "endless-ended",
     };
@@ -1176,9 +1175,9 @@ describe("integrated planner calendar domain", () => {
       expect.objectContaining({
         eventUid: "event-endless",
         startDate: "2026-09-08",
-        endDate: "2026-09-25",
-        endAt: "2026-09-25T14:59:00.000Z",
-        calendarStartOnly: false,
+        endDate: "2026-09-08",
+        endAt: null,
+        calendarStartOnly: true,
         runType: "permanent",
         endless: true,
       }),
@@ -1192,25 +1191,24 @@ describe("integrated planner calendar domain", () => {
         endless: false,
       }),
     ]);
-    expect(layout.eventStrips).toMatchObject([
-      expect.objectContaining({ period: expect.objectContaining({ eventUid: "event-endless" }) }),
+    expect(layout.eventStrips).toEqual([]);
+    expect(layout.eventStartMarkers).toHaveLength(3);
+    expect(layout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual([
+      "event-undated",
+      "event-endless",
+      "event-unrelated",
     ]);
-    expect(layout.eventStartMarkers).toHaveLength(2);
-    expect(layout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual(["event-undated", "event-unrelated"]);
     expect(layout.eventStartMarkers[0].leftPercent).toBeCloseTo((11 / 24 / 7) * 100);
     expect(getPlannerPeriodsForDate(periods, "2026-10-01", "2026-09-15")).toEqual([]);
     const personalLayout = buildPlannerWeekLayout(personalPeriods, week, "Asia/Seoul");
-    expect(personalLayout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual(["event-undated"]);
-    expect(personalLayout.eventStrips.map(({ period }) => period.eventUid)).toEqual(["event-endless"]);
+    expect(personalLayout.eventStartMarkers.map(({ period }) => period.eventUid)).toEqual([
+      "event-undated",
+      "event-endless",
+    ]);
+    expect(personalLayout.eventStrips).toEqual([]);
     expect(personalPeriods.filter(({ kind }) => kind === "event")).toMatchObject([
       { runType: "rerun", endDate: "2026-09-07", endAt: null, endless: false },
-      {
-        runType: "permanent",
-        endDate: "2026-09-25",
-        endAt: "2026-09-25T14:59:00.000Z",
-        calendarStartOnly: false,
-        endless: true,
-      },
+      { runType: "permanent", endDate: "2026-09-08", endAt: null, calendarStartOnly: true, endless: true },
     ]);
   });
 
