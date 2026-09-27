@@ -397,7 +397,7 @@ export async function getPyroxeneTimelineItemsInDatabase(
     .select()
     .from(pgPyroxeneTimelineItemsTable)
     .where(eq(pgPyroxeneTimelineItemsTable.userId, userId))
-    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt));
+    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id));
   return items.map(toTimelineItemModel);
 }
 

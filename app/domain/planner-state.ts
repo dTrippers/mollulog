@@ -187,10 +187,10 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
       }
     : null;
 
-  const records = rows.timelineItems.map(parseTimelineItem).sort((left, right) => {
-    const byDate = left.eventAt.localeCompare(right.eventAt);
-    return byDate || left.uid.localeCompare(right.uid);
-  });
+  // Records sort by eventAt; equal dates keep legacy row id order.
+  const records = rows.timelineItems
+    .map(parseTimelineItem)
+    .sort((left, right) => left.eventAt.localeCompare(right.eventAt));
   if (new Set(records.map((item) => item.uid)).size !== records.length) {
     return invalid("pyroxene_timeline_items.uid");
   }

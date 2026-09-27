@@ -105,7 +105,7 @@ describe("PostgreSQL Pyroxene repository", () => {
 
     const readSql = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text)).join("\n");
     expect(readSql).toContain('order by "pyroxene_owned_resources"."input_at" desc');
-    expect(readSql).toContain('order by "pyroxene_timeline_items"."event_at" asc');
+    expect(readSql).toContain('order by "pyroxene_timeline_items"."event_at" asc, "pyroxene_timeline_items"."id" asc');
   });
 
   it("reads all Pyroxene user state through one held PostgreSQL client", async () => {

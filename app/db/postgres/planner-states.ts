@@ -62,12 +62,12 @@ async function readLegacyRows(db: PlannerStateDatabase, userId?: number): Promis
       ? db
           .select()
           .from(pgPyroxeneTimelineItemsTable)
-          .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.uid))
+          .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id))
       : db
           .select()
           .from(pgPyroxeneTimelineItemsTable)
           .where(eq(pgPyroxeneTimelineItemsTable.userId, userId))
-          .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.uid)),
+          .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id)),
     userId === undefined
       ? db.select().from(pgPyroxenePlannerOptionsTable)
       : db.select().from(pgPyroxenePlannerOptionsTable).where(eq(pgPyroxenePlannerOptionsTable.userId, userId)),

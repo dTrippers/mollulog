@@ -222,11 +222,21 @@ export class FakePostgresClient {
     const table = this.tables[tableName] ?? [];
     this.selectParameterCounts.push(values.length);
     let rows = table.filter((row) => matchesWhere(row, text, values));
-    const order = text.match(/\border\s+by\s+"([a-z0-9_]+)"(?:\s+(asc|desc))?/i);
-    if (order) {
-      const field = fromPgField(order[1]);
-      const multiplier = order[2]?.toLowerCase() === "desc" ? -1 : 1;
-      rows = [...rows].sort((left, right) => (Number(left[field]) - Number(right[field])) * multiplier);
+    const orderClause = text.match(/\border\s+by\s+([\s\S]*?)(?:\blimit\b|\breturning\b|$)/i)?.[1] ?? "";
+    const orderTerms = [...orderClause.matchAll(/(?:"[a-z0-9_]+"\.)?"([a-z0-9_]+)"(?:\s+(asc|desc))?/gi)].map(
+      ([, field, direction]) => ({ field: fromPgField(field ?? ""), direction: direction?.toLowerCase() }),
+    );
+    if (orderTerms.length > 0) {
+      rows = [...rows].sort((left, right) => {
+        for (const { field, direction } of orderTerms) {
+          const leftValue = left[field];
+          const rightValue = right[field];
+          let comparison = Number(leftValue) - Number(rightValue);
+          if (!Number.isFinite(comparison)) comparison = String(leftValue).localeCompare(String(rightValue));
+          if (comparison !== 0) return direction === "desc" ? -comparison : comparison;
+        }
+        return 0;
+      });
     }
     const limit = text.match(/\blimit\s+(?:\$(\d+)|(\d+))/i);
     if (limit) {

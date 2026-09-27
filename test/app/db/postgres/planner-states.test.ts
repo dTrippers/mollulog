@@ -191,6 +191,59 @@ describe("PostgreSQL planner state dual writes", () => {
     expect(parity.conversionFailures).toEqual([]);
   });
 
+  it("uses legacy id order for equal-date records in per-user reads and parity", async () => {
+    const client = new FakePostgresClient({
+      ...legacyTables(),
+      pyroxene_timeline_items: [
+        {
+          id: 12076,
+          uid: "EBqd0Ol1::onetime",
+          userId: 7,
+          eventAt: date,
+          source: "other",
+          repeatType: null,
+          repeatIntervalDays: null,
+          repeatCount: null,
+          autoRepurchase: false,
+          description: "Second inserted record",
+          pyroxeneDelta: 100,
+          oneTimeTicketDelta: 0,
+          tenTimeTicketDelta: 0,
+        },
+        {
+          id: 12074,
+          uid: "QSvU46BL::onetime",
+          userId: 7,
+          eventAt: date,
+          source: "other",
+          repeatType: null,
+          repeatIntervalDays: null,
+          repeatCount: null,
+          autoRepurchase: false,
+          description: "First inserted record",
+          pyroxeneDelta: 200,
+          oneTimeTicketDelta: 0,
+          tenTimeTicketDelta: 0,
+        },
+      ],
+    });
+
+    const document = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(document.pyroxene.records.map(({ uid }) => uid)).toEqual(["QSvU46BL::onetime", "EBqd0Ol1::onetime"]);
+    client.tables.planner_states = [{ id: 1, userId: 7, revision: 1, document }];
+
+    const parity = await checkPlannerStateParityInDatabase(drizzle(client as unknown as Client));
+
+    expect(parity.mismatches).toEqual([]);
+    const timelineReads = client.statements.filter((statement) => statement.includes('from "pyroxene_timeline_items"'));
+    expect(timelineReads).toHaveLength(2);
+    for (const statement of timelineReads) {
+      expect(statement).toContain(
+        'order by "pyroxene_timeline_items"."event_at" asc, "pyroxene_timeline_items"."id" asc',
+      );
+    }
+  });
+
   it("keeps every pyroxene write operation equal to its legacy-table projection", async () => {
     const mutations: Array<[string, (client: FakePostgresClient) => Promise<unknown>]> = [
       [

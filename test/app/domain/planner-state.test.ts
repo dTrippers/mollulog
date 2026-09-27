@@ -132,6 +132,19 @@ describe("planner state projection", () => {
     });
   });
 
+  it("keeps input order for records with equal eventAt even when uid order differs", () => {
+    const document = projectPlannerStateDocument(
+      projectionRows({
+        timelineItems: [
+          { ...timelineRow, id: 12074, uid: "QSvU46BL::onetime" },
+          { ...timelineRow, id: 12076, uid: "EBqd0Ol1::onetime" },
+        ],
+      }),
+    );
+
+    expect(document.pyroxene.records.map(({ uid }) => uid)).toEqual(["QSvU46BL::onetime", "EBqd0Ol1::onetime"]);
+  });
+
   it("projects absent optional sections without hiding malformed stored payloads", () => {
     const empty = projectPlannerStateDocument({
       resources: [],
