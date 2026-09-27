@@ -1,7 +1,6 @@
-import { ArrowDownTrayIcon, ArrowUpTrayIcon, CameraIcon } from "@heroicons/react/24/outline";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 import { Page } from "~/components/features/layout";
-import type { PageLinkProps } from "~/components/features/layout/PageLink";
 
 type ConnectDataScreen = "import" | "export";
 
@@ -34,14 +33,6 @@ export default function ConnectDataPage({ currentScreen, pendingDraftCount, chil
           link: "/connect/export",
           active: currentScreen === "export",
         },
-      ]}
-      links={[
-        {
-          Icon: CameraIcon,
-          title: "스크린샷/영상 인식기",
-          description: "게임 화면 스크린샷 또는 녹화 영상을 인식해 등록할 수 있어요",
-          to: "/scanner/resource",
-        } satisfies PageLinkProps,
       ]}
     >
       {children}

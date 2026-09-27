@@ -104,6 +104,7 @@ describe("global navigation catalog", () => {
       "/@sensei/futures",
       "/@sensei/timelines",
       "/scanner/resource",
+      "/connect/import",
     ]);
   });
 
@@ -219,7 +220,8 @@ describe("global navigation catalog", () => {
       "모집 기록",
       "관심 학생",
       "공략 작성하기",
-      "데이터 가져오기",
+      "게임 화면 인식기",
+      "외부 데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([
       "프로필 편집",
@@ -227,21 +229,31 @@ describe("global navigation catalog", () => {
     ]);
   });
 
-  it("maps scanner and connect routes to one data-import menu entry", () => {
-    for (const pathname of ["/scanner/resource", "/scanner/student", "/connect/import"]) {
-      const item = getNavigationCatalog({ ...signedInOptions, pathname }).find(
-        ({ menuId }) => menuId === "data-import",
-      );
-      expect(item).toMatchObject({
+  it("keeps the scanner and external data menus separate", () => {
+    for (const pathname of ["/scanner/resource", "/scanner/student"]) {
+      const catalog = getNavigationCatalog({ ...signedInOptions, pathname });
+      expect(catalog.find(({ menuId }) => menuId === "screen-scanner")).toMatchObject({
         to: "/scanner/resource",
-        name: "데이터 가져오기",
+        name: "게임 화면 인식기",
         isActive: true,
         requiresSignIn: true,
       });
+      expect(catalog.find(({ menuId }) => menuId === "external-data")?.isActive).toBe(false);
+    }
+
+    for (const pathname of ["/connect/import", "/connect/export"]) {
+      const catalog = getNavigationCatalog({ ...signedInOptions, pathname });
+      expect(catalog.find(({ menuId }) => menuId === "external-data")).toMatchObject({
+        to: "/connect/import",
+        name: "외부 데이터 연동",
+        isActive: true,
+        requiresSignIn: true,
+      });
+      expect(catalog.find(({ menuId }) => menuId === "screen-scanner")?.isActive).toBe(false);
     }
   });
 
-  it("resolves saved IDs for moved account entries and both data-import aliases", () => {
+  it("resolves saved IDs for moved account entries and the scanner and external data menus", () => {
     const items = getAvailableNavigationFavorites(
       ["profile", "notifications", "connect-import", "scanner-resource", "news", "contact"],
       getNavigationFavoriteItems(signedInOptions),
@@ -250,7 +262,8 @@ describe("global navigation catalog", () => {
     expect(items.map(({ favoriteId, name, to }) => [favoriteId, name, to])).toEqual([
       ["profile", "프로필", "/@sensei"],
       ["notifications", "알림 설정", "/notifications"],
-      ["connect-import", "데이터 가져오기", "/scanner/resource"],
+      ["connect-import", "외부 데이터 연동", "/connect/import"],
+      ["scanner-resource", "게임 화면 인식기", "/scanner/resource"],
       ["news", "업데이트 소식", "/news"],
       ["contact", "제안/문의", "/contact"],
     ]);
@@ -269,7 +282,8 @@ describe("global navigation catalog", () => {
         expect.objectContaining({ id: "my-students", name: "모집한 학생", to: "/@sensei/students" }),
         expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/@sensei/timelines" }),
         expect.objectContaining({ id: "farming-calculator", name: "파밍 계산기", to: "/utils/resources/farming" }),
-        expect.objectContaining({ id: "data-import", name: "데이터 가져오기", to: "/scanner/resource" }),
+        expect.objectContaining({ id: "screen-scanner", name: "게임 화면 인식기", to: "/scanner/resource" }),
+        expect.objectContaining({ id: "external-data", name: "외부 데이터 연동", to: "/connect/import" }),
         expect.objectContaining({ id: "notifications", name: "알림 설정", to: "/notifications" }),
       ]),
     );

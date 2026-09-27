@@ -25,7 +25,8 @@ export const NAVIGATION_MENU_IDS = [
   "pickup-history",
   "favorite-students",
   "my-walkthroughs",
-  "data-import",
+  "screen-scanner",
+  "external-data",
   "news",
   "contact",
 ] as const;

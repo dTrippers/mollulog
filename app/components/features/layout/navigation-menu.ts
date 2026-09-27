@@ -245,8 +245,10 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
         currentUsername &&
           (pathname.startsWith(`/@${currentUsername}/timelines`) || pathname.startsWith(`/@${currentUsername}/parties`)),
       );
-    case "data-import":
-      return pathname.startsWith("/scanner/") || pathname === "/scanner" || pathname.startsWith("/connect/");
+    case "screen-scanner":
+      return pathname === "/scanner" || pathname.startsWith("/scanner/");
+    case "external-data":
+      return pathname === "/connect" || pathname.startsWith("/connect/");
     case "profile":
       return Boolean(currentUsername && normalizedPathname === `/@${currentUsername}`);
     case "community-feed":
@@ -565,17 +567,28 @@ export function getNavigationCatalog({
       isActive: itemIsActive("my-walkthroughs", pathname, currentUsername),
     },
     {
-      menuId: "data-import",
+      menuId: "screen-scanner",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
       to: "/scanner/resource",
-      name: "데이터 가져오기",
+      name: "게임 화면 인식기",
       favoriteId: "scanner-resource",
-      legacyFavoriteIds: ["connect-import"],
       requiresSignIn: true,
       OutlineIcon: CameraIconOutline,
       SolidIcon: CameraIconSolid,
-      isActive: itemIsActive("data-import", pathname, currentUsername),
+      isActive: itemIsActive("screen-scanner", pathname, currentUsername),
+    },
+    {
+      menuId: "external-data",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: "/connect/import",
+      name: "외부 데이터 연동",
+      favoriteId: "connect-import",
+      requiresSignIn: true,
+      OutlineIcon: ArrowsRightLeftIconOutline,
+      SolidIcon: ArrowsRightLeftIconSolid,
+      isActive: itemIsActive("external-data", pathname, currentUsername),
     },
     {
       menuId: "community-timelines",

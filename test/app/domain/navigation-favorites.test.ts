@@ -36,19 +36,13 @@ describe("navigation favorites", () => {
     ]);
   });
 
-  it("maps both scanner favorite IDs to the single data-import row and removes either alias together", () => {
-    const item = {
-      menuId: "data-import",
-      favoriteId: "scanner-resource",
-      legacyFavoriteIds: ["connect-import"],
-      name: "데이터 가져오기",
-      to: "/scanner/resource",
-    };
-
-    expect(getAvailableNavigationFavorites(["connect-import", "scanner-resource"], [item])).toEqual([
-      { ...item, favoriteId: "connect-import" },
+  it("keeps the scanner and external data favorites independent", () => {
+    expect(toggleNavigationFavoriteId(["connect-import", "scanner-resource"], "scanner-resource")).toEqual([
+      "connect-import",
     ]);
-    expect(toggleNavigationFavoriteId(["connect-import"], "scanner-resource")).toEqual([]);
-    expect(toggleNavigationFavoriteId(["scanner-resource"], "connect-import")).toEqual([]);
+    expect(toggleNavigationFavoriteId(["scanner-resource"], "connect-import")).toEqual([
+      "scanner-resource",
+      "connect-import",
+    ]);
   });
 });

@@ -8,11 +8,6 @@ export type NavigationFavoriteItem = {
   disabled?: boolean;
 };
 
-const favoriteAliases: Record<string, readonly string[]> = {
-  "scanner-resource": ["connect-import"],
-  "connect-import": ["scanner-resource"],
-};
-
 export function normalizeNavigationFavoriteIds(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -44,11 +39,8 @@ export function normalizeNavigationFavoriteIds(value: unknown): string[] {
 
 export function toggleNavigationFavoriteId(value: unknown, favoriteId: string): string[] {
   const normalized = normalizeNavigationFavoriteIds(value);
-  const aliases = new Set([favoriteId, ...(favoriteAliases[favoriteId] ?? [])]);
-  const index = normalized.findIndex((id) => aliases.has(id));
-
-  if (index >= 0) {
-    return normalized.filter((id) => !aliases.has(id));
+  if (normalized.includes(favoriteId)) {
+    return normalized.filter((id) => id !== favoriteId);
   }
 
   if (normalized.length >= MAX_NAVIGATION_FAVORITE_IDS) {
