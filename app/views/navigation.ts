@@ -1,4 +1,5 @@
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   compareInstantAsc,
   isInstantAfter,
@@ -11,8 +12,14 @@ import { getAllCoupons } from "~/models/coupon";
 import { getPersonalNavigationState } from "~/models/personal-navigation";
 import { getLatestPostTime } from "~/models/post";
 import { getAllRaidSchedules } from "~/models/raid";
+import { getNavigationMenuBadges } from "~/models/navigation-menu-badges";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getTimelineContentsByContentTypes } from "~/models/timeline-content.server";
+import {
+  resolveMenuBadgeOverrides,
+  type NavigationMenuId,
+  type ResolvedMenuBadgeOverride,
+} from "~/domain/navigation-menu-badges";
 
 export type NavigationBarContents = {
   upcomingEvent: {
@@ -26,6 +33,7 @@ export type NavigationBarContents = {
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
   unreadNotificationCount: number;
+  menuBadgeOverrides: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
 };
 
 export type NavigationBarContentsRaw = {
@@ -41,6 +49,49 @@ export type NavigationBarContentsRaw = {
   raidActivePeriods: { startAt: UtcIsoString | null; endAt: UtcIsoString | null }[];
   couponActivePeriods: { endAt: UtcIsoString | null }[];
 };
+
+const MENU_BADGE_CACHE_FRESH_TTL = 30;
+const MENU_BADGE_CACHE_MAX_STALE_TTL = 5 * 60;
+const MENU_BADGE_CACHE_EXPIRATION_TTL = 10 * 60;
+
+async function getCachedNavigationMenuBadgeOverrides(
+  env: Env,
+  now: Date,
+  ctx?: ExecutionContext,
+): Promise<Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>> {
+  let storedBadges: Awaited<ReturnType<typeof getNavigationMenuBadges>>;
+  try {
+    storedBadges = await fetchRouteCached(
+      env,
+      ctx,
+      cacheKey("route", "navigation-menu-badges", 1, "all"),
+      () => getNavigationMenuBadges(env, { ctx }),
+      false,
+      {
+        freshTtl: MENU_BADGE_CACHE_FRESH_TTL,
+        maxStaleTtl: MENU_BADGE_CACHE_MAX_STALE_TTL,
+        expirationTtl: MENU_BADGE_CACHE_EXPIRATION_TTL,
+      },
+    );
+  } catch (error) {
+    getLogger(env, ctx, { view: "navigation_menu_badges" }).error("Failed to load navigation menu badges", error, {
+      operation: "list",
+    });
+    captureServerError(error, { view: "navigation_menu_badges", operation: "list" });
+    return {};
+  }
+
+  const { overrides, warnings } = resolveMenuBadgeOverrides(storedBadges, now);
+  const logger = warnings.length > 0 ? getLogger(env, ctx, { view: "navigation_menu_badges" }) : null;
+  for (const warning of warnings) {
+    logger?.warn("Ignored invalid navigation menu badge data", {
+      operation: "resolve",
+      menuId: warning.menuId,
+      reason: warning.reason,
+    });
+  }
+  return overrides;
+}
 
 export async function getNavigationBarContentsRaw(
   env: Env,
@@ -100,11 +151,13 @@ export async function getNavigationBarContents(
   publicReadEnv: Env = env,
 ): Promise<NavigationBarContents> {
   const now = nowUtcIso();
-  const [raw, personalNavigation] = await Promise.all([
+  const nowDate = new Date(now);
+  const [raw, personalNavigation, menuBadgeOverrides] = await Promise.all([
     getNavigationBarContentsRaw(publicReadEnv, forceRefresh, ctx),
     userId
       ? getPersonalNavigationState(env, userId, { ctx })
       : Promise.resolve({ hasUnconsumedCoupons: false, hasUnreadFeedbackReplies: false, unreadNotificationCount: 0 }),
+    getCachedNavigationMenuBadgeOverrides(publicReadEnv, nowDate, ctx),
   ]);
   const shopCandidates = raw.eventCandidates.filter(
     (content) =>
@@ -147,5 +200,6 @@ export async function getNavigationBarContents(
     hasUnconsumedCoupons: personalNavigation.hasUnconsumedCoupons,
     hasUnreadFeedbackReplies: personalNavigation.hasUnreadFeedbackReplies,
     unreadNotificationCount: personalNavigation.unreadNotificationCount,
+    menuBadgeOverrides,
   };
 }

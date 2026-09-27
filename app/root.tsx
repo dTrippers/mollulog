@@ -45,6 +45,7 @@ import {
 } from "./routes/futures._components/futures-navigation";
 import styles from "./tailwind.css?url";
 import { getNavigationBarContents } from "./views/navigation";
+import type { NavigationBarContents } from "./views/navigation";
 import { getSiteBanner } from "./views/site-banner";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
@@ -60,10 +61,12 @@ const themeConfig = {
 const reportedServerRouteErrorKeys = new Set<string>();
 
 export type RootOutletContext = {
+  currentUsername: string | null;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   mobileNavigationIds: MobileNavigationPair;
   setMobileNavigationIds: (ids: MobileNavigationPair) => void;
+  navigationBarContents: NavigationBarContents;
 };
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
@@ -95,6 +98,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
       favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
       mobileNavigationIds: preference.mobileNavigationIds ?? normalizeMobileNavigationIds(undefined),
+      desktopNavigationCollapsed: preference.desktopNavigationCollapsed,
+      desktopNavigationExpandedGroups: preference.desktopNavigationExpandedGroups,
       navigationBarContents,
       siteBanner,
       publicEnv: {
@@ -197,6 +202,8 @@ export default function App() {
     currentProfileStudentId,
     favoriteNavigationIds,
     mobileNavigationIds: initialMobileNavigationIds,
+    desktopNavigationCollapsed,
+    desktopNavigationExpandedGroups,
     navigationBarContents,
     siteBanner,
   } = loaderData;
@@ -312,6 +319,8 @@ export default function App() {
             currentProfileStudentId={currentProfileStudentId}
             favoriteNavigationIds={favoriteNavigationIds}
             mobileNavigationIds={mobileNavigationIds}
+            desktopNavigationCollapsed={desktopNavigationCollapsed}
+            desktopNavigationExpandedGroups={desktopNavigationExpandedGroups}
             darkMode={darkMode}
             setDarkMode={setDarkMode}
             upcomingEvent={navigationBarContents.upcomingEvent}
@@ -320,14 +329,15 @@ export default function App() {
             hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
             hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
             unreadNotificationCount={navigationBarContents.unreadNotificationCount}
+            menuBadgeOverrides={navigationBarContents.menuBadgeOverrides}
             siteBanner={siteBanner}
           />
           <div
-            className={`mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:pt-0 ${
+            className={`mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:min-w-0 lg:flex-1 lg:pt-0 ${
               isContentTransitionRoute ? "mllg-view-transition-content" : ""
             }`}
           >
-            <div className="mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
+            <div className="page-available-width-container @container/page-available mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>
                   {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
@@ -338,6 +348,8 @@ export default function App() {
                         setDarkMode,
                         mobileNavigationIds,
                         setMobileNavigationIds,
+                        currentUsername,
+                        navigationBarContents,
                       } satisfies RootOutletContext
                     }
                   />

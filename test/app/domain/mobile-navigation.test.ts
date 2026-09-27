@@ -20,6 +20,13 @@ describe("mobile navigation preference", () => {
     ]);
   });
 
+  it("accepts the separate farming calculator mobile choice", () => {
+    expect(normalizeMobileNavigationIds(["resource-planner", "farming-calculator"])).toEqual([
+      "resource-planner",
+      "farming-calculator",
+    ]);
+  });
+
   it.each([
     undefined,
     null,

@@ -3,11 +3,13 @@ import {
   ChatBubbleLeftRightIcon,
   FunnelIcon,
   IdentificationIcon,
+  UserIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, useLoaderData, useLocation } from "react-router";
+import { Outlet, useLoaderData, useLocation, useOutletContext } from "react-router";
 import { Page } from "~/components/features/layout";
+import PageLink from "~/components/features/layout/PageLink";
 import {
   clearStudentDirectoryDisplaySettings,
   clearStudentFilters,
@@ -23,8 +25,10 @@ import {
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
 import { Button } from "~/components/primitives";
+import { useSignIn } from "~/contexts/SignInProvider";
 import { canonicalLink } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
+import type { RootOutletContext } from "~/root";
 
 export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
 export const STUDENT_FILTER_COOKIE_PATH = "/";
@@ -81,6 +85,8 @@ export const meta: MetaFunction = ({ location }) => {
 export default function StudentsLayout() {
   const { filterState: initialFilterState, students } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
+  const { currentUsername } = useOutletContext<RootOutletContext>();
+  const { showSignIn } = useSignIn();
   const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [filterState, setFilterState] = usePersistentStudentFilterState({
@@ -104,6 +110,17 @@ export default function StudentsLayout() {
     <Page
       title="학생부"
       description="학생들의 프로필과 총력전/대결전 통계, 평가 정보를 확인해보세요"
+      belowTitle={
+        isStudentsIndex ? (
+          <PageLink
+            Icon={UserIcon}
+            title="모집한 학생"
+            description="모집한 학생의 성급과 성장 정보를 관리해요"
+            to={currentUsername ? `/@${currentUsername}/students` : "/unauthorized"}
+            onClick={currentUsername ? undefined : showSignIn}
+          />
+        ) : undefined
+      }
       panels={
         isStudentsIndex
           ? [

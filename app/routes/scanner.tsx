@@ -1,10 +1,11 @@
-import { AcademicCapIcon, ArchiveBoxIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { AcademicCapIcon, ArchiveBoxIcon, ArrowsRightLeftIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { type Dispatch, type SetStateAction, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, redirect, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import FeatureFeedbackButton from "~/components/features/feedback/FeatureFeedbackButton";
 import Page from "~/components/features/layout/Page";
+import type { PageLinkProps } from "~/components/features/layout/PageLink";
 import ScannerJobsPanel from "./scanner._components/ScannerJobsPanel";
 import { type ScannerUploadQuota, UploadQuotaMeter } from "./scanner._components/UploadQuotaMeter";
 import { getScannerQuotaError, isScannerQuotaEnabled, useScannerQuota } from "./scanner._components/useScannerQuota";
@@ -73,6 +74,14 @@ export default function ScannerLayout() {
         },
       ]}
       belowPanels={<FeatureFeedbackButton featureName="스크린샷 인식기" feedbackType="resource_scanner_feedback" />}
+      links={[
+        {
+          Icon: ArrowsRightLeftIcon,
+          title: "외부 데이터 연동",
+          description: "외부 사이트의 데이터를 가져오거나 내보낼 수 있어요",
+          to: "/connect/import",
+        } satisfies PageLinkProps,
+      ]}
       screens={[
         {
           text: "아이템",

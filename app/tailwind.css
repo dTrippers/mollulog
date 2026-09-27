@@ -36,6 +36,7 @@
   --mobile-nav-height: calc(3.25rem + max(env(safe-area-inset-bottom), 0.375rem));
   --mobile-bottom-offset: calc(var(--mobile-nav-height) + 1rem);
   --mobile-page-bottom-padding: calc(var(--mobile-nav-height) + 2rem);
+  --container-page-narrow: 52rem;
 }
 
 /*
@@ -396,4 +397,65 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+.mllg-navigation-shell {
+  width: 15rem;
+}
+
+.mllg-navigation-shell[data-desktop-navigation-mode="collapsed"] {
+  width: 4.75rem;
+}
+
+.mllg-navigation-shell[data-desktop-navigation-mode="collapsed"] .mllg-navigation-expanded,
+.mllg-navigation-shell[data-desktop-navigation-mode="expanded"] .mllg-navigation-rail {
+  display: none;
+}
+
+.mllg-navigation-shell[data-desktop-navigation-mode="expanded"] .mllg-navigation-expanded,
+.mllg-navigation-shell[data-desktop-navigation-mode="collapsed"] .mllg-navigation-rail {
+  display: flex;
+}
+
+.mllg-navigation-shell[data-desktop-navigation-mode="auto"] .mllg-navigation-expanded {
+  display: flex;
+}
+
+.mllg-navigation-shell[data-desktop-navigation-mode="auto"] .mllg-navigation-rail {
+  display: none;
+}
+
+@media (min-width: 64rem) and (max-width: 79.999rem) {
+  .mllg-navigation-shell[data-desktop-navigation-mode="auto"] {
+    width: 4.75rem;
+  }
+
+  .mllg-navigation-shell[data-desktop-navigation-mode="auto"] .mllg-navigation-expanded {
+    display: none;
+  }
+
+  .mllg-navigation-shell[data-desktop-navigation-mode="auto"] .mllg-navigation-rail {
+    display: flex;
+  }
+}
+
+@media (min-width: 64rem) {
+  /* CSS container conditions cannot read var(); keep this at --container-page-narrow. */
+  @container page-available (width < 52rem) {
+    .mllg-page-layout[data-layout="horizontal"] {
+      width: calc(100% + 1rem);
+      margin-inline: -0.5rem;
+    }
+
+    .mllg-page-layout[data-layout="horizontal"] .mllg-page-sidebar {
+      width: 14rem;
+      max-width: 14rem;
+      flex-basis: 14rem;
+      margin-right: 1rem;
+    }
+
+    .mllg-page-layout[data-layout="horizontal"] .mllg-page-content {
+      padding-inline: 0;
+    }
+  }
 }

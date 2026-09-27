@@ -4,6 +4,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { WalkthroughTimelineList } from "~/components/features/walkthrough-timeline";
 import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
 import { listPostgresWalkthroughTimelinesByUser } from "~/db/postgres/walkthrough-timelines";
+import { getUserParties } from "~/models/party.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 
 export const meta: MetaFunction = ({ params }) => [
@@ -15,6 +16,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const me = sensei.id === currentUser?.id;
+  const hasParties = me && (await getUserParties(env, sensei.username, { includePrivate: true })).length > 0;
   const timelines = await listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx });
   const timelineUids = timelines.map((timeline) => timeline.uid);
   const engagementByUid = await getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, currentUser?.id, {
@@ -22,6 +24,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   });
   return {
     me,
+    hasParties,
     signedIn: currentUser !== null,
     timelines,
     engagementByUid,

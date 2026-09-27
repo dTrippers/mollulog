@@ -6,13 +6,16 @@ import {
   LockClosedIcon,
   QueueListIcon,
   UserIcon,
+  UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useState } from "react";
-import { Outlet, useLocation, useParams, useRouteError } from "react-router";
+import { Outlet, useLocation, useMatches, useOutletContext, useParams, useRouteError } from "react-router";
 import { ErrorPage, Page, type PagePanelProps, ServerErrorPage } from "~/components/features/layout";
-import type { PageLinkProps } from "~/components/features/layout/PageLink";
+import PageLink, { type PageLinkProps } from "~/components/features/layout/PageLink";
+import SegmentedControl from "~/components/primitives/SegmentedControl";
 import { Title } from "~/components/primitives";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
+import type { RootOutletContext } from "~/root";
 
 export const ErrorBoundary = () => {
   const error = useRouteError();
@@ -55,6 +58,113 @@ export const ErrorBoundary = () => {
 type Screen = "profile" | "students" | "pickups" | "futures" | "parties" | "timelines";
 type UserPageLinksState = { username: string; links: PageLinkProps[] };
 
+export function getUserPagePresentation(pathname: string, username: string, isOwner: boolean) {
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  let currentScreen: Screen = "profile";
+  if (normalizedPathname.startsWith(`/@${username}/students`)) {
+    currentScreen = "students";
+  } else if (normalizedPathname.startsWith(`/@${username}/pickups`)) {
+    currentScreen = "pickups";
+  } else if (normalizedPathname.startsWith(`/@${username}/futures`)) {
+    currentScreen = "futures";
+  } else if (normalizedPathname.startsWith(`/@${username}/timelines`)) {
+    currentScreen = "timelines";
+  } else if (normalizedPathname.startsWith(`/@${username}/parties`)) {
+    currentScreen = "parties";
+  }
+
+  const isOwnerDataScreen =
+    isOwner &&
+    (currentScreen === "students" ||
+      currentScreen === "pickups" ||
+      currentScreen === "futures" ||
+      currentScreen === "timelines" ||
+      currentScreen === "parties");
+  const isOwnerProfileLanding = isOwner && normalizedPathname === `/@${username}`;
+  const isOwnerDataPage = isOwnerDataScreen || isOwnerProfileLanding;
+  const screens = isOwnerDataPage
+    ? [
+          {
+            text: "프로필",
+            Icon: UserCircleIcon,
+            link: `/@${username}`,
+            active: isOwnerProfileLanding,
+          },
+          { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
+          {
+            text: "모집 기록",
+            Icon: ChartBarIcon,
+            link: `/@${username}/pickups`,
+            active: currentScreen === "pickups",
+          },
+          {
+            text: "관심 학생",
+            Icon: HeartIcon,
+            link: `/@${username}/futures`,
+            active: currentScreen === "futures",
+          },
+          {
+            text: "공략 작성하기",
+            Icon: QueueListIcon,
+            link: `/@${username}/timelines`,
+            active: currentScreen === "timelines" || currentScreen === "parties",
+          },
+        ]
+      : [
+          { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
+          { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
+          {
+            text: "모집 이력/통계",
+            Icon: ChartBarIcon,
+            link: `/@${username}/pickups`,
+            active: currentScreen === "pickups",
+          },
+          { text: "관심 학생", Icon: HeartIcon, link: `/@${username}/futures`, active: currentScreen === "futures" },
+          {
+            text: "공략 타임라인",
+            Icon: QueueListIcon,
+            link: `/@${username}/timelines`,
+            active: currentScreen === "timelines",
+          },
+          {
+            text: "편성/공략",
+            Icon: DocumentTextIcon,
+            link: `/@${username}/parties`,
+            active: currentScreen === "parties",
+          },
+        ];
+
+  return {
+    currentScreen,
+    isOwnerDataScreen,
+    isOwnerDataPage,
+    isOwnerProfileLanding,
+    title: isOwnerDataPage ? "나의 데이터" : `@${username}`,
+    description: isOwnerDataPage ? undefined : "선생님의 정보를 확인해보세요",
+    screens,
+  };
+}
+
+export function shouldShowUserLegacyPartySwitcher(
+  pathname: string,
+  username: string,
+  isOwner: boolean,
+  hasParties: boolean,
+): boolean {
+  return (
+    isOwner &&
+    hasParties &&
+    (pathname === `/@${username}/timelines` || pathname === `/@${username}/parties`)
+  );
+}
+
+export function getUserPageHasParties(matches: readonly { data: unknown }[]): boolean {
+  return matches.some(({ data }) => {
+    if (typeof data !== "object" || data === null || !("hasParties" in data)) return false;
+    return data.hasParties === true;
+  });
+}
+
 export function getUserPageLinks(
   currentScreen: Screen,
   username: string,
@@ -66,20 +176,12 @@ export function getUserPageLinks(
 export default function User() {
   const params = useParams();
   const username = (params.username as string).replace("@", "");
-
   const { pathname } = useLocation();
-  let currentScreen: Screen = "profile";
-  if (pathname.startsWith(`/@${username}/students`)) {
-    currentScreen = "students";
-  } else if (pathname.startsWith(`/@${username}/pickups`)) {
-    currentScreen = "pickups";
-  } else if (pathname.startsWith(`/@${username}/futures`)) {
-    currentScreen = "futures";
-  } else if (pathname.startsWith(`/@${username}/timelines`)) {
-    currentScreen = "timelines";
-  } else if (pathname.startsWith(`/@${username}/parties`)) {
-    currentScreen = "parties";
-  }
+  const { currentUsername } = useOutletContext<RootOutletContext>();
+  const isOwner = currentUsername === username;
+  const hasParties = getUserPageHasParties(useMatches());
+  const presentation = getUserPagePresentation(pathname, username, isOwner);
+  const { currentScreen } = presentation;
 
   const [panels, setPanels] = useState<PagePanelProps[]>([]);
   const [links, setLinks] = useState<UserPageLinksState | undefined>(undefined);
@@ -89,6 +191,7 @@ export default function User() {
     },
     [username],
   );
+  const isOwnerLegacyPartyScreen = shouldShowUserLegacyPartySwitcher(pathname, username, isOwner, hasParties);
 
   useEffect(() => {
     if (currentScreen !== "students") {
@@ -99,34 +202,34 @@ export default function User() {
 
   return (
     <Page
-      title={`@${username}`}
-      description="선생님의 정보를 확인해보세요"
+      title={presentation.title}
+      description={presentation.description}
+      belowTitle={
+        isOwner && currentScreen === "students" ? (
+          <PageLink
+            Icon={IdentificationIcon}
+            title="학생부"
+            description="모든 학생의 프로필과 통계를 확인해요"
+            to="/students"
+          />
+        ) : undefined
+      }
       panels={panels}
       links={getUserPageLinks(currentScreen, username, links)}
-      screens={[
-        { text: "프로필 정보", Icon: IdentificationIcon, link: `/@${username}`, active: currentScreen === "profile" },
-        { text: "모집한 학생", Icon: UserIcon, link: `/@${username}/students`, active: currentScreen === "students" },
-        {
-          text: "모집 이력/통계",
-          Icon: ChartBarIcon,
-          link: `/@${username}/pickups`,
-          active: currentScreen === "pickups",
-        },
-        { text: "관심 학생", Icon: HeartIcon, link: `/@${username}/futures`, active: currentScreen === "futures" },
-        {
-          text: "공략 타임라인",
-          Icon: QueueListIcon,
-          link: `/@${username}/timelines`,
-          active: currentScreen === "timelines",
-        },
-        {
-          text: "편성/공략",
-          Icon: DocumentTextIcon,
-          link: `/@${username}/parties`,
-          active: currentScreen === "parties",
-        },
-      ]}
+      screens={presentation.screens}
     >
+      {isOwnerLegacyPartyScreen ? (
+        <div className="mb-4">
+          <SegmentedControl
+            ariaLabel="내 공략 화면"
+            value={currentScreen === "parties" ? "parties" : "timelines"}
+            options={[
+              { value: "timelines", label: "공략 타임라인", to: `/@${username}/timelines` },
+              { value: "parties", label: "이전 편성·공략", to: `/@${username}/parties` },
+            ]}
+          />
+        </div>
+      ) : null}
       <Outlet context={{ setPanels, setLinks: setPageLinks }} />
     </Page>
   );

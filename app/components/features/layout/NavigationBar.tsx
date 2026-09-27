@@ -1,17 +1,23 @@
-import { MoonIcon, SunIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { XMarkIcon } from "@heroicons/react/16/solid";
 import {
   CalendarIcon as CalendarIconOutline,
+  ChevronDoubleLeftIcon,
+  ChevronDoubleRightIcon,
+  ChevronDownIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
-  StarIcon as StarIconOutline,
-  UserCircleIcon as UserCircleIconOutline,
 } from "@heroicons/react/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { DEFAULT_MOBILE_NAVIGATION_IDS, type MobileNavigationPair } from "~/domain/mobile-navigation";
+import {
+  normalizeDesktopNavigationExpandedGroups,
+  type DesktopNavigationExpandedGroups,
+  type DesktopNavigationPreferenceGroupId,
+} from "~/domain/desktop-navigation-preference";
+import type { NavigationMenuId, ResolvedMenuBadgeOverride } from "~/domain/navigation-menu-badges";
 import {
   getAvailableNavigationFavorites,
   normalizeNavigationFavoriteIds,
@@ -26,13 +32,19 @@ import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
 import NotificationHistoryPopover from "./NotificationHistoryPopover";
+import { NavigationAccountPopover } from "./NavigationAccountPopover";
+import { NavigationFlyout } from "./NavigationFlyout";
+import { NavigationFavoriteMenuRow, NavigationMenuRow } from "./NavigationMenuRow";
+import { NavigationRail, type NavigationRailGroup } from "./NavigationRail";
 import {
+  getAccountNavigationActions,
   getDesktopNavigation,
   getMobileNavigationItems,
-  getNavigationSectionStates,
+  getNavigationFavoriteItems,
+  getNavigationGroupBadgeSummary,
+  isAccountNavigationActive,
+  NAVIGATION_GROUPS,
   type NavigationItem,
-  type NavigationSection,
-  type NavigationSectionStates,
 } from "./navigation-menu";
 import { SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
 
@@ -41,6 +53,8 @@ type NavigationBarProps = {
   currentProfileStudentId: string | null;
   favoriteNavigationIds: string[];
   mobileNavigationIds: MobileNavigationPair;
+  desktopNavigationCollapsed?: boolean;
+  desktopNavigationExpandedGroups?: DesktopNavigationExpandedGroups;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   upcomingEvent: { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -49,10 +63,17 @@ type NavigationBarProps = {
   hasUnconsumedCoupons: boolean;
   hasUnreadFeedbackReplies: boolean;
   unreadNotificationCount: number;
+  menuBadgeOverrides: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
   siteBanner: SiteBannerData | null;
 };
 
-type NavigationSearchVariant = "desktop" | "mobile";
+type NavigationSearchVariant = "desktop" | "mobile" | "rail";
+
+const FAVORITES_EMPTY_HINT = "☆를 눌러 즐겨찾기에 추가";
+
+export function NavigationFavoriteEmptyHint() {
+  return <p className="px-2 py-2 text-xs text-muted-foreground">{FAVORITES_EMPTY_HINT}</p>;
+}
 
 function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -64,7 +85,7 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const [isPopupOpen, setIsPopupOpen] = useState(false);
 
   useEffect(() => {
-    if (variant === "mobile") {
+    if (variant === "mobile" || variant === "rail") {
       inputRef.current?.focus();
     }
   }, [variant]);
@@ -98,7 +119,7 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
     };
 
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (event.key === "Escape" && variant !== "rail") {
         setIsPopupOpen(false);
         inputRef.current?.blur();
       }
@@ -111,19 +132,20 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
       window.removeEventListener("mousedown", closeOnOutsideClick);
       window.removeEventListener("keydown", closeOnEscape);
     };
-  }, [isPopupOpen]);
+  }, [isPopupOpen, variant]);
 
   const results = fetcher.data?.results ?? [];
   const hasQuery = Boolean(query.trim());
   const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
   const isLoading = fetcher.state !== "idle";
 
-  const inputClassName = cn(`
-    w-full rounded-md bg-background py-2 pr-3 pl-9 text-sm text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30
-  `);
+  const inputClassName = cn(
+    "w-full rounded-md bg-background py-2 pr-3 pl-9 text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30",
+    variant === "desktop" ? "text-xs" : "text-sm",
+  );
 
   return (
-    <div ref={rootRef} className={variant === "desktop" ? "relative" : "relative w-full"}>
+    <div ref={rootRef} className={variant === "mobile" ? "relative w-full" : "relative"}>
       <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-muted-foreground">
         {isLoading ? (
           <span
@@ -156,9 +178,11 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
           isEmpty={!hasQuery}
           onResultClick={() => setIsPopupOpen(false)}
           className={
-            variant === "desktop"
-              ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
-              : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+            variant === "rail"
+              ? "relative z-layer-navigation-menu -mx-2 mt-2 max-h-[calc(100dvh-8rem)] w-96 overflow-y-auto rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+              : variant === "desktop"
+                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
           }
         />
       )}
@@ -292,6 +316,8 @@ export default function NavigationBar({
   currentProfileStudentId,
   favoriteNavigationIds,
   mobileNavigationIds,
+  desktopNavigationCollapsed,
+  desktopNavigationExpandedGroups,
   darkMode,
   setDarkMode,
   upcomingEvent,
@@ -300,82 +326,335 @@ export default function NavigationBar({
   hasUnconsumedCoupons,
   hasUnreadFeedbackReplies,
   unreadNotificationCount,
+  menuBadgeOverrides,
   siteBanner,
 }: NavigationBarProps) {
   const matches = useMatches();
   const location = useLocation();
-  const pathname = matches[matches.length - 1].pathname;
+  const pathname = matches[matches.length - 1]?.pathname ?? location.pathname;
   const searchResetKey = `${location.pathname}\n${location.search}`;
   const { showSignIn } = useSignIn();
-  const sectionStates = getNavigationSectionStates(pathname, upcomingEvent);
+  const submit = useSubmit();
+  const navigationOptions = {
+    pathname,
+    upcomingEvent,
+    hasOngoingRaid,
+    hasUnconsumedCoupons,
+    isSignedIn: currentUsername !== null,
+    currentUsername,
+    hasRecentNews,
+    hasUnreadFeedbackReplies,
+    menuBadgeOverrides,
+  };
+  const desktopNavigation = getDesktopNavigation(navigationOptions);
+  const accountActions = getAccountNavigationActions(navigationOptions);
+  const favoriteNavigationItems = getNavigationFavoriteItems(navigationOptions);
   const [localFavoriteNavigationIds, onFavoriteToggle] = useNavigationFavorites(favoriteNavigationIds);
   const [localUnreadNotificationCount, setLocalUnreadNotificationCount] = useState(unreadNotificationCount);
+  const [expandedGroups, setExpandedGroups] = useState<DesktopNavigationExpandedGroups>(
+    () => normalizeDesktopNavigationExpandedGroups(desktopNavigationExpandedGroups) ?? {},
+  );
+  const [collapsedPreference, setCollapsedPreference] = useState(desktopNavigationCollapsed);
+  const [activeFlyout, setActiveFlyout] = useState<{
+    id: string;
+    title: string;
+    kind: "group" | "search" | "banner";
+    anchorEl: HTMLElement;
+    group?: NavigationRailGroup;
+  } | null>(null);
+  const [railNotificationOpen, setRailNotificationOpen] = useState(false);
+  const [expandedAccountOpen, setExpandedAccountOpen] = useState(false);
+  const [railAccountOpen, setRailAccountOpen] = useState(false);
 
   useEffect(() => {
     setLocalUnreadNotificationCount(unreadNotificationCount);
   }, [unreadNotificationCount]);
 
+  const navigationMode = collapsedPreference === undefined ? "auto" : collapsedPreference ? "collapsed" : "expanded";
+  const allFavoriteItems = getAvailableNavigationFavorites(localFavoriteNavigationIds, favoriteNavigationItems);
+  const favoriteIdSet = new Set(localFavoriteNavigationIds);
+  const sectionById = new Map(desktopNavigation.groups.map((section) => [section.id, section]));
+  const railGroups: NavigationRailGroup[] = NAVIGATION_GROUPS.flatMap((group) => {
+    const section = sectionById.get(group.id);
+    return section ? [{ ...group, items: section.items }] : [];
+  });
+  const railNewsGroup = railGroups.find((group) => group.id === "news") ?? null;
+  const railScrollingGroups = railGroups.filter((group) => group.id !== "news");
+  const desktopBannerVisible =
+    siteBanner !== null && shouldRenderGlobalSiteBanner(siteBanner, "desktop_navigation", pathname);
+
+  const openFlyout = useCallback(
+    (flyout: NonNullable<typeof activeFlyout>) => {
+      setRailNotificationOpen(false);
+      setRailAccountOpen(false);
+      setExpandedAccountOpen(false);
+      setActiveFlyout((current) => (current?.id === flyout.id ? null : flyout));
+    },
+    [],
+  );
+  const closeFlyout = useCallback(
+    (returnFocus = false) => {
+      const anchorEl = activeFlyout?.anchorEl;
+      setActiveFlyout(null);
+      if (returnFocus) window.requestAnimationFrame(() => anchorEl?.focus());
+    },
+    [activeFlyout],
+  );
+  const handleOpenGroup = useCallback(
+    (group: NavigationRailGroup, anchorEl: HTMLButtonElement) =>
+      openFlyout({ id: group.id, title: group.name, kind: "group", anchorEl, group }),
+    [openFlyout],
+  );
+  const handleOpenSearch = useCallback(
+    (anchorEl: HTMLButtonElement) => openFlyout({ id: "search", title: "검색", kind: "search", anchorEl }),
+    [openFlyout],
+  );
+  const handleOpenBanner = useCallback(
+    (anchorEl: HTMLButtonElement) =>
+      openFlyout({ id: "site-banner", title: "사이트 배너", kind: "banner", anchorEl }),
+    [openFlyout],
+  );
+  const handleRailNotificationChange = useCallback((isOpen: boolean) => {
+    setRailNotificationOpen(isOpen);
+    if (isOpen) {
+      setActiveFlyout(null);
+      setRailAccountOpen(false);
+      setExpandedAccountOpen(false);
+    }
+  }, []);
+  const handleRailAccountChange = useCallback((isOpen: boolean) => {
+    setRailAccountOpen(isOpen);
+    if (isOpen) {
+      setActiveFlyout(null);
+      setRailNotificationOpen(false);
+      setExpandedAccountOpen(false);
+    }
+  }, []);
+  const handleExpandedAccountChange = useCallback((isOpen: boolean) => {
+    setExpandedAccountOpen(isOpen);
+    if (isOpen) {
+      setRailNotificationOpen(false);
+      setRailAccountOpen(false);
+      setActiveFlyout(null);
+    }
+  }, []);
+
+  const expandedToggleCollapsed = navigationMode === "auto" ? false : Boolean(collapsedPreference);
+  const railToggleCollapsed = navigationMode === "auto" ? true : Boolean(collapsedPreference);
+
+  const handleCollapseToggle = (displayedCollapsed: boolean) => {
+    const nextCollapsed = !displayedCollapsed;
+    setCollapsedPreference(nextCollapsed);
+    setActiveFlyout(null);
+    setRailNotificationOpen(false);
+    setRailAccountOpen(false);
+    setExpandedAccountOpen(false);
+    submitPreference(submit, { desktopNavigationCollapsed: nextCollapsed });
+  };
+
+  const setGroupExpanded = (groupId: DesktopNavigationPreferenceGroupId, expanded: boolean) => {
+    const nextExpandedGroups = { ...expandedGroups, [groupId]: expanded };
+    setExpandedGroups(nextExpandedGroups);
+    submitPreference(submit, { desktopNavigationExpandedGroups: nextExpandedGroups });
+  };
+
+  const groupIsExpanded = (groupId: DesktopNavigationPreferenceGroupId) => expandedGroups[groupId] ?? true;
+
+  const favoriteRows = allFavoriteItems;
+  const FlyoutNavigationRow = activeFlyout?.group?.id === "favorites" ? NavigationFavoriteMenuRow : NavigationMenuRow;
+
+  const accountFooter = (
+    <>
+      <div className="min-w-0 flex-1">
+        <NavigationAccountPopover
+          variant="expanded"
+          username={currentUsername}
+          profileStudentId={currentProfileStudentId}
+          darkMode={darkMode}
+          isActive={isAccountNavigationActive(pathname, currentUsername)}
+          actions={accountActions}
+          isOpen={expandedAccountOpen}
+          onOpenChange={handleExpandedAccountChange}
+          onDarkModeChange={(next) => setDarkMode(() => next)}
+          onShowSignIn={showSignIn}
+        />
+      </div>
+      <button
+        type="button"
+        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-label="메뉴 접기/펼치기"
+        aria-expanded={!expandedToggleCollapsed}
+        title={expandedToggleCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
+        data-navigation-toggle-variant="expanded"
+        onClick={() => handleCollapseToggle(expandedToggleCollapsed)}
+      >
+        {expandedToggleCollapsed ? <ChevronDoubleRightIcon className="size-4" aria-hidden="true" /> : <ChevronDoubleLeftIcon className="size-4" aria-hidden="true" />}
+      </button>
+    </>
+  );
+
+  const railAccountFooter = (
+    <>
+      <NavigationAccountPopover
+        variant="rail"
+        username={currentUsername}
+        profileStudentId={currentProfileStudentId}
+        darkMode={darkMode}
+        isActive={isAccountNavigationActive(pathname, currentUsername)}
+        actions={accountActions}
+        isOpen={railAccountOpen}
+        onOpenChange={handleRailAccountChange}
+        onDarkModeChange={(next) => setDarkMode(() => next)}
+        onShowSignIn={showSignIn}
+      />
+      <button
+        type="button"
+        className="flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        aria-label="메뉴 접기/펼치기"
+        aria-expanded={!railToggleCollapsed}
+        title={railToggleCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
+        data-navigation-toggle-variant="rail"
+        onClick={() => handleCollapseToggle(railToggleCollapsed)}
+      >
+        {railToggleCollapsed ? <ChevronDoubleRightIcon className="size-5" aria-hidden="true" /> : <ChevronDoubleLeftIcon className="size-5" aria-hidden="true" />}
+      </button>
+    </>
+  );
+
   return (
     <>
       <aside
-        className="
-          hidden bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex lg:h-screen lg:w-68 lg:shrink-0 lg:flex-col
-        "
+        data-desktop-navigation-mode={navigationMode}
+        className="mllg-navigation-shell hidden h-screen shrink-0 flex-col overflow-visible bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex transition-[width] duration-200 motion-reduce:transition-none"
       >
-        <Link
-          to="/"
-          className="flex h-16 items-center px-4 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
-          aria-label="몰루로그 홈으로 이동"
-        >
-          <img
-            src={darkMode ? "/mollulog-full-dark.png" : "/mollulog-full-light.png"}
-            alt="몰루로그 로고"
-            className="h-10 object-cover"
-          />
-          <h1 className="pt-2 font-ingame font-light text-sm text-foreground">몰루로그</h1>
-        </Link>
-
-        <div className="flex items-center gap-2 px-3 pt-3 pb-2">
-          <div className="min-w-0 flex-1">
-            <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
-          </div>
-          {currentUsername ? (
-            <NotificationHistoryPopover
-              placement="desktop"
-              unreadCount={localUnreadNotificationCount}
-              onUnreadCountChange={setLocalUnreadNotificationCount}
+        <div data-navigation-variant="expanded" className="mllg-navigation-expanded flex h-full min-h-0 min-w-0 flex-col">
+          <Link
+            to="/"
+            className="flex h-14 shrink-0 items-center gap-1 px-3 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
+            aria-label="몰루로그 홈으로 이동"
+          >
+            <img
+              src={darkMode ? "/mollulog-full-dark.png" : "/mollulog-full-light.png"}
+              alt="몰루로그 로고"
+              className="h-9 object-cover"
             />
+            <span className="pt-1 font-ingame text-sm font-light text-foreground">몰루로그</span>
+          </Link>
+
+          <div className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
+            <div className="min-w-0 flex-1">
+              <NavigationSearch key={`desktop:${searchResetKey}`} variant="desktop" />
+            </div>
+            {currentUsername ? (
+              <NotificationHistoryPopover
+                placement="desktop"
+                unreadCount={localUnreadNotificationCount}
+                onUnreadCountChange={setLocalUnreadNotificationCount}
+              />
+            ) : null}
+          </div>
+
+          {desktopBannerVisible && siteBanner ? (
+            <div className="shrink-0 px-3 pb-2">
+              <SiteBanner banner={siteBanner} slot="desktop_navigation" />
+            </div>
+          ) : null}
+
+          <nav aria-label="데스크톱 주요 메뉴" className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
+            <div className="space-y-0.5">
+              <NavigationMenuRow {...desktopNavigation.homeItem} />
+              {favoriteRows.length > 0 ? (
+                <ul aria-label="즐겨찾기" className="m-0 list-none space-y-0.5 p-0">
+                  {favoriteRows.map((item) => (
+                    <li key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`} className="list-none">
+                      <NavigationFavoriteMenuRow
+                        {...item}
+                        isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) =>
+                          Boolean(id && favoriteIdSet.has(id)),
+                        )}
+                        onFavoriteToggle={onFavoriteToggle}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+            {desktopNavigation.groups.map((section) => (
+              <DesktopNavigationGroup
+                key={section.id}
+                id={section.id as DesktopNavigationPreferenceGroupId}
+                title={section.name}
+                items={section.items}
+                expanded={groupIsExpanded(section.id as DesktopNavigationPreferenceGroupId)}
+                hasRedDot={getNavigationGroupBadgeSummary(section.items)}
+                active={section.items.some((item) => item.isActive)}
+                favoriteIdSet={favoriteIdSet}
+                onFavoriteToggle={onFavoriteToggle}
+                onToggle={(next) => setGroupExpanded(section.id as DesktopNavigationPreferenceGroupId, next)}
+              />
+            ))}
+          </nav>
+
+          <div className="flex shrink-0 items-center gap-2 px-3 py-2">
+            {accountFooter}
+          </div>
+        </div>
+
+        <div className="mllg-navigation-rail h-full min-h-0 min-w-0 flex-1">
+          <NavigationRail
+            darkMode={darkMode}
+            homeItem={desktopNavigation.homeItem}
+            groups={railScrollingGroups}
+            bottomGroup={railNewsGroup}
+            favoriteItems={allFavoriteItems}
+            activeFlyoutId={activeFlyout?.id ?? null}
+            siteBannerVisible={desktopBannerVisible}
+            onOpenSearch={handleOpenSearch}
+            onOpenGroup={handleOpenGroup}
+            onOpenBanner={handleOpenBanner}
+            notificationControl={
+              currentUsername ? (
+                <NotificationHistoryPopover
+                  placement="rail"
+                  unreadCount={localUnreadNotificationCount}
+                  onUnreadCountChange={setLocalUnreadNotificationCount}
+                  isOpen={railNotificationOpen}
+                  onOpenChange={handleRailNotificationChange}
+                />
+              ) : null
+            }
+            accountFooter={railAccountFooter}
+          />
+          {activeFlyout ? (
+            <NavigationFlyout
+              id={`navigation-flyout-${activeFlyout.id}`}
+              title={activeFlyout.title}
+              anchorEl={activeFlyout.anchorEl}
+              onClose={closeFlyout}
+              width={activeFlyout.kind === "search" ? "search" : "menu"}
+              autoFocusFirstLink={activeFlyout.kind !== "search"}
+            >
+              {activeFlyout.kind === "search" ? (
+                <NavigationSearch key={`rail:${searchResetKey}`} variant="rail" />
+              ) : activeFlyout.kind === "banner" ? (
+                siteBanner ? <SiteBanner banner={siteBanner} slot="desktop_navigation" /> : null
+              ) : activeFlyout.group ? (
+                activeFlyout.group.items.length === 0 && activeFlyout.group.id === "favorites" ? (
+                  <NavigationFavoriteEmptyHint />
+                ) : (
+                  activeFlyout.group.items.map((item) => (
+                    <FlyoutNavigationRow
+                      key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`}
+                      {...item}
+                      isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) => Boolean(id && favoriteIdSet.has(id)))}
+                      onFavoriteToggle={onFavoriteToggle}
+                    />
+                  ))
+                )
+              ) : null}
+            </NavigationFlyout>
           ) : null}
         </div>
-
-        {siteBanner && shouldRenderGlobalSiteBanner(siteBanner, "desktop_navigation", pathname) ? (
-          <div className="px-3 pb-2">
-            <SiteBanner banner={siteBanner} slot="desktop_navigation" />
-          </div>
-        ) : null}
-
-        <div className="no-scrollbar flex-1 overflow-y-auto px-3 py-2">
-          <DesktopMenuContent
-            currentUsername={currentUsername}
-            pathname={pathname}
-            favoriteNavigationIds={localFavoriteNavigationIds}
-            onFavoriteToggle={onFavoriteToggle}
-            hasRecentNews={hasRecentNews}
-            upcomingEvent={upcomingEvent}
-            hasOngoingRaid={hasOngoingRaid}
-            hasUnconsumedCoupons={hasUnconsumedCoupons}
-            hasUnreadFeedbackReplies={hasUnreadFeedbackReplies}
-            sectionStates={sectionStates}
-          />
-        </div>
-
-        <DesktopUtilityFooter
-          currentUsername={currentUsername}
-          currentProfileStudentId={currentProfileStudentId}
-          darkMode={darkMode}
-          onDarkModeToggle={setDarkMode}
-          onShowSignIn={showSignIn}
-        />
       </aside>
 
       <MobileBrandHeader
@@ -393,12 +672,71 @@ export default function NavigationBar({
         pathname={pathname}
         upcomingEvent={upcomingEvent}
         mobileNavigationIds={mobileNavigationIds}
+        menuBadgeOverrides={menuBadgeOverrides}
       />
       <MobileNavigationPersonalizationTutorial
         mobileNavigationIds={mobileNavigationIds}
         isSignedIn={currentUsername !== null}
       />
     </>
+  );
+}
+
+function DesktopNavigationGroup({
+  id,
+  title,
+  items,
+  expanded,
+  hasRedDot,
+  active,
+  favoriteIdSet,
+  onFavoriteToggle,
+  onToggle,
+}: {
+  id: DesktopNavigationPreferenceGroupId;
+  title: string;
+  items: NavigationItem[];
+  expanded: boolean;
+  hasRedDot: boolean;
+  active: boolean;
+  favoriteIdSet: Set<string>;
+  onFavoriteToggle: (favoriteId: string) => void;
+  onToggle?: (expanded: boolean) => void;
+}) {
+  const controlsId = `desktop-navigation-group-${id}`;
+
+  return (
+    <section className="mt-2">
+      <button
+        type="button"
+        className={cn(
+          "flex min-h-6.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-foreground/65 transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          active && !expanded && "bg-background text-foreground",
+        )}
+        aria-expanded={expanded}
+        aria-controls={controlsId}
+        onClick={() => onToggle?.(!expanded)}
+      >
+        <span className="min-w-0 flex-1 truncate">{title}</span>
+        {!expanded && hasRedDot ? (
+          <span className="size-1.5 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
+        ) : null}
+        <ChevronDownIcon
+          className={cn("size-4 shrink-0 transition-transform", !expanded && "-rotate-90")}
+          aria-hidden="true"
+        />
+      </button>
+      <div id={controlsId} hidden={!expanded} className="mt-0.5 space-y-0.5">
+        {items.map((item) => (
+          <NavigationMenuRow
+            key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`}
+            {...item}
+            isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) => Boolean(id && favoriteIdSet.has(id)))}
+            onFavoriteToggle={onFavoriteToggle}
+          />
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -637,14 +975,22 @@ function MobileBottomNavigation({
   pathname,
   upcomingEvent,
   mobileNavigationIds,
+  menuBadgeOverrides,
 }: {
   currentUsername: string | null;
   currentProfileStudentId: string | null;
   pathname: string;
   upcomingEvent: NavigationBarProps["upcomingEvent"];
   mobileNavigationIds: MobileNavigationPair;
+  menuBadgeOverrides: NavigationBarProps["menuBadgeOverrides"];
 }) {
-  const items = getMobileNavigationItems({ pathname, upcomingEvent, mobileNavigationIds });
+  const items = getMobileNavigationItems({
+    pathname,
+    upcomingEvent,
+    currentUsername,
+    mobileNavigationIds,
+    menuBadgeOverrides,
+  });
 
   return (
     <nav
@@ -685,298 +1031,5 @@ function MobileBottomNavigation({
         })}
       </div>
     </nav>
-  );
-}
-
-interface MenuItemProps extends NavigationItem {
-  isFavorite?: boolean;
-  onFavoriteToggle?: (favoriteId: string) => void;
-}
-
-function DesktopMenuGroupLabel({ children }: { children: React.ReactNode }) {
-  return <div className="mt-5 mb-1.5 px-2 text-sm font-medium text-foreground/65">{children}</div>;
-}
-
-function DesktopMenuSectionList({
-  section,
-  favoriteIds,
-  onFavoriteToggle,
-}: {
-  section: NavigationSection;
-  favoriteIds: Set<string>;
-  onFavoriteToggle: (favoriteId: string) => void;
-}) {
-  return (
-    <>
-      <DesktopMenuGroupLabel>{section.name}</DesktopMenuGroupLabel>
-      <div className="space-y-0.5">
-        {section.items.map((item) => (
-          <SubMenuItem
-            key={item.name}
-            {...item}
-            isFavorite={item.favoriteId ? favoriteIds.has(item.favoriteId) : false}
-            onFavoriteToggle={onFavoriteToggle}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-interface DesktopMenuContentProps {
-  currentUsername: string | null;
-  pathname: string;
-  favoriteNavigationIds: string[];
-  onFavoriteToggle: (favoriteId: string) => void;
-  hasRecentNews: boolean;
-  upcomingEvent: NavigationBarProps["upcomingEvent"];
-  hasOngoingRaid: boolean;
-  hasUnconsumedCoupons: boolean;
-  hasUnreadFeedbackReplies: boolean;
-  sectionStates: NavigationSectionStates;
-}
-
-function DesktopMenuContent({
-  currentUsername,
-  pathname,
-  favoriteNavigationIds,
-  onFavoriteToggle,
-  hasRecentNews,
-  upcomingEvent,
-  hasOngoingRaid,
-  hasUnconsumedCoupons,
-  hasUnreadFeedbackReplies,
-  sectionStates,
-}: DesktopMenuContentProps) {
-  const {
-    primaryItems,
-    sections: menuSections,
-    profileItems,
-    serviceItems,
-  } = getDesktopNavigation({
-    pathname,
-    upcomingEvent,
-    hasOngoingRaid,
-    hasUnconsumedCoupons,
-    isSignedIn: currentUsername !== null,
-    currentUsername,
-    hasRecentNews,
-    hasUnreadFeedbackReplies,
-    sectionStates,
-  });
-  const desktopItems = [
-    ...primaryItems,
-    ...menuSections.flatMap((section) => section.items),
-    ...profileItems,
-    ...serviceItems,
-  ];
-  const favoriteItems = getAvailableNavigationFavorites(favoriteNavigationIds, desktopItems);
-  const favoriteIdSet = new Set(favoriteNavigationIds);
-
-  return (
-    <nav aria-label="데스크톱 주요 메뉴">
-      <div className="space-y-0.5">
-        {primaryItems.map((item) => (
-          <SubMenuItem key={item.to} {...item} />
-        ))}
-      </div>
-
-      {favoriteItems.length > 0 && (
-        <div className="mt-2 space-y-0.5">
-          {favoriteItems.map((item) => (
-            <SubMenuItem key={`favorite:${item.favoriteId}`} {...item} isFavorite onFavoriteToggle={onFavoriteToggle} />
-          ))}
-        </div>
-      )}
-
-      {menuSections.map((section) => (
-        <DesktopMenuSectionList
-          key={section.name}
-          section={section}
-          favoriteIds={favoriteIdSet}
-          onFavoriteToggle={onFavoriteToggle}
-        />
-      ))}
-
-      {profileItems.length > 0 && (
-        <>
-          <DesktopMenuGroupLabel>내 정보</DesktopMenuGroupLabel>
-          <div className="space-y-0.5">
-            {profileItems.map((item) => (
-              <SubMenuItem
-                key={item.name}
-                {...item}
-                isFavorite={item.favoriteId ? favoriteIdSet.has(item.favoriteId) : false}
-                onFavoriteToggle={onFavoriteToggle}
-              />
-            ))}
-          </div>
-        </>
-      )}
-
-      <DesktopMenuGroupLabel>서비스</DesktopMenuGroupLabel>
-      <div className="space-y-0.5">
-        {serviceItems.map((item) => (
-          <SubMenuItem
-            key={item.name}
-            {...item}
-            isFavorite={item.favoriteId ? favoriteIdSet.has(item.favoriteId) : false}
-            onFavoriteToggle={onFavoriteToggle}
-          />
-        ))}
-      </div>
-    </nav>
-  );
-}
-
-function DesktopUtilityFooter({
-  currentUsername,
-  currentProfileStudentId,
-  darkMode,
-  onDarkModeToggle,
-  onShowSignIn,
-}: {
-  currentUsername: string | null;
-  currentProfileStudentId: string | null;
-  darkMode: boolean;
-  onDarkModeToggle: (fn: (prev: boolean) => boolean) => void;
-  onShowSignIn: () => void;
-}) {
-  const submit = useSubmit();
-  const ModeIcon = darkMode ? SunIcon : MoonIcon;
-
-  return (
-    <div className="shrink-0 px-3 py-2">
-      <div className="flex items-center gap-2">
-        {currentUsername ? (
-          <Link
-            to={`/@${currentUsername}`}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
-          >
-            {currentProfileStudentId ? (
-              <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
-            ) : (
-              <span className="flex size-5 items-center justify-center">
-                <UserCircleIconOutline className="size-4" />
-              </span>
-            )}
-            <span className="min-w-0 truncate">{currentUsername}</span>
-          </Link>
-        ) : (
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-left text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
-            onClick={onShowSignIn}
-          >
-            <span className="flex size-5 items-center justify-center">
-              <UserCircleIconOutline className="size-4" />
-            </span>
-            <span className="min-w-0 truncate">로그인</span>
-          </button>
-        )}
-        <button
-          type="button"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          onClick={() => {
-            const nextDarkMode = !darkMode;
-            submitPreference(submit, { darkMode: nextDarkMode });
-            onDarkModeToggle(() => nextDarkMode);
-          }}
-          aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
-          title={darkMode ? "라이트 모드" : "다크 모드"}
-        >
-          <ModeIcon className="size-4" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function SubMenuItem({
-  to,
-  name,
-  favoriteId,
-  OutlineIcon,
-  SolidIcon,
-  isActive,
-  isFavorite = false,
-  onFavoriteToggle,
-  showRedDot,
-  badgeLabel,
-  disabled,
-}: MenuItemProps) {
-  const className = cn(
-    `group relative my-0.5 flex min-w-0 items-center rounded-md px-2 py-1 text-sm transition-colors hover:bg-background hover:text-foreground ${
-      isActive ? "bg-background font-medium text-foreground" : "font-normal text-foreground/75"
-    } ${disabled ? "opacity-40" : ""}`,
-  );
-  const content = (
-    <>
-      <span className="flex size-5 items-center justify-center">
-        {isActive ? (
-          <SolidIcon className="size-4 text-foreground" />
-        ) : (
-          <OutlineIcon className="size-4 text-foreground/70" />
-        )}
-      </span>
-      <span className="min-w-0">
-        <span className="inline-flex min-w-0 items-start gap-1 whitespace-nowrap">
-          <span>{name}</span>
-          {badgeLabel && (
-            <span className="mt-0.5 shrink-0 origin-left scale-90 whitespace-nowrap text-xs font-normal leading-none text-muted-foreground/70">
-              {badgeLabel}
-            </span>
-          )}
-          {showRedDot && (
-            <span className="mt-1 size-1.5 shrink-0 animate-pulse rounded-full bg-red-500" aria-hidden="true" />
-          )}
-        </span>
-      </span>
-    </>
-  );
-
-  if (disabled) {
-    return (
-      <div className={className}>
-        <div className="grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3">{content}</div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={className}>
-      <Link
-        to={to}
-        className="absolute inset-0 z-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-label={badgeLabel ? `${name} ${badgeLabel}` : name}
-      />
-      <div
-        className="pointer-events-none relative z-[1] grid min-w-0 flex-1 grid-cols-[1.25rem_1fr] items-center gap-3 pr-7"
-        aria-hidden="true"
-      >
-        {content}
-      </div>
-      {favoriteId && onFavoriteToggle && (
-        <button
-          type="button"
-          className={cn(
-            "absolute right-2 top-1/2 z-10 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md opacity-0 transition-colors hover:bg-muted focus:outline-none focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring/30 group-has-[:focus-visible]:opacity-100 group-hover:opacity-100",
-            isFavorite
-              ? "text-yellow-600 hover:text-yellow-600 dark:text-yellow-400 dark:hover:text-yellow-400"
-              : "text-foreground/55 hover:text-foreground",
-          )}
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            onFavoriteToggle(favoriteId);
-          }}
-          aria-label={isFavorite ? `${name} 즐겨찾기에서 제거` : `${name} 즐겨찾기에 추가`}
-          aria-pressed={isFavorite}
-          title={isFavorite ? "즐겨찾기에서 제거" : "즐겨찾기에 추가"}
-        >
-          {isFavorite ? <StarIconSolid className="size-4" /> : <StarIconOutline className="size-4" />}
-        </button>
-      )}
-    </div>
   );
 }

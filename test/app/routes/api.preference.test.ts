@@ -59,6 +59,38 @@ describe("api.preference", () => {
     expect(preference.mobileNavigationIds).toEqual(["feed", "students"]);
   });
 
+  it("accepts old preference cookies without desktop navigation state", async () => {
+    const cookie = await serializePreference(env, { darkMode: false, mobileNavigationIds: ["feed", "students"] });
+    const preference = await getPreference(env, new Request("https://mollulog.net", { headers: { Cookie: cookie } }));
+
+    expect(preference.desktopNavigationCollapsed).toBeUndefined();
+    expect(preference.desktopNavigationExpandedGroups).toBeUndefined();
+  });
+
+  it("persists desktop rail and group state while merging later preference updates", async () => {
+    const firstResponse = await callAction(
+      {
+        desktopNavigationCollapsed: true,
+        desktopNavigationExpandedGroups: { favorites: false, game: true, oldSection: true },
+      },
+      await serializePreference(env, { darkMode: false, favoriteNavigationIds: ["profile"] }),
+    );
+    const firstCookie = firstResponse.headers.get("Set-Cookie");
+    expect(firstCookie).toBeTruthy();
+
+    const secondResponse = await callAction({ darkMode: true }, firstCookie ?? undefined);
+    const secondCookie = secondResponse.headers.get("Set-Cookie");
+    const preference = await getPreference(
+      env,
+      new Request("https://mollulog.net", { headers: secondCookie ? { Cookie: secondCookie } : {} }),
+    );
+
+    expect(preference.darkMode).toBe(true);
+    expect(preference.favoriteNavigationIds).toEqual(["profile"]);
+    expect(preference.desktopNavigationCollapsed).toBe(true);
+    expect(preference.desktopNavigationExpandedGroups).toEqual({ game: true });
+  });
+
   it("merges timezone updates without dropping dark mode", async () => {
     const cookie = await serializePreference(env, { darkMode: true });
     const response = await callAction({ timeZone: "America/New_York" }, cookie);

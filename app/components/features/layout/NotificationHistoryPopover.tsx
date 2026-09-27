@@ -6,7 +6,7 @@ import type { NotificationHistoryItem, NotificationHistoryResponse } from "~/dom
 import { cn } from "~/lib/utils";
 
 type NotificationHistoryPopoverProps = {
-  placement: "desktop" | "mobile";
+  placement: "desktop" | "rail" | "mobile";
   unreadCount: number;
   onUnreadCountChange?: (count: number) => void;
   isOpen?: boolean;
@@ -77,8 +77,19 @@ export default function NotificationHistoryPopover({
     const viewportPadding = 12;
     const width = Math.min(352, Math.max(0, window.innerWidth - viewportPadding * 2));
     const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
-    const left = placement === "mobile" ? maxLeft : Math.min(maxLeft, Math.max(viewportPadding, rect.left));
-    const top = Math.max(viewportPadding, rect.bottom + 8);
+    const left =
+      placement === "mobile"
+        ? maxLeft
+        : placement === "rail"
+          ? Math.min(maxLeft, Math.max(viewportPadding, rect.right + 8))
+          : Math.min(maxLeft, Math.max(viewportPadding, rect.left));
+    const top =
+      placement === "rail"
+        ? Math.min(
+            Math.max(viewportPadding, window.innerHeight - 420 - viewportPadding),
+            Math.max(viewportPadding, rect.top),
+          )
+        : Math.max(viewportPadding, rect.bottom + 8);
 
     setPosition({
       top,
@@ -222,8 +233,8 @@ export default function NotificationHistoryPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex items-center justify-center rounded-md bg-background transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          "size-9",
+          "relative inline-flex items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          placement === "rail" ? "size-11 bg-transparent" : "size-9 bg-background",
           placement === "desktop" ? "text-muted-foreground" : "text-foreground/75",
         )}
         onClick={() => setIsOpen(!isOpen)}

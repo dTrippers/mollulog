@@ -3,7 +3,14 @@ const MAX_NAVIGATION_FAVORITE_ID_LENGTH = 64;
 
 export type NavigationFavoriteItem = {
   favoriteId?: string;
+  legacyFavoriteIds?: readonly string[];
+  menuId?: string;
   disabled?: boolean;
+};
+
+const favoriteAliases: Record<string, readonly string[]> = {
+  "scanner-resource": ["connect-import"],
+  "connect-import": ["scanner-resource"],
 };
 
 export function normalizeNavigationFavoriteIds(value: unknown): string[] {
@@ -37,10 +44,11 @@ export function normalizeNavigationFavoriteIds(value: unknown): string[] {
 
 export function toggleNavigationFavoriteId(value: unknown, favoriteId: string): string[] {
   const normalized = normalizeNavigationFavoriteIds(value);
-  const index = normalized.indexOf(favoriteId);
+  const aliases = new Set([favoriteId, ...(favoriteAliases[favoriteId] ?? [])]);
+  const index = normalized.findIndex((id) => aliases.has(id));
 
   if (index >= 0) {
-    return normalized.filter((id) => id !== favoriteId);
+    return normalized.filter((id) => !aliases.has(id));
   }
 
   if (normalized.length >= MAX_NAVIGATION_FAVORITE_IDS) {
@@ -54,14 +62,23 @@ export function getAvailableNavigationFavorites<T extends NavigationFavoriteItem
   favoriteIds: unknown,
   items: readonly T[],
 ): T[] {
-  const availableItems = new Map(
-    items
-      .filter((item): item is T & { favoriteId: string } => Boolean(item.favoriteId) && item.disabled !== true)
-      .map((item) => [item.favoriteId, item]),
-  );
+  const availableItems = new Map<string, T & { favoriteId: string }>();
+  for (const item of items) {
+    if (!item.favoriteId || item.disabled === true) continue;
+    for (const id of [item.favoriteId, ...(item.legacyFavoriteIds ?? [])]) {
+      availableItems.set(id, item as T & { favoriteId: string });
+    }
+  }
 
-  return normalizeNavigationFavoriteIds(favoriteIds).flatMap((id) => {
+  const result: (T & { favoriteId: string })[] = [];
+  const seenItems = new Set<string>();
+  for (const id of normalizeNavigationFavoriteIds(favoriteIds)) {
     const item = availableItems.get(id);
-    return item ? [item] : [];
-  });
+    if (!item) continue;
+    const itemKey = item.menuId ?? item.favoriteId;
+    if (seenItems.has(itemKey)) continue;
+    seenItems.add(itemKey);
+    result.push({ ...item, favoriteId: id });
+  }
+  return result;
 }

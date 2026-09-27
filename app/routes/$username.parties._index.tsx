@@ -32,6 +32,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   return {
     me,
+    hasParties: me && parties.length > 0,
     parties,
     students: allStudents.map((student) => ({
       uid: student.uid,

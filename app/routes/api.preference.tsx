@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, SubmitFunction } from "react-router";
 import { getPreference, type Preference, serializePreference } from "~/auth/preference.server";
 import { normalizeMobileNavigationIds } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
+import { normalizeDesktopNavigationExpandedGroups } from "~/domain/desktop-navigation-preference";
 import { normalizeTimeZone } from "~/lib/date-time";
 
 export async function submitPreference(fn: SubmitFunction, preference: Preference) {
@@ -36,6 +37,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
       submittedMobileNavigationIds === undefined
         ? currentPreference.mobileNavigationIds
         : normalizeMobileNavigationIds(submittedMobileNavigationIds),
+    desktopNavigationCollapsed:
+      typeof submittedPreference.desktopNavigationCollapsed === "boolean"
+        ? submittedPreference.desktopNavigationCollapsed
+        : currentPreference.desktopNavigationCollapsed,
+    desktopNavigationExpandedGroups:
+      submittedPreference.desktopNavigationExpandedGroups === undefined
+        ? currentPreference.desktopNavigationExpandedGroups
+        : normalizeDesktopNavigationExpandedGroups(submittedPreference.desktopNavigationExpandedGroups),
     timeZone:
       submittedPreference.timeZone === undefined
         ? currentPreference.timeZone

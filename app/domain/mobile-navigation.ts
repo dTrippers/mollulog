@@ -9,6 +9,7 @@ export const MOBILE_NAVIGATION_IDS = [
   "pyroxene-planner",
   "student-growth-planner",
   "resource-planner",
+  "farming-calculator",
   "event-shop-calculator",
   "relationship-calculator",
   "strategy-timeline",

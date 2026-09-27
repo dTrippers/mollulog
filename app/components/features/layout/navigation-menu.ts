@@ -1,9 +1,9 @@
 import {
   ArchiveBoxIcon as ArchiveBoxIconOutline,
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
-  BellAlertIcon as BellAlertIconOutline,
   BoltIcon as BoltIconOutline,
   BookOpenIcon as BookOpenIconOutline,
+  CalculatorIcon as CalculatorIconOutline,
   CalendarIcon as CalendarIconOutline,
   CameraIcon as CameraIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
@@ -13,23 +13,27 @@ import {
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconOutline,
   EnvelopeIcon as EnvelopeIconOutline,
   FireIcon as FireIconOutline,
-  GiftIcon as GiftIconOutline,
   HeartIcon as HeartIconOutline,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   ListBulletIcon as ListBulletIconOutline,
+  MapIcon as MapIconOutline,
   MegaphoneIcon as MegaphoneIconOutline,
   QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
+  UserIcon as UserIconOutline,
+  UserCircleIcon as UserCircleIconOutline,
+  ChartBarIcon as ChartBarIconOutline,
+  CircleStackIcon as CircleStackIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ArchiveBoxIcon as ArchiveBoxIconSolid,
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
-  BellAlertIcon as BellAlertIconSolid,
   BoltIcon as BoltIconSolid,
   BookOpenIcon as BookOpenIconSolid,
+  CalculatorIcon as CalculatorIconSolid,
   CalendarIcon as CalendarIconSolid,
   CameraIcon as CameraIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
@@ -39,16 +43,20 @@ import {
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconSolid,
   EnvelopeIcon as EnvelopeIconSolid,
   FireIcon as FireIconSolid,
-  GiftIcon as GiftIconSolid,
   HeartIcon as HeartIconSolid,
   HomeIcon as HomeIconSolid,
   IdentificationIcon as IdentificationIconSolid,
   ListBulletIcon as ListBulletIconSolid,
+  MapIcon as MapIconSolid,
   MegaphoneIcon as MegaphoneIconSolid,
   QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
+  UserIcon as UserIconSolid,
+  UserCircleIcon as UserCircleIconSolid,
+  ChartBarIcon as ChartBarIconSolid,
+  CircleStackIcon as CircleStackIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
 import {
@@ -57,17 +65,32 @@ import {
   type MobileNavigationId,
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
+import {
+  applyMenuBadgeOverride,
+  type NavigationMenuId,
+  type ResolvedMenuBadgeOverride,
+} from "~/domain/navigation-menu-badges";
 import type { UtcIsoString } from "~/lib/date-time";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
-export type NavigationSurface = "desktop" | "mobileBottom" | "more" | "search";
-type NavigationGroup = "primary" | "content" | "planner" | "external" | "profile" | "service" | "mobile";
+export type NavigationSurface = "desktop" | "mobileBottom" | "more" | "search" | "account";
+export type NavigationGroupId =
+  | "home"
+  | "game"
+  | "planner"
+  | "personal"
+  | "community"
+  | "news"
+  | "settings"
+  | "account";
 
 export type NavigationItem = {
+  menuId?: NavigationMenuId;
   to: string;
   name: string;
   favoriteId?: string;
+  legacyFavoriteIds?: string[];
   description?: string;
   OutlineIcon: IconComponent;
   SolidIcon: IconComponent;
@@ -78,30 +101,13 @@ export type NavigationItem = {
   requiresSignIn?: boolean;
   mobileNavigationId?: MobileNavigationId;
   mobileLabel?: string;
-  group?: NavigationGroup;
+  group?: NavigationGroupId;
   surfaces?: readonly NavigationSurface[];
 };
 
 type NavigationCatalogItem = NavigationItem & {
-  group: NavigationGroup;
+  group: NavigationGroupId;
   surfaces: readonly NavigationSurface[];
-};
-
-export type NavigationSection = {
-  name: string;
-  description?: string;
-  OutlineIcon: IconComponent;
-  SolidIcon: IconComponent;
-  isActive: boolean;
-  items: NavigationItem[];
-};
-
-export type NavigationSectionStates = {
-  isCommunityActive: boolean;
-  isContentActive: boolean;
-  isUtilActive: boolean;
-  isExternalActive: boolean;
-  isProfileActive: boolean;
 };
 
 export type UpcomingNavigationEvent = { uid: string; since: UtcIsoString; until: UtcIsoString } | null;
@@ -110,6 +116,7 @@ export type SearchableMenuItem = {
   id: string;
   name: string;
   to: string;
+  requiresSignIn?: boolean;
 };
 
 export type NavigationCatalogOptions = {
@@ -121,72 +128,146 @@ export type NavigationCatalogOptions = {
   currentUsername?: string | null;
   hasRecentNews?: boolean;
   hasUnreadFeedbackReplies?: boolean;
-  sectionStates?: NavigationSectionStates;
+  menuBadgeOverrides?: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
 };
 
-const SECTION_DEFINITIONS = [
+export type NavigationGroup = {
+  id: Exclude<NavigationGroupId, "home" | "settings" | "account">;
+  name: string;
+  shortName: string;
+  OutlineIcon: IconComponent;
+  SolidIcon: IconComponent;
+};
+
+export const NAVIGATION_GROUPS: readonly NavigationGroup[] = [
   {
-    group: "content",
-    name: "컨텐츠",
-    description: "일정, 학생, 레이드 정보를 확인해보세요",
+    id: "game",
+    name: "게임 정보",
+    shortName: "게임 정보",
     OutlineIcon: RectangleGroupIconOutline,
     SolidIcon: RectangleGroupIconSolid,
-    activeState: "isContentActive",
   },
   {
-    group: "planner",
-    name: "플래너 & 계산기",
-    description: "계획과 계산 도구를 사용해보세요",
-    OutlineIcon: Cog6ToothIconOutline,
-    SolidIcon: Cog6ToothIconSolid,
-    activeState: "isUtilActive",
+    id: "planner",
+    name: "플래너·계산기",
+    shortName: "플래너",
+    OutlineIcon: CalculatorIconOutline,
+    SolidIcon: CalculatorIconSolid,
   },
   {
-    group: "external",
-    name: "게임 외 정보",
-    description: "게임 밖에서 챙길 정보를 확인해보세요",
-    OutlineIcon: GiftIconOutline,
-    SolidIcon: GiftIconSolid,
-    activeState: "isExternalActive",
+    id: "community",
+    name: "커뮤니티",
+    shortName: "커뮤니티",
+    OutlineIcon: ChatBubbleLeftRightIconOutline,
+    SolidIcon: ChatBubbleLeftRightIconSolid,
   },
-] as const;
+  {
+    id: "personal",
+    name: "나의 데이터",
+    shortName: "나의 데이터",
+    OutlineIcon: CircleStackIconOutline,
+    SolidIcon: CircleStackIconSolid,
+  },
+  {
+    id: "news",
+    name: "소식·도움말",
+    shortName: "소식·도움말",
+    OutlineIcon: MegaphoneIconOutline,
+    SolidIcon: MegaphoneIconSolid,
+  },
+];
 
-export function getNavigationSectionStates(
-  pathname: string,
-  upcomingEvent: UpcomingNavigationEvent,
-): NavigationSectionStates {
-  const isFuturesActive = pathname.startsWith("/futures");
-  const isCommunityActive = pathname.startsWith("/community");
-  const isStudentActive = pathname.startsWith("/students");
+const NAVIGATION_SEARCH_GROUP_ORDER: readonly NavigationGroupId[] = [
+  "home",
+  "game",
+  "planner",
+  "community",
+  "personal",
+  "news",
+  "settings",
+  "account",
+];
+const navigationSearchGroupRank = new Map(NAVIGATION_SEARCH_GROUP_ORDER.map((id, index) => [id, index]));
 
-  return {
-    isCommunityActive,
-    isContentActive:
-      isFuturesActive ||
-      pathname.startsWith("/events") ||
-      pathname.startsWith("/raids") ||
-      isStudentActive ||
-      pathname.startsWith("/mainstory") ||
-      pathname === "/furniture" ||
-      pathname.startsWith("/furniture/"),
-    isUtilActive:
-      pathname.startsWith("/utils") ||
-      pathname.startsWith("/planner") ||
-      pathname.startsWith("/timelines") ||
-      !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
-    isExternalActive: pathname.startsWith("/coupons"),
-    isProfileActive:
-      pathname.startsWith("/@") ||
-      pathname.startsWith("/edit") ||
-      pathname.startsWith("/my") ||
-      pathname.startsWith("/connect") ||
-      pathname.startsWith("/scanner") ||
-      pathname.startsWith("/notifications"),
-  };
-}
+const MORE_GROUPS: readonly { id: NavigationGroupId; name: string }[] = [
+  ...NAVIGATION_GROUPS.map(({ id, name }) => ({ id, name })),
+  { id: "settings", name: "설정" },
+];
 
 export function isEventShopNavigationPath(pathname: string): boolean {
   return pathname === "/utils/event-shop" || /^\/events\/[^/]+\/shop(?:\/|$)/.test(pathname);
+}
+
+function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsername: string | null): boolean {
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  switch (menuId) {
+    case "home":
+      return pathname === "/";
+    case "futures":
+      return pathname.startsWith("/futures");
+    case "events":
+      return pathname.startsWith("/events") && !isEventShopNavigationPath(pathname);
+    case "raids":
+      return pathname.startsWith("/raids");
+    case "students":
+      return pathname.startsWith("/students");
+    case "main-story":
+      return pathname.startsWith("/mainstory");
+    case "furniture-catalog":
+      return pathname === "/furniture" || pathname.startsWith("/furniture/");
+    case "coupons":
+      return pathname.startsWith("/coupons");
+    case "pyroxene-planner":
+      return pathname.startsWith("/utils/pyroxene");
+    case "student-growth-planner":
+      return pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students");
+    case "resource-planner":
+      return (
+        pathname.startsWith("/utils/resources/inventory") ||
+        pathname.startsWith("/utils/resources/drafts/")
+      );
+    case "farming-calculator":
+      return normalizedPathname === "/utils/resources/farming";
+    case "event-shop-calculator":
+      return isEventShopNavigationPath(pathname);
+    case "relationship-calculator":
+      return pathname.startsWith("/utils/relationship");
+    case "raid-score-calculator":
+      return pathname.startsWith("/utils/raidscore");
+    case "my-students":
+      return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/students`));
+    case "pickup-history":
+      return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/pickups`));
+    case "favorite-students":
+      return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/futures`));
+    case "my-walkthroughs":
+      return Boolean(
+        currentUsername &&
+          (pathname.startsWith(`/@${currentUsername}/timelines`) || pathname.startsWith(`/@${currentUsername}/parties`)),
+      );
+    case "data-import":
+      return pathname.startsWith("/scanner/") || pathname === "/scanner" || pathname.startsWith("/connect/");
+    case "profile":
+      return Boolean(currentUsername && normalizedPathname === `/@${currentUsername}`);
+    case "community-feed":
+      return pathname.startsWith("/community");
+    case "community-timelines":
+      return pathname === "/timelines" || pathname.startsWith("/timelines/");
+    case "news":
+      return pathname.startsWith("/news");
+    case "contact":
+      return pathname.startsWith("/contact");
+  }
+}
+
+function accountIsActive(pathname: string, currentUsername: string | null): boolean {
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  return Boolean(
+    currentUsername &&
+      (normalizedPathname.startsWith(`/@${currentUsername}/friends`) ||
+        normalizedPathname.startsWith("/edit") ||
+        normalizedPathname.startsWith("/notifications")),
+  );
 }
 
 export function getNavigationCatalog({
@@ -198,41 +279,47 @@ export function getNavigationCatalog({
   currentUsername = null,
   hasRecentNews = false,
   hasUnreadFeedbackReplies = false,
-  sectionStates = getNavigationSectionStates(pathname, upcomingEvent),
+  menuBadgeOverrides,
 }: NavigationCatalogOptions): NavigationCatalogItem[] {
+  void upcomingEvent;
   const items: NavigationCatalogItem[] = [
     {
-      group: "primary",
+      menuId: "home",
+      group: "home",
       surfaces: ["desktop", "mobileBottom", "search"],
       to: "/",
       name: "홈",
       OutlineIcon: HomeIconOutline,
       SolidIcon: HomeIconSolid,
-      isActive: pathname === "/",
+      isActive: itemIsActive("home", pathname, currentUsername),
     },
     {
-      group: "primary",
+      menuId: "community-feed",
+      group: "community",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/community",
       name: "피드",
       mobileNavigationId: "feed",
       OutlineIcon: ChatBubbleLeftRightIconOutline,
       SolidIcon: ChatBubbleLeftRightIconSolid,
-      isActive: sectionStates.isCommunityActive,
+      isActive: itemIsActive("community-feed", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "futures",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "search"],
       to: "/futures",
       name: "미래시",
       favoriteId: "futures",
       description: "이벤트와 모집 일정을 확인해보세요",
+      mobileNavigationId: undefined,
       OutlineIcon: CalendarIconOutline,
       SolidIcon: CalendarIconSolid,
-      isActive: pathname.startsWith("/futures"),
+      isActive: itemIsActive("futures", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "events",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/events",
       name: "이벤트",
@@ -241,10 +328,11 @@ export function getNavigationCatalog({
       description: "이벤트 개최, 복각, 상설 일정을 확인해보세요",
       OutlineIcon: ListBulletIconOutline,
       SolidIcon: ListBulletIconSolid,
-      isActive: pathname.startsWith("/events") && !isEventShopNavigationPath(pathname),
+      isActive: itemIsActive("events", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "raids",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/raids",
       name: "총력전 / 대결전",
@@ -255,10 +343,11 @@ export function getNavigationCatalog({
       badgeLabel: hasOngoingRaid ? "진행중" : undefined,
       OutlineIcon: FireIconOutline,
       SolidIcon: FireIconSolid,
-      isActive: pathname.startsWith("/raids"),
+      isActive: itemIsActive("raids", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "students",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/students",
       name: "학생부",
@@ -267,10 +356,11 @@ export function getNavigationCatalog({
       description: "학생 프로필과 평가를 확인해보세요",
       OutlineIcon: IdentificationIconOutline,
       SolidIcon: IdentificationIconSolid,
-      isActive: pathname.startsWith("/students"),
+      isActive: itemIsActive("students", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "main-story",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/mainstory",
       name: "메인 스토리",
@@ -279,20 +369,33 @@ export function getNavigationCatalog({
       description: "메인 스토리 공개 일정을 확인해보세요",
       OutlineIcon: BookOpenIconOutline,
       SolidIcon: BookOpenIconSolid,
-      isActive: pathname.startsWith("/mainstory"),
+      isActive: itemIsActive("main-story", pathname, currentUsername),
     },
     {
-      group: "content",
+      menuId: "furniture-catalog",
+      group: "game",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/furniture",
       name: "가구 도감",
       mobileNavigationId: "furniture-catalog",
-      mobileLabel: "가구 도감",
       favoriteId: "furniture-catalog",
       description: "테마별 가구 구성과 보유 현황을 확인해보세요",
       OutlineIcon: RectangleGroupIconOutline,
       SolidIcon: RectangleGroupIconSolid,
-      isActive: pathname === "/furniture" || pathname.startsWith("/furniture/"),
+      isActive: itemIsActive("furniture-catalog", pathname, currentUsername),
+    },
+    {
+      menuId: "coupons",
+      group: "game",
+      surfaces: ["desktop", "more", "search"],
+      to: "/coupons",
+      name: "쿠폰",
+      favoriteId: "coupons",
+      description: "사용 가능한 쿠폰을 확인하고 등록해보세요",
+      OutlineIcon: TicketIconOutline,
+      SolidIcon: TicketIconSolid,
+      isActive: itemIsActive("coupons", pathname, currentUsername),
+      showRedDot: hasUnconsumedCoupons,
     },
     {
       group: "planner",
@@ -308,20 +411,21 @@ export function getNavigationCatalog({
       isActive: pathname.startsWith("/planner"),
     },
     {
+      menuId: "pyroxene-planner",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/pyroxene",
       name: "청휘석 플래너",
       mobileNavigationId: "pyroxene-planner",
-      mobileLabel: "청휘석 플래너",
       favoriteId: "pyroxene-planner",
       description: "모집 시점의 청휘석을 계산해보세요",
       badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
       OutlineIcon: CreditCardIconOutline,
       SolidIcon: CreditCardIconSolid,
-      isActive: pathname.startsWith("/utils/pyroxene"),
+      isActive: itemIsActive("pyroxene-planner", pathname, currentUsername),
     },
     {
+      menuId: "student-growth-planner",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/growth/students",
@@ -332,22 +436,38 @@ export function getNavigationCatalog({
       description: "성장에 필요한 재화를 정리해보세요",
       OutlineIcon: TableCellsIconOutline,
       SolidIcon: TableCellsIconSolid,
-      isActive: pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students"),
+      isActive: itemIsActive("student-growth-planner", pathname, currentUsername),
     },
     {
+      menuId: "resource-planner",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/resources/inventory",
-      name: "재화 관리/파밍 계산기",
+      name: "재화 플래너",
       mobileNavigationId: "resource-planner",
-      mobileLabel: "재화 관리",
+      mobileLabel: "재화 플래너",
       favoriteId: "resource-planner",
-      description: "보유 재화와 장비 파밍 계획을 확인해보세요",
+      description: "각 재화의 보유·필요 수량을 관리해요",
       OutlineIcon: ArchiveBoxIconOutline,
       SolidIcon: ArchiveBoxIconSolid,
-      isActive: pathname.startsWith("/utils/resources"),
+      isActive: itemIsActive("resource-planner", pathname, currentUsername),
     },
     {
+      menuId: "farming-calculator",
+      group: "planner",
+      surfaces: ["desktop", "mobileBottom", "more", "search"],
+      to: "/utils/resources/farming",
+      name: "파밍 계산기",
+      mobileNavigationId: "farming-calculator",
+      mobileLabel: "파밍 계산기",
+      favoriteId: "farming-calculator",
+      description: "필요 장비를 얻을 스테이지를 계산해요",
+      OutlineIcon: MapIconOutline,
+      SolidIcon: MapIconSolid,
+      isActive: itemIsActive("farming-calculator", pathname, currentUsername),
+    },
+    {
+      menuId: "event-shop-calculator",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/event-shop",
@@ -358,9 +478,10 @@ export function getNavigationCatalog({
       description: "이벤트 효율과 상점을 확인해보세요",
       OutlineIcon: BoltIconOutline,
       SolidIcon: BoltIconSolid,
-      isActive: isEventShopNavigationPath(pathname),
+      isActive: itemIsActive("event-shop-calculator", pathname, currentUsername),
     },
     {
+      menuId: "relationship-calculator",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/relationship",
@@ -371,23 +492,10 @@ export function getNavigationCatalog({
       description: "학생별 인연 랭크를 계산해보세요",
       OutlineIcon: HeartIconOutline,
       SolidIcon: HeartIconSolid,
-      isActive: pathname.startsWith("/utils/relationship"),
+      isActive: itemIsActive("relationship-calculator", pathname, currentUsername),
     },
     {
-      group: "planner",
-      surfaces: ["desktop", "mobileBottom", "more", "search"],
-      to: "/timelines",
-      name: "공략 타임라인",
-      mobileNavigationId: "strategy-timeline",
-      mobileLabel: "공략",
-      favoriteId: "strategy-timeline",
-      description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
-      OutlineIcon: QueueListIconOutline,
-      SolidIcon: QueueListIconSolid,
-      isActive: pathname.startsWith("/timelines"),
-      badgeLabel: "베타",
-    },
-    {
+      menuId: "raid-score-calculator",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/utils/raidscore",
@@ -398,73 +506,94 @@ export function getNavigationCatalog({
       description: "클리어 시간 기준 점수를 계산해보세요",
       OutlineIcon: ClockIconOutline,
       SolidIcon: ClockIconSolid,
-      isActive: pathname.startsWith("/utils/raidscore"),
+      isActive: itemIsActive("raid-score-calculator", pathname, currentUsername),
     },
     {
-      group: "external",
-      surfaces: ["desktop", "search"],
-      to: "/coupons",
-      name: "쿠폰",
-      favoriteId: "coupons",
-      description: "사용 가능한 쿠폰을 확인하고 등록해보세요",
-      OutlineIcon: TicketIconOutline,
-      SolidIcon: TicketIconSolid,
-      isActive: pathname.startsWith("/coupons"),
-      showRedDot: hasUnconsumedCoupons,
+      menuId: "profile",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}` : "/unauthorized",
+      name: "프로필",
+      favoriteId: "profile",
+      requiresSignIn: true,
+      OutlineIcon: UserCircleIconOutline,
+      SolidIcon: UserCircleIconSolid,
+      isActive: itemIsActive("profile", pathname, currentUsername),
     },
-    ...(currentUsername
-      ? [
-          {
-            group: "profile" as const,
-            surfaces: ["desktop", "search"] as const,
-            to: `/@${currentUsername}`,
-            name: "내 프로필",
-            favoriteId: "profile",
-            OutlineIcon: IdentificationIconOutline,
-            SolidIcon: IdentificationIconSolid,
-            isActive: pathname.startsWith("/@"),
-          },
-        ]
-      : []),
     {
-      group: "profile",
+      menuId: "my-students",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}/students` : "/unauthorized",
+      name: "모집한 학생",
+      requiresSignIn: true,
+      OutlineIcon: UserIconOutline,
+      SolidIcon: UserIconSolid,
+      isActive: itemIsActive("my-students", pathname, currentUsername),
+    },
+    {
+      menuId: "pickup-history",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}/pickups` : "/unauthorized",
+      name: "모집 기록",
+      requiresSignIn: true,
+      OutlineIcon: ChartBarIconOutline,
+      SolidIcon: ChartBarIconSolid,
+      isActive: itemIsActive("pickup-history", pathname, currentUsername),
+    },
+    {
+      menuId: "favorite-students",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}/futures` : "/unauthorized",
+      name: "관심 학생",
+      requiresSignIn: true,
+      OutlineIcon: HeartIconOutline,
+      SolidIcon: HeartIconSolid,
+      isActive: itemIsActive("favorite-students", pathname, currentUsername),
+    },
+    {
+      menuId: "my-walkthroughs",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}/timelines` : "/unauthorized",
+      name: "공략 작성하기",
+      requiresSignIn: true,
+      OutlineIcon: QueueListIconOutline,
+      SolidIcon: QueueListIconSolid,
+      isActive: itemIsActive("my-walkthroughs", pathname, currentUsername),
+    },
+    {
+      menuId: "data-import",
+      group: "personal",
       surfaces: ["desktop", "more", "search"],
       to: "/scanner/resource",
-      name: "스크린샷/영상 인식기",
+      name: "데이터 가져오기",
       favoriteId: "scanner-resource",
-      badgeLabel: "v1.2",
+      legacyFavoriteIds: ["connect-import"],
       requiresSignIn: true,
       OutlineIcon: CameraIconOutline,
       SolidIcon: CameraIconSolid,
-      isActive: pathname.startsWith("/scanner"),
+      isActive: itemIsActive("data-import", pathname, currentUsername),
     },
     {
-      group: "profile",
+      menuId: "community-timelines",
+      group: "community",
       surfaces: ["desktop", "more", "search"],
-      to: "/connect/import",
-      name: "외부 데이터 연동",
-      favoriteId: "connect-import",
-      requiresSignIn: true,
-      OutlineIcon: ArrowsRightLeftIconOutline,
-      SolidIcon: ArrowsRightLeftIconSolid,
-      isActive: pathname.startsWith("/connect"),
+      to: "/timelines",
+      name: "공략 타임라인",
+      mobileNavigationId: "strategy-timeline",
+      mobileLabel: "공략",
+      favoriteId: "strategy-timeline",
+      description: "공략을 찾아보고 실전에서 순서대로 확인해보세요",
+      OutlineIcon: QueueListIconOutline,
+      SolidIcon: QueueListIconSolid,
+      isActive: itemIsActive("community-timelines", pathname, currentUsername),
     },
     {
-      group: "profile",
-      surfaces: ["desktop", "more", "search"],
-      to: "/notifications",
-      name: "알림 설정",
-      favoriteId: "notifications",
-      description: "컨텐츠 일정을 잊지 않도록 알림으로 받아보세요",
-      badgeLabel: "베타",
-      showRedDot: true,
-      requiresSignIn: true,
-      OutlineIcon: BellAlertIconOutline,
-      SolidIcon: BellAlertIconSolid,
-      isActive: pathname.startsWith("/notifications"),
-    },
-    {
-      group: "service",
+      menuId: "news",
+      group: "news",
       surfaces: ["desktop", "more", "search"],
       to: "/news",
       name: "업데이트 소식",
@@ -472,9 +601,11 @@ export function getNavigationCatalog({
       OutlineIcon: MegaphoneIconOutline,
       SolidIcon: MegaphoneIconSolid,
       showRedDot: hasRecentNews,
+      isActive: itemIsActive("news", pathname, currentUsername),
     },
     {
-      group: "service",
+      menuId: "contact",
+      group: "news",
       surfaces: ["desktop", "more", "search"],
       to: "/contact",
       name: "제안/문의",
@@ -482,9 +613,51 @@ export function getNavigationCatalog({
       OutlineIcon: EnvelopeIconOutline,
       SolidIcon: EnvelopeIconSolid,
       showRedDot: hasUnreadFeedbackReplies,
+      isActive: itemIsActive("contact", pathname, currentUsername),
     },
     {
-      group: "mobile",
+      group: "account",
+      surfaces: ["account"],
+      to: currentUsername ? `/@${currentUsername}` : "/",
+      name: "내 프로필 보기",
+      OutlineIcon: IdentificationIconOutline,
+      SolidIcon: IdentificationIconOutline,
+      isActive: accountIsActive(pathname, currentUsername),
+      requiresSignIn: true,
+    },
+    {
+      group: "settings",
+      surfaces: ["account", "more"],
+      to: "/edit",
+      name: "프로필 편집",
+      OutlineIcon: UserCircleIconOutline,
+      SolidIcon: UserCircleIconSolid,
+      isActive: pathname.startsWith("/edit"),
+      requiresSignIn: true,
+    },
+    {
+      group: "settings",
+      surfaces: ["account", "more", "search"],
+      to: "/notifications",
+      name: "알림 설정",
+      favoriteId: "notifications",
+      description: "게임 일정을 잊지 않도록 알림으로 받아보세요",
+      OutlineIcon: Cog6ToothIconOutline,
+      SolidIcon: Cog6ToothIconSolid,
+      isActive: pathname.startsWith("/notifications"),
+      requiresSignIn: true,
+    },
+    {
+      group: "account",
+      surfaces: ["account"],
+      to: "/signout",
+      name: "로그아웃",
+      OutlineIcon: ArrowsRightLeftIconOutline,
+      SolidIcon: ArrowsRightLeftIconSolid,
+      requiresSignIn: true,
+    },
+    {
+      group: "account",
       surfaces: ["mobileBottom"],
       to: "/more",
       name: "더보기",
@@ -494,59 +667,68 @@ export function getNavigationCatalog({
     },
   ];
 
-  return items;
-}
-
-export function getNavigationSections(options: NavigationCatalogOptions): NavigationSection[] {
-  const catalog = getNavigationCatalog(options);
-  const sectionStates = options.sectionStates ?? getNavigationSectionStates(options.pathname, options.upcomingEvent);
-
-  return SECTION_DEFINITIONS.map((section) => ({
-    name: section.name,
-    description: section.description,
-    OutlineIcon: section.OutlineIcon,
-    SolidIcon: section.SolidIcon,
-    isActive: sectionStates[section.activeState],
-    items: catalog.filter((item) => item.group === section.group),
-  }));
+  return items.map((item) => {
+    if (!item.menuId) return item;
+    const badge = applyMenuBadgeOverride(
+      item.menuId,
+      { label: item.badgeLabel, showRedDot: item.showRedDot },
+      menuBadgeOverrides?.[item.menuId],
+    );
+    return { ...item, badgeLabel: badge.label, showRedDot: badge.showRedDot };
+  });
 }
 
 export type DesktopNavigation = {
-  primaryItems: NavigationItem[];
-  sections: NavigationSection[];
-  profileItems: NavigationItem[];
-  serviceItems: NavigationItem[];
+  homeItem: NavigationItem;
+  groups: { id: NavigationGroupId; name: string; items: NavigationItem[] }[];
 };
 
 export function getDesktopNavigation(options: NavigationCatalogOptions): DesktopNavigation {
   const catalog = getNavigationCatalog(options).filter(
     (item) => item.surfaces.includes("desktop") && (!item.requiresSignIn || options.isSignedIn),
   );
-  const sections = getNavigationSections(options);
+  const homeItem = catalog.find((item) => item.menuId === "home");
+  if (!homeItem) throw new Error("Navigation catalog is missing the home item");
 
   return {
-    primaryItems: catalog.filter((item) => item.group === "primary"),
-    sections,
-    profileItems: catalog.filter((item) => item.group === "profile"),
-    serviceItems: catalog.filter((item) => item.group === "service"),
+    homeItem,
+    groups: NAVIGATION_GROUPS.map((group) => ({
+      id: group.id,
+      name: group.name,
+      items: catalog.filter((item) => item.group === group.id),
+    })).filter((group) => group.items.length > 0),
   };
+}
+
+export function getNavigationFavoriteItems(options: NavigationCatalogOptions): NavigationItem[] {
+  return getNavigationCatalog(options).filter((item) => item.favoriteId && (!item.requiresSignIn || options.isSignedIn));
+}
+
+export function isAccountNavigationActive(pathname: string, currentUsername: string | null): boolean {
+  return accountIsActive(pathname, currentUsername);
 }
 
 export function getMobileNavigationItems({
   pathname,
   upcomingEvent,
+  currentUsername = null,
   mobileNavigationIds = DEFAULT_MOBILE_NAVIGATION_IDS,
+  menuBadgeOverrides,
 }: {
   pathname: string;
   upcomingEvent: UpcomingNavigationEvent;
+  currentUsername?: string | null;
   mobileNavigationIds?: unknown;
+  menuBadgeOverrides?: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
 }): NavigationItem[] {
   const catalog = getNavigationCatalog({
     pathname,
     upcomingEvent,
     hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
-    isSignedIn: false,
+    isSignedIn: currentUsername !== null,
+    currentUsername,
+    menuBadgeOverrides,
   });
   const normalizedIds = normalizeMobileNavigationIds(mobileNavigationIds);
   const candidatesById = new Map(
@@ -560,17 +742,11 @@ export function getMobileNavigationItems({
     const item = candidatesById.get(id);
     return item ? [{ ...item, name: item.mobileLabel ?? item.name }] : [];
   });
-  const homeItem = catalog.find((item) => item.to === "/");
-  const futuresItem = catalog.find((item) => item.to === "/futures");
+  const homeItem = catalog.find((item) => item.menuId === "home");
+  const futuresItem = catalog.find((item) => item.menuId === "futures");
   const moreItem = catalog.find((item) => item.to === "/more");
-  const fixedItems = [homeItem, futuresItem];
-
-  return [...fixedItems, ...selectedItems, moreItem].filter((item): item is NavigationCatalogItem => Boolean(item));
-}
-
-export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
-  return getNavigationCatalog(options).filter(
-    (item) => item.surfaces.includes("more") && (!item.requiresSignIn || options.isSignedIn),
+  return [homeItem, futuresItem, ...selectedItems, moreItem].filter(
+    (item): item is NavigationCatalogItem => Boolean(item),
   );
 }
 
@@ -589,50 +765,65 @@ export function getMobileNavigationOptions(options: NavigationCatalogOptions): N
     .map((item) => ({ ...item, name: item.mobileLabel ?? item.name }));
 }
 
+export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
+  return getNavigationCatalog(options).filter(
+    (item) => item.surfaces.includes("more") && (!item.requiresSignIn || options.isSignedIn),
+  );
+}
+
 export type MoreNavigationSection = {
+  id: NavigationGroupId;
   name: string;
   items: NavigationItem[];
 };
 
 export function getMoreNavigationSections(options: NavigationCatalogOptions): MoreNavigationSection[] {
   const items = getMoreNavigationItems(options);
-  return [
-    {
-      name: "컨텐츠",
-      items: items.filter((item) => item.group === "primary" || item.group === "content"),
-    },
-    {
-      name: "플래너 & 계산기",
-      items: items.filter((item) => item.group === "planner"),
-    },
-    {
-      name: "내 정보",
-      items: items.filter((item) => item.group === "profile"),
-    },
-    {
-      name: "서비스",
-      items: items.filter((item) => item.group === "service"),
-    },
-  ].filter((section) => section.items.length > 0);
+  return MORE_GROUPS.map((group) => ({
+    id: group.id,
+    name: group.name,
+    items: items.filter((item) => item.group === group.id),
+  })).filter((section) => section.items.length > 0 || section.id === "settings");
 }
 
 export function getSearchableMenuItems({
   currentUsername = null,
+  isSignedIn = currentUsername !== null,
+  menuBadgeOverrides,
 }: {
   currentUsername?: string | null;
+  isSignedIn?: boolean;
+  menuBadgeOverrides?: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
 } = {}): SearchableMenuItem[] {
   return getNavigationCatalog({
     pathname: "",
     upcomingEvent: null,
     hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
-    isSignedIn: false,
+    isSignedIn,
     currentUsername,
+    menuBadgeOverrides,
   })
-    .filter((item) => item.surfaces.includes("search"))
+    .filter((item) => item.surfaces.includes("search") && (isSignedIn || !item.requiresSignIn))
+    .sort(
+      (left, right) =>
+        (navigationSearchGroupRank.get(left.group) ?? Number.POSITIVE_INFINITY) -
+        (navigationSearchGroupRank.get(right.group) ?? Number.POSITIVE_INFINITY),
+    )
     .map((item) => ({
-      id: item.favoriteId ?? item.to,
+      id: item.menuId ?? item.favoriteId ?? item.to,
       name: item.name,
       to: item.to,
+      requiresSignIn: item.requiresSignIn,
     }));
+}
+
+export function getAccountNavigationActions(options: NavigationCatalogOptions): NavigationItem[] {
+  return getNavigationCatalog(options).filter(
+    (item) => item.surfaces.includes("account") && (!item.requiresSignIn || options.isSignedIn),
+  );
+}
+
+export function getNavigationGroupBadgeSummary(items: readonly NavigationItem[]): boolean {
+  return items.some((item) => item.showRedDot === true);
 }

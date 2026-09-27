@@ -5,6 +5,10 @@ import {
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
+import {
+  normalizeDesktopNavigationExpandedGroups,
+  type DesktopNavigationExpandedGroups,
+} from "~/domain/desktop-navigation-preference";
 
 let _preferenceCookie: Cookie;
 
@@ -13,6 +17,8 @@ export type Preference = {
   timeZone?: string;
   favoriteNavigationIds?: string[];
   mobileNavigationIds?: MobileNavigationPair;
+  desktopNavigationCollapsed?: boolean;
+  desktopNavigationExpandedGroups?: DesktopNavigationExpandedGroups;
 };
 
 const defaultPreference = {
@@ -41,6 +47,9 @@ function normalizePreference(value: unknown): Preference {
     timeZone: typeof parsed.timeZone === "string" ? parsed.timeZone : defaultPreference.timeZone,
     favoriteNavigationIds: normalizeNavigationFavoriteIds(parsed.favoriteNavigationIds),
     mobileNavigationIds: normalizeMobileNavigationIds(parsed.mobileNavigationIds),
+    desktopNavigationCollapsed:
+      typeof parsed.desktopNavigationCollapsed === "boolean" ? parsed.desktopNavigationCollapsed : undefined,
+    desktopNavigationExpandedGroups: normalizeDesktopNavigationExpandedGroups(parsed.desktopNavigationExpandedGroups),
   };
 }
 
