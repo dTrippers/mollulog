@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { Page } from "~/components/features/layout";
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
@@ -17,13 +19,10 @@ import {
   parseUserResourceInventoryQuantity,
   upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
-import type { GrowthLayoutContext } from "./utils.growth._components/types";
 import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
-import type { ResourceInventoryFilterState } from "./utils.resources._components/ResourceInventoryFilterPanel";
-
-type ResourceInventoryOutletContext = GrowthLayoutContext & {
-  resourceInventoryFilter: ResourceInventoryFilterState;
-};
+import ResourceInventoryFilterPanel from "./utils.resources._components/ResourceInventoryFilterPanel";
+import { getResourcePlannerPageLinks } from "./utils.resources._components/resource-page-links";
+import type { ResourcePlannerOutletContext } from "./utils.resources";
 
 type ResourceInventorySavePayload = {
   items?: unknown;
@@ -35,7 +34,7 @@ type ActionData = {
   savedAt?: number;
 };
 
-export const meta: MetaFunction = () => [{ title: "보유 재화 관리 | 몰루로그" }];
+export const meta: MetaFunction = () => [{ title: "재화 플래너 | 몰루로그" }];
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -133,20 +132,37 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 export default function ResourceInventoryPage() {
   const { resources, ownedQuantities, relationshipGiftRequirements } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const { managedStudents, resourceInventoryFilter } = useOutletContext<ResourceInventoryOutletContext>();
+  const { managedStudents, resourceInventoryFilter, setResourceInventoryFilter } =
+    useOutletContext<ResourcePlannerOutletContext>();
   const requiredResources = aggregateGrowthResourceRequirements([
     ...managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
     relationshipGiftRequirements,
   ]);
 
   return (
-    <ResourceInventoryEditor
-      resources={resources}
-      requiredResources={requiredResources}
-      ownedQuantities={ownedQuantities}
-      filter={resourceInventoryFilter}
-      error={actionData?.error}
-    />
+    <Page
+      title="재화 플래너"
+      description="각 재화의 보유·필요 수량을 관리해요"
+      contentWidth="full"
+      panels={[
+        {
+          title: "검색 및 필터",
+          Icon: FunnelIcon,
+          children: (
+            <ResourceInventoryFilterPanel value={resourceInventoryFilter} onChange={setResourceInventoryFilter} />
+          ),
+        },
+      ]}
+      links={getResourcePlannerPageLinks()}
+    >
+      <ResourceInventoryEditor
+        resources={resources}
+        requiredResources={requiredResources}
+        ownedQuantities={ownedQuantities}
+        filter={resourceInventoryFilter}
+        error={actionData?.error}
+      />
+    </Page>
   );
 }
 

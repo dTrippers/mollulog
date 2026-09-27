@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { Page } from "~/components/features/layout";
 import { routeError } from "~/lib/http-errors";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import {
@@ -10,6 +11,7 @@ import {
   getUserResourceInventoryMapByItemUids,
 } from "~/models/user-resource-inventory";
 import ResourceInventoryDraftReview from "./utils.resources._components/ResourceInventoryDraftReview";
+import { getResourcePlannerPageLinks } from "./utils.resources._components/resource-page-links";
 
 type ActionData = {
   error?: string;
@@ -86,11 +88,18 @@ export default function ResourceDraftPage() {
   const actionData = useActionData<typeof action>();
 
   return (
-    <ResourceInventoryDraftReview
-      draft={draft}
-      resourcesByUid={resourcesByUid}
-      currentQuantities={currentQuantities}
-      error={actionData?.error}
-    />
+    <Page
+      title="재화 플래너"
+      description="각 재화의 보유·필요 수량을 관리해요"
+      contentWidth="full"
+      links={getResourcePlannerPageLinks()}
+    >
+      <ResourceInventoryDraftReview
+        draft={draft}
+        resourcesByUid={resourcesByUid}
+        currentQuantities={currentQuantities}
+        error={actionData?.error}
+      />
+    </Page>
   );
 }

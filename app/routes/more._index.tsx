@@ -54,20 +54,30 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 };
 
 export default function MoreIndexPage() {
-  const { currentUser, upcomingEvent, hasOngoingRaid, hasUnconsumedCoupons, hasRecentNews, hasUnreadFeedbackReplies } =
-    useLoaderData<typeof loader>();
-  const { darkMode, setDarkMode, mobileNavigationIds, setMobileNavigationIds } = useOutletContext<RootOutletContext>();
+  const { currentUser } = useLoaderData<typeof loader>();
+  const {
+    darkMode,
+    setDarkMode,
+    mobileNavigationIds,
+    setMobileNavigationIds,
+    navigationBarContents,
+  } = useOutletContext<RootOutletContext>();
   const submit = useSubmit();
   const { showSignIn } = useSignIn();
+  const hasUnconsumedCoupons = currentUser
+    ? currentUser.availableCouponCount > 0
+    : navigationBarContents.hasUnconsumedCoupons;
 
   const navigationOptions = {
     pathname: "/more",
-    upcomingEvent,
-    hasOngoingRaid,
+    upcomingEvent: navigationBarContents.upcomingEvent,
+    hasOngoingRaid: navigationBarContents.hasOngoingRaid,
     hasUnconsumedCoupons,
-    hasRecentNews,
-    hasUnreadFeedbackReplies,
+    hasRecentNews: navigationBarContents.hasRecentNews,
+    hasUnreadFeedbackReplies: navigationBarContents.hasUnreadFeedbackReplies,
+    menuBadgeOverrides: navigationBarContents.menuBadgeOverrides,
     isSignedIn: currentUser !== null,
+    currentUsername: currentUser?.username ?? null,
   };
   const menuSections = getMoreNavigationSections(navigationOptions).map((section) => ({
     name: section.name,
@@ -102,7 +112,7 @@ export default function MoreIndexPage() {
 
 function toMoreActionItem(item: NavigationItem): MoreActionItem {
   return {
-    key: item.to,
+    key: item.menuId ?? item.to,
     to: item.to,
     name: item.name,
     OutlineIcon: item.OutlineIcon,
@@ -175,7 +185,7 @@ function MoreProfileBlock({
         />
         <ProfileSummaryLink
           to={`/@${currentUser.username}/pickups`}
-          label="모집 이력"
+          label="모집 기록"
           value={`${currentUser.pickupHistoryCount.toLocaleString()}건`}
         />
         <ProfileSummaryLink
@@ -192,7 +202,7 @@ function MoreProfileBlock({
 function MorePersonalPlannerSection({ currentUser }: { currentUser: MoreCurrentUser }) {
   return (
     <section>
-      <SubTitle text="나의 데이터" />
+      <SubTitle text="내 계획" />
       <div className={cn("divide-y divide-border overflow-hidden rounded-lg", moreDataSurfaceClassName)}>
         <PyroxenePlannerRow pyroxene={currentUser.pyroxene} />
         <RelationshipPlannerRow relationship={currentUser.relationship} isSignedIn />
@@ -438,7 +448,7 @@ function MoreMenuSections({
                     onPin={openReplacementSheet}
                   />
                 ))}
-                {section.name === "서비스" ? (
+                {section.name === "설정" ? (
                   <MoreThemeMenuItem darkMode={darkMode} onToggle={onToggleDarkMode} />
                 ) : null}
               </div>
@@ -530,7 +540,7 @@ function MoreMenuItem({
           ) : null}
           {item.showRedDot ? (
             <span
-              className="absolute top-0 -right-3 size-1.5 animate-pulse rounded-full bg-red-500"
+              className="absolute top-0 -right-3 size-1.5 animate-pulse rounded-full bg-destructive"
               aria-hidden="true"
             />
           ) : null}
@@ -588,19 +598,11 @@ function MoreMenuItem({
 }
 
 function getMoreMenuItemAriaLabel(item: MoreActionItem): string {
-  if (!item.showRedDot) {
-    return item.name;
-  }
-
-  if (item.to === "/news") {
-    return "업데이트 소식, 새 소식 있음";
-  }
-
-  if (item.to === "/contact") {
-    return "제안/문의, 읽지 않은 답변 있음";
-  }
-
-  return item.name;
+  const label = item.badgeLabel ? `${item.name}, ${item.badgeLabel}` : item.name;
+  if (!item.showRedDot) return label;
+  if (item.to === "/news") return `${label}, 새 소식 있음`;
+  if (item.to === "/contact") return `${label}, 읽지 않은 답변 있음`;
+  return `${label}, 새 항목 있음`;
 }
 
 function MoreThemeMenuItem({ darkMode, onToggle }: { darkMode: boolean; onToggle: () => void }) {
@@ -610,12 +612,13 @@ function MoreThemeMenuItem({ darkMode, onToggle }: { darkMode: boolean; onToggle
       type="button"
       className="relative flex min-h-11 w-full items-center gap-3 rounded-md px-2.5 py-2 text-base font-normal text-foreground/85 transition-colors hover:bg-neutral-200 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:hover:bg-neutral-700"
       onClick={onToggle}
-      aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
+      aria-label={darkMode ? "다크 모드 끄기" : "다크 모드 켜기"}
+      aria-pressed={darkMode}
     >
       <span className="flex size-6 shrink-0 items-center justify-center">
         <ModeIcon className="size-5 text-yellow-600 dark:text-yellow-400" aria-hidden="true" />
       </span>
-      <span className="min-w-0 break-keep text-left">{darkMode ? "라이트 모드" : "다크 모드"}</span>
+      <span className="min-w-0 break-keep text-left">다크 모드</span>
     </button>
   );
 }

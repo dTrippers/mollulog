@@ -13,7 +13,12 @@ import {
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
 import { getAllStudents, getAllStudentsMap } from "~/models/student";
-import { getUserPageLinks } from "~/routes/$username";
+import {
+  getUserPageHasParties,
+  getUserPageLinks,
+  getUserPagePresentation,
+  shouldShowUserLegacyPartySwitcher,
+} from "~/routes/$username";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import {
   action,
@@ -146,6 +151,70 @@ beforeEach(() => {
   mockedRemoveRecruitedStudent.mockResolvedValue(undefined);
   mockedUpsertRecruitedStudent.mockResolvedValue(undefined);
   mockedAddRecruitedStudents.mockResolvedValue(undefined);
+});
+
+describe("@username layout owner presentation", () => {
+  it("reads the legacy party control availability from child route data", () => {
+    expect(getUserPageHasParties([{ data: { hasParties: true } }])).toBe(true);
+    expect(getUserPageHasParties([{ data: { hasParties: false } }])).toBe(false);
+    expect(getUserPageHasParties([{ data: { parties: [{ uid: "party-1" }] } }])).toBe(false);
+  });
+
+  it("keeps another user's public profile presentation for a signed-in viewer", () => {
+    const presentation = getUserPagePresentation("/@other/students", "other", false);
+
+    expect(presentation).toMatchObject({
+      title: "@other",
+      description: "선생님의 정보를 확인해보세요",
+    });
+    expect(presentation.screens?.map(({ text }) => text)).toEqual([
+      "프로필 정보",
+      "모집한 학생",
+      "모집 이력/통계",
+      "관심 학생",
+      "공략 타임라인",
+      "편성/공략",
+    ]);
+    expect(presentation.screens?.find(({ text }) => text === "모집한 학생")).toBeDefined();
+  });
+
+  it("uses five personal data tabs on the owner's landing page and data routes", () => {
+    const students = getUserPagePresentation("/@sensei/students", "sensei", true);
+    expect(students.title).toBe("나의 데이터");
+    expect(students.description).toBeUndefined();
+    expect(students.screens?.map(({ text }) => text)).toEqual([
+      "프로필",
+      "모집한 학생",
+      "모집 기록",
+      "관심 학생",
+      "공략 작성하기",
+    ]);
+    expect(students.screens?.[1]).toMatchObject({ link: "/@sensei/students", active: true });
+
+    for (const pathname of ["/@sensei", "/@sensei/"]) {
+      const profile = getUserPagePresentation(pathname, "sensei", true);
+      expect(profile).toMatchObject({ title: "나의 데이터", description: undefined, isOwnerProfileLanding: true });
+      expect(profile.screens?.map(({ text }) => text)).toEqual([
+        "프로필",
+        "모집한 학생",
+        "모집 기록",
+        "관심 학생",
+        "공략 작성하기",
+      ]);
+      expect(profile.screens?.[0]).toMatchObject({ link: "/@sensei", active: true });
+      expect(profile.screens?.slice(1).every(({ active }) => !active)).toBe(true);
+    }
+
+    const parties = getUserPagePresentation("/@sensei/parties", "sensei", true);
+    expect(parties.screens?.find(({ text }) => text === "공략 작성하기")).toMatchObject({ active: true });
+  });
+
+  it("shows the legacy route switch only for the owner when party data exists", () => {
+    expect(shouldShowUserLegacyPartySwitcher("/@sensei/timelines", "sensei", true, true)).toBe(true);
+    expect(shouldShowUserLegacyPartySwitcher("/@sensei/parties", "sensei", true, false)).toBe(false);
+    expect(shouldShowUserLegacyPartySwitcher("/@sensei/parties/edit/1", "sensei", true, true)).toBe(false);
+    expect(shouldShowUserLegacyPartySwitcher("/@other/parties", "other", false, true)).toBe(false);
+  });
 });
 
 describe("@username students loader", () => {

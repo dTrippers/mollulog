@@ -1,29 +1,19 @@
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/16/solid";
-import {
-  ArchiveBoxIcon,
-  CameraIcon,
-  ChartBarIcon,
-  FunnelIcon,
-  MagnifyingGlassIcon,
-  TableCellsIcon,
-} from "@heroicons/react/24/outline";
+import type { Dispatch, SetStateAction } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Outlet, redirect, useLoaderData, useLocation } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Page } from "~/components/features/layout";
-import { PanelActionRow, PanelBody, PanelOptionChip } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
 import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
-import ResourceInventoryFilterPanel, {
+import {
   createResourceInventoryFilterState,
   type ResourceInventoryFilterState,
 } from "./utils.resources._components/ResourceInventoryFilterPanel";
 
 const FARMING_SETTINGS_STORAGE_KEY = "mollulog::resources::farming-settings";
 
-type FarmingPlannerSettings = {
+export type FarmingPlannerSettings = {
   showNormal: boolean;
   showHard: boolean;
   prioritizeHighTier: boolean;
@@ -35,23 +25,10 @@ const DEFAULT_FARMING_SETTINGS: FarmingPlannerSettings = {
   prioritizeHighTier: false,
 };
 
-type ResourcePlannerOutletContext = GrowthLayoutContext & {
+export type ResourcePlannerOutletContext = GrowthLayoutContext & {
   resourceInventoryFilter: ResourceInventoryFilterState;
-};
-
-export const meta: MetaFunction = () => {
-  return [
-    { title: "재화 관리/파밍 계산기 | 몰루로그" },
-    {
-      name: "description",
-      content: "<블루 아카이브> 보유 재화와 필요한 장비 파밍 계획을 확인해보세요.",
-    },
-    { name: "og:title", content: "재화 관리/파밍 계산기 | 몰루로그" },
-    {
-      name: "og:description",
-      content: "<블루 아카이브> 보유 재화와 필요한 장비 파밍 계획을 확인해보세요.",
-    },
-  ];
+  setResourceInventoryFilter: Dispatch<SetStateAction<ResourceInventoryFilterState>>;
+  setFarmingSettings: Dispatch<SetStateAction<FarmingPlannerSettings>>;
 };
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -67,7 +44,6 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export default function ResourcePlannerLayout() {
   const loaderData = useLoaderData<typeof loader>();
-  const { pathname } = useLocation();
 
   const [managedStudents, setManagedStudents] = useState(loaderData.managedStudents);
   const [farmingSettings, setFarmingSettings] = useState(DEFAULT_FARMING_SETTINGS);
@@ -111,6 +87,8 @@ export default function ResourcePlannerLayout() {
     availableStudents: loaderData.availableStudents,
     updateStudent,
     resourceInventoryFilter,
+    setResourceInventoryFilter,
+    setFarmingSettings,
     farmingStageFilter: {
       showNormal: farmingSettings.showNormal,
       showHard: farmingSettings.showHard,
@@ -118,130 +96,7 @@ export default function ResourcePlannerLayout() {
     },
   };
 
-  return (
-    <Page
-      title="재화 관리/파밍 계산기"
-      description="보유 재화와 필요한 장비 파밍 계획을 확인해보세요."
-      contentWidth="full"
-      panels={
-        pathname === "/utils/resources/inventory"
-          ? [
-              {
-                title: "검색 및 필터",
-                Icon: FunnelIcon,
-                children: (
-                  <ResourceInventoryFilterPanel value={resourceInventoryFilter} onChange={setResourceInventoryFilter} />
-                ),
-              },
-            ]
-          : pathname === "/utils/resources/farming"
-            ? [
-                {
-                  title: "계산 설정",
-                  Icon: ChartBarIcon,
-                  children: (
-                    <FarmingPlannerSettingsPanel
-                      showNormal={farmingSettings.showNormal}
-                      showHard={farmingSettings.showHard}
-                      prioritizeHighTier={farmingSettings.prioritizeHighTier}
-                      onShowNormalChange={(showNormal) => setFarmingSettings((prev) => ({ ...prev, showNormal }))}
-                      onShowHardChange={(showHard) => setFarmingSettings((prev) => ({ ...prev, showHard }))}
-                      onPrioritizeHighTierChange={(prioritizeHighTier) =>
-                        setFarmingSettings((prev) => ({ ...prev, prioritizeHighTier }))
-                      }
-                    />
-                  ),
-                },
-              ]
-            : undefined
-      }
-      screens={[
-        {
-          text: "재화 관리",
-          description: "각 재화별 보유/필요 수량을 관리",
-          Icon: ArchiveBoxIcon,
-          link: "/utils/resources/inventory",
-          active: pathname.startsWith("/utils/resources/inventory"),
-        },
-        {
-          text: "장비 파밍 계산기",
-          description: "필요 장비를 획득하기 위한 스테이지를 확인",
-          Icon: MagnifyingGlassIcon,
-          link: "/utils/resources/farming",
-          active: pathname === "/utils/resources/farming",
-        },
-      ]}
-      links={[
-        {
-          title: "스크린샷 인식기",
-          description: "아이템 화면 스크린샷에서 보유 재화를 인식할 수 있어요",
-          to: "/scanner/resource",
-          Icon: CameraIcon,
-        },
-        {
-          title: "학생 성장 플래너",
-          description: "학생들의 성장 목표를 입력하면 필요한 재화를 계산할 수 있어요",
-          to: "/utils/growth/students",
-          Icon: TableCellsIcon,
-        },
-      ]}
-    >
-      <Outlet context={contextValue} />
-    </Page>
-  );
-}
-
-function FarmingPlannerSettingsPanel({
-  showNormal,
-  showHard,
-  prioritizeHighTier,
-  onShowNormalChange,
-  onShowHardChange,
-  onPrioritizeHighTierChange,
-}: {
-  showNormal: boolean;
-  showHard: boolean;
-  prioritizeHighTier: boolean;
-  onShowNormalChange: (value: boolean) => void;
-  onShowHardChange: (value: boolean) => void;
-  onPrioritizeHighTierChange: (value: boolean) => void;
-}) {
-  return (
-    <PanelBody className="space-y-2">
-      <PanelActionRow
-        title="스테이지 난이도"
-        actions={
-          <div className="ml-auto flex shrink-0 items-center justify-end gap-1">
-            <PanelOptionChip
-              label="노말"
-              active={showNormal}
-              Icon={showNormal ? EyeIcon : EyeSlashIcon}
-              onClick={() => onShowNormalChange(!showNormal)}
-            />
-            <PanelOptionChip
-              label="하드"
-              active={showHard}
-              Icon={showHard ? EyeIcon : EyeSlashIcon}
-              onClick={() => onShowHardChange(!showHard)}
-            />
-          </div>
-        }
-      />
-
-      <PanelActionRow
-        title="상위티어 우선"
-        description="설계도 단가를 반영하여 계산해요"
-        actions={
-          <PanelOptionChip
-            label="적용"
-            active={prioritizeHighTier}
-            Icon={prioritizeHighTier ? EyeIcon : EyeSlashIcon}
-            onClick={() => onPrioritizeHighTierChange(!prioritizeHighTier)}
-          />
-        }
-      />
-    </PanelBody>
-  );
+  return <Outlet context={contextValue} />;
 }
 
 function readStoredFarmingSettings(): FarmingPlannerSettings {

@@ -62,6 +62,13 @@ function isSearchableTimelineContent(
   return SEARCHABLE_TIMELINE_CONTENT_TYPES.includes(content.contentType as SearchableTimelineContentType);
 }
 
+function getMenuSearchIndexEntries(username?: string | null): SearchIndexEntry[] {
+  return getSearchableMenuItems({ currentUsername: username ?? null, isSignedIn: Boolean(username) }).map((item) => ({
+    candidate: item.name,
+    result: { type: "menu", name: item.name, to: item.to },
+  }));
+}
+
 function deduplicateTimelineContentsByContentUid(contents: TimelineContent[]): TimelineContent[] {
   const contentsWithoutContentUid: TimelineContent[] = [];
   const latestContentByContentUid = new Map<string, TimelineContent>();
@@ -112,16 +119,10 @@ async function getSearchIndex(env: Env, ctx?: ExecutionContext): Promise<SearchI
 }
 
 async function buildSearchIndex(env: Env, ctx?: ExecutionContext): Promise<SearchIndexEntry[]> {
-  const [menuItems, students, timelineContents] = await Promise.all([
-    Promise.resolve(getSearchableMenuItems()),
+  const [students, timelineContents] = await Promise.all([
     getAllStudents(env, true),
     getAllTimelineContentsMeta(env, { ctx }),
   ]);
-
-  const menuEntries: SearchIndexEntry[] = menuItems.map((item) => ({
-    candidate: item.name,
-    result: { type: "menu", name: item.name, to: item.to },
-  }));
 
   const studentEntries: SearchIndexEntry[] = students.map((student) => {
     const fullName = formatStudentFullName(student);
@@ -150,7 +151,7 @@ async function buildSearchIndex(env: Env, ctx?: ExecutionContext): Promise<Searc
       },
     }));
 
-  return [...menuEntries, ...studentEntries, ...eventEntries];
+  return [...studentEntries, ...eventEntries];
 }
 
 function searchIndex(index: SearchIndexEntry[], query: string): SearchResult[] {
@@ -170,18 +171,6 @@ function searchIndex(index: SearchIndexEntry[], query: string): SearchResult[] {
   return results;
 }
 
-function getCurrentUserProfileSearchEntry(username: string): SearchIndexEntry | null {
-  const profileItem = getSearchableMenuItems({ currentUsername: username }).find((item) => item.id === "profile");
-  if (!profileItem) {
-    return null;
-  }
-
-  return {
-    candidate: profileItem.name,
-    result: { type: "menu", name: profileItem.name, to: profileItem.to },
-  };
-}
-
 export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<SearchResponse> => {
   const q = new URL(request.url).searchParams.get("q")?.trim() ?? "";
   if (!q) {
@@ -190,6 +179,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
 
   const { env, ctx } = context.cloudflare;
   const [index, sensei] = await Promise.all([getSearchIndex(env, ctx), getActiveSensei(env, request)]);
-  const profileEntry = sensei ? getCurrentUserProfileSearchEntry(sensei.username) : null;
-  return { results: searchIndex(profileEntry ? [...index, profileEntry] : index, q) };
+  const menuEntries = getMenuSearchIndexEntries(sensei?.username);
+  return { results: searchIndex([...menuEntries, ...index], q) };
 };

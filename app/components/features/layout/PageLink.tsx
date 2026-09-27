@@ -8,9 +8,10 @@ export type PageLinkProps = {
   description: string;
   to: string;
   preventScrollReset?: boolean;
+  onClick?: () => void;
 };
 
-export default function PageLink({ Icon, title, description, to, preventScrollReset }: PageLinkProps) {
+export default function PageLink({ Icon, title, description, to, preventScrollReset, onClick }: PageLinkProps) {
   const content = (
     <div className="flex w-full items-center justify-between gap-3 rounded-lg bg-card px-3 py-3 shadow-sm shadow-black/5 transition-colors hover:bg-muted dark:shadow-none dark:hover:bg-foreground/10 md:px-4">
       <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -25,6 +26,18 @@ export default function PageLink({ Icon, title, description, to, preventScrollRe
       <ArrowRightIcon className="size-4 shrink-0 text-primary transition-transform group-hover:translate-x-1" />
     </div>
   );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className="group block w-full border-0 bg-transparent p-0 text-left"
+        onClick={onClick}
+      >
+        {content}
+      </button>
+    );
+  }
 
   if (to.startsWith("http")) {
     return (

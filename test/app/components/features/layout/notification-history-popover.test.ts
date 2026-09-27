@@ -11,10 +11,11 @@ describe("notification history popover composition", () => {
     expect(popoverSource).toContain('unreadCount > 99 ? "99+" : unreadCount');
     expect(popoverSource).toContain("읽지 않은 알림 $" + "{unreadCount}개");
     expect(popoverSource).toContain("key={notification.uid}");
-    expect(popoverSource).toContain('"size-9"');
     expect(popoverSource).toContain('placement === "desktop" ? "text-muted-foreground" : "text-foreground/75"');
     expect(popoverSource).toContain('placement === "desktop" ? "size-[18px]" : "size-5"');
     expect(popoverSource).toContain('strokeWidth={placement === "desktop" ? 1.75 : 2}');
+    expect(popoverSource).toContain('placement === "rail" ? "size-11 bg-transparent" : "size-9 bg-background"');
+    expect(popoverSource).toContain("rect.right + 8");
     expect(popoverSource).toContain("Math.min(420");
   });
 

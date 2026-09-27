@@ -17,6 +17,10 @@ import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
+import type {
+  MenuBadgeLabelMode,
+  MenuBadgeRedDotMode,
+} from "~/domain/navigation-menu-badges";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type {
@@ -607,6 +611,20 @@ export const pgSiteBannersTable = pgTable(
     index("site_banners_active_ends_at_uid_idx").on(table.endsAt, table.uid),
     index("site_banners_starts_at_idx").on(table.startsAt),
   ],
+);
+
+export const pgNavigationMenuBadgesTable = pgTable(
+  "navigation_menu_badges",
+  {
+    menuId: text("menu_id").primaryKey(),
+    labelMode: text("label_mode").$type<MenuBadgeLabelMode>().notNull().default("auto"),
+    label: text(),
+    redDotMode: text("red_dot_mode").$type<MenuBadgeRedDotMode>().notNull().default("auto"),
+    startsAt: timestamptz("starts_at"),
+    endsAt: timestamptz("ends_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
 );
 
 export const pgCouponRegistrationsTable = pgTable(

@@ -4,14 +4,16 @@ import {
   getDesktopNavigation,
   getMobileNavigationItems,
   getMobileNavigationOptions,
-  getMoreNavigationItems,
   getMoreNavigationSections,
   getNavigationCatalog,
-  getNavigationSections,
+  getNavigationFavoriteItems,
   getSearchableMenuItems,
+  isAccountNavigationActive,
 } from "~/components/features/layout/navigation-menu";
+import { getAvailableNavigationFavorites } from "~/domain/navigation-favorites";
+import { NAVIGATION_MENU_IDS } from "~/domain/navigation-menu-badges";
 
-const navigationOptions = {
+const guestOptions = {
   pathname: "/",
   upcomingEvent: null,
   hasOngoingRaid: false,
@@ -19,62 +21,44 @@ const navigationOptions = {
   isSignedIn: false,
 };
 
-function getMenuItems({ hasOngoingRaid = false, isSignedIn = false } = {}) {
-  return getNavigationSections({
-    pathname: "/",
-    upcomingEvent: null,
-    hasOngoingRaid,
-    hasUnconsumedCoupons: false,
-    isSignedIn,
-  }).flatMap((section) => section.items);
-}
+const signedInOptions = {
+  ...guestOptions,
+  isSignedIn: true,
+  currentUsername: "sensei",
+};
 
-describe("getNavigationSections", () => {
-  it("puts furniture at the end of content and activates that section at its new route", () => {
-    const sections = getNavigationSections({ ...navigationOptions, pathname: "/furniture" });
-    const content = sections.find((section) => section.name === "컨텐츠");
-    const planner = sections.find((section) => section.name === "플래너 & 계산기");
-
-    expect(content?.items.at(-1)).toMatchObject({ name: "가구 도감", to: "/furniture", isActive: true });
-    expect(content?.isActive).toBe(true);
-    expect(planner?.items.some((item) => item.name === "가구 도감")).toBe(false);
-    expect(planner?.isActive).toBe(false);
+describe("global navigation catalog", () => {
+  it("keeps the account trigger inactive on the owner's profile root but active on account routes", () => {
+    expect(isAccountNavigationActive("/@sensei", "sensei")).toBe(false);
+    expect(isAccountNavigationActive("/@sensei/", "sensei")).toBe(false);
+    expect(isAccountNavigationActive("/@sensei/friends", "sensei")).toBe(true);
+    expect(isAccountNavigationActive("/edit", "sensei")).toBe(true);
+    expect(isAccountNavigationActive("/notifications", "sensei")).toBe(true);
+    expect(isAccountNavigationActive("/@sensei/students", "sensei")).toBe(false);
+    expect(isAccountNavigationActive("/@other/", "sensei")).toBe(false);
+    expect(isAccountNavigationActive("/@me", "sensei")).toBe(false);
+    expect(isAccountNavigationActive("/@me/friends", "sensei")).toBe(false);
   });
 
-  it("labels the raid menu only while a raid is ongoing", () => {
-    expect(getMenuItems({ hasOngoingRaid: true }).find((item) => item.to === "/raids")?.badgeLabel).toBe("진행중");
-    expect(getMenuItems().find((item) => item.to === "/raids")?.badgeLabel).toBeUndefined();
-  });
+  it("defines the stable admin badge IDs once in the catalog", () => {
+    const menuEntries = getNavigationCatalog(signedInOptions).flatMap(({ menuId, name }) =>
+      menuId ? ([[menuId, name]] as const) : [],
+    );
+    const catalogIds = menuEntries.map(([menuId]) => menuId).sort();
+    const namesById = Object.fromEntries(menuEntries);
 
-  it("labels guest access to the pyroxene planner only while signed out", () => {
-    expect(getMenuItems().find((item) => item.to === "/utils/pyroxene")?.badgeLabel).toBe("로그인 없이 사용");
-    expect(
-      getMenuItems({ isSignedIn: true }).find((item) => item.to === "/utils/pyroxene")?.badgeLabel,
-    ).toBeUndefined();
-  });
-
-  it("keeps the event-shop favorite ID with the fixed utility path", () => {
-    const eventShop = getNavigationSections({
-      pathname: "/",
-      upcomingEvent: null,
-      hasOngoingRaid: false,
-      hasUnconsumedCoupons: false,
-      isSignedIn: false,
-    })
-      .flatMap((section) => section.items)
-      .find((item) => item.name === "이벤트 상점 계산기");
-
-    expect(eventShop).toMatchObject({
-      favoriteId: "event-shop-calculator",
-      to: "/utils/event-shop",
-      name: "이벤트 상점 계산기",
-      mobileLabel: "상점 계산기",
+    expect(catalogIds).toEqual([...NAVIGATION_MENU_IDS].sort());
+    expect(namesById).toMatchObject({
+      "resource-planner": "재화 플래너",
+      "farming-calculator": "파밍 계산기",
+      profile: "프로필",
+      "my-students": "모집한 학생",
+      "my-walkthroughs": "공략 작성하기",
     });
-    expect(eventShop?.disabled).toBeUndefined();
   });
 
   it("adds the integrated planner while preserving detailed planner entries", () => {
-    const items = getMenuItems();
+    const items = getNavigationCatalog(guestOptions);
 
     expect(items.find((item) => item.to === "/planner")).toMatchObject({
       name: "통합 플래너",
@@ -88,40 +72,84 @@ describe("getNavigationSections", () => {
   });
 
   it.each(["/planner", "/planner/import"])("activates the integrated planner at %s", (pathname) => {
-    const planner = getNavigationSections({ ...navigationOptions, pathname }).find(
-      (section) => section.name === "플래너 & 계산기",
-    );
+    const planner = getDesktopNavigation({ ...guestOptions, pathname }).groups.find(({ id }) => id === "planner");
 
     expect(planner?.items.find((item) => item.name === "통합 플래너")).toMatchObject({
       to: "/planner",
       isActive: true,
     });
-    expect(planner?.isActive).toBe(true);
-  });
-});
-
-describe("navigation surface projections", () => {
-  it("derives the mobile bottom navigation from the catalog", () => {
-    const items = getMobileNavigationItems({ pathname: "/more", upcomingEvent: null });
-
-    expect(items.map((item) => item.to)).toEqual(["/", "/futures", "/community", "/students", "/more"]);
-    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual(["더보기"]);
   });
 
-  it.each([
-    { pathname: "/community", mobileNavigationIds: ["events", "raids"] as const },
-    { pathname: "/students", mobileNavigationIds: ["events", "raids"] as const },
-  ])("leaves every item inactive when the route is not selected", ({ pathname, mobileNavigationIds }) => {
-    const items = getMobileNavigationItems({ pathname, upcomingEvent: null, mobileNavigationIds });
+  it("uses the approved desktop group names and order", () => {
+    const desktop = getDesktopNavigation(guestOptions);
 
-    expect(items.filter((item) => item.isActive).map((item) => item.name)).toEqual([]);
+    expect(desktop.groups.map(({ name }) => name)).toEqual(["게임 정보", "플래너·계산기", "커뮤니티", "소식·도움말"]);
+    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "news"]);
+    expect(desktop.groups.flatMap(({ name }) => [name])).not.toEqual(
+      expect.arrayContaining(["컨텐츠", "플래너 & 계산기", "게임 외 정보", "내 정보", "서비스"]),
+    );
+
+    const signedIn = getDesktopNavigation(signedInOptions);
+    expect(signedIn.groups.map(({ name }) => name)).toEqual([
+      "게임 정보",
+      "플래너·계산기",
+      "커뮤니티",
+      "나의 데이터",
+      "소식·도움말",
+    ]);
+    expect(signedIn.groups.find(({ id }) => id === "personal")?.items.map(({ to }) => to)).toEqual([
+      "/@sensei",
+      "/@sensei/students",
+      "/@sensei/pickups",
+      "/@sensei/futures",
+      "/@sensei/timelines",
+      "/scanner/resource",
+    ]);
   });
 
-  it("exposes exactly the approved mobile candidates and labels in order", () => {
-    const options = getMobileNavigationOptions(navigationOptions);
+  it("keeps every existing game and planner destination in its new group", () => {
+    const desktop = getDesktopNavigation(guestOptions);
+    const itemsByGroup = Object.fromEntries(desktop.groups.map(({ id, items }) => [id, items.map(({ to }) => to)]));
 
-    expect(options).toHaveLength(14);
-    expect(options.map((item) => item.mobileNavigationId)).toEqual([
+    expect(itemsByGroup.game).toEqual([
+      "/futures",
+      "/events",
+      "/raids",
+      "/students",
+      "/mainstory",
+      "/furniture",
+      "/coupons",
+    ]);
+    expect(itemsByGroup.planner).toEqual([
+      "/planner",
+      "/utils/pyroxene",
+      "/utils/growth/students",
+      "/utils/resources/inventory",
+      "/utils/resources/farming",
+      "/utils/event-shop",
+      "/utils/relationship",
+      "/utils/raidscore",
+    ]);
+    expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
+    expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
+  });
+
+  it("keeps the mobile bottom navigation at home, futures, two saved choices, and more", () => {
+    const items = getMobileNavigationItems({
+      pathname: "/more",
+      upcomingEvent: null,
+      currentUsername: "sensei",
+      mobileNavigationIds: ["feed", "students"],
+    });
+
+    expect(items.map(({ to }) => to)).toEqual(["/", "/futures", "/community", "/students", "/more"]);
+    expect(items.filter(({ isActive }) => isActive).map(({ name }) => name)).toEqual(["더보기"]);
+  });
+
+  it("keeps all supported mobile pin IDs and their compact labels", () => {
+    const options = getMobileNavigationOptions(guestOptions);
+
+    expect(options.map(({ mobileNavigationId }) => mobileNavigationId)).toEqual([
       "feed",
       "students",
       "events",
@@ -132,12 +160,13 @@ describe("navigation surface projections", () => {
       "pyroxene-planner",
       "student-growth-planner",
       "resource-planner",
+      "farming-calculator",
       "event-shop-calculator",
       "relationship-calculator",
       "strategy-timeline",
       "raid-score-calculator",
     ]);
-    expect(options.map((item) => item.name)).toEqual([
+    expect(options.map(({ name }) => name)).toEqual([
       "피드",
       "학생부",
       "이벤트",
@@ -147,143 +176,188 @@ describe("navigation surface projections", () => {
       "통합 플래너",
       "청휘석 플래너",
       "성장 플래너",
-      "재화 관리",
+      "재화 플래너",
+      "파밍 계산기",
       "상점 계산기",
       "인연 계산기",
       "공략",
       "점수 계산기",
     ]);
-    expect(options.every((item) => item.name.replace(/[\s/]/g, "").length <= 6)).toBe(true);
   });
 
-  it("keeps signed-in desktop-only items out of the guest desktop menu", () => {
-    const guest = getDesktopNavigation(navigationOptions);
-    const signedIn = getDesktopNavigation({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
+  it("projects the exact More groups and keeps coupons visible to guests", () => {
+    const guestSections = getMoreNavigationSections(guestOptions);
+    const signedInSections = getMoreNavigationSections(signedInOptions);
 
-    expect(guest.profileItems).toEqual([]);
-    expect(signedIn.profileItems.map((item) => item.to)).toEqual([
-      "/@sensei",
-      "/scanner/resource",
-      "/connect/import",
-      "/notifications",
+    expect(guestSections.map(({ name }) => name)).toEqual([
+      "게임 정보",
+      "플래너·계산기",
+      "커뮤니티",
+      "소식·도움말",
+      "설정",
     ]);
-  });
-
-  it("uses explicit surface membership for the more screen", () => {
-    const guestItems = getMoreNavigationItems(navigationOptions);
-    const signedInItems = getMoreNavigationItems({ ...navigationOptions, isSignedIn: true });
-
-    expect(guestItems.map((item) => item.to)).toEqual([
-      "/community",
-      "/events",
-      "/raids",
-      "/students",
-      "/mainstory",
-      "/furniture",
-      "/planner",
-      "/utils/pyroxene",
-      "/utils/growth/students",
-      "/utils/resources/inventory",
-      "/utils/event-shop",
-      "/utils/relationship",
-      "/timelines",
-      "/utils/raidscore",
-      "/news",
-      "/contact",
-    ]);
-
-    expect(guestItems.map((item) => item.name)).toEqual([
-      "피드",
+    expect(guestSections.find(({ id }) => id === "game")?.items.map(({ name }) => name)).toEqual([
       "이벤트",
       "총력전 / 대결전",
       "학생부",
       "메인 스토리",
       "가구 도감",
-      "통합 플래너",
-      "청휘석 플래너",
-      "학생 성장 플래너",
-      "재화 관리/파밍 계산기",
-      "이벤트 상점 계산기",
-      "인연 랭크 계산기",
-      "공략 타임라인",
-      "총력전 점수 계산기",
-      "업데이트 소식",
-      "제안/문의",
+      "쿠폰",
     ]);
-
-    expect(signedInItems.map((item) => item.name)).toEqual([
-      ...guestItems.slice(0, -2).map((item) => item.name),
-      "스크린샷/영상 인식기",
-      "외부 데이터 연동",
+    expect(guestSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/coupons");
+    expect(signedInSections.map(({ name }) => name)).toEqual([
+      "게임 정보",
+      "플래너·계산기",
+      "커뮤니티",
+      "나의 데이터",
+      "소식·도움말",
+      "설정",
+    ]);
+    expect(signedInSections.find(({ id }) => id === "personal")?.items.map(({ name }) => name)).toEqual([
+      "프로필",
+      "모집한 학생",
+      "모집 기록",
+      "관심 학생",
+      "공략 작성하기",
+      "데이터 가져오기",
+    ]);
+    expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([
+      "프로필 편집",
       "알림 설정",
-      ...guestItems.slice(-2).map((item) => item.name),
     ]);
   });
 
-  it("always exposes the relationship calculator in the guest More menu", () => {
-    expect(getMoreNavigationItems(navigationOptions)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ name: "인연 랭크 계산기", to: "/utils/relationship" })]),
+  it("maps scanner and connect routes to one data-import menu entry", () => {
+    for (const pathname of ["/scanner/resource", "/scanner/student", "/connect/import"]) {
+      const item = getNavigationCatalog({ ...signedInOptions, pathname }).find(
+        ({ menuId }) => menuId === "data-import",
+      );
+      expect(item).toMatchObject({
+        to: "/scanner/resource",
+        name: "데이터 가져오기",
+        isActive: true,
+        requiresSignIn: true,
+      });
+    }
+  });
+
+  it("resolves saved IDs for moved account entries and both data-import aliases", () => {
+    const items = getAvailableNavigationFavorites(
+      ["profile", "notifications", "connect-import", "scanner-resource", "news", "contact"],
+      getNavigationFavoriteItems(signedInOptions),
     );
+
+    expect(items.map(({ favoriteId, name, to }) => [favoriteId, name, to])).toEqual([
+      ["profile", "프로필", "/@sensei"],
+      ["notifications", "알림 설정", "/notifications"],
+      ["connect-import", "데이터 가져오기", "/scanner/resource"],
+      ["news", "업데이트 소식", "/news"],
+      ["contact", "제안/문의", "/contact"],
+    ]);
   });
 
-  it("projects service links into the More service section with their red dots", () => {
-    const sections = getMoreNavigationSections({
-      ...navigationOptions,
-      hasRecentNews: true,
-      hasUnreadFeedbackReplies: true,
-    });
-    expect(sections.at(-1)).toMatchObject({
-      name: "서비스",
-      items: [
-        expect.objectContaining({ to: "/news", name: "업데이트 소식", showRedDot: true }),
-        expect.objectContaining({ to: "/contact", name: "제안/문의", showRedDot: true }),
-      ],
-    });
-  });
+  it("respects sign-in requirements in shared search and adds personal routes only for a signed-in user", () => {
+    const guestItems = getSearchableMenuItems();
+    const signedInItems = getSearchableMenuItems({ currentUsername: "sensei" });
 
-  it("exposes auth-gated links and the unavailable event-shop entry to search", () => {
-    const guestSearchItems = getSearchableMenuItems();
-    const signedInSearchItems = getSearchableMenuItems({ currentUsername: "sensei" });
-
-    expect(guestSearchItems).toEqual(
+    expect(guestItems.some(({ requiresSignIn }) => requiresSignIn)).toBe(false);
+    expect(guestItems.some(({ to }) => to === "/unauthorized")).toBe(false);
+    expect(guestItems).toEqual(expect.arrayContaining([expect.objectContaining({ name: "이벤트", to: "/events" })]));
+    expect(signedInItems).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ name: "스크린샷/영상 인식기", to: "/scanner/resource" }),
-        expect.objectContaining({ name: "외부 데이터 연동", to: "/connect/import" }),
-        expect.objectContaining({ name: "알림 설정", to: "/notifications" }),
-        expect.objectContaining({ name: "이벤트 상점 계산기", to: "/utils/event-shop" }),
+        expect.objectContaining({ id: "profile", name: "프로필", to: "/@sensei" }),
+        expect.objectContaining({ id: "my-students", name: "모집한 학생", to: "/@sensei/students" }),
+        expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/@sensei/timelines" }),
+        expect.objectContaining({ id: "farming-calculator", name: "파밍 계산기", to: "/utils/resources/farming" }),
+        expect.objectContaining({ id: "data-import", name: "데이터 가져오기", to: "/scanner/resource" }),
+        expect.objectContaining({ id: "notifications", name: "알림 설정", to: "/notifications" }),
       ]),
     );
-    expect(signedInSearchItems).toEqual(
-      expect.arrayContaining([expect.objectContaining({ id: "profile", name: "내 프로필", to: "/@sensei" })]),
+    expect(signedInItems.map(({ id }) => id).indexOf("community-timelines")).toBeLessThan(
+      signedInItems.map(({ id }) => id).indexOf("profile"),
+    );
+    expect(signedInItems.map(({ id }) => id).indexOf("profile")).toBeLessThan(
+      signedInItems.map(({ id }) => id).indexOf("news"),
     );
   });
 
-  it("keeps the notification red dot and resource scanner v1.2 badge", () => {
-    const catalog = getNavigationCatalog({ ...navigationOptions, isSignedIn: true, currentUsername: "sensei" });
+  it("keeps saved planner favorites on the inventory page and activates farming separately", () => {
+    const options = getNavigationFavoriteItems(signedInOptions);
+    const resourceFavorite = getAvailableNavigationFavorites(["resource-planner"], options);
+    const inventoryItem = getNavigationCatalog({
+      ...signedInOptions,
+      pathname: "/utils/resources/inventory",
+    }).find(({ menuId }) => menuId === "resource-planner");
+    const farmingItem = getNavigationCatalog({
+      ...signedInOptions,
+      pathname: "/utils/resources/farming",
+    }).find(({ menuId }) => menuId === "farming-calculator");
 
-    expect(catalog.filter((item) => item.showRedDot === true).map((item) => item.name)).toEqual(["알림 설정"]);
-    expect(catalog.filter((item) => item.badgeLabel === "v1.2").map((item) => item.name)).toEqual([
-      "스크린샷/영상 인식기",
-    ]);
-    expect(catalog.filter((item) => item.badgeLabel === "베타").map((item) => item.name)).toEqual([
-      "공략 타임라인",
-      "알림 설정",
-    ]);
+    expect(resourceFavorite.map(({ name, to }) => [name, to])).toEqual([["재화 플래너", "/utils/resources/inventory"]]);
+    expect(inventoryItem?.isActive).toBe(true);
+    expect(farmingItem?.isActive).toBe(true);
+    expect(
+      getNavigationCatalog({ ...signedInOptions, pathname: "/utils/resources/farming" }).find(
+        ({ menuId }) => menuId === "resource-planner",
+      )?.isActive,
+    ).toBe(false);
   });
 
-  it("keeps the selected event-shop tab active on the resolved shop screen only", () => {
-    const items = getMobileNavigationItems({
-      pathname: "/events/event-uid/shop",
-      upcomingEvent: null,
-      mobileNavigationIds: ["events", "event-shop-calculator"],
-    });
+  it("activates the profile menu only on the signed-in owner's root, including a trailing slash", () => {
+    for (const pathname of ["/@sensei", "/@sensei/"]) {
+      const profile = getNavigationCatalog({ ...signedInOptions, pathname }).find(({ menuId }) => menuId === "profile");
+      expect(profile?.isActive).toBe(true);
+    }
+    expect(
+      getNavigationCatalog({ ...signedInOptions, pathname: "/@other" }).find(({ menuId }) => menuId === "profile")
+        ?.isActive,
+    ).toBe(false);
+    expect(
+      getNavigationCatalog({ ...signedInOptions, pathname: "/@sensei/students" }).find(
+        ({ menuId }) => menuId === "profile",
+      )?.isActive,
+    ).toBe(false);
+  });
 
-    expect(items.map((item) => [item.name, item.isActive])).toEqual([
-      ["홈", false],
-      ["미래시", false],
-      ["이벤트", false],
-      ["상점 계산기", true],
-      ["더보기", false],
-    ]);
+  it("keeps automatic states while applying manual label and dot modes independently", () => {
+    const catalog = getNavigationCatalog({
+      ...signedInOptions,
+      hasOngoingRaid: true,
+      hasUnconsumedCoupons: true,
+      hasRecentNews: true,
+      hasUnreadFeedbackReplies: true,
+      menuBadgeOverrides: {
+        raids: { menuId: "raids", labelMode: "custom", label: "새 시즌", redDotMode: "hidden" },
+        coupons: { menuId: "coupons", labelMode: "auto", label: null, redDotMode: "hidden" },
+        news: { menuId: "news", labelMode: "hidden", label: null, redDotMode: "show" },
+      },
+    });
+    const itemById = new Map(catalog.flatMap((item) => (item.menuId ? [[item.menuId, item] as const] : [])));
+
+    expect(itemById.get("raids")).toMatchObject({ badgeLabel: "새 시즌", showRedDot: false });
+    expect(itemById.get("coupons")).toMatchObject({ badgeLabel: undefined, showRedDot: false });
+    expect(itemById.get("news")).toMatchObject({ badgeLabel: undefined, showRedDot: true });
+    expect(itemById.get("contact")).toMatchObject({ showRedDot: true });
+    expect(catalog.find(({ to }) => to === "/notifications")?.showRedDot).toBeUndefined();
+  });
+
+  it("does not keep the retired hard-coded labels or notification dot", () => {
+    const catalog = getNavigationCatalog({ ...signedInOptions, hasRecentNews: false, hasUnreadFeedbackReplies: false });
+
+    expect(catalog.some(({ badgeLabel }) => badgeLabel === "v1.2" || badgeLabel === "베타")).toBe(false);
+    expect(catalog.find(({ to }) => to === "/notifications")?.showRedDot).toBeUndefined();
+    expect(catalog.find(({ to }) => to === "/utils/pyroxene")?.badgeLabel).toBeUndefined();
+    expect(catalog.find(({ to }) => to === "/raids")?.badgeLabel).toBeUndefined();
+  });
+
+  it("keeps automatic raid and guest-planner labels", () => {
+    const activeRaid = getDesktopNavigation({ ...guestOptions, hasOngoingRaid: true });
+    const raidItem = activeRaid.groups.find(({ id }) => id === "game")?.items.find(({ to }) => to === "/raids");
+    const guestPlanner = getDesktopNavigation(guestOptions)
+      .groups.find(({ id }) => id === "planner")
+      ?.items.find(({ to }) => to === "/utils/pyroxene");
+
+    expect(raidItem?.badgeLabel).toBe("진행중");
+    expect(guestPlanner?.badgeLabel).toBe("로그인 없이 사용");
   });
 });

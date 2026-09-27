@@ -128,7 +128,11 @@ export default function Page({
 
   return (
     <>
-      <div data-page-max-width={maxWidth} className={cn("flex flex-col", layout === "horizontal" && "lg:flex-row")}>
+      <div
+        data-page-max-width={maxWidth}
+        data-layout={layout}
+        className={cn("mllg-page-layout flex flex-col", layout === "horizontal" && "lg:flex-row lg:min-w-0")}
+      >
         <PageSidebar
           title={title}
           description={description}
@@ -153,7 +157,7 @@ export default function Page({
           <VerticalDesktopTabBar screens={screens} isSticky={isTabBarSticky} />
         )}
 
-        <div className={`relative z-0 min-w-0 grow lg:p-4 ${contentAreaClass}`}>{children}</div>
+        <div className={`mllg-page-content relative z-0 min-w-0 grow lg:p-4 ${contentAreaClass}`}>{children}</div>
       </div>
 
       {((links && links.length > 0) || (panels && panels.length > 0)) && (
@@ -207,7 +211,7 @@ function PageSidebar({
     : "relative z-20 shrink-0 w-full overflow-x-hidden no-scrollbar lg:z-auto lg:h-screen lg:max-w-64 xl:max-w-xs lg:mr-4 xl:mr-6 lg:sticky lg:top-6 lg:self-start lg:overflow-y-scroll";
 
   return (
-    <div className={containerClass}>
+    <div className={cn("mllg-page-sidebar", containerClass)}>
       <header className="pt-6 pb-4">
         {backward &&
           (backward.onClick ? (

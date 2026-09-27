@@ -1,4 +1,4 @@
-import { describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { loader } from "../../../app/routes/api.search";
@@ -8,8 +8,23 @@ jest.mock("~/auth/authenticator.server", () => ({
 }));
 
 jest.mock("~/components/features/layout/navigation-menu", () => ({
-  getSearchableMenuItems: ({ currentUsername }: { currentUsername?: string | null } = {}) =>
-    currentUsername ? [{ id: "profile", name: "내 프로필", to: `/@${currentUsername}` }] : [],
+  getSearchableMenuItems: ({
+    currentUsername,
+    isSignedIn,
+  }: {
+    currentUsername?: string | null;
+    isSignedIn?: boolean;
+  } = {}) => {
+    const publicItems = [{ id: "events", name: "이벤트", to: "/events" }];
+    const personalItems =
+      currentUsername && isSignedIn
+        ? [
+            { id: "profile", name: "내 프로필 보기", to: `/@${currentUsername}`, requiresSignIn: true },
+            { id: "my-students", name: "내 학생", to: `/@${currentUsername}/students`, requiresSignIn: true },
+          ]
+        : [];
+    return [...publicItems, ...personalItems];
+  },
 }));
 
 jest.mock("~/models/student", () => ({
@@ -43,6 +58,11 @@ const mockedGetAllTimelineContentsMeta = getAllTimelineContentsMeta as jest.Mock
 >;
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 
+beforeEach(() => {
+  mockedGetActiveSensei.mockReset();
+  mockedGetActiveSensei.mockResolvedValue(null);
+});
+
 async function callLoader(q: string) {
   return loader({
     request: new Request(`https://mollulog.net/api/search?q=${encodeURIComponent(q)}`),
@@ -64,11 +84,17 @@ describe("api.search", () => {
     expect(mockedGetAllTimelineContentsMeta).toHaveBeenCalledWith(env, { ctx: undefined });
   });
 
-  it("adds the signed-in user's profile to the cached search index", async () => {
+  it("adds signed-in personal destinations to the request without caching them", async () => {
     mockedGetActiveSensei.mockResolvedValue({ username: "sensei" } as never);
 
-    const response = await callLoader("내 프로필");
+    const response = await callLoader("내 학생");
 
-    expect(response.results).toContainEqual({ type: "menu", name: "내 프로필", to: "/@sensei" });
+    expect(response.results).toContainEqual({ type: "menu", name: "내 학생", to: "/@sensei/students" });
+  });
+
+  it("does not expose personal destinations in the signed-out search response", async () => {
+    const response = await callLoader("내 학생");
+
+    expect(response.results).toEqual([]);
   });
 });
