@@ -1,55 +1,60 @@
-import { and, eq, like, or } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import { upsertEventShopStateInDatabase } from "~/db/postgres/event-shop-state";
+import { PlannerStateRevisionConflictError, withPlannerStateUpdate } from "~/db/postgres/planner-states";
 import {
-  type PlannerStateMutation,
-  PlannerStateRevisionConflictError,
-  withPlannerStateUpdate,
-} from "~/db/postgres/planner-states";
-import {
-  createAttendanceInDatabase,
-  createBuyPyroxeneInDatabase,
-  createOtherPyroxeneGainInDatabase,
-  createPyroxeneApPackageInDatabase,
-  createPyroxeneMonthlyPackageInDatabase,
   createPyroxeneOwnedResourceInDatabase,
   ensureCollectedSourceInDatabase,
   type PostgresPyroxeneOptions,
   type PyroxeneDatabase,
-  sortPlannerStateTimelineRecords,
   upsertPyroxeneEventDataInDatabase,
   upsertPyroxenePlannerOptionsInDatabase,
   withPyroxeneDatabase,
 } from "~/db/postgres/pyroxene-planner";
-import type { GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
-import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import type { EventShopState } from "~/domain/event-shop-state";
+import { type PlannerStateDocumentV1, sortPlannerStateTimelineRecords } from "~/domain/planner-state";
 import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { nowUtcIso } from "~/lib/date-time";
 import { pgPyroxeneGuestImportItemsTable, pgPyroxeneTimelineItemsTable } from "./schema";
 
-export type GuestImportItemType = "resources" | "options" | "record" | "source" | "event" | "favorite";
-
-export type GuestPyroxeneImportExternalOperation = {
-  itemKey: string;
-  run: () => Promise<void>;
-};
-
-export type GuestPyroxeneImportPlan = {
-  resources?: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number };
-  options?: PyroxenePlannerOptions;
-  records: GuestPyroxeneRecord[];
-  sourceKeys: string[];
-  eventTrials: { eventUid: string; expectedTrials: number }[];
-  favorites: GuestPyroxeneImportExternalOperation[];
-};
+export type GuestImportItemType = "resources" | "options" | "record" | "source" | "event" | "eventShop" | "favorite";
 
 export type GuestImportItem = {
   type: GuestImportItemType;
   key: string;
 };
 
-export type GuestPyroxeneImportResult = {
-  verified: GuestImportItem[];
-  failed: GuestImportItem[];
+export type GuestPlannerImportSelection = {
+  resources: boolean;
+  options: boolean;
+  recordUids: string[];
+  sourceKeys: string[];
+  eventUids: string[];
+  eventShopUids: string[];
+};
+
+export type GuestPlannerImportSource = {
+  sourceId: string;
+  datasetId: string;
+  document: PlannerStateDocumentV1;
+  selection: GuestPlannerImportSelection;
+};
+
+export type GuestPlannerImportItem = GuestImportItem & { datasetId: string; sourceId: string };
+
+export type GuestPlannerImportResult = {
+  verified: GuestPlannerImportItem[];
+  failed: GuestPlannerImportItem[];
   revisionConflict: boolean;
+};
+
+export type GuestPlannerImportPlan = {
+  sources: GuestPlannerImportSource[];
+  favorites: Array<{
+    sourceId: string;
+    datasetId: string;
+    itemKey: string;
+    run: () => Promise<void>;
+  }>;
 };
 
 type ImportedTimelineRecord = PlannerStateDocumentV1["pyroxene"]["records"][number];
@@ -60,26 +65,6 @@ function withImportedResource(document: PlannerStateDocumentV1, resource: Import
     return document;
   }
   return { ...document, pyroxene: { ...document.pyroxene, resources: resource } };
-}
-
-function withImportedRecords(
-  document: PlannerStateDocumentV1,
-  records: readonly ImportedTimelineRecord[],
-  replaceAttendance = false,
-): PlannerStateDocumentV1 {
-  const byUid = new Map(
-    document.pyroxene.records
-      .filter((record) => !replaceAttendance || record.source !== "attendance")
-      .map((record) => [record.uid, record]),
-  );
-  for (const record of records) byUid.set(record.uid, record);
-  return {
-    ...document,
-    pyroxene: {
-      ...document.pyroxene,
-      records: sortPlannerStateTimelineRecords([...byUid.values()]),
-    },
-  };
 }
 
 function withImportedSourceKey(document: PlannerStateDocumentV1, sourceKey: string): PlannerStateDocumentV1 {
@@ -102,19 +87,85 @@ function withImportedOptions(
   };
 }
 
-function withImportedEventTrials(
+function withImportedEventShop(
   document: PlannerStateDocumentV1,
   eventUid: string,
-  expectedTrials: number,
+  state: EventShopState,
 ): PlannerStateDocumentV1 {
-  const current = document.pyroxene.eventData[eventUid] ?? { completed: false, expectedTrials: null };
-  return {
-    ...document,
-    pyroxene: {
-      ...document.pyroxene,
-      eventData: { ...document.pyroxene.eventData, [eventUid]: { ...current, expectedTrials } },
-    },
-  };
+  return { ...document, eventShops: { ...document.eventShops, [eventUid]: state } };
+}
+
+function importedTimelineUid(userId: number, datasetId: string, baseUid: string, uid: string): string {
+  const suffix = uid.slice(baseUid.length);
+  return `${deterministicImportUid(userId, datasetId, baseUid)}${suffix}`;
+}
+
+async function importGuestTimelineRecordsInDatabase(
+  db: PyroxeneDatabase,
+  userId: number,
+  datasetId: string,
+  records: readonly ImportedTimelineRecord[],
+): Promise<ImportedTimelineRecord[]> {
+  if (records.length === 0) return [];
+  const importedRecords = records.map((record) => {
+    const baseUid = record.uid.split("::", 1)[0];
+    if (!baseUid) throw new Error("Invalid guest planner timeline group");
+    return { ...record, uid: importedTimelineUid(userId, datasetId, baseUid, record.uid) };
+  });
+  const importedUids = importedRecords.map(({ uid }) => uid);
+
+  if (records.some((record) => record.source === "attendance")) {
+    await db
+      .delete(pgPyroxeneTimelineItemsTable)
+      .where(
+        and(eq(pgPyroxeneTimelineItemsTable.userId, userId), eq(pgPyroxeneTimelineItemsTable.source, "attendance")),
+      );
+  }
+
+  const inserted = await db
+    .insert(pgPyroxeneTimelineItemsTable)
+    .values(
+      importedRecords.map((record) => ({
+        uid: record.uid,
+        userId,
+        eventAt: new Date(record.eventAt),
+        source: record.source,
+        repeatType: record.repeatType,
+        repeatIntervalDays: record.repeatIntervalDays,
+        repeatCount: record.repeatCount,
+        autoRepurchase: record.autoRepurchase,
+        description: record.description,
+        pyroxeneDelta: record.pyroxeneDelta,
+        oneTimeTicketDelta: record.oneTimeTicketDelta,
+        tenTimeTicketDelta: record.tenTimeTicketDelta,
+      })),
+    )
+    .onConflictDoNothing({ target: pgPyroxeneTimelineItemsTable.uid })
+    .returning();
+  const insertedUids = new Set(inserted.map(({ uid }) => uid));
+  const missingUids = importedUids.filter((uid) => !insertedUids.has(uid));
+  const existing = missingUids.length
+    ? await db
+        .select()
+        .from(pgPyroxeneTimelineItemsTable)
+        .where(
+          and(eq(pgPyroxeneTimelineItemsTable.userId, userId), inArray(pgPyroxeneTimelineItemsTable.uid, missingUids)),
+        )
+    : [];
+
+  return [...inserted, ...existing].map((row) => ({
+    uid: row.uid,
+    eventAt: row.eventAt.toISOString(),
+    source: row.source as ImportedTimelineRecord["source"],
+    repeatType: row.repeatType as ImportedTimelineRecord["repeatType"],
+    repeatIntervalDays: row.repeatIntervalDays,
+    repeatCount: row.repeatCount,
+    autoRepurchase: row.autoRepurchase,
+    description: row.description,
+    pyroxeneDelta: row.pyroxeneDelta,
+    oneTimeTicketDelta: row.oneTimeTicketDelta,
+    tenTimeTicketDelta: row.tenTimeTicketDelta,
+  }));
 }
 
 /**
@@ -272,228 +323,194 @@ export async function importGuestResourcesInDatabase(
   db: PyroxeneDatabase,
   userId: number,
   datasetId: string,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
+  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number; inputAt?: string },
 ): Promise<ImportedResource> {
   return createPyroxeneOwnedResourceInDatabase(db, userId, resources, {
     uid: deterministicImportUid(userId, datasetId, "resources"),
+    ...(resources.inputAt ? { inputAt: resources.inputAt } : {}),
     ignoreUidConflict: true,
   });
 }
 
-export async function importGuestRecordInDatabase(
-  db: PyroxeneDatabase,
-  userId: number,
-  datasetId: string,
-  record: GuestPyroxeneRecord,
-): Promise<ImportedTimelineRecord[]> {
-  const uid = deterministicImportUid(userId, datasetId, record.recordId);
-  const [existing] = await db
-    .select({ id: pgPyroxeneTimelineItemsTable.id })
-    .from(pgPyroxeneTimelineItemsTable)
-    .where(
-      and(
-        eq(pgPyroxeneTimelineItemsTable.userId, userId),
-        or(eq(pgPyroxeneTimelineItemsTable.uid, uid), like(pgPyroxeneTimelineItemsTable.uid, `${uid}::%`)),
-      ),
-    )
-    .limit(1);
-  if (existing) return [];
-
-  switch (record.kind) {
-    case "buy":
-      return createBuyPyroxeneInDatabase(db, userId, record.date, record.quantity, {
-        repeatType: record.repeatType,
-        monthlyCount: record.monthlyCount,
-        uid,
-        ignoreUidConflict: true,
-      });
-    case "monthlyPackage":
-      return createPyroxeneMonthlyPackageInDatabase(
-        db,
-        userId,
-        record.startDate,
-        record.packageType,
-        record.autoRepurchase,
-        uid,
-        true,
-      );
-    case "apPackage":
-      return createPyroxeneApPackageInDatabase(db, userId, record.startDate, record.autoRepurchase, uid, true);
-    case "attendance":
-      return createAttendanceInDatabase(db, userId, record.startDate, uid, true);
-    case "other":
-      return createOtherPyroxeneGainInDatabase(
-        db,
-        userId,
-        record.date,
-        record.resources.pyroxene,
-        record.resources.oneTimeTicket,
-        record.resources.tenTimeTicket,
-        record.description,
-        uid,
-        true,
-      );
+function selectedGuestPlannerItems(source: GuestPlannerImportSource): GuestPlannerImportItem[] {
+  const { datasetId, document, selection } = source;
+  const recordsByUid = new Map<string, ImportedTimelineRecord[]>();
+  for (const record of document.pyroxene.records) {
+    const baseUid = record.uid.split("::", 1)[0];
+    recordsByUid.set(baseUid, [...(recordsByUid.get(baseUid) ?? []), record]);
   }
+  const selected = [
+    ...(selection.resources && document.pyroxene.resources ? [{ type: "resources" as const, key: "current" }] : []),
+    ...(selection.options ? [{ type: "options" as const, key: "current" }] : []),
+    ...selection.recordUids.map((key) => ({ type: "record" as const, key })),
+    ...selection.sourceKeys.map((key) => ({ type: "source" as const, key })),
+    ...selection.eventUids.map((key) => ({ type: "event" as const, key })),
+    ...selection.eventShopUids.map((key) => ({ type: "eventShop" as const, key })),
+  ];
+  if (selection.recordUids.some((uid) => !recordsByUid.has(uid))) throw new Error("Unknown guest timeline record");
+  if (selection.sourceKeys.some((key) => !document.pyroxene.collectedSourceKeys.includes(key))) {
+    throw new Error("Unknown guest collected source");
+  }
+  if (selection.eventUids.some((uid) => !Object.hasOwn(document.pyroxene.eventData, uid))) {
+    throw new Error("Unknown guest event data");
+  }
+  if (selection.eventShopUids.some((uid) => !Object.hasOwn(document.eventShops, uid))) {
+    throw new Error("Unknown guest event shop plan");
+  }
+  return selected.map((item) => ({ ...item, datasetId, sourceId: source.sourceId }));
 }
 
-export async function importGuestResourcesPostgres(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  datasetId: string,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-): Promise<void> {
-  return withPyroxeneDatabase(env, "guest_import.resources", (db) =>
-    withPlannerStateUpdate(
-      db,
-      userId,
-      async (tx, document) => {
-        const imported = await importGuestResourcesInDatabase(tx, userId, datasetId, resources);
-        return { document: withImportedResource(document, imported), result: undefined };
-      },
-      { retryable: true },
-    ),
+function withImportedTimelineGroup(
+  document: PlannerStateDocumentV1,
+  imported: readonly ImportedTimelineRecord[],
+  replaceAttendance: boolean,
+): PlannerStateDocumentV1 {
+  const byUid = new Map(
+    document.pyroxene.records
+      .filter((record) => !replaceAttendance || record.source !== "attendance")
+      .map((record) => [record.uid, record]),
   );
+  for (const record of imported) byUid.set(record.uid, record);
+  return {
+    ...document,
+    pyroxene: { ...document.pyroxene, records: sortPlannerStateTimelineRecords([...byUid.values()]) },
+  };
 }
 
-export async function importGuestRecordPostgres(
+/** Imports all selected planner sections in one revision-conditional document update. */
+export async function runPostgresGuestPlannerImport(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
-  datasetId: string,
-  record: GuestPyroxeneRecord,
-): Promise<void> {
-  return withPyroxeneDatabase(env, "guest_import.record", (db) =>
-    withPlannerStateUpdate(
-      db,
-      userId,
-      async (tx, document) => {
-        const imported = await importGuestRecordInDatabase(tx, userId, datasetId, record);
-        return {
-          document: withImportedRecords(document, imported, record.kind === "attendance" && imported.length > 0),
-          result: undefined,
-        };
-      },
-      { retryable: true },
-    ),
-  );
-}
-
-export async function runPostgresGuestPyroxeneImport(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  datasetId: string,
-  plan: GuestPyroxeneImportPlan,
+  plan: GuestPlannerImportPlan,
   options: PostgresPyroxeneOptions = {},
-): Promise<GuestPyroxeneImportResult> {
-  return withPyroxeneDatabase(
-    env,
-    "guest_import.batch",
-    async (db) => {
-      const existingReceipts = await getGuestReceiptKeysInDatabase(db, userId, datasetId);
-      const verified: GuestImportItem[] = [];
-      const failed: GuestImportItem[] = [];
-      const pendingReceipts: GuestImportItem[] = [];
-      let revisionConflict = false;
+): Promise<GuestPlannerImportResult> {
+  const selectedBySource = plan.sources.map((source) => ({ source, items: selectedGuestPlannerItems(source) }));
+  const selectedItems = selectedBySource.flatMap(({ items }) => items);
+  if (selectedItems.length === 0) return { verified: [], failed: [], revisionConflict: false };
+  try {
+    const verified = await withPyroxeneDatabase(
+      env,
+      "guest_import.planner_state",
+      (db) =>
+        withPlannerStateUpdate(
+          db,
+          userId,
+          async (tx, initialDocument) => {
+            let document = initialDocument;
+            const verifiedItems: GuestPlannerImportItem[] = [];
+            const pendingItems: GuestPlannerImportItem[] = [];
 
-      const runPlannerItem = async (item: GuestImportItem, mutation: PlannerStateMutation<void>) => {
-        if (existingReceipts.has(receiptKey(item.type, item.key))) {
-          verified.push(item);
-          return;
-        }
-        try {
-          await withPlannerStateUpdate(db, userId, mutation, { retryable: true });
-          pendingReceipts.push(item);
-        } catch (error) {
-          if (error instanceof PlannerStateRevisionConflictError) revisionConflict = true;
-          failed.push(item);
-        }
-      };
+            for (const { source, items } of selectedBySource) {
+              const receiptKeys = await getGuestReceiptKeysInDatabase(tx, userId, source.datasetId);
+              const pendingForSource = items.filter((item) => {
+                if (!receiptKeys.has(receiptKey(item.type, item.key))) return true;
+                verifiedItems.push(item);
+                return false;
+              });
+              const pendingRecordUids = new Set(
+                pendingForSource.filter((item) => item.type === "record").map(({ key }) => key),
+              );
+              if (pendingRecordUids.size > 0) {
+                const selectedRecords = source.document.pyroxene.records.filter((record) =>
+                  pendingRecordUids.has(record.uid.split("::", 1)[0]),
+                );
+                const imported = await importGuestTimelineRecordsInDatabase(
+                  tx,
+                  userId,
+                  source.datasetId,
+                  selectedRecords,
+                );
+                document = withImportedTimelineGroup(
+                  document,
+                  imported,
+                  selectedRecords.some((record) => record.source === "attendance"),
+                );
+              }
 
-      const runExternalItem = async (item: GuestImportItem, operation: () => Promise<void>) => {
-        if (existingReceipts.has(receiptKey(item.type, item.key))) {
-          verified.push(item);
-          return;
-        }
-        try {
-          await operation();
-          pendingReceipts.push(item);
-        } catch (error) {
-          if (error instanceof PlannerStateRevisionConflictError) revisionConflict = true;
-          failed.push(item);
-        }
-      };
+              for (const item of pendingForSource) {
+                switch (item.type) {
+                  case "resources": {
+                    const resource = source.document.pyroxene.resources;
+                    if (!resource) throw new Error("Missing guest resources");
+                    const imported = await importGuestResourcesInDatabase(tx, userId, source.datasetId, resource);
+                    document = withImportedResource(document, imported);
+                    break;
+                  }
+                  case "options": {
+                    const options = normalizePyroxenePlannerOptions(source.document.pyroxene.options);
+                    await upsertPyroxenePlannerOptionsInDatabase(tx, userId, options);
+                    document = withImportedOptions(document, options);
+                    break;
+                  }
+                  case "record": {
+                    break;
+                  }
+                  case "source":
+                    await ensureCollectedSourceInDatabase(tx, userId, item.key);
+                    document = withImportedSourceKey(document, item.key);
+                    break;
+                  case "event": {
+                    const eventData = source.document.pyroxene.eventData[item.key];
+                    if (!eventData) throw new Error("Missing guest event data");
+                    await upsertPyroxeneEventDataInDatabase(tx, userId, item.key, eventData);
+                    document = {
+                      ...document,
+                      pyroxene: {
+                        ...document.pyroxene,
+                        eventData: { ...document.pyroxene.eventData, [item.key]: eventData },
+                      },
+                    };
+                    break;
+                  }
+                  case "eventShop": {
+                    const state = source.document.eventShops[item.key];
+                    if (!state) throw new Error("Missing guest event shop state");
+                    const normalizedState = await upsertEventShopStateInDatabase(tx, userId, item.key, state);
+                    document = withImportedEventShop(document, item.key, normalizedState);
+                    break;
+                  }
+                  case "favorite":
+                    throw new Error("Favorite imports are handled by the favorite command");
+                }
+                pendingItems.push(item);
+              }
+            }
 
-      if (plan.resources) {
-        await runPlannerItem({ type: "resources", key: "current" }, async (tx, document) => {
-          const imported = await importGuestResourcesInDatabase(
-            tx,
-            userId,
-            datasetId,
-            plan.resources as NonNullable<typeof plan.resources>,
-          );
-          return { document: withImportedResource(document, imported), result: undefined };
-        });
-      }
-      if (plan.options) {
-        await runPlannerItem({ type: "options", key: "current" }, async (tx, document) => {
-          const options = normalizePyroxenePlannerOptions(plan.options as PyroxenePlannerOptions);
-          await upsertPyroxenePlannerOptionsInDatabase(tx, userId, options);
-          return { document: withImportedOptions(document, options), result: undefined };
-        });
-      }
-      for (const record of plan.records) {
-        await runPlannerItem({ type: "record", key: record.recordId }, async (tx, document) => {
-          const imported = await importGuestRecordInDatabase(tx, userId, datasetId, record);
-          return {
-            document: withImportedRecords(document, imported, record.kind === "attendance" && imported.length > 0),
-            result: undefined,
-          };
-        });
-      }
-      for (const sourceKey of plan.sourceKeys) {
-        await runPlannerItem({ type: "source", key: sourceKey }, async (tx, document) => {
-          await ensureCollectedSourceInDatabase(tx, userId, sourceKey);
-          return { document: withImportedSourceKey(document, sourceKey), result: undefined };
-        });
-      }
-      for (const { eventUid, expectedTrials } of plan.eventTrials) {
-        await runPlannerItem({ type: "event", key: eventUid }, async (tx, document) => {
-          await upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, { expectedTrials });
-          return { document: withImportedEventTrials(document, eventUid, expectedTrials), result: undefined };
-        });
-      }
-      for (const favorite of plan.favorites) {
-        await runExternalItem({ type: "favorite", key: favorite.itemKey }, favorite.run);
-      }
+            if (pendingItems.length > 0) {
+              await tx
+                .insert(pgPyroxeneGuestImportItemsTable)
+                .values(
+                  pendingItems.map(({ datasetId, type, key }) => ({
+                    userId,
+                    datasetId,
+                    itemType: type,
+                    itemKey: encodePostgresPyroxeneReceiptItemKey(key),
+                    importedAt: new Date(nowUtcIso()),
+                  })),
+                )
+                .onConflictDoNothing({
+                  target: [
+                    pgPyroxeneGuestImportItemsTable.userId,
+                    pgPyroxeneGuestImportItemsTable.datasetId,
+                    pgPyroxeneGuestImportItemsTable.itemType,
+                    pgPyroxeneGuestImportItemsTable.itemKey,
+                  ],
+                });
+              verifiedItems.push(...pendingItems);
+            }
 
-      if (pendingReceipts.length > 0) {
-        try {
-          await db
-            .insert(pgPyroxeneGuestImportItemsTable)
-            .values(
-              pendingReceipts.map(({ type, key }) => ({
-                userId,
-                datasetId,
-                itemType: type,
-                itemKey: encodePostgresPyroxeneReceiptItemKey(key),
-                importedAt: new Date(nowUtcIso()),
-              })),
-            )
-            .onConflictDoNothing({
-              target: [
-                pgPyroxeneGuestImportItemsTable.userId,
-                pgPyroxeneGuestImportItemsTable.datasetId,
-                pgPyroxeneGuestImportItemsTable.itemType,
-                pgPyroxeneGuestImportItemsTable.itemKey,
-              ],
-            });
-          verified.push(...pendingReceipts);
-        } catch {
-          failed.push(...pendingReceipts);
-        }
-      }
-
-      return { verified, failed, revisionConflict };
-    },
-    options,
-  );
+            return { document, result: verifiedItems };
+          },
+          { retryable: true },
+        ),
+      options,
+    );
+    return { verified, failed: [], revisionConflict: false };
+  } catch (error) {
+    return {
+      verified: [],
+      failed: selectedItems,
+      revisionConflict: error instanceof PlannerStateRevisionConflictError,
+    };
+  }
 }

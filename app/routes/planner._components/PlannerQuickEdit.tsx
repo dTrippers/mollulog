@@ -1,11 +1,21 @@
 import { type FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { Button } from "~/components/primitives";
-import { createGuestRecord, type GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
-import { DEFAULT_BUY_PYROXENE_QUANTITY } from "~/domain/pyroxene-sources";
+import {
+  createGuestRecord,
+  type GuestPyroxeneRecord,
+  guestPyroxeneRecordToTimelineItems,
+} from "~/domain/guest-pyroxene-planner";
+import { sortPlannerStateTimelineRecords } from "~/domain/planner-state";
+import {
+  createOptimisticBuyTimelineItems,
+  createOptimisticOtherTimelineItems,
+  DEFAULT_BUY_PYROXENE_QUANTITY,
+  extractPyroxeneTimelineBaseUid,
+} from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
-import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
+import { updateGuestPlanner } from "~/lib/guest-planner.client";
 
 export type PlannerQuickEditEntry = {
   id: string;
@@ -21,7 +31,7 @@ type PlannerQuickEditProps = {
   timeZone: string;
   entries: readonly PlannerQuickEditEntry[];
   isSignedIn: boolean;
-  guestStorageStatus: "ready" | "memory" | "corrupt" | "loading";
+  guestStorageStatus: "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading";
   initialKind?: PlannerQuickEditKind;
   initialEntry?: PlannerQuickEditEntry;
   onSaved?: () => void;
@@ -251,34 +261,73 @@ export default function PlannerQuickEdit({
                   packageType,
                   autoRepurchase: false,
                 }) as GuestPyroxeneRecord);
-      const snapshot = await updateGuestPyroxenePlanner((current) => {
+      const snapshot = await updateGuestPlanner((current) => {
+        const currentRecords = current.document.pyroxene.records;
         if (!editingId && newRecord) {
           changed = true;
-          return { ...current, records: [...current.records, newRecord] };
+          return {
+            ...current,
+            document: {
+              ...current.document,
+              pyroxene: {
+                ...current.document.pyroxene,
+                records: sortPlannerStateTimelineRecords([
+                  ...currentRecords,
+                  ...guestPyroxeneRecordToTimelineItems(newRecord).map(({ userId: _userId, ...item }) => item),
+                ]),
+              },
+            },
+          };
         }
-        const records = current.records.map((record) => {
-          if (record.recordId !== editingId) return record;
-          if (kind === "buy" && record.kind === "buy") {
+        const baseRecords = currentRecords.filter((record) => extractPyroxeneTimelineBaseUid(record.uid) === editingId);
+        const untouchedRecords = currentRecords.filter(
+          (record) => extractPyroxeneTimelineBaseUid(record.uid) !== editingId,
+        );
+        const records = baseRecords.map((record) => {
+          if (kind === "buy" && record.source === "buy") {
             changed = true;
-            return {
-              ...record,
-              date: dateInstant,
-              quantity: numericQuantity,
-              repeatType: "fixed_days" as const,
-              monthlyCount: 1,
-            };
+            return createOptimisticBuyTimelineItems(numericQuantity, new Date(dateInstant), {
+              uid: record.uid,
+              repeatType: "fixed_days",
+            })[0];
           }
-          if (kind === "other" && record.kind === "other") {
+          if (kind === "other" && record.source === "other") {
             changed = true;
-            return { ...record, date: dateInstant, description: description.trim(), resources: numericResources };
+            return createOptimisticOtherTimelineItems(
+              numericResources,
+              description.trim(),
+              new Date(dateInstant),
+              record.uid,
+            )[0];
           }
           return record;
         });
-        return changed ? { ...current, records } : current;
+        return changed
+          ? {
+              ...current,
+              document: {
+                ...current.document,
+                pyroxene: {
+                  ...current.document.pyroxene,
+                  records: sortPlannerStateTimelineRecords([...untouchedRecords, ...records]),
+                },
+              },
+            }
+          : current;
       });
 
       if (snapshot.status === "corrupt") {
         setMessage("브라우저의 청휘석 계획을 읽지 못해 저장하지 않았어요.");
+        setMessageIsError(true);
+        return;
+      }
+      if (snapshot.status === "conflict") {
+        setMessage("다른 탭에서 플래너가 바뀌었어요. 새로고침 후 다시 시도해주세요.");
+        setMessageIsError(true);
+        return;
+      }
+      if (snapshot.status === "unavailable") {
+        setMessage("브라우저 플래너 저장소를 사용할 수 없어 저장하지 않았어요.");
         setMessageIsError(true);
         return;
       }

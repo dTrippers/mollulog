@@ -4,6 +4,7 @@ import {
   type PlannerStateProjectionRows,
   plannerStateDocumentDifferences,
   projectPlannerStateDocument,
+  sortPlannerStateTimelineRecords,
 } from "~/domain/planner-state";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
@@ -75,6 +76,21 @@ function projectionRows(overrides: Partial<PlannerStateProjectionRows> = {}): Pl
 }
 
 describe("planner state projection", () => {
+  it("sorts planner records by event time while preserving same-time order", () => {
+    const input = [
+      { uid: "later", eventAt: "2026-09-03T00:00:00.000Z" },
+      { uid: "same-first", eventAt: "2026-09-02T00:00:00.000Z" },
+      { uid: "same-second", eventAt: "2026-09-02T00:00:00.000Z" },
+    ];
+
+    expect(sortPlannerStateTimelineRecords(input).map(({ uid }) => uid)).toEqual([
+      "same-first",
+      "same-second",
+      "later",
+    ]);
+    expect(input[0]?.uid).toBe("later");
+  });
+
   it("keeps the latest resources and preserves planner payload fields", () => {
     const document = projectPlannerStateDocument(projectionRows());
 

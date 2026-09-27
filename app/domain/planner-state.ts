@@ -26,6 +26,11 @@ export type PlannerStateDocumentV1 = {
   ap: null;
 };
 
+/** Sort planner records by event time while keeping same-time insertion order stable. */
+export function sortPlannerStateTimelineRecords<T extends { eventAt: string }>(records: readonly T[]): T[] {
+  return [...records].sort((left, right) => left.eventAt.localeCompare(right.eventAt));
+}
+
 export type PlannerStateProjectionRows = {
   resources: readonly unknown[];
   timelineItems: readonly unknown[];

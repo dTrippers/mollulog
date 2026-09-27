@@ -48,7 +48,7 @@ jest.mock("~/models/recruitment-result.server", () => ({
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: mockGetLogger }));
 
-import { action } from "~/routes/utils.pyroxene";
+import { action, PYROXENE_GUEST_IMPORT_HREF } from "~/routes/utils.pyroxene";
 import { decodePyroxeneActionPayload } from "~/routes/utils.pyroxene._components/action-data";
 
 const env = {} as Env;
@@ -136,6 +136,10 @@ beforeEach(() => {
 });
 
 describe("Pyroxene action payload", () => {
+  it("sends the pyroxene import entry back to the pyroxene planner", () => {
+    expect(PYROXENE_GUEST_IMPORT_HREF).toBe("/planner/import?from=pyroxene");
+  });
+
   it.each(validActions)("decodes valid $intent with $method", ({ intent, payload, method }) => {
     expect(decodePyroxeneActionPayload({ intent, payload }, method)).toMatchObject({ intent, payload });
   });

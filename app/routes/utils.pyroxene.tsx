@@ -11,22 +11,23 @@ import {
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
+  GuestPlannerLegacyConflictCallout,
   PyroxenePlannerOptionsPanel,
   PyroxenePlannerSourcePanel,
   PyroxeneSchedule,
-  useGuestPyroxenePlanner,
+  useGuestPlanner,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
 import Page from "~/components/features/layout/Page";
 import { Button, Callout } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { guestPlannerHasData, updateGuestPlannerOptions } from "~/domain/guest-planner";
 import {
   createGuestRecord,
   type GuestPyroxeneRecord,
   guestPyroxeneRecordToTimelineItems,
-  guestPyroxeneTimelineItems,
-  hasGuestPyroxenePlannerData,
 } from "~/domain/guest-pyroxene-planner";
+import { sortPlannerStateTimelineRecords } from "~/domain/planner-state";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -65,6 +66,8 @@ import {
 } from "~/models/recruitment-result.server";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._components/action-data";
+
+export const PYROXENE_GUEST_IMPORT_HREF = "/planner/import?from=pyroxene";
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -360,7 +363,7 @@ export default function PyroxenePlanner() {
   const loaderData = useLoaderData<typeof loader>();
   const { signedIn, contents } = loaderData;
   const { showSignIn } = useSignIn();
-  const guestPlanner = useGuestPyroxenePlanner();
+  const guestPlanner = useGuestPlanner();
   const loaderResources = toPickupResources(loaderData.latestResources);
 
   const [initialDate, setInitialDate] = useState<Date | null>(
@@ -435,23 +438,31 @@ export default function PyroxenePlanner() {
   }, [loaderData.favoritedStudents]);
 
   useEffect(() => {
-    if (signedIn || !guestPlanner.snapshot || guestPlanner.snapshot.status === "corrupt") return;
-    const data = guestPlanner.snapshot.envelope.data;
-    setInitialDate(data.resources ? new Date(data.resources.inputAt) : null);
-    setInitialResources(data.resources ? toPickupResources(data.resources) : zeroPickupResources());
-    setLocalTimelineItems(guestPyroxeneTimelineItems(data));
+    if (
+      signedIn ||
+      !guestPlanner.snapshot ||
+      (guestPlanner.snapshot.status !== "ready" &&
+        guestPlanner.snapshot.status !== "memory" &&
+        guestPlanner.snapshot.status !== "conflict")
+    )
+      return;
+    const { document, favorites } = guestPlanner.snapshot.envelope;
+    const pyroxene = document.pyroxene;
+    setInitialDate(pyroxene.resources ? new Date(pyroxene.resources.inputAt) : null);
+    setInitialResources(pyroxene.resources ? toPickupResources(pyroxene.resources) : zeroPickupResources());
+    setLocalTimelineItems(pyroxene.records.map((item) => ({ ...item, userId: 0 })));
     setLocalEventData(
-      Object.entries(data.eventTrials).map(([eventUid, expectedTrials]) => ({
+      Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({
         uid: `guest-${eventUid}`,
         userId: 0,
         eventUid,
-        completed: false,
-        expectedTrials,
+        completed: state.completed,
+        expectedTrials: state.expectedTrials,
       })),
     );
-    setLocalCollectedSourceKeys(data.collectedSourceKeys);
-    setLocalFavoritedStudents(data.favoriteStudents);
-    setOptions(data.options);
+    setLocalCollectedSourceKeys(pyroxene.collectedSourceKeys);
+    setLocalFavoritedStudents(favorites);
+    setOptions(pyroxene.options);
   }, [guestPlanner.snapshot, signedIn]);
 
   useEffect(() => {
@@ -489,10 +500,18 @@ export default function PyroxenePlanner() {
     const inputAt = new Date();
     if (!signedIn) {
       confirmOwnedResourceSave({ eventUid, resources: ownedResources, collectedSourceKeys }, inputAt.toISOString());
-      void guestPlanner.update((data) => ({
-        ...data,
-        resources: { ...ownedResources, inputAt: inputAt.toISOString() },
-        collectedSourceKeys: [...new Set([...data.collectedSourceKeys, ...collectedSourceKeys])],
+      void guestPlanner.update((envelope) => ({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            resources: { ...ownedResources, inputAt: inputAt.toISOString() },
+            collectedSourceKeys: [
+              ...new Set([...envelope.document.pyroxene.collectedSourceKeys, ...collectedSourceKeys]),
+            ].sort(),
+          },
+        },
       }));
       return;
     }
@@ -516,11 +535,17 @@ export default function PyroxenePlanner() {
       return prev.filter((key) => key !== sourceKey);
     });
     if (!signedIn) {
-      void guestPlanner.update((data) => ({
-        ...data,
-        collectedSourceKeys: collected
-          ? [...new Set([...data.collectedSourceKeys, sourceKey])]
-          : data.collectedSourceKeys.filter((key) => key !== sourceKey),
+      void guestPlanner.update((envelope) => ({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            collectedSourceKeys: collected
+              ? [...new Set([...envelope.document.pyroxene.collectedSourceKeys, sourceKey])].sort()
+              : envelope.document.pyroxene.collectedSourceKeys.filter((key) => key !== sourceKey),
+          },
+        },
       }));
       return;
     }
@@ -548,11 +573,20 @@ export default function PyroxenePlanner() {
       ];
     });
     if (!signedIn) {
-      void guestPlanner.update((current) => {
-        const eventTrials = { ...current.eventTrials };
-        if (data.expectedTrials === null || data.expectedTrials === undefined) delete eventTrials[eventUid];
-        else eventTrials[eventUid] = data.expectedTrials;
-        return { ...current, eventTrials };
+      void guestPlanner.update((envelope) => {
+        const eventData = { ...envelope.document.pyroxene.eventData };
+        if (data.expectedTrials === null || data.expectedTrials === undefined) {
+          const current = eventData[eventUid];
+          if (current?.completed) eventData[eventUid] = { ...current, expectedTrials: null };
+          else delete eventData[eventUid];
+        } else {
+          const current = eventData[eventUid] ?? { completed: false, expectedTrials: null };
+          eventData[eventUid] = { ...current, expectedTrials: data.expectedTrials };
+        }
+        return {
+          ...envelope,
+          document: { ...envelope.document, pyroxene: { ...envelope.document.pyroxene, eventData } },
+        };
       });
       return;
     }
@@ -581,9 +615,17 @@ export default function PyroxenePlanner() {
     const baseUid = extractPyroxeneTimelineBaseUid(itemUid);
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
     if (!signedIn) {
-      void guestPlanner.update((data) => ({
-        ...data,
-        records: data.records.filter((record) => record.recordId !== baseUid),
+      void guestPlanner.update((envelope) => ({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            records: envelope.document.pyroxene.records.filter(
+              (record) => extractPyroxeneTimelineBaseUid(record.uid) !== baseUid,
+            ),
+          },
+        },
       }));
       return;
     }
@@ -601,13 +643,13 @@ export default function PyroxenePlanner() {
       return favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget;
     });
     if (!signedIn) {
-      void guestPlanner.update((data) => {
-        const withoutTarget = data.favoriteStudents.filter(
+      void guestPlanner.update((envelope) => {
+        const withoutTarget = envelope.favorites.filter(
           (favorite) => !(favorite.contentUid === contentUid && favorite.studentUid === studentUid),
         );
         return {
-          ...data,
-          favoriteStudents: favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget,
+          ...envelope,
+          favorites: favorited ? [...withoutTarget, { contentUid, studentUid }] : withoutTarget,
         };
       });
       return;
@@ -623,13 +665,22 @@ export default function PyroxenePlanner() {
       const current = replaceAttendance ? prev.filter((item) => item.source !== "attendance") : prev;
       return [...current, ...guestPyroxeneRecordToTimelineItems(record)];
     });
-    void guestPlanner.update((data) => ({
-      ...data,
-      records: [
-        ...(replaceAttendance ? data.records.filter((item) => item.kind !== "attendance") : data.records),
-        record,
-      ],
-    }));
+    void guestPlanner.update((envelope) => {
+      const added = guestPyroxeneRecordToTimelineItems(record);
+      const retained = replaceAttendance
+        ? envelope.document.pyroxene.records.filter((item) => item.source !== "attendance")
+        : envelope.document.pyroxene.records;
+      return {
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            records: sortPlannerStateTimelineRecords([...retained, ...added]),
+          },
+        },
+      };
+    });
   };
 
   const handleSaveBuy = (
@@ -789,7 +840,7 @@ export default function PyroxenePlanner() {
     };
     setOptions(nextOptions);
     if (!signedIn) {
-      void guestPlanner.update((data) => ({ ...data, options: nextOptions, optionsChanged: true }));
+      void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, nextOptions));
     }
     return nextOptions;
   };
@@ -801,7 +852,7 @@ export default function PyroxenePlanner() {
     }
     optionsSaveTimer.current = setTimeout(() => {
       if (!signedIn) {
-        void guestPlanner.update((data) => ({ ...data, options: newOptions, optionsChanged: true }));
+        void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, newOptions));
         return;
       }
       fetcher.submit(
@@ -839,7 +890,18 @@ export default function PyroxenePlanner() {
       ownedResourcesFetcher.state === "submitting" ||
       ownedResourcesFetcher.state === "loading");
   const guestDataStatus = guestPlanner.snapshot?.status;
-  const hasGuestData = guestPlanner.snapshot ? hasGuestPyroxenePlannerData(guestPlanner.snapshot.envelope.data) : false;
+  const hasGuestLegacyConflicts =
+    guestPlanner.snapshot && "envelope" in guestPlanner.snapshot
+      ? guestPlanner.snapshot.envelope.legacyConflicts.length > 0
+      : false;
+  const hasGuestData =
+    guestPlanner.snapshot?.status === "ready" ||
+    guestPlanner.snapshot?.status === "memory" ||
+    guestPlanner.snapshot?.status === "conflict"
+      ? guestPlanner.snapshot.legacySources.pyroxeneCorrupt ||
+        guestPlanner.snapshot.legacySources.eventShopsCorrupt ||
+        guestPlannerHasData(guestPlanner.snapshot.envelope)
+      : false;
   return (
     <>
       {/* Saving indicator */}
@@ -900,14 +962,16 @@ export default function PyroxenePlanner() {
               <Callout tone="destructive" title={fetcher.data.error} />
             ) : null}
             {ownedResourceSaveError ? <Callout tone="destructive" title={ownedResourceSaveError} /> : null}
-            {signedIn && hasGuestData ? (
+            {signedIn && hasGuestLegacyConflicts ? (
+              <GuestPlannerLegacyConflictCallout to={PYROXENE_GUEST_IMPORT_HREF} />
+            ) : signedIn && hasGuestData ? (
               <Callout
                 tone="info"
                 title="비로그인 상태에서 입력한 데이터가 있어요"
                 description="계정에 저장된 내용과 비교 후 최근 데이터를 선택해주세요."
               >
                 <div className="mt-2">
-                  <Button text="내용 확인" to="/utils/pyroxene/import" size="sm" variant="primary" />
+                  <Button text="내용 확인" to={PYROXENE_GUEST_IMPORT_HREF} size="sm" variant="primary" />
                 </div>
               </Callout>
             ) : !signedIn && guestDataStatus === "memory" ? (
@@ -922,6 +986,12 @@ export default function PyroxenePlanner() {
                   <Button text="저장된 데이터 초기화" size="sm" variant="danger-subtle" onClick={guestPlanner.reset} />
                 </div>
               </Callout>
+            ) : !signedIn && hasGuestLegacyConflicts ? (
+              <GuestPlannerLegacyConflictCallout />
+            ) : !signedIn && guestDataStatus === "conflict" ? (
+              <Callout tone="warning" title="다른 탭에서 미로그인 상태의 플래너가 바뀌었어요" />
+            ) : !signedIn && guestDataStatus === "unavailable" ? (
+              <Callout tone="destructive" title="브라우저 플래너 저장소를 사용할 수 없어요" />
             ) : !signedIn ? (
               <Callout
                 tone="info"

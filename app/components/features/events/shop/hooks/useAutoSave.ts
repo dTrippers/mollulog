@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
-import type { GuestEventShopPlan } from "~/domain/guest-event-shop-planner";
-import { persistGuestEventShopPlanImmediately, readGuestEventShopPlanner } from "~/lib/guest-event-shop-planner.client";
+import { upsertGuestPlannerEventShopPlan } from "~/domain/guest-planner";
+import { readGuestPlanner, updateGuestPlanner } from "~/lib/guest-planner.client";
 import type { ShopState } from "./useShopState";
 
-export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "none";
+export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
 
 type UseAutoSaveParams = {
   state: ShopState;
@@ -81,6 +81,8 @@ function guestStorageError(status: GuestPlannerStatus): string {
       return "저장된 게스트 상점 계획을 읽지 못했어요. 현재 입력은 저장되지 않았어요.";
     case "unavailable":
       return "브라우저 상점 계획 저장소에 접근할 수 없어요. 현재 입력은 저장되지 않았어요.";
+    case "loading":
+      return "브라우저 플래너를 불러오고 있어요. 잠시 후 다시 시도해주세요.";
     case "ready":
     case "none":
       return "브라우저에 상점 계획을 저장하지 못했어요.";
@@ -131,11 +133,12 @@ export function useAutoSave({
   }, [savedShopState]);
 
   const saveGuestState = useCallback(
-    (nextState: EventShopState, force = false) => {
+    async (nextState: EventShopState, force = false) => {
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
-      const plan: GuestEventShopPlan = { timelineUid, shopStateUid, state: nextState };
-      const result = persistGuestEventShopPlanImmediately(plan);
+      const result = await updateGuestPlanner((envelope) =>
+        upsertGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState }),
+      );
       if (result.status === "ready") {
         lastSavedStateRef.current = nextState;
         setSaveError(null);
@@ -148,12 +151,12 @@ export function useAutoSave({
 
   useEffect(() => {
     if (signedIn || isInitialLoad) return;
-    saveGuestState(currentState, guestPlannerStatus === "memory");
+    void saveGuestState(currentState, guestPlannerStatus === "memory");
   }, [currentState, guestPlannerStatus, isInitialLoad, saveGuestState, signedIn]);
 
   useEffect(() => {
     if (signedIn) return;
-    const flush = () => saveGuestState(currentStateRef.current, guestPlannerStatus === "memory");
+    const flush = () => void saveGuestState(currentStateRef.current, guestPlannerStatus === "memory");
     window.addEventListener("pagehide", flush);
     return () => {
       window.removeEventListener("pagehide", flush);
@@ -232,7 +235,7 @@ export function useAutoSave({
         lastSavedStateRef.current &&
         eventShopStatesEqual(lastSavedStateRef.current, currentState)
       ) {
-        const snapshot = readGuestEventShopPlanner();
+        const snapshot = readGuestPlanner();
         setSaveError(snapshot.status === "ready" ? null : guestStorageError(snapshot.status));
         return;
       }

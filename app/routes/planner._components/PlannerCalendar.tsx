@@ -53,7 +53,7 @@ type PlannerCalendarProps = {
   isSignedIn: boolean;
   timeZone: string;
   oneOffEntries: PlannerQuickEditEntry[];
-  guestStorageStatus: "ready" | "memory" | "corrupt" | "loading";
+  guestStorageStatus: "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading";
   recruitmentSavedStates: PlannerRecruitmentSavedState[];
   recruitmentIsSaving: boolean;
   recruitmentSaveResult: PlannerRecruitmentSaveResult | null;

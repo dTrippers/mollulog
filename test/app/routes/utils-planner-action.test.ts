@@ -11,7 +11,7 @@ jest.mock("~/models/integrated-planner", () => ({ saveIntegratedPlannerRecruitme
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: jest.fn() }));
 jest.mock("~/views/integrated-planner", () => ({ getIntegratedPlannerData: jest.fn() }));
 
-import { action } from "~/routes/planner";
+import { action, PLANNER_GUEST_EVENT_SHOP_IMPORT_HREF, PLANNER_GUEST_PYROXENE_IMPORT_HREF } from "~/routes/planner";
 
 const env = {} as Env;
 const ctx = {} as ExecutionContext;
@@ -36,6 +36,14 @@ beforeEach(() => {
 });
 
 describe("integrated planner action", () => {
+  it("sends the pyroxene import entry back to the integrated planner", () => {
+    expect(PLANNER_GUEST_PYROXENE_IMPORT_HREF).toBe("/planner/import?from=planner");
+  });
+
+  it("sends the event shop comparison entry back to the integrated planner", () => {
+    expect(PLANNER_GUEST_EVENT_SHOP_IMPORT_HREF).toBe("/planner/import?from=planner");
+  });
+
   it("returns the shared revision conflict message and HTTP 409 for planner writes", async () => {
     mockCreateBuyPyroxene.mockRejectedValue(new PlannerStateRevisionConflictError());
 

@@ -10,7 +10,7 @@ import {
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
 
-type EventShopStateDatabase = NodePgDatabase;
+export type EventShopStateDatabase = NodePgDatabase;
 
 const eventShopStateHistorySources = ["autosave"] as const;
 
@@ -74,6 +74,30 @@ async function withEventShopStateDatabase<T>(
   );
 }
 
+export async function upsertEventShopStateInDatabase(
+  tx: EventShopStateDatabase,
+  userId: number,
+  eventUid: string,
+  state: EventShopState,
+): Promise<EventShopState> {
+  const historySource = parseEventShopStateHistorySource("autosave");
+  const normalizedState = normalizeEventShopStateForStorage(state);
+  await tx
+    .insert(pgEventShopStatesTable)
+    .values({ uid: nanoid(8), userId, eventUid, ...normalizedState })
+    .onConflictDoUpdate({
+      target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+      set: { ...normalizedState, updatedAt: new Date() },
+    });
+  await tx.insert(pgEventShopStatesHistoryTable).values({
+    userId,
+    eventUid,
+    state: normalizedState,
+    source: historySource,
+  });
+  return normalizedState;
+}
+
 export async function upsertPostgresEventShopState(
   env: Env,
   userId: number,
@@ -82,7 +106,6 @@ export async function upsertPostgresEventShopState(
   options: PostgresEventShopStateUpsertOptions = {},
 ): Promise<void> {
   const submittedState = normalizeEventShopStateForStorage(state);
-  const historySource = parseEventShopStateHistorySource("autosave");
   await withEventShopStateDatabase(
     env,
     (db) =>
@@ -94,36 +117,15 @@ export async function upsertPostgresEventShopState(
             document.eventShops[eventUid] ??
             (options.fallbackEventUid ? document.eventShops[options.fallbackEventUid] : undefined) ??
             null;
-          const stateToSave = normalizeEventShopStateForStorage(
+          const stateToSave =
             !options.replace && options.baseState && currentState
               ? mergeEventShopStateChanges(options.baseState, submittedState, currentState)
-              : submittedState,
-          );
-          await tx
-            .insert(pgEventShopStatesTable)
-            .values({
-              uid: nanoid(8),
-              userId,
-              eventUid,
-              ...stateToSave,
-            })
-            .onConflictDoUpdate({
-              target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-              set: {
-                ...stateToSave,
-                updatedAt: new Date(),
-              },
-            });
-          await tx.insert(pgEventShopStatesHistoryTable).values({
-            userId,
-            eventUid,
-            state: stateToSave,
-            source: historySource,
-          });
+              : submittedState;
+          const normalizedState = await upsertEventShopStateInDatabase(tx, userId, eventUid, stateToSave);
           return {
             document: {
               ...document,
-              eventShops: { ...document.eventShops, [eventUid]: stateToSave },
+              eventShops: { ...document.eventShops, [eventUid]: normalizedState },
             },
             result: undefined,
           };
