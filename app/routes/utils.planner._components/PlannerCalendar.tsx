@@ -520,13 +520,15 @@ export default function PlannerCalendar({
                 })}
                 {readOnlyBuySources.map((source) => (
                   <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="break-keep text-sm font-medium text-foreground">{source.label}</h3>
+                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
+                      {source.label}
+                    </h3>
                     {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
                   </li>
                 ))}
                 {dateResourceAttribution?.unmatchedEventRewardSources.map((source) => (
                   <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="break-keep text-sm font-medium text-foreground">
+                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
                       {getPlannerUnmatchedEventRewardLabel(source)}
                     </h3>
                     {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
@@ -534,7 +536,9 @@ export default function PlannerCalendar({
                 ))}
                 {dateResourceAttribution?.unmatchedEventSources.map((source) => (
                   <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="break-keep text-sm font-medium text-foreground">{source.label}</h3>
+                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
+                      {source.label}
+                    </h3>
                     {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
                   </li>
                 ))}

@@ -41,20 +41,42 @@ export function PlannerPeriodRange({
 }
 
 export function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
-  const [imageFailed, setImageFailed] = useState(false);
   return (
     <div className="relative size-10 shrink-0 overflow-hidden rounded-md">
       <div aria-hidden="true" className="absolute inset-0 rounded-md bg-muted ring-1 ring-border" />
-      {period?.imageUrl && !imageFailed ? (
-        <img
-          src={period.imageUrl}
-          alt=""
-          className="relative size-full object-cover"
-          loading="lazy"
-          onError={() => setImageFailed(true)}
+      {period?.imageUrl ? (
+        <PlannerEventThumbnailImage
+          key={JSON.stringify([period.imageUrl, period.fallbackImageUrl])}
+          imageUrl={period.imageUrl}
+          fallbackImageUrl={period.fallbackImageUrl}
         />
       ) : null}
     </div>
+  );
+}
+
+function PlannerEventThumbnailImage({
+  imageUrl,
+  fallbackImageUrl,
+}: {
+  imageUrl: string;
+  fallbackImageUrl?: string | null;
+}) {
+  const [imageStage, setImageStage] = useState<"primary" | "fallback" | "failed">("primary");
+  const currentImageUrl = imageStage === "primary" ? imageUrl : imageStage === "fallback" ? fallbackImageUrl : null;
+  if (!currentImageUrl) return null;
+
+  return (
+    <img
+      key={currentImageUrl}
+      src={currentImageUrl}
+      alt=""
+      className="relative size-full object-cover"
+      loading="lazy"
+      onError={() => {
+        setImageStage((currentStage) => (currentStage === "primary" && fallbackImageUrl ? "fallback" : "failed"));
+      }}
+    />
   );
 }
 

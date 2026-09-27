@@ -36,6 +36,7 @@ import type { TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 import dayjs from "~/lib/dayjs";
+import { eventIconImageUrl } from "~/models/assets";
 
 describe("integrated planner calendar domain", () => {
   test("adds only forecasted total assault and elimination raids to a separate weekly lane", () => {
@@ -1394,6 +1395,120 @@ describe("integrated planner calendar domain", () => {
     );
   });
 
+  test("builds a square event icon URL and returns no URL without a content UID", () => {
+    expect(eventIconImageUrl("817")).toBe("https://assets.baql.net/images/events/icon/817_kr.webp");
+    expect(eventIconImageUrl("817", "jp")).toBe("https://assets.baql.net/images/events/icon/817_jp.webp");
+    expect(eventIconImageUrl(null)).toBeNull();
+  });
+
+  test("keeps the selected event icon and non-event timeline images on their periods", () => {
+    const eventIconUrl = eventIconImageUrl("817");
+    const imageUrls = {
+      mainStory: "https://example.test/main-story.webp",
+      pickup: "https://example.test/pickup.webp",
+    };
+    const periods = buildPublicPlannerPeriods({
+      contents: [
+        {
+          kind: "event",
+          uid: "event-1",
+          name: "이벤트",
+          contentType: "event",
+          contentUid: "817",
+          imageUrl: eventIconUrl,
+          fallbackImageUrl: eventIconImageUrl("817", "jp"),
+          since: "2026-09-15T00:00:00.000Z",
+          until: "2026-09-20T00:00:00.000Z",
+        },
+        {
+          kind: "event",
+          uid: "event-without-content-uid",
+          name: "이벤트 아이콘 없음",
+          contentType: "event",
+          contentUid: null,
+          imageUrl: eventIconImageUrl(null),
+          fallbackImageUrl: eventIconImageUrl(null, "jp"),
+          since: "2026-09-15T00:00:00.000Z",
+          until: "2026-09-20T00:00:00.000Z",
+        },
+        {
+          kind: "event",
+          uid: "story-1",
+          name: "메인 스토리",
+          contentType: "main_story",
+          contentUid: "part-2-1",
+          imageUrl: imageUrls.mainStory,
+          fallbackImageUrl: null,
+          since: "2026-09-15T00:00:00.000Z",
+          until: "2026-09-20T00:00:00.000Z",
+        },
+        {
+          kind: "event",
+          uid: "pickup-1",
+          name: "픽업",
+          contentType: "pickup",
+          contentUid: "pickup-1",
+          imageUrl: imageUrls.pickup,
+          fallbackImageUrl: null,
+          since: "2026-09-15T00:00:00.000Z",
+          until: "2026-09-20T00:00:00.000Z",
+        },
+      ],
+      scheduleItems: [],
+      shopPeriods: [],
+      timeZone: "Asia/Seoul",
+    });
+
+    expect(periods.find(({ eventUid }) => eventUid === "event-1")).toMatchObject({
+      contentType: "event",
+      contentUid: "817",
+      imageUrl: eventIconUrl,
+      fallbackImageUrl: eventIconImageUrl("817", "jp"),
+    });
+    expect(periods.find(({ eventUid }) => eventUid === "event-without-content-uid")?.imageUrl).toBeNull();
+    expect(periods.find(({ eventUid }) => eventUid === "story-1")).toMatchObject({
+      contentType: "main_story",
+      contentUid: "part-2-1",
+      imageUrl: imageUrls.mainStory,
+      fallbackImageUrl: null,
+    });
+    expect(periods.find(({ eventUid }) => eventUid === "pickup-1")).toMatchObject({
+      contentType: "pickup",
+      contentUid: "pickup-1",
+      imageUrl: imageUrls.pickup,
+      fallbackImageUrl: null,
+    });
+  });
+
+  test("uses an event period image for recruitment editor candidates", () => {
+    const imageUrl = eventIconImageUrl("817");
+    const event: PlannerPeriod = {
+      key: "event:event-1",
+      kind: "event",
+      eventUid: "event-1",
+      contentType: "event",
+      contentUid: "817",
+      name: "이벤트",
+      startDate: "2026-09-15",
+      endDate: "2026-09-29",
+      imageUrl,
+      fallbackImageUrl: eventIconImageUrl("817", "jp"),
+    };
+    const recruitment: PlannerPeriod = {
+      key: "recruitment:event-1",
+      kind: "recruitment",
+      eventUid: "event-1",
+      name: "이벤트",
+      startDate: "2026-09-15",
+      endDate: "2026-09-29",
+      students: [],
+    };
+
+    expect(buildPlannerRecruitmentCandidatesForDate([event, recruitment], "2026-09-15")).toMatchObject([
+      { eventUid: "event-1", imageUrl, fallbackImageUrl: eventIconImageUrl("817", "jp") },
+    ]);
+  });
+
   test("uses forecast recruitment dates when the raw recruitment group starts on another date", () => {
     const contents = [
       {
@@ -2170,6 +2285,23 @@ describe("integrated planner calendar domain", () => {
         accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
         resourceDelta: { pyroxene: 660, oneTimeTicket: 0, tenTimeTicket: 0 },
       },
+      {
+        date: dayjs.utc("2026-09-15T03:00:00.000Z"),
+        source: {
+          type: "event" as const,
+          event: {
+            uid: eventUid,
+            name: partName,
+            since: "2026-09-15T02:00:00.000Z",
+            until: "2026-09-29T02:00:00.000Z",
+            earnablePyroxene: null,
+            tags: [],
+            recruitments: [],
+          },
+        },
+        accumulatedResources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+        resourceDelta: { pyroxene: 40, oneTimeTicket: 0, tenTimeTicket: 0 },
+      },
     ];
     const dailyResources = projectPlannerCalendarResources(summarizePyroxeneTimeline(timeline, "Asia/Seoul"));
     const event: PlannerPeriod = {
@@ -2181,6 +2313,8 @@ describe("integrated planner calendar domain", () => {
       endDate: "2026-09-29",
       startAt: "2026-09-15T02:00:00.000Z",
       endAt: "2026-09-29T02:00:00.000Z",
+      contentType: "main_story",
+      contentUid: "part-2-1",
       href: `/events/${eventUid}`,
     };
     const visibleEventItem = { key: event.key, period: event, facts: [] };
@@ -2194,12 +2328,13 @@ describe("integrated planner calendar domain", () => {
       [event],
       [visibleEventItem],
     );
-    const readingReward = readingRewardAttribution.unmatchedEventRewardSources[0];
-
     expect(contentRewardAttribution.eventChanges[eventUid]).toEqual([{ key: "pyroxene", quantity: 2_120 }]);
     expect(contentRewardAttribution.eventChanges[eventUid]).toEqual(dailyResources["2026-09-29"].changes);
-    expect(getPlannerUnmatchedEventRewardLabel(readingReward)).toBe(`메인 스토리 보상 · ${partName}`);
-    expect(readingReward.changes).toEqual(dailyResources["2026-09-15"].changes);
+    expect(readingRewardAttribution.eventChanges[eventUid]).toEqual([{ key: "pyroxene", quantity: 700 }]);
+    expect(readingRewardAttribution.unmatchedEventRewardSources).toEqual([]);
+    expect(
+      attributePlannerDateResources(dailyResources["2026-09-15"], [event], []).unmatchedEventRewardSources,
+    ).toMatchObject([{ eventUid: "main-story-reward:part-2-1", changes: [{ key: "pyroxene", quantity: 660 }] }]);
     expect(
       getPlannerUnmatchedEventRewardLabel({
         key: "other-event-reward",

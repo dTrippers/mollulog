@@ -182,7 +182,7 @@ export default function PlannerDateScheduleRow({
             ref={titleRef}
             tabIndex={highlighted ? -1 : undefined}
             aria-label={articleLabel}
-            className="line-clamp-2 break-keep text-sm font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="line-clamp-2 whitespace-pre-line break-keep text-sm font-medium text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {period.isPlanned ? (
               <StarIcon

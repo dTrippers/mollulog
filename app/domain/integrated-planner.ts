@@ -1,7 +1,7 @@
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline } from "~/domain/pyroxene-timeline";
-import type { RunType } from "~/domain/timeline-content";
+import type { RunType, TimelineContentType } from "~/domain/timeline-content";
 import {
   formatInstant,
   formatInstantDateKey,
@@ -44,6 +44,9 @@ export type PlannerPeriod = {
   href?: string;
   startAt?: string | null;
   imageUrl?: string | null;
+  fallbackImageUrl?: string | null;
+  contentType?: TimelineContentType;
+  contentUid?: string | null;
   endAt?: string | null;
   runType?: RunType;
   endless?: boolean;
@@ -189,6 +192,7 @@ export type PlannerRecruitmentCandidatePeriod = {
   startAt: string | null;
   endAt: string | null;
   imageUrl: string | null;
+  fallbackImageUrl?: string | null;
   runType?: RunType;
   students: PlannerPeriodStudent[];
 };
@@ -198,6 +202,9 @@ export type PlannerScheduleContentInput = {
   uid: string;
   name: string;
   imageUrl?: string | null;
+  fallbackImageUrl?: string | null;
+  contentType?: TimelineContentType;
+  contentUid?: string | null;
   since: string;
   until: string;
   actualEndAt?: string | null;
@@ -361,7 +368,15 @@ export function attributePlannerDateResources(
 
   for (const source of day?.sources ?? []) {
     if (source.type === "event_reward" || source.type === "event") {
-      const eventUid = source.eventUid;
+      let eventUid = source.eventUid;
+      if (source.type === "event_reward" && eventUid?.startsWith("main-story-reward:")) {
+        const partUid = eventUid.slice("main-story-reward:".length);
+        const matchingMainStoryCard = dateItems.find(
+          ({ period }) =>
+            period.kind === "event" && period.contentType === "main_story" && period.contentUid === partUid,
+        );
+        if (matchingMainStoryCard?.period.eventUid) eventUid = matchingMainStoryCard.period.eventUid;
+      }
       if (!eventUid || !eventUids.has(eventUid) || !visibleEventUids.has(eventUid)) {
         if (source.type === "event_reward") unmatchedEventRewardSources.push(source);
         else unmatchedEventSources.push(source);
@@ -1189,6 +1204,9 @@ export function buildPlannerPeriods({
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
+      ...(content.fallbackImageUrl !== undefined ? { fallbackImageUrl: content.fallbackImageUrl } : {}),
+      ...(content.contentType ? { contentType: content.contentType } : {}),
+      ...(content.contentUid !== undefined ? { contentUid: content.contentUid } : {}),
       endAt: actualEndAt,
       runType: content.runType,
       endless: content.endless,
@@ -1299,6 +1317,9 @@ export function buildPublicPlannerPeriods({
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
+      ...(content.fallbackImageUrl !== undefined ? { fallbackImageUrl: content.fallbackImageUrl } : {}),
+      ...(content.contentType ? { contentType: content.contentType } : {}),
+      ...(content.contentUid !== undefined ? { contentUid: content.contentUid } : {}),
       endAt: actualEndAt,
       runType: content.runType,
       endless: content.endless,
@@ -1756,6 +1777,7 @@ export function buildPlannerRecruitmentCandidatesForDate(
         startAt: period.startAt ?? null,
         endAt: period.endAt ?? null,
         imageUrl: eventPeriod?.imageUrl ?? null,
+        ...(eventPeriod?.fallbackImageUrl !== undefined ? { fallbackImageUrl: eventPeriod.fallbackImageUrl } : {}),
         ...(eventPeriod?.runType ? { runType: eventPeriod.runType } : {}),
         students: [],
       } satisfies PlannerRecruitmentCandidatePeriod);
@@ -1768,6 +1790,9 @@ export function buildPlannerRecruitmentCandidatesForDate(
       candidate.endAt = period.endAt ?? null;
     }
     if (!candidate.imageUrl && eventPeriod?.imageUrl) candidate.imageUrl = eventPeriod.imageUrl;
+    if (!candidate.fallbackImageUrl && eventPeriod?.fallbackImageUrl) {
+      candidate.fallbackImageUrl = eventPeriod.fallbackImageUrl;
+    }
     const existingStudentUids = new Set(candidate.students.map((student) => student.uid));
     // Prefer the full recruitment roster (allRecruitmentStudents) so the editor still lists every
     // student once a favorite is saved; fall back to `students` for periods built outside

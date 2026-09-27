@@ -17,6 +17,11 @@ export function studentStandingImageUrl(uid: string): string {
   return `https://assets.baql.net/images/students/standing/${uid}.webp`;
 }
 
+export function eventIconImageUrl(contentUid: string | null, locale: "kr" | "jp" = "kr"): string | null {
+  if (!contentUid) return null;
+  return `https://assets.baql.net/images/events/icon/${encodeURIComponent(contentUid)}_${locale}.webp`;
+}
+
 const RESOURCE_IMAGE_DIRECTORIES = {
   item: "items",
   currency: "currencies",

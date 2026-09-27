@@ -14,6 +14,7 @@ export type PlannerRecruitmentCandidate = {
   startAt: string | null;
   endAt: string | null;
   imageUrl: string | null;
+  fallbackImageUrl?: string | null;
   runType?: RunType;
   students: { uid: string; name: string; imageUid: string | null }[];
 };
@@ -179,16 +180,49 @@ function formatRecruitmentMetadata(
   return `${runType ? `${runType} · ` : ""}모집 ${formatRecruitmentRange(candidate, referenceDateKey, timeZone)}`;
 }
 
-function RecruitmentEventImage({ imageUrl, className }: { imageUrl: string | null; className: string }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  return imageUrl && !imageFailed ? (
+function RecruitmentEventImage({
+  imageUrl,
+  fallbackImageUrl,
+  className,
+}: {
+  imageUrl: string | null;
+  fallbackImageUrl?: string | null;
+  className: string;
+}) {
+  return imageUrl ? (
+    <RecruitmentEventImageSource
+      key={JSON.stringify([imageUrl, fallbackImageUrl])}
+      imageUrl={imageUrl}
+      fallbackImageUrl={fallbackImageUrl}
+      className={className}
+    />
+  ) : (
+    <span aria-hidden="true" className={`${className} bg-muted`} />
+  );
+}
+
+function RecruitmentEventImageSource({
+  imageUrl,
+  fallbackImageUrl,
+  className,
+}: {
+  imageUrl: string;
+  fallbackImageUrl?: string | null;
+  className: string;
+}) {
+  const [imageStage, setImageStage] = useState<"primary" | "fallback" | "failed">("primary");
+  const currentImageUrl = imageStage === "primary" ? imageUrl : imageStage === "fallback" ? fallbackImageUrl : null;
+  return currentImageUrl ? (
     <img
-      src={imageUrl}
+      key={currentImageUrl}
+      src={currentImageUrl}
       alt=""
       aria-hidden="true"
       className={`${className} object-cover`}
       loading="lazy"
-      onError={() => setImageFailed(true)}
+      onError={() => {
+        setImageStage((currentStage) => (currentStage === "primary" && fallbackImageUrl ? "fallback" : "failed"));
+      }}
     />
   ) : (
     <span aria-hidden="true" className={`${className} bg-muted`} />
@@ -430,9 +464,13 @@ export function PlannerRecruitmentEditor({
                   }}
                   className="grid w-full grid-cols-[2.5rem_minmax(0,1fr)_1rem] items-start gap-3 border-b border-border py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  <RecruitmentEventImage imageUrl={candidate.imageUrl} className="size-10 rounded-md" />
+                  <RecruitmentEventImage
+                    imageUrl={candidate.imageUrl}
+                    fallbackImageUrl={candidate.fallbackImageUrl}
+                    className="size-10 rounded-md"
+                  />
                   <span className="min-w-0">
-                    <span className="line-clamp-2 block break-keep text-sm font-semibold text-foreground">
+                    <span className="line-clamp-2 block whitespace-pre-line break-keep text-sm font-semibold text-foreground">
                       {candidate.eventName}
                     </span>
                     <span className="mt-0.5 block text-xs tabular-nums text-muted-foreground">
@@ -465,9 +503,13 @@ export function PlannerRecruitmentEditor({
       ) : selectedCandidate && draft ? (
         <form className="space-y-5" onSubmit={handleSubmit}>
           <header className="flex min-w-0 items-start gap-3">
-            <RecruitmentEventImage imageUrl={selectedCandidate.imageUrl} className="size-12 rounded-md" />
+            <RecruitmentEventImage
+              imageUrl={selectedCandidate.imageUrl}
+              fallbackImageUrl={selectedCandidate.fallbackImageUrl}
+              className="size-12 rounded-md"
+            />
             <div className="min-w-0 flex-1">
-              <p className="line-clamp-2 break-keep text-sm font-semibold text-foreground">
+              <p className="line-clamp-2 whitespace-pre-line break-keep text-sm font-semibold text-foreground">
                 {selectedCandidate.eventName}
               </p>
               <p className="mt-1 text-xs tabular-nums text-muted-foreground">

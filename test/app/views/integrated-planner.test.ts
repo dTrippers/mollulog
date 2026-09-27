@@ -85,6 +85,7 @@ describe("integrated planner view", () => {
       imageUrl: null,
       runType: "rerun",
       contentType: "event",
+      contentUid: "event-content-1",
       tags: [],
     };
     mockGetTimelineContents.mockResolvedValue([sourceEvent]);
@@ -94,6 +95,52 @@ describe("integrated planner view", () => {
     expect(result.timelineEventsStatus).toBe("available");
     expect(result.timelineEvents).toEqual([sourceEvent]);
     expect(mockGetTimelineContents).toHaveBeenCalledWith(env, undefined, { ctx });
+  });
+
+  it("passes content UIDs through for events, main stories, and pickups", async () => {
+    const timelineEvents = [
+      {
+        uid: "event-1",
+        name: "Event",
+        startAt: "2026-09-01T00:00:00.000Z",
+        endAt: "2026-09-30T00:00:00.000Z",
+        endless: false,
+        imageUrl: "https://example.test/event.webp",
+        runType: "first",
+        contentType: "event",
+        contentUid: "817",
+        tags: [],
+      },
+      {
+        uid: "story-1",
+        name: "Story",
+        startAt: "2026-09-15T00:00:00.000Z",
+        endAt: null,
+        endless: true,
+        imageUrl: "https://example.test/story.webp",
+        runType: "permanent",
+        contentType: "main_story",
+        contentUid: "part-2-1",
+        tags: [],
+      },
+      {
+        uid: "pickup-1",
+        name: "Pickup",
+        startAt: "2026-09-15T00:00:00.000Z",
+        endAt: "2026-09-30T00:00:00.000Z",
+        endless: false,
+        imageUrl: "https://example.test/pickup.webp",
+        runType: "first",
+        contentType: "pickup",
+        contentUid: "pickup-content-1",
+        tags: [],
+      },
+    ];
+    mockGetTimelineContents.mockResolvedValue(timelineEvents);
+
+    const result = await getIntegratedPlannerData(env, null, ctx);
+
+    expect(result.timelineEvents).toEqual(timelineEvents);
   });
 
   it("batch-loads multiple shop states, preferring canonical records and using legacy fallbacks", async () => {

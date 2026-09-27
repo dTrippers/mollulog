@@ -76,7 +76,7 @@ export type IntegratedPlannerShopEvent = {
 
 export type IntegratedPlannerTimelineEvent = Pick<
   TimelineContent,
-  "uid" | "name" | "startAt" | "endAt" | "endless" | "imageUrl" | "runType" | "contentType" | "tags"
+  "uid" | "name" | "startAt" | "endAt" | "endless" | "imageUrl" | "runType" | "contentType" | "contentUid" | "tags"
 >;
 
 export type IntegratedPlannerData = {
@@ -116,7 +116,7 @@ export async function getIntegratedPlannerData(
               content.contentType === "main_story" ||
               content.contentType === "pickup",
           )
-          .map(({ uid, name, startAt, endAt, endless, imageUrl, runType, contentType, tags }) => ({
+          .map(({ uid, name, startAt, endAt, endless, imageUrl, runType, contentType, contentUid, tags }) => ({
             uid,
             name,
             startAt,
@@ -125,6 +125,7 @@ export async function getIntegratedPlannerData(
             imageUrl,
             runType,
             contentType,
+            contentUid,
             tags,
           }))
       : [];

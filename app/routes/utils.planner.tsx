@@ -48,6 +48,7 @@ import { extractPyroxeneTimelineBaseUid } from "~/domain/pyroxene-sources";
 import type { GuestEventShopPlannerSnapshot } from "~/lib/guest-event-shop-planner.client";
 import { readGuestEventShopPlanner, subscribeGuestEventShopPlanner } from "~/lib/guest-event-shop-planner.client";
 import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
+import { eventIconImageUrl } from "~/models/assets";
 import { saveIntegratedPlannerRecruitmentPlan } from "~/models/integrated-planner";
 import {
   createBuyPyroxene,
@@ -613,6 +614,13 @@ export default function IntegratedPlannerRoute() {
       return loaderData.pyroxeneSchedules.filter((content) => content.kind === "raid");
     }
     const timelineEventsByUid = new Map(loaderData.timelineEvents.map((event) => [event.uid, event]));
+    const getTimelineImages = (event: (typeof loaderData.timelineEvents)[number]) =>
+      event.contentType === "event"
+        ? {
+            imageUrl: eventIconImageUrl(event.contentUid, "kr"),
+            fallbackImageUrl: eventIconImageUrl(event.contentUid, "jp"),
+          }
+        : { imageUrl: event.imageUrl, fallbackImageUrl: null };
     const scheduleEventUids = new Set(
       loaderData.pyroxeneSchedules.flatMap((content) =>
         content.kind === "event" && !content.uid.startsWith("group:") && !content.tags.includes("main_story_reward")
@@ -632,6 +640,9 @@ export default function IntegratedPlannerRoute() {
           actualEndAt: event.endAt,
           endless: event.endless,
           runType: event.runType,
+          ...getTimelineImages(event),
+          contentType: event.contentType,
+          contentUid: event.contentUid,
         },
       ];
     });
@@ -647,7 +658,9 @@ export default function IntegratedPlannerRoute() {
         kind: "event" as const,
         uid: event.uid,
         name: event.name,
-        imageUrl: event.imageUrl,
+        ...getTimelineImages(event),
+        contentType: event.contentType,
+        contentUid: event.contentUid,
         since: event.startAt,
         until: event.endAt ?? event.startAt,
         actualEndAt: event.endAt,
