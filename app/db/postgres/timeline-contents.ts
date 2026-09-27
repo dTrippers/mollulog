@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgTimelineContentsTable } from "~/db/postgres/schema";
 import {
@@ -185,6 +185,31 @@ export async function getPostgresFutureRaidContents(
       options,
     ),
   );
+}
+
+export async function getPostgresHomeMainStoryContent(
+  env: Pick<Env, "HYPERDRIVE">,
+  now: Date | UtcIsoString,
+  options: PostgresTimelineContentsOptions = {},
+): Promise<TimelineContent | null> {
+  const [row] = await selectRows(
+    env,
+    "get_latest_published_home_main_story",
+    (db) =>
+      db
+        .select()
+        .from(pgTimelineContentsTable)
+        .where(
+          and(
+            eq(pgTimelineContentsTable.contentType, "main_story"),
+            lte(pgTimelineContentsTable.startAt, new Date(toUtcIso(now))),
+          ),
+        )
+        .orderBy(desc(pgTimelineContentsTable.startAt), desc(pgTimelineContentsTable.uid))
+        .limit(1),
+    options,
+  );
+  return row ? toDomain(row) : null;
 }
 
 export async function getPostgresTimelineContentsByContentTypes(
