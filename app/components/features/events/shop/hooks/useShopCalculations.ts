@@ -45,6 +45,10 @@ const EMPTY_RESULT: CalculationResult = {
   },
 };
 
+function calculationInputsMatch(left: readonly unknown[] | null, right: readonly unknown[]): boolean {
+  return Boolean(left && left.length === right.length && left.every((value, index) => value === right[index]));
+}
+
 /**
  * Memoized calculation orchestration hook.
  * Coordinates all shop calculations in the correct order.
@@ -62,8 +66,45 @@ export function useShopCalculations({
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
   const [isCalculating, setIsCalculating] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastCompletedInputsRef = useRef<readonly unknown[] | null>(null);
+  const currentCalculationInputs = [
+    state.itemQuantities,
+    state.itemPurchaseDays,
+    state.existingPaymentItemQuantities,
+    state.includeFirstClear,
+    state.minigameStartRound,
+    state.minigamePlayCount,
+    state.enabledStages,
+    state.extraStageRuns,
+    state.overriddenRequiredQuantities,
+    stages,
+    shopResources,
+    appliedBonusRatio,
+    minigamePaymentCosts,
+    excludedShopResourceUids,
+    minigameConfig,
+  ];
+  const isReady = calculationInputsMatch(lastCompletedInputsRef.current, currentCalculationInputs);
 
   useEffect(() => {
+    const calculationInputs = [
+      state.itemQuantities,
+      state.itemPurchaseDays,
+      state.existingPaymentItemQuantities,
+      state.includeFirstClear,
+      state.minigameStartRound,
+      state.minigamePlayCount,
+      state.enabledStages,
+      state.extraStageRuns,
+      state.overriddenRequiredQuantities,
+      stages,
+      shopResources,
+      appliedBonusRatio,
+      minigamePaymentCosts,
+      excludedShopResourceUids,
+      minigameConfig,
+    ];
+
     // Clear existing timer
     if (debounceTimerRef.current) {
       clearTimeout(debounceTimerRef.current);
@@ -107,6 +148,7 @@ export function useShopCalculations({
         unobtainableTargets: optimizationResult.unobtainableTargets,
         ...itemBreakdownResult,
       });
+      lastCompletedInputsRef.current = calculationInputs;
       setIsCalculating(false);
     }, 150);
 
@@ -133,5 +175,5 @@ export function useShopCalculations({
     minigameConfig,
   ]);
 
-  return useMemo(() => ({ ...result, isCalculating }), [result, isCalculating]);
+  return useMemo(() => ({ ...result, isCalculating, isReady }), [result, isCalculating, isReady]);
 }

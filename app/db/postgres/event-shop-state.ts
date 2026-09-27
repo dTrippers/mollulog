@@ -1,8 +1,8 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import type { EventShopOwnedQuantityPatch, EventShopState } from "~/domain/event-shop-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
-import type { EventShopState } from "~/models/event-shop-state";
 import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
 
 type EventShopStateDatabase = NodePgDatabase;
@@ -60,6 +60,30 @@ export async function getPostgresEventShopState(
   return row ? toEventShopStateModel(row) : null;
 }
 
+export async function getPostgresEventShopStates(
+  env: Env,
+  userId: number,
+  eventUids: readonly string[],
+  options: PostgresEventShopStateOptions = {},
+): Promise<Record<string, EventShopState>> {
+  const uniqueEventUids = [...new Set(eventUids)];
+  if (uniqueEventUids.length === 0) return {};
+
+  const rows = await withEventShopStateDatabase(
+    env,
+    (db) =>
+      db
+        .select()
+        .from(pgEventShopStatesTable)
+        .where(
+          and(eq(pgEventShopStatesTable.userId, userId), inArray(pgEventShopStatesTable.eventUid, uniqueEventUids)),
+        ),
+    options,
+  );
+
+  return Object.fromEntries(rows.map((row) => [row.eventUid, toEventShopStateModel(row)]));
+}
+
 export async function upsertPostgresEventShopState(
   env: Env,
   userId: number,
@@ -111,6 +135,55 @@ export async function upsertPostgresEventShopState(
           source: historySource,
         });
       });
+    },
+    options,
+  );
+}
+
+export async function patchPostgresEventShopStateOwnedQuantities(
+  env: Env,
+  userId: number,
+  eventUid: string,
+  patch: EventShopOwnedQuantityPatch,
+  defaultState: EventShopState,
+  options: PostgresEventShopStateOptions = {},
+): Promise<void> {
+  await withEventShopStateDatabase(
+    env,
+    async (db) => {
+      await db
+        .insert(pgEventShopStatesTable)
+        .values({
+          uid: nanoid(8),
+          userId,
+          eventUid,
+          itemQuantities: defaultState.itemQuantities,
+          itemPurchaseDays: defaultState.itemPurchaseDays,
+          selectedBonusStudentUids: defaultState.selectedBonusStudentUids,
+          bonusStudentSelectionMode: defaultState.bonusStudentSelectionMode,
+          selectedBonusStudentUidsByItem: defaultState.selectedBonusStudentUidsByItem,
+          enabledStages: defaultState.enabledStages,
+          includeRecruitedStudents: defaultState.includeRecruitedStudents,
+          existingPaymentItemQuantities: {
+            ...defaultState.existingPaymentItemQuantities,
+            ...patch,
+          },
+          includeFirstClear: defaultState.includeFirstClear,
+          extraStageRuns: defaultState.extraStageRuns,
+          minigameStartRound: defaultState.minigameStartRound,
+          minigamePlayCount: defaultState.minigamePlayCount,
+          minigamePaymentQuantityMode: defaultState.minigamePaymentQuantityMode,
+          overriddenRequiredQuantities: defaultState.overriddenRequiredQuantities,
+        })
+        .onConflictDoUpdate({
+          target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+          set: {
+            existingPaymentItemQuantities: sql<
+              Record<string, number>
+            >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
+            updatedAt: new Date(),
+          },
+        });
     },
     options,
   );

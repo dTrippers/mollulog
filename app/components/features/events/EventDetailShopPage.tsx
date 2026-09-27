@@ -1,5 +1,6 @@
 import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
@@ -18,7 +19,13 @@ import {
   filterClueSearchShopResources,
   resolveClueSearchExchange,
 } from "./shop/clue-search";
-import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "./shop/hooks";
+import {
+  type GuestPlannerStatus,
+  useAutoSave,
+  useBonusCalculation,
+  useShopCalculations,
+  useShopState,
+} from "./shop/hooks";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
 
 type EventDetailShopPageProps = {
@@ -32,6 +39,7 @@ type EventDetailShopPageProps = {
   savedShopStateSource: SavedShopStateSource;
   availablePurchaseDays: number;
   signedIn: boolean;
+  guestPlannerStatus?: GuestPlannerStatus;
   minigameConfig?: MinigameConfig | null;
 };
 
@@ -46,6 +54,7 @@ export default function EventDetailShopPage({
   savedShopStateSource,
   availablePurchaseDays,
   signedIn,
+  guestPlannerStatus = "none",
   minigameConfig = null,
 }: EventDetailShopPageProps) {
   const clueSearchExchange = useMemo(
@@ -128,6 +137,19 @@ export default function EventDetailShopPage({
     signedIn,
   });
 
+  // Track initial load for auto-save
+  const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
+  const hasSavedShopStateRef = useRef(savedShopState !== null);
+  useEffect(() => {
+    if (!hasSavedShopStateRef.current) {
+      const timer = setTimeout(() => {
+        setIsInitialLoad(false);
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   // Bonus calculation
   const { appliedBonusRatios } = useBonusCalculation({
     eventRewardBonus,
@@ -137,7 +159,15 @@ export default function EventDetailShopPage({
   });
 
   // Auto-save
-  const { isSaving } = useAutoSave({ state, signedIn, shopStateUid, savedShopState });
+  const { isSaving, saveError, retrySave } = useAutoSave({
+    state,
+    signedIn,
+    timelineUid: eventUid,
+    shopStateUid,
+    savedShopState,
+    isInitialLoad,
+    guestPlannerStatus,
+  });
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
@@ -188,6 +218,16 @@ export default function EventDetailShopPage({
       )}
 
       <div className="overflow-x-hidden">
+        {saveError && (
+          <div
+            aria-live="polite"
+            className="my-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-500/10 p-4 text-sm text-amber-700 dark:text-amber-300"
+            role="alert"
+          >
+            <span>{saveError}</span>
+            <Button text="다시 시도" size="sm" variant="secondary" onClick={retrySave} disabled={isSaving} />
+          </div>
+        )}
         <div className="my-8">
           <EventInfoCard
             Icon={ExclamationCircleIcon}

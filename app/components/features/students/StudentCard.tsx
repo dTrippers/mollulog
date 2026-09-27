@@ -99,21 +99,25 @@ function getStudentCardAction({
 
 function StudentCardFrame({
   interactive,
+  pressed,
   onClick,
   children,
 }: {
   interactive: boolean;
+  pressed?: boolean | "mixed";
   onClick?: () => void;
   children: ReactNode;
 }) {
-  const className = interactive ? "block w-full hover:scale-105 transition text-left cursor-pointer" : "";
+  const className = interactive
+    ? "block w-full hover:scale-105 transition text-left cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    : "";
 
   if (!interactive) {
     return <div>{children}</div>;
   }
 
   return (
-    <button type="button" className={className} onClick={onClick}>
+    <button type="button" className={className} aria-pressed={pressed} onClick={onClick}>
       {children}
     </button>
   );
@@ -243,6 +247,7 @@ export default function StudentCard({
         top: popupPosition?.top,
         maxHeight: "calc(100vh - 2rem)",
       };
+  const pressed = onSelect ? (indeterminate && !checked ? "mixed" : checked) : undefined;
   const popup = (uid || popupId) && name && popups && popups.length > 0 && (
     <Transition
       show={showPositionedPopup}
@@ -268,7 +273,7 @@ export default function StudentCard({
 
   return (
     <div ref={rootRef} className="relative">
-      <StudentCardFrame interactive={interactive} onClick={handleCardClick}>
+      <StudentCardFrame interactive={interactive} pressed={pressed} onClick={handleCardClick}>
         <div className={flush ? "" : "my-1"}>
           <div className="relative">
             <div

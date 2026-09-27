@@ -67,6 +67,7 @@ import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
+  const selectedEventUid = new URL(request.url).searchParams.get("eventUid");
 
   // contents와 인증은 서로 무관하므로 병렬 실행
   const [contents, currentUser] = await Promise.all([
@@ -77,6 +78,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   if (!currentUser) {
     return {
       contents,
+      selectedEventUid,
       favoritedStudents: [],
       latestResources: {
         pyroxene: 0,
@@ -108,6 +110,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   return {
     signedIn: true,
     contents,
+    selectedEventUid,
     favoritedStudents: favoritedStudents.map(({ contentId, studentId }) => ({
       contentUid: contentId,
       studentUid: studentId,
@@ -901,6 +904,7 @@ export default function PyroxenePlanner() {
             ) : null}
           </div>
           <PyroxeneSchedule
+            selectedEventUid={loaderData.selectedEventUid}
             initialDate={initialDate}
             initialResources={initialResources}
             eventDataMap={eventDataMap}

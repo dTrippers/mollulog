@@ -150,7 +150,7 @@ function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem[
 }
 
 function getRaidRewardDate(raidUntil: Date | string): Dayjs {
-  return dayjs(raidUntil).tz("Asia/Seoul").endOf("month").hour(4).minute(0).second(0).millisecond(0);
+  return dayjs(raidUntil).tz("Asia/Seoul").add(1, "day").startOf("day");
 }
 
 function getEliminationTicketExpiresAt(rewardAt: Date | string | Dayjs): Dayjs {

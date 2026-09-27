@@ -12,7 +12,8 @@ const workerScope = self as unknown as {
 };
 
 workerScope.onmessage = (event) => {
-  const { id, initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys } = event.data;
+  const { id, initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate } =
+    event.data;
   const timeline = buildTimeline(
     initialResources,
     initialDate ?? new Date(),
@@ -21,6 +22,7 @@ workerScope.onmessage = (event) => {
     options,
     undefined,
     collectedSourceKeys,
+    endDate,
   );
   workerScope.postMessage({ id, timeline: serializeTimeline(timeline) });
 };
