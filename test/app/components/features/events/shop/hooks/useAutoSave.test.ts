@@ -1,5 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import { resolveAccountSaveResponse } from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
+import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
+import {
+  resolveAccountSaveResponse,
+  resolveGuestSave,
+} from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
 import {
   getInitialLastSavedState,
   type ShopState,
@@ -176,5 +180,35 @@ describe("resolveAccountSaveResponse", () => {
       requestId: "save-2",
     });
     expect(retry).toEqual({ status: "success" });
+  });
+});
+
+describe("resolveGuestSave", () => {
+  it("maps rejected guest storage writes to the existing explicit save error", async () => {
+    const result = await resolveGuestSave(() => Promise.reject(new Error("unhandled storage failure")));
+
+    expect(result).toEqual({
+      snapshot: null,
+      error: "브라우저에 상점 계획을 저장하지 못했어요.",
+    });
+  });
+
+  it("keeps the normal guest storage status and its explicit copy", async () => {
+    const snapshot: GuestPlannerSnapshot = {
+      status: "unavailable",
+      legacySources: {
+        pyroxene: null,
+        eventShops: null,
+        pyroxeneSignature: null,
+        eventShopsSignature: null,
+        pyroxeneCorrupt: false,
+        eventShopsCorrupt: false,
+      },
+    };
+
+    await expect(resolveGuestSave(() => Promise.resolve(snapshot))).resolves.toMatchObject({
+      snapshot,
+      error: "브라우저 상점 계획 저장소에 접근할 수 없어요. 현재 입력은 저장되지 않았어요.",
+    });
   });
 });

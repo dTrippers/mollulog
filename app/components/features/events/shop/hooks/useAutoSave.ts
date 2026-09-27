@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
 import { upsertGuestPlannerEventShopPlan } from "~/domain/guest-planner";
-import { readGuestPlanner, updateGuestPlanner } from "~/lib/guest-planner.client";
+import {
+  flushGuestPlannerEventShopPlan,
+  type GuestPlannerSnapshot,
+  readGuestPlanner,
+  updateGuestPlanner,
+} from "~/lib/guest-planner.client";
 import type { ShopState } from "./useShopState";
 
 export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
@@ -89,7 +94,21 @@ function guestStorageError(status: GuestPlannerStatus): string {
   }
 }
 
-/** Saves guest changes synchronously and account changes only after server acknowledgement. */
+export async function resolveGuestSave(
+  save: () => Promise<GuestPlannerSnapshot>,
+): Promise<{ snapshot: GuestPlannerSnapshot | null; error: string | null }> {
+  try {
+    const snapshot = await save();
+    return {
+      snapshot,
+      error: snapshot.status === "ready" ? null : guestStorageError(snapshot.status),
+    };
+  } catch {
+    return { snapshot: null, error: guestStorageError("ready") };
+  }
+}
+
+/** Saves guest changes to browser storage and account changes only after server acknowledgement. */
 export function useAutoSave({
   state,
   signedIn,
@@ -136,15 +155,37 @@ export function useAutoSave({
     async (nextState: EventShopState, force = false) => {
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
-      const result = await updateGuestPlanner((envelope) =>
-        upsertGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState }),
+      const resolution = await resolveGuestSave(() =>
+        updateGuestPlanner((envelope) =>
+          upsertGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState }),
+        ),
       );
-      if (result.status === "ready") {
-        lastSavedStateRef.current = nextState;
-        setSaveError(null);
+      if (resolution.error) {
+        setSaveError(resolution.error);
         return;
       }
-      setSaveError(guestStorageError(result.status));
+      if (resolution.snapshot?.status !== "ready") return;
+      lastSavedStateRef.current = nextState;
+      setSaveError(null);
+    },
+    [shopStateUid, timelineUid],
+  );
+
+  const flushGuestState = useCallback(
+    (nextState: EventShopState, force = false) => {
+      const baseline = lastSavedStateRef.current;
+      if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
+      try {
+        const result = flushGuestPlannerEventShopPlan({ timelineUid, shopStateUid, state: nextState });
+        if (result.status === "ready") {
+          lastSavedStateRef.current = nextState;
+          setSaveError(null);
+          return;
+        }
+        setSaveError(guestStorageError(result.status));
+      } catch {
+        setSaveError(guestStorageError("ready"));
+      }
     },
     [shopStateUid, timelineUid],
   );
@@ -156,13 +197,13 @@ export function useAutoSave({
 
   useEffect(() => {
     if (signedIn) return;
-    const flush = () => void saveGuestState(currentStateRef.current, guestPlannerStatus === "memory");
+    const flush = () => flushGuestState(currentStateRef.current, guestPlannerStatus === "memory");
     window.addEventListener("pagehide", flush);
     return () => {
       window.removeEventListener("pagehide", flush);
       flush();
     };
-  }, [guestPlannerStatus, saveGuestState, signedIn]);
+  }, [flushGuestState, guestPlannerStatus, signedIn]);
 
   useEffect(() => {
     if (!signedIn || isInitialLoad) return;

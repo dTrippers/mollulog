@@ -79,6 +79,46 @@ type ImportActionResult = {
   successfulSections: Record<string, GuestPlannerSection[]>;
 };
 
+export const MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES = 2 * 1024 * 1024;
+const MAX_GUEST_PLANNER_IMPORT_SOURCES = 41;
+
+async function readImportRequestText(request: Request): Promise<string> {
+  const contentLength = Number(request.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES) {
+    throw new Error("Guest planner import request is too large.");
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return "";
+
+  const chunks: Uint8Array[] = [];
+  let byteLength = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    byteLength += value.byteLength;
+    if (byteLength > MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES) {
+      try {
+        await reader.cancel();
+      } catch {
+        // The request is already rejected; cancellation is only a resource optimization.
+      }
+      throw new Error("Guest planner import request is too large.");
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
+export function describeImportFailure(failedLabels: readonly string[], discardedCount: number): string {
+  return `가져오지 못한 항목은 이 브라우저에 남겨뒀어요: ${failedLabels.join(", ")}. 다시 시도할 수 있어요.${discardedCount > 0 ? " 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요." : ""}`;
+}
+
 export function getGuestPlannerImportDisplayState({
   sourceCount,
   totalCount,
@@ -141,13 +181,27 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+  return (
+    Array.isArray(value) &&
+    value.length <= 1_000 &&
+    value.every((item) => typeof item === "string" && item.length > 0 && item.length <= 200)
+  );
 }
 
 function isFavoriteArray(value: unknown): value is GuestPyroxeneFavorite[] {
   return (
     Array.isArray(value) &&
-    value.every((item) => isRecord(item) && typeof item.contentUid === "string" && typeof item.studentUid === "string")
+    value.length <= 1_000 &&
+    value.every(
+      (item) =>
+        isRecord(item) &&
+        typeof item.contentUid === "string" &&
+        item.contentUid.length > 0 &&
+        item.contentUid.length <= 200 &&
+        typeof item.studentUid === "string" &&
+        item.studentUid.length > 0 &&
+        item.studentUid.length <= 200,
+    )
   );
 }
 
@@ -443,7 +497,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
   let body: unknown;
   try {
-    body = await request.json();
+    body = JSON.parse(await readImportRequestText(request)) as unknown;
   } catch {
     return data<ImportActionResult>(
       {
@@ -456,7 +510,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       { status: 400 },
     );
   }
-  if (!isRecord(body) || !Array.isArray(body.sources)) {
+  if (!isRecord(body) || !Array.isArray(body.sources) || body.sources.length > MAX_GUEST_PLANNER_IMPORT_SOURCES) {
     return data<ImportActionResult>(
       {
         success: false,
@@ -478,7 +532,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const labels = new Map<string, string>();
   const uniqueSelectionKeys = new Set<string>();
   for (const rawSource of body.sources) {
-    if (!isRecord(rawSource) || typeof rawSource.id !== "string" || !isSelection(rawSource.selection)) {
+    if (
+      !isRecord(rawSource) ||
+      typeof rawSource.id !== "string" ||
+      rawSource.id.length === 0 ||
+      rawSource.id.length > 200 ||
+      !isSelection(rawSource.selection)
+    ) {
       return data<ImportActionResult>(
         {
           success: false,
@@ -1034,7 +1094,7 @@ export default function UnifiedGuestPlannerImportPage() {
             }
             description={
               failedLabels.length > 0
-                ? `${failedLabels.join(", ")}은 이 브라우저에 남겨뒀어요. 다시 시도할 수 있어요.${discardedCount > 0 ? ` 선택하지 않은 항목은 저장할 때 이 브라우저에서 삭제해요.` : ""}`
+                ? describeImportFailure(failedLabels, discardedCount)
                 : discardedCount > 0
                   ? `선택한 항목은 계정에 가져오고, 선택하지 않은 계획 ${discardedCount}개는 이 브라우저에서 삭제했어요.`
                   : "가져온 항목을 이 브라우저에서 정리했어요."

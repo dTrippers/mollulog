@@ -46,6 +46,15 @@ import dayjs from "~/lib/dayjs";
 
 export const GUEST_PLANNER_STORAGE_KEY = "mollulog::guest-planner::v1";
 
+const MAX_GUEST_PLANNER_RECORDS = 500;
+const MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS = 1_000;
+const MAX_GUEST_PLANNER_FAVORITES = 1_000;
+const MAX_GUEST_PLANNER_EVENT_DATA = 500;
+const MAX_GUEST_PLANNER_EVENT_SHOPS = 500;
+const MAX_GUEST_PLANNER_LEGACY_CONFLICTS = 20;
+const MAX_GUEST_PLANNER_ID_LENGTH = 200;
+const MAX_EVENT_SHOP_STATE_ENTRIES = 5_000;
+
 export type GuestPlannerEnvelope = {
   datasetId: string;
   revision: number;
@@ -54,7 +63,6 @@ export type GuestPlannerEnvelope = {
   pyroxeneOptionsChanged: boolean;
   favorites: GuestPyroxeneFavorite[];
   eventShopTimelineUids: Record<string, string>;
-  legacyAcknowledgements: Array<{ source: "pyroxene" | "eventShops"; signature: string; sections: string[] }>;
   legacyMirror: GuestPlannerLegacyMirror | null;
   legacyConflicts: GuestPlannerLegacyConflict[];
   legacyUnreadable: { pyroxene: string | null; eventShops: string | null };
@@ -138,6 +146,60 @@ function isFavorite(value: unknown): value is GuestPyroxeneFavorite {
   );
 }
 
+function hasBoundedEventShopState(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  let entryCount = 0;
+  const mapFields = [
+    "itemQuantities",
+    "itemPurchaseDays",
+    "selectedBonusStudentUidsByItem",
+    "enabledStages",
+    "existingPaymentItemQuantities",
+    "extraStageRuns",
+    "overriddenRequiredQuantities",
+  ];
+  for (const field of mapFields) {
+    const map = value[field];
+    if (!isRecord(map)) return false;
+    const entries = Object.entries(map);
+    if (
+      entries.length > 1_000 ||
+      entries.some(([key]) => key.length === 0 || key.length > MAX_GUEST_PLANNER_ID_LENGTH)
+    ) {
+      return false;
+    }
+    entryCount += entries.length;
+    if (entryCount > MAX_EVENT_SHOP_STATE_ENTRIES) return false;
+    if (field === "selectedBonusStudentUidsByItem") {
+      for (const [, students] of entries) {
+        if (
+          !Array.isArray(students) ||
+          students.length > MAX_GUEST_PLANNER_FAVORITES ||
+          students.some(
+            (studentUid) => typeof studentUid !== "string" || studentUid.length === 0 || studentUid.length > 200,
+          )
+        ) {
+          return false;
+        }
+        entryCount += students.length;
+        if (entryCount > MAX_EVENT_SHOP_STATE_ENTRIES) return false;
+      }
+    }
+  }
+  const selectedStudents = value.selectedBonusStudentUids;
+  if (
+    !Array.isArray(selectedStudents) ||
+    selectedStudents.length > MAX_GUEST_PLANNER_FAVORITES ||
+    selectedStudents.some(
+      (studentUid) => typeof studentUid !== "string" || studentUid.length === 0 || studentUid.length > 200,
+    )
+  ) {
+    return false;
+  }
+  entryCount += selectedStudents.length;
+  return entryCount <= MAX_EVENT_SHOP_STATE_ENTRIES;
+}
+
 function normalizeLegacyPyroxene(value: unknown): GuestPyroxenePlannerEnvelope | null {
   try {
     return parseGuestPyroxenePlanner(JSON.stringify(value));
@@ -148,18 +210,45 @@ function normalizeLegacyPyroxene(value: unknown): GuestPyroxenePlannerEnvelope |
 
 function normalizeLegacyEventShops(value: unknown): GuestEventShopPlannerEnvelope | null {
   try {
+    if (!isRecord(value) || !isRecord(value.data) || !isRecord(value.data.plans)) return null;
+    const plans = Object.entries(value.data.plans);
+    if (
+      plans.length > MAX_GUEST_PLANNER_EVENT_SHOPS ||
+      plans.some(
+        ([key, plan]) =>
+          key.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+          !isRecord(plan) ||
+          typeof plan.timelineUid !== "string" ||
+          plan.timelineUid.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+          typeof plan.shopStateUid !== "string" ||
+          plan.shopStateUid.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+          !hasBoundedEventShopState(plan.state),
+      )
+    ) {
+      return null;
+    }
     return normalizeGuestEventShopPlanner(value);
   } catch {
     return null;
   }
 }
 
-function isStringList(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string" && item.length > 0);
+function isStringList(value: unknown, maxCount: number): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.length <= maxCount &&
+    value.every((item) => typeof item === "string" && item.length > 0 && item.length <= MAX_GUEST_PLANNER_ID_LENGTH)
+  );
 }
 
 function normalizeLegacyConflict(value: unknown): GuestPlannerLegacyConflict | null {
-  if (!isRecord(value) || !isStableId(value.id) || !isRecord(value.keys)) return null;
+  if (
+    !isRecord(value) ||
+    !isStableId(value.id) ||
+    value.id.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+    !isRecord(value.keys)
+  )
+    return null;
   const pyroxene = value.pyroxene === null ? null : normalizeLegacyPyroxene(value.pyroxene);
   const eventShops = value.eventShops === null ? null : normalizeLegacyEventShops(value.eventShops);
   if ((value.pyroxene !== null && !pyroxene) || (value.eventShops !== null && !eventShops)) return null;
@@ -167,19 +256,19 @@ function normalizeLegacyConflict(value: unknown): GuestPlannerLegacyConflict | n
   if (
     !isRecord(keys.pyroxene) ||
     typeof keys.pyroxene.resources !== "boolean" ||
-    !isStringList(keys.pyroxene.records) ||
+    !isStringList(keys.pyroxene.records, MAX_GUEST_PLANNER_RECORDS) ||
     typeof keys.pyroxene.options !== "boolean" ||
-    !isStringList(keys.pyroxene.eventTrials) ||
-    !isStringList(keys.pyroxene.favorites) ||
-    !isStringList(keys.pyroxene.collectedSourceKeys) ||
-    !isStringList(keys.eventShopUids) ||
+    !isStringList(keys.pyroxene.eventTrials, MAX_GUEST_PLANNER_EVENT_DATA) ||
+    !isStringList(keys.pyroxene.favorites, MAX_GUEST_PLANNER_FAVORITES) ||
+    !isStringList(keys.pyroxene.collectedSourceKeys, MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS) ||
+    !isStringList(keys.eventShopUids, MAX_GUEST_PLANNER_EVENT_SHOPS) ||
     !isRecord(keys.removed) ||
     typeof keys.removed.resources !== "boolean" ||
-    !isStringList(keys.removed.records) ||
-    !isStringList(keys.removed.eventTrials) ||
-    !isStringList(keys.removed.favorites) ||
-    !isStringList(keys.removed.collectedSourceKeys) ||
-    !isStringList(keys.removed.eventShopUids)
+    !isStringList(keys.removed.records, MAX_GUEST_PLANNER_RECORDS) ||
+    !isStringList(keys.removed.eventTrials, MAX_GUEST_PLANNER_EVENT_DATA) ||
+    !isStringList(keys.removed.favorites, MAX_GUEST_PLANNER_FAVORITES) ||
+    !isStringList(keys.removed.collectedSourceKeys, MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS) ||
+    !isStringList(keys.removed.eventShopUids, MAX_GUEST_PLANNER_EVENT_SHOPS)
   ) {
     return null;
   }
@@ -240,7 +329,6 @@ export function createEmptyGuestPlanner(datasetId = nanoid(16)): GuestPlannerEnv
     pyroxeneOptionsChanged: false,
     favorites: [],
     eventShopTimelineUids: {},
-    legacyAcknowledgements: [],
     legacyMirror: null,
     legacyConflicts: [],
     legacyUnreadable: { pyroxene: null, eventShops: null },
@@ -255,9 +343,32 @@ function projectDocument(value: unknown): PlannerStateDocumentV1 | null {
   if (
     !(pyroxene.resources === null || isRecord(pyroxene.resources)) ||
     !Array.isArray(pyroxene.records) ||
+    pyroxene.records.length > MAX_GUEST_PLANNER_RECORDS ||
+    pyroxene.records.some(
+      (item) =>
+        !isRecord(item) ||
+        typeof item.uid !== "string" ||
+        item.uid.length === 0 ||
+        item.uid.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+        typeof item.description !== "string" ||
+        item.description.length > 200,
+    ) ||
     !isRecord(pyroxene.options) ||
     !Array.isArray(pyroxene.collectedSourceKeys) ||
+    pyroxene.collectedSourceKeys.length > MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS ||
+    pyroxene.collectedSourceKeys.some(
+      (key) => typeof key !== "string" || key.length === 0 || key.length > MAX_GUEST_PLANNER_ID_LENGTH,
+    ) ||
     !isRecord(pyroxene.eventData) ||
+    Object.keys(pyroxene.eventData).length > MAX_GUEST_PLANNER_EVENT_DATA ||
+    Object.keys(pyroxene.eventData).some(
+      (eventUid) => eventUid.length === 0 || eventUid.length > MAX_GUEST_PLANNER_ID_LENGTH,
+    ) ||
+    Object.keys(value.eventShops).length > MAX_GUEST_PLANNER_EVENT_SHOPS ||
+    Object.entries(value.eventShops).some(
+      ([eventUid, state]) =>
+        eventUid.length === 0 || eventUid.length > MAX_GUEST_PLANNER_ID_LENGTH || !hasBoundedEventShopState(state),
+    ) ||
     value.ap !== null
   ) {
     return null;
@@ -287,20 +398,12 @@ export function normalizeGuestPlanner(value: unknown): GuestPlannerEnvelope | nu
     !Number.isFinite(Date.parse(value.updatedAt)) ||
     (value.pyroxeneOptionsChanged !== undefined && typeof value.pyroxeneOptionsChanged !== "boolean") ||
     !Array.isArray(value.favorites) ||
+    value.favorites.length > MAX_GUEST_PLANNER_FAVORITES ||
     !value.favorites.every(isFavorite) ||
     !isRecord(value.eventShopTimelineUids) ||
-    (value.legacyAcknowledgements !== undefined &&
-      (!Array.isArray(value.legacyAcknowledgements) ||
-        value.legacyAcknowledgements.some(
-          (entry) =>
-            !isRecord(entry) ||
-            (entry.source !== "pyroxene" && entry.source !== "eventShops") ||
-            !isStableId(entry.signature) ||
-            !Array.isArray(entry.sections) ||
-            !entry.sections.every((section) => typeof section === "string"),
-        ))) ||
     (value.legacyConflicts !== undefined &&
       (!Array.isArray(value.legacyConflicts) ||
+        value.legacyConflicts.length > MAX_GUEST_PLANNER_LEGACY_CONFLICTS ||
         value.legacyConflicts.some((item) => !normalizeLegacyConflict(item)))) ||
     (value.legacyUnreadable !== undefined &&
       (!isRecord(value.legacyUnreadable) ||
@@ -313,9 +416,17 @@ export function normalizeGuestPlanner(value: unknown): GuestPlannerEnvelope | nu
 
   const document = projectDocument(value.document);
   if (!document) return null;
+  if (Object.keys(value.eventShopTimelineUids).length > MAX_GUEST_PLANNER_EVENT_SHOPS) return null;
   const eventShopTimelineUids: Record<string, string> = {};
   for (const [shopStateUid, timelineUid] of Object.entries(value.eventShopTimelineUids)) {
-    if (!isStableId(shopStateUid) || !isStableId(timelineUid) || !document.eventShops[shopStateUid]) return null;
+    if (
+      !isStableId(shopStateUid) ||
+      shopStateUid.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+      !isStableId(timelineUid) ||
+      timelineUid.length > MAX_GUEST_PLANNER_ID_LENGTH ||
+      !document.eventShops[shopStateUid]
+    )
+      return null;
     eventShopTimelineUids[shopStateUid] = timelineUid;
   }
   if (Object.keys(document.eventShops).some((shopStateUid) => !eventShopTimelineUids[shopStateUid])) return null;
@@ -330,8 +441,6 @@ export function normalizeGuestPlanner(value: unknown): GuestPlannerEnvelope | nu
       stableJson(document.pyroxene.options) !== stableJson(emptyPlannerDocument().pyroxene.options),
     favorites: value.favorites as GuestPyroxeneFavorite[],
     eventShopTimelineUids,
-    legacyAcknowledgements:
-      (value.legacyAcknowledgements as GuestPlannerEnvelope["legacyAcknowledgements"] | undefined) ?? [],
     legacyMirror: null,
     legacyConflicts: (value.legacyConflicts ?? [])
       .map(normalizeLegacyConflict)
@@ -1018,10 +1127,6 @@ export function createGuestPlannerConflictEnvelope(
   return envelope;
 }
 
-export function guestPlannerPyroxeneData(envelope: GuestPlannerEnvelope) {
-  return envelope.document.pyroxene;
-}
-
 export function updateGuestPlannerOptions(
   envelope: GuestPlannerEnvelope,
   options: PyroxenePlannerOptions,
@@ -1129,7 +1234,6 @@ function clearLegacyConflictSections(
 export function legacyGuestPlannerSources(
   pyroxeneRaw: string | null,
   eventShopsRaw: string | null,
-  acknowledgements: GuestPlannerEnvelope["legacyAcknowledgements"] = [],
 ): GuestPlannerLegacySources {
   const parsedPyroxene = pyroxeneRaw === null ? null : parseGuestPyroxenePlanner(pyroxeneRaw);
   let eventShops: GuestEventShopPlannerEnvelope | null = null;
@@ -1146,52 +1250,18 @@ export function legacyGuestPlannerSources(
   const eventShopsSignature = eventShops
     ? legacySourceSignature(eventShops.datasetId, eventShops.revision, eventShops.updatedAt)
     : null;
-  const pyroxeneCleared = new Set(
-    acknowledgements
-      .filter((entry) => entry.source === "pyroxene" && entry.signature === pyroxeneSignature)
-      .flatMap((entry) => entry.sections),
-  );
-  const eventShopsCleared = new Set(
-    acknowledgements
-      .filter((entry) => entry.source === "eventShops" && entry.signature === eventShopsSignature)
-      .flatMap((entry) => entry.sections),
-  );
-  const pyroxene = parsedPyroxene ? clearLegacyPyroxeneSections(parsedPyroxene, pyroxeneCleared) : null;
-  if (eventShops && eventShopsCleared.has("eventShops")) {
-    eventShops = { ...eventShops, data: { plans: {} } };
-  }
   return {
-    pyroxene,
+    pyroxene: parsedPyroxene,
     eventShops,
     pyroxeneSignature,
     eventShopsSignature,
-    pyroxeneCorrupt: pyroxeneRaw !== null && pyroxene === null,
+    pyroxeneCorrupt: pyroxeneRaw !== null && parsedPyroxene === null,
     eventShopsCorrupt: eventShopsRaw !== null && eventShops === null,
   };
 }
 
 function legacySourceSignature(datasetId: string, revision: number, updatedAt: string): string {
   return `${datasetId}:${revision}:${updatedAt}`;
-}
-
-function clearLegacyPyroxeneSections(
-  envelope: GuestPyroxenePlannerEnvelope,
-  cleared: ReadonlySet<string>,
-): GuestPyroxenePlannerEnvelope {
-  const data = envelope.data;
-  return {
-    ...envelope,
-    data: {
-      ...data,
-      resources: cleared.has("resources") ? null : data.resources,
-      records: cleared.has("records") ? [] : data.records,
-      options: cleared.has("options") ? defaultPyroxenePlannerOptions : data.options,
-      optionsChanged: cleared.has("options") ? false : data.optionsChanged,
-      favoriteStudents: cleared.has("recruitment") ? [] : data.favoriteStudents,
-      eventTrials: cleared.has("recruitment") ? {} : data.eventTrials,
-      collectedSourceKeys: cleared.has("collectedSourceKeys") ? [] : data.collectedSourceKeys,
-    },
-  };
 }
 
 export function clearGuestPlannerSectionsIfUnchanged(
@@ -1271,21 +1341,6 @@ export function clearGuestPlannerSectionsIfUnchanged(
     eventShopTimelineUids: nextEventShopTimelineUids,
     legacyConflicts: clearLegacyConflictSections(current.legacyConflicts, clearedSections),
   };
-}
-
-export function acknowledgeGuestPlannerLegacySections(
-  envelope: GuestPlannerEnvelope,
-  source: "pyroxene" | "eventShops",
-  signature: string,
-  sections: readonly string[],
-): GuestPlannerEnvelope {
-  const existing = envelope.legacyAcknowledgements.find(
-    (entry) => entry.source === source && entry.signature === signature,
-  );
-  const sectionSet = new Set([...(existing?.sections ?? []), ...sections]);
-  const legacyAcknowledgements = envelope.legacyAcknowledgements.filter((entry) => entry !== existing);
-  legacyAcknowledgements.push({ source, signature, sections: [...sectionSet].sort() });
-  return { ...envelope, legacyAcknowledgements };
 }
 
 export function createGuestPlannerFromLegacySources(

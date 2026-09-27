@@ -34,6 +34,7 @@ import {
   action,
   buildSources,
   countSourceItems,
+  describeImportFailure,
   describeTimelineGroup,
   formatStudents,
   getGuestPlannerImportDisplayState,
@@ -41,6 +42,7 @@ import {
   guestPyroxeneRecordsById,
   guestTimelineRecordGroupsById,
   initialSelection,
+  MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES,
   ResourceConflictComparison,
 } from "~/routes/planner_.import";
 
@@ -129,6 +131,70 @@ function recordGroups(envelope: ReturnType<typeof createPlannerWithGuestRecords>
 }
 
 describe("unified planner import action", () => {
+  it("rejects oversized normalized guest data before starting an import", async () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.records = Array.from({ length: 501 }, () => ({})) as never;
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope,
+                selection: {
+                  resources: false,
+                  options: false,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      data: { success: false, failedLabels: ["가져올 데이터를 확인하지 못했어요"] },
+      init: { status: 400 },
+    });
+    expect(mockImportGuestPlannerState).not.toHaveBeenCalled();
+  });
+
+  it("rejects an import request beyond the byte limit while reading the stream", async () => {
+    const body = JSON.stringify({ sources: [], padding: "x".repeat(MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES) });
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/utils/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body,
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      data: { success: false, failedLabels: ["가져올 데이터를 확인하지 못했어요"] },
+      init: { status: 400 },
+    });
+    expect(mockImportGuestPlannerState).not.toHaveBeenCalled();
+  });
+
+  it("uses particle-neutral wording for failed sections", () => {
+    expect(describeImportFailure(["현재 보유 재화"], 0)).toBe(
+      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 현재 보유 재화. 다시 시도할 수 있어요.",
+    );
+    expect(describeImportFailure(["수급/소비 계획"], 2)).toBe(
+      "가져오지 못한 항목은 이 브라우저에 남겨뒀어요: 수급/소비 계획. 다시 시도할 수 있어요. 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요.",
+    );
+  });
+
   it("uses each guest record's own name and date for current and old-version records", () => {
     const { records, pyroxene, envelope } = createPlannerWithGuestRecords();
     const conflict: GuestPlannerLegacyConflict = {

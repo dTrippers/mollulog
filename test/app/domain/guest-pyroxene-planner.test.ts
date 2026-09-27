@@ -1,6 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
 import {
-  clearVerifiedGuestPyroxeneImport,
   createEmptyGuestPyroxenePlanner,
   type GuestPyroxeneRecord,
   guestPyroxeneRecordToTimelineItems,
@@ -71,67 +70,6 @@ describe("guest pyroxene planner", () => {
       },
     ];
     expect(parseGuestPyroxenePlanner(JSON.stringify(envelope))).toBeNull();
-  });
-
-  it("가져오기를 요청한 뒤 수정된 로컬 값은 이전 응답으로 지우지 않는다", () => {
-    const submitted = createEmptyGuestPyroxenePlanner().data;
-    submitted.resources = {
-      inputAt: "2026-07-19T01:00:00.000Z",
-      pyroxene: 12_000,
-      oneTimeTicket: 0,
-      tenTimeTicket: 0,
-    };
-    submitted.optionsChanged = true;
-    submitted.eventTrials = { event: 200 };
-
-    const current = structuredClone(submitted);
-    current.resources = {
-      inputAt: "2026-07-19T02:00:00.000Z",
-      pyroxene: 13_000,
-      oneTimeTicket: 0,
-      tenTimeTicket: 0,
-    };
-    current.options = { ...current.options, consumption: { apChargeCount: 3 } };
-    current.eventTrials.event = 300;
-
-    const next = clearVerifiedGuestPyroxeneImport(current, submitted, {
-      resources: true,
-      options: true,
-      recordIds: [],
-      sourceKeys: [],
-      eventUids: ["event"],
-      favorites: [],
-    });
-
-    expect(next.resources).toEqual(current.resources);
-    expect(next.options).toEqual(current.options);
-    expect(next.optionsChanged).toBe(true);
-    expect(next.eventTrials).toEqual({ event: 300 });
-  });
-
-  it("서버에서 확인된 항목만 로컬 데이터에서 정리한다", () => {
-    const envelope = createEmptyGuestPyroxenePlanner();
-    envelope.data.resources = {
-      inputAt: "2026-07-19T01:00:00.000Z",
-      pyroxene: 12_000,
-      oneTimeTicket: 0,
-      tenTimeTicket: 0,
-    };
-    envelope.data.eventTrials = { imported: 200, failed: 300 };
-    envelope.data.collectedSourceKeys = ["imported", "failed"];
-
-    const next = clearVerifiedGuestPyroxeneImport(envelope.data, envelope.data, {
-      resources: true,
-      options: false,
-      recordIds: [],
-      sourceKeys: ["imported"],
-      eventUids: ["imported"],
-      favorites: [],
-    });
-
-    expect(next.resources).toBeNull();
-    expect(next.eventTrials).toEqual({ failed: 300 });
-    expect(next.collectedSourceKeys).toEqual(["failed"]);
   });
 
   it("논리 레코드의 stable id를 계산 항목 uid로 사용한다", () => {

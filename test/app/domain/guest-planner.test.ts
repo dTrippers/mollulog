@@ -26,6 +26,143 @@ describe("guest planner envelope", () => {
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: {} } })).toBeNull();
   });
 
+  it("ignores the retired legacy acknowledgement field when reading stored envelopes", () => {
+    const envelope = createEmptyGuestPlanner() as ReturnType<typeof createEmptyGuestPlanner> & {
+      legacyAcknowledgements?: unknown;
+    };
+    envelope.legacyAcknowledgements = [{ source: "invalid", signature: "x", sections: "untrusted" }];
+
+    const normalized = normalizeGuestPlanner(envelope);
+
+    expect(normalized).not.toBeNull();
+    expect(normalized).not.toHaveProperty("legacyAcknowledgements");
+  });
+
+  it("rejects guest envelopes that exceed the old parser's bounds and the shop/conflict caps", () => {
+    const envelope = createEmptyGuestPlanner();
+
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: { ...envelope.document.pyroxene, records: Array.from({ length: 501 }, () => ({})) },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            collectedSourceKeys: Array.from({ length: 1_001 }, (_, index) => `source-${index}`),
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            collectedSourceKeys: ["s".repeat(201)],
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        favorites: Array.from({ length: 1_001 }, () => ({ contentUid: "content", studentUid: "student" })),
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        favorites: [{ contentUid: "c".repeat(201), studentUid: "student" }],
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            records: [{ uid: "u".repeat(201), description: "" }],
+          },
+        },
+      }),
+    ).toBeNull();
+    const oldPyroxene = createEmptyGuestPyroxenePlanner();
+    const oldEventShops = createEmptyGuestEventShopPlanner();
+    const legacyMirror = createGuestPlannerLegacyMirror(envelope, { pyroxene: oldPyroxene, eventShops: oldEventShops });
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        legacyMirror: {
+          ...legacyMirror,
+          pyroxene: {
+            ...legacyMirror.pyroxene,
+            data: { ...legacyMirror.pyroxene.data, eventTrials: { ["e".repeat(201)]: 1 } },
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            records: [{ uid: "record-1", description: "설명".repeat(101) }],
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          pyroxene: {
+            ...envelope.document.pyroxene,
+            eventData: { ["e".repeat(201)]: { completed: false, expectedTrials: 1 } },
+          },
+        },
+      }),
+    ).toBeNull();
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: {
+          ...envelope.document,
+          eventShops: Object.fromEntries(
+            Array.from({ length: 501 }, (_, index) => [`shop-${index}`, createDefaultEventShopState([], [])]),
+          ),
+        },
+      }),
+    ).toBeNull();
+
+    const oversizedShopState = createDefaultEventShopState([], []);
+    oversizedShopState.itemQuantities = Object.fromEntries(
+      Array.from({ length: 1_001 }, (_, index) => [`item-${index}`, 1]),
+    );
+    expect(
+      normalizeGuestPlanner({
+        ...envelope,
+        document: { ...envelope.document, eventShops: { shop: oversizedShopState } },
+        eventShopTimelineUids: { shop: "timeline" },
+      }),
+    ).toBeNull();
+    expect(normalizeGuestPlanner({ ...envelope, legacyConflicts: Array.from({ length: 21 }, () => ({})) })).toBeNull();
+  });
+
   it("preserves the legacy optionsChanged flag for planner comparisons", () => {
     const legacy = createEmptyGuestPyroxenePlanner();
     legacy.data.options = {

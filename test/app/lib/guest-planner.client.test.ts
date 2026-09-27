@@ -19,6 +19,7 @@ import {
   parseGuestPyroxenePlanner,
 } from "~/domain/guest-pyroxene-planner";
 import {
+  flushGuestPlannerEventShopPlan,
   readGuestPlanner,
   resetGuestPlanner,
   subscribeGuestPlanner,
@@ -124,6 +125,40 @@ afterEach(() => {
 });
 
 describe("unified guest planner storage", () => {
+  it("flushes a pending shop plan to the envelope and both legacy mirrors synchronously", () => {
+    const plan = {
+      timelineUid: "event-timeline-1",
+      shopStateUid: "shop-content-1",
+      state: createDefaultEventShopState([], ["student-1"]),
+    };
+
+    const snapshot = flushGuestPlannerEventShopPlan(plan);
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    const storedEnvelope = JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null") as {
+      datasetId: string;
+      document: { eventShops: Record<string, unknown> };
+    };
+    const storedPyroxene = parseGuestPyroxenePlanner(stored.get(GUEST_PYROXENE_PLANNER_STORAGE_KEY) ?? "");
+    const storedEventShops = normalizeGuestEventShopPlanner(
+      JSON.parse(stored.get(GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY) ?? "null") as unknown,
+    );
+
+    expect(storedEnvelope.document.eventShops[plan.shopStateUid]).toEqual(plan.state);
+    expect(storedEventShops?.data.plans[plan.shopStateUid]).toEqual(plan);
+    expect(storedPyroxene?.datasetId).toBe(snapshot.envelope.legacyMirror?.pyroxene.datasetId);
+    expect(storedEventShops?.datasetId).toBe(snapshot.envelope.legacyMirror?.eventShops.datasetId);
+    expect(operations).toEqual([
+      `set:${GUEST_PYROXENE_PLANNER_STORAGE_KEY}`,
+      `set:${GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY}`,
+      `set:${GUEST_PLANNER_STORAGE_KEY}`,
+      `set:${GUEST_PYROXENE_PLANNER_STORAGE_KEY}`,
+      `set:${GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY}`,
+      `set:${GUEST_PLANNER_STORAGE_KEY}`,
+    ]);
+  });
+
   it("returns the same snapshot until the stored guest envelope changes", () => {
     const envelope = createEmptyGuestPlanner();
     stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(envelope));

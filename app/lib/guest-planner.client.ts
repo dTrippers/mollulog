@@ -1,6 +1,7 @@
 import {
   createEmptyGuestEventShopPlanner,
   GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY,
+  type GuestEventShopPlan,
   type GuestEventShopPlannerEnvelope,
   hasGuestEventShopPlannerData,
   normalizeGuestEventShopPlanner,
@@ -20,6 +21,7 @@ import {
   legacyGuestPlannerSources,
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
+  upsertGuestPlannerEventShopPlan,
 } from "~/domain/guest-planner";
 import {
   createEmptyGuestPyroxenePlanner,
@@ -117,8 +119,8 @@ function emptyEventShopsFromMirror(mirror: GuestPlannerLegacyMirror["eventShops"
   return { ...empty, datasetId: mirror.datasetId, revision: mirror.revision, updatedAt: mirror.updatedAt };
 }
 
-function parseLegacy(raw: RawStorage, acknowledgements: GuestPlannerEnvelope["legacyAcknowledgements"] = []) {
-  const sources = legacyGuestPlannerSources(raw.pyroxene, raw.eventShops, acknowledgements);
+function parseLegacy(raw: RawStorage) {
+  const sources = legacyGuestPlannerSources(raw.pyroxene, raw.eventShops);
   return {
     sources,
     pyroxene: sources.pyroxene,
@@ -313,7 +315,7 @@ function enqueue<T>(operation: () => Promise<T> | T): Promise<T> {
 }
 
 function updateIncomingLegacyUnreadable(envelope: GuestPlannerEnvelope, raw: RawStorage): GuestPlannerEnvelope {
-  const legacy = parseLegacy(raw, envelope.legacyAcknowledgements);
+  const legacy = parseLegacy(raw);
   const unreadable = {
     pyroxene: raw.pyroxene !== null && !legacy.pyroxene ? raw.pyroxene : null,
     eventShops: raw.eventShops !== null && !legacy.eventShops ? raw.eventShops : null,
@@ -367,7 +369,7 @@ function reconcileCurrentStorage(): GuestPlannerSnapshot {
     envelope = memorySnapshot.envelope;
   }
 
-  legacy = parseLegacy(raw, envelope.legacyAcknowledgements);
+  legacy = parseLegacy(raw);
 
   const hadLegacyMirror = envelope.legacyMirror !== null;
   const oldUnreadable = envelope.legacyUnreadable;
@@ -478,6 +480,57 @@ export function updateGuestPlanner(update: GuestPlannerUpdate): Promise<GuestPla
     emit();
     return snapshot;
   });
+}
+
+function updateGuestPlannerImmediately(update: GuestPlannerUpdate): GuestPlannerSnapshot {
+  if (typeof window === "undefined") return { status: "unavailable", legacySources: emptyLegacySources() };
+  const reconciled = reconcileCurrentStorage();
+  if (!("envelope" in reconciled) || reconciled.status === "conflict") return reconciled;
+
+  const nextFromUpdate = update(reconciled.envelope);
+  if (guestPlannerEnvelopeEqual(nextFromUpdate, reconciled.envelope)) return reconciled;
+  const envelope: GuestPlannerEnvelope = {
+    ...nextFromUpdate,
+    datasetId: reconciled.envelope.datasetId,
+    revision: reconciled.envelope.revision + 1,
+    updatedAt: new Date().toISOString(),
+  };
+  let raw: RawStorage;
+  try {
+    raw = readRawStorage();
+  } catch {
+    memoryBaseEnvelope ??= reconciled.envelope;
+    const snapshot = makeSnapshot(envelope, "memory", { envelope: null, pyroxene: null, eventShops: null });
+    memorySnapshot = snapshot;
+    emit();
+    return snapshot;
+  }
+
+  const confirmed = writeConfirmed(envelope, raw);
+  if (confirmed) {
+    const snapshot = makeSnapshot(confirmed, "ready", {
+      envelope: JSON.stringify(confirmed),
+      pyroxene: JSON.stringify(confirmed.legacyMirror?.pyroxene ?? null),
+      eventShops: JSON.stringify(confirmed.legacyMirror?.eventShops ?? null),
+    });
+    memoryBaseEnvelope = null;
+    memorySnapshot = snapshot;
+    publicSnapshotCache = snapshot;
+    emit();
+    return snapshot;
+  }
+
+  memoryBaseEnvelope ??= reconciled.envelope;
+  const snapshot = makeSnapshot(envelope, "memory", raw);
+  memorySnapshot = snapshot;
+  publicSnapshotCache = snapshot;
+  emit();
+  return snapshot;
+}
+
+/** Flush a pending event-shop edit before page teardown, without a queued or locked async write. */
+export function flushGuestPlannerEventShopPlan(plan: GuestEventShopPlan): GuestPlannerSnapshot {
+  return updateGuestPlannerImmediately((envelope) => upsertGuestPlannerEventShopPlan(envelope, plan));
 }
 
 export function resetGuestPlanner(): Promise<GuestPlannerSnapshot> {
