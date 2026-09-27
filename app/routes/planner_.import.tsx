@@ -1383,7 +1383,7 @@ export default function UnifiedGuestPlannerImportPage() {
                   {recordGroups.size > 0 && (
                     <SectionCard
                       title="수급/소비 계획"
-                      description="계정에 추가할 계획을 선택해주세요. 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요."
+                      description="계정에 추가할 계획을 선택해주세요. 일부만 선택하면 선택하지 않은 계획은 저장할 때 이 브라우저에서 삭제해요."
                     >
                       {sourceMarker}
                       <div className="space-y-3">
