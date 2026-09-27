@@ -1,10 +1,10 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { selectHomeMainStory } from "~/domain/home-content";
+import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import type { TimelineContent } from "~/models/timeline-content";
 import type { HomeSourceResult } from "~/views/home";
-import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { formatInstant, nowUtcIso } from "~/lib/date-time";
 
 export default function HomeMainStoryCard({ source }: { source: HomeSourceResult<TimelineContent | null> }) {
   const displayTimeZone = useDisplayTimeZone();
@@ -13,8 +13,10 @@ export default function HomeMainStoryCard({ source }: { source: HomeSourceResult
   const title =
     source.status === "error"
       ? "메인 스토리 정보를 불러오지 못했어요"
-      : current?.name ?? "공개된 메인 스토리가 없어요";
-  const dateLabel = current ? `${formatInstant(current.startAt, { timeZone: displayTimeZone, format: "M/D" })} 공개` : null;
+      : (current?.name ?? "공개된 메인 스토리가 없어요");
+  const dateLabel = current
+    ? `${formatInstant(current.startAt, { timeZone: displayTimeZone, format: "M/D" })} 공개`
+    : null;
 
   return (
     <Link

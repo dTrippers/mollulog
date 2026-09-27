@@ -21,9 +21,9 @@ import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
 import { getHomeOverviewSources, getIndexContents, type IndexRecruitment } from "~/views/home";
-import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 import HomeMainStoryCard from "./_index._components/HomeMainStoryCard";
 import HomeRaidEmptyState from "./_index._components/HomeRaidEmptyState";
+import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
 import HomeStatusSummary from "./_index._components/HomeStatusSummary";
 
 export const meta: MetaFunction = ({ location }) => {
@@ -103,15 +103,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       })),
     );
 
-    const [
-      { mainEvent, currentRaids, currentRecruitments, favoritedCounts },
-      favoritedStudents,
-      homeOverview,
-    ] = await Promise.all([
-      indexContentsPromise,
-      favoritedStudentsPromise,
-      homeOverviewPromise,
-    ]);
+    const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents, homeOverview] =
+      await Promise.all([indexContentsPromise, favoritedStudentsPromise, homeOverviewPromise]);
     const favoritedStudentUids = currentUserId
       ? favoritedStudents
           .filter((favorited) =>
@@ -172,10 +165,7 @@ export default function Index() {
       <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
         <div className="min-w-0 lg:flex-1">
           <MainEvent event={mainEvent} />
-          <HomeStatusSummary
-            campaigns={homeOverview.campaigns}
-            jointFiringDrills={homeOverview.jointFiringDrills}
-          />
+          <HomeStatusSummary campaigns={homeOverview.campaigns} jointFiringDrills={homeOverview.jointFiringDrills} />
 
           {currentRecruitments.length > 0 && (
             <CurrentRecruitments

@@ -1,5 +1,5 @@
-import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { HomeCampaign, HomeJointFiringDrill } from "~/domain/home-content";
+import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
 import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
@@ -22,9 +22,7 @@ function isOngoingContent(content: TimelineContent, now: UtcIsoString): boolean 
 }
 
 export function selectHomeMainEvent(contents: TimelineContent[], now: UtcIsoString): TimelineContent | null {
-  const ongoingEvent = contents.find(
-    (content) => content.contentType === "event" && isOngoingContent(content, now),
-  );
+  const ongoingEvent = contents.find((content) => content.contentType === "event" && isOngoingContent(content, now));
   const upcomingEvent = contents
     .filter((content) => content.contentType === "event" && isInstantAfter(content.startAt, now))
     .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
@@ -58,7 +56,10 @@ export type HomeOverviewSources = {
   mainStoryContent: HomeSourceResult<TimelineContent | null>;
 };
 
-async function loadHomeSource<T>(load: () => Promise<T>, onError: (error: unknown) => void): Promise<HomeSourceResult<T>> {
+async function loadHomeSource<T>(
+  load: () => Promise<T>,
+  onError: (error: unknown) => void,
+): Promise<HomeSourceResult<T>> {
   try {
     return { status: "success", data: await load() };
   } catch (error) {
@@ -71,14 +72,17 @@ export async function getHomeOverviewSources(env: Env, forceRefresh = false, ctx
   const logger = getLogger(env, ctx, { route: "home.overview" });
   const now = nowUtcIso();
   const [campaigns, jointFiringDrills, mainStoryContent] = await Promise.all([
-    loadHomeSource(() => getHomeCampaigns(env, forceRefresh), (error) =>
-      logger.error("Failed to load home campaigns", error),
+    loadHomeSource(
+      () => getHomeCampaigns(env, forceRefresh),
+      (error) => logger.error("Failed to load home campaigns", error),
     ),
-    loadHomeSource(() => getHomeJointFiringDrills(env, forceRefresh), (error) =>
-      logger.error("Failed to load home joint firing drills", error),
+    loadHomeSource(
+      () => getHomeJointFiringDrills(env, forceRefresh),
+      (error) => logger.error("Failed to load home joint firing drills", error),
     ),
-    loadHomeSource(() => getHomeMainStoryContent(env, now, { ctx }), (error) =>
-      logger.error("Failed to load home main story contents", error),
+    loadHomeSource(
+      () => getHomeMainStoryContent(env, now, { ctx }),
+      (error) => logger.error("Failed to load home main story contents", error),
     ),
   ]);
 

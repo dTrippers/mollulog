@@ -1,12 +1,12 @@
 import { Link } from "react-router";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
-  selectHomeCampaigns,
-  selectHomeJointFiringDrill,
   type HomeCampaign,
   type HomeJointFiringDrill,
   type HomeJointFiringDrillSelection,
+  selectHomeCampaigns,
+  selectHomeJointFiringDrill,
 } from "~/domain/home-content";
-import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, nowUtcIso, parseUtcTimestamp } from "~/lib/date-time";
 import { relativeTime } from "~/locales/ko";
 import type { HomeSourceResult } from "~/views/home";
@@ -25,9 +25,7 @@ export default function HomeStatusSummary({
   const campaignFailed = campaignSelection.status === "error";
   const campaigns = campaignSelection.status === "success" ? campaignSelection.campaigns : [];
   const drillSelection: HomeJointFiringDrillSelection =
-    drillSource.status === "success"
-      ? selectHomeJointFiringDrill(drillSource.data, now)
-      : { kind: "error" };
+    drillSource.status === "success" ? selectHomeJointFiringDrill(drillSource.data, now) : { kind: "error" };
 
   return (
     <dl className="mt-3 flex flex-col gap-1.5">

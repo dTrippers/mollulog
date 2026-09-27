@@ -49,11 +49,7 @@ export function getFutureRaidContents(
   return getPostgresFutureRaidContents(env, contentTypes, nowUtcIso(), { ctx: options.ctx });
 }
 
-export function getHomeMainStoryContent(
-  env: Env,
-  now = nowUtcIso(),
-  options: TimelineContentReadOptions = {},
-) {
+export function getHomeMainStoryContent(env: Env, now = nowUtcIso(), options: TimelineContentReadOptions = {}) {
   return getPostgresHomeMainStoryContent(env, now, { ctx: options.ctx });
 }
 
