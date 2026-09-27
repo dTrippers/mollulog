@@ -120,6 +120,11 @@ export type GuestPlannerSection =
   | "collectedSourceKeys"
   | "eventShops";
 
+export type GuestPlannerItemReference = {
+  type: "resources" | "options" | "record" | "source" | "event" | "eventShop" | "favorite";
+  key: string;
+};
+
 export type GuestPlannerLegacySources = {
   pyroxene: GuestPyroxenePlannerEnvelope | null;
   eventShops: GuestEventShopPlannerEnvelope | null;
@@ -369,10 +374,14 @@ function projectDocument(value: unknown): GuestPlannerDocument | null {
   const ap = cloneGuestPlannerAp(value.ap);
   if (ap === undefined) return null;
   const pyroxene = value.pyroxene;
+  const recordPlanCount = Array.isArray(pyroxene.records)
+    ? new Set(pyroxene.records.filter(isRecord).map((item) => extractPyroxeneTimelineBaseUid(String(item.uid ?? ""))))
+        .size
+    : 0;
   if (
     !(pyroxene.resources === null || isRecord(pyroxene.resources)) ||
     !Array.isArray(pyroxene.records) ||
-    pyroxene.records.length > MAX_GUEST_PLANNER_RECORDS ||
+    recordPlanCount > MAX_GUEST_PLANNER_RECORDS ||
     pyroxene.records.some(
       (item) =>
         !isRecord(item) ||
@@ -813,14 +822,28 @@ function mergeEventShopPlan(
   const submittedState = normalizeEventShopState(submitted.state);
   const latestState = normalizeEventShopState(latest.state);
   if (!baseState || !submittedState || !latestState) return { value: latest, conflict: true };
-  const changedFields = (state: EventShopState) =>
-    (Object.keys(baseState) as Array<keyof EventShopState>).filter(
-      (key) => stableJson(baseState[key]) !== stableJson(state[key]),
-    );
-  const submittedFields = new Set(changedFields(submittedState));
-  const latestFields = new Set(changedFields(latestState));
-  for (const field of submittedFields) {
-    if (latestFields.has(field) && stableJson(submittedState[field]) !== stableJson(latestState[field])) {
+  for (const field of Object.keys(baseState) as Array<keyof EventShopState>) {
+    const baseValue = baseState[field];
+    const submittedValue = submittedState[field];
+    const latestValue = latestState[field];
+    if (isRecord(baseValue) && isRecord(submittedValue) && isRecord(latestValue)) {
+      const keys = new Set([...Object.keys(baseValue), ...Object.keys(submittedValue), ...Object.keys(latestValue)]);
+      for (const key of keys) {
+        const baseHas = Object.hasOwn(baseValue, key);
+        const submittedHas = Object.hasOwn(submittedValue, key);
+        const latestHas = Object.hasOwn(latestValue, key);
+        const submittedChanged =
+          baseHas !== submittedHas || stableJson(baseValue[key]) !== stableJson(submittedValue[key]);
+        const latestChanged = baseHas !== latestHas || stableJson(baseValue[key]) !== stableJson(latestValue[key]);
+        const sameValue =
+          submittedHas === latestHas && stableJson(submittedValue[key]) === stableJson(latestValue[key]);
+        if (submittedChanged && latestChanged && !sameValue) return { value: latest, conflict: true };
+      }
+    } else if (
+      stableJson(baseValue) !== stableJson(submittedValue) &&
+      stableJson(baseValue) !== stableJson(latestValue) &&
+      stableJson(submittedValue) !== stableJson(latestValue)
+    ) {
       return { value: latest, conflict: true };
     }
   }
@@ -1016,6 +1039,21 @@ export function upsertGuestPlannerEventShopPlan(
   };
 }
 
+/** Applies the submitted detail-page edit over the latest envelope, retaining concurrent per-key changes. */
+export function mergeGuestPlannerEventShopPlan(
+  envelope: GuestPlannerEnvelope,
+  plan: GuestEventShopPlan & { baseState: EventShopState },
+): GuestPlannerEnvelope {
+  const latestState = envelope.document.eventShops[plan.shopStateUid] ?? plan.baseState;
+  const state = mergeEventShopStateChanges(plan.baseState, plan.state, latestState);
+  const latestTimelineUid = envelope.eventShopTimelineUids[plan.shopStateUid] ?? plan.timelineUid;
+  return upsertGuestPlannerEventShopPlan(envelope, {
+    timelineUid: latestTimelineUid,
+    shopStateUid: plan.shopStateUid,
+    state,
+  });
+}
+
 export function patchGuestPlannerEventShopOwnedQuantities(
   envelope: GuestPlannerEnvelope,
   plan: Pick<GuestEventShopPlan, "timelineUid" | "shopStateUid"> & {
@@ -1184,10 +1222,13 @@ export function hasUnresolvedGuestPlannerOptions(
 
 function clearLegacyConflictSections(
   conflicts: readonly GuestPlannerLegacyConflict[],
+  conflictId: string,
+  source: "pyroxene" | "eventShops",
   sections: ReadonlySet<GuestPlannerSection>,
 ): GuestPlannerLegacyConflict[] {
   return conflicts
     .map((conflict) => {
+      if (conflict.id !== conflictId) return conflict;
       let pyroxene = conflict.pyroxene;
       let eventShops = conflict.eventShops;
       const keys = {
@@ -1202,17 +1243,17 @@ function clearLegacyConflictSections(
           eventShopUids: [...conflict.keys.removed.eventShopUids],
         },
       };
-      if (sections.has("resources")) {
+      if (source === "pyroxene" && sections.has("resources")) {
         keys.pyroxene.resources = false;
         keys.removed.resources = false;
         if (pyroxene) pyroxene = { ...pyroxene, data: { ...pyroxene.data, resources: null } };
       }
-      if (sections.has("records")) {
+      if (source === "pyroxene" && sections.has("records")) {
         keys.pyroxene.records = [];
         keys.removed.records = [];
         if (pyroxene) pyroxene = { ...pyroxene, data: { ...pyroxene.data, records: [] } };
       }
-      if (sections.has("options")) {
+      if (source === "pyroxene" && sections.has("options")) {
         keys.pyroxene.options = false;
         if (pyroxene)
           pyroxene = {
@@ -1220,19 +1261,19 @@ function clearLegacyConflictSections(
             data: { ...pyroxene.data, options: defaultPyroxenePlannerOptions, optionsChanged: false },
           };
       }
-      if (sections.has("recruitment")) {
+      if (source === "pyroxene" && sections.has("recruitment")) {
         keys.pyroxene.eventTrials = [];
         keys.pyroxene.favorites = [];
         keys.removed.eventTrials = [];
         keys.removed.favorites = [];
         if (pyroxene) pyroxene = { ...pyroxene, data: { ...pyroxene.data, eventTrials: {}, favoriteStudents: [] } };
       }
-      if (sections.has("collectedSourceKeys")) {
+      if (source === "pyroxene" && sections.has("collectedSourceKeys")) {
         keys.pyroxene.collectedSourceKeys = [];
         keys.removed.collectedSourceKeys = [];
         if (pyroxene) pyroxene = { ...pyroxene, data: { ...pyroxene.data, collectedSourceKeys: [] } };
       }
-      if (sections.has("eventShops")) {
+      if (source === "eventShops" && sections.has("eventShops")) {
         keys.eventShopUids = [];
         keys.removed.eventShopUids = [];
         if (eventShops) eventShops = { ...eventShops, data: { plans: {} } };
@@ -1252,8 +1293,8 @@ function clearLegacyConflictSections(
       const hasRemainingShopKeys = keys.eventShopUids.length > 0 || keys.removed.eventShopUids.length > 0;
       return {
         ...conflict,
-        pyroxene: hasRemainingPyroxeneKeys ? pyroxene : null,
-        eventShops: hasRemainingShopKeys ? eventShops : null,
+        pyroxene: source === "pyroxene" && !hasRemainingPyroxeneKeys ? null : pyroxene,
+        eventShops: source === "eventShops" && !hasRemainingShopKeys ? null : eventShops,
         keys,
       };
     })
@@ -1293,83 +1334,272 @@ function legacySourceSignature(datasetId: string, revision: number, updatedAt: s
   return `${datasetId}:${revision}:${updatedAt}`;
 }
 
-export function clearGuestPlannerSectionsIfUnchanged(
+function itemGroup(records: readonly PlannerStateTimelineRecord[], key: string): PlannerStateTimelineRecord[] {
+  return records.filter((record) => extractPyroxeneTimelineBaseUid(record.uid) === key);
+}
+
+/** Clears only the exact guest items confirmed for this source and unchanged since submission. */
+export function clearGuestPlannerItemsIfUnchanged(
   current: GuestPlannerEnvelope,
   submitted: GuestPlannerEnvelope,
-  sections: readonly GuestPlannerSection[],
+  items: readonly GuestPlannerItemReference[],
 ): GuestPlannerEnvelope {
   const nextDocument = { ...current.document, pyroxene: { ...current.document.pyroxene } };
-  const nextFavorites = [...current.favorites];
-  const nextEventShopTimelineUids = { ...current.eventShopTimelineUids };
-  const nextEventShops = { ...current.document.eventShops };
-  let nextPyroxeneOptionsChanged = current.pyroxeneOptionsChanged;
-  const clearedSections = new Set<GuestPlannerSection>();
-  const clearIfSame = (
-    section: GuestPlannerSection,
-    currentValue: unknown,
-    submittedValue: unknown,
-    clear: () => void,
-  ) => {
-    if (stableJson(currentValue) === stableJson(submittedValue)) {
-      clear();
-      clearedSections.add(section);
-    }
-  };
-  for (const section of sections) {
-    switch (section) {
+  const records = [...current.document.pyroxene.records];
+  const collectedSourceKeys = [...current.document.pyroxene.collectedSourceKeys];
+  const eventData = { ...current.document.pyroxene.eventData };
+  const eventShops = { ...current.document.eventShops };
+  const eventShopTimelineUids = { ...current.eventShopTimelineUids };
+  const favorites = [...current.favorites];
+  let optionsChanged = current.pyroxeneOptionsChanged;
+
+  for (const item of items) {
+    switch (item.type) {
       case "resources":
-        clearIfSame(section, current.document.pyroxene.resources, submitted.document.pyroxene.resources, () => {
+        if (
+          current.document.pyroxene.resources &&
+          stableJson(current.document.pyroxene.resources) === stableJson(submitted.document.pyroxene.resources)
+        ) {
           nextDocument.pyroxene.resources = null;
-        });
-        break;
-      case "records":
-        clearIfSame(section, current.document.pyroxene.records, submitted.document.pyroxene.records, () => {
-          nextDocument.pyroxene.records = [];
-        });
+        }
         break;
       case "options":
-        clearIfSame(section, current.document.pyroxene.options, submitted.document.pyroxene.options, () => {
+        if (
+          current.pyroxeneOptionsChanged === submitted.pyroxeneOptionsChanged &&
+          stableJson(current.document.pyroxene.options) === stableJson(submitted.document.pyroxene.options)
+        ) {
           nextDocument.pyroxene.options = defaultPyroxenePlannerOptions;
-          nextPyroxeneOptionsChanged = false;
-        });
+          optionsChanged = false;
+        }
         break;
-      case "recruitment":
-        clearIfSame(
-          section,
-          { eventData: current.document.pyroxene.eventData, favorites: current.favorites },
-          { eventData: submitted.document.pyroxene.eventData, favorites: submitted.favorites },
-          () => {
-            nextDocument.pyroxene.eventData = {};
-            nextFavorites.splice(0);
-          },
-        );
+      case "record": {
+        const submittedGroup = itemGroup(submitted.document.pyroxene.records, item.key);
+        const currentGroup = itemGroup(records, item.key);
+        if (submittedGroup.length > 0 && stableJson(currentGroup) === stableJson(submittedGroup)) {
+          const ids = new Set(currentGroup.map(({ uid }) => uid));
+          for (let index = records.length - 1; index >= 0; index -= 1) {
+            if (ids.has(records[index].uid)) records.splice(index, 1);
+          }
+        }
         break;
-      case "collectedSourceKeys":
-        clearIfSame(
-          section,
-          current.document.pyroxene.collectedSourceKeys,
-          submitted.document.pyroxene.collectedSourceKeys,
-          () => {
-            nextDocument.pyroxene.collectedSourceKeys = [];
-          },
-        );
+      }
+      case "source":
+        if (
+          submitted.document.pyroxene.collectedSourceKeys.includes(item.key) &&
+          collectedSourceKeys.includes(item.key)
+        ) {
+          collectedSourceKeys.splice(collectedSourceKeys.indexOf(item.key), 1);
+        }
         break;
-      case "eventShops":
-        clearIfSame(section, current.document.eventShops, submitted.document.eventShops, () => {
-          for (const key of Object.keys(nextEventShops)) delete nextEventShops[key];
-          for (const key of Object.keys(nextEventShopTimelineUids)) delete nextEventShopTimelineUids[key];
-        });
+      case "event":
+        if (
+          Object.hasOwn(submitted.document.pyroxene.eventData, item.key) &&
+          stableJson(eventData[item.key]) === stableJson(submitted.document.pyroxene.eventData[item.key])
+        ) {
+          delete eventData[item.key];
+        }
         break;
+      case "eventShop":
+        if (
+          Object.hasOwn(submitted.document.eventShops, item.key) &&
+          stableJson(eventShops[item.key]) === stableJson(submitted.document.eventShops[item.key]) &&
+          eventShopTimelineUids[item.key] === submitted.eventShopTimelineUids[item.key]
+        ) {
+          delete eventShops[item.key];
+          delete eventShopTimelineUids[item.key];
+        }
+        break;
+      case "favorite": {
+        const submittedFavorite = submitted.favorites.find((favorite) => favoriteIdentity(favorite) === item.key);
+        const currentIndex = favorites.findIndex((favorite) => favoriteIdentity(favorite) === item.key);
+        if (
+          submittedFavorite &&
+          currentIndex >= 0 &&
+          stableJson(favorites[currentIndex]) === stableJson(submittedFavorite)
+        ) {
+          favorites.splice(currentIndex, 1);
+        }
+        break;
+      }
     }
   }
+
   return {
     ...current,
-    document: { ...nextDocument, eventShops: nextEventShops },
-    pyroxeneOptionsChanged: nextPyroxeneOptionsChanged,
-    favorites: nextFavorites,
-    eventShopTimelineUids: nextEventShopTimelineUids,
-    legacyConflicts: clearLegacyConflictSections(current.legacyConflicts, clearedSections),
+    document: {
+      ...nextDocument,
+      pyroxene: {
+        ...nextDocument.pyroxene,
+        records,
+        collectedSourceKeys,
+        eventData,
+      },
+      eventShops,
+    },
+    pyroxeneOptionsChanged: optionsChanged,
+    favorites,
+    eventShopTimelineUids,
   };
+}
+
+/** Clears confirmed items only from one legacy conflict source, never from sibling sources. */
+export function clearGuestPlannerLegacyConflictItemsIfUnchanged(
+  current: GuestPlannerEnvelope,
+  conflictId: string,
+  source: "pyroxene" | "eventShops",
+  submitted: GuestPlannerEnvelope,
+  items: readonly GuestPlannerItemReference[],
+): GuestPlannerEnvelope {
+  const conflictIndex = current.legacyConflicts.findIndex((conflict) => conflict.id === conflictId);
+  if (conflictIndex < 0) return current;
+  const conflicts = [...current.legacyConflicts];
+  const conflict = conflicts[conflictIndex];
+  const next = {
+    ...conflict,
+    keys: {
+      pyroxene: { ...conflict.keys.pyroxene },
+      eventShopUids: [...conflict.keys.eventShopUids],
+      removed: {
+        ...conflict.keys.removed,
+        records: [...conflict.keys.removed.records],
+        eventTrials: [...conflict.keys.removed.eventTrials],
+        favorites: [...conflict.keys.removed.favorites],
+        collectedSourceKeys: [...conflict.keys.removed.collectedSourceKeys],
+        eventShopUids: [...conflict.keys.removed.eventShopUids],
+      },
+    },
+    pyroxene: conflict.pyroxene ? { ...conflict.pyroxene, data: { ...conflict.pyroxene.data } } : null,
+    eventShops: conflict.eventShops ? { ...conflict.eventShops, data: { ...conflict.eventShops.data } } : null,
+  } satisfies GuestPlannerLegacyConflict;
+  const expectedPyroxene = source === "pyroxene" ? guestPlannerPyroxeneDataForLegacyMirror(submitted, null) : null;
+  const expectedShops = source === "eventShops" ? guestPlannerEventShopDataForLegacyMirror(submitted) : null;
+
+  for (const item of items) {
+    if (source === "pyroxene" && next.pyroxene && expectedPyroxene) {
+      const data = next.pyroxene.data;
+      switch (item.type) {
+        case "resources":
+          if (next.keys.pyroxene.resources && stableJson(data.resources) === stableJson(expectedPyroxene.resources)) {
+            next.keys.pyroxene.resources = false;
+            next.pyroxene.data = { ...data, resources: null };
+          }
+          break;
+        case "record": {
+          const expected = expectedPyroxene.records.find((record) => record.recordId === item.key);
+          const actual = data.records.find((record) => record.recordId === item.key);
+          if (expected && actual && stableJson(actual) === stableJson(expected)) {
+            next.keys.pyroxene.records = next.keys.pyroxene.records.filter((key) => key !== item.key);
+            next.pyroxene.data = {
+              ...data,
+              records: data.records.filter((record) => record.recordId !== item.key),
+            };
+          }
+          break;
+        }
+        case "options":
+          if (
+            next.keys.pyroxene.options &&
+            stableJson(data.options) === stableJson(expectedPyroxene.options) &&
+            data.optionsChanged === expectedPyroxene.optionsChanged
+          ) {
+            next.keys.pyroxene.options = false;
+            next.pyroxene.data = { ...data, optionsChanged: false };
+          }
+          break;
+        case "source":
+          if (
+            next.keys.pyroxene.collectedSourceKeys.includes(item.key) &&
+            data.collectedSourceKeys.includes(item.key) &&
+            expectedPyroxene.collectedSourceKeys.includes(item.key)
+          ) {
+            next.keys.pyroxene.collectedSourceKeys = next.keys.pyroxene.collectedSourceKeys.filter(
+              (key) => key !== item.key,
+            );
+            next.pyroxene.data = {
+              ...data,
+              collectedSourceKeys: data.collectedSourceKeys.filter((key) => key !== item.key),
+            };
+          }
+          break;
+        case "event":
+          if (
+            next.keys.pyroxene.eventTrials.includes(item.key) &&
+            stableJson(data.eventTrials[item.key]) === stableJson(expectedPyroxene.eventTrials[item.key])
+          ) {
+            next.keys.pyroxene.eventTrials = next.keys.pyroxene.eventTrials.filter((key) => key !== item.key);
+            const eventTrials = { ...data.eventTrials };
+            delete eventTrials[item.key];
+            next.pyroxene.data = { ...data, eventTrials };
+          }
+          break;
+        case "favorite": {
+          const expected = expectedPyroxene.favoriteStudents.find(
+            (favorite) => favoriteIdentity(favorite) === item.key,
+          );
+          const actual = data.favoriteStudents.find((favorite) => favoriteIdentity(favorite) === item.key);
+          if (expected && actual && stableJson(actual) === stableJson(expected)) {
+            next.keys.pyroxene.favorites = next.keys.pyroxene.favorites.filter((key) => key !== item.key);
+            next.pyroxene.data = {
+              ...data,
+              favoriteStudents: data.favoriteStudents.filter((favorite) => favoriteIdentity(favorite) !== item.key),
+            };
+          }
+          break;
+        }
+        case "eventShop":
+          break;
+      }
+    } else if (source === "eventShops" && next.eventShops && expectedShops && item.type === "eventShop") {
+      const expected = expectedShops.plans[item.key];
+      const actual = next.eventShops.data.plans[item.key];
+      if (
+        next.keys.eventShopUids.includes(item.key) &&
+        expected &&
+        actual &&
+        stableJson(actual) === stableJson(expected)
+      ) {
+        next.keys.eventShopUids = next.keys.eventShopUids.filter((key) => key !== item.key);
+        next.eventShops.data = {
+          ...next.eventShops.data,
+          plans: Object.fromEntries(Object.entries(next.eventShops.data.plans).filter(([key]) => key !== item.key)),
+        };
+      }
+    }
+  }
+
+  const hasPyroxene = Boolean(
+    next.keys.pyroxene.resources ||
+      next.keys.pyroxene.records.length ||
+      next.keys.pyroxene.options ||
+      next.keys.pyroxene.eventTrials.length ||
+      next.keys.pyroxene.favorites.length ||
+      next.keys.pyroxene.collectedSourceKeys.length ||
+      next.keys.removed.resources ||
+      next.keys.removed.records.length ||
+      next.keys.removed.eventTrials.length ||
+      next.keys.removed.favorites.length ||
+      next.keys.removed.collectedSourceKeys.length,
+  );
+  const hasEventShops = Boolean(next.keys.eventShopUids.length || next.keys.removed.eventShopUids.length);
+  if (!hasPyroxene && !hasEventShops) conflicts.splice(conflictIndex, 1);
+  else
+    conflicts[conflictIndex] = {
+      ...next,
+      pyroxene: hasPyroxene ? next.pyroxene : null,
+      eventShops: hasEventShops ? next.eventShops : null,
+    };
+  return { ...current, legacyConflicts: conflicts };
+}
+
+/** Clears conflict tombstones only for the selected conflict and its source. */
+export function clearGuestPlannerLegacyConflictSections(
+  current: GuestPlannerEnvelope,
+  conflictId: string,
+  source: "pyroxene" | "eventShops",
+  sections: readonly GuestPlannerSection[],
+): GuestPlannerEnvelope {
+  const legacyConflicts = clearLegacyConflictSections(current.legacyConflicts, conflictId, source, new Set(sections));
+  return { ...current, legacyConflicts };
 }
 
 export function createGuestPlannerFromLegacySources(

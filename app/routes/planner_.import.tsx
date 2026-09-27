@@ -17,9 +17,12 @@ import { Button, Callout, Checkbox, ResourceCard, SectionCard } from "~/componen
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
 import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
 import {
-  clearGuestPlannerSectionsIfUnchanged,
+  clearGuestPlannerItemsIfUnchanged,
+  clearGuestPlannerLegacyConflictItemsIfUnchanged,
+  clearGuestPlannerLegacyConflictSections,
   createGuestPlannerConflictEnvelope,
   type GuestPlannerEnvelope,
+  type GuestPlannerItemReference,
   type GuestPlannerLegacyConflict,
   type GuestPlannerSection,
   guestPlannerEventShopPlans,
@@ -42,10 +45,7 @@ import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPlannerImportPlan, importGuestPlannerState } from "~/models/guest-pyroxene-import";
 import { getPyroxeneUserState } from "~/models/pyroxene-planner";
-import type {
-  EventShopPlanDisplayCatalog,
-  EventShopStateLookupResponse,
-} from "~/routes/api.planner.event-shop-states";
+import type { EventShopPlanDisplayCatalog, EventShopStateLookupResponse } from "~/routes/api.planner.event-shop-states";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
 type GuestPlannerSelection = {
@@ -76,7 +76,7 @@ type ImportActionResult = {
   verified: number;
   failedLabels: string[];
   revisionConflict: boolean;
-  successfulSections: Record<string, GuestPlannerSection[]>;
+  cleanupItems?: Record<string, GuestPlannerItemReference[]>;
 };
 
 export const MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES = 2 * 1024 * 1024;
@@ -462,6 +462,64 @@ export function getMissingGuestCollectedSourceKeys(
   return guestKeys.filter((key) => !accountSourceKeys.has(key));
 }
 
+function importItemsBySection(
+  envelope: GuestPlannerEnvelope,
+): Record<GuestPlannerSection, GuestPlannerItemReference[]> {
+  const recordIds = new Set(
+    envelope.document.pyroxene.records.map((record) => extractPyroxeneTimelineBaseUid(record.uid)),
+  );
+  return {
+    resources: envelope.document.pyroxene.resources ? [{ type: "resources", key: "current" }] : [],
+    records: [...recordIds].map((key) => ({ type: "record", key })),
+    options: envelope.pyroxeneOptionsChanged ? [{ type: "options", key: "current" }] : [],
+    recruitment: [
+      ...Object.keys(envelope.document.pyroxene.eventData).map((key) => ({ type: "event" as const, key })),
+      ...envelope.favorites.map((favorite) => ({ type: "favorite" as const, key: favoriteKey(favorite) })),
+    ],
+    collectedSourceKeys: envelope.document.pyroxene.collectedSourceKeys.map((key) => ({ type: "source", key })),
+    eventShops: Object.keys(envelope.document.eventShops).map((key) => ({ type: "eventShop", key })),
+  };
+}
+
+function selectedImportItemsBySection(
+  selection: GuestPlannerSelection,
+): Record<GuestPlannerSection, GuestPlannerItemReference[]> {
+  return {
+    resources: selection.resources ? [{ type: "resources", key: "current" }] : [],
+    records: selection.recordUids.map((key) => ({ type: "record", key })),
+    options: selection.options ? [{ type: "options", key: "current" }] : [],
+    recruitment: [
+      ...selection.eventUids.map((key) => ({ type: "event" as const, key })),
+      ...selection.favorites.map((favorite) => ({ type: "favorite" as const, key: favoriteKey(favorite) })),
+    ],
+    collectedSourceKeys: selection.sourceKeys.map((key) => ({ type: "source", key })),
+    eventShops: selection.eventShopUids.map((key) => ({ type: "eventShop", key })),
+  };
+}
+
+function getSourceCleanupItems(
+  source: { id: string; envelope: GuestPlannerEnvelope; selection: GuestPlannerSelection },
+  verified: readonly { sourceId: string; type: string; key: string }[],
+  failed: readonly { sourceId: string; type: string; key: string }[],
+): GuestPlannerItemReference[] {
+  const allBySection = importItemsBySection(source.envelope);
+  const selectedBySection = selectedImportItemsBySection(source.selection);
+  const verifiedKeys = new Set(verified.map(({ sourceId, type, key }) => `${sourceId}\u0000${type}\u0000${key}`));
+  const failedKeys = new Set(failed.map(({ sourceId, type, key }) => `${sourceId}\u0000${type}\u0000${key}`));
+  const cleanup = new Map<string, GuestPlannerItemReference>();
+  for (const section of Object.keys(allBySection) as GuestPlannerSection[]) {
+    const selected = selectedBySection[section];
+    if (selected.length === 0) continue;
+    const successful = selected.every((item) => {
+      const itemKey = `${source.id}\u0000${item.type}\u0000${item.key}`;
+      return verifiedKeys.has(itemKey) && !failedKeys.has(itemKey);
+    });
+    if (!successful) continue;
+    for (const item of allBySection[section]) cleanup.set(`${item.type}\u0000${item.key}`, item);
+  }
+  return [...cleanup.values()];
+}
+
 function accountPyroxeneItems(contents: Awaited<ReturnType<typeof getPyroxenePlannerContents>>) {
   const names = new Map<string, string>();
   for (const content of contents) {
@@ -489,7 +547,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         verified: 0,
         failedLabels: ["로그인이 필요해요"],
         revisionConflict: false,
-        successfulSections: {},
       },
       { status: 401 },
     );
@@ -505,7 +562,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         verified: 0,
         failedLabels: ["가져올 데이터를 확인하지 못했어요"],
         revisionConflict: false,
-        successfulSections: {},
       },
       { status: 400 },
     );
@@ -517,7 +573,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         verified: 0,
         failedLabels: ["가져올 데이터를 확인하지 못했어요"],
         revisionConflict: false,
-        successfulSections: {},
       },
       { status: 400 },
     );
@@ -545,7 +600,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           verified: 0,
           failedLabels: ["가져올 데이터를 확인하지 못했어요"],
           revisionConflict: false,
-          successfulSections: {},
         },
         { status: 400 },
       );
@@ -559,7 +613,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           verified: 0,
           failedLabels: ["가져올 데이터를 확인하지 못했어요"],
           revisionConflict: false,
-          successfulSections: {},
         },
         { status: 400 },
       );
@@ -581,7 +634,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           verified: 0,
           failedLabels: ["선택한 항목이 원본 데이터와 일치하지 않아요"],
           revisionConflict: false,
-          successfulSections: {},
         },
         { status: 400 },
       );
@@ -602,7 +654,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           verified: 0,
           failedLabels: ["같은 항목을 둘 이상의 계획에서 선택했어요"],
           revisionConflict: false,
-          successfulSections: {},
         },
         { status: 400 },
       );
@@ -615,7 +666,6 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           verified: 0,
           failedLabels: ["가져올 데이터를 확인하지 못했어요"],
           revisionConflict: false,
-          successfulSections: {},
         },
         { status: 400 },
       );
@@ -668,36 +718,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       verified: 0,
       failedLabels: ["선택한 항목을 가져오지 못했어요"],
       revisionConflict: false,
-      successfulSections: {},
+      cleanupItems: {},
     } satisfies ImportActionResult;
   }
 
-  const successfulSections: Record<string, GuestPlannerSection[]> = {};
+  const cleanupItems: Record<string, GuestPlannerItemReference[]> = {};
   for (const source of sourceById.values()) {
-    const selection = source.selection;
-    const fails = (types: string[], keys: string[]) =>
-      result.failed.some((item) => item.sourceId === source.id && types.includes(item.type) && keys.includes(item.key));
-    const sectionResults: GuestPlannerSection[] = [];
-    if (source.envelope.document.pyroxene.resources && !fails(["resources"], selection.resources ? ["current"] : []))
-      sectionResults.push("resources");
-    if (
-      groupTimelineRecords(source.envelope.document.pyroxene.records).size > 0 &&
-      !fails(["record"], selection.recordUids)
-    )
-      sectionResults.push("records");
-    if (source.envelope.pyroxeneOptionsChanged && !fails(["options"], selection.options ? ["current"] : []))
-      sectionResults.push("options");
-    const recruitmentKeys = [...selection.eventUids, ...selection.favorites.map(favoriteKey)];
-    if (
-      (source.envelope.favorites.length > 0 || Object.keys(source.envelope.document.pyroxene.eventData).length > 0) &&
-      !fails(["event", "favorite"], recruitmentKeys)
-    )
-      sectionResults.push("recruitment");
-    if (source.envelope.document.pyroxene.collectedSourceKeys.length > 0 && !fails(["source"], selection.sourceKeys))
-      sectionResults.push("collectedSourceKeys");
-    if (Object.keys(source.envelope.document.eventShops).length > 0 && !fails(["eventShop"], selection.eventShopUids))
-      sectionResults.push("eventShops");
-    successfulSections[source.id] = sectionResults;
+    cleanupItems[source.id] = getSourceCleanupItems(source, result.verified, result.failed);
   }
   const failedLabels = result.failed.map(
     (item) => labels.get(`${item.sourceId}\u0000${item.type}\u0000${item.key}`) ?? "플래너 항목",
@@ -707,7 +734,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     verified: result.verified.length,
     failedLabels,
     revisionConflict: result.revisionConflict,
-    successfulSections,
+    cleanupItems,
   } satisfies ImportActionResult;
 };
 
@@ -851,17 +878,25 @@ export default function UnifiedGuestPlannerImportPage() {
     void guestPlanner.update((current) => {
       let next = current;
       for (const source of submitted) {
-        const sections = [
-          ...new Set([
-            ...(result.successfulSections[source.id] ?? []),
-            ...(result.success && source.kind === "legacyConflict" ? (source.conflictResolutionSections ?? []) : []),
-          ]),
-        ];
-        if (sections.length === 0) continue;
+        const items = result.cleanupItems?.[source.id] ?? [];
         if (source.kind === "current") {
-          next = clearGuestPlannerSectionsIfUnchanged(next, source.envelope, sections);
-        } else if (source.conflictBaseEnvelope) {
-          next = clearGuestPlannerSectionsIfUnchanged(next, source.conflictBaseEnvelope, sections);
+          next = clearGuestPlannerItemsIfUnchanged(next, source.envelope, items);
+        } else if (source.legacyConflict && source.conflictSource) {
+          next = clearGuestPlannerLegacyConflictItemsIfUnchanged(
+            next,
+            source.legacyConflict.id,
+            source.conflictSource,
+            source.envelope,
+            items,
+          );
+          if (result.success && source.conflictResolutionSections?.length) {
+            next = clearGuestPlannerLegacyConflictSections(
+              next,
+              source.legacyConflict.id,
+              source.conflictSource,
+              source.conflictResolutionSections,
+            );
+          }
         }
       }
       return next;
@@ -904,9 +939,7 @@ export default function UnifiedGuestPlannerImportPage() {
 
   const from = new URLSearchParams(location.search).get("from");
   const back =
-    from === "pyroxene"
-      ? { title: "청휘석 플래너", to: "/utils/pyroxene" }
-      : { title: "통합 플래너", to: "/planner" };
+    from === "pyroxene" ? { title: "청휘석 플래너", to: "/utils/pyroxene" } : { title: "통합 플래너", to: "/planner" };
   const countedImportItems = new Set<string>();
   const defaultShopPlanCount = new Set(
     [...defaultShopPlanKeys].map((key) => key.split("\u0000")[1]).filter((key): key is string => Boolean(key)),
@@ -1451,10 +1484,21 @@ export function ResourceConflictComparison({
   accountResources: (PickupResources & { inputAt: Date | string }) | null;
   onChange: (source: "current" | "legacy" | "account") => void;
 }) {
+  const resourceNote = (candidate: (PickupResources & { inputAt: string }) | null) => {
+    if (!candidate || !accountResources) return undefined;
+    const sameAmounts =
+      candidate.pyroxene === accountResources.pyroxene &&
+      candidate.oneTimeTicket === accountResources.oneTimeTicket &&
+      candidate.tenTimeTicket === accountResources.tenTimeTicket;
+    const candidateTime = new Date(candidate.inputAt).getTime();
+    const accountTime = new Date(accountResources.inputAt).getTime();
+    return !sameAmounts && candidateTime < accountTime ? "가져온 시각 기준 보유량으로 저장돼요" : undefined;
+  };
   const choices = [
     {
       id: "current" as const,
       label: "비로그인 시 등록한 값",
+      note: resourceNote(guestResources),
       content: guestResources ? (
         <ResourceSourceSummary resources={guestResources} inputAt={guestResources.inputAt} />
       ) : (
@@ -1464,6 +1508,7 @@ export function ResourceConflictComparison({
     {
       id: "legacy" as const,
       label: "이전 버전 화면에서 저장한 값",
+      note: resourceNote(legacyResources),
       content: legacyResources ? (
         <ResourceSourceSummary resources={legacyResources} inputAt={legacyResources.inputAt} />
       ) : (
@@ -1502,7 +1547,12 @@ export function ResourceConflictComparison({
                 onChange={() => onChange(choice.id)}
                 className="mt-0.5 size-4 shrink-0 border-input text-primary focus:ring-2 focus:ring-ring/30"
               />
-              {choice.label}
+              <span>
+                {choice.label}
+                {choice.note && (
+                  <span className="mt-1 block text-xs font-normal text-muted-foreground">{choice.note}</span>
+                )}
+              </span>
             </span>
             {choice.content}
           </label>

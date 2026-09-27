@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
-import { upsertGuestPlannerEventShopPlan } from "~/domain/guest-planner";
+import { mergeGuestPlannerEventShopPlan } from "~/domain/guest-planner";
 import {
   flushGuestPlannerEventShopPlan,
   type GuestPlannerSnapshot,
@@ -155,9 +155,10 @@ export function useAutoSave({
     async (nextState: EventShopState, force = false) => {
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
+      const baseState = baseline ?? nextState;
       const resolution = await resolveGuestSave(() =>
         updateGuestPlanner((envelope) =>
-          upsertGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState }),
+          mergeGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState, baseState }),
         ),
       );
       if (resolution.error) {
@@ -176,7 +177,10 @@ export function useAutoSave({
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
       try {
-        const result = flushGuestPlannerEventShopPlan({ timelineUid, shopStateUid, state: nextState });
+        const result = flushGuestPlannerEventShopPlan(
+          { timelineUid, shopStateUid, state: nextState },
+          baseline ?? nextState,
+        );
         if (result.status === "ready") {
           lastSavedStateRef.current = nextState;
           setSaveError(null);

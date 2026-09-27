@@ -7,9 +7,10 @@ import {
   upsertGuestEventShopPlan,
 } from "~/domain/guest-event-shop-planner";
 import {
-  clearGuestPlannerSectionsIfUnchanged,
+  clearGuestPlannerItemsIfUnchanged,
   createEmptyGuestPlanner,
   GUEST_PLANNER_STORAGE_KEY,
+  mergeGuestPlannerEventShopPlan,
   upsertGuestPlannerEventShopPlan,
 } from "~/domain/guest-planner";
 import {
@@ -187,7 +188,7 @@ describe("unified guest planner storage", () => {
       state: createDefaultEventShopState([], ["student-1"]),
     };
 
-    const snapshot = flushGuestPlannerEventShopPlan(plan);
+    const snapshot = flushGuestPlannerEventShopPlan(plan, createDefaultEventShopState([], ["student-1"]));
 
     expect(snapshot.status).toBe("ready");
     if (snapshot.status !== "ready") return;
@@ -244,6 +245,79 @@ describe("unified guest planner storage", () => {
     expect(updated).not.toBe(first);
     expect(updated.status).toBe("ready");
     if (updated.status === "ready") expect(updated.envelope.document.pyroxene.resources?.pyroxene).toBe(1200);
+  });
+
+  it("keeps an unsaved memory snapshot when subscribers read stale storage after a write failure", async () => {
+    const initial = createEmptyGuestPlanner();
+    initial.document.pyroxene.resources = {
+      inputAt: "2026-09-01T00:00:00.000Z",
+      pyroxene: 1200,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+    failWrites = true;
+    const initialResource = readGuestPlanner();
+    if (initialResource.status !== "ready") throw new Error("Expected the seeded guest planner to be ready.");
+    const initialResources = initialResource.envelope.document.pyroxene.resources;
+    if (!initialResources) throw new Error("Expected the seeded guest resources.");
+
+    const updated = await updateGuestPlanner((current) => ({
+      ...current,
+      document: {
+        ...current.document,
+        pyroxene: {
+          ...current.document.pyroxene,
+          resources: { ...initialResources, pyroxene: 2400 },
+        },
+      },
+    }));
+    const unsubscribe = subscribeGuestPlanner(() => {
+      readGuestPlanner();
+    });
+    dispatchStorage(GUEST_PYROXENE_PLANNER_STORAGE_KEY);
+    await flushQueuedStorageWork();
+    unsubscribe();
+    const read = readGuestPlanner();
+
+    expect(updated.status).toBe("memory");
+    expect(read.status).toBe("memory");
+    if (read.status === "memory") expect(read.envelope.document.pyroxene.resources?.pyroxene).toBe(2400);
+    expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.pyroxene.resources.pyroxene).toBe(1200);
+  });
+
+  it("does not overwrite the last valid envelope when an update exceeds the plan-group limit", async () => {
+    const initial = createEmptyGuestPlanner();
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+    const priorEnvelope = stored.get(GUEST_PLANNER_STORAGE_KEY);
+    const updated = await updateGuestPlanner((current) => ({
+      ...current,
+      document: {
+        ...current.document,
+        pyroxene: {
+          ...current.document.pyroxene,
+          records: Array.from({ length: 501 }, (_, index) => ({
+            uid: `oversized-record-${index}`,
+            eventAt: "2026-09-01T00:00:00.000Z",
+            source: "other" as const,
+            repeatType: "fixed_days" as const,
+            repeatIntervalDays: null,
+            repeatCount: null,
+            autoRepurchase: false,
+            description: "",
+            pyroxeneDelta: 1,
+            oneTimeTicketDelta: 0,
+            tenTimeTicketDelta: 0,
+          })),
+        },
+      },
+    }));
+
+    expect(updated.status).toBe("memory");
+    expect(stored.get(GUEST_PLANNER_STORAGE_KEY)).toBe(priorEnvelope);
+    expect(readGuestPlanner().status).toBe("memory");
   });
 
   it("migrates both legacy keys, keeps them as mirrors, and preserves their receipt dataset IDs", async () => {
@@ -327,6 +401,76 @@ describe("unified guest planner storage", () => {
     expect(mirroredEventShops?.datasetId).toBe(shopId);
     expect(mirroredPyroxene?.revision).toBeGreaterThan(pyroRevision);
     expect(mirroredEventShops?.revision).toBeGreaterThan(shopRevision);
+  });
+
+  it("merges stale detail edits with latest owned-currency edits in async and synchronous writes", async () => {
+    const base = {
+      ...createDefaultEventShopState([], ["student-1"]),
+      itemQuantities: { "daily-ticket": 1 },
+    };
+    const initial = createEmptyGuestPlanner();
+    const seeded = upsertGuestPlannerEventShopPlan(initial, {
+      timelineUid: "event-timeline-1",
+      shopStateUid: "shop-1",
+      state: base,
+    });
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(seeded));
+    await flushQueuedStorageWork();
+    const detailSubmitted = { ...base, itemQuantities: { "daily-ticket": 9 } };
+
+    const ownedCurrencySaved = await updateGuestPlanner((current) =>
+      upsertGuestPlannerEventShopPlan(current, {
+        timelineUid: "event-timeline-1",
+        shopStateUid: "shop-1",
+        state: {
+          ...base,
+          existingPaymentItemQuantities: { currency: 42 },
+        },
+      }),
+    );
+    expect(ownedCurrencySaved.status).toBe("ready");
+    // The production detail hook supplies its last-saved base to the merge helper.
+    const mergedAsync = await updateGuestPlanner((current) =>
+      mergeGuestPlannerEventShopPlan(current, {
+        timelineUid: "event-timeline-1",
+        shopStateUid: "shop-1",
+        baseState: base,
+        state: detailSubmitted,
+      }),
+    );
+    expect(mergedAsync.status).toBe("ready");
+    if (mergedAsync.status === "ready") {
+      expect(mergedAsync.envelope.document.eventShops["shop-1"]).toMatchObject({
+        itemQuantities: { "daily-ticket": 9 },
+        existingPaymentItemQuantities: { currency: 42 },
+      });
+    }
+
+    const secondBase = { ...base, itemQuantities: { "daily-ticket": 2 } };
+    await updateGuestPlanner((current) =>
+      upsertGuestPlannerEventShopPlan(current, {
+        timelineUid: "event-timeline-2",
+        shopStateUid: "shop-2",
+        state: { ...secondBase, existingPaymentItemQuantities: { currency: 42 } },
+      }),
+    );
+    const staleDetailEdit = { ...secondBase, itemQuantities: { "daily-ticket": 8 } };
+    flushGuestPlannerEventShopPlan(
+      { timelineUid: "event-timeline-2", shopStateUid: "shop-2", state: staleDetailEdit },
+      secondBase,
+    );
+    const flushed = readGuestPlanner();
+    expect(flushed.status).toBe("ready");
+    if (flushed.status === "ready") {
+      expect(flushed.envelope.document.eventShops["shop-1"]).toMatchObject({
+        itemQuantities: { "daily-ticket": 9 },
+        existingPaymentItemQuantities: { currency: 42 },
+      });
+      expect(flushed.envelope.document.eventShops["shop-2"]).toMatchObject({
+        itemQuantities: { "daily-ticket": 8 },
+        existingPaymentItemQuantities: { currency: 42 },
+      });
+    }
   });
 
   it("merges an old-tab record edit and re-mirrors it without changing the legacy dataset ID", async () => {
@@ -433,7 +577,10 @@ describe("unified guest planner storage", () => {
     if (current.status !== "ready") return;
 
     const cleared = await updateGuestPlanner((latest) =>
-      clearGuestPlannerSectionsIfUnchanged(latest, current.envelope, ["resources", "eventShops"]),
+      clearGuestPlannerItemsIfUnchanged(latest, current.envelope, [
+        { type: "resources", key: "current" },
+        { type: "eventShop", key: "shop-1" },
+      ]),
     );
 
     expect(cleared.status).toBe("ready");

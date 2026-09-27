@@ -1,7 +1,6 @@
 import {
   type GuestPlannerImportPlan,
   type GuestPlannerImportResult,
-  hasPostgresGuestImportReceipt,
   markPostgresGuestImportReceipt,
   runPostgresGuestPlannerImport,
 } from "~/db/postgres/guest-pyroxene-import";
@@ -26,10 +25,6 @@ export async function importGuestPlannerState(
       key: favorite.itemKey,
     };
     try {
-      if (await hasPostgresGuestImportReceipt(env, userId, item.datasetId, item.type, item.key, options)) {
-        verified.push(item);
-        continue;
-      }
       await favorite.run();
       await markPostgresGuestImportReceipt(env, userId, item.datasetId, item.type, item.key, options);
       verified.push(item);

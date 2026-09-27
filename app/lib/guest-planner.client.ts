@@ -1,3 +1,4 @@
+import type { EventShopState } from "~/domain/event-shop-state";
 import {
   createEmptyGuestEventShopPlanner,
   GUEST_EVENT_SHOP_PLANNER_STORAGE_KEY,
@@ -19,9 +20,9 @@ import {
   guestPlannerHasData,
   guestPlannerPyroxeneDataForLegacyMirror,
   legacyGuestPlannerSources,
+  mergeGuestPlannerEventShopPlan,
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
-  upsertGuestPlannerEventShopPlan,
 } from "~/domain/guest-planner";
 import {
   createEmptyGuestPyroxenePlanner,
@@ -186,7 +187,15 @@ function mirrorForWrite(envelope: GuestPlannerEnvelope, raw: RawStorage): GuestP
 }
 
 function writeConfirmed(envelope: GuestPlannerEnvelope, raw: RawStorage): GuestPlannerEnvelope | null {
-  const next = mirrorForWrite(envelope, raw);
+  const validEnvelope = normalizeGuestPlanner(envelope);
+  if (!validEnvelope) return null;
+  let next: GuestPlannerEnvelope;
+  try {
+    next = mirrorForWrite(validEnvelope, raw);
+  } catch {
+    return null;
+  }
+  if (!normalizeGuestPlanner(next)) return null;
   const pyroCorrupt = raw.pyroxene !== null && !parseGuestPyroxenePlanner(raw.pyroxene);
   let eventShopCorrupt = false;
   if (raw.eventShops !== null) {
@@ -259,11 +268,13 @@ function detectLegacyChanges(envelope: GuestPlannerEnvelope, raw: RawStorage): b
 
 function readSnapshot(): GuestPlannerSnapshot {
   if (typeof window === "undefined") return { status: "unavailable", legacySources: emptyLegacySources() };
+  if (memorySnapshot?.status === "memory" || memorySnapshot?.status === "conflict") {
+    return cacheSnapshot(memorySnapshot);
+  }
   let raw: RawStorage;
   try {
     raw = readRawStorage();
   } catch {
-    if (memorySnapshot?.status === "memory" || memorySnapshot?.status === "conflict") return memorySnapshot;
     return { status: "unavailable", legacySources: emptyLegacySources() };
   }
   if (raw.envelope === null) {
@@ -292,8 +303,7 @@ function readSnapshot(): GuestPlannerSnapshot {
   const needsMirrorInitialization = envelope.legacyMirror === null;
   envelope = withCurrentMirror(envelope);
   if (needsMirrorInitialization || detectLegacyChanges(envelope, raw)) scheduleReconcile();
-  const status = memorySnapshot?.status === "memory" ? "memory" : "ready";
-  const snapshot = makeSnapshot(envelope, status, raw);
+  const snapshot = makeSnapshot(envelope, "ready", raw);
   memorySnapshot = snapshot;
   return cacheSnapshot(snapshot);
 }
@@ -406,7 +416,8 @@ function reconcileCurrentStorage(): GuestPlannerSnapshot {
   const needsWrite =
     raw.envelope === null || merged.changed || unreadableChanged || mustInitializeMirror || mustCreateMissingKeys;
   if (!needsWrite) {
-    const snapshot = makeSnapshot(next, "ready", raw);
+    const status = memorySnapshot?.status === "memory" && memoryBaseEnvelope ? "memory" : "ready";
+    const snapshot = makeSnapshot(next, status, raw);
     memorySnapshot = snapshot;
     return snapshot;
   }
@@ -536,9 +547,12 @@ function updateGuestPlannerImmediately(update: GuestPlannerUpdate): GuestPlanner
   return snapshot;
 }
 
-/** Flush a pending event-shop edit before page teardown, without a queued or locked async write. */
-export function flushGuestPlannerEventShopPlan(plan: GuestEventShopPlan): GuestPlannerSnapshot {
-  return updateGuestPlannerImmediately((envelope) => upsertGuestPlannerEventShopPlan(envelope, plan));
+/** Flush a pending event-shop edit against a fresh synchronous storage read before page teardown. */
+export function flushGuestPlannerEventShopPlan(
+  plan: GuestEventShopPlan,
+  baseState: EventShopState,
+): GuestPlannerSnapshot {
+  return updateGuestPlannerImmediately((envelope) => mergeGuestPlannerEventShopPlan(envelope, { ...plan, baseState }));
 }
 
 export function resetGuestPlanner(): Promise<GuestPlannerSnapshot> {

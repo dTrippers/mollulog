@@ -447,7 +447,9 @@ describe("unified planner import action", () => {
       verified: 1,
       failedLabels: ["현재 보유 재화"],
       revisionConflict: true,
-      successfulSections: { current: ["recruitment"] },
+      cleanupItems: {
+        current: [{ type: "favorite", key: "content-1\u0000student-1" }],
+      },
     });
   });
 
@@ -505,7 +507,7 @@ describe("unified planner import action", () => {
       success: true,
       verified: 1,
       failedLabels: [],
-      successfulSections: { current: ["resources"] },
+      cleanupItems: { current: [{ type: "resources", key: "current" }] },
     });
   });
 
@@ -592,7 +594,103 @@ describe("unified planner import action", () => {
     expect(result).toMatchObject({
       success: true,
       verified: 1,
-      successfulSections: { "legacy-pyroxene": ["resources"] },
+      cleanupItems: { "legacy-pyroxene": [{ type: "resources", key: "current" }] },
     });
+  });
+
+  it("does not mark an unselected current resource as cleanup-success when an older conflict import fails", async () => {
+    const current = createEmptyGuestPlanner();
+    current.document.pyroxene.resources = {
+      inputAt: "2026-09-28T00:00:00.000Z",
+      pyroxene: 2400,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    const legacy = createEmptyGuestPyroxenePlanner();
+    legacy.data.resources = {
+      inputAt: "2026-09-27T00:00:00.000Z",
+      pyroxene: 1800,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    const legacyEnvelope = createGuestPlannerFromLegacySources({ pyroxene: legacy, eventShops: null });
+    mockImportGuestPlannerState.mockResolvedValueOnce({
+      verified: [],
+      failed: [{ sourceId: "legacy-pyroxene", datasetId: legacy.datasetId, type: "resources", key: "current" }],
+      revisionConflict: false,
+    });
+
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope: current,
+                selection: {
+                  resources: false,
+                  options: false,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+              {
+                id: "legacy-pyroxene",
+                envelope: legacyEnvelope,
+                selection: {
+                  resources: true,
+                  options: false,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      cleanupItems: { current: [], "legacy-pyroxene": [] },
+    });
+  });
+
+  it("shows the import-time resource note only for older, different guest amounts", () => {
+    const html = renderToStaticMarkup(
+      createElement(ResourceConflictComparison, {
+        selected: "current",
+        guestResources: {
+          inputAt: "2026-09-27T00:00:00.000Z",
+          pyroxene: 2400,
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+        },
+        legacyResources: {
+          inputAt: "2026-09-29T00:00:00.000Z",
+          pyroxene: 1800,
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+        },
+        accountResources: {
+          inputAt: "2026-09-28T00:00:00.000Z",
+          pyroxene: 100,
+          oneTimeTicket: 0,
+          tenTimeTicket: 0,
+        },
+        onChange: () => undefined,
+      }),
+    );
+
+    expect(html.match(/가져온 시각 기준 보유량으로 저장돼요/g)).toHaveLength(1);
   });
 });

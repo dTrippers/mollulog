@@ -2,17 +2,24 @@ import { describe, expect, it } from "@jest/globals";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
 import { createEmptyGuestEventShopPlanner, upsertGuestEventShopPlan } from "~/domain/guest-event-shop-planner";
 import {
-  clearGuestPlannerSectionsIfUnchanged,
+  clearGuestPlannerItemsIfUnchanged,
+  clearGuestPlannerLegacyConflictItemsIfUnchanged,
   createEmptyGuestPlanner,
+  createGuestPlannerConflictEnvelope,
   createGuestPlannerFromLegacySources,
   createGuestPlannerLegacyMirror,
   guestPlannerHasData,
   hasUnresolvedGuestPlannerOptions,
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
+  patchGuestPlannerEventShopOwnedQuantities,
   updateGuestPlannerOptions,
 } from "~/domain/guest-planner";
-import { createEmptyGuestPyroxenePlanner, type GuestPyroxeneRecord } from "~/domain/guest-pyroxene-planner";
+import {
+  createEmptyGuestPyroxenePlanner,
+  type GuestPyroxeneRecord,
+  guestPyroxeneTimelineItems,
+} from "~/domain/guest-pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 describe("guest planner envelope", () => {
@@ -217,7 +224,7 @@ describe("guest planner envelope", () => {
     expect(updateGuestPlannerOptions(createEmptyGuestPlanner(), legacy.data.options).pyroxeneOptionsChanged).toBe(true);
   });
 
-  it("clears every item in confirmed sections, including entries omitted from the selection", () => {
+  it("clears every confirmed source item, including entries omitted from the selection", () => {
     const envelope = createEmptyGuestPlanner();
     envelope.document.pyroxene.resources = {
       inputAt: "2026-09-01T00:00:00.000Z",
@@ -251,13 +258,14 @@ describe("guest planner envelope", () => {
     envelope.document.eventShops = { "shop-1": createDefaultEventShopState([], []) };
     envelope.eventShopTimelineUids = { "shop-1": "timeline-1" };
 
-    const cleared = clearGuestPlannerSectionsIfUnchanged(envelope, envelope, [
-      "resources",
-      "records",
-      "options",
-      "recruitment",
-      "collectedSourceKeys",
-      "eventShops",
+    const cleared = clearGuestPlannerItemsIfUnchanged(envelope, envelope, [
+      { type: "resources", key: "current" },
+      { type: "record", key: "record-1" },
+      { type: "options", key: "current" },
+      { type: "event", key: "event-1" },
+      { type: "favorite", key: "content-1\u0000student-1" },
+      { type: "source", key: "source-1" },
+      { type: "eventShop", key: "shop-1" },
     ]);
 
     expect(cleared.document.pyroxene.resources).toBeNull();
@@ -272,7 +280,7 @@ describe("guest planner envelope", () => {
     expect(guestPlannerHasData(cleared)).toBe(false);
   });
 
-  it("keeps a section when the current guest source changed after the submitted snapshot", () => {
+  it("keeps an item when the current guest source changed after the submitted snapshot", () => {
     const submitted = createEmptyGuestPlanner();
     submitted.document.pyroxene.resources = {
       inputAt: "2026-09-01T00:00:00.000Z",
@@ -291,9 +299,136 @@ describe("guest planner envelope", () => {
       },
     };
 
-    const result = clearGuestPlannerSectionsIfUnchanged(current, submitted, ["resources"]);
+    const result = clearGuestPlannerItemsIfUnchanged(current, submitted, [{ type: "resources", key: "current" }]);
 
     expect(result.document.pyroxene.resources).toEqual({ ...submitted.document.pyroxene.resources, pyroxene: 1500 });
+  });
+
+  it("does not clear a legacy conflict when cleanup confirms a different source", () => {
+    const oldPlanner = createEmptyGuestPyroxenePlanner();
+    oldPlanner.data.resources = {
+      inputAt: "2026-09-01T00:00:00.000Z",
+      pyroxene: 1800,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    const current = createEmptyGuestPlanner();
+    current.document.pyroxene.resources = {
+      inputAt: "2026-09-02T00:00:00.000Z",
+      pyroxene: 2400,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+    };
+    current.legacyConflicts = [
+      {
+        id: "legacy-conflict-1",
+        pyroxene: oldPlanner,
+        eventShops: null,
+        keys: {
+          pyroxene: {
+            resources: true,
+            records: [],
+            options: false,
+            eventTrials: [],
+            favorites: [],
+            collectedSourceKeys: [],
+          },
+          eventShopUids: [],
+          removed: {
+            resources: false,
+            records: [],
+            eventTrials: [],
+            favorites: [],
+            collectedSourceKeys: [],
+            eventShopUids: [],
+          },
+        },
+      },
+    ];
+
+    const cleared = clearGuestPlannerItemsIfUnchanged(current, current, [{ type: "resources", key: "current" }]);
+
+    expect(cleared.document.pyroxene.resources).toBeNull();
+    expect(cleared.legacyConflicts[0]?.pyroxene?.data.resources?.pyroxene).toBe(1800);
+    expect(cleared.legacyConflicts[0]?.keys.pyroxene.resources).toBe(true);
+  });
+
+  it("clears only the matching legacy conflict ID and source item", () => {
+    const makeConflict = (id: string, pyroxeneAmount: number) => {
+      const pyroxene = createEmptyGuestPyroxenePlanner();
+      pyroxene.data.resources = {
+        inputAt: "2026-09-01T00:00:00.000Z",
+        pyroxene: pyroxeneAmount,
+        oneTimeTicket: 0,
+        tenTimeTicket: 0,
+      };
+      return {
+        id,
+        pyroxene,
+        eventShops: null,
+        keys: {
+          pyroxene: {
+            resources: true,
+            records: [],
+            options: false,
+            eventTrials: [],
+            favorites: [],
+            collectedSourceKeys: [],
+          },
+          eventShopUids: [],
+          removed: {
+            resources: false,
+            records: [],
+            eventTrials: [],
+            favorites: [],
+            collectedSourceKeys: [],
+            eventShopUids: [],
+          },
+        },
+      };
+    };
+    const current = createEmptyGuestPlanner();
+    const first = makeConflict("conflict-1", 1800);
+    const second = makeConflict("conflict-2", 1700);
+    current.legacyConflicts = [first, second];
+    const submitted = createGuestPlannerConflictEnvelope(first, "pyroxene");
+    if (!submitted) throw new Error("Expected a pyroxene conflict source.");
+
+    const updated = clearGuestPlannerLegacyConflictItemsIfUnchanged(current, "conflict-1", "pyroxene", submitted, [
+      { type: "resources", key: "current" },
+    ]);
+
+    expect(updated.legacyConflicts.map(({ id }) => id)).toEqual(["conflict-2"]);
+    expect(updated.legacyConflicts[0]?.pyroxene?.data.resources?.pyroxene).toBe(1700);
+  });
+
+  it("applies the 500-record limit to plan groups before timeline expansion", () => {
+    const pyroxene = createEmptyGuestPyroxenePlanner();
+    const records: GuestPyroxeneRecord[] = Array.from({ length: 251 }, (_, index) => ({
+      recordId: `monthly-${String(index).padStart(4, "0")}`,
+      createdAt: "2026-09-01T00:00:00.000Z",
+      kind: "monthlyPackage",
+      startDate: "2026-09-02T00:00:00.000Z",
+      packageType: "half",
+      autoRepurchase: false,
+    }));
+    pyroxene.data.records = records;
+    const envelope = createGuestPlannerFromLegacySources({ pyroxene, eventShops: null });
+
+    expect(envelope.document.pyroxene.records).toHaveLength(502);
+    expect(normalizeGuestPlanner(envelope)).not.toBeNull();
+
+    const overLimit = createEmptyGuestPyroxenePlanner();
+    overLimit.data.records = [
+      ...records,
+      ...Array.from({ length: 250 }, (_, index) => ({
+        ...records[0],
+        recordId: `monthly-over-limit-${String(index).padStart(3, "0")}`,
+      })),
+    ];
+    const invalid = createGuestPlannerFromLegacySources({ pyroxene: overLimit, eventShops: null });
+    expect(normalizeGuestPlanner(invalid)).toBeNull();
+    expect(guestPyroxeneTimelineItems(pyroxene.data)).toHaveLength(502);
   });
 
   it("merges old-tab record additions, removals, and edits by record ID", () => {
@@ -405,6 +540,29 @@ describe("guest planner envelope", () => {
     expect(result.envelope.document.eventShops["shop-1"].itemQuantities).toEqual({ item: 3 });
     expect(result.envelope.document.eventShops["shop-1"].existingPaymentItemQuantities).toEqual({ currency: 2 });
     expect(result.conflict).toBeNull();
+  });
+
+  it("patches integrated-planner owned currency into the latest guest shop plan", () => {
+    const envelope = createEmptyGuestPlanner();
+    const baseState = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "daily-ticket": 9 },
+      existingPaymentItemQuantities: { currency: 10 },
+    };
+    envelope.document.eventShops["shop-1"] = baseState;
+    envelope.eventShopTimelineUids["shop-1"] = "event-timeline-1";
+
+    const updated = patchGuestPlannerEventShopOwnedQuantities(envelope, {
+      timelineUid: "event-timeline-1",
+      shopStateUid: "shop-1",
+      defaults: createDefaultEventShopState([], []),
+      patch: { currency: 42 },
+    });
+
+    expect(updated.document.eventShops["shop-1"]).toMatchObject({
+      itemQuantities: { "daily-ticket": 9 },
+      existingPaymentItemQuantities: { currency: 42 },
+    });
   });
 
   it("preserves a divergent legacy value as a conflict instead of overwriting the canonical value", () => {
