@@ -8,7 +8,7 @@ const defaultOptions: PyroxenePlannerOptions = {
   event: { pickupChance: "average" },
   raid: { tier: "platinum" },
   tactical: { level: "in100" },
-  consumption: { apChargeCount: 0 },
+  consumption: { apChargeCount: 0, apChargeExceptions: [] },
   timeline: { display: ["event", "event_reward", "raid", "buy", "package_onetime", "package_ap", "ap_charge"] },
 };
 
@@ -719,7 +719,7 @@ describe("pyroxene-timeline", () => {
       new Date("2026-01-01T00:00:00.000Z"),
       new Map(),
       [futureEvent("2026-01-05T00:00:00.000Z")],
-      { ...defaultOptions, consumption: { apChargeCount: 7 } },
+      { ...defaultOptions, consumption: { apChargeCount: 7, apChargeExceptions: [] } },
     );
 
     const apChargeEntries = timeline.filter((entry) => entry.source.type === "ap_charge");
@@ -728,6 +728,32 @@ describe("pyroxene-timeline", () => {
     expect(apChargeEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
       ["2026-01-02", -370],
       ["2026-01-03", -370],
+      ["2026-01-04", -370],
+    ]);
+  });
+
+  it("uses the date-specific AP charge exception and keeps the legacy result without exceptions", () => {
+    const timeline = buildTimeline(
+      initialResources,
+      new Date("2026-01-01T00:00:00.000Z"),
+      new Map(),
+      [futureEvent("2026-01-05T00:00:00.000Z")],
+      {
+        ...defaultOptions,
+        consumption: {
+          apChargeCount: 7,
+          apChargeExceptions: [{ uid: "exception-1", startDate: "2026-01-03", endDate: "2026-01-03", count: 2 }],
+        },
+      },
+    );
+
+    expect(
+      timeline
+        .filter((entry) => entry.source.type === "ap_charge")
+        .map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]),
+    ).toEqual([
+      ["2026-01-02", -370],
+      ["2026-01-03", -60],
       ["2026-01-04", -370],
     ]);
   });

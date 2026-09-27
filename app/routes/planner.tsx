@@ -48,8 +48,8 @@ import {
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid } from "~/domain/pyroxene-sources";
-import { eventIconImageUrl } from "~/models/assets";
 import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
+import { eventIconImageUrl } from "~/models/assets";
 import { saveIntegratedPlannerRecruitmentPlan } from "~/models/integrated-planner";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import {
@@ -439,6 +439,12 @@ export default function IntegratedPlannerRoute() {
             })),
     [accountState?.eventData, guestData?.eventData, isSignedIn],
   );
+  const apPlannerState = isSignedIn
+    ? (accountState?.apPlanner ?? null)
+    : pyroxeneGuestPlanner.snapshot && "envelope" in pyroxeneGuestPlanner.snapshot
+      ? pyroxeneGuestPlanner.snapshot.envelope.document.ap
+      : null;
+  const apPlanEventUids = useMemo(() => new Set(Object.keys(apPlannerState?.eventPlans ?? {})), [apPlannerState]);
   const collectedSourceKeys = useMemo(
     () => (isSignedIn ? (accountState?.collectedSourceKeys ?? []) : (guestData?.collectedSourceKeys ?? [])),
     [accountState?.collectedSourceKeys, guestData?.collectedSourceKeys, isSignedIn],
@@ -895,9 +901,10 @@ export default function IntegratedPlannerRoute() {
         favorites: favoritedStudents,
         eventTrials,
         shopPeriods,
+        apPlanEventUids: [...apPlanEventUids],
         timeZone: displayTimeZone,
       }),
-    [displayTimeZone, eventTrials, favoritedStudents, plannerContents, scheduleItems, shopPeriods],
+    [apPlanEventUids, displayTimeZone, eventTrials, favoritedStudents, plannerContents, scheduleItems, shopPeriods],
   );
 
   const publicPeriods = useMemo(
@@ -916,8 +923,8 @@ export default function IntegratedPlannerRoute() {
     [eventTrials, favoritedStudents],
   );
   const displayPeriods = useMemo(
-    () => buildPlannerDisplayPeriods(periods, publicPeriods, plannedEventUids),
-    [periods, plannedEventUids, publicPeriods],
+    () => buildPlannerDisplayPeriods(periods, publicPeriods, plannedEventUids, apPlanEventUids),
+    [apPlanEventUids, periods, plannedEventUids, publicPeriods],
   );
 
   const scheduleAvailability = useMemo(() => {

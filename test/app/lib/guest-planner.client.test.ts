@@ -8,10 +8,14 @@ import {
   upsertGuestEventShopPlan,
 } from "~/domain/guest-event-shop-planner";
 import {
+  addGuestPlannerApChargeException,
   clearGuestPlannerItemsIfUnchanged,
   createEmptyGuestPlanner,
   GUEST_PLANNER_STORAGE_KEY,
   mergeGuestPlannerEventShopPlan,
+  removeGuestPlannerApChargeException,
+  setGuestPlannerApChargeCount,
+  updateGuestPlannerOptions,
   upsertGuestPlannerEventShopPlan,
 } from "~/domain/guest-planner";
 import {
@@ -127,8 +131,158 @@ afterEach(() => {
 });
 
 describe("unified guest planner storage", () => {
-  it("keeps opaque AP data through async guest updates", async () => {
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+  it("persists an AP-only update and increments the envelope revision", async () => {
+    const initial = createEmptyGuestPlanner();
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+    const before = readGuestPlanner();
+    expect(before.status).toBe("ready");
+    if (before.status !== "ready") return;
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
+
+    const snapshot = await updateGuestPlanner((current) => ({
+      ...current,
+      document: { ...current.document, ap },
+    }));
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    expect(snapshot.envelope.revision).toBeGreaterThan(before.envelope.revision);
+    expect(snapshot.envelope.document.ap).toEqual(ap);
+    expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.ap).toEqual(ap);
+  });
+
+  it("keeps an AP exception applied by another tab during a stale options autosave", async () => {
+    const initial = createEmptyGuestPlanner();
+    const exception = { uid: "applied", startDate: "2026-10-01", endDate: "2026-10-03", count: 4 };
+    initial.document.pyroxene.options = {
+      ...initial.document.pyroxene.options,
+      consumption: { ...initial.document.pyroxene.options.consumption, apChargeExceptions: [exception] },
+    };
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const snapshot = await updateGuestPlanner((current) =>
+      updateGuestPlannerOptions(current, createEmptyGuestPlanner().document.pyroxene.options),
+    );
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    expect(snapshot.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([exception]);
+    expect(
+      JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.pyroxene.options.consumption
+        .apChargeExceptions,
+    ).toEqual([exception]);
+  });
+
+  it("keeps tab A's exception when stale tab B changes the daily AP charge count", async () => {
+    const initial = createEmptyGuestPlanner();
+    const existing = { uid: "existing", startDate: "2026-10-01", endDate: "2026-10-02", count: 2 };
+    initial.document.pyroxene.options = {
+      ...initial.document.pyroxene.options,
+      consumption: { ...initial.document.pyroxene.options.consumption, apChargeExceptions: [existing] },
+    };
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const appliedByTabA = { uid: "tab-a", startDate: "2026-10-04", endDate: "2026-10-05", count: 4 };
+    const tabASave = await updateGuestPlanner(
+      (current) => addGuestPlannerApChargeException(current, appliedByTabA).envelope,
+    );
+    expect(tabASave.status).toBe("ready");
+
+    const staleTabBSave = await updateGuestPlanner((current) => setGuestPlannerApChargeCount(current, 7));
+
+    expect(staleTabBSave.status).toBe("ready");
+    if (staleTabBSave.status !== "ready") return;
+    expect(staleTabBSave.envelope.document.pyroxene.options.consumption.apChargeCount).toBe(7);
+    expect(staleTabBSave.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([
+      existing,
+      appliedByTabA,
+    ]);
+  });
+
+  it("appends a stale tab's non-overlapping exception without dropping tab A's exception", async () => {
+    const initial = createEmptyGuestPlanner();
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const appliedByTabA = { uid: "tab-a", startDate: "2026-10-01", endDate: "2026-10-02", count: 4 };
+    await updateGuestPlanner((current) => addGuestPlannerApChargeException(current, appliedByTabA).envelope);
+
+    const appliedByTabB = { uid: "tab-b", startDate: "2026-10-04", endDate: "2026-10-05", count: 5 };
+    const tabBResult = await updateGuestPlanner((current) => {
+      const result = addGuestPlannerApChargeException(current, appliedByTabB);
+      expect(result.overlap).toBe(false);
+      return result.envelope;
+    });
+
+    expect(tabBResult.status).toBe("ready");
+    if (tabBResult.status !== "ready") return;
+    expect(tabBResult.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([
+      appliedByTabA,
+      appliedByTabB,
+    ]);
+  });
+
+  it("keeps tab A's exception when stale tab B removes an older exception", async () => {
+    const initial = createEmptyGuestPlanner();
+    const oldException = { uid: "old", startDate: "2026-10-01", endDate: "2026-10-02", count: 2 };
+    initial.document.pyroxene.options = {
+      ...initial.document.pyroxene.options,
+      consumption: { ...initial.document.pyroxene.options.consumption, apChargeExceptions: [oldException] },
+    };
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const appliedByTabA = { uid: "tab-a", startDate: "2026-10-04", endDate: "2026-10-05", count: 4 };
+    await updateGuestPlanner((current) => addGuestPlannerApChargeException(current, appliedByTabA).envelope);
+
+    const staleTabBSave = await updateGuestPlanner((current) =>
+      removeGuestPlannerApChargeException(current, oldException.uid),
+    );
+
+    expect(staleTabBSave.status).toBe("ready");
+    if (staleTabBSave.status !== "ready") return;
+    expect(staleTabBSave.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([appliedByTabA]);
+  });
+
+  it("removes a guest AP exception by uid while retaining the others", async () => {
+    const initial = createEmptyGuestPlanner();
+    initial.document.pyroxene.options = {
+      ...initial.document.pyroxene.options,
+      consumption: {
+        ...initial.document.pyroxene.options.consumption,
+        apChargeExceptions: [
+          { uid: "remove", startDate: "2026-10-01", endDate: "2026-10-02", count: 2 },
+          { uid: "keep", startDate: "2026-10-04", endDate: "2026-10-05", count: 3 },
+        ],
+      },
+    };
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const snapshot = await updateGuestPlanner((current) => removeGuestPlannerApChargeException(current, "remove"));
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    expect(snapshot.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([
+      { uid: "keep", startDate: "2026-10-04", endDate: "2026-10-05", count: 3 },
+    ]);
+  });
+
+  it("preserves AP through unrelated async guest updates", async () => {
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
     const initial = createEmptyGuestPlanner();
     initial.document.ap = ap;
     stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
@@ -138,7 +292,6 @@ describe("unified guest planner storage", () => {
       ...current,
       document: {
         ...current.document,
-        ap: null,
         pyroxene: {
           ...current.document.pyroxene,
           resources: {
@@ -157,8 +310,13 @@ describe("unified guest planner storage", () => {
     expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.ap).toEqual(ap);
   });
 
-  it("keeps opaque AP data when resetting guest planner sections", async () => {
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+  it("keeps AP on a full guest planner reset", async () => {
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
     const initial = createEmptyGuestPlanner();
     initial.document.ap = ap;
     stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
@@ -175,8 +333,38 @@ describe("unified guest planner storage", () => {
     expect(storedEnvelope.document.ap).toEqual(ap);
   });
 
-  it("flushes a pending shop plan while retaining opaque AP data in all canonical envelope writes", async () => {
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+  it("allows an explicit AP section reset while clearing imported guest data", async () => {
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
+    const initial = createEmptyGuestPlanner();
+    initial.document.ap = ap;
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const current = readGuestPlanner();
+    expect(current.status).toBe("ready");
+    if (current.status !== "ready") return;
+    const snapshot = await updateGuestPlanner((latest) =>
+      clearGuestPlannerItemsIfUnchanged(latest, current.envelope, [{ type: "ap", key: "current" }]),
+    );
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    expect(snapshot.envelope.document.ap).toBeNull();
+    expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.ap).toBeNull();
+  });
+
+  it("flushes a pending shop plan while retaining AP data in canonical envelope writes", async () => {
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
     const initial = createEmptyGuestPlanner();
     initial.document.ap = ap;
     stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
@@ -513,7 +701,12 @@ describe("unified guest planner storage", () => {
     stored.set(GUEST_PYROXENE_PLANNER_STORAGE_KEY, JSON.stringify(oldPyroxene));
     readGuestPlanner();
     await flushQueuedStorageWork();
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
     const beforeAp = readGuestPlanner();
     expect(beforeAp.status).toBe("ready");
     if (beforeAp.status !== "ready") return;

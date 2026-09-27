@@ -5,6 +5,7 @@ import {
   type PlannerStateRevisionConflictError,
   updatePostgresPlannerStateDocument,
 } from "~/db/postgres/planner-states";
+import { type ApPlannerState, normalizeApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 
@@ -13,6 +14,7 @@ export { PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/db/postgres/planner-s
 export type PlannerState = PlannerStateDocumentV1;
 export type PyroxenePlannerState = PlannerStateDocumentV1["pyroxene"];
 export type EventShopPlannerStates = PlannerStateDocumentV1["eventShops"];
+export type ApPlannerStoredState = ApPlannerState | null;
 
 export function isPlannerStateRevisionConflictError(error: unknown): error is PlannerStateRevisionConflictError {
   return error instanceof Error && error.name === "PlannerStateRevisionConflictError";
@@ -57,6 +59,36 @@ export async function getEventShopPlannerStates(
       const state = states[eventUid];
       return state ? [[eventUid, state]] : [];
     }),
+  );
+}
+
+export async function getApPlannerState(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<ApPlannerStoredState> {
+  return (await getPlannerState(env, userId, options)).ap;
+}
+
+export async function updateApPlannerState<T>(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  update: (
+    transaction: PlannerStateDatabase,
+    current: ApPlannerStoredState,
+  ) => Promise<{ state: ApPlannerStoredState; result: T }>,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<T> {
+  return updatePostgresPlannerStateDocument(
+    env,
+    userId,
+    async (transaction, currentDocument) => {
+      const { state, result } = await update(transaction, currentDocument.ap);
+      const normalized = state === null ? null : normalizeApPlannerState(state);
+      if (state !== null && normalized === null) throw new Error("AP 플래너 내용을 확인해주세요.");
+      return { document: { ...currentDocument, ap: normalized }, result };
+    },
+    { ...options, retryable: true },
   );
 }
 

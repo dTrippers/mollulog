@@ -427,6 +427,17 @@ export function getNavigationCatalog({
       isActive: itemIsActive("pyroxene-planner", pathname, currentUsername),
     },
     {
+      group: "planner",
+      surfaces: ["desktop", "more", "search"],
+      to: "/utils/ap",
+      name: "AP 플래너",
+      favoriteId: "ap-planner",
+      description: "상점 목표에 필요한 AP를 준비해보세요",
+      OutlineIcon: BoltIconOutline,
+      SolidIcon: BoltIconSolid,
+      isActive: pathname.startsWith("/utils/ap"),
+    },
+    {
       menuId: "student-growth-planner",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],

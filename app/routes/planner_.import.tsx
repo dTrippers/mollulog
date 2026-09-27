@@ -14,6 +14,8 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { GuestPlannerLegacyConflictCallout, useGuestPlanner } from "~/components/features/futures";
 import Page from "~/components/features/layout/Page";
 import { Button, Callout, Checkbox, ResourceCard, SectionCard } from "~/components/primitives";
+import type { ApPlannerState } from "~/domain/ap-planner";
+import { apPlannerStateHasData, formatApShortDate } from "~/domain/ap-planner";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
 import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
 import {
@@ -45,7 +47,9 @@ import dayjs from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPlannerImportPlan, importGuestPlannerState } from "~/models/guest-pyroxene-import";
+import { getPlannerState } from "~/models/planner-state";
 import { getPyroxeneUserState } from "~/models/pyroxene-planner";
+import { getTimelineContents } from "~/models/timeline-content.server";
 import type { EventShopPlanDisplayCatalog, EventShopStateLookupResponse } from "~/routes/api.planner.event-shop-states";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 
@@ -56,6 +60,7 @@ type GuestPlannerSelection = {
   sourceKeys: string[];
   eventUids: string[];
   eventShopUids: string[];
+  ap: boolean;
   favorites: GuestPyroxeneFavorite[];
 };
 
@@ -182,6 +187,7 @@ const emptySelection = (): GuestPlannerSelection => ({
   sourceKeys: [],
   eventUids: [],
   eventShopUids: [],
+  ap: false,
   favorites: [],
 });
 
@@ -192,9 +198,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const user = await getActiveSensei(env, request);
   if (!user) return redirect("/unauthorized");
 
-  const [contents, pyroxeneState, favorites] = await Promise.all([
+  const [contents, pyroxeneState, plannerState, timelineEvents, favorites] = await Promise.all([
     getPyroxenePlannerContents(env, false, ctx),
     getPyroxeneUserState(env, user.id, { ctx }),
+    getPlannerState(env, user.id, { ctx }),
+    getTimelineContents(env, undefined, { ctx }),
     getUserFavoritedStudents(env, user.id, undefined, { ctx }),
   ]);
   return {
@@ -205,6 +213,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     eventData: pyroxeneState.eventData,
     sourceKeys: [...pyroxeneState.collectedSourceKeys],
     favorites: favorites.map(({ contentId, studentId }) => ({ contentUid: contentId, studentUid: studentId })),
+    apPlanner: plannerState.ap,
+    timelineEvents: timelineEvents
+      .filter((event) => event.contentType === "event")
+      .map(({ uid, name }) => ({ uid, name })),
   };
 };
 
@@ -237,17 +249,30 @@ function isFavoriteArray(value: unknown): value is GuestPyroxeneFavorite[] {
   );
 }
 
-function isSelection(value: unknown): value is GuestPlannerSelection {
-  return (
-    isRecord(value) &&
-    typeof value.resources === "boolean" &&
-    typeof value.options === "boolean" &&
-    isStringArray(value.recordUids) &&
-    isStringArray(value.sourceKeys) &&
-    isStringArray(value.eventUids) &&
-    isStringArray(value.eventShopUids) &&
-    isFavoriteArray(value.favorites)
-  );
+function parseSelection(value: unknown): GuestPlannerSelection | null {
+  if (
+    !isRecord(value) ||
+    typeof value.resources !== "boolean" ||
+    typeof value.options !== "boolean" ||
+    (value.ap !== undefined && typeof value.ap !== "boolean") ||
+    !isStringArray(value.recordUids) ||
+    !isStringArray(value.sourceKeys) ||
+    !isStringArray(value.eventUids) ||
+    !isStringArray(value.eventShopUids) ||
+    !isFavoriteArray(value.favorites)
+  ) {
+    return null;
+  }
+  return {
+    resources: value.resources,
+    options: value.options,
+    ap: value.ap === true,
+    recordUids: value.recordUids,
+    sourceKeys: value.sourceKeys,
+    eventUids: value.eventUids,
+    eventShopUids: value.eventShopUids,
+    favorites: value.favorites,
+  };
 }
 
 function favoriteKey(favorite: GuestPyroxeneFavorite): string {
@@ -400,6 +425,7 @@ export function initialSelection(
     sourceKeys: string[];
     eventData: Array<{ eventUid: string }>;
     favorites: GuestPyroxeneFavorite[];
+    apPlanner?: ApPlannerState | null;
   },
 ): GuestPlannerSelection {
   const guest = source.envelope;
@@ -425,6 +451,9 @@ export function initialSelection(
     sourceKeys: guest.document.pyroxene.collectedSourceKeys.filter((key) => !accountSourceKeys.has(key)),
     eventUids: Object.keys(guest.document.pyroxene.eventData).filter((uid) => !accountEventUids.has(uid)),
     eventShopUids: Object.keys(guest.document.eventShops),
+    ap:
+      apPlannerStateHasData(guest.document.ap) &&
+      JSON.stringify(guest.document.ap) !== JSON.stringify(account.apPlanner ?? null),
     favorites: selectedFavorites,
   };
 }
@@ -464,6 +493,7 @@ function initialSelections(
     };
     selection.resources = selection.resources && unique("resources", "current");
     selection.options = selection.options && unique("options", "current");
+    selection.ap = selection.ap && unique("ap", "current");
     selection.recordUids = selection.recordUids.filter((key) => unique("record", key));
     selection.sourceKeys = selection.sourceKeys.filter((key) => unique("source", key));
     selection.eventUids = selection.eventUids.filter((key) => unique("event", key));
@@ -478,6 +508,7 @@ function countSelection(selection: GuestPlannerSelection): number {
   return (
     Number(selection.resources) +
     Number(selection.options) +
+    Number(selection.ap) +
     selection.recordUids.length +
     selection.sourceKeys.length +
     selection.eventUids.length +
@@ -503,6 +534,7 @@ export function countSourceItems(
   for (const eventUid of Object.keys(envelope.document.pyroxene.eventData)) add(`event:${eventUid}`);
   for (const favorite of envelope.favorites) add(`favorite:${favoriteKey(favorite)}`);
   for (const shopStateUid of Object.keys(envelope.document.eventShops)) add(`eventShop:${shopStateUid}`);
+  if (apPlannerStateHasData(envelope.document.ap)) add("apPlanner");
   return seen.size - before;
 }
 
@@ -548,6 +580,7 @@ function importItemsBySection(
     ],
     collectedSourceKeys: envelope.document.pyroxene.collectedSourceKeys.map((key) => ({ type: "source", key })),
     eventShops: Object.keys(envelope.document.eventShops).map((key) => ({ type: "eventShop", key })),
+    ap: apPlannerStateHasData(envelope.document.ap) ? [{ type: "ap", key: "current" }] : [],
   };
 }
 
@@ -564,6 +597,7 @@ function selectedImportItemsBySection(
     ],
     collectedSourceKeys: selection.sourceKeys.map((key) => ({ type: "source", key })),
     eventShops: selection.eventShopUids.map((key) => ({ type: "eventShop", key })),
+    ap: selection.ap ? [{ type: "ap", key: "current" }] : [],
   };
 }
 
@@ -607,6 +641,8 @@ function hasGuestPlannerItem(envelope: GuestPlannerEnvelope | null, item: GuestP
       return Object.hasOwn(envelope.document.eventShops, item.key);
     case "favorite":
       return envelope.favorites.some((favorite) => favoriteKey(favorite) === item.key);
+    case "ap":
+      return apPlannerStateHasData(envelope.document.ap);
   }
 }
 
@@ -762,12 +798,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const labels = new Map<string, string>();
   const uniqueSelectionKeys = new Set<string>();
   for (const rawSource of body.sources) {
+    const selection = isRecord(rawSource) ? parseSelection(rawSource.selection) : null;
     if (
       !isRecord(rawSource) ||
       typeof rawSource.id !== "string" ||
       rawSource.id.length === 0 ||
       rawSource.id.length > 200 ||
-      !isSelection(rawSource.selection)
+      !selection
     ) {
       return data<ImportActionResult>(
         {
@@ -792,13 +829,13 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         { status: 400 },
       );
     }
-    const selection = rawSource.selection;
     const recordUids = new Set([...groupTimelineRecords(validEnvelope.document.pyroxene.records).keys()]);
     if (
       selection.recordUids.some((key) => !recordUids.has(key)) ||
       selection.sourceKeys.some((key) => !validEnvelope.document.pyroxene.collectedSourceKeys.includes(key)) ||
       selection.eventUids.some((key) => !Object.hasOwn(validEnvelope.document.pyroxene.eventData, key)) ||
       selection.eventShopUids.some((key) => !Object.hasOwn(validEnvelope.document.eventShops, key)) ||
+      (selection.ap && !apPlannerStateHasData(validEnvelope.document.ap)) ||
       selection.favorites.some(
         (favorite) => !validEnvelope.favorites.some((candidate) => favoriteKey(candidate) === favoriteKey(favorite)),
       )
@@ -816,6 +853,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     const itemKeys = [
       ...(selection.resources ? ["resources\u0000current"] : []),
       ...(selection.options ? ["options\u0000current"] : []),
+      ...(selection.ap ? ["ap\u0000current"] : []),
       ...selection.recordUids.map((key) => `record\u0000${key}`),
       ...selection.sourceKeys.map((key) => `source\u0000${key}`),
       ...selection.eventUids.map((key) => `event\u0000${key}`),
@@ -849,7 +887,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     sources.push({
       sourceId: rawSource.id,
       datasetId: validEnvelope.datasetId,
-      document: { ...validEnvelope.document, ap: null } satisfies PlannerStateDocumentV1,
+      document: { ...validEnvelope.document } satisfies PlannerStateDocumentV1,
       selection: {
         resources: selection.resources,
         options: selection.options,
@@ -857,6 +895,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         sourceKeys: selection.sourceKeys,
         eventUids: selection.eventUids,
         eventShopUids: selection.eventShopUids,
+        ap: selection.ap,
       },
     });
     sourceById.set(rawSource.id, source);
@@ -866,6 +905,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       labels.set(`${rawSource.id}\u0000${type}\u0000${key}`, label);
     if (selection.resources) addLabel("resources", "current", "현재 보유 재화");
     if (selection.options) addLabel("options", "current", "플래너 설정");
+    if (selection.ap) addLabel("ap", "current", "AP 플래너");
     for (const key of selection.recordUids) {
       addLabel("record", key, describeTimelineGroup(recordGroups.get(key) ?? [], guestRecordsById));
     }
@@ -957,6 +997,7 @@ export default function UnifiedGuestPlannerImportPage() {
       sourceKeys: account.sourceKeys,
       eventData: account.eventData,
       favorites: account.favorites,
+      apPlanner: account.apPlanner,
     };
     setSelectionBySource(initialSelections(sources, accountState));
   }, [
@@ -964,6 +1005,7 @@ export default function UnifiedGuestPlannerImportPage() {
     account.favorites,
     account.records,
     account.resources,
+    account.apPlanner,
     account.sourceKeys,
     sources,
     sourcesSignature,
@@ -1073,7 +1115,7 @@ export default function UnifiedGuestPlannerImportPage() {
   const toggleUnique = useCallback(
     (
       sourceId: string,
-      field: "resources" | "options" | "recordUids" | "sourceKeys" | "eventUids" | "eventShopUids" | "favorites",
+      field: "resources" | "options" | "ap" | "recordUids" | "sourceKeys" | "eventUids" | "eventShopUids" | "favorites",
       key: string | null,
       checked: boolean,
       favorite?: GuestPyroxeneFavorite,
@@ -1083,7 +1125,7 @@ export default function UnifiedGuestPlannerImportPage() {
           Object.entries(current).map(([id, selection]) => [id, { ...selection, favorites: [...selection.favorites] }]),
         );
         const target = next[sourceId] ?? emptySelection();
-        if (field === "resources" || field === "options") {
+        if (field === "resources" || field === "options" || field === "ap") {
           for (const selection of Object.values(next)) selection[field] = false;
           target[field] = checked;
         } else if (field === "favorites") {
@@ -1180,7 +1222,7 @@ export default function UnifiedGuestPlannerImportPage() {
       envelope: source.envelope,
       selection: effectiveSelectionBySource[source.id] ?? emptySelection(),
     }));
-    fetcher.submit({ sources: bodySources }, { method: "POST", encType: "application/json" });
+    fetcher.submit(JSON.stringify({ sources: bodySources }), { method: "POST", encType: "application/json" });
   };
 
   const snapshotStatus = guestPlanner.snapshot?.status;
@@ -1612,6 +1654,28 @@ export default function UnifiedGuestPlannerImportPage() {
                       </div>
                     </SectionCard>
                   )}
+
+                  {apPlannerStateHasData(guest.document.ap) && (
+                    <SectionCard
+                      title="AP 플래너"
+                      description="플레이 조건과 이벤트별 계획·접속 시간을 비교해 가져올 내용을 선택해주세요."
+                    >
+                      {sourceMarker}
+                      <p className="mb-3 text-sm text-muted-foreground">
+                        {JSON.stringify(guest.document.ap) === JSON.stringify(account.apPlanner)
+                          ? "계정 AP 플래너와 같은 내용이에요."
+                          : "선택하면 이 브라우저의 AP 플래너 상태가 계정에 저장돼요."}
+                      </p>
+                      <ImportSourceComparison
+                        name={`ap-${source.id}`}
+                        selected={selection.ap ? "guest" : "account"}
+                        onChange={(selected) => toggleUnique(source.id, "ap", null, selected === "guest")}
+                        guestLabel={source.label}
+                        guest={<ApPlannerSummary state={guest.document.ap} timelineEvents={account.timelineEvents} />}
+                        account={<ApPlannerSummary state={account.apPlanner} timelineEvents={account.timelineEvents} />}
+                      />
+                    </SectionCard>
+                  )}
                 </div>
               );
             })}
@@ -1824,7 +1888,61 @@ function PlannerOptionsSummary({ options }: { options: PyroxenePlannerOptions })
       <span className="block text-muted-foreground">
         AP 충전 {options.consumption.apChargeCount}회 · 타임라인 {options.timeline.display.length}개 표시
       </span>
+      <span className="block text-muted-foreground">
+        기간별 AP 충전 예외 {options.consumption.apChargeExceptions.length}건
+      </span>
+      {options.consumption.apChargeExceptions.length > 0 ? (
+        <ul className="list-disc space-y-0.5 pl-5 text-xs text-muted-foreground">
+          {options.consumption.apChargeExceptions.map((exception) => (
+            <li key={exception.uid}>
+              {exception.startDate} ~ {exception.endDate} · 매일 {exception.count}회
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </span>
+  );
+}
+
+function ApPlannerSummary({
+  state,
+  timelineEvents,
+}: {
+  state: ApPlannerState | null;
+  timelineEvents: readonly { uid: string; name: string }[];
+}) {
+  if (!state || !apPlannerStateHasData(state)) {
+    return <p className="text-sm text-muted-foreground">저장된 AP 플래너 상태가 없어요.</p>;
+  }
+  const names = new Map(timelineEvents.map(({ uid, name }) => [uid, name]));
+  const plans = Object.entries(state.eventPlans).sort(([left], [right]) => {
+    const leftName = names.get(left) ?? "";
+    const rightName = names.get(right) ?? "";
+    return leftName.localeCompare(rightName);
+  });
+  return (
+    <div className="space-y-2 text-sm">
+      <p className="font-medium">플레이 조건</p>
+      <p className="text-muted-foreground">
+        {state.accountLevel === null ? "계정 레벨 미입력" : `계정 레벨 Lv.${state.accountLevel}`} ·{" "}
+        {state.cafeRank === null ? "카페 랭크 미입력" : `카페 랭크 ${state.cafeRank}`} ·{" "}
+        {state.comfort === null ? "편의성 랭크 최대" : `편의성 ${state.comfort.toLocaleString()}`}
+      </p>
+      <p className="font-medium">이벤트 계획 {plans.length}건</p>
+      {plans.length > 0 ? (
+        <ul className="space-y-1 text-muted-foreground">
+          {plans.map(([eventUid, plan]) => (
+            <li key={eventUid}>
+              {names.get(eventUid) ?? "이벤트 일정 확인 중"} ·{" "}
+              {plan.accessAt ? formatApShortDate(plan.accessAt) : "접속 시간 미입력"}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {Object.keys(state).some((key) => !["accountLevel", "cafeRank", "comfort", "eventPlans"].includes(key)) ? (
+        <p className="text-xs text-muted-foreground">현재 화면에서 편집할 수 없는 이전 버전 정보도 함께 유지해요.</p>
+      ) : null}
+    </div>
   );
 }
 

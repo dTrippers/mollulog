@@ -65,6 +65,7 @@ export type PlannerPeriod = {
   allRecruitmentStudents?: PlannerPeriodStudent[];
   expectedTrials?: number;
   isPlanned?: boolean;
+  isApPlanned?: boolean;
   hasRecruitmentPlan?: boolean;
 };
 
@@ -239,13 +240,16 @@ export type PlannerShopPeriodInput = {
 export function getPlannerPlannedEventUids({
   favorites,
   eventTrials,
+  apPlanEventUids = [],
 }: {
   favorites: readonly PlannerFavoriteInput[];
   eventTrials: readonly PlannerEventTrialInput[];
+  apPlanEventUids?: readonly string[];
 }): Set<string> {
   return new Set([
     ...favorites.map(({ contentUid }) => contentUid),
     ...eventTrials.filter(({ expectedTrials }) => expectedTrials !== null).map(({ eventUid }) => eventUid),
+    ...apPlanEventUids,
   ]);
 }
 
@@ -847,6 +851,7 @@ function mergeDuplicatePlannerPeriods(existing: PlannerPeriod, incoming: Planner
     ...existing,
     ...preferred,
     ...(existing.isPlanned === true || incoming.isPlanned === true ? { isPlanned: true } : {}),
+    ...(existing.isApPlanned === true || incoming.isApPlanned === true ? { isApPlanned: true } : {}),
     ...(existing.hasRecruitmentPlan === true || incoming.hasRecruitmentPlan === true
       ? { hasRecruitmentPlan: true }
       : {}),
@@ -1150,6 +1155,7 @@ export function buildPlannerPeriods({
   favorites,
   eventTrials,
   shopPeriods,
+  apPlanEventUids = [],
   timeZone,
 }: {
   contents: readonly PlannerScheduleContentInput[];
@@ -1157,6 +1163,7 @@ export function buildPlannerPeriods({
   favorites: readonly PlannerFavoriteInput[];
   eventTrials: readonly PlannerEventTrialInput[];
   shopPeriods: readonly PlannerShopPeriodInput[];
+  apPlanEventUids?: readonly string[];
   timeZone: string;
 }): PlannerPeriod[] {
   const favoriteKeys = new Set(favorites.map(({ contentUid, studentUid }) => `${contentUid}\u0000${studentUid}`));
@@ -1188,7 +1195,7 @@ export function buildPlannerPeriods({
       .filter((entry): entry is PlannerEventTrialInput & { expectedTrials: number } => entry.expectedTrials !== null)
       .map((entry) => [entry.eventUid, entry.expectedTrials]),
   );
-  const relatedEventUids = getPlannerPlannedEventUids({ favorites, eventTrials });
+  const relatedEventUids = getPlannerPlannedEventUids({ favorites, eventTrials, apPlanEventUids });
   const periods: PlannerPeriod[] = [];
 
   for (const content of contents) {
@@ -1420,6 +1427,7 @@ export function buildPlannerDisplayPeriods(
   personalPeriods: readonly PlannerPeriod[],
   publicPeriods: readonly PlannerPeriod[],
   plannedEventUidsInput: ReadonlySet<string> = new Set<string>(),
+  apPlanEventUidsInput: ReadonlySet<string> = new Set<string>(),
 ): PlannerPeriod[] {
   const plannedEventUids = new Set([
     ...plannedEventUidsInput,
@@ -1428,7 +1436,9 @@ export function buildPlannerDisplayPeriods(
     // whenever shop input is non-default, independent of A5) must not.
     ...personalPeriods.flatMap((period) =>
       period.eventUid &&
-      (period.kind === "event" || (period.kind === "recruitment" && hasPlannerRecruitmentPlan(period)))
+      ((period.kind === "event" &&
+        (!apPlanEventUidsInput.has(period.eventUid) || plannedEventUidsInput.has(period.eventUid))) ||
+        (period.kind === "recruitment" && hasPlannerRecruitmentPlan(period)))
         ? [period.eventUid]
         : [],
     ),
@@ -1450,14 +1460,30 @@ export function buildPlannerDisplayPeriods(
         (publicPeriod.kind !== "recruitment" || hasPlannerRecruitmentPlan(period)),
     );
     const period = publicPeriod.kind === "recruitment" && personalMatch ? personalMatch : publicPeriod;
-    const hasRecruitmentPlan = publicPeriod.kind === "recruitment" && hasPlannerRecruitmentPlan(personalMatch);
+    const hasRecruitmentPlan =
+      publicPeriod.kind === "recruitment"
+        ? hasPlannerRecruitmentPlan(personalMatch)
+        : publicPeriod.kind === "event"
+          ? Boolean(
+              period.eventUid &&
+                (plannedEventUidsInput.has(period.eventUid) ||
+                  (personalMatch?.isPlanned === true && !apPlanEventUidsInput.has(period.eventUid))),
+            )
+          : undefined;
     appendUnique({
       ...period,
+      ...(period.kind === "event"
+        ? { isApPlanned: Boolean(period.eventUid && apPlanEventUidsInput.has(period.eventUid)) }
+        : {}),
       isPlanned:
         period.kind === "recruitment"
           ? hasRecruitmentPlan
-          : Boolean(period.eventUid && plannedEventUids.has(period.eventUid)),
-      hasRecruitmentPlan,
+          : period.kind === "event"
+            ? Boolean(
+                period.eventUid && (plannedEventUids.has(period.eventUid) || apPlanEventUidsInput.has(period.eventUid)),
+              )
+            : Boolean(period.eventUid && plannedEventUids.has(period.eventUid)),
+      ...(hasRecruitmentPlan === undefined ? {} : { hasRecruitmentPlan }),
       ...(period.kind === "recruitment"
         ? { allRecruitmentStudents: unionPlannerStudents(publicPeriod.students, personalMatch?.students) }
         : {}),
@@ -1466,14 +1492,31 @@ export function buildPlannerDisplayPeriods(
 
   for (const personalPeriod of personalPeriods) {
     if (publicPeriods.some((period) => hasSamePlannerPeriod(period, personalPeriod))) continue;
-    const hasRecruitmentPlan = personalPeriod.kind === "recruitment" && hasPlannerRecruitmentPlan(personalPeriod);
+    const hasRecruitmentPlan =
+      personalPeriod.kind === "recruitment"
+        ? hasPlannerRecruitmentPlan(personalPeriod)
+        : personalPeriod.kind === "event"
+          ? Boolean(
+              personalPeriod.eventUid &&
+                (plannedEventUidsInput.has(personalPeriod.eventUid) ||
+                  (personalPeriod.isPlanned === true && !apPlanEventUidsInput.has(personalPeriod.eventUid))),
+            )
+          : undefined;
     appendUnique({
       ...personalPeriod,
+      ...(personalPeriod.kind === "event"
+        ? { isApPlanned: Boolean(personalPeriod.eventUid && apPlanEventUidsInput.has(personalPeriod.eventUid)) }
+        : {}),
       isPlanned:
         personalPeriod.kind === "recruitment"
           ? hasRecruitmentPlan
-          : Boolean(personalPeriod.eventUid && plannedEventUids.has(personalPeriod.eventUid)),
-      hasRecruitmentPlan,
+          : personalPeriod.kind === "event"
+            ? Boolean(
+                personalPeriod.eventUid &&
+                  (plannedEventUids.has(personalPeriod.eventUid) || apPlanEventUidsInput.has(personalPeriod.eventUid)),
+              )
+            : Boolean(personalPeriod.eventUid && plannedEventUids.has(personalPeriod.eventUid)),
+      ...(hasRecruitmentPlan === undefined ? {} : { hasRecruitmentPlan }),
       ...(personalPeriod.kind === "recruitment"
         ? { allRecruitmentStudents: unionPlannerStudents(personalPeriod.students) }
         : {}),

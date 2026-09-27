@@ -15,6 +15,19 @@ describe("guest pyroxene planner", () => {
     expect(parseGuestPyroxenePlanner(JSON.stringify(envelope))).toEqual(envelope);
   });
 
+  it("기존 게스트 옵션에서 빠진 AP 충전 예외를 빈 목록으로 정규화한다", () => {
+    const envelope = createEmptyGuestPyroxenePlanner();
+    const oldShape = JSON.parse(JSON.stringify(envelope)) as typeof envelope;
+    const storedOptions = oldShape.data.options as unknown as {
+      consumption: { apChargeExceptions?: unknown };
+    };
+    delete storedOptions.consumption.apChargeExceptions;
+
+    const parsed = parseGuestPyroxenePlanner(JSON.stringify(oldShape));
+
+    expect(parsed?.data.options.consumption.apChargeExceptions).toEqual([]);
+  });
+
   it("사용자 입력이 하나라도 있으면 가져오기 대상으로 판단한다", () => {
     const envelope = createEmptyGuestPyroxenePlanner();
     envelope.data.resources = {

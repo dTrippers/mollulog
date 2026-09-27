@@ -1,3 +1,4 @@
+import type { ApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
@@ -11,6 +12,7 @@ import {
 } from "~/models/event-content";
 import { getEventShopStates } from "~/models/event-shop-state";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getPlannerState } from "~/models/planner-state";
 import type { PyroxeneEventData, PyroxeneTimelineItem } from "~/models/pyroxene-planner";
 import { getPyroxeneUserState } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -40,6 +42,7 @@ export type IntegratedPlannerAccountState = {
   favoritedStudents: { contentUid: string; studentUid: string }[];
   recruitedStudentUids: string[] | null;
   recruitmentCompletions: { eventUid: string; recruitmentGroupUid: string }[];
+  apPlanner: ApPlannerState | null;
 };
 
 type EventShopContent = NonNullable<Awaited<ReturnType<typeof getEventShopContent>>>;
@@ -184,8 +187,9 @@ async function loadAccountState(
     const groupUids = schedules.flatMap((content) =>
       content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
     );
-    const [pyroxeneState, favorites, recruitmentResults, recruitedStudents] = await Promise.all([
+    const [pyroxeneState, plannerState, favorites, recruitmentResults, recruitedStudents] = await Promise.all([
       getPyroxeneUserState(env, userId, { ctx }),
+      getPlannerState(env, userId, { ctx }),
       getUserFavoritedStudents(env, userId, undefined, { ctx }),
       getRecruitmentResultsByRecruitmentGroupUids(env, userId, groupUids),
       getRecruitedStudents(env, userId).catch(() => null),
@@ -219,6 +223,7 @@ async function loadAccountState(
         })),
         recruitedStudentUids: recruitedStudents?.map(({ studentUid }) => studentUid) ?? null,
         recruitmentCompletions,
+        apPlanner: plannerState.ap,
       },
     };
   } catch {

@@ -69,7 +69,7 @@ export default function BottomSheet({
               id={id}
               className={cn(`
               w-screen lg:max-w-3xl ${fitContent ? "h-auto max-h-[85dvh]" : "h-dvh max-h-120 md:max-h-144"} px-4 pt-6 lg:px-8 lg:pt-8 pb-[var(--pb-safe-or-6)] flex flex-col
-              rounded-t-lg bg-popover/90 shadow-t-xl backdrop-blur-sm
+              rounded-t-lg bg-popover shadow-t-xl backdrop-blur-sm
             `)}
             >
               <div className="mb-4 flex shrink-0 items-center justify-between gap-3">

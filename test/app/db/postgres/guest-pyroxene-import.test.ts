@@ -44,6 +44,7 @@ function makePlan(document = emptyDocument()): GuestPlannerImportPlan {
           sourceKeys: ["source-1"],
           eventUids: [],
           eventShopUids: [],
+          ap: false,
         },
       },
     ],
@@ -105,6 +106,41 @@ describe("PostgreSQL guest import receipt keys", () => {
 });
 
 describe("PostgreSQL unified guest planner import", () => {
+  it("imports the selected AP document section and records its retry receipt without a legacy AP mirror", async () => {
+    const sourceDocument = emptyDocument();
+    sourceDocument.ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-09-30T03:00:00.000Z" } },
+    };
+    const plan = makePlan(sourceDocument);
+    plan.sources[0].selection = {
+      resources: false,
+      options: false,
+      recordUids: [],
+      sourceKeys: [],
+      eventUids: [],
+      eventShopUids: [],
+      ap: true,
+    };
+    const client = fakeClient(tables());
+
+    const result = await runPostgresGuestPlannerImport(env, 7, plan, {
+      createClient: () => client as unknown as Client,
+    });
+
+    expect(result.failed).toEqual([]);
+    expect(result.verified).toEqual([{ sourceId: "current", datasetId: "dataset-1", type: "ap", key: "current" }]);
+    const receipt = client.tables.pyroxene_guest_import_items?.[0];
+    expect(receipt).toMatchObject({ itemType: "ap", itemKey: encodePostgresPyroxeneReceiptItemKey("current") });
+    const storedRow = client.tables.planner_states?.[0];
+    if (!storedRow) throw new Error("Expected an AP planner document after import");
+    const storedDocument = typeof storedRow.document === "string" ? JSON.parse(storedRow.document) : storedRow.document;
+    expect(storedDocument.ap).toEqual(sourceDocument.ap);
+    expect((await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7)).ap).toBeNull();
+  });
+
   it("imports selected Pyroxene and event shop data in one mirrored document update", async () => {
     const sourceDocument = projectPlannerStateDocument({
       resources: [],
@@ -156,6 +192,7 @@ describe("PostgreSQL unified guest planner import", () => {
       sourceKeys: ["source-1"],
       eventUids: ["event-1"],
       eventShopUids: ["shop-1"],
+      ap: false,
     };
     const client = fakeClient(tables());
 
@@ -228,6 +265,7 @@ describe("PostgreSQL unified guest planner import", () => {
         sourceKeys: [],
         eventUids: [],
         eventShopUids: ["shop-1"],
+        ap: false,
       };
       return runPostgresGuestPlannerImport(env, 7, plan, {
         createClient: () => client as unknown as Client,
@@ -280,6 +318,7 @@ describe("PostgreSQL unified guest planner import", () => {
       sourceKeys: [],
       eventUids: [],
       eventShopUids: ["shop-1"],
+      ap: false,
     };
 
     const result = await runPostgresGuestPlannerImport(env, 7, plan, {
@@ -326,6 +365,7 @@ describe("PostgreSQL unified guest planner import", () => {
         sourceKeys: [],
         eventUids: [],
         eventShopUids: [],
+        ap: false,
       };
       return plan;
     };
@@ -381,6 +421,7 @@ describe("PostgreSQL unified guest planner import", () => {
         sourceKeys: [],
         eventUids: [],
         eventShopUids: [],
+        ap: false,
       };
       return plan;
     };
@@ -435,6 +476,7 @@ describe("PostgreSQL unified guest planner import", () => {
       sourceKeys: ["source-1"],
       eventUids: [],
       eventShopUids: [],
+      ap: false,
     };
     const client = fakeClient(tables(), true);
 

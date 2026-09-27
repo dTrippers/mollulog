@@ -1,4 +1,5 @@
 import type { InputHTMLAttributes } from "react";
+import { useId } from "react";
 import { cn } from "~/lib/utils";
 import Field from "./Field";
 
@@ -27,7 +28,8 @@ export default function Input({
   disabled,
   ...props
 }: InputProps) {
-  const controlId = id ?? name;
+  const generatedId = useId();
+  const controlId = id ?? name ?? (label ? generatedId : undefined);
 
   return (
     <Field

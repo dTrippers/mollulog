@@ -191,16 +191,18 @@ export type PlannerEventCardRecruitmentAction = {
 
 export function PlannerEventCardActions({
   eventPeriod,
+  apPlannerHref,
   shopCalculatorHref,
   recruitmentActions = [],
   className,
 }: {
   eventPeriod?: PlannerPeriod;
+  apPlannerHref?: string;
   shopCalculatorHref?: string;
   recruitmentActions?: readonly PlannerEventCardRecruitmentAction[];
   className?: string;
 }) {
-  if (!eventPeriod && !shopCalculatorHref && recruitmentActions.length === 0) return null;
+  if (!eventPeriod && !apPlannerHref && !shopCalculatorHref && recruitmentActions.length === 0) return null;
 
   return (
     <div className={`flex flex-wrap gap-2 ${className ?? ""}`.trim()}>
@@ -211,6 +213,15 @@ export function PlannerEventCardActions({
           variant="secondary"
           className="shadow-xs dark:shadow-none"
           to={eventPeriod.href}
+        />
+      ) : null}
+      {apPlannerHref ? (
+        <Button
+          text="AP 플래너"
+          size="xs"
+          variant="secondary"
+          className="shadow-xs dark:shadow-none"
+          to={apPlannerHref}
         />
       ) : null}
       {shopCalculatorHref ? (

@@ -6,6 +6,7 @@ type FieldProps = {
   description?: string;
   error?: string;
   htmlFor?: string;
+  setChildId?: boolean;
   children: ReactNode;
   containerClassName?: string;
   labelClassName?: string;
@@ -18,6 +19,7 @@ export default function Field({
   description,
   error,
   htmlFor,
+  setChildId = true,
   children,
   containerClassName,
   labelClassName,
@@ -31,7 +33,7 @@ export default function Field({
   const content =
     htmlFor && isValidElement(children) && typeof children.type !== "symbol"
       ? cloneElement(children as ReactElement<Record<string, unknown>>, {
-          id: (children.props as { id?: string }).id ?? htmlFor,
+          ...(setChildId ? { id: (children.props as { id?: string }).id ?? htmlFor } : {}),
           "aria-describedby":
             [(children.props as { "aria-describedby"?: string })["aria-describedby"], describedBy]
               .filter(Boolean)
