@@ -45,6 +45,7 @@ export type GuestPlannerSnapshot =
 type GuestPlannerUpdate = (current: GuestPlannerEnvelope) => GuestPlannerEnvelope;
 type RawStorage = { envelope: string | null; pyroxene: string | null; eventShops: string | null };
 
+// M2 keeps AP opaque. A later AP writer must change this helper; otherwise AP-only edits are reverted and treated as unchanged.
 function preserveGuestPlannerAp(current: GuestPlannerEnvelope, updated: GuestPlannerEnvelope): GuestPlannerEnvelope {
   return {
     ...updated,

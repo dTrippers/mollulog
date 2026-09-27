@@ -155,6 +155,24 @@ describe("unified guest planner storage", () => {
     expect(JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null").document.ap).toEqual(ap);
   });
 
+  it("keeps opaque AP data when resetting guest planner sections", async () => {
+    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const initial = createEmptyGuestPlanner();
+    initial.document.ap = ap;
+    stored.set(GUEST_PLANNER_STORAGE_KEY, JSON.stringify(initial));
+    await flushQueuedStorageWork();
+
+    const snapshot = await resetGuestPlanner();
+
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status !== "ready") return;
+    const storedEnvelope = JSON.parse(stored.get(GUEST_PLANNER_STORAGE_KEY) ?? "null") as {
+      document: { ap: unknown };
+    };
+    expect(snapshot.envelope.document.ap).toEqual(ap);
+    expect(storedEnvelope.document.ap).toEqual(ap);
+  });
+
   it("flushes a pending shop plan while retaining opaque AP data in all canonical envelope writes", async () => {
     const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
     const initial = createEmptyGuestPlanner();
