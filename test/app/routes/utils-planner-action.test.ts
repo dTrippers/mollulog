@@ -11,7 +11,7 @@ jest.mock("~/models/integrated-planner", () => ({ saveIntegratedPlannerRecruitme
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: jest.fn() }));
 jest.mock("~/views/integrated-planner", () => ({ getIntegratedPlannerData: jest.fn() }));
 
-import { action } from "~/routes/utils.planner";
+import { action } from "~/routes/planner";
 
 const env = {} as Env;
 const ctx = {} as ExecutionContext;
@@ -25,7 +25,7 @@ function actionArgs() {
   formData.set("submissionId", "submission-1");
   return {
     context: { cloudflare: { env, ctx } },
-    request: new Request("https://mollulog.test/utils/planner", { method: "POST", body: formData }),
+    request: new Request("https://mollulog.test/planner", { method: "POST", body: formData }),
   } as never;
 }
 
