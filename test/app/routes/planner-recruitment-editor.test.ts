@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import { eventIconImageUrl, studentImageUrl } from "~/models/assets";
-import PlannerRecruitmentEditor from "~/routes/utils.planner._components/PlannerRecruitmentEditor";
+import PlannerRecruitmentEditor from "~/routes/planner._components/PlannerRecruitmentEditor";
 
 function renderEditor(candidateCount = 1) {
   const candidates = Array.from({ length: candidateCount }, (_, index) => ({

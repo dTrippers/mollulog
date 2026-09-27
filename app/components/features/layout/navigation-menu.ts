@@ -171,6 +171,7 @@ export function getNavigationSectionStates(
       pathname.startsWith("/furniture/"),
     isUtilActive:
       pathname.startsWith("/utils") ||
+      pathname.startsWith("/planner") ||
       pathname.startsWith("/timelines") ||
       !!(upcomingEvent && pathname.startsWith(`/events/${upcomingEvent.uid}`)),
     isExternalActive: pathname.startsWith("/coupons"),
@@ -296,7 +297,7 @@ export function getNavigationCatalog({
     {
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
-      to: "/utils/planner",
+      to: "/planner",
       name: "통합 플래너",
       mobileNavigationId: "integrated-planner",
       mobileLabel: "통합 플래너",
@@ -304,7 +305,7 @@ export function getNavigationCatalog({
       description: "모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요",
       OutlineIcon: CalendarIconOutline,
       SolidIcon: CalendarIconSolid,
-      isActive: pathname.startsWith("/utils/planner"),
+      isActive: pathname.startsWith("/planner"),
     },
     {
       group: "planner",

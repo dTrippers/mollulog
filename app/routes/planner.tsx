@@ -57,16 +57,16 @@ import {
   createPyroxeneMonthlyPackage,
   updatePyroxeneOneOffTimelineItem,
 } from "~/models/pyroxene-planner";
-import type { EventShopStateLookupResponse } from "~/routes/api.utils.planner.event-shop-states";
+import type { EventShopStateLookupResponse } from "~/routes/api.planner.event-shop-states";
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
 import { getPyroxenePlannerContents, type PyroxenePlannerContent } from "~/views/pyroxene";
-import PlannerCalendar, { type PlannerCalendarShopPlan } from "./utils.planner._components/PlannerCalendar";
-import type { PlannerQuickEditEntry } from "./utils.planner._components/PlannerQuickEdit";
+import PlannerCalendar, { type PlannerCalendarShopPlan } from "./planner._components/PlannerCalendar";
+import type { PlannerQuickEditEntry } from "./planner._components/PlannerQuickEdit";
 import type {
   PlannerRecruitmentSavedState,
   PlannerRecruitmentSaveInput,
   PlannerRecruitmentSaveResult,
-} from "./utils.planner._components/PlannerRecruitmentEditor";
+} from "./planner._components/PlannerRecruitmentEditor";
 
 export const meta: MetaFunction = () => [
   { title: "통합 플래너 | 몰루로그" },
@@ -372,7 +372,7 @@ export default function IntegratedPlannerRoute() {
     void Promise.all(
       chunks.map(async (plans) => {
         try {
-          const response = await fetch("/api/utils/planner/event-shop-states", {
+          const response = await fetch("/api/planner/event-shop-states", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -1000,7 +1000,7 @@ export default function IntegratedPlannerRoute() {
                 shortTitle: "상점 비교",
                 description: "로그인 전에 입력한 계획이 계정에 없거나 내용이 달라요.",
                 Icon: ShoppingBagIcon,
-                to: "/utils/planner/import",
+                to: "/planner/import",
               },
             ]
           : []

@@ -15,7 +15,7 @@ jest.mock("~/models/event-shop-state", () => ({ getEventShopStates: mockGetEvent
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: mockGetRecruitedStudents }));
 
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
-import { action } from "~/routes/api.utils.planner.event-shop-states";
+import { action } from "~/routes/api.planner.event-shop-states";
 
 const env = {} as Env;
 const ctx = {} as ExecutionContext;
@@ -23,7 +23,7 @@ const ctx = {} as ExecutionContext;
 function actionArgs(payload: unknown) {
   return {
     context: { cloudflare: { env, ctx } },
-    request: new Request("https://mollulog.test/api/utils/planner/event-shop-states", {
+    request: new Request("https://mollulog.test/api/planner/event-shop-states", {
       method: "POST",
       body: JSON.stringify(payload),
       headers: { "Content-Type": "application/json" },

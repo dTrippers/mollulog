@@ -76,15 +76,27 @@ describe("getNavigationSections", () => {
   it("adds the integrated planner while preserving detailed planner entries", () => {
     const items = getMenuItems();
 
-    expect(items.find((item) => item.to === "/utils/planner")).toMatchObject({
+    expect(items.find((item) => item.to === "/planner")).toMatchObject({
       name: "통합 플래너",
       favoriteId: "integrated-planner",
       mobileNavigationId: "integrated-planner",
       OutlineIcon: CalendarIconOutline,
     });
     expect(items.map((item) => item.to)).toEqual(
-      expect.arrayContaining(["/utils/planner", "/utils/pyroxene", "/utils/event-shop"]),
+      expect.arrayContaining(["/planner", "/utils/pyroxene", "/utils/event-shop"]),
     );
+  });
+
+  it.each(["/planner", "/planner/import"])("activates the integrated planner at %s", (pathname) => {
+    const planner = getNavigationSections({ ...navigationOptions, pathname }).find(
+      (section) => section.name === "플래너 & 계산기",
+    );
+
+    expect(planner?.items.find((item) => item.name === "통합 플래너")).toMatchObject({
+      to: "/planner",
+      isActive: true,
+    });
+    expect(planner?.isActive).toBe(true);
   });
 });
 
@@ -168,7 +180,7 @@ describe("navigation surface projections", () => {
       "/students",
       "/mainstory",
       "/furniture",
-      "/utils/planner",
+      "/planner",
       "/utils/pyroxene",
       "/utils/growth/students",
       "/utils/resources/inventory",

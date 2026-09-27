@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
 import type { PlannerPeriod } from "~/domain/integrated-planner";
-import PlannerEventCardDetails from "~/routes/utils.planner._components/PlannerEventCardDetails";
+import PlannerEventCardDetails from "~/routes/planner._components/PlannerEventCardDetails";
 
 const eventPeriod: PlannerPeriod = {
   key: "event:event-1",

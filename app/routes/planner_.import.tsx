@@ -20,10 +20,7 @@ import {
   subscribeGuestEventShopPlanner,
   updateGuestEventShopPlanner,
 } from "~/lib/guest-event-shop-planner.client";
-import type {
-  EventShopPlanDisplayCatalog,
-  EventShopStateLookupResponse,
-} from "~/routes/api.utils.planner.event-shop-states";
+import type { EventShopPlanDisplayCatalog, EventShopStateLookupResponse } from "~/routes/api.planner.event-shop-states";
 
 type SaveResult = {
   success?: boolean;
@@ -251,7 +248,7 @@ export default function EventShopPlanImportPage() {
           timelineUid,
           shopStateUid,
         }));
-        const response = await fetch("/api/utils/planner/event-shop-states", {
+        const response = await fetch("/api/planner/event-shop-states", {
           method: "POST",
           credentials: "same-origin",
           headers: { "Content-Type": "application/json" },
@@ -354,7 +351,7 @@ export default function EventShopPlanImportPage() {
     <Page
       title="이벤트 상점 계획 비교"
       description="이 브라우저에 저장된 상점 계획을 계정 계획과 이벤트별로 비교해요. 현재 달 밖의 계획도 여기에 표시돼요."
-      backward={{ title: "통합 플래너로 돌아가기", to: "/utils/planner" }}
+      backward={{ title: "통합 플래너로 돌아가기", to: "/planner" }}
     >
       <div className="space-y-4 pb-8">
         {snapshot?.status === "memory" && (
