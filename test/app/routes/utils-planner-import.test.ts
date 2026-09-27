@@ -136,7 +136,7 @@ describe("unified planner import action", () => {
     envelope.document.pyroxene.records = Array.from({ length: 501 }, () => ({})) as never;
     const result = await action(
       actionArgs(
-        new Request("https://mollulog.test/utils/planner/import", {
+        new Request("https://mollulog.test/planner/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -171,7 +171,7 @@ describe("unified planner import action", () => {
     const body = JSON.stringify({ sources: [], padding: "x".repeat(MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES) });
     const result = await action(
       actionArgs(
-        new Request("https://mollulog.test/utils/planner/import", {
+        new Request("https://mollulog.test/planner/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body,
@@ -473,7 +473,7 @@ describe("unified planner import action", () => {
 
     const result = await action(
       actionArgs(
-        new Request("https://mollulog.test/utils/planner/import", {
+        new Request("https://mollulog.test/planner/import", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
