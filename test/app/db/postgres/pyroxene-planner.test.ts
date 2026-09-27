@@ -69,6 +69,15 @@ function createClient(options: { failOn?: string } = {}) {
       return { rows: [[4, 7, JSON.stringify(defaultPyroxenePlannerOptions), new Date(), new Date()]], rowCount: 1 };
     }
     if (text.includes('from "pyroxene_collected_sources"')) {
+      if (text.includes('"id"')) {
+        return {
+          rows: [
+            [1, "source-1", 7, "source-1", new Date("2026-08-01T00:00:00.000Z"), new Date("2026-08-01T00:00:00.000Z")],
+            [2, "source-2", 7, "source-2", new Date("2026-08-02T00:00:00.000Z"), new Date("2026-08-02T00:00:00.000Z")],
+          ],
+          rowCount: 2,
+        };
+      }
       return { rows: [["source-1"], ["source-2"]], rowCount: 2 };
     }
     return { rows: [], rowCount: 0 };
@@ -96,7 +105,7 @@ describe("PostgreSQL Pyroxene repository", () => {
 
     const readSql = query.mock.calls.map(([config]) => (typeof config === "string" ? config : config.text)).join("\n");
     expect(readSql).toContain('order by "pyroxene_owned_resources"."input_at" desc');
-    expect(readSql).toContain('order by "pyroxene_timeline_items"."event_at" asc');
+    expect(readSql).toContain('order by "pyroxene_timeline_items"."event_at" asc, "pyroxene_timeline_items"."id" asc');
   });
 
   it("reads all Pyroxene user state through one held PostgreSQL client", async () => {

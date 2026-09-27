@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, isNull, like, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
 import {
   defaultPyroxenePlannerOptions,
   normalizePyroxenePlannerOptions,
@@ -219,7 +220,10 @@ export async function createPostgresPyroxeneOwnedResource(
   return withPyroxeneDatabase(
     env,
     "owned_resources.create",
-    (db) => createPyroxeneOwnedResourceInDatabase(db, userId, resources, options),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) =>
+        createPyroxeneOwnedResourceInDatabase(tx, userId, resources, options),
+      ),
     options,
   );
 }
@@ -233,11 +237,12 @@ export async function deletePostgresPyroxeneOwnedResourceByUid(
   await withPyroxeneDatabase(
     env,
     "owned_resources.delete",
-    async (db) => {
-      await db
-        .delete(pgPyroxeneOwnedResourcesTable)
-        .where(and(eq(pgPyroxeneOwnedResourcesTable.userId, userId), eq(pgPyroxeneOwnedResourcesTable.uid, uid)));
-    },
+    (db) =>
+      withPlannerStateDualWrite(db, userId, async (tx) => {
+        await tx
+          .delete(pgPyroxeneOwnedResourcesTable)
+          .where(and(eq(pgPyroxeneOwnedResourcesTable.userId, userId), eq(pgPyroxeneOwnedResourcesTable.uid, uid)));
+      }),
     options,
   );
 }
@@ -324,7 +329,7 @@ export async function upsertPostgresCollectedSource(
   return withPyroxeneDatabase(
     env,
     "collected_sources.upsert",
-    (db) => upsertCollectedSourceInDatabase(db, userId, sourceKey),
+    (db) => withPlannerStateDualWrite(db, userId, (tx) => upsertCollectedSourceInDatabase(tx, userId, sourceKey)),
     options,
   );
 }
@@ -338,7 +343,7 @@ export async function ensurePostgresCollectedSource(
   return withPyroxeneDatabase(
     env,
     "collected_sources.ensure",
-    (db) => ensureCollectedSourceInDatabase(db, userId, sourceKey),
+    (db) => withPlannerStateDualWrite(db, userId, (tx) => ensureCollectedSourceInDatabase(tx, userId, sourceKey)),
     options,
   );
 }
@@ -354,7 +359,8 @@ export async function upsertPostgresCollectedSources(
   await withPyroxeneDatabase(
     env,
     "collected_sources.bulk_upsert",
-    (db) => upsertCollectedSourcesInDatabase(db, userId, uniqueSourceKeys),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) => upsertCollectedSourcesInDatabase(tx, userId, uniqueSourceKeys)),
     options,
   );
 }
@@ -368,16 +374,17 @@ export async function deletePostgresCollectedSource(
   await withPyroxeneDatabase(
     env,
     "collected_sources.delete",
-    async (db) => {
-      await db
-        .delete(pgPyroxeneCollectedSourcesTable)
-        .where(
-          and(
-            eq(pgPyroxeneCollectedSourcesTable.userId, userId),
-            eq(pgPyroxeneCollectedSourcesTable.sourceKey, sourceKey),
-          ),
-        );
-    },
+    (db) =>
+      withPlannerStateDualWrite(db, userId, async (tx) => {
+        await tx
+          .delete(pgPyroxeneCollectedSourcesTable)
+          .where(
+            and(
+              eq(pgPyroxeneCollectedSourcesTable.userId, userId),
+              eq(pgPyroxeneCollectedSourcesTable.sourceKey, sourceKey),
+            ),
+          );
+      }),
     options,
   );
 }
@@ -390,7 +397,7 @@ export async function getPyroxeneTimelineItemsInDatabase(
     .select()
     .from(pgPyroxeneTimelineItemsTable)
     .where(eq(pgPyroxeneTimelineItemsTable.userId, userId))
-    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt));
+    .orderBy(asc(pgPyroxeneTimelineItemsTable.eventAt), asc(pgPyroxeneTimelineItemsTable.id));
   return items.map(toTimelineItemModel);
 }
 
@@ -650,7 +657,8 @@ export async function createPostgresBuyPyroxene(
   return withPyroxeneDatabase(
     env,
     "timeline_items.buy",
-    (db) => createBuyPyroxeneInDatabase(db, userId, date, quantity, options),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) => createBuyPyroxeneInDatabase(tx, userId, date, quantity, options)),
     options,
   );
 }
@@ -664,7 +672,7 @@ export async function deletePostgresPyroxeneTimelineItem(
   return withPyroxeneDatabase(
     env,
     "timeline_items.delete",
-    (db) => deletePyroxeneTimelineItemInDatabase(db, userId, uid),
+    (db) => withPlannerStateDualWrite(db, userId, (tx) => deletePyroxeneTimelineItemInDatabase(tx, userId, uid)),
     options,
   );
 }
@@ -686,7 +694,8 @@ export async function updatePostgresPyroxeneOneOffTimelineItem(
   return withPyroxeneDatabase(
     env,
     "timeline_items.update_one_off",
-    (db) => updatePyroxeneOneOffTimelineItemInDatabase(db, userId, uid, input),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) => updatePyroxeneOneOffTimelineItemInDatabase(tx, userId, uid, input)),
     options,
   );
 }
@@ -703,7 +712,10 @@ export async function createPostgresPyroxeneMonthlyPackage(
   return withPyroxeneDatabase(
     env,
     "timeline_items.monthly_package",
-    (db) => createPyroxeneMonthlyPackageInDatabase(db, userId, startDate, packageType, autoRepurchase, uid),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) =>
+        createPyroxeneMonthlyPackageInDatabase(tx, userId, startDate, packageType, autoRepurchase, uid),
+      ),
     options,
   );
 }
@@ -719,7 +731,10 @@ export async function createPostgresPyroxeneApPackage(
   return withPyroxeneDatabase(
     env,
     "timeline_items.ap_package",
-    (db) => createPyroxeneApPackageInDatabase(db, userId, startDate, autoRepurchase, uid),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) =>
+        createPyroxeneApPackageInDatabase(tx, userId, startDate, autoRepurchase, uid),
+      ),
     options,
   );
 }
@@ -734,7 +749,7 @@ export async function createPostgresAttendance(
   return withPyroxeneDatabase(
     env,
     "timeline_items.attendance",
-    (db) => createAttendanceInDatabase(db, userId, startDate, uid),
+    (db) => withPlannerStateDualWrite(db, userId, (tx) => createAttendanceInDatabase(tx, userId, startDate, uid)),
     options,
   );
 }
@@ -754,7 +769,9 @@ export async function createPostgresOtherPyroxeneGain(
     env,
     "timeline_items.other",
     (db) =>
-      createOtherPyroxeneGainInDatabase(db, userId, date, pyroxene, oneTimeTicket, tenTimeTicket, description, uid),
+      withPlannerStateDualWrite(db, userId, (tx) =>
+        createOtherPyroxeneGainInDatabase(tx, userId, date, pyroxene, oneTimeTicket, tenTimeTicket, description, uid),
+      ),
     options,
   );
 }
@@ -814,7 +831,7 @@ export async function upsertPostgresPyroxenePlannerOptions(
   return withPyroxeneDatabase(
     env,
     "planner_options.upsert",
-    (db) => upsertPyroxenePlannerOptionsInDatabase(db, userId, options),
+    (db) => withPlannerStateDualWrite(db, userId, (tx) => upsertPyroxenePlannerOptionsInDatabase(tx, userId, options)),
     repositoryOptions,
   );
 }
@@ -899,7 +916,8 @@ export async function upsertPostgresPyroxeneEventData(
   await withPyroxeneDatabase(
     env,
     "event_data.upsert",
-    (db) => upsertPyroxeneEventDataInDatabase(db, userId, eventUid, data),
+    (db) =>
+      withPlannerStateDualWrite(db, userId, (tx) => upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, data)),
     options,
   );
 }
@@ -913,11 +931,12 @@ export async function deletePostgresPyroxeneEventData(
   await withPyroxeneDatabase(
     env,
     "event_data.delete",
-    async (db) => {
-      await db
-        .delete(pgPyroxeneEventDataTable)
-        .where(and(eq(pgPyroxeneEventDataTable.userId, userId), eq(pgPyroxeneEventDataTable.eventUid, eventUid)));
-    },
+    (db) =>
+      withPlannerStateDualWrite(db, userId, async (tx) => {
+        await tx
+          .delete(pgPyroxeneEventDataTable)
+          .where(and(eq(pgPyroxeneEventDataTable.userId, userId), eq(pgPyroxeneEventDataTable.eventUid, eventUid)));
+      }),
     options,
   );
 }

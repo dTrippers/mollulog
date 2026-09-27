@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
+import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
 import type { EventShopOwnedQuantityPatch, EventShopState } from "~/domain/event-shop-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
@@ -111,8 +112,8 @@ export async function upsertPostgresEventShopState(
   };
   await withEventShopStateDatabase(
     env,
-    async (db) => {
-      await db.transaction(async (tx) => {
+    (db) =>
+      withPlannerStateDualWrite(db, userId, async (tx) => {
         await tx
           .insert(pgEventShopStatesTable)
           .values({
@@ -134,8 +135,7 @@ export async function upsertPostgresEventShopState(
           state: normalizedState,
           source: historySource,
         });
-      });
-    },
+      }),
     options,
   );
 }
@@ -150,41 +150,42 @@ export async function patchPostgresEventShopStateOwnedQuantities(
 ): Promise<void> {
   await withEventShopStateDatabase(
     env,
-    async (db) => {
-      await db
-        .insert(pgEventShopStatesTable)
-        .values({
-          uid: nanoid(8),
-          userId,
-          eventUid,
-          itemQuantities: defaultState.itemQuantities,
-          itemPurchaseDays: defaultState.itemPurchaseDays,
-          selectedBonusStudentUids: defaultState.selectedBonusStudentUids,
-          bonusStudentSelectionMode: defaultState.bonusStudentSelectionMode,
-          selectedBonusStudentUidsByItem: defaultState.selectedBonusStudentUidsByItem,
-          enabledStages: defaultState.enabledStages,
-          includeRecruitedStudents: defaultState.includeRecruitedStudents,
-          existingPaymentItemQuantities: {
-            ...defaultState.existingPaymentItemQuantities,
-            ...patch,
-          },
-          includeFirstClear: defaultState.includeFirstClear,
-          extraStageRuns: defaultState.extraStageRuns,
-          minigameStartRound: defaultState.minigameStartRound,
-          minigamePlayCount: defaultState.minigamePlayCount,
-          minigamePaymentQuantityMode: defaultState.minigamePaymentQuantityMode,
-          overriddenRequiredQuantities: defaultState.overriddenRequiredQuantities,
-        })
-        .onConflictDoUpdate({
-          target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-          set: {
-            existingPaymentItemQuantities: sql<
-              Record<string, number>
-            >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
-            updatedAt: new Date(),
-          },
-        });
-    },
+    (db) =>
+      withPlannerStateDualWrite(db, userId, async (tx) => {
+        await tx
+          .insert(pgEventShopStatesTable)
+          .values({
+            uid: nanoid(8),
+            userId,
+            eventUid,
+            itemQuantities: defaultState.itemQuantities,
+            itemPurchaseDays: defaultState.itemPurchaseDays,
+            selectedBonusStudentUids: defaultState.selectedBonusStudentUids,
+            bonusStudentSelectionMode: defaultState.bonusStudentSelectionMode,
+            selectedBonusStudentUidsByItem: defaultState.selectedBonusStudentUidsByItem,
+            enabledStages: defaultState.enabledStages,
+            includeRecruitedStudents: defaultState.includeRecruitedStudents,
+            existingPaymentItemQuantities: {
+              ...defaultState.existingPaymentItemQuantities,
+              ...patch,
+            },
+            includeFirstClear: defaultState.includeFirstClear,
+            extraStageRuns: defaultState.extraStageRuns,
+            minigameStartRound: defaultState.minigameStartRound,
+            minigamePlayCount: defaultState.minigamePlayCount,
+            minigamePaymentQuantityMode: defaultState.minigamePaymentQuantityMode,
+            overriddenRequiredQuantities: defaultState.overriddenRequiredQuantities,
+          })
+          .onConflictDoUpdate({
+            target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+            set: {
+              existingPaymentItemQuantities: sql<
+                Record<string, number>
+              >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
+              updatedAt: new Date(),
+            },
+          });
+      }),
     options,
   );
 }

@@ -205,6 +205,9 @@ export class FakePostgresClient {
       return { rows: [], rowCount: 0 };
     }
     if (/^select\s+setval/i.test(normalized)) return { rows: [], rowCount: 0 };
+    if (/^select\s+pg_advisory_xact_lock\(hashtextextended\(\$\d+,\s*0\)\)$/i.test(normalized)) {
+      return { rows: [], rowCount: 1 };
+    }
     const rowModeArray =
       typeof config !== "string" && (config as QueryConfig & { rowMode?: string }).rowMode === "array";
     if (/^select/i.test(normalized)) return this.select(normalized, values, rowModeArray);
@@ -219,11 +222,21 @@ export class FakePostgresClient {
     const table = this.tables[tableName] ?? [];
     this.selectParameterCounts.push(values.length);
     let rows = table.filter((row) => matchesWhere(row, text, values));
-    const order = text.match(/\border\s+by\s+"([a-z0-9_]+)"(?:\s+(asc|desc))?/i);
-    if (order) {
-      const field = fromPgField(order[1]);
-      const multiplier = order[2]?.toLowerCase() === "desc" ? -1 : 1;
-      rows = [...rows].sort((left, right) => (Number(left[field]) - Number(right[field])) * multiplier);
+    const orderClause = text.match(/\border\s+by\s+([\s\S]*?)(?:\blimit\b|\breturning\b|$)/i)?.[1] ?? "";
+    const orderTerms = [...orderClause.matchAll(/(?:"[a-z0-9_]+"\.)?"([a-z0-9_]+)"(?:\s+(asc|desc))?/gi)].map(
+      ([, field, direction]) => ({ field: fromPgField(field ?? ""), direction: direction?.toLowerCase() }),
+    );
+    if (orderTerms.length > 0) {
+      rows = [...rows].sort((left, right) => {
+        for (const { field, direction } of orderTerms) {
+          const leftValue = left[field];
+          const rightValue = right[field];
+          let comparison = Number(leftValue) - Number(rightValue);
+          if (!Number.isFinite(comparison)) comparison = String(leftValue).localeCompare(String(rightValue));
+          if (comparison !== 0) return direction === "desc" ? -comparison : comparison;
+        }
+        return 0;
+      });
     }
     const limit = text.match(/\blimit\s+(?:\$(\d+)|(\d+))/i);
     if (limit) {
@@ -321,6 +334,19 @@ export class FakePostgresClient {
     if (/^coalesce\(/i.test(trimmed)) {
       const field = trimmed.match(/excluded\.([a-z0-9_]+)/i)?.[1] ?? "";
       return inserted[fromPgField(field)] ?? existing[fromPgField(field)];
+    }
+    const jsonbMerge = trimmed.match(/^(?:"[^"]+"\.)?"([a-z0-9_]+)"\s*\|\|\s*\$(\d+)(?:::jsonb)?$/i);
+    if (jsonbMerge) {
+      const asJsonObject = (value: unknown): Row => {
+        const parsed = typeof value === "string" ? (JSON.parse(value) as unknown) : value;
+        if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+          throw new Error("Fake PostgreSQL JSONB merge requires object values");
+        }
+        return parsed as Row;
+      };
+      const left = asJsonObject(existing[fromPgField(jsonbMerge[1])]);
+      const right = asJsonObject(values[Number(jsonbMerge[2]) - 1]);
+      return { ...left, ...right };
     }
     const placeholder = trimmed.match(/\$(\d+)/);
     if (placeholder) return values[Number(placeholder[1]) - 1];
