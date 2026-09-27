@@ -64,4 +64,68 @@ describe("event shop state", () => {
       existingPaymentItemQuantities: { "currency-1": 55 },
     });
   });
+
+  it("merges map fields per key when concurrent saves change different items", () => {
+    const base = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "item-a": 1, "item-b": 2 },
+    };
+    const submitted = { ...base, itemQuantities: { "item-a": 3, "item-b": 2 } };
+    const latest = { ...base, itemQuantities: { "item-a": 1, "item-b": 4 } };
+
+    const merged = mergeEventShopStateChanges(base, submitted, latest);
+
+    expect(merged.itemQuantities).toEqual({ "item-a": 3, "item-b": 4 });
+    expect(normalizeEventShopState(merged)).toEqual(merged);
+  });
+
+  it("lets the later save win when concurrent map edits change the same key", () => {
+    const base = { ...createDefaultEventShopState([], []), itemQuantities: { "item-a": 1 } };
+    const submitted = { ...base, itemQuantities: { "item-a": 5 } };
+    const latest = { ...base, itemQuantities: { "item-a": 3 } };
+
+    expect(mergeEventShopStateChanges(base, submitted, latest).itemQuantities).toEqual({ "item-a": 5 });
+  });
+
+  it("deletes a map key only when the latest save left it unchanged", () => {
+    const base = { ...createDefaultEventShopState([], []), itemQuantities: { "item-a": 1, "item-b": 2 } };
+    const submitted = { ...base, itemQuantities: { "item-b": 2 } };
+    const unchangedLatest = { ...base, itemQuantities: { "item-a": 1, "item-b": 3 } };
+    const changedLatest = { ...base, itemQuantities: { "item-a": 4, "item-b": 3 } };
+
+    expect(mergeEventShopStateChanges(base, submitted, unchangedLatest).itemQuantities).toEqual({ "item-b": 3 });
+    expect(mergeEventShopStateChanges(base, submitted, changedLatest).itemQuantities).toEqual({
+      "item-a": 4,
+      "item-b": 3,
+    });
+  });
+
+  it("merges selected bonus students per item key", () => {
+    const base = {
+      ...createDefaultEventShopState([], []),
+      selectedBonusStudentUidsByItem: {
+        "item-a": ["student-base"],
+        "item-b": ["student-base"],
+      },
+    };
+    const submitted = {
+      ...base,
+      selectedBonusStudentUidsByItem: {
+        "item-a": ["student-a"],
+        "item-b": ["student-base"],
+      },
+    };
+    const latest = {
+      ...base,
+      selectedBonusStudentUidsByItem: {
+        "item-a": ["student-base"],
+        "item-b": ["student-b"],
+      },
+    };
+
+    expect(mergeEventShopStateChanges(base, submitted, latest).selectedBonusStudentUidsByItem).toEqual({
+      "item-a": ["student-a"],
+      "item-b": ["student-b"],
+    });
+  });
 });

@@ -1,5 +1,7 @@
 import {
   type PostgresEventShopStateOptions,
+  type PostgresEventShopStatePatchOptions,
+  type PostgresEventShopStateUpsertOptions,
   patchPostgresEventShopStateOwnedQuantities,
   upsertPostgresEventShopState,
 } from "~/db/postgres/event-shop-state";
@@ -26,8 +28,9 @@ export async function upsertEventShopState(
   userId: number,
   eventUid: string,
   state: EventShopState,
+  options: PostgresEventShopStateUpsertOptions = {},
 ): Promise<void> {
-  await upsertPostgresEventShopState(env, userId, eventUid, state);
+  await upsertPostgresEventShopState(env, userId, eventUid, state, options);
 }
 
 export async function patchEventShopStateOwnedQuantities(
@@ -36,7 +39,7 @@ export async function patchEventShopStateOwnedQuantities(
   eventUid: string,
   patch: EventShopOwnedQuantityPatch,
   defaultState: EventShopState,
-  options: PostgresEventShopStateOptions = {},
+  options: PostgresEventShopStatePatchOptions = {},
 ): Promise<void> {
   await patchPostgresEventShopStateOwnedQuantities(env, userId, eventUid, patch, defaultState, options);
 }

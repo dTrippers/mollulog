@@ -51,22 +51,22 @@ beforeEach(() => {
 });
 
 describe("event shop full-plan save", () => {
-  it("merges detailed-screen edits with fields changed in the account since load", async () => {
+  it("passes base and submitted plans to the locked storage update", async () => {
     const base = {
       ...createDefaultEventShopState([], []),
       existingPaymentItemQuantities: { "currency-1": 10 },
     };
     const submitted = { ...base, itemQuantities: { "item-1": 3 } };
-    const latest = { ...base, existingPaymentItemQuantities: { "currency-1": 42 } };
-    mockGetEventShopState.mockResolvedValue(latest);
 
     const result = await action(actionArgs("timeline-1", { save: submitted, base }));
 
     expect(result).toEqual({ success: true });
-    expect(mockGetEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1");
-    expect(mockUpsertEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1", {
-      ...submitted,
-      existingPaymentItemQuantities: { "currency-1": 42 },
+    expect(mockGetEventShopState).not.toHaveBeenCalled();
+    expect(mockUpsertEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1", submitted, {
+      baseState: base,
+      fallbackEventUid: "timeline-1",
+      replace: false,
+      ctx,
     });
   });
 
@@ -76,7 +76,12 @@ describe("event shop full-plan save", () => {
 
     expect(result).toEqual({ success: true });
     expect(mockGetEventShopState).not.toHaveBeenCalled();
-    expect(mockUpsertEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1", guestPlan);
+    expect(mockUpsertEventShopState).toHaveBeenCalledWith(env, 7, "canonical-shop-1", guestPlan, {
+      baseState: null,
+      fallbackEventUid: "timeline-1",
+      replace: true,
+      ctx,
+    });
   });
 
   it("returns the approved revision conflict message for a stale account write", async () => {

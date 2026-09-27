@@ -7,7 +7,7 @@ import {
 } from "~/db/postgres/event-shop-state";
 import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
 import { createDefaultEventShopState, type EventShopState } from "~/domain/event-shop-state";
-import { projectPlannerStateDocument } from "~/domain/planner-state";
+import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import { getEventShopStates } from "~/models/event-shop-state";
 import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
@@ -77,6 +77,12 @@ async function expectPlannerStateToMatchLegacyProjection(client: FakePostgresCli
   const document = typeof row.document === "string" ? JSON.parse(row.document) : row.document;
   const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
   expect(document).toEqual(projected);
+}
+
+function getStoredPlannerDocument(client: FakePostgresClient): PlannerStateDocumentV1 {
+  const row = client.tables.planner_states?.[0];
+  if (!row) throw new Error("Expected a planner state row");
+  return (typeof row.document === "string" ? JSON.parse(row.document) : row.document) as PlannerStateDocumentV1;
 }
 
 describe("PostgreSQL event shop state", () => {
@@ -163,6 +169,195 @@ describe("PostgreSQL event shop state", () => {
       "currency-2": 240,
     });
     expect(client.tables.event_shop_states?.[0]?.itemQuantities).toEqual(existingState.itemQuantities);
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("merges stale submissions against the latest locked document and preserves unrelated fields", async () => {
+    const fallbackEventUid = "timeline-event-1";
+    const canonicalEventUid = "shop-content-1";
+    const baseState: EventShopState = {
+      ...createDefaultEventShopState([], ["student-existing"]),
+      itemQuantities: { "daily-ticket": 1 },
+      itemPurchaseDays: { "daily-ticket": 2 },
+      existingPaymentItemQuantities: { "currency-1": 10 },
+      minigamePlayCount: 3,
+    };
+    const client = createProjectionClient([
+      { uid: "fallback-state", userId: 7, eventUid: fallbackEventUid, ...baseState },
+    ]);
+    const requestedPurchase = { ...baseState, itemQuantities: { "daily-ticket": 3 } };
+    const requestedCurrency = {
+      ...baseState,
+      existingPaymentItemQuantities: { "currency-1": 42 },
+    };
+    const saveOptions = {
+      baseState,
+      fallbackEventUid,
+      createClient: () => client as unknown as Client,
+    };
+
+    await upsertPostgresEventShopState(env, 7, canonicalEventUid, requestedPurchase, saveOptions);
+    await upsertPostgresEventShopState(env, 7, canonicalEventUid, requestedCurrency, saveOptions);
+
+    const document = getStoredPlannerDocument(client);
+    expect(document.eventShops[canonicalEventUid]).toMatchObject({
+      itemQuantities: { "daily-ticket": 3 },
+      itemPurchaseDays: { "daily-ticket": 2 },
+      existingPaymentItemQuantities: { "currency-1": 42 },
+      minigamePlayCount: 3,
+    });
+    expect(document.eventShops[fallbackEventUid]).toEqual(baseState);
+    expect(client.tables.event_shop_states).toHaveLength(2);
+    expect(client.tables.event_shop_states?.find((row) => row.eventUid === fallbackEventUid)).toMatchObject(baseState);
+    const canonicalRow = client.tables.event_shop_states?.find((row) => row.eventUid === canonicalEventUid);
+    expect(canonicalRow?.eventUid).toBe(canonicalEventUid);
+    expect(JSON.parse(canonicalRow?.itemQuantities as string)).toEqual({ "daily-ticket": 3 });
+    expect(JSON.parse(canonicalRow?.existingPaymentItemQuantities as string)).toEqual({ "currency-1": 42 });
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("preserves different item quantity keys from stale submissions in the locked save path", async () => {
+    const canonicalEventUid = "shop-content-1";
+    const baseState: EventShopState = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "item-a": 1, "item-b": 2 },
+    };
+    const client = createProjectionClient([
+      { uid: "canonical-state", userId: 7, eventUid: canonicalEventUid, ...baseState },
+    ]);
+    const saveOptions = { baseState, createClient: () => client as unknown as Client };
+
+    await upsertPostgresEventShopState(
+      env,
+      7,
+      canonicalEventUid,
+      { ...baseState, itemQuantities: { "item-a": 3, "item-b": 2 } },
+      saveOptions,
+    );
+    await upsertPostgresEventShopState(
+      env,
+      7,
+      canonicalEventUid,
+      { ...baseState, itemQuantities: { "item-a": 1, "item-b": 4 } },
+      saveOptions,
+    );
+
+    expect(getStoredPlannerDocument(client).eventShops[canonicalEventUid]?.itemQuantities).toEqual({
+      "item-a": 3,
+      "item-b": 4,
+    });
+    expect(JSON.parse(client.tables.event_shop_states?.[0]?.itemQuantities as string)).toEqual({
+      "item-a": 3,
+      "item-b": 4,
+    });
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("lets the later stale submission win when both requests change the same field", async () => {
+    const canonicalEventUid = "shop-content-1";
+    const baseState: EventShopState = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "daily-ticket": 1 },
+    };
+    const client = createProjectionClient([
+      { uid: "canonical-state", userId: 7, eventUid: canonicalEventUid, ...baseState },
+    ]);
+    const saveOptions = { baseState, createClient: () => client as unknown as Client };
+
+    await upsertPostgresEventShopState(
+      env,
+      7,
+      canonicalEventUid,
+      { ...baseState, itemQuantities: { "daily-ticket": 3 } },
+      saveOptions,
+    );
+    await upsertPostgresEventShopState(
+      env,
+      7,
+      canonicalEventUid,
+      { ...baseState, itemQuantities: { "daily-ticket": 5 } },
+      saveOptions,
+    );
+
+    expect(getStoredPlannerDocument(client).eventShops[canonicalEventUid]?.itemQuantities).toEqual({
+      "daily-ticket": 5,
+    });
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("keeps fallback-only purchase settings when patching owned quantities", async () => {
+    const fallbackEventUid = "timeline-event-1";
+    const canonicalEventUid = "shop-content-1";
+    const fallbackState: EventShopState = {
+      ...createDefaultEventShopState([], ["student-fallback"]),
+      itemQuantities: { "daily-ticket": 60 },
+      itemPurchaseDays: { "daily-ticket": 4 },
+      enabledStages: { "stage-fallback": false },
+      minigamePlayCount: 7,
+      existingPaymentItemQuantities: { "currency-1": 10 },
+    };
+    const defaultState: EventShopState = {
+      ...createDefaultEventShopState([], ["student-default"]),
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      enabledStages: {},
+    };
+    const client = createProjectionClient([
+      { uid: "fallback-state", userId: 7, eventUid: fallbackEventUid, ...fallbackState },
+    ]);
+
+    await patchPostgresEventShopStateOwnedQuantities(env, 7, canonicalEventUid, { "currency-1": 42 }, defaultState, {
+      fallbackEventUid,
+      createClient: () => client as unknown as Client,
+    });
+
+    const document = getStoredPlannerDocument(client);
+    expect(document.eventShops[canonicalEventUid]).toMatchObject({
+      itemQuantities: { "daily-ticket": 60 },
+      itemPurchaseDays: { "daily-ticket": 4 },
+      selectedBonusStudentUids: ["student-fallback"],
+      enabledStages: { "stage-fallback": false },
+      minigamePlayCount: 7,
+      existingPaymentItemQuantities: { "currency-1": 42 },
+    });
+    expect(document.eventShops[fallbackEventUid]).toEqual(fallbackState);
+    expect(client.tables.event_shop_states).toHaveLength(2);
+    const canonicalRow = client.tables.event_shop_states?.find((row) => row.eventUid === canonicalEventUid);
+    expect(JSON.parse(canonicalRow?.itemQuantities as string)).toEqual({ "daily-ticket": 60 });
+    expect(JSON.parse(canonicalRow?.itemPurchaseDays as string)).toEqual({ "daily-ticket": 4 });
+    expect(JSON.parse(canonicalRow?.existingPaymentItemQuantities as string)).toEqual({ "currency-1": 42 });
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("replaces the canonical plan as submitted without merging current or fallback fields", async () => {
+    const fallbackEventUid = "timeline-event-1";
+    const canonicalEventUid = "shop-content-1";
+    const fallbackState: EventShopState = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "daily-ticket": 60 },
+    };
+    const currentCanonical: EventShopState = {
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "daily-ticket": 25 },
+    };
+    const submitted: EventShopState = {
+      ...createDefaultEventShopState([], ["student-imported"]),
+      itemQuantities: { "daily-ticket": 9 },
+    };
+    const client = createProjectionClient([
+      { uid: "fallback-state", userId: 7, eventUid: fallbackEventUid, ...fallbackState },
+      { uid: "canonical-state", userId: 7, eventUid: canonicalEventUid, ...currentCanonical },
+    ]);
+
+    await upsertPostgresEventShopState(env, 7, canonicalEventUid, submitted, {
+      baseState: null,
+      fallbackEventUid,
+      replace: true,
+      createClient: () => client as unknown as Client,
+    });
+
+    expect(getStoredPlannerDocument(client).eventShops[canonicalEventUid]).toEqual(submitted);
+    expect(getStoredPlannerDocument(client).eventShops[fallbackEventUid]).toEqual(fallbackState);
     await expectPlannerStateToMatchLegacyProjection(client);
   });
 

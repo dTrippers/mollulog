@@ -1,13 +1,9 @@
 import { type ActionFunctionArgs, data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import {
-  mergeEventShopStateChanges,
-  normalizeEventShopOwnedQuantityPatch,
-  normalizeEventShopState,
-} from "~/domain/event-shop-state";
+import { normalizeEventShopOwnedQuantityPatch, normalizeEventShopState } from "~/domain/event-shop-state";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import { getEventMetadata } from "~/models/event-content";
-import { getEventShopState, upsertEventShopState } from "~/models/event-shop-state";
+import { upsertEventShopState } from "~/models/event-shop-state";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import { updateEventShopOwnedQuantities } from "~/views/event-shop-state";
 
@@ -112,12 +108,12 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
         timelineUid: submittedEventUid,
         shopContentUid: metadata.shopContentUid,
       });
-      const latestState = replace
-        ? null
-        : ((await getEventShopState(env, currentUser.id, identity.shopStateUid)) ??
-          (identity.fallbackStateUid ? await getEventShopState(env, currentUser.id, identity.fallbackStateUid) : null));
-      const stateToSave = baseState && latestState ? mergeEventShopStateChanges(baseState, state, latestState) : state;
-      await upsertEventShopState(env, currentUser.id, identity.shopStateUid, stateToSave);
+      await upsertEventShopState(env, currentUser.id, identity.shopStateUid, state, {
+        baseState,
+        fallbackEventUid: identity.fallbackStateUid,
+        replace,
+        ctx,
+      });
       return { success: true, ...(requestId ? { requestId } : {}) };
     } catch (error) {
       const revisionConflict = isPlannerStateRevisionConflictError(error);

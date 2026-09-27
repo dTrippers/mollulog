@@ -51,20 +51,20 @@ export async function updateEventShopOwnedQuantities(
     return { status: "currency-unavailable" };
   }
 
-  const shopStateUid = buildEventShopStateIdentity({
+  const identity = buildEventShopStateIdentity({
     timelineUid,
     shopContentUid: metadata.shopContentUid,
-  }).shopStateUid;
+  });
   await patchEventShopStateOwnedQuantities(
     env,
     userId,
-    shopStateUid,
+    identity.shopStateUid,
     patch,
     createDefaultEventShopState(
       shopContent.stages,
       recruitedStudents.map(({ studentUid }) => studentUid),
     ),
-    { ctx },
+    { fallbackEventUid: identity.fallbackStateUid, ctx },
   );
   return { status: "saved" };
 }
