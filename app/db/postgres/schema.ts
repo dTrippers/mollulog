@@ -15,6 +15,7 @@ import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResul
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
+import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
@@ -44,6 +45,19 @@ import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+
+export const pgPlannerStatesTable = pgTable(
+  "planner_states",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    revision: integer().notNull(),
+    document: jsonb().$type<PlannerStateDocumentV1>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("planner_states_user_id_uidx").on(table.userId)],
+);
 
 /** Canonical PostgreSQL tables for the authenticated identity domain. */
 export const pgSenseisTable = pgTable(
@@ -1358,9 +1372,7 @@ export const pgKnowledgeEntryRevisionsTable = pgTable(
   },
   (table) => [
     index("knowledge_entry_revisions_entry_id_id_idx").on(table.entryId, table.id),
-    index("knowledge_entry_revisions_draft_entry_idx")
-      .on(table.entryId)
-      .where(sql`${table.status} = 'draft'`),
+    index("knowledge_entry_revisions_draft_entry_idx").on(table.entryId).where(sql`${table.status} = 'draft'`),
     index("knowledge_entry_revisions_entry_status_updated_idx").on(table.entryId, table.status, table.updatedAt.desc()),
   ],
 );

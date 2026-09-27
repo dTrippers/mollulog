@@ -1,4 +1,5 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
 import {
   decodePostgresPyroxeneReceiptItemKey,
@@ -8,6 +9,8 @@ import {
   markPostgresGuestImportReceipt,
   runPostgresGuestPyroxeneImport,
 } from "~/db/postgres/guest-pyroxene-import";
+import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
+import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
 
@@ -125,6 +128,12 @@ describe("PostgreSQL guest Pyroxene import", () => {
     expect(client.end).toHaveBeenCalledTimes(1);
     expect(receiptReads).toHaveLength(1);
     expect(receiptWrites).toHaveLength(1);
+    expect(
+      query.mock.calls.filter(([config]) => {
+        const text = typeof config === "string" ? config : config.text;
+        return text.includes('insert into "planner_states"');
+      }),
+    ).toHaveLength(3);
     expect(result.failed).toEqual([]);
     expect(result.verified).toEqual([
       { type: "resources", key: "current" },
@@ -143,6 +152,31 @@ describe("PostgreSQL guest Pyroxene import", () => {
     expect(events.indexOf("favorite")).toBeLessThan(
       events.findIndex((event) => event.includes('insert into "pyroxene_guest_import_items"')),
     );
+  });
+
+  it("dual-writes imported guest data equal to the legacy-table projection", async () => {
+    const client = new FakePostgresClient({
+      pyroxene_owned_resources: [],
+      pyroxene_collected_sources: [],
+      pyroxene_timeline_items: [],
+      pyroxene_planner_options: [],
+      pyroxene_event_data: [],
+      event_shop_states: [],
+      pyroxene_guest_import_items: [],
+    });
+    const events: string[] = [];
+
+    const result = await runPostgresGuestPyroxeneImport(env, 7, "dataset-1", plan(events), {
+      createClient: () => client as unknown as Client,
+    });
+
+    expect(result.failed).toEqual([]);
+    const row = client.tables.planner_states?.[0];
+    expect(row).toBeDefined();
+    if (!row) throw new Error("Expected a dual-written planner state row");
+    const document = typeof row.document === "string" ? JSON.parse(row.document) : row.document;
+    const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(document).toEqual(projected);
   });
 
   it("does not verify newly operated items when the bulk receipt insert fails", async () => {

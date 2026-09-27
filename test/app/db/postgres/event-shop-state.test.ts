@@ -1,11 +1,14 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
 import {
   getPostgresEventShopStates,
   patchPostgresEventShopStateOwnedQuantities,
   upsertPostgresEventShopState,
 } from "~/db/postgres/event-shop-state";
+import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
 import { createDefaultEventShopState, type EventShopState } from "~/domain/event-shop-state";
+import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
 
@@ -33,6 +36,27 @@ function findStatementValues(query: ReturnType<typeof createClient>["query"], ta
     return text.includes(`insert into "${table}"`);
   });
   return (call?.[1] ?? []) as unknown[];
+}
+
+function createProjectionClient(eventShopStates: Record<string, unknown>[] = []) {
+  return new FakePostgresClient({
+    pyroxene_owned_resources: [],
+    pyroxene_collected_sources: [],
+    pyroxene_timeline_items: [],
+    pyroxene_planner_options: [],
+    pyroxene_event_data: [],
+    event_shop_states: eventShopStates,
+    event_shop_state_history: [],
+  });
+}
+
+async function expectPlannerStateToMatchLegacyProjection(client: FakePostgresClient) {
+  const row = client.tables.planner_states?.[0];
+  expect(row).toBeDefined();
+  if (!row) throw new Error("Expected a dual-written planner state row");
+  const document = typeof row.document === "string" ? JSON.parse(row.document) : row.document;
+  const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+  expect(document).toEqual(projected);
 }
 
 describe("PostgreSQL event shop state", () => {
@@ -80,6 +104,51 @@ describe("PostgreSQL event shop state", () => {
     expect(updateClause).not.toContain('"item_quantities" =');
     expect(updateClause).not.toContain('"enabled_stages" =');
     expect(statement?.values).toContain(JSON.stringify(patch));
+    expect(calls.some(({ text }) => text.includes('insert into "planner_states"'))).toBe(true);
+    expect(calls.map(({ text }) => text.toLowerCase())).toEqual(expect.arrayContaining(["begin", "commit"]));
+  });
+
+  it("dual-writes an event shop upsert equal to the legacy-table projection", async () => {
+    const client = createProjectionClient();
+    const state: EventShopState = {
+      ...createDefaultEventShopState([], ["student-1"]),
+      itemQuantities: { "daily-ticket": 60 },
+      itemPurchaseDays: { "daily-ticket": 1 },
+      minigamePlayCount: 3,
+    };
+
+    await upsertPostgresEventShopState(env, 7, "event-1", state, {
+      createClient: () => client as unknown as Client,
+    });
+
+    await expectPlannerStateToMatchLegacyProjection(client);
+  });
+
+  it("dual-writes an owned-quantity patch after merging JSONB into an existing shop row", async () => {
+    const existingState: EventShopState = {
+      ...createDefaultEventShopState([], ["student-existing"]),
+      itemQuantities: { "daily-ticket": 60 },
+      existingPaymentItemQuantities: { "currency-1": 10, "currency-kept": 5 },
+    };
+    const client = createProjectionClient([{ uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...existingState }]);
+    const patch = { "currency-1": 0, "currency-2": 240 };
+
+    await patchPostgresEventShopStateOwnedQuantities(
+      env,
+      7,
+      "shop-1",
+      patch,
+      createDefaultEventShopState([], ["student-new"]),
+      { createClient: () => client as unknown as Client },
+    );
+
+    expect(client.tables.event_shop_states?.[0]?.existingPaymentItemQuantities).toEqual({
+      "currency-1": 0,
+      "currency-kept": 5,
+      "currency-2": 240,
+    });
+    expect(client.tables.event_shop_states?.[0]?.itemQuantities).toEqual(existingState.itemQuantities);
+    await expectPlannerStateToMatchLegacyProjection(client);
   });
 
   it("writes the state upsert and the history snapshot inside one transaction", async () => {
@@ -99,10 +168,12 @@ describe("PostgreSQL event shop state", () => {
 
     const upsertIndex = events.findIndex((event) => event.includes('insert into "event_shop_states"'));
     const historyIndex = events.findIndex((event) => event.includes('insert into "event_shop_state_history"'));
+    const documentIndex = events.findIndex((event) => event.includes('insert into "planner_states"'));
     const commitIndex = lowered.indexOf("commit");
     expect(upsertIndex).toBeGreaterThanOrEqual(0);
     expect(historyIndex).toBeGreaterThan(upsertIndex);
-    expect(commitIndex).toBeGreaterThan(historyIndex);
+    expect(documentIndex).toBeGreaterThan(historyIndex);
+    expect(commitIndex).toBeGreaterThan(documentIndex);
 
     const historyValues = findStatementValues(query, "event_shop_state_history");
     expect(historyValues).toContain("autosave");

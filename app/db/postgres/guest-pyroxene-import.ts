@@ -1,4 +1,5 @@
 import { and, eq, like, or } from "drizzle-orm";
+import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
 import {
   createAttendanceInDatabase,
   createBuyPyroxeneInDatabase,
@@ -275,7 +276,7 @@ export async function importGuestResourcesPostgres(
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
 ): Promise<void> {
   return withPyroxeneDatabase(env, "guest_import.resources", (db) =>
-    importGuestResourcesInDatabase(db, userId, datasetId, resources),
+    withPlannerStateDualWrite(db, userId, (tx) => importGuestResourcesInDatabase(tx, userId, datasetId, resources)),
   );
 }
 
@@ -286,7 +287,7 @@ export async function importGuestRecordPostgres(
   record: GuestPyroxeneRecord,
 ): Promise<void> {
   return withPyroxeneDatabase(env, "guest_import.record", (db) =>
-    importGuestRecordInDatabase(db, userId, datasetId, record),
+    withPlannerStateDualWrite(db, userId, (tx) => importGuestRecordInDatabase(tx, userId, datasetId, record)),
   );
 }
 
@@ -306,13 +307,18 @@ export async function runPostgresGuestPyroxeneImport(
       const failed: GuestImportItem[] = [];
       const pendingReceipts: GuestImportItem[] = [];
 
-      const runItem = async (item: GuestImportItem, operation: () => Promise<void>) => {
+      const runItem = async (
+        item: GuestImportItem,
+        operation: (transaction: PyroxeneDatabase) => Promise<void>,
+        dualWrite = true,
+      ) => {
         if (existingReceipts.has(receiptKey(item.type, item.key))) {
           verified.push(item);
           return;
         }
         try {
-          await operation();
+          if (dualWrite) await withPlannerStateDualWrite(db, userId, operation);
+          else await operation(db);
           pendingReceipts.push(item);
         } catch {
           failed.push(item);
@@ -320,30 +326,32 @@ export async function runPostgresGuestPyroxeneImport(
       };
 
       if (plan.resources) {
-        await runItem({ type: "resources", key: "current" }, () =>
-          importGuestResourcesInDatabase(db, userId, datasetId, plan.resources as NonNullable<typeof plan.resources>),
+        await runItem({ type: "resources", key: "current" }, (tx) =>
+          importGuestResourcesInDatabase(tx, userId, datasetId, plan.resources as NonNullable<typeof plan.resources>),
         );
       }
       if (plan.options) {
-        await runItem({ type: "options", key: "current" }, () =>
-          upsertPyroxenePlannerOptionsInDatabase(db, userId, plan.options as PyroxenePlannerOptions),
+        await runItem({ type: "options", key: "current" }, (tx) =>
+          upsertPyroxenePlannerOptionsInDatabase(tx, userId, plan.options as PyroxenePlannerOptions),
         );
       }
       for (const record of plan.records) {
-        await runItem({ type: "record", key: record.recordId }, () =>
-          importGuestRecordInDatabase(db, userId, datasetId, record),
+        await runItem({ type: "record", key: record.recordId }, (tx) =>
+          importGuestRecordInDatabase(tx, userId, datasetId, record),
         );
       }
       for (const sourceKey of plan.sourceKeys) {
-        await runItem({ type: "source", key: sourceKey }, () => ensureCollectedSourceInDatabase(db, userId, sourceKey));
+        await runItem({ type: "source", key: sourceKey }, (tx) =>
+          ensureCollectedSourceInDatabase(tx, userId, sourceKey),
+        );
       }
       for (const { eventUid, expectedTrials } of plan.eventTrials) {
-        await runItem({ type: "event", key: eventUid }, () =>
-          upsertPyroxeneEventDataInDatabase(db, userId, eventUid, { expectedTrials }),
+        await runItem({ type: "event", key: eventUid }, (tx) =>
+          upsertPyroxeneEventDataInDatabase(tx, userId, eventUid, { expectedTrials }),
         );
       }
       for (const favorite of plan.favorites) {
-        await runItem({ type: "favorite", key: favorite.itemKey }, favorite.run);
+        await runItem({ type: "favorite", key: favorite.itemKey }, favorite.run, false);
       }
 
       if (pendingReceipts.length > 0) {
