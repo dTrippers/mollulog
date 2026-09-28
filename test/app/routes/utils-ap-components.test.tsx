@@ -314,7 +314,12 @@ describe("AP planner event card", () => {
       currentAt: "2026-09-27T00:00:00.000Z",
       options: defaultPyroxenePlannerOptions,
       previousPlannedEvents: [
-        { name: "앞 이벤트", startAt: "2026-09-20T02:00:00.000Z", endAt: "2026-10-01T03:00:00.000Z" },
+        {
+          timelineUid: "previous",
+          name: "앞 이벤트",
+          startAt: "2026-09-20T02:00:00.000Z",
+          endAt: "2026-10-01T03:00:00.000Z",
+        },
       ],
     });
     const sparseCalculation = {
@@ -341,7 +346,7 @@ describe("AP planner event card", () => {
     expect(markup).toContain("10/5 (월) · 시작");
   });
 
-  it("shows the unverified 999 caution when a stockpile refill would reach the threshold", () => {
+  it("keeps stockpile refill suggestions under the 999 hold limit instead of warning about them", () => {
     const calculation = calculateApPlannerEvent({
       event: { ...event, requiredAp: 100_000 },
       conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
@@ -350,8 +355,7 @@ describe("AP planner event card", () => {
       options: defaultPyroxenePlannerOptions,
     });
     const suggestion = calculation.refillSuggestions.find(({ kind }) => kind === "stockpile-day");
-    expect(suggestion).toBeDefined();
-    expect((calculation.supplyBreakdown?.stockpile ?? 0) + (suggestion?.additionalAp ?? 0)).toBeGreaterThanOrEqual(999);
+    expect(suggestion).toMatchObject({ toCount: 6 });
 
     const markup = renderCard({
       calculation,
@@ -360,8 +364,85 @@ describe("AP planner event card", () => {
       shopTargetExists: true,
     });
 
-    expect(markup).toContain('aria-label="AP 999 이상 보유 시 충전 주의"');
-    expect(markup).toContain("보유 AP가 999 이상이면 충전하지 못할 수 있어요(미확인 정보)");
+    expect(markup).not.toContain("AP 999 이상 보유 시 충전 주의");
+    expect(markup).toContain("AP 모으는 날(9/30) AP 충전 6회");
+  });
+
+  it("flags a stockpile start time that has already passed", () => {
+    const calculation = calculateApPlannerEvent({
+      event,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: { accessAt: "2026-09-30T03:00:00.000Z" },
+      currentAt: "2026-09-30T01:30:00.000Z",
+      options: defaultPyroxenePlannerOptions,
+    });
+
+    const markup = renderCard({
+      calculation,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: { accessAt: "2026-09-30T03:00:00.000Z" },
+      shopTargetExists: true,
+    });
+
+    expect(markup).toContain("모으기 시작 시각(9/29(화) 12:00)이 지났어요.");
+  });
+
+  it("explains that nothing is stockpiled while an earlier event lasts past the access time", () => {
+    const calculation = calculateApPlannerEvent({
+      event,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: { accessAt: "2026-09-30T03:00:00.000Z" },
+      currentAt: "2026-09-27T00:00:00.000Z",
+      options: defaultPyroxenePlannerOptions,
+      previousPlannedEvents: [
+        {
+          timelineUid: "previous",
+          name: "앞 이벤트",
+          startAt: "2026-09-20T02:00:00.000Z",
+          endAt: "2026-10-01T02:00:00.000Z",
+        },
+      ],
+    });
+
+    const markup = renderCard({
+      calculation,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: { accessAt: "2026-09-30T03:00:00.000Z" },
+      shopTargetExists: true,
+    });
+
+    expect(markup).toContain("앞 이벤트가 접속 시간 뒤에 끝나서 미리 모을 AP가 없어요");
+    expect(markup).toContain("앞 이벤트(앞 이벤트)가 끝난 뒤부터 AP를 계산해요.");
+    expect(markup).not.toContain("순서 보기");
+  });
+
+  it("explains the ongoing supply window, including today's tasks and an earlier event's overlap", () => {
+    const calculation = calculateApPlannerEvent({
+      event,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: null,
+      currentAt: "2026-10-01T03:00:00.000Z",
+      options: defaultPyroxenePlannerOptions,
+      previousPlannedEvents: [
+        {
+          timelineUid: "previous",
+          name: "앞 이벤트",
+          startAt: "2026-09-20T02:00:00.000Z",
+          endAt: "2026-10-02T02:00:00.000Z",
+        },
+      ],
+    });
+    expect(calculation.status).toBe("ongoing");
+
+    const markup = renderCard({
+      calculation,
+      conditions: { accountLevel: 85, cafeRank: 8, comfort: 4_500 },
+      plan: null,
+      shopTargetExists: true,
+    });
+
+    expect(markup).toContain("오늘 과제는 이미 받았다고 보고 계산해요.");
+    expect(markup).toContain("앞 이벤트(앞 이벤트)가 끝난 뒤부터 AP를 계산해요.");
   });
 
   it("shows a loading placeholder in the play-conditions panel while the guest snapshot loads", () => {

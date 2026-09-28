@@ -15,6 +15,7 @@ import {
 import {
   apChargeExceptionRangesOverlap,
   defaultPyroxenePlannerOptions,
+  getPyroxeneApChargeCountForDate,
   normalizePyroxeneApChargeExceptions,
 } from "../../../app/domain/pyroxene-planner";
 
@@ -76,7 +77,9 @@ describe("AP planner domain", () => {
       plan: { accessAt: eventB.startAt },
       currentAt: "2026-09-27T00:00:00.000Z",
       options: defaultPyroxenePlannerOptions,
-      previousPlannedEvents: [{ name: "이벤트 A", startAt: eventA.startAt, endAt: eventA.endAt as string }],
+      previousPlannedEvents: [
+        { timelineUid: eventA.timelineUid, name: "이벤트 A", startAt: eventA.startAt, endAt: eventA.endAt as string },
+      ],
     });
     expect(overlap.overlapEventName).toBe("이벤트 A");
     expect(overlap.resultAp).toBeGreaterThan(0);
@@ -157,12 +160,12 @@ describe("AP planner domain", () => {
       stockpile: 1_120,
       natural: 470,
       cafe: 1_178,
-      dailyTasks: 300,
-      dailyTaskDays: 2,
+      dailyTasks: 450,
+      dailyTaskDays: 3,
       apCharges: 720,
       apChargeDays: 2,
     });
-    expect(calculation.availableAp).toBe(3_788);
+    expect(calculation.availableAp).toBe(3_938);
     expect(calculation.stockpileSteps.at(-1)?.ap).toBe(calculation.supplyBreakdown?.stockpile);
   });
 
@@ -203,7 +206,7 @@ describe("AP planner domain", () => {
     });
 
     expect(calculation.supplyBreakdown).toMatchObject({ stockpile: 1_120, apCharges: 720, apChargeDays: 2 });
-    expect(calculation.availableAp).toBe(3_788);
+    expect(calculation.availableAp).toBe(3_938);
     expect(calculation.refillSuggestions[0]).toMatchObject({
       kind: "event-period",
       startDate: "2026-11-19",
@@ -397,5 +400,150 @@ describe("AP planner domain", () => {
     expect(addApChargeException([first], overlap)).toEqual({ exceptions: [first], overlap: true });
     expect(() => normalizePyroxeneApChargeExceptions([first, overlap])).toThrow("겹쳐요");
     expect(normalizePyroxeneApChargeExceptions([first])).toEqual([first]);
+  });
+
+  describe("external review boundaries", () => {
+    const nextEvent: ApPlannerEvent = {
+      ...eventA,
+      timelineUid: "next",
+      name: "다음 이벤트",
+      startAt: "2026-09-30T11:00:00+09:00",
+      endAt: "2026-10-01T11:00:00+09:00",
+      requiredAp: 1_500,
+    };
+    const base = {
+      event: nextEvent,
+      conditions,
+      plan: { accessAt: "2026-09-30T12:00:00+09:00" },
+      currentAt: "2026-09-28T12:00:00+09:00",
+      options: defaultPyroxenePlannerOptions,
+    };
+
+    it("gives the whole overlap to an earlier event that ends after the next access time", () => {
+      const previous = {
+        timelineUid: "previous",
+        name: "앞 이벤트",
+        startAt: "2026-09-25T11:00:00+09:00",
+        endAt: "2026-10-01T10:00:00+09:00",
+      };
+      const calculation = calculateApPlannerEvent({ ...base, previousPlannedEvents: [previous] });
+      expect(calculation.overlapEventName).toBe("앞 이벤트");
+      expect(calculation.stockpileStartsAt).toBeNull();
+      expect(calculation.stockpileSteps).toEqual([]);
+      // Only 10:00~11:00 on 10/1 remains; that game day's tasks and refills belong to the earlier event.
+      expect(calculation.supplyBreakdown).toMatchObject({
+        stockpile: 0,
+        natural: 10,
+        dailyTasks: 0,
+        apCharges: 0,
+      });
+      expect(calculation.refillSuggestions.every((suggestion) => suggestion.kind === "event-period")).toBe(true);
+    });
+
+    it("orders events with the same start so only one of them owns the overlap", () => {
+      const sibling = {
+        timelineUid: "a-sibling",
+        name: "동시 시작",
+        startAt: nextEvent.startAt,
+        endAt: nextEvent.endAt as string,
+      };
+      const withSibling = calculateApPlannerEvent({ ...base, previousPlannedEvents: [sibling] });
+      expect(withSibling.overlapEventName).toBe("동시 시작");
+      const siblingCalculation = calculateApPlannerEvent({
+        ...base,
+        event: { ...nextEvent, timelineUid: "a-sibling" },
+        previousPlannedEvents: [{ ...sibling, timelineUid: "next" }],
+      });
+      expect(siblingCalculation.overlapEventName).toBeNull();
+    });
+
+    it("keeps the planned stockpile but flags a start time that has already passed", () => {
+      const late = calculateApPlannerEvent({ ...base, currentAt: "2026-09-30T10:30:00+09:00" });
+      expect(late.stockpileStartsAt).toBe("2026-09-29T03:00:00.000Z");
+      expect(late.supplyBreakdown?.stockpile).toBe(830);
+      expect(late.stockpileStartPassed).toBe(true);
+      expect(calculateApPlannerEvent(base).stockpileStartPassed).toBe(false);
+    });
+
+    it("counts the daily tasks of the access game day for a future event", () => {
+      expect(calculateApPlannerEvent(base).supplyBreakdown).toMatchObject({ dailyTaskDays: 2, dailyTasks: 300 });
+    });
+
+    it("assumes today's daily tasks were already received for an ongoing event", () => {
+      const ongoing = calculateApPlannerEvent({ ...base, plan: null, currentAt: "2026-09-30T12:00:00+09:00" });
+      expect(ongoing.status).toBe("ongoing");
+      expect(ongoing.supplyBreakdown).toMatchObject({ dailyTaskDays: 1, dailyTasks: 150 });
+    });
+
+    it("never refills above 999 held AP while stockpiling and suggests only useful refills", () => {
+      const calculation = calculateApPlannerEvent({ ...base, event: { ...nextEvent, requiredAp: 3_200 } });
+      const suggestion = calculation.refillSuggestions.find((item) => item.kind === "stockpile-day");
+      expect(suggestion).toBeDefined();
+      const applied = calculateApPlannerEvent({
+        ...base,
+        event: { ...nextEvent, requiredAp: 3_200 },
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: {
+            ...defaultPyroxenePlannerOptions.consumption,
+            apChargeExceptions: [
+              {
+                uid: "applied",
+                startDate: suggestion?.startDate as string,
+                endDate: suggestion?.endDate as string,
+                count: suggestion?.toCount as number,
+              },
+            ],
+          },
+        },
+      });
+      const chargeSteps = applied.stockpileSteps.filter((step) => step.kind === "charge");
+      expect(chargeSteps.length).toBeGreaterThan(0);
+      expect(chargeSteps.every((step) => step.ap <= 999)).toBe(true);
+      // 160 AP from natural regen leaves room for floor((999 - 160) / 120) = 6 refills; holding more than the
+      // max AP then stops the 70 AP of natural regen until access, so the net gain is 720 - 70.
+      expect(suggestion).toMatchObject({ toCount: 6, additionalAp: 650 });
+    });
+
+    it("keeps searching refill counts when one refill is offset by the natural regen it stops", () => {
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        event: { ...nextEvent, startAt: "2026-09-29T11:00:00+09:00", requiredAp: 10_000 },
+        plan: { accessAt: "2026-09-30T03:00:00+09:00" },
+      });
+      // 04:00 on 9/29: 0 refills = 830, 1 = 830, 2 = 850 ... 8 refills hold 970 AP, still under the limit.
+      expect(calculation.refillSuggestions.find((item) => item.kind === "stockpile-day")).toMatchObject({
+        startDate: "2026-09-29",
+        toCount: 8,
+        additionalAp: 740,
+      });
+    });
+
+    it("caps an over-limit saved exception and says how many refills were possible", () => {
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: {
+            ...defaultPyroxenePlannerOptions.consumption,
+            apChargeExceptions: [{ uid: "manual", startDate: "2026-09-30", endDate: "2026-09-30", count: 13 }],
+          },
+        },
+      });
+      const chargeStep = calculation.stockpileSteps.find((step) => step.kind === "charge");
+      expect(chargeStep).toMatchObject({ ap: 880, receivedAp: 720 });
+      expect(chargeStep?.label).toContain("13회 중 6회만");
+    });
+
+    it("applies AP charge exceptions by the 04:00 game day", () => {
+      const consumption = {
+        apChargeCount: 3,
+        apChargeExceptions: [{ uid: "e", startDate: "2026-09-30", endDate: "2026-09-30", count: 6 }],
+      };
+      expect(getPyroxeneApChargeCountForDate("2026-09-30T02:00:00+09:00", consumption)).toBe(3);
+      expect(getPyroxeneApChargeCountForDate("2026-09-30T04:00:00+09:00", consumption)).toBe(6);
+      expect(getPyroxeneApChargeCountForDate("2026-10-01T02:00:00+09:00", consumption)).toBe(6);
+      expect(getPyroxeneApChargeCountForDate("2026-10-01T04:00:00+09:00", consumption)).toBe(3);
+    });
   });
 });

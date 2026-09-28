@@ -1,0 +1,138 @@
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+
+type CardProps = {
+  event: { timelineUid: string };
+  calculation: ApPlannerCalculation | null;
+  calculationError: string | null;
+  shopTargetExists: boolean;
+};
+
+const renderedCards: CardProps[] = [];
+
+jest.mock("react-router", () => {
+  const actual = jest.requireActual<typeof import("react-router")>("react-router");
+  return {
+    ...actual,
+    useLoaderData: jest.fn(),
+    useFetcher: () => ({ state: "idle", data: undefined, submit: jest.fn() }),
+  };
+});
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+jest.mock("~/components/features/futures", () => ({ useGuestPlanner: () => ({ snapshot: null }) }));
+jest.mock("~/components/features/layout/Page", () => ({
+  __esModule: true,
+  default: ({ children }: { children: unknown }) => children,
+}));
+jest.mock("~/routes/utils.ap._components/ApTimelineEvent", () => ({
+  __esModule: true,
+  default: (props: CardProps) => {
+    renderedCards.push(props);
+    return null;
+  },
+}));
+
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { MemoryRouter, useLoaderData } from "react-router";
+import type { Stage } from "~/domain/event-shop";
+import { createDefaultEventShopState } from "~/domain/event-shop-state";
+import { type ApPlannerCalculation, calculateApPlannerEvent } from "~/domain/ap-planner";
+import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import ApPlannerRoute from "~/routes/utils.ap";
+
+const mockUseLoaderData = useLoaderData as unknown as jest.Mock;
+
+const conditions = { accountLevel: 85, cafeRank: 8, comfort: 4_500 };
+const previous = {
+  uid: "previous",
+  name: "앞 이벤트",
+  contentType: "event",
+  startAt: "2026-09-25T11:00:00+09:00",
+  endAt: "2026-09-30T10:00:00+09:00",
+};
+const next = {
+  uid: "next",
+  name: "다음 이벤트",
+  contentType: "event",
+  startAt: "2026-09-30T11:00:00+09:00",
+  endAt: "2026-10-01T11:00:00+09:00",
+};
+const nextAccessAt = "2026-09-30T12:00:00+09:00";
+const now = "2026-09-30T10:30:00+09:00";
+const stages: Stage[] = [{ uid: "story", index: "1", entryAp: 12, difficulty: 0, rewards: [] }];
+
+function loaderData(overriddenRequiredQuantities: Record<string, number> = {}) {
+  const shopState = { ...createDefaultEventShopState(stages, []), includeFirstClear: true, overriddenRequiredQuantities };
+  return {
+    signedIn: true,
+    now,
+    accountStateStatus: "available",
+    timelineEventsStatus: "available",
+    shopEventsStatus: "available",
+    timelineEvents: [previous, next],
+    accountState: {
+      apPlanner: {
+        ...conditions,
+        eventPlans: { previous: { accessAt: previous.startAt }, next: { accessAt: nextAccessAt } },
+      },
+      options: defaultPyroxenePlannerOptions,
+    },
+    shopEvents: [previous, next].map((event) => ({
+      timelineUid: event.uid,
+      name: event.name,
+      shopStateUid: event.uid,
+      status: "available",
+      accountStateStatus: "available",
+      startAt: event.startAt,
+      endAt: event.endAt,
+      accountState: shopState,
+      content: { stages, shopResources: [], eventRewardBonus: [], minigameConfig: null },
+    })),
+  };
+}
+
+function renderNextCard(data: ReturnType<typeof loaderData>): CardProps | undefined {
+  renderedCards.length = 0;
+  mockUseLoaderData.mockReturnValue(data);
+  renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ApPlannerRoute)));
+  return renderedCards.find((card) => card.event.timelineUid === "next");
+}
+
+describe("AP planner route", () => {
+  beforeEach(() => {
+    mockUseLoaderData.mockReset();
+  });
+
+  it("keeps a hidden, just-ended planned event as the owner of its AP period", () => {
+    const card = renderNextCard(loaderData());
+
+    expect(renderedCards.some((rendered) => rendered.event.timelineUid === "previous")).toBe(false);
+    const expected = calculateApPlannerEvent({
+      event: {
+        timelineUid: next.uid,
+        name: next.name,
+        startAt: next.startAt,
+        endAt: next.endAt,
+        exchangeUntil: next.endAt,
+        requiredAp: 12,
+        requiredBreakdown: { firstClearAp: 12, questSweepAp: 0, extraSweepAp: 0 },
+      },
+      conditions,
+      plan: { accessAt: nextAccessAt },
+      currentAt: now,
+      options: defaultPyroxenePlannerOptions,
+      previousPlannedEvents: [{ ...previous, timelineUid: previous.uid }],
+    });
+    expect(card?.calculation?.overlapEventName).toBe("앞 이벤트");
+    expect(card?.calculation?.availableAp).toBe(expected.availableAp);
+    expect(card?.calculation?.supplyBreakdown).toMatchObject({ stockpile: 70, dailyTasks: 150 });
+  });
+
+  it("reports a shop target with unobtainable currency instead of a partial AP verdict", () => {
+    const card = renderNextCard(loaderData({ unobtainable: 1_000 }));
+
+    expect(card?.calculation).toBeNull();
+    expect(card?.shopTargetExists).toBe(true);
+    expect(card?.calculationError).toBe("선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어 AP를 계산할 수 없어요.");
+  });
+});

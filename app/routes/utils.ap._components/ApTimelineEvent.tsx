@@ -14,7 +14,7 @@ import { formatApDate, formatApShortDate } from "~/domain/ap-planner";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { apChargeExceptionRangesOverlap } from "~/domain/pyroxene-planner";
 import dayjs from "~/lib/dayjs";
-import ApStockpileSteps, { UnverifiedRuleHelp } from "./ApStockpileSteps";
+import ApStockpileSteps from "./ApStockpileSteps";
 
 const KST = "Asia/Seoul";
 
@@ -110,7 +110,6 @@ function RefillRow({
   applied,
   disabled,
   applyVariant,
-  showUnverified999Caution,
   onApply,
   onUndo,
 }: {
@@ -118,7 +117,6 @@ function RefillRow({
   applied: { uid: string } | null;
   disabled: boolean;
   applyVariant: "primary" | "secondary";
-  showUnverified999Caution: boolean;
   onApply: () => void;
   onUndo: () => void;
 }) {
@@ -137,14 +135,6 @@ function RefillRow({
       <div className="min-w-0">
         <p className="text-sm font-medium">{title}</p>
         <p className="text-xs text-muted-foreground">{applied ? `${details} · 청휘석 플래너에도 반영돼요` : details}</p>
-        {showUnverified999Caution ? (
-          <p className="mt-1">
-            <UnverifiedRuleHelp
-              label="AP 999 이상 보유 시 충전 주의"
-              message="보유 AP가 999 이상이면 충전하지 못할 수 있어요(미확인 정보)"
-            />
-          </p>
-        ) : null}
       </div>
       {applied ? (
         <div className="flex shrink-0 items-center gap-2">
@@ -449,8 +439,6 @@ export default function ApTimelineEvent({
                           exception.count === candidate.toCount,
                       ),
                   );
-                  const projectedStockpile =
-                    (calculation.supplyBreakdown?.stockpile ?? 0) + (applied ? 0 : suggestion.additionalAp);
                   return (
                     <RefillRow
                       key={`${suggestion.kind}:${suggestion.startDate}:${suggestion.endDate}`}
@@ -458,7 +446,6 @@ export default function ApTimelineEvent({
                       applied={applied}
                       disabled={disabled}
                       applyVariant={suggestionIndex === firstUnappliedIndex ? "primary" : "secondary"}
-                      showUnverified999Caution={suggestion.kind === "stockpile-day" && projectedStockpile >= 999}
                       onApply={() => onApplyException(suggestion)}
                       onUndo={() => applied && onRemoveException(applied.uid)}
                     />

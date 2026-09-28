@@ -124,11 +124,12 @@ export function normalizePyroxeneApChargeExceptions(value: unknown): PyroxeneApC
   return exceptions.sort((left, right) => left.startDate.localeCompare(right.startDate));
 }
 
+/** Resolve the charge count for the game day (04:00 KST to the next 04:00 KST) that contains `date`. */
 export function getPyroxeneApChargeCountForDate(
   date: Date | string,
   consumption: PyroxenePlannerOptions["consumption"],
 ): number {
-  const dateKey = dayjs(date).tz("Asia/Seoul").format("YYYY-MM-DD");
+  const dateKey = dayjs(date).tz("Asia/Seoul").subtract(4, "hour").format("YYYY-MM-DD");
   return (
     consumption.apChargeExceptions.find((exception) => exception.startDate <= dateKey && dateKey <= exception.endDate)
       ?.count ?? consumption.apChargeCount

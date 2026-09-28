@@ -11,6 +11,8 @@ export const AP_PER_REFILL = 120;
 export const AP_PER_NATURAL_REGEN_MINUTES = 1;
 export const AP_NATURAL_REGEN_MINUTES = 6;
 export const AP_DAILY_TASK_REWARD = 150;
+/** Community-sourced rule: an AP refill cannot push held AP above this value. */
+export const AP_REFILL_HOLD_LIMIT = 999;
 export const AP_PLANNER_MAX_EVENT_PLANS = 500;
 export const AP_PLANNER_MAX_JSON_LENGTH = 65_536;
 
@@ -46,7 +48,7 @@ export type ApPlannerEvent = {
 };
 
 type ValidApPlannerEvent = Omit<ApPlannerEvent, "endAt"> & { endAt: string };
-export type ApPlannerPreviousEvent = Pick<ApPlannerEvent, "name" | "startAt"> & { endAt: string };
+export type ApPlannerPreviousEvent = Pick<ApPlannerEvent, "timelineUid" | "name" | "startAt"> & { endAt: string };
 
 export type ApStockpileStep = {
   at: string;
@@ -87,6 +89,7 @@ export type ApPlannerCalculation = {
   supplyBreakdown: ApSupplyBreakdown | null;
   stockpileSteps: ApStockpileStep[];
   stockpileStartsAt: string | null;
+  stockpileStartPassed: boolean;
   overlapEventName: string | null;
   refillSuggestions: ApRefillSuggestion[];
   refillOverlapConflict: boolean;
@@ -371,7 +374,7 @@ function refillSuggestions(
   event: ValidApPlannerEvent,
   availableAp: number,
   accessAt: string,
-  stockpileStartsAt: string,
+  stockpileStartsAt: string | null,
   stockpileAp: number,
   storedCafeAp: number,
   maxAp: number,
@@ -381,7 +384,8 @@ function refillSuggestions(
   const deficit = Math.max(0, shortage(availableAp, event.requiredAp));
   const chargeDates = dailyResetInstantsBetween(accessAt, event.endAt).map(gameDate);
   const preparationEnd = dayjs(event.startAt).isBefore(dayjs(accessAt)) ? event.startAt : accessAt;
-  const stockpileDates = dailyResetInstantsBetween(stockpileStartsAt, preparationEnd).map(gameDate);
+  const stockpileDates =
+    stockpileStartsAt === null ? [] : dailyResetInstantsBetween(stockpileStartsAt, preparationEnd).map(gameDate);
   const baseCount = options.consumption.apChargeCount;
   const suggestions: ApRefillSuggestion[] = [];
   let overlapConflict = false;
@@ -426,7 +430,7 @@ function refillSuggestions(
       item.endDate === stockpileDates.at(-1) &&
       item.count > baseCount,
   );
-  if (appliedStockpile) {
+  if (appliedStockpile && stockpileStartsAt !== null) {
     const optionsWithoutApplied = {
       ...options,
       consumption: {
@@ -498,34 +502,32 @@ function refillSuggestions(
     }
   }
 
-  if (deficit > 0 && stockpileDates.length > 0 && !appliedStockpile) {
+  if (deficit > 0 && stockpileStartsAt !== null && stockpileDates.length > 0 && !appliedStockpile) {
     const range = exceptionRange(stockpileDates, baseCount + 1);
     if (hasOverlappingException(range)) {
       overlapConflict = true;
     } else {
+      // Net gain is not monotonic: a refill can be offset by the natural regen it stops, and the hold limit caps it.
+      // Scan every count and take the first that covers the deficit, otherwise the smallest count with the most AP.
       let targetCount = baseCount;
       let additionalAp = 0;
-      let projectedStockpile = stockpileAp;
-      while (targetCount < 20 && additionalAp < deficit) {
-        targetCount += 1;
-        const projectionRange = exceptionRange(stockpileDates, targetCount);
+      for (let count = baseCount + 1; count <= 20; count += 1) {
+        const projectionRange = exceptionRange(stockpileDates, count);
         if (!projectionRange) break;
-        const projectedOptions: PyroxenePlannerOptions = {
-          ...options,
-          consumption: {
-            ...options.consumption,
-            apChargeExceptions: [...options.consumption.apChargeExceptions, projectionRange],
-          },
-        };
-        projectedStockpile = buildStockpileSteps(
+        const projectedStockpile = buildStockpileSteps(
           accessAt,
           stockpileStartsAt,
           overlapEventName,
           maxAp,
           storedCafeAp,
-          projectedOptions.consumption,
+          { ...options.consumption, apChargeExceptions: [...options.consumption.apChargeExceptions, projectionRange] },
         ).stockpileAp;
-        additionalAp = Math.max(0, projectedStockpile - stockpileAp);
+        const projectedAdditionalAp = Math.max(0, projectedStockpile - stockpileAp);
+        if (projectedAdditionalAp > additionalAp) {
+          targetCount = count;
+          additionalAp = projectedAdditionalAp;
+        }
+        if (additionalAp >= deficit) break;
       }
       if (additionalAp > 0 && targetCount > baseCount) {
         suggestions.push({
@@ -584,14 +586,22 @@ function buildStockpileSteps(
       naturalSupply(cursor.toISOString(), resetAtString),
     );
     currentAp += naturalBeforeReset;
-    const chargeCount = getPyroxeneApChargeCountForDate(resetAtString, consumption);
-    if (chargeCount > 0) {
+    const plannedChargeCount = getPyroxeneApChargeCountForDate(resetAtString, consumption);
+    const chargeCount = Math.min(
+      plannedChargeCount,
+      Math.max(0, Math.floor((AP_REFILL_HOLD_LIMIT - currentAp) / AP_PER_REFILL)),
+    );
+    if (plannedChargeCount > 0) {
       const chargeAp = chargeCount * AP_PER_REFILL;
       currentAp += chargeAp;
       const naturalLabel = naturalBeforeReset > 0 ? `자연 회복 ${naturalBeforeReset.toLocaleString()} AP · ` : "";
+      const capLabel =
+        chargeCount < plannedChargeCount
+          ? ` (${AP_REFILL_HOLD_LIMIT} AP를 넘으면 충전할 수 없어 ${plannedChargeCount}회 중 ${chargeCount}회만)`
+          : "";
       steps.push({
         at: resetAtString,
-        label: `${naturalLabel}AP 충전 ${chargeCount}회 · +${chargeAp.toLocaleString()} AP`,
+        label: `${naturalLabel}AP 충전 ${chargeCount}회 · +${chargeAp.toLocaleString()} AP${capLabel}`,
         ap: currentAp,
         kind: "charge",
         receivedAp: chargeAp,
@@ -676,6 +686,7 @@ export function calculateApPlannerEvent(input: {
       supplyBreakdown: null,
       stockpileSteps: [],
       stockpileStartsAt: null,
+      stockpileStartPassed: false,
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
@@ -696,6 +707,7 @@ export function calculateApPlannerEvent(input: {
       supplyBreakdown: null,
       stockpileSteps: [],
       stockpileStartsAt: null,
+      stockpileStartPassed: false,
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
@@ -712,6 +724,7 @@ export function calculateApPlannerEvent(input: {
       supplyBreakdown: null,
       stockpileSteps: [],
       stockpileStartsAt: null,
+      stockpileStartPassed: false,
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
@@ -729,44 +742,50 @@ export function calculateApPlannerEvent(input: {
   ) {
     throw new Error("접속 시간은 이벤트 시작부터 종료 사이로 입력해주세요.");
   }
-  const previous = [...(input.previousPlannedEvents ?? [])]
-    .filter((candidate) => Date.parse(candidate.startAt) < Date.parse(validEvent.startAt))
+  // Earlier events keep their AP: order by start, then end, then UID so equal starts still have one owner.
+  const precedes = (candidate: ApPlannerPreviousEvent) =>
+    Date.parse(candidate.startAt) - Date.parse(validEvent.startAt) ||
+    Date.parse(candidate.endAt) - Date.parse(validEvent.endAt) ||
+    candidate.timelineUid.localeCompare(validEvent.timelineUid);
+  const previous = (input.previousPlannedEvents ?? [])
+    .filter((candidate) => candidate.timelineUid !== validEvent.timelineUid && precedes(candidate) < 0)
     .sort((left, right) => Date.parse(right.endAt) - Date.parse(left.endAt))[0];
   const candidateStockpileStart = dayjs(from).subtract(24, "hour");
   const previousEnd = previous ? dayjs(previous.endAt) : null;
-  const overlaps = previousEnd?.isAfter(candidateStockpileStart) && previousEnd.isBefore(dayjs(from));
-  const stockpileStartsAt = isOngoing
-    ? from
-    : overlaps && previousEnd
-      ? previousEnd.toISOString()
-      : candidateStockpileStart.toISOString();
+  const overlaps = Boolean(previousEnd?.isAfter(isOngoing ? dayjs(from) : candidateStockpileStart));
+  const previousEndsAfterAccess = overlaps && previousEnd !== null && !previousEnd.isBefore(dayjs(from));
+  const supplyFrom =
+    previousEndsAfterAccess && previousEnd
+      ? (previousEnd.isAfter(dayjs(validEvent.endAt)) ? dayjs(validEvent.endAt) : previousEnd).toISOString()
+      : from;
+  // When the earlier event lasts past the access time, nothing can be stockpiled for this event.
+  const hasStockpile = !isOngoing && !previousEndsAfterAccess;
+  const stockpileStartsAt = overlaps && previousEnd ? previousEnd.toISOString() : candidateStockpileStart.toISOString();
   const overlapEventName = overlaps ? (previous?.name ?? null) : null;
-  const storedCafeAp = isOngoing ? 0 : cafeStoredSupplyDuring(stockpileStartsAt, from, production);
-  const stockpilePlan = isOngoing
-    ? { steps: [] as ApStockpileStep[], stockpileAp: 0 }
-    : buildStockpileSteps(
-        from,
-        stockpileStartsAt,
-        overlapEventName,
-        condition.maxAp,
-        storedCafeAp,
-        options.consumption,
-      );
+  const storedCafeAp = hasStockpile ? cafeStoredSupplyDuring(stockpileStartsAt, from, production) : 0;
+  const stockpilePlan = hasStockpile
+    ? buildStockpileSteps(from, stockpileStartsAt, overlapEventName, condition.maxAp, storedCafeAp, options.consumption)
+    : { steps: [] as ApStockpileStep[], stockpileAp: 0 };
   const stockpile = stockpilePlan.stockpileAp;
-  const dailyTaskDays = countDailyResets(from, validEvent.endAt);
+  // A future plan also receives the tasks of its first game day unless an earlier event already claimed that day.
+  // Ongoing events assume today's tasks were already received.
+  const firstGameDayStart = dayjs(getNextDailyReset(supplyFrom)).subtract(1, "day");
+  const firstGameDayClaimed = isOngoing || Boolean(previousEnd && overlaps && !previousEnd.isBefore(firstGameDayStart));
+  const dailyTaskDays = countDailyResets(supplyFrom, validEvent.endAt) + (firstGameDayClaimed ? 0 : 1);
   const dailyTasks = dailyTaskDays * AP_DAILY_TASK_REWARD;
-  const firstChargeDate = gameDate(from) > gameDate(validEvent.startAt) ? gameDate(from) : gameDate(validEvent.startAt);
+  const firstChargeDate =
+    gameDate(supplyFrom) > gameDate(validEvent.startAt) ? gameDate(supplyFrom) : gameDate(validEvent.startAt);
   const resetDates = dailyChargeDays(`${firstChargeDate}T00:00:00+09:00`, validEvent.endAt).filter((date) => {
     const resetAt = dayjs.tz(`${date}T${String(GAME_RESET_HOUR).padStart(2, "0")}:00:00`, KST);
-    return resetAt.isAfter(dayjs(from)) && !resetAt.isAfter(dayjs(validEvent.endAt));
+    return resetAt.isAfter(dayjs(supplyFrom)) && !resetAt.isAfter(dayjs(validEvent.endAt));
   });
   const chargeCounts = resetDates.map((date) =>
     getPyroxeneApChargeCountForDate(`${date}T12:00:00+09:00`, options.consumption),
   );
   const apChargeDays = chargeCounts.length;
   const apCharges = chargeCounts.reduce((sum, count) => sum + count * AP_PER_REFILL, 0);
-  const natural = naturalSupply(from, validEvent.endAt);
-  const cafe = cafeSupplyDuring(from, validEvent.endAt, production);
+  const natural = naturalSupply(supplyFrom, validEvent.endAt);
+  const cafe = cafeSupplyDuring(supplyFrom, validEvent.endAt, production);
   const availableAp = stockpile + natural + cafe + dailyTasks + apCharges;
   const supplyBreakdown = {
     stockpile,
@@ -780,8 +799,8 @@ export function calculateApPlannerEvent(input: {
   const refill = refillSuggestions(
     validEvent,
     availableAp,
-    from,
-    stockpileStartsAt,
+    supplyFrom,
+    hasStockpile ? stockpileStartsAt : null,
     stockpile,
     storedCafeAp,
     condition.maxAp,
@@ -796,7 +815,8 @@ export function calculateApPlannerEvent(input: {
     resultAp: availableAp - requiredAp,
     supplyBreakdown,
     stockpileSteps: stockpilePlan.steps,
-    stockpileStartsAt: isOngoing ? null : stockpileStartsAt,
+    stockpileStartsAt: hasStockpile ? stockpileStartsAt : null,
+    stockpileStartPassed: hasStockpile && Date.parse(stockpileStartsAt) < now,
     overlapEventName,
     refillSuggestions: refill.suggestions,
     refillOverlapConflict: refill.overlapConflict,

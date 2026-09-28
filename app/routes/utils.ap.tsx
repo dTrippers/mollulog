@@ -382,6 +382,7 @@ function calculateShopRequiredAp(
 ): {
   requiredAp: number;
   breakdown: { firstClearAp: number; questSweepAp: number; extraSweepAp: number };
+  hasUnobtainableTargets: boolean;
 } {
   if (!shop.content || !state) throw new Error("상점 계산 상태를 확인할 수 없어요.");
   const { stages, shopResources, eventRewardBonus, minigameConfig } = shop.content;
@@ -422,6 +423,7 @@ function calculateShopRequiredAp(
       questSweepAp: calculation.questSweepAp,
       extraSweepAp: calculation.extraSweepAp,
     },
+    hasUnobtainableTargets: Object.keys(calculation.unobtainableTargets).length > 0,
   };
 }
 
@@ -488,13 +490,13 @@ export default function ApPlannerRoute() {
   const actionEventUid = fetcher.data?.eventUid;
   const actionError = fetcher.data && !fetcher.data.success ? (fetcher.data.error ?? null) : null;
 
-  const events = useMemo<ApDisplayEvent[]>(() => {
+  // Ended events are hidden but still own the AP of their period, so overlap checks use the full list.
+  const allEvents = useMemo<ApDisplayEvent[]>(() => {
     const timelineByUid = new Map(loaderData.timelineEvents.map((event) => [event.uid, event]));
     return loaderData.shopEvents
       .flatMap((shop) => {
         const timeline = timelineByUid.get(shop.timelineUid);
         if (timeline?.contentType !== "event" || !timeline.startAt) return [];
-        if (timeline.endAt && Date.parse(timeline.endAt) <= Date.parse(loaderData.now)) return [];
         return [
           {
             timelineUid: shop.timelineUid,
@@ -507,12 +509,16 @@ export default function ApPlannerRoute() {
         ];
       })
       .sort((left, right) => Date.parse(left.startAt) - Date.parse(right.startAt));
-  }, [loaderData.now, loaderData.shopEvents, loaderData.timelineEvents]);
+  }, [loaderData.shopEvents, loaderData.timelineEvents]);
+  const events = useMemo(
+    () => allEvents.filter((entry) => !entry.endAt || Date.parse(entry.endAt) > Date.parse(loaderData.now)),
+    [allEvents, loaderData.now],
+  );
 
   const calculatedEvents = useMemo<CalculatedApEvent[]>(() => {
-    const previousPlannedEvents = events.flatMap((entry) => {
+    const previousPlannedEvents = allEvents.flatMap((entry) => {
       if (!effectiveApState.eventPlans[entry.timelineUid] || !entry.endAt) return [];
-      return [{ name: entry.name, startAt: entry.startAt, endAt: entry.endAt }];
+      return [{ timelineUid: entry.timelineUid, name: entry.name, startAt: entry.startAt, endAt: entry.endAt }];
     });
     return events.map((entry) => {
       const plan = effectiveApState.eventPlans[entry.timelineUid] ?? null;
@@ -537,9 +543,11 @@ export default function ApPlannerRoute() {
       if (!calculationError && shopState) {
         try {
           const required = calculateShopRequiredAp(entry.shop, shopState);
-          shopTargetExists = hasApShopTarget(required.requiredAp);
+          shopTargetExists = required.hasUnobtainableTargets || hasApShopTarget(required.requiredAp);
           if (shopTargetExists) {
-            if (!entry.endAt) {
+            if (required.hasUnobtainableTargets) {
+              calculationError = "선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어 AP를 계산할 수 없어요.";
+            } else if (!entry.endAt) {
               calculationError = "이벤트 종료 시각을 확인할 수 없어 AP를 계산하지 못했어요.";
             } else {
               const event: ApPlannerEvent = {
@@ -577,6 +585,7 @@ export default function ApPlannerRoute() {
   }, [
     actionError,
     actionEventUid,
+    allEvents,
     effectiveApState,
     events,
     guestErrors,

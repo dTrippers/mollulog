@@ -6,6 +6,7 @@ import {
   cafeProduction,
   comfortMaximum,
   formatApDate,
+  formatApShortDate,
   formatCafeApPerHour,
   maxApForAccountLevel,
 } from "~/domain/ap-planner";
@@ -77,7 +78,11 @@ function CalculationConditions({
           {exceptionCount > 0 ? `(예외 ${exceptionCount}건 반영)` : ""}을 사용해요. (일일 초기화 오전 4시)
         </li>
         <li>
-          999 이상 보유 시 충전 불가·우편함 (커뮤니티 정보) <UnverifiedRuleHelp />
+          보유 AP가 999를 넘게 되는 AP 충전은 할 수 없다고 보고 계산해요. (커뮤니티 정보){" "}
+          <UnverifiedRuleHelp
+            label="AP 999 충전 제한 안내"
+            message="공식 확인이 되지 않은 커뮤니티 정보예요. 모으는 동안에는 충전 후 999 AP를 넘지 않는 횟수까지만 반영해요."
+          />
         </li>
         <li>
           점검 중 자연 회복·카페 생산 여부는 확인되지 않았어요. <UnverifiedRuleHelp />
@@ -141,10 +146,12 @@ export default function ApStockpileSteps({
               ? "이벤트 종료까지 확보할 수 있는 AP를 계산해요"
               : access && calculation.stockpileStartsAt
                 ? `${formatApDate(calculation.stockpileStartsAt)} ${dayjs(calculation.stockpileStartsAt).tz(KST).format("HH:mm")}부터 · 접속 시 약 ${access.ap.toLocaleString()} AP`
-                : "접속 시간을 입력해주세요"}
+                : calculation.overlapEventName
+                  ? "앞 이벤트가 접속 시간 뒤에 끝나서 미리 모을 AP가 없어요"
+                  : "접속 시간을 입력해주세요"}
           </p>
         </div>
-        {calculation.status !== "ongoing" ? (
+        {calculation.status !== "ongoing" && calculation.stockpileSteps.length > 0 ? (
           <button
             type="button"
             aria-expanded={expanded}
@@ -160,11 +167,23 @@ export default function ApStockpileSteps({
           </button>
         ) : null}
       </div>
-      {calculation.overlapEventName && calculation.status !== "ongoing" ? (
-        <p className="text-xs text-muted-foreground">앞 이벤트({calculation.overlapEventName})가 끝난 뒤부터 모아요.</p>
+      {calculation.overlapEventName ? (
+        <p className="text-xs text-muted-foreground">
+          {calculation.stockpileStartsAt
+            ? `앞 이벤트(${calculation.overlapEventName})가 끝난 뒤부터 모아요.`
+            : `앞 이벤트(${calculation.overlapEventName})가 끝난 뒤부터 AP를 계산해요.`}
+        </p>
+      ) : null}
+      {calculation.stockpileStartPassed && calculation.stockpileStartsAt ? (
+        <p className="text-xs text-amber-700 dark:text-amber-300">
+          모으기 시작 시각({formatApShortDate(calculation.stockpileStartsAt)})이 지났어요. 그때부터 AP를 쓰지 않았다고
+          가정한 값이에요.
+        </p>
       ) : null}
       {calculation.status === "ongoing" ? (
-        <p className="text-xs text-muted-foreground">현재 보유 AP는 포함하지 않았어요.</p>
+        <p className="text-xs text-muted-foreground">
+          현재 보유 AP와 오늘 일일 과제 AP는 포함하지 않았어요. 오늘 과제는 이미 받았다고 보고 계산해요.
+        </p>
       ) : expanded ? (
         <Callout tone="default" className="p-3">
           <div className="space-y-2">
