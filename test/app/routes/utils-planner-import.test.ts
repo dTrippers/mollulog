@@ -929,6 +929,7 @@ describe("withComparedEventShopSelections", () => {
     eventUids: [],
     eventShopUids: ["shop-1", "shop-2"],
     favorites: [],
+    ap: false,
   };
   const availableRow = (shopStateUid: string) => ({
     timelineUid: `timeline-${shopStateUid}`,
