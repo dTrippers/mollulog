@@ -1,8 +1,12 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { withPlannerStateDualWrite } from "~/db/postgres/planner-states";
-import type { EventShopOwnedQuantityPatch, EventShopState } from "~/domain/event-shop-state";
+import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
+import {
+  type EventShopOwnedQuantityPatch,
+  type EventShopState,
+  mergeEventShopStateChanges,
+} from "~/domain/event-shop-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
 
@@ -24,6 +28,35 @@ export type PostgresEventShopStateOptions = {
   createClient?: PostgresClientFactory;
 };
 
+export type PostgresEventShopStateUpsertOptions = PostgresEventShopStateOptions & {
+  baseState?: EventShopState | null;
+  fallbackEventUid?: string | null;
+  replace?: boolean;
+};
+
+export type PostgresEventShopStatePatchOptions = PostgresEventShopStateOptions & {
+  fallbackEventUid?: string | null;
+};
+
+function normalizeEventShopStateForStorage(state: EventShopState): EventShopState {
+  return {
+    itemQuantities: state.itemQuantities,
+    itemPurchaseDays: state.itemPurchaseDays ?? {},
+    selectedBonusStudentUids: state.selectedBonusStudentUids,
+    bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
+    selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem ?? {},
+    enabledStages: state.enabledStages,
+    includeRecruitedStudents: state.includeRecruitedStudents,
+    existingPaymentItemQuantities: state.existingPaymentItemQuantities ?? {},
+    includeFirstClear: state.includeFirstClear,
+    extraStageRuns: state.extraStageRuns ?? {},
+    minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
+    minigamePlayCount: state.minigamePlayCount ?? 0,
+    minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
+    overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
+  };
+}
+
 async function withEventShopStateDatabase<T>(
   env: Env,
   operation: (db: EventShopStateDatabase) => Promise<T>,
@@ -41,101 +74,62 @@ async function withEventShopStateDatabase<T>(
   );
 }
 
-export async function getPostgresEventShopState(
-  env: Env,
-  userId: number,
-  eventUid: string,
-  options: PostgresEventShopStateOptions = {},
-): Promise<EventShopState | null> {
-  const row = await withEventShopStateDatabase(
-    env,
-    (db) =>
-      db
-        .select()
-        .from(pgEventShopStatesTable)
-        .where(and(eq(pgEventShopStatesTable.userId, userId), eq(pgEventShopStatesTable.eventUid, eventUid)))
-        .limit(1)
-        .then((rows) => rows[0] ?? null),
-    options,
-  );
-  return row ? toEventShopStateModel(row) : null;
-}
-
-export async function getPostgresEventShopStates(
-  env: Env,
-  userId: number,
-  eventUids: readonly string[],
-  options: PostgresEventShopStateOptions = {},
-): Promise<Record<string, EventShopState>> {
-  const uniqueEventUids = [...new Set(eventUids)];
-  if (uniqueEventUids.length === 0) return {};
-
-  const rows = await withEventShopStateDatabase(
-    env,
-    (db) =>
-      db
-        .select()
-        .from(pgEventShopStatesTable)
-        .where(
-          and(eq(pgEventShopStatesTable.userId, userId), inArray(pgEventShopStatesTable.eventUid, uniqueEventUids)),
-        ),
-    options,
-  );
-
-  return Object.fromEntries(rows.map((row) => [row.eventUid, toEventShopStateModel(row)]));
-}
-
 export async function upsertPostgresEventShopState(
   env: Env,
   userId: number,
   eventUid: string,
   state: EventShopState,
-  options: PostgresEventShopStateOptions = {},
+  options: PostgresEventShopStateUpsertOptions = {},
 ): Promise<void> {
-  const minigameStartRound = Math.max(1, state.minigameStartRound ?? 1);
+  const submittedState = normalizeEventShopStateForStorage(state);
   const historySource = parseEventShopStateHistorySource("autosave");
-  const normalizedState: EventShopState = {
-    itemQuantities: state.itemQuantities,
-    itemPurchaseDays: state.itemPurchaseDays ?? {},
-    selectedBonusStudentUids: state.selectedBonusStudentUids,
-    bonusStudentSelectionMode: state.bonusStudentSelectionMode ?? "shared",
-    selectedBonusStudentUidsByItem: state.selectedBonusStudentUidsByItem ?? {},
-    enabledStages: state.enabledStages,
-    includeRecruitedStudents: state.includeRecruitedStudents,
-    existingPaymentItemQuantities: state.existingPaymentItemQuantities ?? {},
-    includeFirstClear: state.includeFirstClear,
-    extraStageRuns: state.extraStageRuns ?? {},
-    minigameStartRound,
-    minigamePlayCount: state.minigamePlayCount ?? 0,
-    minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
-    overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
-  };
   await withEventShopStateDatabase(
     env,
     (db) =>
-      withPlannerStateDualWrite(db, userId, async (tx) => {
-        await tx
-          .insert(pgEventShopStatesTable)
-          .values({
-            uid: nanoid(8),
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const currentState =
+            document.eventShops[eventUid] ??
+            (options.fallbackEventUid ? document.eventShops[options.fallbackEventUid] : undefined) ??
+            null;
+          const stateToSave = normalizeEventShopStateForStorage(
+            !options.replace && options.baseState && currentState
+              ? mergeEventShopStateChanges(options.baseState, submittedState, currentState)
+              : submittedState,
+          );
+          await tx
+            .insert(pgEventShopStatesTable)
+            .values({
+              uid: nanoid(8),
+              userId,
+              eventUid,
+              ...stateToSave,
+            })
+            .onConflictDoUpdate({
+              target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+              set: {
+                ...stateToSave,
+                updatedAt: new Date(),
+              },
+            });
+          await tx.insert(pgEventShopStatesHistoryTable).values({
             userId,
             eventUid,
-            ...normalizedState,
-          })
-          .onConflictDoUpdate({
-            target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-            set: {
-              ...normalizedState,
-              updatedAt: new Date(),
-            },
+            state: stateToSave,
+            source: historySource,
           });
-        await tx.insert(pgEventShopStatesHistoryTable).values({
-          userId,
-          eventUid,
-          state: normalizedState,
-          source: historySource,
-        });
-      }),
+          return {
+            document: {
+              ...document,
+              eventShops: { ...document.eventShops, [eventUid]: stateToSave },
+            },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
 }
@@ -146,86 +140,47 @@ export async function patchPostgresEventShopStateOwnedQuantities(
   eventUid: string,
   patch: EventShopOwnedQuantityPatch,
   defaultState: EventShopState,
-  options: PostgresEventShopStateOptions = {},
+  options: PostgresEventShopStatePatchOptions = {},
 ): Promise<void> {
   await withEventShopStateDatabase(
     env,
     (db) =>
-      withPlannerStateDualWrite(db, userId, async (tx) => {
-        await tx
-          .insert(pgEventShopStatesTable)
-          .values({
-            uid: nanoid(8),
-            userId,
-            eventUid,
-            itemQuantities: defaultState.itemQuantities,
-            itemPurchaseDays: defaultState.itemPurchaseDays,
-            selectedBonusStudentUids: defaultState.selectedBonusStudentUids,
-            bonusStudentSelectionMode: defaultState.bonusStudentSelectionMode,
-            selectedBonusStudentUidsByItem: defaultState.selectedBonusStudentUidsByItem,
-            enabledStages: defaultState.enabledStages,
-            includeRecruitedStudents: defaultState.includeRecruitedStudents,
-            existingPaymentItemQuantities: {
-              ...defaultState.existingPaymentItemQuantities,
-              ...patch,
-            },
-            includeFirstClear: defaultState.includeFirstClear,
-            extraStageRuns: defaultState.extraStageRuns,
-            minigameStartRound: defaultState.minigameStartRound,
-            minigamePlayCount: defaultState.minigamePlayCount,
-            minigamePaymentQuantityMode: defaultState.minigamePaymentQuantityMode,
-            overriddenRequiredQuantities: defaultState.overriddenRequiredQuantities,
-          })
-          .onConflictDoUpdate({
-            target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-            set: {
-              existingPaymentItemQuantities: sql<
-                Record<string, number>
-              >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
-              updatedAt: new Date(),
-            },
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const currentState =
+            document.eventShops[eventUid] ??
+            (options.fallbackEventUid ? document.eventShops[options.fallbackEventUid] : undefined) ??
+            defaultState;
+          const nextState = normalizeEventShopStateForStorage({
+            ...currentState,
+            existingPaymentItemQuantities: { ...currentState.existingPaymentItemQuantities, ...patch },
           });
-      }),
+          await tx
+            .insert(pgEventShopStatesTable)
+            .values({
+              uid: nanoid(8),
+              userId,
+              eventUid,
+              ...nextState,
+            })
+            .onConflictDoUpdate({
+              target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
+              set: {
+                existingPaymentItemQuantities: sql<
+                  Record<string, number>
+                >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
+                updatedAt: new Date(),
+              },
+            });
+          return {
+            document: { ...document, eventShops: { ...document.eventShops, [eventUid]: nextState } },
+            result: undefined,
+          };
+        },
+        { retryable: true },
+      ),
     options,
   );
-}
-
-function parseJson<T>(value: T | string, field: string): T {
-  if (typeof value !== "string") return value;
-  try {
-    return JSON.parse(value) as T;
-  } catch {
-    throw new Error(`Invalid PostgreSQL JSON value: ${field}`);
-  }
-}
-
-function toEventShopStateModel(row: typeof pgEventShopStatesTable.$inferSelect): EventShopState {
-  return {
-    itemQuantities: parseJson(row.itemQuantities, "event_shop_states.item_quantities"),
-    itemPurchaseDays: parseJson(row.itemPurchaseDays, "event_shop_states.item_purchase_days"),
-    selectedBonusStudentUids: parseJson(row.selectedBonusStudentUids, "event_shop_states.selected_bonus_student_uids"),
-    bonusStudentSelectionMode: row.bonusStudentSelectionMode === "perItem" ? "perItem" : "shared",
-    selectedBonusStudentUidsByItem: parseJson(
-      row.selectedBonusStudentUidsByItem,
-      "event_shop_states.selected_bonus_student_uids_by_item",
-    ),
-    enabledStages: parseJson(row.enabledStages, "event_shop_states.enabled_stages"),
-    includeRecruitedStudents: row.includeRecruitedStudents,
-    existingPaymentItemQuantities: parseJson(
-      row.existingPaymentItemQuantities,
-      "event_shop_states.existing_payment_item_quantities",
-    ),
-    includeFirstClear: row.includeFirstClear,
-    extraStageRuns: parseJson(row.extraStageRuns, "event_shop_states.extra_stage_runs"),
-    minigameStartRound: Math.max(1, row.minigameStartRound ?? 1),
-    minigamePlayCount: row.minigamePlayCount ?? 0,
-    minigamePaymentQuantityMode:
-      row.minigamePaymentQuantityMode === "min" || row.minigamePaymentQuantityMode === "max"
-        ? row.minigamePaymentQuantityMode
-        : "expected",
-    overriddenRequiredQuantities: parseJson(
-      row.overriddenRequiredQuantities,
-      "event_shop_states.overridden_required_quantities",
-    ),
-  };
 }

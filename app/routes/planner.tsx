@@ -50,6 +50,7 @@ import { readGuestEventShopPlanner, subscribeGuestEventShopPlanner } from "~/lib
 import { updateGuestPyroxenePlanner } from "~/lib/guest-pyroxene-planner.client";
 import { eventIconImageUrl } from "~/models/assets";
 import { saveIntegratedPlannerRecruitmentPlan } from "~/models/integrated-planner";
+import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import {
   createBuyPyroxene,
   createOtherPyroxeneGain,
@@ -121,12 +122,13 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   const currentUser = await getActiveSensei(env, request);
   const formData = await request.formData();
   const submissionId = formData.get("submissionId");
-  const response = (success: boolean, error?: string, status = 200) =>
+  const response = (success: boolean, error?: string, status = 200, revisionConflict = false) =>
     data(
       {
         success,
         ...(typeof submissionId === "string" ? { submissionId } : {}),
         ...(error ? { error } : {}),
+        ...(revisionConflict ? { revisionConflict: true } : {}),
       },
       { status },
     );
@@ -173,7 +175,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 
       await saveIntegratedPlannerRecruitmentPlan(env, currentUser.id, eventUid, studentUids, ctx);
       return response(true);
-    } catch {
+    } catch (error) {
+      if (isPlannerStateRevisionConflictError(error)) {
+        return response(false, PLANNER_STATE_REVISION_CONFLICT_MESSAGE, 409, true);
+      }
       return response(false, "모집 계획을 저장하지 못했어요. 입력을 보존했으니 다시 시도해주세요.", 500);
     }
   }
@@ -194,7 +199,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         await createPyroxeneMonthlyPackage(env, currentUser.id, date, packageType, false);
       }
       return response(true);
-    } catch {
+    } catch (error) {
+      if (isPlannerStateRevisionConflictError(error)) {
+        return response(false, PLANNER_STATE_REVISION_CONFLICT_MESSAGE, 409, true);
+      }
       return response(false, "패키지 계획을 저장하지 못했어요. 다시 시도해주세요.", 500);
     }
   }
@@ -264,7 +272,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           "반복 계획이나 이미 변경된 항목은 이 화면에서 수정할 수 없어요. 상세 플래너에서 확인해주세요.",
           409,
         );
-  } catch {
+  } catch (error) {
+    if (isPlannerStateRevisionConflictError(error)) {
+      return response(false, PLANNER_STATE_REVISION_CONFLICT_MESSAGE, 409, true);
+    }
     return response(false, "청휘석 계획을 저장하지 못했어요. 입력을 보존했으니 다시 시도해주세요.", 500);
   }
 };

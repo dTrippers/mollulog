@@ -5,8 +5,11 @@ import {
   backfillPlannerStatesInDatabase,
   checkPlannerStateParityInDatabase,
   getPlannerStateDocumentFromLegacyInDatabase,
+  PlannerStateRevisionConflictError,
+  updatePlannerStateDocumentInDatabase,
 } from "~/db/postgres/planner-states";
 import {
+  createBuyPyroxeneInDatabase,
   createPostgresAttendance,
   createPostgresBuyPyroxene,
   createPostgresOtherPyroxeneGain,
@@ -24,7 +27,7 @@ import {
   upsertPostgresPyroxeneEventData,
   upsertPostgresPyroxenePlannerOptions,
 } from "~/db/postgres/pyroxene-planner";
-import { projectPlannerStateDocument } from "~/domain/planner-state";
+import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
@@ -45,6 +48,19 @@ function legacyTables() {
   };
 }
 
+function withPlannerState(tables: Record<string, unknown[]>, revision = 1) {
+  const rows = (name: string) => (tables[name] ?? []) as unknown[];
+  const document = projectPlannerStateDocument({
+    resources: rows("pyroxene_owned_resources"),
+    timelineItems: rows("pyroxene_timeline_items"),
+    plannerOptions: rows("pyroxene_planner_options"),
+    collectedSources: rows("pyroxene_collected_sources"),
+    eventData: rows("pyroxene_event_data"),
+    eventShops: rows("event_shop_states"),
+  });
+  return { ...tables, planner_states: [{ id: 1, userId: 7, revision, document }] };
+}
+
 function emptyPlannerStateDocument() {
   return projectPlannerStateDocument({
     resources: [],
@@ -58,13 +74,13 @@ function emptyPlannerStateDocument() {
 
 describe("PostgreSQL planner state dual writes", () => {
   it("projects legacy tables and stores their state in the same transaction as a pyroxene mutation", async () => {
-    const client = new FakePostgresClient(legacyTables());
+    const client = new FakePostgresClient(withPlannerState(legacyTables()));
 
     await upsertPostgresCollectedSource(env, 7, "source-1", { createClient: () => client as unknown as Client });
 
     const documentRow = client.tables.planner_states?.[0];
     expect(documentRow).toBeDefined();
-    expect(documentRow?.revision).toBe(1);
+    expect(documentRow?.revision).toBe(2);
     const document =
       typeof documentRow?.document === "string" ? JSON.parse(documentRow.document) : documentRow?.document;
     expect(document.pyroxene.resources).toEqual({
@@ -81,7 +97,7 @@ describe("PostgreSQL planner state dual writes", () => {
 
   it("locks each user before the legacy mutation with a user-specific advisory label", async () => {
     for (const userId of [7, 8]) {
-      const client = new FakePostgresClient(legacyTables());
+      const client = new FakePostgresClient(withPlannerState(legacyTables()));
 
       await upsertPostgresCollectedSource(env, userId, `source-${userId}`, {
         createClient: () => client as unknown as Client,
@@ -112,12 +128,13 @@ describe("PostgreSQL planner state dual writes", () => {
     );
   });
 
-  it("rolls back a legacy write when the projection query fails", async () => {
-    const client = new FakePostgresClient(legacyTables());
+  it("rolls back the legacy mirror when the revision update fails", async () => {
+    const client = new FakePostgresClient(withPlannerState(legacyTables()));
+    const originalDocument = client.tables.planner_states?.[0]?.document;
     const originalQuery = client.query.bind(client);
     jest.spyOn(client, "query").mockImplementation(async (config, positionalValues) => {
       const text = typeof config === "string" ? config : config.text;
-      if (text.includes('from "pyroxene_planner_options"')) throw new Error("projection query failed");
+      if (text.startsWith('update "planner_states"')) throw new Error("revision update failed");
       return originalQuery(config, positionalValues);
     });
 
@@ -129,6 +146,90 @@ describe("PostgreSQL planner state dual writes", () => {
     expect(statements).toContain("begin");
     expect(statements).toContain("rollback");
     expect(statements).not.toContain("commit");
+    expect(client.tables.pyroxene_collected_sources).toEqual([]);
+    expect(client.tables.planner_states?.[0]?.document).toEqual(originalDocument);
+  });
+
+  it("reapplies one retryable mutation to the latest revision after a compare-and-set conflict", async () => {
+    const client = new FakePostgresClient(withPlannerState(legacyTables()));
+    const originalQuery = client.query.bind(client);
+    let conditionalUpdates = 0;
+    let concurrentCommitApplied = false;
+    jest.spyOn(client, "query").mockImplementation(async (config, positionalValues) => {
+      const text = typeof config === "string" ? config : config.text;
+      if (text.startsWith('update "planner_states"') && conditionalUpdates === 0) {
+        conditionalUpdates += 1;
+        return { rows: [], rowCount: 0 };
+      }
+      const result = await originalQuery(config, positionalValues);
+      if (text.toLowerCase() === "rollback" && !concurrentCommitApplied) {
+        concurrentCommitApplied = true;
+        const source = {
+          id: 2,
+          uid: "source-concurrent",
+          userId: 7,
+          sourceKey: "source-concurrent",
+          collectedAt: date,
+          createdAt: date,
+        };
+        client.tables.pyroxene_collected_sources?.push(source);
+        const stateRow = client.tables.planner_states?.[0];
+        if (!stateRow) throw new Error("Expected the concurrent planner state row");
+        const currentDocument = stateRow.document as PlannerStateDocumentV1;
+        stateRow.revision = 2;
+        stateRow.document = {
+          ...currentDocument,
+          pyroxene: {
+            ...currentDocument.pyroxene,
+            collectedSourceKeys: ["source-concurrent"],
+          },
+        };
+      }
+      if (text.startsWith('update "planner_states"')) conditionalUpdates += 1;
+      return result;
+    });
+
+    await upsertPostgresCollectedSource(env, 7, "source-retry", {
+      createClient: () => client as unknown as Client,
+    });
+
+    expect(conditionalUpdates).toBe(2);
+    expect(client.tables.pyroxene_collected_sources?.map((row) => row.sourceKey)).toEqual([
+      "source-concurrent",
+      "source-retry",
+    ]);
+    expect(client.tables.pyroxene_owned_resources?.[0]?.inputAt).toBeInstanceOf(Date);
+    const storedDocument = client.tables.planner_states?.[0]?.document;
+    const document = (
+      typeof storedDocument === "string" ? JSON.parse(storedDocument) : storedDocument
+    ) as PlannerStateDocumentV1;
+    const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(document).toEqual(projected);
+    expect(client.tables.planner_states?.[0]?.revision).toBe(3);
+  });
+
+  it("returns an explicit revision conflict when an update is not safe to retry", async () => {
+    const client = new FakePostgresClient(withPlannerState(legacyTables()));
+    const originalQuery = client.query.bind(client);
+    let conditionalUpdates = 0;
+    jest.spyOn(client, "query").mockImplementation(async (config, positionalValues) => {
+      const text = typeof config === "string" ? config : config.text;
+      if (text.startsWith('update "planner_states"')) {
+        conditionalUpdates += 1;
+        return { rows: [], rowCount: 0 };
+      }
+      return originalQuery(config, positionalValues);
+    });
+
+    await expect(
+      updatePlannerStateDocumentInDatabase(drizzle(client as unknown as Client), 7, async (_transaction, document) => ({
+        document,
+        result: undefined,
+      })),
+    ).rejects.toBeInstanceOf(PlannerStateRevisionConflictError);
+
+    expect(conditionalUpdates).toBe(1);
+    expect(client.statements.map((statement) => statement.toLowerCase())).toContain("rollback");
   });
 
   it("supports a dry-run backfill, an idempotent rerun, and zero-difference parity", async () => {
@@ -370,48 +471,50 @@ describe("PostgreSQL planner state dual writes", () => {
     ];
 
     for (const [name, mutate] of mutations) {
-      const client = new FakePostgresClient({
-        ...legacyTables(),
-        pyroxene_collected_sources: [
-          {
-            id: 1,
-            uid: "source-existing",
-            userId: 7,
-            sourceKey: "source-existing",
-            collectedAt: date,
-            createdAt: date,
-          },
-        ],
-        pyroxene_timeline_items: [
-          {
-            id: 1,
-            uid: "record-1",
-            userId: 7,
-            eventAt: date,
-            source: "other",
-            repeatType: null,
-            repeatIntervalDays: null,
-            repeatCount: null,
-            autoRepurchase: false,
-            description: "Existing",
-            pyroxeneDelta: 4,
-            oneTimeTicketDelta: 0,
-            tenTimeTicketDelta: 0,
-          },
-        ],
-        pyroxene_event_data: [
-          {
-            id: 1,
-            uid: "event-data-1",
-            userId: 7,
-            eventUid: "event-1",
-            completed: false,
-            expectedTrials: 3,
-            createdAt: date,
-            updatedAt: date,
-          },
-        ],
-      });
+      const client = new FakePostgresClient(
+        withPlannerState({
+          ...legacyTables(),
+          pyroxene_collected_sources: [
+            {
+              id: 1,
+              uid: "source-existing",
+              userId: 7,
+              sourceKey: "source-existing",
+              collectedAt: date,
+              createdAt: date,
+            },
+          ],
+          pyroxene_timeline_items: [
+            {
+              id: 1,
+              uid: "record-1",
+              userId: 7,
+              eventAt: date,
+              source: "other",
+              repeatType: null,
+              repeatIntervalDays: null,
+              repeatCount: null,
+              autoRepurchase: false,
+              description: "Existing",
+              pyroxeneDelta: 4,
+              oneTimeTicketDelta: 0,
+              tenTimeTicketDelta: 0,
+            },
+          ],
+          pyroxene_event_data: [
+            {
+              id: 1,
+              uid: "event-data-1",
+              userId: 7,
+              eventUid: "event-1",
+              completed: false,
+              expectedTrials: 3,
+              createdAt: date,
+              updatedAt: date,
+            },
+          ],
+        }),
+      );
       await mutate(client);
 
       const storedRow = client.tables.planner_states?.[0];
@@ -425,5 +528,150 @@ describe("PostgreSQL planner state dual writes", () => {
       );
       if (!storedRow) throw new Error(`No planner state written for ${name}`);
     }
+  });
+
+  it("keeps same-date package rows after existing rows in legacy insertion order", async () => {
+    const startDate = new Date("2026-08-01T00:00:00.000Z");
+    const eventAt = new Date("2026-07-31T19:00:00.000Z");
+    const existingRows = [
+      {
+        id: 39,
+        uid: "z-existing",
+        userId: 7,
+        eventAt,
+        source: "other",
+        repeatType: null,
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+        description: "Existing first",
+        pyroxeneDelta: 4,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      },
+      {
+        id: 40,
+        uid: "y-existing",
+        userId: 7,
+        eventAt,
+        source: "other",
+        repeatType: null,
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+        description: "Existing second",
+        pyroxeneDelta: 5,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      },
+    ];
+    const client = new FakePostgresClient(
+      withPlannerState({
+        ...legacyTables(),
+        pyroxene_timeline_items: existingRows,
+      }),
+    );
+    client.tables.pyroxene_timeline_items = [...existingRows].reverse();
+
+    await createPostgresPyroxeneMonthlyPackage(env, 7, startDate, "half", false, "a-package", {
+      createClient: () => client as unknown as Client,
+    });
+
+    const rows = client.tables.pyroxene_timeline_items ?? [];
+    expect(rows.slice(2).map((row) => row.id)).toEqual([41, 42]);
+    expect(rows.slice(2).map((row) => row.uid)).toEqual(["a-package::onetime", "a-package::daily"]);
+    const storedRow = client.tables.planner_states?.[0];
+    expect(storedRow).toBeDefined();
+    if (!storedRow) throw new Error("Expected a planner state after package creation");
+    const storedDocument = typeof storedRow.document === "string" ? JSON.parse(storedRow.document) : storedRow.document;
+    const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(storedDocument).toEqual(projected);
+    expect(projected.pyroxene.records.map(({ uid }) => uid)).toEqual([
+      "z-existing",
+      "y-existing",
+      "a-package::onetime",
+      "a-package::daily",
+    ]);
+  });
+
+  it.each([
+    {
+      name: "an earlier-created row moved onto later-created rows",
+      timelineItems: [
+        { id: 2, uid: "moving", eventAt: new Date("2026-08-08T19:00:00.000Z") },
+        { id: 3, uid: "target-first", eventAt: new Date("2026-07-31T19:00:00.000Z") },
+        { id: 4, uid: "target-second", eventAt: new Date("2026-07-31T19:00:00.000Z") },
+      ],
+      expectedUids: ["moving", "target-first", "target-second"],
+    },
+    {
+      name: "a later-created row moved onto earlier-created rows",
+      timelineItems: [
+        { id: 2, uid: "target-first", eventAt: new Date("2026-07-31T19:00:00.000Z") },
+        { id: 3, uid: "target-second", eventAt: new Date("2026-07-31T19:00:00.000Z") },
+        { id: 4, uid: "moving", eventAt: new Date("2026-08-08T19:00:00.000Z") },
+      ],
+      expectedUids: ["target-first", "target-second", "moving"],
+    },
+  ])("keeps the document in legacy id order after $name", async ({ timelineItems, expectedUids }) => {
+    const records = timelineItems.map(({ id, uid, eventAt }) => ({
+      id,
+      uid,
+      userId: 7,
+      eventAt,
+      source: "other",
+      repeatType: null,
+      repeatIntervalDays: null,
+      repeatCount: null,
+      autoRepurchase: false,
+      description: uid,
+      pyroxeneDelta: 1,
+      oneTimeTicketDelta: 0,
+      tenTimeTicketDelta: 0,
+    }));
+    const client = new FakePostgresClient(withPlannerState({ ...legacyTables(), pyroxene_timeline_items: records }));
+
+    await updatePostgresPyroxeneOneOffTimelineItem(
+      env,
+      7,
+      "moving",
+      {
+        source: "other",
+        date: "2026-08-01T00:00:00.000Z",
+        description: "Moved",
+        pyroxeneDelta: 10,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      },
+      { createClient: () => client as unknown as Client },
+    );
+
+    const storedRow = client.tables.planner_states?.[0];
+    expect(storedRow).toBeDefined();
+    if (!storedRow) throw new Error("Expected a planner state after one-off update");
+    const storedDocument = typeof storedRow.document === "string" ? JSON.parse(storedRow.document) : storedRow.document;
+    const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
+    expect(storedDocument).toEqual(projected);
+    expect(projected.pyroxene.records.map(({ uid }) => uid)).toEqual(expectedUids);
+  });
+
+  it.each([
+    { repeatType: "weekly" as never },
+    { repeatType: null as never },
+    { monthlyCount: 0 },
+    { monthlyCount: -1 },
+    { monthlyCount: 1.5 },
+    { monthlyCount: Number.NaN },
+    { monthlyCount: Number.POSITIVE_INFINITY },
+    { monthlyCount: null as never },
+  ])("rejects invalid Pyroxene purchase options before writing: %p", async (options) => {
+    const client = new FakePostgresClient();
+
+    await expect(
+      createBuyPyroxeneInDatabase(drizzle(client as unknown as Client), 7, isoDate, 100, options),
+    ).rejects.toThrow(/Invalid Pyroxene purchase/);
+    expect(client.statements.some((statement) => statement.startsWith('insert into "pyroxene_timeline_items"'))).toBe(
+      false,
+    );
   });
 });

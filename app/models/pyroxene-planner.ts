@@ -11,13 +11,6 @@ import {
   deletePostgresPyroxeneOwnedResourceByUid,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
-  getPostgresAllPyroxeneEventData,
-  getPostgresCollectedSourceKeys,
-  getPostgresLatestPyroxeneOwnedResource,
-  getPostgresPyroxeneEventData,
-  getPostgresPyroxenePlannerOptions,
-  getPostgresPyroxeneTimelineItems,
-  getPostgresPyroxeneUserState,
   type PostgresPyroxeneOptions,
   updatePostgresPyroxeneOneOffTimelineItem,
   upsertPostgresCollectedSource,
@@ -27,6 +20,7 @@ import {
 } from "~/db/postgres/pyroxene-planner";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneMonthlyPackageType } from "~/domain/pyroxene-sources";
+import { getPyroxenePlannerState } from "~/models/planner-state";
 
 export type {
   PostgresPyroxeneOptions,
@@ -44,7 +38,8 @@ export type PyroxenePlannerOptionsModel = {
 };
 
 export async function getLatestPyroxeneOwnedResource(env: Env, userId: number, options: PostgresPyroxeneOptions = {}) {
-  return getPostgresLatestPyroxeneOwnedResource(env, userId, options);
+  const resource = (await getPyroxenePlannerState(env, userId, options)).resources;
+  return resource ? { ...resource, userId } : null;
 }
 
 export async function createPyroxeneOwnedResource(
@@ -65,7 +60,7 @@ export async function getCollectedSourceKeys(
   userId: number,
   options: PostgresPyroxeneOptions = {},
 ): Promise<Set<string>> {
-  return getPostgresCollectedSourceKeys(env, userId, options);
+  return new Set((await getPyroxenePlannerState(env, userId, options)).collectedSourceKeys);
 }
 
 export async function upsertCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {
@@ -87,7 +82,7 @@ export async function deleteCollectedSource(env: Env, userId: number, sourceKey:
 export type { TimelineSourceType };
 
 export async function getPyroxeneTimelineItems(env: Env, userId: number, options: PostgresPyroxeneOptions = {}) {
-  return getPostgresPyroxeneTimelineItems(env, userId, options);
+  return (await getPyroxenePlannerState(env, userId, options)).records.map((item) => ({ ...item, userId }));
 }
 
 type CreateBuyPyroxeneOptions = {
@@ -175,7 +170,7 @@ export async function getPyroxenePlannerOptions(
   userId: number,
   options: PostgresPyroxeneOptions = {},
 ): Promise<PyroxenePlannerOptions> {
-  return getPostgresPyroxenePlannerOptions(env, userId, options);
+  return (await getPyroxenePlannerState(env, userId, options)).options;
 }
 
 export async function upsertPyroxenePlannerOptions(
@@ -192,11 +187,13 @@ export async function getPyroxeneEventData(
   eventUid: string,
   options: PostgresPyroxeneOptions = {},
 ) {
-  return getPostgresPyroxeneEventData(env, userId, eventUid, options);
+  const eventData = (await getPyroxenePlannerState(env, userId, options)).eventData[eventUid];
+  return eventData ? { ...eventData, eventUid, userId } : null;
 }
 
 export async function getAllPyroxeneEventData(env: Env, userId: number, options: PostgresPyroxeneOptions = {}) {
-  return getPostgresAllPyroxeneEventData(env, userId, options);
+  const eventData = (await getPyroxenePlannerState(env, userId, options)).eventData;
+  return Object.entries(eventData).map(([eventUid, data]) => ({ ...data, eventUid, userId }));
 }
 
 export async function upsertPyroxeneEventData(
@@ -213,5 +210,12 @@ export async function deletePyroxeneEventData(env: Env, userId: number, eventUid
 }
 
 export async function getPyroxeneUserState(env: Env, userId: number, options: PostgresPyroxeneOptions = {}) {
-  return getPostgresPyroxeneUserState(env, userId, options);
+  const state = await getPyroxenePlannerState(env, userId, options);
+  return {
+    latestResources: state.resources ? { ...state.resources, userId } : null,
+    options: state.options,
+    eventData: Object.entries(state.eventData).map(([eventUid, data]) => ({ ...data, eventUid, userId })),
+    timelineItems: state.records.map((item) => ({ ...item, userId })),
+    collectedSourceKeys: new Set(state.collectedSourceKeys),
+  };
 }

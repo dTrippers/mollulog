@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 
 const mockGetActiveSensei = jest.fn<() => Promise<{ id: number } | null>>();
 type AsyncMock = (...args: unknown[]) => Promise<unknown>;
@@ -546,6 +547,36 @@ describe("Pyroxene action dispatch", () => {
     expect(mockLoggerError).toHaveBeenCalledWith("Failed to save pyroxene owned resources", expect.any(Error), {
       operation: "save-owned-resources",
       userId: 1,
+    });
+  });
+
+  it("returns the approved revision conflict message without exposing internals", async () => {
+    const conflict = new Error("database-specific details");
+    conflict.name = "PlannerStateRevisionConflictError";
+    mockCreateBuyPyroxene.mockRejectedValue(conflict);
+
+    const response = await action(
+      actionArgs("save-buy", { quantity: 100, date: "2026-08-08", repeatType: "fixed_days", monthlyCount: 1 }, "POST"),
+    );
+
+    expect(response).toMatchObject({
+      data: { success: false, error: PLANNER_STATE_REVISION_CONFLICT_MESSAGE, revisionConflict: true },
+      init: { status: 409 },
+    });
+  });
+
+  it("uses the same revision conflict message for owned-resource saves", async () => {
+    const conflict = new Error("database-specific details");
+    conflict.name = "PlannerStateRevisionConflictError";
+    mockCreatePyroxeneOwnedResource.mockRejectedValue(conflict);
+
+    const response = await action(
+      actionArgs("save-owned-resources", { resources: { pyroxene: 1, oneTimeTicket: 0, tenTimeTicket: 0 } }, "POST"),
+    );
+
+    expect(response).toMatchObject({
+      data: { success: false, error: PLANNER_STATE_REVISION_CONFLICT_MESSAGE, revisionConflict: true },
+      init: { status: 409 },
     });
   });
 

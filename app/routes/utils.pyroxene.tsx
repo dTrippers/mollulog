@@ -41,6 +41,7 @@ import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import type { PyroxeneEventData, PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import {
   createAttendance,
@@ -164,131 +165,153 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     );
   }
 
-  switch (actionData.intent) {
-    case "save-owned-resources": {
-      const { resources, eventUid, collectedSourceKeys } = actionData.payload;
-      const savedAt = new Date().toISOString();
-      try {
-        await createPyroxeneOwnedResource(env, currentUser.id, resources, { inputAt: savedAt });
-        if (eventUid) {
-          const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
-            (content) => content.kind === "event" && content.uid === eventUid,
+  try {
+    switch (actionData.intent) {
+      case "save-owned-resources": {
+        const { resources, eventUid, collectedSourceKeys } = actionData.payload;
+        const savedAt = new Date().toISOString();
+        try {
+          await createPyroxeneOwnedResource(env, currentUser.id, resources, { inputAt: savedAt });
+          if (eventUid) {
+            const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
+              (content) => content.kind === "event" && content.uid === eventUid,
+            );
+            if (content?.kind !== "event" || !content.recruitmentGroupUid) {
+              throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
+            }
+
+            const recruitedStudents = content.recruitments.flatMap((recruitment) => {
+              if (!recruitment.pickup || !recruitment.student) return [];
+              return [
+                {
+                  studentUid: recruitment.student.uid,
+                  tier: recruitment.student.initialTier || 3,
+                  pickup: true,
+                },
+              ];
+            });
+            if (recruitedStudents.length === 0) {
+              throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
+            }
+
+            await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
+              contentUid: eventUid,
+              recruitedStudents,
+            });
+          }
+          if (collectedSourceKeys) {
+            await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
+          }
+        } catch (error) {
+          logger.error("Failed to save pyroxene owned resources", error, {
+            operation: "save-owned-resources",
+            userId: currentUser.id,
+          });
+          const revisionConflict = isPlannerStateRevisionConflictError(error);
+          return data(
+            {
+              success: false,
+              error: revisionConflict ? PLANNER_STATE_REVISION_CONFLICT_MESSAGE : "보유 재화를 저장하지 못했어요",
+              ...(revisionConflict ? { revisionConflict: true } : {}),
+            },
+            { status: revisionConflict ? 409 : 500 },
           );
-          if (content?.kind !== "event" || !content.recruitmentGroupUid) {
-            throw new Error(`Cannot resolve recruitment group for pyroxene completion: eventUid=${eventUid}`);
-          }
-
-          const recruitedStudents = content.recruitments.flatMap((recruitment) => {
-            if (!recruitment.pickup || !recruitment.student) return [];
-            return [
-              {
-                studentUid: recruitment.student.uid,
-                tier: recruitment.student.initialTier || 3,
-                pickup: true,
-              },
-            ];
-          });
-          if (recruitedStudents.length === 0) {
-            throw new Error(`Cannot resolve pickup students for pyroxene completion: eventUid=${eventUid}`);
-          }
-
-          await setRecruitmentResultCompletion(env, currentUser.id, content.recruitmentGroupUid, true, {
-            contentUid: eventUid,
-            recruitedStudents,
-          });
         }
-        if (collectedSourceKeys) {
-          await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
-        }
-      } catch (error) {
-        logger.error("Failed to save pyroxene owned resources", error, {
-          operation: "save-owned-resources",
-          userId: currentUser.id,
+        return { success: true, savedAt };
+      }
+      case "save-buy":
+        await createBuyPyroxene(env, currentUser.id, actionData.payload.date, actionData.payload.quantity, {
+          repeatType: actionData.payload.repeatType,
+          monthlyCount: actionData.payload.monthlyCount,
         });
-        return data({ success: false, error: "보유 재화를 저장하지 못했어요" }, { status: 500 });
-      }
-      return { success: true, savedAt };
-    }
-    case "save-buy":
-      await createBuyPyroxene(env, currentUser.id, actionData.payload.date, actionData.payload.quantity, {
-        repeatType: actionData.payload.repeatType,
-        monthlyCount: actionData.payload.monthlyCount,
-      });
-      break;
-    case "save-monthly-package":
-      await createPyroxeneMonthlyPackage(
-        env,
-        currentUser.id,
-        actionData.payload.startDate,
-        actionData.payload.packageType,
-        actionData.payload.autoRepurchase,
-      );
-      if (actionData.payload.options) {
+        break;
+      case "save-monthly-package":
+        await createPyroxeneMonthlyPackage(
+          env,
+          currentUser.id,
+          actionData.payload.startDate,
+          actionData.payload.packageType,
+          actionData.payload.autoRepurchase,
+        );
+        if (actionData.payload.options) {
+          await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+        }
+        break;
+      case "save-ap-package":
+        await createPyroxeneApPackage(
+          env,
+          currentUser.id,
+          actionData.payload.startDate,
+          actionData.payload.autoRepurchase,
+        );
+        if (actionData.payload.options) {
+          await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+        }
+        break;
+      case "save-attendance":
+        await createAttendance(env, currentUser.id, actionData.payload.startDate);
+        break;
+      case "save-other":
+        await createOtherPyroxeneGain(
+          env,
+          currentUser.id,
+          actionData.payload.date,
+          actionData.payload.resources.pyroxene,
+          actionData.payload.resources.oneTimeTicket,
+          actionData.payload.resources.tenTimeTicket,
+          actionData.payload.description,
+        );
+        break;
+      case "update-event-data":
+        await upsertPyroxeneEventData(env, currentUser.id, actionData.payload.eventUid, {
+          expectedTrials: actionData.payload.expectedTrials,
+        });
+        break;
+      case "save-options":
         await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
-      }
-      break;
-    case "save-ap-package":
-      await createPyroxeneApPackage(
-        env,
-        currentUser.id,
-        actionData.payload.startDate,
-        actionData.payload.autoRepurchase,
-      );
-      if (actionData.payload.options) {
-        await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
-      }
-      break;
-    case "save-attendance":
-      await createAttendance(env, currentUser.id, actionData.payload.startDate);
-      break;
-    case "save-other":
-      await createOtherPyroxeneGain(
-        env,
-        currentUser.id,
-        actionData.payload.date,
-        actionData.payload.resources.pyroxene,
-        actionData.payload.resources.oneTimeTicket,
-        actionData.payload.resources.tenTimeTicket,
-        actionData.payload.description,
-      );
-      break;
-    case "update-event-data":
-      await upsertPyroxeneEventData(env, currentUser.id, actionData.payload.eventUid, {
-        expectedTrials: actionData.payload.expectedTrials,
-      });
-      break;
-    case "save-options":
-      await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
-      break;
-    case "collect-source":
-      await upsertCollectedSources(env, currentUser.id, [actionData.payload.sourceKey]);
-      break;
-    case "uncollect-source":
-      await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
-      break;
-    case "delete-pickup-completion": {
-      let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
-      if (!recruitmentGroupUid) {
-        for (const content of await getPyroxenePlannerContents(env, false, ctx)) {
-          if (content.kind === "event" && content.uid === actionData.payload.eventUid) {
-            recruitmentGroupUid = content.recruitmentGroupUid;
-            break;
+        break;
+      case "collect-source":
+        await upsertCollectedSources(env, currentUser.id, [actionData.payload.sourceKey]);
+        break;
+      case "uncollect-source":
+        await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
+        break;
+      case "delete-pickup-completion": {
+        let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
+        if (!recruitmentGroupUid) {
+          for (const content of await getPyroxenePlannerContents(env, false, ctx)) {
+            if (content.kind === "event" && content.uid === actionData.payload.eventUid) {
+              recruitmentGroupUid = content.recruitmentGroupUid;
+              break;
+            }
           }
         }
-      }
-      if (recruitmentGroupUid) {
-        const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [
-          recruitmentGroupUid,
-        ]);
-        if (recruitmentResult) {
-          await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
+        if (recruitmentGroupUid) {
+          const [recruitmentResult] = await getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, [
+            recruitmentGroupUid,
+          ]);
+          if (recruitmentResult) {
+            await deleteRecruitmentResult(env, currentUser.id, recruitmentResult.uid);
+          }
         }
+        break;
       }
-      break;
+      case "delete-timeline-item":
+        await deletePyroxeneTimelineItem(env, currentUser.id, actionData.payload.itemUid);
+        break;
     }
-    case "delete-timeline-item":
-      await deletePyroxeneTimelineItem(env, currentUser.id, actionData.payload.itemUid);
-      break;
+  } catch (error) {
+    if (isPlannerStateRevisionConflictError(error)) {
+      return data(
+        { success: false, error: PLANNER_STATE_REVISION_CONFLICT_MESSAGE, revisionConflict: true },
+        { status: 409 },
+      );
+    }
+    logger.error("Failed to update pyroxene planner", error, {
+      operation: actionData.intent,
+      userId: currentUser.id,
+    });
+    throw error;
   }
 
   return { success: true };
@@ -311,6 +334,7 @@ export const meta: MetaFunction = ({ location }) => {
 type OwnedResourcesActionResult = {
   success: boolean;
   error?: string;
+  revisionConflict?: boolean;
   savedAt?: string | null;
 };
 
@@ -448,7 +472,7 @@ export default function PyroxenePlanner() {
 
     pendingOwnedResourceSave.current = null;
     if (!ownedResourcesFetcher.data?.success) {
-      setOwnedResourceSaveError("보유 재화를 저장하지 못했어요");
+      setOwnedResourceSaveError(ownedResourcesFetcher.data?.error ?? "보유 재화를 저장하지 못했어요");
       return;
     }
 
@@ -868,6 +892,13 @@ export default function PyroxenePlanner() {
       >
         <div className="space-y-4">
           <div className="space-y-3">
+            {fetcher.data &&
+            "error" in fetcher.data &&
+            typeof fetcher.data.error === "string" &&
+            "revisionConflict" in fetcher.data &&
+            fetcher.data.revisionConflict === true ? (
+              <Callout tone="destructive" title={fetcher.data.error} />
+            ) : null}
             {ownedResourceSaveError ? <Callout tone="destructive" title={ownedResourceSaveError} /> : null}
             {signedIn && hasGuestData ? (
               <Callout

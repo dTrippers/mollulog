@@ -65,7 +65,7 @@ describe("event shop owned quantities view", () => {
         selectedBonusStudentUids: ["student-1"],
         enabledStages: { "stage-9": true },
       }),
-      { ctx },
+      { fallbackEventUid: "timeline-1", ctx },
     );
   });
 

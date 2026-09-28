@@ -23,6 +23,31 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function mergeRecordChanges(
+  base: Record<string, unknown>,
+  submitted: Record<string, unknown>,
+  latest: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...latest };
+  for (const key of new Set([...Object.keys(base), ...Object.keys(submitted)])) {
+    const baseHasKey = Object.hasOwn(base, key);
+    const submittedHasKey = Object.hasOwn(submitted, key);
+    const latestHasKey = Object.hasOwn(latest, key);
+
+    if (!submittedHasKey) {
+      if (baseHasKey && latestHasKey && JSON.stringify(latest[key]) === JSON.stringify(base[key])) {
+        delete merged[key];
+      }
+      continue;
+    }
+
+    if (!baseHasKey || JSON.stringify(submitted[key]) !== JSON.stringify(base[key])) {
+      merged[key] = submitted[key];
+    }
+  }
+  return merged;
+}
+
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 512;
 }
@@ -187,11 +212,22 @@ export function mergeEventShopStateChanges(
 
   const merged: EventShopState = { ...latest };
   for (const key of Object.keys(base) as Array<keyof EventShopState>) {
-    if (JSON.stringify(base[key]) !== JSON.stringify(submitted[key])) {
-      Object.assign(merged, { [key]: submitted[key] });
+    const baseValue = base[key];
+    const submittedValue = submitted[key];
+    const latestValue = latest[key];
+
+    if (isRecord(baseValue) && isRecord(submittedValue) && isRecord(latestValue)) {
+      Object.assign(merged, {
+        [key]: mergeRecordChanges(baseValue, submittedValue, latestValue),
+      });
+    } else if (JSON.stringify(baseValue) !== JSON.stringify(submittedValue)) {
+      Object.assign(merged, { [key]: submittedValue });
     }
   }
-  return merged;
+
+  const normalized = normalizeEventShopState(merged);
+  if (!normalized) throw new Error("상점 계획 내용을 확인해주세요");
+  return normalized;
 }
 
 export function eventShopStatesEqual(left: unknown, right: unknown): boolean {
