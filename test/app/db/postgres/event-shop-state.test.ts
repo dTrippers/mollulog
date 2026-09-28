@@ -1,11 +1,9 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
 import {
   patchPostgresEventShopStateOwnedQuantities,
   upsertPostgresEventShopState,
 } from "~/db/postgres/event-shop-state";
-import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
 import { createDefaultEventShopState, type EventShopState } from "~/domain/event-shop-state";
 import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import { getEventShopStates } from "~/models/event-shop-state";
@@ -41,15 +39,7 @@ function findStatementValues(query: ReturnType<typeof createClient>["query"], ta
 }
 
 function createProjectionClient(eventShopStates: Record<string, unknown>[] = []) {
-  const tables = {
-    pyroxene_owned_resources: [],
-    pyroxene_collected_sources: [],
-    pyroxene_timeline_items: [],
-    pyroxene_planner_options: [],
-    pyroxene_event_data: [],
-    event_shop_states: eventShopStates,
-    event_shop_state_history: [],
-  };
+  const tables = { event_shop_state_history: [] };
   const plannerStates = eventShopStates.length
     ? [
         {
@@ -70,13 +60,8 @@ function createProjectionClient(eventShopStates: Record<string, unknown>[] = [])
   return new FakePostgresClient({ ...tables, planner_states: plannerStates });
 }
 
-async function expectPlannerStateToMatchLegacyProjection(client: FakePostgresClient) {
-  const row = client.tables.planner_states?.[0];
-  expect(row).toBeDefined();
-  if (!row) throw new Error("Expected a dual-written planner state row");
-  const document = typeof row.document === "string" ? JSON.parse(row.document) : row.document;
-  const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
-  expect(document).toEqual(projected);
+function expectNoLegacyShopStateStatements(client: FakePostgresClient) {
+  expect(client.statements.some((statement) => statement.includes('"event_shop_states"'))).toBe(false);
 }
 
 function getStoredPlannerDocument(client: FakePostgresClient): PlannerStateDocumentV1 {
@@ -99,37 +84,7 @@ describe("PostgreSQL event shop state", () => {
     expect(client.statements.some((statement) => statement.includes('from "event_shop_states"'))).toBe(false);
   });
 
-  it("atomically merges owned currencies without replacing other shop settings", async () => {
-    const { client, query } = createClient();
-    const patch = { "currency-1": 0, "currency-2": 240 };
-
-    await patchPostgresEventShopStateOwnedQuantities(
-      env,
-      7,
-      "shop-1",
-      patch,
-      createDefaultEventShopState([], ["student-1"]),
-      { createClient: () => client },
-    );
-
-    const calls = query.mock.calls.map(([config, parameters]) => {
-      if (typeof config === "string") return { text: config, values: parameters };
-      return { text: config.text, values: config.values ?? parameters };
-    });
-    const statement = calls.find(({ text }) => text.includes('insert into "event_shop_states"'));
-    expect(statement).toBeDefined();
-    const updateClause = statement?.text.toLowerCase().split("do update set")[1] ?? "";
-    expect(updateClause).toContain('"existing_payment_item_quantities"');
-    expect(updateClause).toContain(" || ");
-    expect(updateClause).toContain('"updated_at"');
-    expect(updateClause).not.toContain('"item_quantities" =');
-    expect(updateClause).not.toContain('"enabled_stages" =');
-    expect(statement?.values).toContain(JSON.stringify(patch));
-    expect(calls.some(({ text }) => text.includes('insert into "planner_states"'))).toBe(true);
-    expect(calls.map(({ text }) => text.toLowerCase())).toEqual(expect.arrayContaining(["begin", "commit"]));
-  });
-
-  it("dual-writes an event shop upsert equal to the legacy-table projection", async () => {
+  it("stores an event shop upsert in the planner state document", async () => {
     const client = createProjectionClient();
     const state: EventShopState = {
       ...createDefaultEventShopState([], ["student-1"]),
@@ -142,10 +97,12 @@ describe("PostgreSQL event shop state", () => {
       createClient: () => client as unknown as Client,
     });
 
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expect(getStoredPlannerDocument(client).eventShops["event-1"]).toEqual(state);
+    expect(client.tables.event_shop_state_history).toHaveLength(1);
+    expectNoLegacyShopStateStatements(client);
   });
 
-  it("dual-writes an owned-quantity patch after merging JSONB into an existing shop row", async () => {
+  it("merges an owned-quantity patch into the stored shop state without replacing other settings", async () => {
     const existingState: EventShopState = {
       ...createDefaultEventShopState([], ["student-existing"]),
       itemQuantities: { "daily-ticket": 60 },
@@ -163,13 +120,12 @@ describe("PostgreSQL event shop state", () => {
       { createClient: () => client as unknown as Client },
     );
 
-    expect(client.tables.event_shop_states?.[0]?.existingPaymentItemQuantities).toEqual({
-      "currency-1": 0,
-      "currency-kept": 5,
-      "currency-2": 240,
+    expect(getStoredPlannerDocument(client).eventShops["shop-1"]).toEqual({
+      ...existingState,
+      existingPaymentItemQuantities: { "currency-1": 0, "currency-kept": 5, "currency-2": 240 },
     });
-    expect(client.tables.event_shop_states?.[0]?.itemQuantities).toEqual(existingState.itemQuantities);
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expect(client.tables.event_shop_state_history).toEqual([]);
+    expectNoLegacyShopStateStatements(client);
   });
 
   it("merges stale submissions against the latest locked document and preserves unrelated fields", async () => {
@@ -207,13 +163,7 @@ describe("PostgreSQL event shop state", () => {
       minigamePlayCount: 3,
     });
     expect(document.eventShops[fallbackEventUid]).toEqual(baseState);
-    expect(client.tables.event_shop_states).toHaveLength(2);
-    expect(client.tables.event_shop_states?.find((row) => row.eventUid === fallbackEventUid)).toMatchObject(baseState);
-    const canonicalRow = client.tables.event_shop_states?.find((row) => row.eventUid === canonicalEventUid);
-    expect(canonicalRow?.eventUid).toBe(canonicalEventUid);
-    expect(JSON.parse(canonicalRow?.itemQuantities as string)).toEqual({ "daily-ticket": 3 });
-    expect(JSON.parse(canonicalRow?.existingPaymentItemQuantities as string)).toEqual({ "currency-1": 42 });
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expectNoLegacyShopStateStatements(client);
   });
 
   it("preserves different item quantity keys from stale submissions in the locked save path", async () => {
@@ -246,11 +196,7 @@ describe("PostgreSQL event shop state", () => {
       "item-a": 3,
       "item-b": 4,
     });
-    expect(JSON.parse(client.tables.event_shop_states?.[0]?.itemQuantities as string)).toEqual({
-      "item-a": 3,
-      "item-b": 4,
-    });
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expectNoLegacyShopStateStatements(client);
   });
 
   it("lets the later stale submission win when both requests change the same field", async () => {
@@ -282,7 +228,7 @@ describe("PostgreSQL event shop state", () => {
     expect(getStoredPlannerDocument(client).eventShops[canonicalEventUid]?.itemQuantities).toEqual({
       "daily-ticket": 5,
     });
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expectNoLegacyShopStateStatements(client);
   });
 
   it("keeps fallback-only purchase settings when patching owned quantities", async () => {
@@ -321,12 +267,7 @@ describe("PostgreSQL event shop state", () => {
       existingPaymentItemQuantities: { "currency-1": 42 },
     });
     expect(document.eventShops[fallbackEventUid]).toEqual(fallbackState);
-    expect(client.tables.event_shop_states).toHaveLength(2);
-    const canonicalRow = client.tables.event_shop_states?.find((row) => row.eventUid === canonicalEventUid);
-    expect(JSON.parse(canonicalRow?.itemQuantities as string)).toEqual({ "daily-ticket": 60 });
-    expect(JSON.parse(canonicalRow?.itemPurchaseDays as string)).toEqual({ "daily-ticket": 4 });
-    expect(JSON.parse(canonicalRow?.existingPaymentItemQuantities as string)).toEqual({ "currency-1": 42 });
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expectNoLegacyShopStateStatements(client);
   });
 
   it("replaces the canonical plan as submitted without merging current or fallback fields", async () => {
@@ -358,10 +299,10 @@ describe("PostgreSQL event shop state", () => {
 
     expect(getStoredPlannerDocument(client).eventShops[canonicalEventUid]).toEqual(submitted);
     expect(getStoredPlannerDocument(client).eventShops[fallbackEventUid]).toEqual(fallbackState);
-    await expectPlannerStateToMatchLegacyProjection(client);
+    expectNoLegacyShopStateStatements(client);
   });
 
-  it("writes the state upsert and the history snapshot inside one transaction", async () => {
+  it("writes the history snapshot and the planner state document inside one transaction", async () => {
     const { client, events, query } = createClient();
     const state: EventShopState = {
       ...createDefaultEventShopState([], ["student-1"]),
@@ -376,12 +317,11 @@ describe("PostgreSQL event shop state", () => {
     expect(lowered).toContain("begin");
     expect(lowered).toContain("commit");
 
-    const upsertIndex = events.findIndex((event) => event.includes('insert into "event_shop_states"'));
     const historyIndex = events.findIndex((event) => event.includes('insert into "event_shop_state_history"'));
     const documentIndex = events.findIndex((event) => event.includes('into "planner_states"'));
     const commitIndex = lowered.indexOf("commit");
-    expect(upsertIndex).toBeGreaterThanOrEqual(0);
-    expect(historyIndex).toBeGreaterThan(upsertIndex);
+    expect(events.some((event) => event.includes('"event_shop_states"'))).toBe(false);
+    expect(historyIndex).toBeGreaterThanOrEqual(0);
     expect(documentIndex).toBeGreaterThan(historyIndex);
     expect(commitIndex).toBeGreaterThan(documentIndex);
 
