@@ -66,15 +66,6 @@ export type GuestPyroxenePlannerEnvelope = {
   data: GuestPyroxenePlannerData;
 };
 
-export type VerifiedGuestPyroxeneImport = {
-  resources: boolean;
-  options: boolean;
-  recordIds: string[];
-  sourceKeys: string[];
-  eventUids: string[];
-  favorites: GuestPyroxeneFavorite[];
-};
-
 export function createEmptyGuestPyroxenePlanner(): GuestPyroxenePlannerEnvelope {
   return {
     version: GUEST_PYROXENE_PLANNER_VERSION,
@@ -337,10 +328,6 @@ export function pyroxeneTimelineItemFingerprint(item: PyroxeneTimelineItem): str
   });
 }
 
-export function guestPyroxeneRecordFingerprint(record: GuestPyroxeneRecord): string {
-  return guestPyroxeneRecordToTimelineItems(record).map(pyroxeneTimelineItemFingerprint).sort().join("|");
-}
-
 export function hasGuestPyroxenePlannerData(data: GuestPyroxenePlannerData): boolean {
   return Boolean(
     data.resources ||
@@ -350,49 +337,6 @@ export function hasGuestPyroxenePlannerData(data: GuestPyroxenePlannerData): boo
       Object.keys(data.eventTrials).length ||
       data.favoriteStudents.length,
   );
-}
-
-function isSameValue(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
-export function clearVerifiedGuestPyroxeneImport(
-  current: GuestPyroxenePlannerData,
-  submitted: GuestPyroxenePlannerData,
-  verified: VerifiedGuestPyroxeneImport,
-): GuestPyroxenePlannerData {
-  const verifiedRecordIds = new Set(verified.recordIds);
-  const submittedRecords = new Map(submitted.records.map((record) => [record.recordId, record]));
-  const verifiedSourceKeys = new Set(verified.sourceKeys);
-  const verifiedEventUids = new Set(verified.eventUids);
-  const verifiedFavoriteKeys = new Set(
-    verified.favorites.map((favorite) => `${favorite.contentUid}\u0000${favorite.studentUid}`),
-  );
-  const eventTrials = { ...current.eventTrials };
-
-  for (const eventUid of verifiedEventUids) {
-    if (current.eventTrials[eventUid] === submitted.eventTrials[eventUid]) delete eventTrials[eventUid];
-  }
-
-  const clearResources =
-    verified.resources && current.resources !== null && isSameValue(current.resources, submitted.resources);
-  const clearOptions = verified.options && current.optionsChanged && isSameValue(current.options, submitted.options);
-
-  return {
-    ...current,
-    resources: clearResources ? null : current.resources,
-    options: clearOptions ? defaultPyroxenePlannerOptions : current.options,
-    optionsChanged: clearOptions ? false : current.optionsChanged,
-    records: current.records.filter((record) => {
-      if (!verifiedRecordIds.has(record.recordId)) return true;
-      return !isSameValue(record, submittedRecords.get(record.recordId));
-    }),
-    collectedSourceKeys: current.collectedSourceKeys.filter((key) => !verifiedSourceKeys.has(key)),
-    eventTrials,
-    favoriteStudents: current.favoriteStudents.filter(
-      (favorite) => !verifiedFavoriteKeys.has(`${favorite.contentUid}\u0000${favorite.studentUid}`),
-    ),
-  };
 }
 
 export function createGuestRecord<T extends Omit<GuestPyroxeneRecord, "recordId" | "createdAt">>(

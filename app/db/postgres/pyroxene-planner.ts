@@ -2,7 +2,7 @@ import { and, asc, desc, eq, isNull, like, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
-import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import { type PlannerStateDocumentV1, sortPlannerStateTimelineRecords } from "~/domain/planner-state";
 import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
@@ -89,10 +89,6 @@ type TimelineWriteOptions = {
   uid?: string;
   ignoreUidConflict?: boolean;
 };
-
-export function sortPlannerStateTimelineRecords<T extends { eventAt: string }>(records: readonly T[]): T[] {
-  return [...records].sort((left, right) => left.eventAt.localeCompare(right.eventAt));
-}
 
 function toDate(value: Date | string): Date {
   return value instanceof Date ? value : new Date(value);

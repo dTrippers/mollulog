@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
-import type { GuestEventShopPlan } from "~/domain/guest-event-shop-planner";
-import { persistGuestEventShopPlanImmediately, readGuestEventShopPlanner } from "~/lib/guest-event-shop-planner.client";
+import { mergeGuestPlannerEventShopPlan } from "~/domain/guest-planner";
+import {
+  flushGuestPlannerEventShopPlan,
+  type GuestPlannerSnapshot,
+  readGuestPlanner,
+  updateGuestPlanner,
+} from "~/lib/guest-planner.client";
 import type { ShopState } from "./useShopState";
 
-export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "none";
+export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
 
 type UseAutoSaveParams = {
   state: ShopState;
@@ -81,13 +86,40 @@ function guestStorageError(status: GuestPlannerStatus): string {
       return "저장된 게스트 상점 계획을 읽지 못했어요. 현재 입력은 저장되지 않았어요.";
     case "unavailable":
       return "브라우저 상점 계획 저장소에 접근할 수 없어요. 현재 입력은 저장되지 않았어요.";
+    case "loading":
+      return "브라우저 플래너를 불러오고 있어요. 잠시 후 다시 시도해주세요.";
     case "ready":
     case "none":
       return "브라우저에 상점 계획을 저장하지 못했어요.";
   }
 }
 
-/** Saves guest changes synchronously and account changes only after server acknowledgement. */
+export async function resolveGuestSave(
+  save: () => Promise<GuestPlannerSnapshot>,
+): Promise<{ snapshot: GuestPlannerSnapshot | null; error: string | null }> {
+  try {
+    const snapshot = await save();
+    return {
+      snapshot,
+      error: snapshot.status === "ready" ? null : guestStorageError(snapshot.status),
+    };
+  } catch {
+    return { snapshot: null, error: guestStorageError("ready") };
+  }
+}
+
+/** Lets only the most recent guest save or teardown flush write, so a queued stale save cannot undo a newer one. */
+export function createGuestSaveGate() {
+  let generation = 0;
+  return {
+    begin(): () => boolean {
+      const current = ++generation;
+      return () => current === generation;
+    },
+  };
+}
+
+/** Saves guest changes to browser storage and account changes only after server acknowledgement. */
 export function useAutoSave({
   state,
   signedIn,
@@ -109,6 +141,7 @@ export function useAutoSave({
   const accountSaveSequenceRef = useRef(0);
   const accountSaveFailedRef = useRef(false);
   const initialAccountSavePendingRef = useRef(signedIn && savedShopState === null);
+  const [guestSaveGate] = useState(createGuestSaveGate);
   const [saveError, setSaveError] = useState<string | null>(() =>
     !signedIn && guestPlannerStatus !== "ready" && guestPlannerStatus !== "none"
       ? guestStorageError(guestPlannerStatus)
@@ -131,35 +164,70 @@ export function useAutoSave({
   }, [savedShopState]);
 
   const saveGuestState = useCallback(
-    (nextState: EventShopState, force = false) => {
+    async (nextState: EventShopState, force = false) => {
+      const isLatest = guestSaveGate.begin();
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
-      const plan: GuestEventShopPlan = { timelineUid, shopStateUid, state: nextState };
-      const result = persistGuestEventShopPlanImmediately(plan);
-      if (result.status === "ready") {
-        lastSavedStateRef.current = nextState;
-        setSaveError(null);
+      const baseState = baseline ?? nextState;
+      let superseded = false;
+      const resolution = await resolveGuestSave(() =>
+        updateGuestPlanner((envelope) => {
+          if (!isLatest()) {
+            superseded = true;
+            return envelope;
+          }
+          return mergeGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState, baseState });
+        }),
+      );
+      if (superseded) return;
+      if (resolution.error) {
+        setSaveError(resolution.error);
         return;
       }
-      setSaveError(guestStorageError(result.status));
+      if (resolution.snapshot?.status !== "ready") return;
+      lastSavedStateRef.current = nextState;
+      setSaveError(null);
     },
-    [shopStateUid, timelineUid],
+    [guestSaveGate, shopStateUid, timelineUid],
+  );
+
+  const flushGuestState = useCallback(
+    (nextState: EventShopState, force = false) => {
+      guestSaveGate.begin();
+      const baseline = lastSavedStateRef.current;
+      if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
+      try {
+        const result = flushGuestPlannerEventShopPlan(
+          { timelineUid, shopStateUid, state: nextState },
+          baseline ?? nextState,
+        );
+        if (result.status === "ready") {
+          lastSavedStateRef.current = nextState;
+          setSaveError(null);
+          return;
+        }
+        setSaveError(guestStorageError(result.status));
+      } catch {
+        setSaveError(guestStorageError("ready"));
+      }
+    },
+    [guestSaveGate, shopStateUid, timelineUid],
   );
 
   useEffect(() => {
     if (signedIn || isInitialLoad) return;
-    saveGuestState(currentState, guestPlannerStatus === "memory");
+    void saveGuestState(currentState, guestPlannerStatus === "memory");
   }, [currentState, guestPlannerStatus, isInitialLoad, saveGuestState, signedIn]);
 
   useEffect(() => {
     if (signedIn) return;
-    const flush = () => saveGuestState(currentStateRef.current, guestPlannerStatus === "memory");
+    const flush = () => flushGuestState(currentStateRef.current, guestPlannerStatus === "memory");
     window.addEventListener("pagehide", flush);
     return () => {
       window.removeEventListener("pagehide", flush);
       flush();
     };
-  }, [guestPlannerStatus, saveGuestState, signedIn]);
+  }, [flushGuestState, guestPlannerStatus, signedIn]);
 
   useEffect(() => {
     if (!signedIn || isInitialLoad) return;
@@ -232,7 +300,7 @@ export function useAutoSave({
         lastSavedStateRef.current &&
         eventShopStatesEqual(lastSavedStateRef.current, currentState)
       ) {
-        const snapshot = readGuestEventShopPlanner();
+        const snapshot = readGuestPlanner();
         setSaveError(snapshot.status === "ready" ? null : guestStorageError(snapshot.status));
         return;
       }

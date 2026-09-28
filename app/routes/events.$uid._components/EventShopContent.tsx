@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { EventDetailShopPage } from "~/components/features/events";
 import { EmptyView } from "~/components/primitives";
-import type { GuestEventShopPlannerSnapshot } from "~/lib/guest-event-shop-planner.client";
-import { readGuestEventShopPlanner, subscribeGuestEventShopPlanner } from "~/lib/guest-event-shop-planner.client";
+import { guestPlannerEventShopPlans } from "~/domain/guest-planner";
+import { type GuestPlannerSnapshot, readGuestPlanner, subscribeGuestPlanner } from "~/lib/guest-planner.client";
 
 type EventShopContentProps =
   | {
@@ -32,13 +32,13 @@ export default function EventShopContent(props: EventShopContentProps) {
 }
 
 function ConnectedEventShopContent(props: Extract<EventShopContentProps, { empty: false }>) {
-  const [guestSnapshot, setGuestSnapshot] = useState<GuestEventShopPlannerSnapshot | null>(null);
+  const [guestSnapshot, setGuestSnapshot] = useState<GuestPlannerSnapshot | null>(null);
 
   useEffect(() => {
     if (props.signedIn) return;
-    const refresh = () => setGuestSnapshot(readGuestEventShopPlanner());
+    const refresh = () => setGuestSnapshot(readGuestPlanner());
     refresh();
-    return subscribeGuestEventShopPlanner(refresh);
+    return subscribeGuestPlanner(refresh);
   }, [props.signedIn]);
 
   if (!props.signedIn && !guestSnapshot) {
@@ -53,10 +53,13 @@ function ConnectedEventShopContent(props: Extract<EventShopContentProps, { empty
     );
   }
 
-  const guestPlan =
+  const guestEnvelope =
     guestSnapshot?.status === "ready" || guestSnapshot?.status === "memory" || guestSnapshot?.status === "conflict"
-      ? guestSnapshot.envelope.data.plans[props.shopStateUid]
-      : undefined;
+      ? guestSnapshot.envelope
+      : null;
+  const guestPlan = guestEnvelope
+    ? guestPlannerEventShopPlans(guestEnvelope).find((plan) => plan.shopStateUid === props.shopStateUid)
+    : undefined;
   const savedShopState = props.signedIn ? props.savedShopState : (guestPlan?.state ?? null);
   const guestPlannerStatus = props.signedIn ? "none" : (guestSnapshot?.status ?? "unavailable");
 
