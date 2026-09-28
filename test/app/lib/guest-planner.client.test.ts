@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "@jest/globals";
+import { createGuestSaveGate } from "~/components/features/events/shop/hooks/useAutoSave";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
 import {
   createEmptyGuestEventShopPlanner,
@@ -470,6 +471,40 @@ describe("unified guest planner storage", () => {
         itemQuantities: { "daily-ticket": 8 },
         existingPaymentItemQuantities: { currency: 42 },
       });
+    }
+  });
+
+  it("keeps a teardown flush when an older gated save was still queued", async () => {
+    const gate = createGuestSaveGate();
+    const plan = (quantity: number) => ({
+      ...createDefaultEventShopState([], []),
+      itemQuantities: { "daily-ticket": quantity },
+    });
+    const save = (quantity: number, isLatest: () => boolean) =>
+      updateGuestPlanner((current) =>
+        isLatest()
+          ? mergeGuestPlannerEventShopPlan(current, {
+              timelineUid: "event-timeline-1",
+              shopStateUid: "shop-1",
+              state: plan(quantity),
+              baseState: plan(0),
+            })
+          : current,
+      );
+
+    await save(0, gate.begin());
+    const queued = save(1, gate.begin());
+    gate.begin();
+    flushGuestPlannerEventShopPlan(
+      { timelineUid: "event-timeline-1", shopStateUid: "shop-1", state: plan(2) },
+      plan(0),
+    );
+    await queued;
+
+    const snapshot = readGuestPlanner();
+    expect(snapshot.status).toBe("ready");
+    if (snapshot.status === "ready") {
+      expect(snapshot.envelope.document.eventShops["shop-1"]?.itemQuantities).toEqual({ "daily-ticket": 2 });
     }
   });
 

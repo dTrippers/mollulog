@@ -429,6 +429,25 @@ export function initialSelection(
   };
 }
 
+/** Shops whose account plan was actually read; a successful response can still mark individual shops unavailable. */
+export function comparedEventShopStateUids(response: EventShopStateLookupResponse | null): Set<string> {
+  if (!response?.success) return new Set();
+  return new Set(response.states.filter((row) => row.status === "available").map((row) => row.shopStateUid));
+}
+
+/** Event-shop plans can overwrite account plans, so each stays unselected until its account plan has been compared. */
+export function withComparedEventShopSelections(
+  selectionBySource: Record<string, GuestPlannerSelection>,
+  comparedShopStateUids: ReadonlySet<string>,
+): Record<string, GuestPlannerSelection> {
+  return Object.fromEntries(
+    Object.entries(selectionBySource).map(([sourceId, selection]) => [
+      sourceId,
+      { ...selection, eventShopUids: selection.eventShopUids.filter((uid) => comparedShopStateUids.has(uid)) },
+    ]),
+  );
+}
+
 function initialSelections(
   sources: readonly GuestImportSource[],
   account: Parameters<typeof initialSelection>[1],
@@ -907,6 +926,7 @@ export default function UnifiedGuestPlannerImportPage() {
   const [comparisonResponse, setComparisonResponse] = useState<EventShopStateLookupResponse | null>(null);
   const [compareError, setCompareError] = useState<string | null>(null);
   const [isComparing, setIsComparing] = useState(false);
+  const [compareAttempt, setCompareAttempt] = useState(0);
   const [cleanupOutcome, setCleanupOutcome] = useState<GuestPlannerCleanupOutcome | null>(null);
   const initializedSignature = useRef<string | null>(null);
   const processedResult = useRef<ImportActionResult | null>(null);
@@ -973,7 +993,7 @@ export default function UnifiedGuestPlannerImportPage() {
       return;
     }
     const controller = new AbortController();
-    const requestId = `guest-import-${Date.now()}`;
+    const requestId = `guest-import-${Date.now()}-${compareAttempt}`;
     setComparisonResponse(null);
     setCompareError(null);
     setIsComparing(true);
@@ -1010,7 +1030,7 @@ export default function UnifiedGuestPlannerImportPage() {
     };
     void compare();
     return () => controller.abort();
-  }, [eventShopPlans]);
+  }, [eventShopPlans, compareAttempt]);
 
   useEffect(() => {
     if (!comparisonResponse?.success || defaultShopPlanKeys.size === 0) return;
@@ -1087,6 +1107,11 @@ export default function UnifiedGuestPlannerImportPage() {
   const from = new URLSearchParams(location.search).get("from");
   const back =
     from === "pyroxene" ? { title: "청휘석 플래너", to: "/utils/pyroxene" } : { title: "통합 플래너", to: "/planner" };
+  const comparedShopStateUids = comparedEventShopStateUids(comparisonResponse);
+  const uncomparedShopPlanCount = comparisonResponse?.success
+    ? new Set(eventShopPlans.map(({ plan }) => plan.shopStateUid).filter((uid) => !comparedShopStateUids.has(uid))).size
+    : 0;
+  const effectiveSelectionBySource = withComparedEventShopSelections(selectionBySource, comparedShopStateUids);
   const countedImportItems = new Set<string>();
   const defaultShopPlanCount = new Set(
     [...defaultShopPlanKeys].map((key) => key.split("\u0000")[1]).filter((key): key is string => Boolean(key)),
@@ -1101,11 +1126,11 @@ export default function UnifiedGuestPlannerImportPage() {
       sources.reduce((count, source) => count + (source.conflictDeletionCount ?? 0), 0),
   );
   const selectedCount = sources.reduce(
-    (count, source) => count + countSelection(selectionBySource[source.id] ?? emptySelection()),
+    (count, source) => count + countSelection(effectiveSelectionBySource[source.id] ?? emptySelection()),
     0,
   );
   const unselectedCleanupCount = countUnselectedItemsToCleanup(
-    sources.map((source) => ({ ...source, selection: selectionBySource[source.id] ?? emptySelection() })),
+    sources.map((source) => ({ ...source, selection: effectiveSelectionBySource[source.id] ?? emptySelection() })),
   );
   const isSubmitting = fetcher.state !== "idle";
   const failedLabels = fetcher.data?.failedLabels ?? [];
@@ -1153,7 +1178,7 @@ export default function UnifiedGuestPlannerImportPage() {
     const bodySources = sources.map((source) => ({
       id: source.id,
       envelope: source.envelope,
-      selection: selectionBySource[source.id] ?? emptySelection(),
+      selection: effectiveSelectionBySource[source.id] ?? emptySelection(),
     }));
     fetcher.submit({ sources: bodySources }, { method: "POST", encType: "application/json" });
   };
@@ -1261,8 +1286,32 @@ export default function UnifiedGuestPlannerImportPage() {
             tone="warning"
             Icon={ExclamationCircleIcon}
             title="계정 상점 계획을 확인하지 못했어요"
-            description={compareError}
-          />
+            description={`${compareError} 확인하기 전까지 이벤트 상점 계획은 선택할 수 없어요.`}
+          >
+            <Button
+              text="다시 확인"
+              icon={ArrowPathIcon}
+              size="sm"
+              variant="secondary"
+              onClick={() => setCompareAttempt((attempt) => attempt + 1)}
+            />
+          </Callout>
+        )}
+        {uncomparedShopPlanCount > 0 && (
+          <Callout
+            tone="warning"
+            Icon={ExclamationCircleIcon}
+            title={`이벤트 상점 계획 ${uncomparedShopPlanCount}건의 계정 계획을 확인하지 못했어요`}
+            description="확인하기 전까지 해당 이벤트 상점 계획은 선택할 수 없어요. 이 브라우저 계획은 그대로 남아 있어요."
+          >
+            <Button
+              text="다시 확인"
+              icon={ArrowPathIcon}
+              size="sm"
+              variant="secondary"
+              onClick={() => setCompareAttempt((attempt) => attempt + 1)}
+            />
+          </Callout>
         )}
         {fetcher.data && (
           <Callout
@@ -1308,7 +1357,7 @@ export default function UnifiedGuestPlannerImportPage() {
               </SectionCard>
             )}
             {sources.map((source) => {
-              const selection = selectionBySource[source.id] ?? emptySelection();
+              const selection = effectiveSelectionBySource[source.id] ?? emptySelection();
               const guest = source.envelope;
               const guestRecordsById = guestPyroxeneRecordsById(guest);
               const recordGroups = guestTimelineRecordGroupsById(guest.document.pyroxene.records, guestRecordsById);
@@ -1530,14 +1579,17 @@ export default function UnifiedGuestPlannerImportPage() {
                               <h3 className="sr-only">{eventName}</h3>
                               <ImportCheckbox
                                 checked={selection.eventShopUids.includes(plan.shopStateUid)}
+                                disabled={!comparedShopStateUids.has(plan.shopStateUid)}
                                 onChange={(checked) =>
                                   toggleUnique(source.id, "eventShopUids", plan.shopStateUid, checked)
                                 }
                                 title={`${eventName} · ${comparisonStatus}`}
                                 description={
-                                  comparisonStatus === "계정 계획과 같아요"
-                                    ? "같은 계획이 계정에 저장되어 있어요."
-                                    : "선택하면 이 브라우저 계획을 계정에 저장해요."
+                                  !comparedShopStateUids.has(plan.shopStateUid)
+                                    ? "계정 계획을 확인한 뒤 선택할 수 있어요. 이 브라우저 계획은 그대로 남아 있어요."
+                                    : comparisonStatus === "계정 계획과 같아요"
+                                      ? "같은 계획이 계정에 저장되어 있어요."
+                                      : "선택하면 이 브라우저 계획을 계정에 저장해요."
                                 }
                               />
                               <div className="grid gap-2 md:grid-cols-2">
@@ -1778,11 +1830,13 @@ function PlannerOptionsSummary({ options }: { options: PyroxenePlannerOptions })
 
 function ImportCheckbox({
   checked,
+  disabled = false,
   onChange,
   title,
   description,
 }: {
   checked: boolean;
+  disabled?: boolean;
   onChange: (checked: boolean) => void;
   title: string;
   description: string;
@@ -1790,6 +1844,7 @@ function ImportCheckbox({
   return (
     <Checkbox
       checked={checked}
+      disabled={disabled}
       onChange={onChange}
       className={cn(
         "w-full items-start rounded-lg border px-4 py-3 transition-colors",

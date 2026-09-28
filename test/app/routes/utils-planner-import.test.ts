@@ -35,6 +35,7 @@ import {
   action,
   applyGuestPlannerImportCleanup,
   buildSources,
+  comparedEventShopStateUids,
   countSourceItems,
   countUnselectedItemsToCleanup,
   describeImportCleanup,
@@ -50,6 +51,7 @@ import {
   initialSelection,
   MAX_GUEST_PLANNER_IMPORT_REQUEST_BYTES,
   ResourceConflictComparison,
+  withComparedEventShopSelections,
 } from "~/routes/planner_.import";
 
 const env = {} as Env;
@@ -769,5 +771,64 @@ describe("unified planner import action", () => {
     );
 
     expect(html.match(/가져온 시각 기준 보유량으로 저장돼요/g)).toHaveLength(1);
+  });
+});
+
+describe("withComparedEventShopSelections", () => {
+  const selection = {
+    resources: true,
+    options: false,
+    recordUids: ["record000001"],
+    sourceKeys: [],
+    eventUids: [],
+    eventShopUids: ["shop-1", "shop-2"],
+    favorites: [],
+  };
+  const availableRow = (shopStateUid: string) => ({
+    timelineUid: `timeline-${shopStateUid}`,
+    shopStateUid,
+    status: "available" as const,
+    eventName: "이벤트",
+    state: null,
+    defaultState: null,
+    displayCatalog: null,
+  });
+
+  it("keeps only event-shop selections whose account plan was compared", () => {
+    const compared = comparedEventShopStateUids({
+      success: true,
+      states: [
+        availableRow("shop-1"),
+        { timelineUid: "timeline-shop-2", shopStateUid: "shop-2", status: "unavailable" },
+      ],
+    });
+
+    expect(withComparedEventShopSelections({ current: selection }, compared)).toEqual({
+      current: { ...selection, eventShopUids: ["shop-1"] },
+    });
+  });
+
+  it("blocks every event-shop selection when the account lookup fails inside a successful response", () => {
+    const compared = comparedEventShopStateUids({
+      success: true,
+      states: ["shop-1", "shop-2"].map((shopStateUid) => ({
+        timelineUid: `timeline-${shopStateUid}`,
+        shopStateUid,
+        status: "unavailable" as const,
+        eventName: "이벤트",
+      })),
+    });
+
+    expect(withComparedEventShopSelections({ current: selection }, compared)).toEqual({
+      current: { ...selection, eventShopUids: [] },
+    });
+  });
+
+  it("blocks every event-shop selection when the comparison request fails or has not finished", () => {
+    for (const response of [null, { success: false, states: [availableRow("shop-1")] }]) {
+      expect(withComparedEventShopSelections({ current: selection }, comparedEventShopStateUids(response))).toEqual({
+        current: { ...selection, eventShopUids: [] },
+      });
+    }
   });
 });

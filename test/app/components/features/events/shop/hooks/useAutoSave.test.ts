@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
 import {
+  createGuestSaveGate,
   resolveAccountSaveResponse,
   resolveGuestSave,
 } from "../../../../../../../app/components/features/events/shop/hooks/useAutoSave";
@@ -210,5 +211,17 @@ describe("resolveGuestSave", () => {
       snapshot,
       error: "브라우저 상점 계획 저장소에 접근할 수 없어요. 현재 입력은 저장되지 않았어요.",
     });
+  });
+});
+
+describe("createGuestSaveGate", () => {
+  it("treats only the most recently started save or flush as current", () => {
+    const gate = createGuestSaveGate();
+    const first = gate.begin();
+    expect(first()).toBe(true);
+
+    const second = gate.begin();
+    expect(first()).toBe(false);
+    expect(second()).toBe(true);
   });
 });

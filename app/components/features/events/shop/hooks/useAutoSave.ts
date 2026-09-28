@@ -108,6 +108,17 @@ export async function resolveGuestSave(
   }
 }
 
+/** Lets only the most recent guest save or teardown flush write, so a queued stale save cannot undo a newer one. */
+export function createGuestSaveGate() {
+  let generation = 0;
+  return {
+    begin(): () => boolean {
+      const current = ++generation;
+      return () => current === generation;
+    },
+  };
+}
+
 /** Saves guest changes to browser storage and account changes only after server acknowledgement. */
 export function useAutoSave({
   state,
@@ -130,6 +141,7 @@ export function useAutoSave({
   const accountSaveSequenceRef = useRef(0);
   const accountSaveFailedRef = useRef(false);
   const initialAccountSavePendingRef = useRef(signedIn && savedShopState === null);
+  const [guestSaveGate] = useState(createGuestSaveGate);
   const [saveError, setSaveError] = useState<string | null>(() =>
     !signedIn && guestPlannerStatus !== "ready" && guestPlannerStatus !== "none"
       ? guestStorageError(guestPlannerStatus)
@@ -153,14 +165,21 @@ export function useAutoSave({
 
   const saveGuestState = useCallback(
     async (nextState: EventShopState, force = false) => {
+      const isLatest = guestSaveGate.begin();
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
       const baseState = baseline ?? nextState;
+      let superseded = false;
       const resolution = await resolveGuestSave(() =>
-        updateGuestPlanner((envelope) =>
-          mergeGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState, baseState }),
-        ),
+        updateGuestPlanner((envelope) => {
+          if (!isLatest()) {
+            superseded = true;
+            return envelope;
+          }
+          return mergeGuestPlannerEventShopPlan(envelope, { timelineUid, shopStateUid, state: nextState, baseState });
+        }),
       );
+      if (superseded) return;
       if (resolution.error) {
         setSaveError(resolution.error);
         return;
@@ -169,11 +188,12 @@ export function useAutoSave({
       lastSavedStateRef.current = nextState;
       setSaveError(null);
     },
-    [shopStateUid, timelineUid],
+    [guestSaveGate, shopStateUid, timelineUid],
   );
 
   const flushGuestState = useCallback(
     (nextState: EventShopState, force = false) => {
+      guestSaveGate.begin();
       const baseline = lastSavedStateRef.current;
       if (baseline && eventShopStatesEqual(baseline, nextState) && !force) return;
       try {
@@ -191,7 +211,7 @@ export function useAutoSave({
         setSaveError(guestStorageError("ready"));
       }
     },
-    [shopStateUid, timelineUid],
+    [guestSaveGate, shopStateUid, timelineUid],
   );
 
   useEffect(() => {
