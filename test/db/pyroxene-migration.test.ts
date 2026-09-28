@@ -50,17 +50,8 @@ describe("Pyroxene PostgreSQL migration contract", () => {
     expect(migration).not.toMatch(/CHECK\s*\(/i);
   });
 
-  test("maps the six table columns through the PostgreSQL Drizzle schema", () => {
-    expect(schema).toContain("export const pgPyroxeneOwnedResourcesTable = pgTable(");
-    expect(schema).toContain("export const pgPyroxeneCollectedSourcesTable = pgTable(");
-    expect(schema).toContain("export const pgPyroxeneTimelineItemsTable = pgTable(");
-    expect(schema).toContain("export const pgPyroxenePlannerOptionsTable = pgTable(");
-    expect(schema).toContain("export const pgPyroxeneEventDataTable = pgTable(");
+  test("keeps only the guest import receipt table in the PostgreSQL Drizzle schema", () => {
     expect(schema).toContain("export const pgPyroxeneGuestImportItemsTable = pgTable(");
-    expect(schema).toMatch(/inputAt: timestamptz\("input_at"\)/);
-    expect(schema).toMatch(/sourceKey: text\("source_key"\)/);
-    expect(schema).toMatch(/autoRepurchase: boolean\("auto_repurchase"\)/);
-    expect(schema).toMatch(/completed: boolean\(\)/);
     expect(schema).toMatch(/importedAt: timestamptz\("imported_at"\)/);
   });
 

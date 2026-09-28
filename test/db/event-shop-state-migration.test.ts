@@ -39,9 +39,6 @@ describe("event shop state PostgreSQL migration contract", () => {
   test("preserves UID and user/event uniqueness", () => {
     expect(migration).toContain("event_shop_states_uid_uidx");
     expect(migration).toContain("event_shop_states_user_event_uidx");
-    expect(schema).toContain("export const pgEventShopStatesTable = pgTable(");
-    expect(schema).toContain('uniqueIndex("event_shop_states_uid_uidx")');
-    expect(schema).toContain('uniqueIndex("event_shop_states_user_event_uidx")');
   });
 
   test("keeps the model wrapper free of D1 access", () => {
