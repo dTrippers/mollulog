@@ -1,17 +1,14 @@
 import { describe, expect, it, jest } from "@jest/globals";
-import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
 import {
   decodePostgresPyroxeneReceiptItemKey,
   encodePostgresPyroxeneReceiptItemKey,
   type GuestPlannerImportPlan,
-  hasPostgresGuestImportReceipt,
   markPostgresGuestImportReceipt,
   runPostgresGuestPlannerImport,
 } from "~/db/postgres/guest-pyroxene-import";
-import { getPlannerStateDocumentFromLegacyInDatabase } from "~/db/postgres/planner-states";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
-import { projectPlannerStateDocument } from "~/domain/planner-state";
+import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import { FakePostgresClient } from "../../../helpers/fake-postgres";
 
 const env = { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive } as unknown as Env;
@@ -65,14 +62,23 @@ function fakeClient(initial: Record<string, unknown[]>, failPlannerStateWrite = 
   return client;
 }
 
+function storedDocument(client: FakePostgresClient): PlannerStateDocumentV1 {
+  const value = client.tables.planner_states?.[0]?.document;
+  if (value === undefined) throw new Error("Expected a stored planner state");
+  return (typeof value === "string" ? JSON.parse(value) : value) as PlannerStateDocumentV1;
+}
+
+function expectOnlyDocumentAndHistoryWrites(client: FakePostgresClient) {
+  const writtenTables = client.statements.flatMap((statement) =>
+    [...statement.matchAll(/\b(?:into|update|delete\s+from)\s+"([^"]+)"/gi)].map((match) => match[1]),
+  );
+  for (const table of writtenTables) {
+    expect(["planner_states", "event_shop_state_history", "pyroxene_guest_import_items"]).toContain(table);
+  }
+}
+
 function tables(initialDocument = emptyDocument()) {
   return {
-    pyroxene_owned_resources: [],
-    pyroxene_collected_sources: [],
-    pyroxene_timeline_items: [],
-    pyroxene_planner_options: [],
-    pyroxene_event_data: [],
-    event_shop_states: [],
     event_shop_state_history: [],
     pyroxene_guest_import_items: [],
     planner_states: [{ id: 1, userId: 7, revision: 1, document: initialDocument }],
@@ -90,14 +96,9 @@ describe("PostgreSQL guest import receipt keys", () => {
     );
   });
 
-  it("uses the encoded key for receipt reads and writes", async () => {
+  it("stores receipts with the encoded key", async () => {
     const client = new FakePostgresClient({ pyroxene_guest_import_items: [] });
     const key = "content-1\u0000student-1";
-    await expect(
-      hasPostgresGuestImportReceipt(env, 7, "dataset-1", "favorite", key, {
-        createClient: () => client as unknown as Client,
-      }),
-    ).resolves.toBe(false);
     await markPostgresGuestImportReceipt(env, 7, "dataset-1", "favorite", key, {
       createClient: () => client as unknown as Client,
     });
@@ -106,7 +107,7 @@ describe("PostgreSQL guest import receipt keys", () => {
 });
 
 describe("PostgreSQL unified guest planner import", () => {
-  it("imports the selected AP document section and records its retry receipt without a legacy AP mirror", async () => {
+  it("imports the selected AP document section and records its receipt", async () => {
     const sourceDocument = emptyDocument();
     sourceDocument.ap = {
       accountLevel: 85,
@@ -134,14 +135,11 @@ describe("PostgreSQL unified guest planner import", () => {
     expect(result.verified).toEqual([{ sourceId: "current", datasetId: "dataset-1", type: "ap", key: "current" }]);
     const receipt = client.tables.pyroxene_guest_import_items?.[0];
     expect(receipt).toMatchObject({ itemType: "ap", itemKey: encodePostgresPyroxeneReceiptItemKey("current") });
-    const storedRow = client.tables.planner_states?.[0];
-    if (!storedRow) throw new Error("Expected an AP planner document after import");
-    const storedDocument = typeof storedRow.document === "string" ? JSON.parse(storedRow.document) : storedRow.document;
-    expect(storedDocument.ap).toEqual(sourceDocument.ap);
-    expect((await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7)).ap).toBeNull();
+    expect(storedDocument(client).ap).toEqual(sourceDocument.ap);
+    expectOnlyDocumentAndHistoryWrites(client);
   });
 
-  it("imports selected Pyroxene and event shop data in one mirrored document update", async () => {
+  it("imports selected Pyroxene and event shop data in one document update", async () => {
     const sourceDocument = projectPlannerStateDocument({
       resources: [],
       timelineItems: [
@@ -210,19 +208,16 @@ describe("PostgreSQL unified guest planner import", () => {
     ]);
     expect(client.tables.event_shop_state_history).toHaveLength(1);
     expect(client.tables.pyroxene_guest_import_items).toHaveLength(5);
-    const stateRow = client.tables.planner_states?.[0];
-    expect(stateRow).toBeDefined();
-    if (!stateRow) throw new Error("Expected a planner state after import");
-    const storedDocument = typeof stateRow.document === "string" ? JSON.parse(stateRow.document) : stateRow.document;
-    const projectedDocument = await getPlannerStateDocumentFromLegacyInDatabase(
-      drizzle(client as unknown as Client),
-      7,
-    );
-    expect(storedDocument).toEqual(projectedDocument);
-    expect(projectedDocument.pyroxene.records.map(({ uid }) => uid)).toEqual([
-      "guest-7-dataset-1-record-group::first",
-      "guest-7-dataset-1-record-group::second",
+    const document = storedDocument(client);
+    expect(document.pyroxene.records.map(({ uid, eventAt }) => [uid, eventAt])).toEqual([
+      ["guest-7-dataset-1-record-group::first", "2026-09-02T00:00:00.000Z"],
+      ["guest-7-dataset-1-record-group::second", "2026-09-02T00:00:00.000Z"],
     ]);
+    expect(document.pyroxene.resources).toEqual(sourceDocument.pyroxene.resources);
+    expect(document.pyroxene.collectedSourceKeys).toEqual(["source-1"]);
+    expect(document.pyroxene.eventData).toEqual({ "event-1": { completed: false, expectedTrials: 200 } });
+    expect(document.eventShops).toEqual({ "shop-1": sourceDocument.eventShops["shop-1"] });
+    expectOnlyDocumentAndHistoryWrites(client);
   });
 
   it("keeps receipts as history but still applies an explicitly selected set-union item", async () => {
@@ -245,7 +240,7 @@ describe("PostgreSQL unified guest planner import", () => {
       failed: [],
       revisionConflict: false,
     });
-    expect(client.tables.pyroxene_collected_sources).toHaveLength(1);
+    expect(storedDocument(client).pyroxene.collectedSourceKeys).toEqual(["source-1"]);
     expect(client.tables.pyroxene_guest_import_items).toHaveLength(1);
   });
 
@@ -277,8 +272,7 @@ describe("PostgreSQL unified guest planner import", () => {
     await importQuantity(1);
     await importQuantity(1);
 
-    expect(JSON.parse(String(client.tables.event_shop_states?.[0]?.itemQuantities))).toEqual({ "daily-ticket": 1 });
-    expect(JSON.parse(String(client.tables.planner_states?.[0]?.document))).toMatchObject({
+    expect(storedDocument(client)).toMatchObject({
       eventShops: { "shop-1": { itemQuantities: { "daily-ticket": 1 } } },
     });
     expect(client.tables.event_shop_state_history).toHaveLength(3);
@@ -302,7 +296,6 @@ describe("PostgreSQL unified guest planner import", () => {
     };
     const client = fakeClient({
       ...tables(document),
-      event_shop_states: [{ uid: "shop-row", userId: 7, eventUid: "shop-1", ...accountState }],
       pyroxene_guest_import_items: [priorReceipt],
     });
     const guestDocument = emptyDocument();
@@ -326,8 +319,7 @@ describe("PostgreSQL unified guest planner import", () => {
     });
 
     expect(result.failed).toEqual([]);
-    expect(JSON.parse(String(client.tables.event_shop_states?.[0]?.itemQuantities))).toEqual({ "daily-ticket": 1 });
-    expect(JSON.parse(String(client.tables.planner_states?.[0]?.document))).toMatchObject({
+    expect(storedDocument(client)).toMatchObject({
       eventShops: { "shop-1": { itemQuantities: { "daily-ticket": 1 } } },
     });
   });
@@ -380,18 +372,9 @@ describe("PostgreSQL unified guest planner import", () => {
       createClient: () => client as unknown as Client,
     });
 
-    const stateRow = client.tables.planner_states?.[0];
-    if (!stateRow) throw new Error("Expected a planner state after record re-import");
-    const storedDocument = typeof stateRow.document === "string" ? JSON.parse(stateRow.document) : stateRow.document;
-    const projectedDocument = await getPlannerStateDocumentFromLegacyInDatabase(
-      drizzle(client as unknown as Client),
-      7,
-    );
-    expect(client.tables.pyroxene_timeline_items).toHaveLength(1);
-    expect(client.tables.pyroxene_timeline_items?.[0]?.pyroxeneDelta).toBe(90);
-    expect(storedDocument.pyroxene.records).toHaveLength(1);
-    expect(storedDocument.pyroxene.records[0].pyroxeneDelta).toBe(90);
-    expect(storedDocument).toEqual(projectedDocument);
+    const document = storedDocument(client);
+    expect(document.pyroxene.records).toHaveLength(1);
+    expect(document.pyroxene.records[0]).toMatchObject({ uid: "guest-7-dataset-1-record-group", pyroxeneDelta: 90 });
     expect(client.tables.pyroxene_guest_import_items).toHaveLength(1);
   });
 
@@ -404,7 +387,6 @@ describe("PostgreSQL unified guest planner import", () => {
     };
     const accountDocument = emptyDocument();
     accountDocument.pyroxene.resources = accountResource;
-    const resourceRow = { id: 1, uid: "account-resource", userId: 7, ...accountResource };
     const makeResourcePlan = (resources: {
       inputAt: string;
       pyroxene: number;
@@ -431,30 +413,21 @@ describe("PostgreSQL unified guest planner import", () => {
       oneTimeTicket: number;
       tenTimeTicket: number;
     }) => {
-      const client = fakeClient({ ...tables(accountDocument), pyroxene_owned_resources: [resourceRow] });
+      const client = fakeClient(tables(accountDocument));
       await runPostgresGuestPlannerImport(env, 7, makeResourcePlan(resources), {
         createClient: () => client as unknown as Client,
       });
-      const stateRow = client.tables.planner_states?.[0];
-      if (!stateRow) throw new Error("Expected a planner state after resource import");
-      const storedDocument = typeof stateRow.document === "string" ? JSON.parse(stateRow.document) : stateRow.document;
-      const projectedDocument = await getPlannerStateDocumentFromLegacyInDatabase(
-        drizzle(client as unknown as Client),
-        7,
-      );
-      expect(storedDocument).toEqual(projectedDocument);
-      return { client, storedDocument };
+      expectOnlyDocumentAndHistoryWrites(client);
+      return { storedDocument: storedDocument(client) };
     };
 
     const older = await run({ ...accountResource, inputAt: "2026-09-27T00:00:00.000Z", pyroxene: 2400 });
-    expect(older.client.tables.pyroxene_owned_resources).toHaveLength(2);
     expect(older.storedDocument.pyroxene.resources).toMatchObject({ pyroxene: 2400 });
-    expect(Date.parse(older.storedDocument.pyroxene.resources.inputAt)).toBeGreaterThan(
+    expect(Date.parse(older.storedDocument.pyroxene.resources?.inputAt ?? "")).toBeGreaterThan(
       Date.parse(accountResource.inputAt),
     );
 
     const newer = await run({ ...accountResource, inputAt: "2026-09-29T00:00:00.000Z", pyroxene: 2400 });
-    expect(newer.client.tables.pyroxene_owned_resources).toHaveLength(2);
     expect(newer.storedDocument.pyroxene.resources).toEqual({
       inputAt: "2026-09-29T00:00:00.000Z",
       pyroxene: 2400,
@@ -463,7 +436,6 @@ describe("PostgreSQL unified guest planner import", () => {
     });
 
     const sameAmounts = await run({ ...accountResource, inputAt: "2026-09-27T00:00:00.000Z" });
-    expect(sameAmounts.client.tables.pyroxene_owned_resources).toHaveLength(1);
     expect(sameAmounts.storedDocument.pyroxene.resources).toEqual(accountResource);
   });
 
@@ -479,6 +451,7 @@ describe("PostgreSQL unified guest planner import", () => {
       ap: false,
     };
     const client = fakeClient(tables(), true);
+    const originalDocument = client.tables.planner_states?.[0]?.document;
 
     const result = await runPostgresGuestPlannerImport(env, 7, source, {
       createClient: () => client as unknown as Client,
@@ -487,7 +460,7 @@ describe("PostgreSQL unified guest planner import", () => {
     expect(result.revisionConflict).toBe(true);
     expect(result.verified).toEqual([]);
     expect(result.failed).toEqual([{ sourceId: "current", datasetId: "dataset-1", type: "source", key: "source-1" }]);
-    expect(client.tables.pyroxene_collected_sources).toHaveLength(0);
+    expect(client.tables.planner_states?.[0]?.document).toEqual(originalDocument);
     expect(client.tables.pyroxene_guest_import_items).toHaveLength(0);
   });
 });

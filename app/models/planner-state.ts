@@ -62,14 +62,6 @@ export async function getEventShopPlannerStates(
   );
 }
 
-export async function getApPlannerState(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PlannerStateDatabaseOptions = {},
-): Promise<ApPlannerStoredState> {
-  return (await getPlannerState(env, userId, options)).ap;
-}
-
 export async function updateApPlannerState<T>(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -87,50 +79,6 @@ export async function updateApPlannerState<T>(
       const normalized = state === null ? null : normalizeApPlannerState(state);
       if (state !== null && normalized === null) throw new Error("AP 플래너 내용을 확인해주세요.");
       return { document: { ...currentDocument, ap: normalized }, result };
-    },
-    { ...options, retryable: true },
-  );
-}
-
-export async function updatePyroxenePlannerState<T>(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  update: (
-    transaction: PlannerStateDatabase,
-    current: PyroxenePlannerState,
-  ) => Promise<{ state: PyroxenePlannerState; result: T }>,
-  options: PlannerStateDatabaseOptions = {},
-): Promise<T> {
-  return updatePostgresPlannerStateDocument(
-    env,
-    userId,
-    async (transaction, currentDocument) => {
-      const { state, result } = await update(transaction, currentDocument.pyroxene);
-      return { document: { ...currentDocument, pyroxene: state }, result };
-    },
-    { ...options, retryable: true },
-  );
-}
-
-export async function updateEventShopState<T>(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  eventUid: string,
-  update: (
-    transaction: PlannerStateDatabase,
-    current: EventShopState | null,
-  ) => Promise<{ state: EventShopState | null; result: T }>,
-  options: PlannerStateDatabaseOptions = {},
-): Promise<T> {
-  return updatePostgresPlannerStateDocument(
-    env,
-    userId,
-    async (transaction, currentDocument) => {
-      const { state, result } = await update(transaction, currentDocument.eventShops[eventUid] ?? null);
-      const eventShops = { ...currentDocument.eventShops };
-      if (state === null) delete eventShops[eventUid];
-      else eventShops[eventUid] = state;
-      return { document: { ...currentDocument, eventShops }, result };
     },
     { ...options, retryable: true },
   );

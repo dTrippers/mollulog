@@ -1,23 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
-import { drizzle } from "drizzle-orm/node-postgres";
 import type { Client } from "pg";
-import {
-  getPlannerStateDocumentFromLegacyInDatabase,
-  PlannerStateRevisionConflictError,
-} from "~/db/postgres/planner-states";
-import { pgEventShopStatesTable, pgPyroxeneCollectedSourcesTable } from "~/db/postgres/schema";
-import { createDefaultEventShopState } from "~/domain/event-shop-state";
+import { PlannerStateRevisionConflictError } from "~/db/postgres/planner-states";
 import { type PlannerStateDocumentV1, projectPlannerStateDocument } from "~/domain/planner-state";
 import {
-  getApPlannerState,
   getEventShopPlannerState,
   getPlannerState,
   getPyroxenePlannerState,
   isPlannerStateRevisionConflictError,
   PLANNER_STATE_REVISION_CONFLICT_MESSAGE,
   updateApPlannerState,
-  updateEventShopState,
-  updatePyroxenePlannerState,
 } from "~/models/planner-state";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
 
@@ -33,22 +24,8 @@ function createClient() {
     eventShops: [],
   });
   return new FakePostgresClient({
-    pyroxene_owned_resources: [],
-    pyroxene_collected_sources: [],
-    pyroxene_timeline_items: [],
-    pyroxene_planner_options: [],
-    pyroxene_event_data: [],
-    event_shop_states: [],
     planner_states: [{ id: 1, userId: 7, revision: 1, document }],
   });
-}
-
-async function expectStoredDocumentToMatchLegacyProjection(client: FakePostgresClient) {
-  const row = client.tables.planner_states?.[0];
-  if (!row) throw new Error("Expected a planner state row");
-  const document = typeof row.document === "string" ? JSON.parse(row.document) : row.document;
-  const projected = await getPlannerStateDocumentFromLegacyInDatabase(drizzle(client as unknown as Client), 7);
-  expect(document).toEqual(projected);
 }
 
 describe("planner state model", () => {
@@ -107,63 +84,7 @@ describe("planner state model", () => {
     );
   });
 
-  it("updates the pyroxene section with its legacy mirror in one revisioned operation", async () => {
-    const client = createClient();
-    const sourceKey = "source-1";
-
-    await expect(
-      updatePyroxenePlannerState(
-        env,
-        7,
-        async (transaction, current) => {
-          await transaction.insert(pgPyroxeneCollectedSourcesTable).values({
-            uid: "source-row-1",
-            userId: 7,
-            sourceKey,
-            collectedAt: new Date("2026-08-01T00:00:00.000Z"),
-          });
-          return {
-            state: { ...current, collectedSourceKeys: [...current.collectedSourceKeys, sourceKey] },
-            result: sourceKey,
-          };
-        },
-        { createClient: () => client as unknown as Client },
-      ),
-    ).resolves.toBe(sourceKey);
-
-    expect(client.tables.planner_states?.[0]?.revision).toBe(2);
-    await expectStoredDocumentToMatchLegacyProjection(client);
-  });
-
-  it("updates one event shop through the typed section operation and mirrors its payload", async () => {
-    const client = createClient();
-    const state = { ...createDefaultEventShopState([], ["student-1"]), itemQuantities: { "daily-ticket": 60 } };
-
-    await updateEventShopState(
-      env,
-      7,
-      "event-1",
-      async (transaction, current) => {
-        const nextState = current ?? state;
-        await transaction.insert(pgEventShopStatesTable).values({
-          uid: "event-shop-state-1",
-          userId: 7,
-          eventUid: "event-1",
-          ...nextState,
-        });
-        return { state: nextState, result: undefined };
-      },
-      { createClient: () => client as unknown as Client },
-    );
-
-    expect(
-      await getEventShopPlannerState(env, 7, "event-1", { createClient: () => client as unknown as Client }),
-    ).toEqual(state);
-    expect(client.tables.planner_states?.[0]?.revision).toBe(2);
-    await expectStoredDocumentToMatchLegacyProjection(client);
-  });
-
-  it("updates only the AP document section and preserves the sections without legacy mirrors", async () => {
+  it("updates only the AP document section and preserves the other sections", async () => {
     const client = createClient();
     const before = await getPlannerState(env, 7, { createClient: () => client as unknown as Client });
 
@@ -186,9 +107,6 @@ describe("planner state model", () => {
     expect(document.ap).toMatchObject({ accountLevel: 85, cafeRank: 8, comfort: 4_500 });
     expect(document.pyroxene).toEqual(before.pyroxene);
     expect(document.eventShops).toEqual(before.eventShops);
-    expect(await getApPlannerState(env, 7, { createClient: () => client as unknown as Client })).toEqual(document.ap);
-    expect(client.tables.pyroxene_planner_options).toEqual([]);
-    expect(client.tables.event_shop_states).toEqual([]);
     expect(client.tables.planner_states?.[0]?.revision).toBe(2);
   });
 

@@ -2,7 +2,6 @@ import { describe, expect, it } from "@jest/globals";
 import {
   PlannerStateProjectionError,
   type PlannerStateProjectionRows,
-  plannerStateDocumentDifferences,
   projectPlannerStateDocument,
   sortPlannerStateTimelineRecords,
 } from "~/domain/planner-state";
@@ -185,32 +184,5 @@ describe("planner state projection", () => {
         projectionRows({ eventShops: [{ ...shopRow, selectedBonusStudentUids: "not-an-array" }] }),
       ),
     ).toThrow("event_shop_states.selected_bonus_student_uids");
-  });
-
-  it("reports parity by document section", () => {
-    const expected = projectPlannerStateDocument(projectionRows());
-    const actual = structuredClone(expected);
-    const record = actual.pyroxene.records[0];
-    const shop = actual.eventShops["event-shop-1"];
-    if (!record || !shop) throw new Error("Expected planner state fixtures are missing");
-    record.pyroxeneDelta += 1;
-    shop.minigamePlayCount += 1;
-
-    expect(plannerStateDocumentDifferences(expected, actual)).toEqual(["pyroxene.records", "eventShops"]);
-    expect(plannerStateDocumentDifferences(expected, null)).toEqual(["document"]);
-
-    const apChanged = { ...expected, ap: { accountLevel: 85, cafeRank: 8, comfort: 4_500, eventPlans: {} } };
-    expect(plannerStateDocumentDifferences(expected, apChanged)).toEqual([]);
-  });
-
-  it("treats missing AP charge exceptions in an older document as the normalized empty list", () => {
-    const expected = projectPlannerStateDocument(projectionRows());
-    const actual = structuredClone(expected);
-    const storedOptions = actual.pyroxene.options as unknown as {
-      consumption: { apChargeExceptions?: unknown };
-    };
-    delete storedOptions.consumption.apChargeExceptions;
-
-    expect(plannerStateDocumentDifferences(expected, actual)).toEqual([]);
   });
 });
