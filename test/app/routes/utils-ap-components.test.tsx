@@ -300,7 +300,9 @@ describe("AP planner event card", () => {
 
     expect(calculation.status).toBe("ongoing");
     expect(markup).toContain("종료까지");
-    expect(markup).toContain("현재 보유 AP와 오늘 일일 미션은 빼고 계산했어요.");
+    expect(markup).toContain(
+      "현재 보유 AP와 오늘 일일 미션은 빼고, 오늘 AP 충전과 전술 대회 AP 구매는 아직 하지 않은 것으로 계산했어요.",
+    );
     expect(markup).not.toContain("AP 모으기 계산</button>");
     expect(markup).not.toContain("접속 시");
     expect(markup).not.toContain(">모으기 순서 보기<");

@@ -374,7 +374,7 @@ export function apPackagePanelSummary(records: readonly ApPackagePurchaseRecord[
       .format("YYYY-MM-DD");
     return lastDate === null || candidate > lastDate ? candidate : lastDate;
   }, null);
-  if (!lastCoveredDate || lastCoveredDate <= currentGameDate) return "진행 중인 패키지 없음";
+  if (!lastCoveredDate || lastCoveredDate < currentGameDate) return "진행 중인 패키지 없음";
   return `${dayjs.tz(`${lastCoveredDate}T12:00:00`, KST).format("M/D")}까지`;
 }
 
@@ -462,12 +462,16 @@ function refillSuggestions(
   packageRecords: readonly ApPackagePurchaseRecord[],
   overlapEventName: string | null,
   options: PyroxenePlannerOptions,
+  currentGameDay: string | null,
 ): { suggestions: ApRefillSuggestion[]; overlapConflict: boolean } {
   const deficit = Math.max(0, shortage(availableAp, event.requiredAp));
-  const chargeDates = dailyResetInstantsBetween(accessAt, event.endAt).map(gameDate);
-  const preparationEnd = dayjs(event.startAt).isBefore(dayjs(accessAt)) ? event.startAt : accessAt;
+  const chargeDates = [
+    ...(currentGameDay ? [currentGameDay] : []),
+    ...dailyResetInstantsBetween(accessAt, event.endAt).map(gameDate),
+  ];
+  // The stockpile window's reset starts the access game day, whose refills are bought after access.
   const stockpileDates =
-    stockpileStartsAt === null ? [] : dailyResetInstantsBetween(stockpileStartsAt, preparationEnd).map(gameDate);
+    stockpileStartsAt === null ? [] : dailyResetInstantsBetween(stockpileStartsAt, accessAt).map(gameDate);
   const baseCount = options.consumption.apChargeCount;
   const suggestions: ApRefillSuggestion[] = [];
   let overlapConflict = false;
@@ -865,7 +869,9 @@ export function calculateApPlannerEvent(input: {
 
   const now = Date.parse(currentAt);
   if (!Number.isFinite(now)) throw new Error("계산 시각을 확인할 수 없어요.");
-  const isOngoing = Date.parse(validEvent.startAt) <= now && now < Date.parse(validEvent.endAt);
+  // Until a registered access time passes, a started event still follows its gathering plan.
+  const plannedAccessAhead = Boolean(plan?.accessAt && Date.parse(plan.accessAt) > now);
+  const isOngoing = Date.parse(validEvent.startAt) <= now && now < Date.parse(validEvent.endAt) && !plannedAccessAhead;
   if (!isOngoing && !plan) {
     return {
       status: "not-planned",
@@ -959,18 +965,20 @@ export function calculateApPlannerEvent(input: {
     .reduce((sum, date) => sum + apPackageForGameDate(date, packageRecords), 0);
   const firstChargeDate =
     gameDate(supplyFrom) > gameDate(validEvent.startAt) ? gameDate(supplyFrom) : gameDate(validEvent.startAt);
+  // An ongoing event counts today's refills and tactical items as not bought yet, unless an earlier event owns today.
+  const currentGameDay = isOngoing && supplyFrom === from ? packageGameDate(from) : null;
   const resetDates = dailyChargeDays(`${firstChargeDate}T00:00:00+09:00`, validEvent.endAt).filter((date) => {
     const resetAt = dayjs.tz(`${date}T${String(GAME_RESET_HOUR).padStart(2, "0")}:00:00`, KST);
     return resetAt.isAfter(dayjs(supplyFrom)) && !resetAt.isAfter(dayjs(validEvent.endAt));
   });
-  const chargeCounts = resetDates.map((date) =>
+  const chargeCounts = [...(currentGameDay ? [currentGameDay] : []), ...resetDates].map((date) =>
     getPyroxeneApChargeCountForDate(`${date}T12:00:00+09:00`, options.consumption),
   );
   const apChargeDays = chargeCounts.length;
   const apCharges =
     chargeCounts.reduce((sum, count) => sum + count * AP_PER_REFILL, 0) + stockpilePlan.carryOverChargeAp;
   const eventPeriodTacticalApShopDays = isOngoing
-    ? dailyTaskDays
+    ? dailyTaskDays + (currentGameDay ? 1 : 0)
     : dailyResetInstantsBetween(supplyFrom, validEvent.endAt).length;
   const tacticalApShopDays = stockpilePlan.tacticalApShopDays + eventPeriodTacticalApShopDays;
   // Stockpiled purchases are already in the stockpile; only the event period and the deferred part are added here.
@@ -992,48 +1000,6 @@ export function calculateApPlannerEvent(input: {
     apChargeDays,
     tacticalApShopDays,
   };
-  let displayStockpileSteps = stockpilePlan.steps;
-  let displayStockpileStartsAt = hasStockpile ? resultStockpileStartsAt : null;
-  let displayStockpileStartPassed = hasStockpile && Date.parse(resultStockpileStartsAt) < now;
-  let displayOverlapEventName = overlapEventName;
-  const futureRegisteredAccessAt =
-    isOngoing && plan?.accessAt && Date.parse(plan.accessAt) > now ? plan.accessAt : null;
-  if (futureRegisteredAccessAt) {
-    const displayAccess = dayjs(futureRegisteredAccessAt);
-    const displayCandidateStart = displayAccess.subtract(24, "hour");
-    const displayOverlaps = Boolean(previousEnd?.isAfter(displayCandidateStart));
-    const displayPreviousEndsAfterAccess =
-      displayOverlaps && previousEnd !== null && !previousEnd.isBefore(displayAccess);
-    const displayHasStockpile = !displayPreviousEndsAfterAccess;
-    displayOverlapEventName = displayOverlaps ? (previous?.name ?? null) : null;
-    displayStockpileStartsAt =
-      displayHasStockpile
-        ? displayOverlaps && previousEnd
-          ? previousEnd.toISOString()
-          : displayCandidateStart.toISOString()
-        : null;
-    const displayStoredCafeAp =
-      displayHasStockpile && displayStockpileStartsAt
-        ? cafeStoredSupplyDuring(displayStockpileStartsAt, futureRegisteredAccessAt, production)
-        : 0;
-    const displayPlan =
-      displayHasStockpile && displayStockpileStartsAt
-        ? buildStockpileSteps(
-            futureRegisteredAccessAt,
-            displayStockpileStartsAt,
-            displayOverlapEventName,
-            condition.maxAp,
-            displayStoredCafeAp,
-            condition.tacticalApShopCount,
-            packageRecords,
-            options.consumption,
-          )
-        : null;
-    displayStockpileSteps = displayPlan?.steps ?? [];
-    displayStockpileStartPassed = Boolean(
-      displayStockpileStartsAt && Date.parse(displayStockpileStartsAt) < now,
-    );
-  }
   const refill = refillSuggestions(
     validEvent,
     availableAp,
@@ -1046,6 +1012,7 @@ export function calculateApPlannerEvent(input: {
     packageRecords,
     overlapEventName,
     options,
+    currentGameDay,
   );
   return {
     status: isOngoing ? "ongoing" : "ready",
@@ -1054,11 +1021,11 @@ export function calculateApPlannerEvent(input: {
     availableAp,
     resultAp: availableAp - requiredAp,
     supplyBreakdown,
-    stockpileSteps: displayStockpileSteps,
-    stockpileStartsAt: displayStockpileStartsAt,
-    stockpileStartPassed: displayStockpileStartPassed,
+    stockpileSteps: stockpilePlan.steps,
+    stockpileStartsAt: hasStockpile ? resultStockpileStartsAt : null,
+    stockpileStartPassed: hasStockpile && Date.parse(resultStockpileStartsAt) < now,
     accessTimePassed,
-    overlapEventName: displayOverlapEventName,
+    overlapEventName,
     refillSuggestions: refill.suggestions,
     refillOverlapConflict: refill.overlapConflict,
   };

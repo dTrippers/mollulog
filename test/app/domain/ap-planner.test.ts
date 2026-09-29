@@ -557,6 +557,9 @@ describe("AP planner domain", () => {
           "2026-09-30T12:00:00+09:00",
         ),
       ).toBe("진행 중인 패키지 없음");
+      const lastDay = [{ eventAt: "2026-11-01T04:00:00+09:00", autoRepurchase: false }];
+      expect(apPackagePanelSummary(lastDay, "2026-11-14T04:01:00+09:00")).toBe("11/14까지");
+      expect(apPackagePanelSummary(lastDay, "2026-11-15T04:01:00+09:00")).toBe("진행 중인 패키지 없음");
     });
 
     it("buys the access day's tactical items after access and each later day's items in the event period", () => {
@@ -597,23 +600,118 @@ describe("AP planner domain", () => {
         currentAt: "2026-09-30T12:00:00+09:00",
       });
 
+      // Today's purchases are counted as not bought yet, unlike today's daily tasks.
       expect(ongoing.supplyBreakdown).toMatchObject({
         dailyTaskDays: 1,
-        tacticalApShopDays: 1,
-        tacticalApShop: 90,
+        tacticalApShopDays: 2,
+        tacticalApShop: 180,
       });
     });
 
-    it("keeps the result for an ongoing event while exposing its future registered access plan", () => {
-      const ongoing = calculateApPlannerEvent({
+    it("counts and suggests today's refills for an ongoing event on its last game day", () => {
+      const lastDay = {
         ...base,
-        plan: { accessAt: "2026-10-01T03:00:00+09:00" },
-        currentAt: "2026-09-30T12:00:00+09:00",
+        event: { ...nextEvent, startAt: "2026-11-17T11:00:00+09:00", endAt: "2026-11-19T10:59:00+09:00" },
+        plan: null,
+        currentAt: "2026-11-19T04:01:00+09:00",
+      };
+      const withoutTodayCharges = calculateApPlannerEvent(lastDay);
+      const withTodayCharges = calculateApPlannerEvent({
+        ...lastDay,
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: {
+            ...defaultPyroxenePlannerOptions.consumption,
+            apChargeExceptions: [{ uid: "today", startDate: "2026-11-19", endDate: "2026-11-19", count: 3 }],
+          },
+        },
       });
+      expect(withoutTodayCharges.status).toBe("ongoing");
+      expect(withTodayCharges.availableAp).toBe((withoutTodayCharges.availableAp as number) + 360);
+      expect(withTodayCharges.supplyBreakdown).toMatchObject({ apCharges: 360, apChargeDays: 1, dailyTaskDays: 0 });
 
-      expect(ongoing.status).toBe("ongoing");
-      expect(ongoing.accessTimePassed).toBe(false);
-      expect(ongoing.stockpileSteps.some((step) => step.kind === "access")).toBe(true);
+      const short = calculateApPlannerEvent({
+        ...lastDay,
+        event: { ...lastDay.event, requiredAp: (withoutTodayCharges.availableAp as number) + 360 },
+      });
+      expect(short.refillSuggestions).toEqual([
+        expect.objectContaining({
+          kind: "event-period",
+          startDate: "2026-11-19",
+          endDate: "2026-11-19",
+          toCount: 3,
+          additionalAp: 360,
+          deficitAfter: 0,
+        }),
+      ]);
+    });
+
+    it("follows the registered access plan for a started event until the access time passes", () => {
+      const event: ApPlannerEvent = {
+        ...eventA,
+        timelineUid: "started",
+        startAt: "2026-11-17T11:00:00+09:00",
+        endAt: "2026-11-19T10:59:00+09:00",
+        requiredAp: 3_000,
+      };
+      const at = (currentAt: string) =>
+        calculateApPlannerEvent({
+          ...base,
+          event,
+          plan: { accessAt: "2026-11-17T12:00:00+09:00" },
+          currentAt,
+        });
+      const beforeStart = at("2026-11-17T10:59:00+09:00");
+      const started = at("2026-11-17T11:00:00+09:00");
+      const justBeforeAccess = at("2026-11-17T11:59:00+09:00");
+
+      for (const calculation of [started, justBeforeAccess]) {
+        expect(calculation.status).toBe("ready");
+        expect(calculation.availableAp).toBe(beforeStart.availableAp);
+        expect(calculation.supplyBreakdown).toEqual(beforeStart.supplyBreakdown);
+        expect(calculation.stockpileSteps).toEqual(beforeStart.stockpileSteps);
+      }
+      expect(started.supplyBreakdown?.stockpile).toBe(830);
+
+      const afterAccess = at("2026-11-17T12:00:00+09:00");
+      expect(afterAccess.status).toBe("ongoing");
+      expect(afterAccess.accessTimePassed).toBe(true);
+      expect(afterAccess.supplyBreakdown?.stockpile).toBe(0);
+    });
+
+    it("suggests refills for the access game day when access is days after the event start", () => {
+      const event: ApPlannerEvent = {
+        ...eventA,
+        timelineUid: "late-access",
+        startAt: "2026-11-17T11:00:00+09:00",
+        endAt: "2026-11-19T10:59:00+09:00",
+        requiredAp: 0,
+      };
+      const lateBase = { ...base, event, plan: { accessAt: "2026-11-19T08:00:00+09:00" } };
+      const availableAp = calculateApPlannerEvent(lateBase).availableAp as number;
+      const short = calculateApPlannerEvent({ ...lateBase, event: { ...event, requiredAp: availableAp + 120 } });
+
+      expect(short.refillSuggestions).toEqual([
+        expect.objectContaining({
+          kind: "stockpile-day",
+          startDate: "2026-11-19",
+          endDate: "2026-11-19",
+          toCount: 1,
+          additionalAp: 120,
+          deficitAfter: 0,
+        }),
+      ]);
+      const applied = calculateApPlannerEvent({
+        ...lateBase,
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: {
+            ...defaultPyroxenePlannerOptions.consumption,
+            apChargeExceptions: [{ uid: "late", startDate: "2026-11-19", endDate: "2026-11-19", count: 1 }],
+          },
+        },
+      });
+      expect(applied.availableAp).toBe(availableAp + 120);
     });
 
     it("suggests access-day refills worth 120 AP each without touching the stockpile", () => {
