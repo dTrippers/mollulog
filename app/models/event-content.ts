@@ -1,4 +1,4 @@
-import type { MinigameConfig, ShopResource } from "~/domain/event-shop";
+import type { MinigameConfig, RewardItem, ShopResource } from "~/domain/event-shop";
 import { graphql } from "~/graphql";
 import type {
   EventContentShopContentQuery,
@@ -241,6 +241,23 @@ const eventContentShopContentQuery = graphql(`
         minigameType
         payment { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
         payments { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+        treasureHunt {
+          loopRound
+          rounds {
+            round
+            boardWidth
+            boardHeight
+            cellCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+            openCellRewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+            treasures {
+              uid
+              width
+              height
+              count
+              rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+            }
+          }
+        }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -380,6 +397,7 @@ function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {
 }
 
 type ServerCondition = NonNullable<EventContentData>["minigameConfigs"][number]["rewardGroups"][number]["condition"];
+type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][number]["treasureHunt"];
 
 function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups"][number]["rounds"] {
   if (condition.type === "exact" && condition.values) {
@@ -395,6 +413,82 @@ function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups
     return { divisor: condition.divisor, remainders: condition.remainders };
   }
   return "subsequent";
+}
+
+function transformTreasureRewardItems(
+  rewards: NonNullable<ServerTreasureHunt>["rounds"][number]["openCellRewards"],
+): RewardItem[] {
+  return rewards.map((reward) => {
+    if (!reward.resource) {
+      throw new Error("Treasure hunt reward is missing its resource.");
+    }
+    return {
+      resourceType: reward.resource.type,
+      resourceUid: reward.resource.uid,
+      resourceName: reward.resource.name,
+      imageUrl: getEmblemImageUrl(reward.resource),
+      quantity: reward.quantity,
+      rarity: reward.resource.rarity ?? undefined,
+    };
+  });
+}
+
+function transformTreasureHunt(treasureHunt: ServerTreasureHunt | null): MinigameConfig["treasureHunt"] {
+  if (!treasureHunt) {
+    return null;
+  }
+
+  if (!Number.isSafeInteger(treasureHunt.loopRound) || treasureHunt.loopRound < 1) {
+    throw new Error("Treasure hunt loop round is invalid.");
+  }
+  if (!Array.isArray(treasureHunt.rounds)) {
+    throw new Error("Treasure hunt rounds are missing.");
+  }
+  if (treasureHunt.rounds.length < treasureHunt.loopRound) {
+    throw new Error("Treasure hunt round configuration is incomplete.");
+  }
+  const configuredRounds = new Set(treasureHunt.rounds.map((round) => round.round));
+  for (let round = 1; round <= treasureHunt.loopRound; round += 1) {
+    if (!configuredRounds.has(round)) {
+      throw new Error(`Treasure hunt round ${round} is missing its configuration.`);
+    }
+  }
+
+  return {
+    loopRound: treasureHunt.loopRound,
+    rounds: treasureHunt.rounds.map((round) => {
+      if (!round.cellCost.resource) {
+        throw new Error("Treasure hunt cell cost is missing its resource.");
+      }
+      if (round.openCellRewards.length === 0) {
+        throw new Error("Treasure hunt round is missing open-cell rewards.");
+      }
+      if (round.treasures.length === 0) {
+        throw new Error("Treasure hunt round is missing treasures.");
+      }
+
+      return {
+        round: round.round,
+        boardWidth: round.boardWidth,
+        boardHeight: round.boardHeight,
+        cellCost: {
+          resourceType: round.cellCost.resource.type,
+          resourceUid: round.cellCost.resource.uid,
+          resourceName: round.cellCost.resource.name,
+          imageUrl: getEmblemImageUrl(round.cellCost.resource),
+          quantity: round.cellCost.quantity,
+        },
+        openCellRewards: transformTreasureRewardItems(round.openCellRewards),
+        treasures: round.treasures.map((treasure) => ({
+          uid: treasure.uid,
+          width: treasure.width,
+          height: treasure.height,
+          count: treasure.count,
+          rewards: transformTreasureRewardItems(treasure.rewards),
+        })),
+      };
+    }),
+  };
 }
 
 function transformMinigameConfigs(configs: NonNullable<EventContentData>["minigameConfigs"]): MinigameConfig | null {
@@ -419,6 +513,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
 
   return {
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
+    treasureHunt: transformTreasureHunt(serverConfig.treasureHunt),
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
@@ -478,7 +573,7 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 1, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 2, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

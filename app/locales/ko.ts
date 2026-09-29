@@ -311,3 +311,37 @@ export function minigameDescription(minigameType: string): string | null {
   }
   return null;
 }
+
+export const treasureHuntLocale = {
+  title: "보물찾기",
+  targetRound: "목표 회차",
+  excludeCompleted: "완료한 회차 제외",
+  completedRound: "완료 회차",
+  completedRoundHelp: "완료한 다음 회차부터 계산해요",
+  costMode: "보상 획득 기준",
+  top10: "상위 10%",
+  typical: "보통",
+  bottom10: "하위 10%",
+  calculating: "보물찾기 비용을 계산하고 있어요",
+  calculationComplete: "보물찾기 비용 계산을 마쳤어요",
+  progress: (percentage: number) => `계산 중 ${percentage}%`,
+  simulationAssumption: "모든 보물을 여는 가정의 시뮬레이션 결과에요",
+  requiredResources: "필요 재화",
+  totalRewards: "총 획득 보상",
+  treasureRewards: "보물 보상",
+  openRewards: "오픈 보상",
+  roundDetails: "회차별 보물 및 보상",
+  boardSize: "판 크기",
+  cellCost: "칸당 필요 재화",
+  openCellReward: "칸당 오픈 보상",
+  calculatingShort: "계산 중",
+  calculationFailed: "계산 실패",
+  noData: "보물찾기 보상 정보를 준비중이에요",
+  incompatible: "회차마다 칸 비용이 달라 보물찾기 비용을 계산할 수 없어요",
+  failed: "보물찾기 비용을 계산하지 못했어요. 목표 회차를 0으로 두면 보물찾기를 빼고 계산해요.",
+  retry: "다시 시도",
+  selectTarget: "목표 회차를 선택해주세요",
+  provisionalResult: "보물찾기 비용을 계산 중이라 결과가 조금 바뀔 수 있어요",
+  pendingResult: "보물찾기 비용을 계산하고 있어요. 계산이 끝나면 소탕 횟수와 필요한 AP를 보여드려요",
+  failedResult: "보물찾기 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
+} as const;

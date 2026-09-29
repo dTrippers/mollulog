@@ -3,6 +3,7 @@ import { FilterButtons, NumberInput, ResourceCard, Section } from "~/components/
 import type { MinigameConfig } from "~/domain/event-shop";
 import { minigameDescription } from "~/locales/ko";
 import { ClueSearchSection } from "./ClueSearchSection";
+import { TreasureHuntSection, type TreasureHuntSectionState } from "./TreasureHuntSection";
 import type { ClueSearchExchange } from "./clue-search";
 import type { ShopActions, ShopState } from "./hooks";
 import {
@@ -18,9 +19,36 @@ type MiniGameSectionProps = {
   state: ShopState;
   actions: ShopActions;
   exchange?: ClueSearchExchange | null;
+  treasureHuntCalculation: TreasureHuntSectionState;
 };
+type GenericMiniGameSectionProps = Omit<MiniGameSectionProps, "exchange" | "treasureHuntCalculation">;
 
-export function MiniGameSection({ config, state, actions, exchange = null }: MiniGameSectionProps) {
+export function MiniGameSection({
+  config,
+  state,
+  actions,
+  exchange = null,
+  treasureHuntCalculation,
+}: MiniGameSectionProps) {
+  if (config.minigameType === "clue_search") {
+    return <ClueSearchSection config={config} state={state} actions={actions} exchange={exchange} />;
+  }
+
+  if (config.minigameType === "treasure_hunt") {
+    return (
+      <TreasureHuntSection
+        treasureHunt={config.treasureHunt ?? null}
+        state={state}
+        actions={actions}
+        calculation={treasureHuntCalculation}
+      />
+    );
+  }
+
+  return <GenericMiniGameSection config={config} state={state} actions={actions} />;
+}
+
+function GenericMiniGameSection({ config, state, actions }: GenericMiniGameSectionProps) {
   const rewards = useMemo(
     () => calculateMinigameRewards(config, state.minigamePlayCount),
     [config, state.minigamePlayCount],
@@ -39,10 +67,6 @@ export function MiniGameSection({ config, state, actions, exchange = null }: Min
   }, [config, state.minigamePlayCount]);
 
   const isDiceType = config.minigameType === "dice";
-
-  if (config.minigameType === "clue_search") {
-    return <ClueSearchSection config={config} state={state} actions={actions} exchange={exchange} />;
-  }
 
   return (
     <Section

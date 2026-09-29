@@ -1863,6 +1863,18 @@ function ImportCheckbox({
 
 type PlanReviewSection = { title: string; lines: string[] };
 
+export function formatMinigamePlanSummary(
+  state: Pick<EventShopState, "minigamePaymentQuantityMode" | "minigamePlayCount" | "minigameStartRound">,
+  minigameType: EventShopPlanDisplayCatalog["minigameType"],
+): string {
+  const paymentMode =
+    minigameType === "treasure_hunt"
+      ? { expected: "보통 비용", min: "상위 10% 비용", max: "하위 10% 비용" }[state.minigamePaymentQuantityMode]
+      : { expected: "기대 비용", min: "최소 비용", max: "최대 비용" }[state.minigamePaymentQuantityMode];
+  const roundUnit = minigameType === "treasure_hunt" ? "회차" : "라운드";
+  return `${state.minigamePlayCount.toLocaleString()}회 · ${state.minigameStartRound.toLocaleString()}${roundUnit}부터 · ${paymentMode}`;
+}
+
 function visibleName(names: Record<string, string> | undefined, uid: string, fallback: string): string {
   return names?.[uid]?.trim() || fallback;
 }
@@ -1933,13 +1945,12 @@ function getPlanReviewSections(
       ([uid, runs]) =>
         `${visibleName(catalog?.stageLabelsByUid, uid, "스테이지 정보를 확인할 수 없어요")}: 추가 ${runs.toLocaleString()}회`,
     );
-  const paymentMode = { expected: "기대 비용", min: "최소 비용", max: "최대 비용" }[state.minigamePaymentQuantityMode];
   const minigame =
     catalog && !catalog.hasMinigame
       ? state.minigamePlayCount > 0
         ? `미니게임 정보를 확인할 수 없어요 · ${state.minigamePlayCount.toLocaleString()}회`
         : "미니게임 계획 없음"
-      : `${state.minigamePlayCount.toLocaleString()}회 · ${state.minigameStartRound.toLocaleString()}라운드부터 · ${paymentMode}`;
+      : formatMinigamePlanSummary(state, catalog?.minigameType);
   return [
     { title: "상점 구매 목표", lines: purchases.length ? purchases : ["구매 목표 없음"] },
     { title: "현재 보유 재화", lines: owned.length ? owned : ["보유 재화 입력 없음"] },

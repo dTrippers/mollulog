@@ -1,5 +1,5 @@
 import type Decimal from "decimal.js";
-import type { MinigameConfig, MinigamePayment, ShopResource, Stage } from "~/domain/event-shop";
+import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 
 export type StageInfo = {
   uid: string;
@@ -65,6 +65,7 @@ export type RequiredQuantitiesInput = {
   minigamePlayCount: number;
   minigameConfig?: MinigameConfig | null;
   minigamePaymentCosts?: MinigamePayment[];
+  minigameRewards?: RewardItem[];
   excludedShopResourceUids?: readonly string[];
   overriddenRequiredQuantities?: Record<string, number>;
 };

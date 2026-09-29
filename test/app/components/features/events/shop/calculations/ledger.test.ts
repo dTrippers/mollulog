@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { calculateResourceLedger } from "../../../../../../../app/components/features/events/shop/calculations/ledger";
-import type { ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
+import type { MinigameConfig, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 
 const gamepad = {
@@ -183,5 +183,40 @@ describe("calculateResourceLedger", () => {
     expect(ledger.requiredForMinigame).toEqual({ "event-points": 400 });
     expect(ledger.requiredTotals).toEqual({ "event-points": 800 });
     expect(ledger.fromShop).toEqual({ "target-reward": 1 });
+  });
+
+  it("uses external treasure-hunt costs and rewards instead of legacy minigame estimates", () => {
+    const minigameConfig: MinigameConfig = {
+      minigameType: "treasure_hunt",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "legacy-cost", quantity: 10 },
+      payments: [],
+      rewardGroups: [
+        {
+          rounds: [1],
+          payments: [],
+          rewards: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "legacy-reward", quantity: 999 }],
+        },
+      ],
+    };
+    const ledger = calculateResourceLedger({
+      shopResources: [],
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 6,
+      minigameConfig,
+      minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "yukari", quantity: 7000 }],
+      minigameRewards: [
+        { resourceType: ResourceTypeEnum.Item, resourceUid: "renge", quantity: 200 },
+        { resourceType: ResourceTypeEnum.Currency, resourceUid: "credit", quantity: 8320000 },
+      ],
+    });
+
+    expect(ledger.requiredForMinigame).toEqual({ yukari: 7000 });
+    expect(ledger.fromMinigame).toEqual({ renge: 200, credit: 8320000 });
+    expect(ledger.fromMinigame).not.toHaveProperty("legacy-reward");
+    expect(ledger.requiredForMinigame).not.toHaveProperty("legacy-cost");
   });
 });

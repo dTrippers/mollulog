@@ -54,6 +54,15 @@ function createMinigameConfig(overrides: Partial<MinigameConfig> = {}): Minigame
 }
 
 describe("minigame payment calculations", () => {
+  it("does not estimate treasure-hunt costs or rewards from legacy generic fields", () => {
+    const config = createMinigameConfig({ minigameType: "treasure_hunt" });
+
+    expect(calculateMinigamePaymentCosts(config, 6, "expected")).toEqual([]);
+    expect(calculateMinigamePaymentCosts(config, 6, "min")).toEqual([]);
+    expect(calculateMinigamePaymentCosts(config, 6, "max")).toEqual([]);
+    expect(calculateMinigameRewards(config, 6)).toEqual([]);
+  });
+
   it("calculates round-based payment costs using expected quantity by default", () => {
     const costs = calculateMinigamePaymentCosts(createMinigameConfig(), 4);
 

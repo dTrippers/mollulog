@@ -330,6 +330,49 @@ describe("getEventMetadata", () => {
 });
 
 describe("getEventShopContent", () => {
+  it.each([
+    ["an invalid loop round", { loopRound: 0, rounds: [] }, "Treasure hunt loop round is invalid."],
+    ["a missing loop round number", { loopRound: undefined, rounds: [] }, "Treasure hunt loop round is invalid."],
+    ["an empty round list", { loopRound: 1, rounds: [] }, "Treasure hunt round configuration is incomplete."],
+    [
+      "a missing loop round entry",
+      { loopRound: 3, rounds: [{ round: 1 }, { round: 2 }] },
+      "Treasure hunt round configuration is incomplete.",
+    ],
+    [
+      "a missing intermediate round",
+      { loopRound: 3, rounds: [{ round: 1 }, { round: 1 }, { round: 3 }] },
+      "Treasure hunt round 2 is missing its configuration.",
+    ],
+  ])("rejects treasure hunt data with %s", async (_description, treasureHunt, message) => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue({
+      data: {
+        eventContent: {
+          stages: [],
+          shopResources: [],
+          bonuses: [],
+          minigameConfigs: [
+            {
+              minigameType: "treasure_hunt",
+              payment: { quantity: 1, resource: { type: "currency", uid: "payment", name: "칸 비용" } },
+              payments: [],
+              rewardGroups: [],
+              treasureHunt,
+            },
+          ],
+        },
+      },
+      error: undefined,
+      extensions: undefined,
+      operation: {} as never,
+      stale: false,
+      hasNext: false,
+    } as never);
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow(message);
+  });
+
   it("uses shopContentUid for the BAQL eventContent lookup when present", async () => {
     mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
     mockedRunQuery.mockResolvedValue({
@@ -352,7 +395,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v1::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v2::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -385,7 +428,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v1::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v2::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
