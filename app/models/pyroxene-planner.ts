@@ -8,7 +8,6 @@ import {
   createPostgresPyroxeneOwnedResource,
   deletePostgresCollectedSource,
   deletePostgresPyroxeneEventData,
-  deletePostgresPyroxeneOwnedResourceByUid,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
   type PostgresPyroxeneOptions,
@@ -47,13 +46,9 @@ export async function createPyroxeneOwnedResource(
   env: Env,
   userId: number,
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-  options: { uid?: string; inputAt?: string } = {},
+  options: { inputAt?: string } = {},
 ): Promise<void> {
   return createPostgresPyroxeneOwnedResource(env, userId, resources, options);
-}
-
-export async function deletePyroxeneOwnedResourceByUid(env: Env, userId: number, uid: string): Promise<void> {
-  return deletePostgresPyroxeneOwnedResourceByUid(env, userId, uid);
 }
 
 export async function getCollectedSourceKeys(

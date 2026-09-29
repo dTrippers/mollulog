@@ -1,6 +1,4 @@
-import { sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { nanoid } from "nanoid/non-secure";
 import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
 import {
   type EventShopOwnedQuantityPatch,
@@ -8,7 +6,7 @@ import {
   mergeEventShopStateChanges,
 } from "~/domain/event-shop-state";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
-import { pgEventShopStatesHistoryTable, pgEventShopStatesTable } from "./schema";
+import { pgEventShopStatesHistoryTable } from "./schema";
 
 export type EventShopStateDatabase = NodePgDatabase;
 
@@ -74,7 +72,8 @@ async function withEventShopStateDatabase<T>(
   );
 }
 
-export async function upsertEventShopStateInDatabase(
+/** Appends a saved shop state to the append-only history and returns the stored shape. */
+export async function appendEventShopStateHistoryInDatabase(
   tx: EventShopStateDatabase,
   userId: number,
   eventUid: string,
@@ -82,13 +81,6 @@ export async function upsertEventShopStateInDatabase(
 ): Promise<EventShopState> {
   const historySource = parseEventShopStateHistorySource("autosave");
   const normalizedState = normalizeEventShopStateForStorage(state);
-  await tx
-    .insert(pgEventShopStatesTable)
-    .values({ uid: nanoid(8), userId, eventUid, ...normalizedState })
-    .onConflictDoUpdate({
-      target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-      set: { ...normalizedState, updatedAt: new Date() },
-    });
   await tx.insert(pgEventShopStatesHistoryTable).values({
     userId,
     eventUid,
@@ -121,7 +113,7 @@ export async function upsertPostgresEventShopState(
             !options.replace && options.baseState && currentState
               ? mergeEventShopStateChanges(options.baseState, submittedState, currentState)
               : submittedState;
-          const normalizedState = await upsertEventShopStateInDatabase(tx, userId, eventUid, stateToSave);
+          const normalizedState = await appendEventShopStateHistoryInDatabase(tx, userId, eventUid, stateToSave);
           return {
             document: {
               ...document,
@@ -150,7 +142,7 @@ export async function patchPostgresEventShopStateOwnedQuantities(
       withPlannerStateUpdate(
         db,
         userId,
-        async (tx, document) => {
+        async (_tx, document) => {
           const currentState =
             document.eventShops[eventUid] ??
             (options.fallbackEventUid ? document.eventShops[options.fallbackEventUid] : undefined) ??
@@ -159,23 +151,6 @@ export async function patchPostgresEventShopStateOwnedQuantities(
             ...currentState,
             existingPaymentItemQuantities: { ...currentState.existingPaymentItemQuantities, ...patch },
           });
-          await tx
-            .insert(pgEventShopStatesTable)
-            .values({
-              uid: nanoid(8),
-              userId,
-              eventUid,
-              ...nextState,
-            })
-            .onConflictDoUpdate({
-              target: [pgEventShopStatesTable.userId, pgEventShopStatesTable.eventUid],
-              set: {
-                existingPaymentItemQuantities: sql<
-                  Record<string, number>
-                >`${pgEventShopStatesTable.existingPaymentItemQuantities} || ${JSON.stringify(patch)}::jsonb`,
-                updatedAt: new Date(),
-              },
-            });
           return {
             document: { ...document, eventShops: { ...document.eventShops, [eventUid]: nextState } },
             result: undefined,
