@@ -354,28 +354,53 @@ function dailyRewardGameDates(from: string, until: string, firstGameDayClaimed: 
   return [...dates].sort();
 }
 
+function addGameDays(gameDateKey: string, days: number): string {
+  return dayjs.tz(`${gameDateKey}T12:00:00`, KST).add(days, "day").format("YYYY-MM-DD");
+}
+
+/**
+ * Game-date runs the package pays out through `throughGameDate`. It pays 150 AP a day and never stacks: buying
+ * again while a run is active extends that run by 14 days. Auto-repurchase buys again every 14 days.
+ */
+function apPackageRuns(
+  records: readonly ApPackagePurchaseRecord[],
+  throughGameDate: string,
+): Array<{ start: string; end: string }> {
+  const purchases: string[] = [];
+  for (const record of records) {
+    const firstPurchase = packageGameDate(record.eventAt);
+    let purchase = firstPurchase;
+    while (purchase <= throughGameDate && purchases.length < 4_000) {
+      purchases.push(purchase);
+      if (!record.autoRepurchase) break;
+      purchase = addGameDays(purchase, PYROXENE_AP_PACKAGE_CONFIG.repurchaseIntervalDays);
+    }
+  }
+  purchases.sort();
+  const runs: Array<{ start: string; end: string }> = [];
+  for (const purchase of purchases) {
+    const current = runs.at(-1);
+    if (current && current.end >= purchase) {
+      current.end = addGameDays(current.end, AP_PACKAGE_DURATION_DAYS);
+    } else {
+      runs.push({ start: purchase, end: addGameDays(purchase, AP_PACKAGE_DURATION_DAYS - 1) });
+    }
+  }
+  return runs;
+}
+
 function apPackageForGameDate(gameDateKey: string, records: readonly ApPackagePurchaseRecord[]): number {
-  const date = dayjs.tz(`${gameDateKey}T12:00:00`, KST);
-  return records.reduce((total, record) => {
-    const purchaseDate = dayjs.tz(`${packageGameDate(record.eventAt)}T12:00:00`, KST);
-    const elapsedDays = date.diff(purchaseDate, "day");
-    if (elapsedDays < 0) return total;
-    const hasRepurchased = elapsedDays >= PYROXENE_AP_PACKAGE_CONFIG.repurchaseIntervalDays;
-    if (!record.autoRepurchase && hasRepurchased) return total;
-    return total + AP_PACKAGE_DAILY_REWARD;
-  }, 0);
+  return apPackageRuns(records, gameDateKey).some((run) => run.start <= gameDateKey && gameDateKey <= run.end)
+    ? AP_PACKAGE_DAILY_REWARD
+    : 0;
 }
 
 export function apPackagePanelSummary(records: readonly ApPackagePurchaseRecord[], now: string): string {
   if (records.length === 0) return "구매 기록 없음";
   if (records.some((record) => record.autoRepurchase)) return "자동 재구매 중";
   const currentGameDate = packageGameDate(now);
-  const lastCoveredDate = records.reduce<string | null>((lastDate, record) => {
-    const candidate = dayjs.tz(`${packageGameDate(record.eventAt)}T12:00:00`, KST)
-      .add(AP_PACKAGE_DURATION_DAYS - 1, "day")
-      .format("YYYY-MM-DD");
-    return lastDate === null || candidate > lastDate ? candidate : lastDate;
-  }, null);
+  const lastPurchaseDate = records.map((record) => packageGameDate(record.eventAt)).sort().at(-1) as string;
+  const lastCoveredDate = apPackageRuns(records, lastPurchaseDate).at(-1)?.end ?? null;
   if (!lastCoveredDate || lastCoveredDate < currentGameDate) return "진행 중인 패키지 없음";
   return `${dayjs.tz(`${lastCoveredDate}T12:00:00`, KST).format("M/D")}까지`;
 }

@@ -514,7 +514,7 @@ describe("AP planner domain", () => {
       ).toBe(calculation.availableAp);
     });
 
-    it("repeats auto-renewed packages every 14 game days and adds overlapping records", () => {
+    it("repeats auto-renewed packages every 14 game days and never pays more than 150 AP a day", () => {
       const packageEvent: ApPlannerEvent = {
         ...nextEvent,
         startAt: "2026-10-15T11:00:00+09:00",
@@ -531,10 +531,34 @@ describe("AP planner domain", () => {
         packageRecords,
       });
 
-      expect(calculation.supplyBreakdown?.apPackage).toBe(4_200);
+      // The overlapping purchase extends the run instead of doubling it: 150 AP on 10/15 and on each of 10/16~10/30.
+      expect(calculation.supplyBreakdown?.apPackage).toBe(15 * 150);
       expect(calculation.stockpileSteps).toContainEqual(
-        expect.objectContaining({ kind: "ap-package", receivedAp: 300, at: "2026-10-15T02:00:00.000Z" }),
+        expect.objectContaining({ kind: "ap-package", receivedAp: 150, at: "2026-10-15T02:00:00.000Z" }),
       );
+    });
+
+    it("extends the active run by 14 days when the package is bought again early", () => {
+      const packageRecords: ApPackagePurchaseRecord[] = [
+        { eventAt: "2026-10-01T04:00:00+09:00", autoRepurchase: false },
+        { eventAt: "2026-10-10T04:00:00+09:00", autoRepurchase: false },
+      ];
+      const packageEvent: ApPlannerEvent = {
+        ...nextEvent,
+        startAt: "2026-10-01T11:00:00+09:00",
+        endAt: "2026-11-05T11:00:00+09:00",
+      };
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        event: packageEvent,
+        plan: { accessAt: packageEvent.startAt },
+        packageRecords,
+      });
+
+      // 10/1~10/28 is 28 days: 150 AP on 10/1 at access, then 27 days in the event period.
+      expect(calculation.supplyBreakdown?.apPackage).toBe(27 * 150);
+      expect(apPackagePanelSummary(packageRecords, "2026-10-28T12:00:00+09:00")).toBe("10/28까지");
+      expect(apPackagePanelSummary(packageRecords, "2026-10-29T12:00:00+09:00")).toBe("진행 중인 패키지 없음");
     });
 
     it("summarizes future coverage from AP package records", () => {
