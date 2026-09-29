@@ -15,7 +15,7 @@ function formatSuggestionTitle(suggestion: ApRefillSuggestion) {
     const end = dayjs.tz(`${suggestion.endDate}T12:00:00`, KST).format("M/D");
     return `${start}~${end} 매일 AP 충전 ${suggestion.fromCount} → ${suggestion.toCount}회`;
   }
-  return `${dayjs.tz(`${suggestion.startDate}T12:00:00`, KST).format("M/D(ddd)")} 04:00 AP 충전 ${suggestion.toCount}회`;
+  return `${dayjs.tz(`${suggestion.startDate}T12:00:00`, KST).format("M/D(ddd)")} AP 충전 ${suggestion.toCount}회`;
 }
 
 export default function ApRefillTile({

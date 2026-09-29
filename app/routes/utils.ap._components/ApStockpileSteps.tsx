@@ -31,6 +31,14 @@ export default function ApStockpileSteps({
   useEffect(() => setExpanded(initialExpanded), [initialExpanded]);
 
   const accessStep = calculation.stockpileSteps.find((step) => step.kind === "access");
+  const pendingNote = accessStep
+    ? [
+        accessStep.mailboxAp ? `우편함 ${accessStep.mailboxAp.toLocaleString()} AP` : null,
+        accessStep.unclaimedCafeAp ? `카페 ${accessStep.unclaimedCafeAp.toLocaleString()} AP` : null,
+      ]
+        .filter(Boolean)
+        .join(" · ")
+    : "";
   const accessDateKey = dayjs(accessAt).tz(KST).format("YYYY-MM-DD");
   const eventDateKey = dayjs(eventStartAt).tz(KST).format("YYYY-MM-DD");
   const groupedSteps = new Map<string, typeof calculation.stockpileSteps>();
@@ -75,7 +83,10 @@ export default function ApStockpileSteps({
         {accessStep ? (
           <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] gap-3">
             <dt className="text-muted-foreground">접속 시</dt>
-            <dd className="font-semibold tabular-nums">약 {accessStep.ap.toLocaleString()} AP 보유</dd>
+            <dd className="tabular-nums">
+              <span className="font-semibold">약 {accessStep.ap.toLocaleString()} AP 보유</span>
+              {pendingNote ? <span className="text-muted-foreground"> ({pendingNote} 포함)</span> : null}
+            </dd>
           </div>
         ) : null}
       </dl>
@@ -135,7 +146,11 @@ export default function ApStockpileSteps({
                           >
                             {step.kind === "access"
                               ? `사용 가능 약 ${step.ap.toLocaleString()} AP`
-                              : `보유 ${step.ap.toLocaleString()}`}
+                              : step.kind === "mailbox"
+                                ? `우편함 ${(step.mailboxAp ?? 0).toLocaleString()}`
+                                : step.mailboxAp
+                                  ? `보유 ${step.ap.toLocaleString()} · 우편함 ${step.mailboxAp.toLocaleString()}`
+                                  : `보유 ${step.ap.toLocaleString()}`}
                           </span>
                         </li>
                       ))}

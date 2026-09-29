@@ -4,6 +4,7 @@ type CardProps = {
   event: { timelineUid: string; runType?: string | null };
   calculation: ApPlannerCalculation | null;
   calculationError: string | null;
+  rewardDataPending: boolean;
   shopTargetExists: boolean;
 };
 
@@ -150,6 +151,7 @@ describe("AP planner route", () => {
 
     expect(card?.calculation).toBeNull();
     expect(card?.shopTargetExists).toBe(true);
-    expect(card?.calculationError).toBe("선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어요.");
+    expect(card?.rewardDataPending).toBe(true);
+    expect(card?.calculationError).toBe("해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.");
   });
 });

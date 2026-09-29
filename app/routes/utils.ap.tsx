@@ -85,6 +85,8 @@ type CalculatedApEvent = {
   event: ApDisplayEvent;
   calculation: ApPlannerCalculation | null;
   calculationError: string | null;
+  /** The event's quest or minigame reward data is not ready yet; an expected state, not a failure. */
+  rewardDataPending: boolean;
   shopTargetExists: boolean;
   plan: ApPlannerEventPlan | null;
   actionError: string | null;
@@ -713,6 +715,7 @@ export default function ApPlannerRoute() {
             : null;
       const shopState = loaderData.signedIn ? entry.shop.accountState : getGuestShopState(guestPlans, entry.shop);
       let shopTargetExists = false;
+      let rewardDataPending = false;
       let calculation: ApPlannerCalculation | null = null;
       let calculationError = shopError ?? guestStorageError;
       if (!calculationError && shopState) {
@@ -721,7 +724,8 @@ export default function ApPlannerRoute() {
           shopTargetExists = required.hasUnobtainableTargets || hasApShopTarget(required.requiredAp);
           if (shopTargetExists) {
             if (required.hasUnobtainableTargets) {
-              calculationError = "선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어요.";
+              rewardDataPending = true;
+              calculationError = "해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.";
             } else if (!entry.endAt) {
               calculationError = "이벤트 종료 시각을 확인할 수 없어 AP를 계산하지 못했어요.";
             } else {
@@ -753,6 +757,7 @@ export default function ApPlannerRoute() {
         event: entry,
         calculation,
         calculationError,
+        rewardDataPending,
         shopTargetExists,
         plan,
         actionError: actionEventUid === entry.timelineUid ? actionError : (guestErrors[entry.timelineUid] ?? null),
@@ -1167,6 +1172,7 @@ export default function ApPlannerRoute() {
                       event={entry.event}
                       calculation={entry.calculation}
                       calculationError={entry.calculationError}
+                      rewardDataPending={entry.rewardDataPending}
                       shopTargetExists={entry.shopTargetExists}
                       plan={entry.plan}
                       options={pyroxeneOptions}

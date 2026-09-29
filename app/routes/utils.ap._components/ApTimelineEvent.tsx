@@ -31,6 +31,7 @@ type Props = {
   };
   calculation: ApPlannerCalculation | null;
   calculationError?: string | null;
+  rewardDataPending?: boolean;
   shopTargetExists: boolean;
   plan: ApPlannerEventPlan | null;
   options: PyroxenePlannerOptions;
@@ -177,6 +178,7 @@ export default function ApTimelineEvent({
   event,
   calculation,
   calculationError,
+  rewardDataPending = false,
   shopTargetExists,
   plan,
   options,
@@ -237,8 +239,10 @@ export default function ApTimelineEvent({
   const displayResult = hasVerdict ? calculation?.resultAp : null;
   const accessibleResult =
     displayResult === null || displayResult === undefined
-      ? calculationError
-        ? "계산할 수 없음"
+      ? rewardDataPending
+        ? "보상 데이터 준비 중"
+        : calculationError
+          ? "계산할 수 없음"
         : calculation?.status === "input-needed"
           ? "플레이 조건 입력 필요"
           : calculation?.status === "not-planned"
@@ -308,7 +312,9 @@ export default function ApTimelineEvent({
 
   if (calculationError) {
     const invalidTarget = shopTargetExists;
-    const errorName = `이벤트 ${event.name}, ${invalidTarget ? "계산할 수 없어요" : "불러오지 못했어요"}, ${calculationError}`;
+    const errorName = rewardDataPending
+      ? `이벤트 ${event.name}, ${calculationError}`
+      : `이벤트 ${event.name}, ${invalidTarget ? "계산할 수 없어요" : "불러오지 못했어요"}, ${calculationError}`;
     return (
       <article
         ref={articleRef}
@@ -319,7 +325,10 @@ export default function ApTimelineEvent({
       >
         <SectionCard className="space-y-4 p-5 md:p-6">
           {cardHeader}
-          <ApResultSummary kind={invalidTarget ? "error" : "loading-error"} message={calculationError} />
+          <ApResultSummary
+            kind={rewardDataPending ? "pending" : invalidTarget ? "error" : "loading-error"}
+            message={calculationError}
+          />
           {actionError ? <Callout tone="destructive" title={actionError} /> : null}
           <div className="flex flex-wrap justify-end gap-2">
             {plan ? (

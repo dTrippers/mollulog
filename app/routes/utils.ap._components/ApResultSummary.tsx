@@ -3,7 +3,7 @@ import { BoltIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
 type Props =
   | { kind: "required"; requiredAp: number }
   | { kind: "result"; resultAp: number; message?: string | null }
-  | { kind: "error" | "loading-error"; message?: string | null };
+  | { kind: "error" | "loading-error" | "pending"; message?: string | null };
 
 function formatAp(value: number) {
   return Math.abs(value).toLocaleString();
@@ -18,6 +18,9 @@ export default function ApResultSummary(props: Props) {
         <span>계산할 수 없어요. {props.message}</span>
       </p>
     );
+  }
+  if (kind === "pending") {
+    return <p className="break-keep text-sm text-muted-foreground">{props.message}</p>;
   }
   if (kind === "loading-error") {
     return (

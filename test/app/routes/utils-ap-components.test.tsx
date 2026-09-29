@@ -201,7 +201,7 @@ describe("AP planner event card", () => {
     expect(calculation.refillSuggestions.length).toBeGreaterThan(0);
     expect(markup).toContain("AP 충전으로 채우기");
     expect(markup).toContain("적용하면 청휘석 플래너 설정에 반영돼요");
-    expect(markup).toContain("04:00 AP 충전");
+    expect(markup).toMatch(/\d+\/\d+\(.\) AP 충전 \d+회/);
     expect(markup).toContain("bg-green-700/10");
     expect(markup).toContain("−");
     expect(markup).toContain("dark:text-red-300");
@@ -340,10 +340,25 @@ describe("AP planner event card", () => {
     expect(markup).not.toContain(">모으기 순서 보기<");
   });
 
+  it("shows missing reward data as a muted waiting message instead of a warning", () => {
+    const message = "해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.";
+    const markup = renderCard({
+      calculation: null,
+      calculationError: message,
+      rewardDataPending: true,
+      shopTargetExists: true,
+    });
+
+    expect(markup).toContain(`<p class="break-keep text-sm text-muted-foreground">${message}</p>`);
+    expect(markup).not.toContain("계산할 수 없어요");
+    expect(markup).not.toContain("text-amber-700");
+    expect(markup).not.toContain("AP 모으기 계산");
+  });
+
   it("keeps an invalid target out of the add-plan action state", () => {
     const markup = renderCard({
       calculation: null,
-      calculationError: "선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어요.",
+      calculationError: "이벤트 종료 시각을 확인할 수 없어 AP를 계산하지 못했어요.",
       shopTargetExists: true,
     });
 

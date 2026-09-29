@@ -63,8 +63,12 @@ export type ApStockpileStep = {
   at: string;
   label: string;
   ap: number;
-  kind: "drain" | "charge" | "tactical-purchase" | "ap-package" | "natural" | "access";
+  kind: "drain" | "charge" | "tactical-purchase" | "ap-package" | "natural" | "access" | "mailbox";
   receivedAp?: number;
+  /** AP waiting in the mailbox after this step. */
+  mailboxAp?: number;
+  /** Cafe AP left uncollected at access because the hold limit was reached. */
+  unclaimedCafeAp?: number;
 };
 
 export type ApPackagePurchaseRecord = {
@@ -464,7 +468,7 @@ function refillSuggestions(
   availableAp: number,
   accessAt: string,
   stockpileStartsAt: string | null,
-  stockpileAp: number,
+  stockpileContributionAp: number,
   storedCafeAp: number,
   maxAp: number,
   tacticalApShopCount: number,
@@ -529,23 +533,25 @@ function refillSuggestions(
         apChargeExceptions: options.consumption.apChargeExceptions.filter((item) => item.uid !== appliedStockpile.uid),
       },
     };
-    const baselineStockpile = buildStockpileSteps(
-      accessAt,
-      stockpileStartsAt,
-      overlapEventName,
-      maxAp,
-      storedCafeAp,
-      tacticalApShopCount,
-      packageRecords,
-      optionsWithoutApplied.consumption,
-    ).stockpileAp;
+    const baselineStockpile = stockpileContribution(
+      buildStockpileSteps(
+        accessAt,
+        stockpileStartsAt,
+        overlapEventName,
+        maxAp,
+        storedCafeAp,
+        tacticalApShopCount,
+        packageRecords,
+        optionsWithoutApplied.consumption,
+      ),
+    );
     suggestions.push({
       kind: "stockpile-day",
       startDate: appliedStockpile.startDate,
       endDate: appliedStockpile.endDate,
       fromCount: baseCount,
       toCount: appliedStockpile.count,
-      additionalAp: Math.max(0, stockpileAp - baselineStockpile),
+      additionalAp: Math.max(0, stockpileContributionAp - baselineStockpile),
       pyroxeneCost: addedChargeCost(appliedStockpile.count, stockpileDates.length),
       resultAp: availableAp,
       deficitAfter: event.requiredAp - availableAp,
@@ -607,17 +613,19 @@ function refillSuggestions(
       for (let count = baseCount + 1; count <= 20; count += 1) {
         const projectionRange = exceptionRange(stockpileDates, count);
         if (!projectionRange) break;
-        const projectedStockpile = buildStockpileSteps(
-          accessAt,
-          stockpileStartsAt,
-          overlapEventName,
-          maxAp,
-          storedCafeAp,
-          tacticalApShopCount,
-          packageRecords,
-          { ...options.consumption, apChargeExceptions: [...options.consumption.apChargeExceptions, projectionRange] },
-        ).stockpileAp;
-        const projectedAdditionalAp = Math.max(0, projectedStockpile - stockpileAp);
+        const projectedStockpile = stockpileContribution(
+          buildStockpileSteps(
+            accessAt,
+            stockpileStartsAt,
+            overlapEventName,
+            maxAp,
+            storedCafeAp,
+            tacticalApShopCount,
+            packageRecords,
+            { ...options.consumption, apChargeExceptions: [...options.consumption.apChargeExceptions, projectionRange] },
+          ),
+        );
+        const projectedAdditionalAp = Math.max(0, projectedStockpile - stockpileContributionAp);
         if (projectedAdditionalAp > additionalAp) {
           targetCount = count;
           additionalAp = projectedAdditionalAp;
@@ -643,6 +651,46 @@ function refillSuggestions(
   return { suggestions, overlapConflict };
 }
 
+type StockpilePlan = {
+  steps: ApStockpileStep[];
+  /** AP usable at access: held AP, mailbox AP, and cafe AP. */
+  stockpileAp: number;
+  /** Refills and tactical items the hold limit deferred on the access game day; they are bought after access. */
+  carryOverChargeAp: number;
+  carryOverTacticalAp: number;
+  tacticalApShopDays: number;
+  packageGameDates: string[];
+};
+
+const MAILBOX_VALID_HOURS = 24;
+
+/** Rewards that would exceed the hold limit go to the mailbox instead. */
+function receiveOverflowingAp(heldAp: number, receivedAp: number): { heldAp: number; overflowAp: number } {
+  const accepted = Math.min(receivedAp, Math.max(0, AP_REFILL_HOLD_LIMIT - heldAp));
+  return { heldAp: heldAp + accepted, overflowAp: receivedAp - accepted };
+}
+
+function mailboxOverflowLabel(overflowAp: number, receivedAt: dayjs.Dayjs): string {
+  if (overflowAp <= 0) return "";
+  const expiresAt = receivedAt.add(MAILBOX_VALID_HOURS, "hour").toISOString();
+  return ` (${AP_REFILL_HOLD_LIMIT} AP를 넘는 ${overflowAp.toLocaleString()} AP는 우편함으로 · ${formatApShortDate(expiresAt)}까지 받기)`;
+}
+
+function emptyStockpilePlan(): StockpilePlan {
+  return {
+    steps: [],
+    stockpileAp: 0,
+    carryOverChargeAp: 0,
+    carryOverTacticalAp: 0,
+    tacticalApShopDays: 0,
+    packageGameDates: [],
+  };
+}
+
+function stockpileContribution(plan: StockpilePlan): number {
+  return plan.stockpileAp + plan.carryOverChargeAp + plan.carryOverTacticalAp;
+}
+
 function buildStockpileSteps(
   accessAt: string,
   stockpileStartsAt: string,
@@ -652,16 +700,10 @@ function buildStockpileSteps(
   tacticalApShopCount: number,
   packageRecords: readonly ApPackagePurchaseRecord[],
   consumption: PyroxenePlannerOptions["consumption"],
-): {
-  steps: ApStockpileStep[];
-  stockpileAp: number;
-  tacticalApShop: number;
-  tacticalApShopDays: number;
-  apPackage: number;
-  packageGameDates: string[];
-} {
+): StockpilePlan {
   const start = dayjs(stockpileStartsAt);
   const access = dayjs(accessAt);
+  const accessGameDate = packageGameDate(accessAt);
   const steps: ApStockpileStep[] = [];
   const hasFullPreparationDay = access.diff(start, "hour") >= 20 && overlapEventName === null;
   if (hasFullPreparationDay) {
@@ -681,20 +723,66 @@ function buildStockpileSteps(
   }
 
   let currentAp = 0;
+  let mailboxAp = 0;
+  let mailboxExpiresAt: dayjs.Dayjs | null = null;
+  const addToMailbox = (overflowAp: number, receivedAt: dayjs.Dayjs) => {
+    if (overflowAp <= 0) return;
+    mailboxAp += overflowAp;
+    const expiresAt = receivedAt.add(MAILBOX_VALID_HOURS, "hour");
+    if (!mailboxExpiresAt || expiresAt.isBefore(mailboxExpiresAt)) mailboxExpiresAt = expiresAt;
+  };
   let cursor = start;
-  let tacticalApShop = 0;
   let tacticalApShopDays = 0;
-  let apPackage = 0;
+  let carryOverChargeAp = 0;
+  let carryOverTacticalAp = 0;
   const packageGameDates: string[] = [];
   for (const resetAtString of dailyResetInstantsBetween(stockpileStartsAt, accessAt)) {
     const resetAt = dayjs(resetAtString);
+    const isAccessGameDay = packageGameDate(resetAtString) === accessGameDate;
     const apBeforeNatural = currentAp;
     const naturalBeforeReset = Math.min(
       Math.max(0, maxAp - currentAp),
       naturalSupply(cursor.toISOString(), resetAtString),
     );
     currentAp += naturalBeforeReset;
+    const resetGameDate = packageGameDate(resetAtString);
+    const packageAp = apPackageForGameDate(resetGameDate, packageRecords);
     const plannedChargeCount = getPyroxeneApChargeCountForDate(resetAtString, consumption);
+    const hasResetStep = packageAp > 0 || plannedChargeCount > 0 || tacticalApShopCount > 0;
+    // Natural regen before the reset is reported on the first reset step, or on its own when it fills the max AP.
+    let naturalLabel = hasResetStep && naturalBeforeReset > 0 ? `자연 회복 ${naturalBeforeReset.toLocaleString()} AP · ` : "";
+    const takeNaturalLabel = () => {
+      const label = naturalLabel;
+      naturalLabel = "";
+      return label;
+    };
+    if (!hasResetStep && naturalBeforeReset > 0 && currentAp === maxAp) {
+      const naturalFullAt = cursor.add((maxAp - apBeforeNatural) * AP_NATURAL_REGEN_MINUTES, "minute");
+      steps.push({
+        at: naturalFullAt.toISOString(),
+        label: `자연 회복이 최대 AP ${maxAp}에 도달하면 멈춰요`,
+        ap: currentAp,
+        mailboxAp,
+        kind: "natural",
+      });
+    }
+
+    // The package is received automatically on the first login after the reset, before any purchase.
+    if (packageAp > 0) {
+      const received = receiveOverflowingAp(currentAp, packageAp);
+      currentAp = received.heldAp;
+      addToMailbox(received.overflowAp, resetAt);
+      packageGameDates.push(resetGameDate);
+      steps.push({
+        at: resetAtString,
+        label: `${takeNaturalLabel()}접속하면 2주 AP 패키지 +${packageAp.toLocaleString()} AP${mailboxOverflowLabel(received.overflowAp, resetAt)}`,
+        ap: currentAp,
+        mailboxAp,
+        kind: "ap-package",
+        receivedAp: packageAp,
+      });
+    }
+
     const chargeCount = Math.min(
       plannedChargeCount,
       Math.max(0, Math.floor((AP_REFILL_HOLD_LIMIT - currentAp) / AP_PER_REFILL)),
@@ -702,58 +790,44 @@ function buildStockpileSteps(
     if (plannedChargeCount > 0) {
       const chargeAp = chargeCount * AP_PER_REFILL;
       currentAp += chargeAp;
-      const naturalLabel = naturalBeforeReset > 0 ? `자연 회복 ${naturalBeforeReset.toLocaleString()} AP · ` : "";
+      const deferredCount = plannedChargeCount - chargeCount;
+      if (isAccessGameDay) carryOverChargeAp += deferredCount * AP_PER_REFILL;
       const capLabel =
-        chargeCount < plannedChargeCount
-          ? ` (${AP_REFILL_HOLD_LIMIT} AP를 넘으면 충전할 수 없어 ${plannedChargeCount}회 중 ${chargeCount}회만)`
+        deferredCount > 0
+          ? ` (${AP_REFILL_HOLD_LIMIT} AP를 넘으면 충전할 수 없어 ${plannedChargeCount}회 중 ${chargeCount}회만${
+              isAccessGameDay ? ` · 나머지 ${deferredCount}회는 접속 후 AP를 쓰고 충전` : ""
+            })`
           : "";
       steps.push({
         at: resetAtString,
-        label: `${naturalLabel}AP 충전 ${chargeCount}회 · +${chargeAp.toLocaleString()} AP${capLabel}`,
+        label: `${takeNaturalLabel()}AP 충전 ${chargeCount}회 · +${chargeAp.toLocaleString()} AP${capLabel}`,
         ap: currentAp,
+        mailboxAp,
         kind: "charge",
         receivedAp: chargeAp,
       });
-    } else if (naturalBeforeReset > 0 && currentAp === maxAp) {
-      const naturalFullAt = cursor.add((maxAp - apBeforeNatural) * AP_NATURAL_REGEN_MINUTES, "minute");
-      steps.push({
-        at: naturalFullAt.toISOString(),
-        label: `자연 회복이 최대 AP ${maxAp}에 도달하면 멈춰요`,
-        ap: currentAp,
-        kind: "natural",
-      });
     }
+
     if (tacticalApShopCount > 0) {
       tacticalApShopDays += 1;
       const requestedAp = tacticalApShopCount * 90;
       const purchased = applyTacticalApPurchases(currentAp, tacticalApShopCount);
       currentAp = purchased.ap;
-      tacticalApShop += purchased.receivedAp;
+      const deferredAp = requestedAp - purchased.receivedAp;
+      if (isAccessGameDay) carryOverTacticalAp += deferredAp;
       const capLabel =
-        purchased.receivedAp < requestedAp
-          ? ` (${AP_REFILL_HOLD_LIMIT} AP를 넘는 구매는 할 수 없어 ${requestedAp.toLocaleString()} AP 중 ${purchased.receivedAp.toLocaleString()} AP만)`
+        deferredAp > 0
+          ? ` (${AP_REFILL_HOLD_LIMIT} AP를 넘는 구매는 할 수 없어 ${requestedAp.toLocaleString()} AP 중 ${purchased.receivedAp.toLocaleString()} AP만${
+              isAccessGameDay ? " · 나머지는 접속 후 AP를 쓰고 구매" : ""
+            })`
           : "";
       steps.push({
         at: resetAtString,
-        label: `전술 대회 AP 구매 · +${purchased.receivedAp.toLocaleString()} AP${capLabel}`,
+        label: `${takeNaturalLabel()}전술 대회 AP 구매 · +${purchased.receivedAp.toLocaleString()} AP${capLabel}`,
         ap: currentAp,
+        mailboxAp,
         kind: "tactical-purchase",
         receivedAp: purchased.receivedAp,
-      });
-    }
-    const resetGameDate = packageGameDate(resetAtString);
-    const packageAp = apPackageForGameDate(resetGameDate, packageRecords);
-    if (packageAp > 0) {
-      // Like daily-mission AP, this recurring reward is modeled outside the purchase-specific 999 AP cap.
-      currentAp += packageAp;
-      apPackage += packageAp;
-      packageGameDates.push(resetGameDate);
-      steps.push({
-        at: resetAtString,
-        label: `2주 AP 패키지 · +${packageAp.toLocaleString()} AP`,
-        ap: currentAp,
-        kind: "ap-package",
-        receivedAp: packageAp,
       });
     }
     cursor = resetAt;
@@ -769,6 +843,7 @@ function buildStockpileSteps(
         at: naturalFullAt.toISOString(),
         label: `자연 회복이 최대 AP ${maxAp}에 도달하면 멈춰요`,
         ap: currentAp,
+        mailboxAp,
         kind: "natural",
       });
     }
@@ -779,20 +854,47 @@ function buildStockpileSteps(
         at: naturalAt.toISOString(),
         label: `자연 회복으로 약 ${naturalBeforeAccess.toLocaleString()} AP 모아요`,
         ap: currentAp,
+        mailboxAp,
         kind: "natural",
       });
     }
   }
 
-  const stockpileAp = currentAp + storedCafeAp;
+  const stockpileAp = currentAp + mailboxAp + storedCafeAp;
+  // Cafe AP can be collected only below the hold limit; the part above it goes to the mailbox.
+  const canCollectCafe = currentAp < AP_REFILL_HOLD_LIMIT;
+  let accessLabel = "접속할 시각";
+  let unclaimedCafeAp = 0;
+  if (storedCafeAp > 0 && canCollectCafe) {
+    const received = receiveOverflowingAp(currentAp, storedCafeAp);
+    currentAp = received.heldAp;
+    addToMailbox(received.overflowAp, access);
+    accessLabel = `접속해서 카페 AP ${storedCafeAp.toLocaleString()} 받기${mailboxOverflowLabel(received.overflowAp, access)}`;
+  } else if (storedCafeAp > 0) {
+    unclaimedCafeAp = storedCafeAp;
+    accessLabel = `접속 · 보유 AP가 ${AP_REFILL_HOLD_LIMIT}라 카페 AP ${storedCafeAp.toLocaleString()}는 AP를 쓴 뒤 받기`;
+  }
   steps.push({
     at: access.toISOString(),
-    label: storedCafeAp > 0 ? `접속해서 카페 AP ${storedCafeAp.toLocaleString()} 받기` : "접속할 시각",
+    label: accessLabel,
     ap: stockpileAp,
+    mailboxAp,
+    unclaimedCafeAp,
     kind: "access",
     receivedAp: storedCafeAp,
   });
-  return { steps, stockpileAp, tacticalApShop, tacticalApShopDays, apPackage, packageGameDates };
+  if (mailboxAp > 0 && mailboxExpiresAt) {
+    steps.push({
+      at: access.toISOString(),
+      label: `AP를 쓴 뒤 우편함 AP ${mailboxAp.toLocaleString()} 받기 (받은 뒤 ${AP_REFILL_HOLD_LIMIT} AP를 넘지 않을 때만 · ${formatApShortDate(
+        (mailboxExpiresAt as dayjs.Dayjs).toISOString(),
+      )}까지)`,
+      ap: currentAp,
+      mailboxAp,
+      kind: "mailbox",
+    });
+  }
+  return { steps, stockpileAp, carryOverChargeAp, carryOverTacticalAp, tacticalApShopDays, packageGameDates };
 }
 
 export function calculateApPlannerEvent(input: {
@@ -918,14 +1020,7 @@ export function calculateApPlannerEvent(input: {
         packageRecords,
         options.consumption,
       )
-    : {
-        steps: [] as ApStockpileStep[],
-        stockpileAp: 0,
-        tacticalApShop: 0,
-        tacticalApShopDays: 0,
-        apPackage: 0,
-        packageGameDates: [] as string[],
-      };
+    : emptyStockpilePlan();
   const stockpile = stockpilePlan.stockpileAp;
   // A future plan also receives the tasks of its first game day unless an earlier event already claimed that day.
   // Ongoing events assume today's tasks were already received.
@@ -938,7 +1033,6 @@ export function calculateApPlannerEvent(input: {
   const eventPeriodApPackage = eventPeriodGameDates
     .filter((date) => !stockpilePackageDates.has(date))
     .reduce((sum, date) => sum + apPackageForGameDate(date, packageRecords), 0);
-  const apPackage = stockpilePlan.apPackage + eventPeriodApPackage;
   const firstChargeDate =
     gameDate(supplyFrom) > gameDate(validEvent.startAt) ? gameDate(supplyFrom) : gameDate(validEvent.startAt);
   const resetDates = dailyChargeDays(`${firstChargeDate}T00:00:00+09:00`, validEvent.endAt).filter((date) => {
@@ -949,13 +1043,15 @@ export function calculateApPlannerEvent(input: {
     getPyroxeneApChargeCountForDate(`${date}T12:00:00+09:00`, options.consumption),
   );
   const apChargeDays = chargeCounts.length;
-  const apCharges = chargeCounts.reduce((sum, count) => sum + count * AP_PER_REFILL, 0);
+  const apCharges =
+    chargeCounts.reduce((sum, count) => sum + count * AP_PER_REFILL, 0) + stockpilePlan.carryOverChargeAp;
   const eventPeriodTacticalApShopDays = isOngoing
     ? dailyTaskDays
     : dailyResetInstantsBetween(supplyFrom, validEvent.endAt).length;
   const tacticalApShopDays = stockpilePlan.tacticalApShopDays + eventPeriodTacticalApShopDays;
+  // Stockpiled purchases are already in the stockpile; only the event period and the deferred part are added here.
   const tacticalApShop =
-    stockpilePlan.tacticalApShop + eventPeriodTacticalApShopDays * condition.tacticalApShopCount * 90;
+    eventPeriodTacticalApShopDays * condition.tacticalApShopCount * 90 + stockpilePlan.carryOverTacticalAp;
   const natural = naturalSupply(supplyFrom, validEvent.endAt);
   const cafe = cafeSupplyDuring(supplyFrom, validEvent.endAt, production);
   const availableAp = stockpile + natural + cafe + dailyTasks + eventPeriodApPackage + apCharges + tacticalApShop;
@@ -964,7 +1060,7 @@ export function calculateApPlannerEvent(input: {
     natural,
     cafe,
     dailyTasks,
-    apPackage,
+    apPackage: eventPeriodApPackage,
     apCharges,
     tacticalApShop,
     tacticalApShopCount: condition.tacticalApShopCount,
@@ -1019,7 +1115,7 @@ export function calculateApPlannerEvent(input: {
     availableAp,
     supplyFrom,
     hasStockpile ? resultStockpileStartsAt : null,
-    stockpile,
+    stockpileContribution(stockpilePlan),
     storedCafeAp,
     condition.maxAp,
     condition.tacticalApShopCount,
