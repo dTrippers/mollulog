@@ -357,7 +357,7 @@ export default function ApTimelineEvent({
     calculation?.status === "input-needed"
       ? "계정 레벨과 카페 랭크를 입력하면 확보 가능한 AP를 계산해요."
       : calculation?.status === "not-planned"
-        ? "AP 모으기 계산을 등록하면 확보 가능한 AP를 계산해요."
+        ? "접속할 시간을 등록하고 AP 모으기 계산을 시작해보세요."
         : calculation?.status === "access-time-needed"
           ? "접속할 시각을 입력하면 확보 가능한 AP와 AP 모으기 순서를 계산해요."
           : null;

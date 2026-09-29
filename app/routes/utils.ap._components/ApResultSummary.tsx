@@ -37,7 +37,7 @@ export default function ApResultSummary(props: Props) {
         <span className="grid size-5 place-items-center rounded-sm bg-green-700/10 text-green-800 dark:bg-green-400/15 dark:text-green-300">
           <BoltIcon aria-hidden="true" className="size-3" />
         </span>
-        <p className="text-2xl font-bold tabular-nums">{formatAp(props.requiredAp)}</p>
+        <p className="text-2xl font-bold tabular-nums">{formatAp(props.requiredAp)} AP</p>
         <p className="text-sm text-muted-foreground">필요</p>
       </div>
     );
