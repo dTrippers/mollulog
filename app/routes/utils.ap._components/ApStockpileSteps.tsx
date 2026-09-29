@@ -146,7 +146,9 @@ export default function ApStockpileSteps({
                           >
                             {step.kind === "access"
                               ? `사용 가능 약 ${step.ap.toLocaleString()} AP`
-                              : step.kind === "mailbox"
+                              : step.kind === "after-access"
+                                ? `+${(step.receivedAp ?? 0).toLocaleString()} AP`
+                                : step.kind === "mailbox"
                                 ? `우편함 ${(step.mailboxAp ?? 0).toLocaleString()}`
                                 : step.mailboxAp
                                   ? `보유 ${step.ap.toLocaleString()} · 우편함 ${step.mailboxAp.toLocaleString()}`

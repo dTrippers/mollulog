@@ -108,7 +108,7 @@ describe("AP planner domain", () => {
     expect(ongoing.stockpileSteps).toEqual([]);
   });
 
-  it("pins a full preparation sequence with cafe storage, natural AP, daily tasks, and reset-based refills", () => {
+  it("pins a full preparation sequence with cafe storage, natural AP, daily tasks, and refills after access", () => {
     const event: ApPlannerEvent = {
       ...eventA,
       timelineUid: "event-sequence",
@@ -130,53 +130,47 @@ describe("AP planner domain", () => {
     });
 
     expect(calculation.stockpileStartsAt).toBe("2026-11-16T03:00:00.000Z");
+    // No login before access: natural regen reaches the 230 AP max 23 hours later instead of stopping at a refill.
     expect(calculation.stockpileSteps).toEqual([
       {
         at: "2026-11-16T03:00:00.000Z",
-        label: "카페 AP를 받고 AP를 모두 사용하기 · 이후 AP 쓰지 않기",
+        label: "카페 AP를 받고 AP를 모두 사용하기 · 이후 접속할 시각까지 게임에 접속하지 않기",
         ap: 0,
         kind: "drain",
       },
       {
-        at: "2026-11-16T19:00:00.000Z",
-        label: "자연 회복 160 AP · AP 충전 3회 · +360 AP",
-        ap: 520,
-        mailboxAp: 0,
-        kind: "charge",
-        receivedAp: 360,
+        at: "2026-11-17T02:00:00.000Z",
+        label: "자연 회복이 최대 AP 230에 도달하면 멈춰요",
+        ap: 230,
+        kind: "natural",
       },
       {
         at: "2026-11-17T03:00:00.000Z",
-        label: "접속해서 카페 AP 600 받기 (999 AP를 넘는 121 AP는 우편함으로 · 11/18(수) 12:00까지 받기)",
-        ap: 1_120,
-        mailboxAp: 121,
+        label: "접속해서 카페 AP 600 받기",
+        ap: 830,
+        mailboxAp: 0,
         unclaimedCafeAp: 0,
         kind: "access",
         receivedAp: 600,
       },
       {
         at: "2026-11-17T03:00:00.000Z",
-        label: "AP를 쓴 뒤 우편함 AP 121 받기 (받은 뒤 999 AP를 넘지 않을 때만 · 11/18(수) 12:00까지)",
-        ap: 999,
-        mailboxAp: 121,
-        kind: "mailbox",
+        label: "AP를 쓰면서 AP 충전 3회 (11/18(수) 04:00 전까지)",
+        ap: 830,
+        kind: "after-access",
+        receivedAp: 360,
       },
     ]);
-    const chargeStep = calculation.stockpileSteps.find((step) => step.kind === "charge");
-    const cafeStoredAtReset = Math.floor(cafeProduction(8, 4_500).apPerHour * 16);
-    expect(chargeStep?.ap).toBe(520);
-    expect((chargeStep?.ap ?? 0) + cafeStoredAtReset).toBe(922);
-    expect((chargeStep?.ap ?? 0) + cafeStoredAtReset).toBeLessThan(999);
     expect(calculation.supplyBreakdown).toMatchObject({
-      stockpile: 1_120,
+      stockpile: 830,
       natural: 470,
       cafe: 1_178,
       dailyTasks: 450,
       dailyTaskDays: 3,
-      apCharges: 720,
+      apCharges: 1_080,
       apChargeDays: 2,
     });
-    expect(calculation.availableAp).toBe(3_938);
+    expect(calculation.availableAp).toBe(4_008);
     expect(calculation.stockpileSteps.find((step) => step.kind === "access")?.ap).toBe(
       calculation.supplyBreakdown?.stockpile,
     );
@@ -218,8 +212,8 @@ describe("AP planner domain", () => {
       options,
     });
 
-    expect(calculation.supplyBreakdown).toMatchObject({ stockpile: 1_120, apCharges: 720, apChargeDays: 2 });
-    expect(calculation.availableAp).toBe(3_938);
+    expect(calculation.supplyBreakdown).toMatchObject({ stockpile: 830, apCharges: 1_080, apChargeDays: 2 });
+    expect(calculation.availableAp).toBe(4_008);
     expect(calculation.refillSuggestions[0]).toMatchObject({
       kind: "event-period",
       startDate: "2026-11-19",
@@ -379,11 +373,10 @@ describe("AP planner domain", () => {
 
   it("suggests six charges at the 270 pyroxene tier and reports shortage after 20", () => {
     const baseline = calculate({ ...eventA, requiredAp: 0 });
-    const oneDay = calculate({ ...eventA, requiredAp: (baseline.availableAp ?? 0) + 600 });
-    expect(oneDay.refillSuggestions[1]).toMatchObject({
-      kind: "stockpile-day",
+    const oneDay = calculate({ ...eventA, requiredAp: (baseline.availableAp ?? 0) + 650 });
+    expect(oneDay.refillSuggestions.find(({ kind }) => kind === "stockpile-day")).toMatchObject({
       toCount: 6,
-      additionalAp: 650,
+      additionalAp: 720,
       pyroxeneCost: 270,
     });
 
@@ -501,10 +494,10 @@ describe("AP planner domain", () => {
         packageRecords,
       });
 
-      // 13 of the 14 days fall in the event period; the first day is part of the stockpile.
+      // 13 of the 14 days fall in the event period; the first day is received on login at access.
       expect(calculation.supplyBreakdown?.apPackage).toBe(1_950);
       expect(calculation.stockpileSteps).toContainEqual(
-        expect.objectContaining({ kind: "ap-package", receivedAp: 150, at: "2026-09-30T19:00:00.000Z" }),
+        expect.objectContaining({ kind: "ap-package", receivedAp: 150, at: "2026-10-01T02:00:00.000Z" }),
       );
       expect(calculation.stockpileSteps.find((step) => step.kind === "access")?.ap).toBe(
         calculation.supplyBreakdown?.stockpile,
@@ -540,7 +533,7 @@ describe("AP planner domain", () => {
 
       expect(calculation.supplyBreakdown?.apPackage).toBe(4_200);
       expect(calculation.stockpileSteps).toContainEqual(
-        expect.objectContaining({ kind: "ap-package", receivedAp: 300, at: "2026-10-14T19:00:00.000Z" }),
+        expect.objectContaining({ kind: "ap-package", receivedAp: 300, at: "2026-10-15T02:00:00.000Z" }),
       );
     });
 
@@ -566,24 +559,7 @@ describe("AP planner domain", () => {
       ).toBe("진행 중인 패키지 없음");
     });
 
-    it("counts tactical AP once per 04:00 reset across stockpiling and the event period", () => {
-      const calculation = calculateApPlannerEvent({
-        ...base,
-        conditions: { ...conditions, tacticalApShopCount: 2 },
-      });
-
-      expect(calculation.supplyBreakdown).toMatchObject({
-        tacticalApShopCount: 2,
-        // The stockpiled 180 AP is already in the stockpile, so only the event-period purchase is listed here.
-        tacticalApShop: 180,
-        tacticalApShopDays: 2,
-      });
-      expect(calculation.stockpileSteps.filter((step) => step.kind === "tactical-purchase")).toEqual([
-        expect.objectContaining({ at: "2026-09-29T19:00:00.000Z", receivedAp: 180 }),
-      ]);
-    });
-
-    it("applies the 999 AP stockpile purchase cap to each tactical shop item", () => {
+    it("buys the access day's tactical items after access and each later day's items in the event period", () => {
       const calculation = calculateApPlannerEvent({
         ...base,
         conditions: { ...conditions, accountLevel: 90, tacticalApShopCount: 4 },
@@ -592,46 +568,19 @@ describe("AP planner domain", () => {
           consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeCount: 20 },
         },
       });
-      const tacticalStep = calculation.stockpileSteps.find((step) => step.kind === "tactical-purchase");
 
-      expect(tacticalStep).toMatchObject({ ap: 970, receivedAp: 90 });
-      expect(tacticalStep?.label).toContain("360 AP 중 90 AP만");
-      expect(tacticalStep?.ap).toBeLessThanOrEqual(999);
-    });
-
-    it.each([
-      {
-        itemAp: 60,
-        accessAt: "2026-09-30T09:00:00+09:00",
-        eventStartAt: "2026-09-30T08:00:00+09:00",
-        expectedAp: 970,
-      },
-      {
-        itemAp: 30,
-        accessAt: "2026-09-30T04:00:00+09:00",
-        eventStartAt: "2026-09-30T03:00:00+09:00",
-        expectedAp: 990,
-      },
-    ])("buys the $itemAp AP item when only that lineup item fits under 999", ({
-      itemAp,
-      accessAt,
-      eventStartAt,
-      expectedAp,
-    }) => {
-      const calculation = calculateApPlannerEvent({
-        ...base,
-        event: { ...nextEvent, startAt: eventStartAt },
-        conditions: { ...conditions, accountLevel: 90, tacticalApShopCount: 1 },
-        plan: { accessAt },
-        options: {
-          ...defaultPyroxenePlannerOptions,
-          consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeCount: 20 },
-        },
+      expect(calculation.supplyBreakdown).toMatchObject({
+        tacticalApShopCount: 4,
+        tacticalApShop: 720,
+        tacticalApShopDays: 2,
       });
-      const tacticalStep = calculation.stockpileSteps.find((step) => step.kind === "tactical-purchase");
-
-      expect(tacticalStep).toMatchObject({ ap: expectedAp, receivedAp: itemAp });
-      expect(tacticalStep?.ap).toBeLessThanOrEqual(999);
+      expect(calculation.stockpileSteps.find((step) => step.kind === "after-access")).toMatchObject({
+        label: "AP를 쓰면서 AP 충전 20회 · 전술 대회 AP 360 구매 (10/1(목) 04:00 전까지)",
+        receivedAp: 20 * AP_PER_REFILL + 360,
+      });
+      expect(calculation.stockpileSteps.filter((step) => step.kind !== "access").every((step) => step.ap <= 999)).toBe(
+        true,
+      );
     });
 
     it("assumes today's daily tasks were already received for an ongoing event", () => {
@@ -667,10 +616,11 @@ describe("AP planner domain", () => {
       expect(ongoing.stockpileSteps.some((step) => step.kind === "access")).toBe(true);
     });
 
-    it("never refills above 999 held AP while stockpiling and suggests only useful refills", () => {
+    it("suggests access-day refills worth 120 AP each without touching the stockpile", () => {
       const calculation = calculateApPlannerEvent({ ...base, event: { ...nextEvent, requiredAp: 3_200 } });
       const suggestion = calculation.refillSuggestions.find((item) => item.kind === "stockpile-day");
       expect(suggestion).toBeDefined();
+      expect(suggestion?.additionalAp).toBe(((suggestion?.toCount ?? 0) - 0) * AP_PER_REFILL);
       const applied = calculateApPlannerEvent({
         ...base,
         event: { ...nextEvent, requiredAp: 3_200 },
@@ -689,31 +639,16 @@ describe("AP planner domain", () => {
           },
         },
       });
-      const chargeSteps = applied.stockpileSteps.filter((step) => step.kind === "charge");
-      expect(chargeSteps.length).toBeGreaterThan(0);
-      expect(chargeSteps.every((step) => step.ap <= 999)).toBe(true);
-      // 160 AP from natural regen leaves room for floor((999 - 160) / 120) = 6 refills before access; the rest of
-      // the day's refills are bought after access. Holding more than the max AP stops the 70 AP of natural regen
-      // until access, so 12 refills gain 1,440 - 70.
-      expect(suggestion).toMatchObject({ toCount: 12, additionalAp: 1_370 });
+      expect(applied.supplyBreakdown?.stockpile).toBe(calculation.supplyBreakdown?.stockpile);
+      expect(applied.availableAp).toBe((calculation.availableAp ?? 0) + (suggestion?.additionalAp ?? 0));
+      expect(applied.stockpileSteps.find((step) => step.kind === "after-access")?.label).toContain(
+        `AP 충전 ${suggestion?.toCount}회`,
+      );
     });
 
-    it("keeps searching refill counts when one refill is offset by the natural regen it stops", () => {
-      const calculation = calculateApPlannerEvent({
-        ...base,
-        event: { ...nextEvent, startAt: "2026-09-29T11:00:00+09:00", requiredAp: 10_000 },
-        plan: { accessAt: "2026-09-30T03:00:00+09:00" },
-      });
-      // 04:00 on 9/29: one refill only replaces the natural regen it stops, so the search must go past it.
-      expect(calculation.refillSuggestions.find((item) => item.kind === "stockpile-day")).toMatchObject({
-        startDate: "2026-09-29",
-        toCount: 20,
-        additionalAp: 2_180,
-      });
-    });
-
-    it("caps an over-limit saved exception and says how many refills were possible", () => {
-      const calculation = calculateApPlannerEvent({
+    it("keeps natural regen running until access however many refills are planned", () => {
+      const withoutRefills = calculateApPlannerEvent(base);
+      const withRefills = calculateApPlannerEvent({
         ...base,
         options: {
           ...defaultPyroxenePlannerOptions,
@@ -723,9 +658,13 @@ describe("AP planner domain", () => {
           },
         },
       });
-      const chargeStep = calculation.stockpileSteps.find((step) => step.kind === "charge");
-      expect(chargeStep).toMatchObject({ ap: 880, receivedAp: 720 });
-      expect(chargeStep?.label).toContain("13회 중 6회만");
+
+      expect(withRefills.supplyBreakdown?.stockpile).toBe(withoutRefills.supplyBreakdown?.stockpile);
+      expect(withRefills.availableAp).toBe((withoutRefills.availableAp ?? 0) + 13 * AP_PER_REFILL);
+      expect(withRefills.stockpileSteps.find((step) => step.kind === "after-access")).toMatchObject({
+        label: "AP를 쓰면서 AP 충전 13회 (10/1(목) 04:00 전까지)",
+        receivedAp: 13 * AP_PER_REFILL,
+      });
     });
 
     it("applies AP charge exceptions by the 04:00 game day", () => {
@@ -773,57 +712,63 @@ describe("AP planner domain", () => {
       );
     }
 
-    it("adds stockpiled tactical AP only once", () => {
+    it("adds the access day's tactical AP only once", () => {
       const without = calculateWith({});
       const withTactical = calculateWith({ tacticalApShopCount: 2 });
-      const stockpileGain = (withTactical.supplyBreakdown?.stockpile ?? 0) - (without.supplyBreakdown?.stockpile ?? 0);
-      const eventPeriodDays = (withTactical.supplyBreakdown?.tacticalApShopDays ?? 0) - 1;
+      const days = withTactical.supplyBreakdown?.tacticalApShopDays ?? 0;
 
-      expect(withTactical.supplyBreakdown?.tacticalApShop).toBe(eventPeriodDays * 180);
-      expect((withTactical.availableAp ?? 0) - (without.availableAp ?? 0)).toBe(stockpileGain + eventPeriodDays * 180);
+      expect(withTactical.supplyBreakdown?.stockpile).toBe(without.supplyBreakdown?.stockpile);
+      expect(withTactical.supplyBreakdown?.tacticalApShop).toBe(days * 180);
+      expect((withTactical.availableAp ?? 0) - (without.availableAp ?? 0)).toBe(days * 180);
       expect(breakdownSum(withTactical)).toBe(withTactical.availableAp);
     });
 
-    it("keeps the access day's refills that the hold limit deferred", () => {
+    it("keeps every refill of the access day", () => {
       const calculation = calculateWith({ apChargeCount: 20 });
-      const chargeStep = calculation.stockpileSteps.find((step) => step.kind === "charge");
 
-      expect(chargeStep).toMatchObject({ receivedAp: 6 * AP_PER_REFILL });
-      expect(chargeStep?.label).toContain("나머지 14회는 접속 후 AP를 쓰고 충전");
+      expect(calculation.stockpileSteps.find((step) => step.kind === "after-access")?.label).toContain("AP 충전 20회");
       expect(calculation.supplyBreakdown?.apCharges).toBe(
-        ((calculation.supplyBreakdown?.apChargeDays ?? 0) * 20 + 14) * AP_PER_REFILL,
+        ((calculation.supplyBreakdown?.apChargeDays ?? 0) + 1) * 20 * AP_PER_REFILL,
       );
+      expect(calculation.supplyBreakdown?.stockpile).toBe(calculateWith({}).supplyBreakdown?.stockpile);
       expect(breakdownSum(calculation)).toBe(calculation.availableAp);
     });
 
-    it("keeps the access day's tactical items that the hold limit deferred", () => {
-      const calculation = calculateWith({ apChargeCount: 6, tacticalApShopCount: 4 });
-      const tacticalStep = calculation.stockpileSteps.find((step) => step.kind === "tactical-purchase");
-      const deferredAp = 360 - (tacticalStep?.receivedAp ?? 0);
-      const eventPeriodDays = (calculation.supplyBreakdown?.tacticalApShopDays ?? 0) - 1;
-
-      expect(deferredAp).toBeGreaterThan(0);
-      expect(tacticalStep?.label).toContain("나머지는 접속 후 AP를 쓰고 구매");
-      expect(calculation.supplyBreakdown?.tacticalApShop).toBe(eventPeriodDays * 360 + deferredAp);
-    });
-
-    it("receives the package on login before refills and sends AP over 999 to the mailbox", () => {
+    it("receives the package on login at access before collecting cafe AP", () => {
       const packageRecords: ApPackagePurchaseRecord[] = [
         { eventAt: "2026-09-25T04:00:00+09:00", autoRepurchase: false },
       ];
       const calculation = calculateWith({ apChargeCount: 6, packageRecords });
-      const kinds = calculation.stockpileSteps.map((step) => step.kind);
-      const chargeStep = calculation.stockpileSteps.find((step) => step.kind === "charge");
-      const accessStep = calculation.stockpileSteps.find((step) => step.kind === "access");
 
-      expect(kinds.indexOf("ap-package")).toBeLessThan(kinds.indexOf("charge"));
-      expect(chargeStep).toMatchObject({ ap: 910, receivedAp: 5 * AP_PER_REFILL });
-      expect(chargeStep?.label).toContain("나머지 1회는 접속 후");
-      expect(calculation.stockpileSteps.every((step) => step.kind === "access" || step.ap <= 999)).toBe(true);
-      expect(accessStep).toMatchObject({ ap: 1_510, mailboxAp: 511, unclaimedCafeAp: 0 });
-      expect(accessStep?.label).toContain("999 AP를 넘는 511 AP는 우편함으로");
-      expect(calculation.stockpileSteps.at(-1)).toMatchObject({ kind: "mailbox", ap: 999, mailboxAp: 511 });
+      expect(calculation.stockpileSteps.slice(-3)).toEqual([
+        expect.objectContaining({ kind: "ap-package", ap: 380, mailboxAp: 0, receivedAp: 150 }),
+        expect.objectContaining({ kind: "access", label: "카페 AP 600 받기", ap: 980, mailboxAp: 0 }),
+        expect.objectContaining({ kind: "after-access", label: "AP를 쓰면서 AP 충전 6회 (10/1(목) 04:00 전까지)" }),
+      ]);
       expect(breakdownSum(calculation)).toBe(calculation.availableAp);
+    });
+
+    it("sends package and cafe AP over 999 to the mailbox", () => {
+      const calculation = calculateApPlannerEvent({
+        event: reviewEvent,
+        conditions: { accountLevel: 90, cafeRank: 10, comfort: 5_500 },
+        plan: { accessAt: "2026-09-30T03:00:00.000Z" },
+        currentAt: "2026-09-27T00:00:00.000Z",
+        options: defaultPyroxenePlannerOptions,
+        packageRecords: [{ eventAt: "2026-09-25T04:00:00+09:00", autoRepurchase: false }],
+      });
+      const accessStep = calculation.stockpileSteps.find((step) => step.kind === "access");
+      const mailboxAp = (accessStep?.ap ?? 0) - 999;
+
+      expect(mailboxAp).toBeGreaterThan(0);
+      expect(accessStep).toMatchObject({ mailboxAp, unclaimedCafeAp: 0 });
+      expect(accessStep?.label).toContain(`999 AP를 넘는 ${mailboxAp} AP는 우편함으로 · 10/1(목) 12:00까지 받기`);
+      expect(calculation.stockpileSteps.at(-1)).toMatchObject({
+        kind: "mailbox",
+        ap: 999,
+        mailboxAp,
+        label: `AP를 쓴 뒤 우편함 AP ${mailboxAp} 받기 (받은 뒤 999 AP를 넘지 않을 때만 · 10/1(목) 12:00까지)`,
+      });
     });
   });
 });
