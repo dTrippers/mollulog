@@ -116,6 +116,8 @@ export type ApPlannerCalculation = {
   overlapEventName: string | null;
   refillSuggestions: ApRefillSuggestion[];
   refillOverlapConflict: boolean;
+  /** Whether an ongoing result counts today's refills and tactical items as not bought yet. */
+  todayPurchasesIncluded: boolean;
 };
 
 export function hasApShopTarget(requiredAp: number): boolean {
@@ -864,6 +866,7 @@ export function calculateApPlannerEvent(input: {
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
+      todayPurchasesIncluded: false,
     };
   }
 
@@ -887,6 +890,7 @@ export function calculateApPlannerEvent(input: {
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
+      todayPurchasesIncluded: false,
     };
   }
   if (!isOngoing && (!plan || plan.accessAt === null)) {
@@ -904,6 +908,7 @@ export function calculateApPlannerEvent(input: {
       overlapEventName: null,
       refillSuggestions: [],
       refillOverlapConflict: false,
+      todayPurchasesIncluded: false,
     };
   }
 
@@ -965,8 +970,11 @@ export function calculateApPlannerEvent(input: {
     .reduce((sum, date) => sum + apPackageForGameDate(date, packageRecords), 0);
   const firstChargeDate =
     gameDate(supplyFrom) > gameDate(validEvent.startAt) ? gameDate(supplyFrom) : gameDate(validEvent.startAt);
-  // An ongoing event counts today's refills and tactical items as not bought yet, unless an earlier event owns today.
-  const currentGameDay = isOngoing && supplyFrom === from ? packageGameDate(from) : null;
+  // An ongoing event counts today's refills and tactical items as not bought yet, unless an earlier event lasted
+  // past today's reset and already owns them.
+  const earlierEventOwnsToday = Boolean(previousEnd && !previousEnd.isBefore(firstGameDayStart));
+  const currentGameDay =
+    isOngoing && supplyFrom === from && !earlierEventOwnsToday ? packageGameDate(from) : null;
   const resetDates = dailyChargeDays(`${firstChargeDate}T00:00:00+09:00`, validEvent.endAt).filter((date) => {
     const resetAt = dayjs.tz(`${date}T${String(GAME_RESET_HOUR).padStart(2, "0")}:00:00`, KST);
     return resetAt.isAfter(dayjs(supplyFrom)) && !resetAt.isAfter(dayjs(validEvent.endAt));
@@ -1028,6 +1036,7 @@ export function calculateApPlannerEvent(input: {
     overlapEventName,
     refillSuggestions: refill.suggestions,
     refillOverlapConflict: refill.overlapConflict,
+    todayPurchasesIncluded: currentGameDay !== null,
   };
 }
 

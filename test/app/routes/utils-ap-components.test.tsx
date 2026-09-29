@@ -306,6 +306,13 @@ describe("AP planner event card", () => {
     expect(markup).not.toContain("AP 모으기 계산</button>");
     expect(markup).not.toContain("접속 시");
     expect(markup).not.toContain(">모으기 순서 보기<");
+
+    const earlierEventOwnsToday = renderCard({
+      calculation: { ...calculation, todayPurchasesIncluded: false },
+      shopTargetExists: true,
+      plan: null,
+    });
+    expect(earlierEventOwnsToday).toContain("오늘 AP 충전과 전술 대회 AP 구매는 앞 이벤트 몫으로 계산했어요.");
   });
 
   it("omits the zero stockpile basis line when an ongoing event has no visible stockpile block", () => {

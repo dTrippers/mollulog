@@ -491,8 +491,9 @@ export default function ApTimelineEvent({
                 ) : null}
                 {resultIsOngoing ? (
                   <p className="text-xs text-muted-foreground">
-                    현재 보유 AP와 오늘 일일 미션은 빼고, 오늘 AP 충전과 전술 대회 AP 구매는 아직 하지 않은 것으로
-                    계산했어요.
+                    {calculation?.todayPurchasesIncluded
+                      ? "현재 보유 AP와 오늘 일일 미션은 빼고, 오늘 AP 충전과 전술 대회 AP 구매는 아직 하지 않은 것으로 계산했어요."
+                      : "현재 보유 AP와 오늘 일일 미션은 빼고, 오늘 AP 충전과 전술 대회 AP 구매는 앞 이벤트 몫으로 계산했어요."}
                   </p>
                 ) : null}
               </>

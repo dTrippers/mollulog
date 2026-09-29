@@ -608,6 +608,41 @@ describe("AP planner domain", () => {
       });
     });
 
+    it("leaves today's refills and tactical items with an earlier event that ended after today's reset", () => {
+      const previous = {
+        timelineUid: "previous",
+        name: "앞 이벤트",
+        startAt: "2026-11-05T11:00:00+09:00",
+        endAt: "2026-11-19T10:59:00+09:00",
+      };
+      const next = {
+        ...base,
+        event: { ...nextEvent, startAt: "2026-11-19T18:00:00+09:00", endAt: "2026-11-20T10:59:00+09:00" },
+        conditions: { ...conditions, accountLevel: 90, tacticalApShopCount: 4 },
+        plan: { accessAt: "2026-11-19T18:00:00+09:00" },
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeCount: 3 },
+        },
+        previousPlannedEvents: [previous],
+      };
+      const beforeAccess = calculateApPlannerEvent({ ...next, currentAt: "2026-11-19T17:59:00+09:00" });
+      const afterAccess = calculateApPlannerEvent({ ...next, currentAt: "2026-11-19T18:01:00+09:00" });
+
+      expect(beforeAccess.supplyBreakdown).toMatchObject({ apCharges: 360, tacticalApShop: 360 });
+      expect(afterAccess.status).toBe("ongoing");
+      expect(afterAccess.todayPurchasesIncluded).toBe(false);
+      expect(afterAccess.supplyBreakdown).toMatchObject({ apCharges: 360, tacticalApShop: 360 });
+
+      const short = calculateApPlannerEvent({
+        ...next,
+        event: { ...next.event, requiredAp: (afterAccess.availableAp as number) + 120 },
+        currentAt: "2026-11-19T18:01:00+09:00",
+      });
+      expect(short.refillSuggestions).not.toHaveLength(0);
+      expect(short.refillSuggestions.every((suggestion) => suggestion.startDate === "2026-11-20")).toBe(true);
+    });
+
     it("counts and suggests today's refills for an ongoing event on its last game day", () => {
       const lastDay = {
         ...base,
@@ -627,6 +662,7 @@ describe("AP planner domain", () => {
         },
       });
       expect(withoutTodayCharges.status).toBe("ongoing");
+      expect(withoutTodayCharges.todayPurchasesIncluded).toBe(true);
       expect(withTodayCharges.availableAp).toBe((withoutTodayCharges.availableAp as number) + 360);
       expect(withTodayCharges.supplyBreakdown).toMatchObject({ apCharges: 360, apChargeDays: 1, dailyTaskDays: 0 });
 
