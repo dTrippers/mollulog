@@ -66,6 +66,24 @@
   }
 }
 
+@utility navigation-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
+  }
+
+  &::-webkit-scrollbar-track {
+    background-color: transparent;
+  }
+}
+
 @utility no-scrollbar {
   &::-webkit-scrollbar {
     display: none;
@@ -82,6 +100,10 @@
   --muted-foreground: var(--floating-muted-foreground);
   --border: var(--floating-border);
   --input: var(--floating-input);
+}
+
+@utility popover-surface {
+  @apply floating-surface rounded-lg border border-border bg-floating/90 text-floating-foreground shadow-lg shadow-black/10 backdrop-blur-sm dark:bg-floating/80 dark:shadow-black/30;
 }
 
 @utility z-layer-toast {

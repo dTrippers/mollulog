@@ -45,7 +45,7 @@ export function NavigationMenuRow({
           hasFavoriteStar && "transition-opacity group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
         )}
       >
-        {badgeLabel ? <span className="whitespace-nowrap text-xs font-normal text-muted-foreground">{badgeLabel}</span> : null}
+        {badgeLabel ? <span className="whitespace-nowrap text-[10px] leading-4 font-normal text-muted-foreground">{badgeLabel}</span> : null}
         {showRedDot ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" /> : null}
       </span>
     </span>

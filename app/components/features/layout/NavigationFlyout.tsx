@@ -147,7 +147,7 @@ export function NavigationFlyout({
       id={id}
       ref={panelRef}
       className={cn(
-        "fixed z-layer-navigation-menu flex flex-col overflow-hidden rounded-lg bg-card text-card-foreground shadow-lg shadow-black/10 dark:shadow-md dark:shadow-black/30",
+        "fixed z-layer-navigation-menu flex flex-col overflow-hidden popover-surface",
         width === "search" ? "w-96" : "w-56",
         className,
       )}

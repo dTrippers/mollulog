@@ -264,7 +264,7 @@ export default function NotificationHistoryPopover({
           role="dialog"
           aria-label="알림"
           className={cn(
-            "fixed z-layer-navigation-menu flex flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20",
+            "fixed z-layer-navigation-menu flex flex-col overflow-hidden popover-surface",
             position ? "opacity-100" : "pointer-events-none opacity-0",
           )}
           style={

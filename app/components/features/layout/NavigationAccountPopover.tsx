@@ -2,7 +2,6 @@ import {
   MoonIcon,
   SunIcon,
   UserCircleIcon,
-  ChevronUpDownIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useSubmit } from "react-router";
@@ -152,7 +151,7 @@ export function NavigationAccountPopover({
           aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
         >
           <ModeIcon className="size-5" aria-hidden="true" />
-          <span className="text-[11px] leading-4">다크 모드</span>
+          <span className="text-[11px] leading-4">{darkMode ? "라이트 모드" : "다크 모드"}</span>
         </button>
       </div>
     ) : (
@@ -208,7 +207,14 @@ export function NavigationAccountPopover({
         {variant === "expanded" ? (
           <>
             <span className="min-w-0 flex-1 truncate">{username}</span>
-            <ChevronUpDownIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+            <svg
+              viewBox="0 0 16 16"
+              fill="currentColor"
+              className={cn("size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", isOpen && "rotate-180")}
+              aria-hidden="true"
+            >
+              <path d="M4 10 8 6l4 4H4Z" />
+            </svg>
           </>
         ) : (
           <span className="max-w-full truncate text-[11px] leading-4">계정</span>
@@ -223,7 +229,7 @@ export function NavigationAccountPopover({
           aria-label="계정 메뉴"
           aria-hidden={!position}
           className={cn(
-            "fixed z-layer-navigation-menu w-56 rounded-lg bg-card p-2 text-card-foreground shadow-lg shadow-black/10 dark:shadow-md dark:shadow-black/30",
+            "fixed z-layer-navigation-menu w-56 popover-surface p-2",
             !position && "pointer-events-none invisible opacity-0",
           )}
           style={{

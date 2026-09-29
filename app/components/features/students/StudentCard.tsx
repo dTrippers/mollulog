@@ -405,6 +405,7 @@ type StudentCardPopupProps = {
   };
   popups: {
     Icon?: React.ElementType;
+    iconClassName?: string;
     text?: string;
     children?: ReactNode;
     link?: string;
@@ -417,11 +418,11 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
   const { name, attackType, defenseType, role } = student;
 
   return (
-    <div className="m-4 rounded-lg border border-border bg-white/90 text-base leading-normal text-black shadow-lg backdrop-blur-sm md:m-0 dark:bg-black/80 dark:text-white">
-      <div className="px-4 pt-4 pb-2">
-        <p className="text-lg font-bold">{name}</p>
+    <div className="popover-surface relative m-4 p-2 text-sm leading-normal md:m-0">
+      <div className="px-2 pt-2 pb-3">
+        <p className="pr-8 text-sm font-semibold">{name}</p>
         {attackType && defenseType && role && (
-          <div className="py-2 flex text-sm gap-x-1">
+          <div className="mt-2 flex flex-wrap gap-1 text-xs">
             <AttributeBadge text={attackTypeLocale[attackType]} color={attackTypeColor[attackType]} />
             <AttributeBadge text={defenseTypeLocale[defenseType]} color={defenseTypeColor[defenseType]} />
             <AttributeBadge text={roleLocale[role]} color={roleColor[role]} />
@@ -429,23 +430,20 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
         )}
         <button
           type="button"
-          className="absolute top-3 right-2 rounded-lg p-1 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+          className="absolute top-2 right-2 inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
           onClick={onClose}
           aria-label="학생 카드 팝업 닫기"
         >
-          <XMarkIcon className="size-5 hover:text-neutral-700" strokeWidth={2} />
+          <XMarkIcon className="size-4" strokeWidth={2} aria-hidden="true" />
         </button>
       </div>
-      <div>
+      <div className="space-y-0.5">
         {popups.map((popup, index) => {
-          const itemClassName = cn(`
-            w-full px-4 py-3 flex items-center text-left hover:bg-neutral-200/80 dark:hover:bg-neutral-700/80 transition gap-x-2 border-t border-neutral-200 dark:border-neutral-800
-            ${index === popups.length - 1 ? "rounded-b-lg" : ""}
-          `);
+          const itemClassName = "flex min-h-10 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm font-normal transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
           const content = (
             <>
-              {popup.Icon && <popup.Icon className="size-5" />}
+              {popup.Icon && <popup.Icon className={cn("size-4 shrink-0", popup.iconClassName ?? "text-muted-foreground")} aria-hidden="true" />}
               {popup.text && <span>{popup.text}</span>}
               {popup.children}
             </>

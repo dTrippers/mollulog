@@ -179,10 +179,10 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
           onResultClick={() => setIsPopupOpen(false)}
           className={
             variant === "rail"
-              ? "relative z-layer-navigation-menu -mx-2 mt-2 max-h-[calc(100dvh-8rem)] w-96 overflow-y-auto rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+              ? "relative -mx-2 mt-2 max-h-[calc(100dvh-8rem)] w-96 overflow-y-auto"
               : variant === "desktop"
-                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
-                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg border border-border/70 bg-card text-card-foreground shadow-lg"
+                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden popover-surface"
+                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden popover-surface"
           }
         />
       )}
@@ -560,7 +560,7 @@ export default function NavigationBar({
             </div>
           ) : null}
 
-          <nav aria-label="데스크톱 주요 메뉴" className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          <nav aria-label="데스크톱 주요 메뉴" className="navigation-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
             <div className="space-y-0.5">
               <NavigationMenuRow {...desktopNavigation.homeItem} />
               {favoriteRows.length > 0 ? (
@@ -706,11 +706,11 @@ function DesktopNavigationGroup({
   const controlsId = `desktop-navigation-group-${id}`;
 
   return (
-    <section className="mt-2">
+    <section className="mt-4">
       <button
         type="button"
         className={cn(
-          "flex min-h-6.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-medium text-foreground/65 transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+          "flex min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-foreground/80 transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
           active && !expanded && "bg-background text-foreground",
         )}
         aria-expanded={expanded}
@@ -722,11 +722,11 @@ function DesktopNavigationGroup({
           <span className="size-1.5 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
         ) : null}
         <ChevronDownIcon
-          className={cn("size-4 shrink-0 transition-transform", !expanded && "-rotate-90")}
+          className={cn("size-3 shrink-0 transition-transform", !expanded && "-rotate-90")}
           aria-hidden="true"
         />
       </button>
-      <div id={controlsId} hidden={!expanded} className="mt-0.5 space-y-0.5">
+      <div id={controlsId} hidden={!expanded} className="mt-1 space-y-0.5">
         {items.map((item) => (
           <NavigationMenuRow
             key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`}
