@@ -1,4 +1,10 @@
-import { InformationCircleIcon, ListBulletIcon, ShoppingCartIcon, SparklesIcon } from "@heroicons/react/24/outline";
+import {
+  InformationCircleIcon,
+  ListBulletIcon,
+  ShoppingCartIcon,
+  SparklesIcon,
+  Squares2X2Icon,
+} from "@heroicons/react/24/outline";
 import {
   type LoaderFunctionArgs,
   Outlet,
@@ -11,7 +17,8 @@ import {
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
-import { getEventMetadata, getShopAvailableEvents } from "~/models/event-content";
+import { treasureHuntLocale } from "~/locales/ko";
+import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
@@ -25,6 +32,8 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }
+  const minigameType =
+    eventMetadata.contentType === "live" ? null : await getEventMinigameType(publicReadEnv, eventMetadata);
   const pathname = new URL(request.url).pathname;
   if (eventMetadata.contentType === "live" && pathname !== `/events/${uid}`) {
     return redirect(`/events/${uid}`);
@@ -44,7 +53,7 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     });
     shopAvailableEvents.sort((a, b) => compareInstantAsc(a.since, b.since));
   }
-  return { eventMetadata, shopAvailableEvents };
+  return { eventMetadata, minigameType, shopAvailableEvents };
 };
 
 export default function EventPage() {
@@ -52,7 +61,7 @@ export default function EventPage() {
   const { uid } = useParams();
   const location = useLocation();
   const { pathname } = location;
-  const { eventMetadata, shopAvailableEvents } = useLoaderData<typeof loader>();
+  const { eventMetadata, minigameType, shopAvailableEvents } = useLoaderData<typeof loader>();
   const isLive = eventMetadata.contentType === "live";
   const showEventSelector = pathname === `/events/${uid}/shop` && shopAvailableEvents.length > 1;
   const { navigationState, verifiedFutureReturn, returnToFutures } = useFutureDetailReturn(
@@ -125,6 +134,18 @@ export default function EventPage() {
                 disabled: !eventMetadata.recruitmentGroupUid,
                 linkState: futureLinkState,
               },
+              ...(minigameType === "treasure_hunt"
+                ? [
+                    {
+                      text: treasureHuntLocale.simulatorTitle,
+                      description: treasureHuntLocale.simulatorDescription,
+                      Icon: Squares2X2Icon,
+                      link: `/events/${uid}/treasure-hunt`,
+                      active: pathname === `/events/${uid}/treasure-hunt`,
+                      linkState: futureLinkState,
+                    },
+                  ]
+                : []),
             ]
       }
     >

@@ -47,6 +47,8 @@ export async function getEventMetadata(env: Env, timelineUid: string, ctx?: Exec
   };
 }
 
+type EventMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+
 export type ShopAvailableEvent = {
   uid: string;
   name: string;
@@ -564,6 +566,10 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
     return null;
   }
 
+  return getEventShopContentForMetadata(env, metadata, forceRefresh);
+}
+
+export async function getEventShopContentForMetadata(env: Env, metadata: EventMetadata, forceRefresh = false) {
   const shopContentUid = metadata.shopContentUid ?? metadata.contentUid;
   if (!shopContentUid) {
     return null;
@@ -594,4 +600,13 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
     EVENT_STATIC_CONTENT_TTL,
     forceRefresh,
   );
+}
+
+/** Gets the cached minigame type using event metadata already loaded by the caller. */
+export async function getEventMinigameType(
+  env: Env,
+  metadata: EventMetadata,
+): Promise<MinigameConfig["minigameType"] | null> {
+  const content = await getEventShopContentForMetadata(env, metadata);
+  return content?.minigameConfig?.minigameType ?? null;
 }
