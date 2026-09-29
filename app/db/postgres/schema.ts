@@ -208,6 +208,7 @@ export const pgTimelineContentsTable = pgTable(
     rewardExchangeEndAt: timestamptz("reward_exchange_end_at"),
     endless: boolean().notNull().default(false),
     imageUrl: text("image_url"),
+    externalLink: text("external_link"),
     videos: jsonb().$type<TimelineContentVideo[]>().notNull().default([]),
     contentType: text("content_type").notNull(),
     runType: text("run_type").notNull().default("first"),
@@ -240,6 +241,8 @@ export type DiscordConnectionStatus = "pending" | "active" | "failed";
 export type DiscordNotificationTrigger =
   | "event-start"
   | "event-end"
+  | "offline-event-start"
+  | "offline-event-end"
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"

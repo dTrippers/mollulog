@@ -67,9 +67,9 @@ export default function ContentFilterPanel({
       onToggle: (activated: boolean) => onToggleType(activated, ["pickup"]),
     },
     {
-      text: "공식 방송",
-      active: filter.types.includes("live"),
-      onToggle: (activated: boolean) => onToggleType(activated, ["live"]),
+      text: "행사/방송",
+      active: filter.types.some((type) => ["live", "offline_event"].includes(type)),
+      onToggle: (activated: boolean) => onToggleType(activated, ["live", "offline_event"]),
     },
   ];
 

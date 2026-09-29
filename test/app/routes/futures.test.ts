@@ -176,6 +176,7 @@ describe("futures loader data source routing", () => {
           endAt: "2030-01-21T00:00:00.000Z",
         },
         imageUrl: null,
+        externalLink: "https://example.com/event-details",
         confirmed: true,
         isSpoiler: false,
         tags: [],
@@ -191,6 +192,7 @@ describe("futures loader data source routing", () => {
         startAt: "2030-01-11T00:00:00.000Z",
         endAt: "2030-01-21T00:00:00.000Z",
       },
+      externalLink: "https://example.com/event-details",
     });
     expect(result.contents[0]).not.toHaveProperty("recruitmentPeriodNotice");
   });

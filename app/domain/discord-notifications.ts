@@ -7,6 +7,7 @@ export const DISCORD_NOTIFICATION_EVENT_OPINION_REPLY_MESSAGE = "작성한 이�
 export const DISCORD_NOTIFICATION_DEFAULTS = {
   eventStartEnabled: false,
   eventEndEnabled: false,
+  offlineEventEnabled: false,
   rewardExchangeEndEnabled: false,
   recruitmentStartEnabled: false,
   shopResetEnabled: false,
@@ -43,6 +44,7 @@ export function isDiscordOAuthStateValid(
 export type DiscordNotificationSettingsInput = {
   eventStartEnabled: boolean;
   eventEndEnabled: boolean;
+  offlineEventEnabled: boolean;
   rewardExchangeEndEnabled: boolean;
   recruitmentStartEnabled: boolean;
   shopResetEnabled: boolean;
@@ -164,6 +166,10 @@ export function formatDiscordNotificationMessage({
       return `${at}, "${name}" 이벤트가 시작됩니다.`;
     case "event-end":
       return `${at}, "${name}" 이벤트가 종료됩니다.`;
+    case "offline-event-start":
+      return `${at}, "${name}" 행사 일정이 시작됩니다.`;
+    case "offline-event-end":
+      return `${at}, "${name}" 행사 일정이 종료됩니다.`;
     case "reward-exchange-end":
       return `${at}, "${name}" 이벤트의 보상 교환이 종료됩니다. 수령하지 않은 보상은 소멸되니 교환을 완료했는지 확인해주세요.`;
   }
@@ -173,6 +179,8 @@ export function getEnabledTriggers(settings: DiscordNotificationSettingsInput): 
   return [
     settings.eventStartEnabled ? "event-start" : null,
     settings.eventEndEnabled ? "event-end" : null,
+    settings.offlineEventEnabled ? "offline-event-start" : null,
+    settings.offlineEventEnabled ? "offline-event-end" : null,
     settings.rewardExchangeEndEnabled ? "reward-exchange-end" : null,
     settings.recruitmentStartEnabled ? "recruitment-start" : null,
     settings.shopResetEnabled ? "shop-reset" : null,

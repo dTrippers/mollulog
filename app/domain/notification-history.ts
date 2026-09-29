@@ -3,6 +3,8 @@ import { getInstantTime } from "~/lib/date-time";
 export type NotificationHistoryTrigger =
   | "event-start"
   | "event-end"
+  | "offline-event-start"
+  | "offline-event-end"
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"
@@ -41,6 +43,8 @@ const NOTIFICATION_UID_MAX_LENGTH = 128;
 const NOTIFICATION_TYPE_LABELS: Record<NotificationHistoryTrigger, string> = {
   "event-start": "이벤트 시작",
   "event-end": "이벤트 종료",
+  "offline-event-start": "행사 일정 시작",
+  "offline-event-end": "행사 일정 종료",
   "reward-exchange-end": "보상 교환 종료",
   "recruitment-start": "학생 모집 시작",
   "shop-reset": "상점 초기화",

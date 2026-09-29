@@ -74,6 +74,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       recruitmentGroupUid: content.recruitmentGroupUid,
       recruitmentPeriod: content.recruitmentPeriod,
       imageUrl: content.imageUrl,
+      externalLink: content.externalLink,
       confirmed: content.confirmed,
       isSpoiler: content.isSpoiler,
       tags: content.tags,
@@ -179,6 +180,7 @@ type FutureContentForView = Pick<
   | "contentType"
   | "runType"
   | "imageUrl"
+  | "externalLink"
   | "confirmed"
   | "isSpoiler"
   | "tags"
@@ -625,6 +627,7 @@ export default function FutureContents() {
           ...common,
           name: common.raidInfo ? common.raidInfo.name : content.name,
           imageUrl: content.imageUrl,
+          externalLink: content.externalLink,
           recruitmentGroupUid: content.recruitmentGroupUid,
           recruitmentPeriod: content.recruitmentPeriod,
           recruitments: content.recruitments.length > 0 ? content.recruitments : undefined,

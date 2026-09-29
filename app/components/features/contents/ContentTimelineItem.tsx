@@ -12,6 +12,7 @@ import {
   CheckCircleIcon,
   HeartIcon as EmptyHeartIcon,
   IdentificationIcon,
+  LinkIcon,
   PencilSquareIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -35,7 +36,7 @@ import {
   parseUtcTimestamp,
   type UtcIsoString,
 } from "~/lib/date-time";
-import { contentTypeLocale, recruitmentLabelLocale, remainingTime } from "~/locales/ko";
+import { contentTypeLocale, recruitmentLabelLocale, remainingTime, timelineContentTypeLocale } from "~/locales/ko";
 import type { ContentCommentSummary } from "~/models/content";
 import type { EventType, RaidType, Role } from "~/models/content.d";
 import {
@@ -46,6 +47,7 @@ import {
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import ContentCommentEditor from "./ContentCommentEditor";
 import ContentCommentView from "./ContentCommentView";
+import { formatOfflineEventSchedule } from "./content-timeline-format";
 import {
   getRecruitmentOpinionTutorialDismissalAction,
   isRecruitmentOpinionTutorialDismissedForCurrentVisit,
@@ -60,6 +62,7 @@ export type ContentTimelineItemProps = {
   uid: string;
   name: string;
   imageUrl?: string | null;
+  externalLink?: string | null;
   contentType: EventType | RaidType;
   runType: "first" | "rerun" | "permanent";
   endless: boolean;
@@ -171,6 +174,7 @@ export function ContentTimelineItem({
   uid,
   name,
   imageUrl,
+  externalLink,
   contentType,
   runType,
   endless,
@@ -353,8 +357,19 @@ export function ContentTimelineItem({
             <div className="my-1 flex flex-wrap gap-1 text-sm">
               <span className="pr-1 py-0.5 text-neutral-500 dark:text-neutral-400">
                 {(contentType === "event" || contentType === "pickup") && runType === "rerun" && "복각 "}
-                {contentType === "event" && runType === "permanent" ? "이벤트 상설화" : contentTypeLocale[contentType]}
+                {contentType === "event" && runType === "permanent"
+                  ? "이벤트 상설화"
+                  : contentType === "live" || contentType === "offline_event"
+                    ? timelineContentTypeLocale[contentType]
+                    : contentTypeLocale[contentType]}
               </span>
+              {contentType === "offline_event" && since && (
+                <ContentTag
+                  Icon={ClockIcon}
+                  text={formatOfflineEventSchedule(since, until, displayTimeZone)}
+                  color="default"
+                />
+              )}
               {!endless && daysLabel && (
                 <ContentTag Icon={ClockIcon} text={daysLabel} color={finishSoon ? "red" : "default"} />
               )}
@@ -376,6 +391,11 @@ export function ContentTimelineItem({
             onHide={isSpoiler && spoilerVisible ? onHideSpoiler : undefined}
           >
             {headerContent}
+            {externalLink && (!isSpoiler || spoilerVisible) && (
+              <div className="mt-2">
+                <Button href={externalLink} target="_blank" size="xs" icon={LinkIcon} text="자세히 보기" />
+              </div>
+            )}
           </SpoilerHeader>
         </div>
 
