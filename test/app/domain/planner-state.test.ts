@@ -121,7 +121,7 @@ describe("planner state projection", () => {
         options: {
           ...defaultPyroxenePlannerOptions,
           event: { pickupChance: "ceil" },
-          consumption: { apChargeCount: 2 },
+          consumption: { apChargeCount: 2, apChargeExceptions: [] },
         },
         collectedSourceKeys: ["source-a", "source-b"],
         eventData: { "event-1": { completed: true, expectedTrials: 200 } },
@@ -198,5 +198,19 @@ describe("planner state projection", () => {
 
     expect(plannerStateDocumentDifferences(expected, actual)).toEqual(["pyroxene.records", "eventShops"]);
     expect(plannerStateDocumentDifferences(expected, null)).toEqual(["document"]);
+
+    const apChanged = { ...expected, ap: { accountLevel: 85, cafeRank: 8, comfort: 4_500, eventPlans: {} } };
+    expect(plannerStateDocumentDifferences(expected, apChanged)).toEqual([]);
+  });
+
+  it("treats missing AP charge exceptions in an older document as the normalized empty list", () => {
+    const expected = projectPlannerStateDocument(projectionRows());
+    const actual = structuredClone(expected);
+    const storedOptions = actual.pyroxene.options as unknown as {
+      consumption: { apChargeExceptions?: unknown };
+    };
+    delete storedOptions.consumption.apChargeExceptions;
+
+    expect(plannerStateDocumentDifferences(expected, actual)).toEqual([]);
   });
 });

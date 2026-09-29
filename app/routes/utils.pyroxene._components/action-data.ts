@@ -1,4 +1,8 @@
-import { PYROXENE_PICKUP_CHANCES, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import {
+  normalizePyroxeneApChargeExceptions,
+  PYROXENE_PICKUP_CHANCES,
+  type PyroxenePlannerOptions,
+} from "~/domain/pyroxene-planner";
 import {
   PYROXENE_SOURCE_DEFINITIONS,
   type PyroxeneMonthlyPackageType,
@@ -60,6 +64,7 @@ type UpdateEventDataAction = {
 };
 
 type SaveOptionsAction = { intent: "save-options"; payload: { options: PyroxenePlannerOptions } };
+type RemoveApChargeExceptionAction = { intent: "remove-ap-charge-exception"; payload: { uid: string } };
 type CollectSourceAction = { intent: "collect-source"; payload: { sourceKey: string } };
 type UncollectSourceAction = { intent: "uncollect-source"; payload: { sourceKey: string } };
 
@@ -79,6 +84,7 @@ export type ActionData =
   | SaveOtherAction
   | UpdateEventDataAction
   | SaveOptionsAction
+  | RemoveApChargeExceptionAction
   | CollectSourceAction
   | UncollectSourceAction
   | DeletePickupCompletionAction
@@ -243,7 +249,10 @@ function readPlannerOptions(value: unknown): PyroxenePlannerOptions {
     event: { pickupChance: pickupChance as PyroxenePlannerOptions["event"]["pickupChance"] },
     raid: { tier: tier as PyroxenePlannerOptions["raid"]["tier"] },
     tactical: { level: level as PyroxenePlannerOptions["tactical"]["level"] },
-    consumption: { apChargeCount },
+    consumption: {
+      apChargeCount,
+      apChargeExceptions: normalizePyroxeneApChargeExceptions(consumption.apChargeExceptions),
+    },
     timeline: { display: display as PyroxenePlannerOptions["timeline"]["display"] },
   };
 }
@@ -351,6 +360,10 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
       assertMethod(method, "POST");
       assertRequiredKeys(payload, ["options"]);
       return { intent, payload: { options: readPlannerOptions(payload.options) } };
+    case "remove-ap-charge-exception":
+      assertMethod(method, "DELETE");
+      assertRequiredKeys(payload, ["uid"]);
+      return { intent, payload: { uid: readString(payload, "uid") } };
     case "collect-source":
       assertMethod(method, "POST");
       assertRequiredKeys(payload, ["sourceKey"]);

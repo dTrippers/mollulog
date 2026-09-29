@@ -1,6 +1,7 @@
 import { HeartIcon } from "@heroicons/react/16/solid";
 import { Fragment, type ReactNode, useState } from "react";
 import { Button } from "~/components/primitives";
+import SharedPlannerEventThumbnail from "~/components/features/planner/PlannerEventThumbnail";
 import type {
   PlannerPeriod,
   PlannerPeriodBoldEndpoint,
@@ -8,6 +9,10 @@ import type {
   PlannerPeriodStudent,
 } from "~/domain/integrated-planner";
 import { studentImageUrl } from "~/models/assets";
+
+export function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
+  return <SharedPlannerEventThumbnail imageUrl={period?.imageUrl} fallbackImageUrl={period?.fallbackImageUrl} />;
+}
 
 /**
  * Shared rendering of the "M/D HH:mm ~ M/D HH:mm" (or "M/D HH:mm ~" when endless) period
@@ -37,46 +42,6 @@ export function PlannerPeriodRange({
         " ~"
       )}
     </>
-  );
-}
-
-export function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
-  return (
-    <div className="relative size-10 shrink-0 overflow-hidden rounded-md">
-      <div aria-hidden="true" className="absolute inset-0 rounded-md bg-muted ring-1 ring-border" />
-      {period?.imageUrl ? (
-        <PlannerEventThumbnailImage
-          key={JSON.stringify([period.imageUrl, period.fallbackImageUrl])}
-          imageUrl={period.imageUrl}
-          fallbackImageUrl={period.fallbackImageUrl}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function PlannerEventThumbnailImage({
-  imageUrl,
-  fallbackImageUrl,
-}: {
-  imageUrl: string;
-  fallbackImageUrl?: string | null;
-}) {
-  const [imageStage, setImageStage] = useState<"primary" | "fallback" | "failed">("primary");
-  const currentImageUrl = imageStage === "primary" ? imageUrl : imageStage === "fallback" ? fallbackImageUrl : null;
-  if (!currentImageUrl) return null;
-
-  return (
-    <img
-      key={currentImageUrl}
-      src={currentImageUrl}
-      alt=""
-      className="relative size-full object-cover"
-      loading="lazy"
-      onError={() => {
-        setImageStage((currentStage) => (currentStage === "primary" && fallbackImageUrl ? "fallback" : "failed"));
-      }}
-    />
   );
 }
 
@@ -191,16 +156,18 @@ export type PlannerEventCardRecruitmentAction = {
 
 export function PlannerEventCardActions({
   eventPeriod,
+  apPlannerHref,
   shopCalculatorHref,
   recruitmentActions = [],
   className,
 }: {
   eventPeriod?: PlannerPeriod;
+  apPlannerHref?: string;
   shopCalculatorHref?: string;
   recruitmentActions?: readonly PlannerEventCardRecruitmentAction[];
   className?: string;
 }) {
-  if (!eventPeriod && !shopCalculatorHref && recruitmentActions.length === 0) return null;
+  if (!eventPeriod && !apPlannerHref && !shopCalculatorHref && recruitmentActions.length === 0) return null;
 
   return (
     <div className={`flex flex-wrap gap-2 ${className ?? ""}`.trim()}>
@@ -211,6 +178,15 @@ export function PlannerEventCardActions({
           variant="secondary"
           className="shadow-xs dark:shadow-none"
           to={eventPeriod.href}
+        />
+      ) : null}
+      {apPlannerHref ? (
+        <Button
+          text="AP 플래너"
+          size="xs"
+          variant="secondary"
+          className="shadow-xs dark:shadow-none"
+          to={apPlannerHref}
         />
       ) : null}
       {shopCalculatorHref ? (

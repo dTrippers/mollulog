@@ -161,7 +161,7 @@ export default function PlannerDateScheduleRow({
     recruitmentStudentNames,
     highlighted,
     resourceChanges,
-    plannerPlanMarkLabels(planMarks),
+    [...plannerPlanMarkLabels(planMarks), ...(eventPeriod?.isApPlanned ? ["AP 모으기 계획"] : [])],
   );
 
   useEffect(() => {

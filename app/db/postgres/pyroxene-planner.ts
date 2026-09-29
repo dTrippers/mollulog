@@ -982,6 +982,37 @@ export async function upsertPostgresPyroxenePlannerOptions(
   );
 }
 
+export async function updatePostgresPyroxenePlannerOptions<T>(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  update: (current: PyroxenePlannerOptions) => { options: PyroxenePlannerOptions; result: T },
+  repositoryOptions: PostgresPyroxeneOptions = {},
+): Promise<T> {
+  return withPyroxeneDatabase(
+    env,
+    "planner_options.update",
+    (db) =>
+      withPlannerStateUpdate(
+        db,
+        userId,
+        async (tx, document) => {
+          const { options, result } = update(document.pyroxene.options);
+          const normalizedOptions = normalizePyroxenePlannerOptions(options);
+          await upsertPyroxenePlannerOptionsInDatabase(tx, userId, normalizedOptions);
+          return {
+            document: {
+              ...document,
+              pyroxene: { ...document.pyroxene, options: normalizedOptions },
+            },
+            result,
+          };
+        },
+        { retryable: true },
+      ),
+    repositoryOptions,
+  );
+}
+
 export async function upsertPyroxeneEventDataInDatabase(
   db: PyroxeneDatabase,
   userId: number,

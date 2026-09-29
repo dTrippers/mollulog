@@ -12,6 +12,7 @@ const mockCreateAttendance = jest.fn<AsyncMock>();
 const mockCreateOtherPyroxeneGain = jest.fn<AsyncMock>();
 const mockUpsertPyroxeneEventData = jest.fn<AsyncMock>();
 const mockUpsertPyroxenePlannerOptions = jest.fn<AsyncMock>();
+const mockUpdatePyroxenePlannerOptions = jest.fn<AsyncMock>();
 const mockUpsertCollectedSources = jest.fn<AsyncMock>();
 const mockDeleteCollectedSource = jest.fn<AsyncMock>();
 const mockDeletePyroxeneTimelineItem = jest.fn<AsyncMock>();
@@ -35,6 +36,7 @@ jest.mock("~/models/pyroxene-planner", () => {
     createOtherPyroxeneGain: mockCreateOtherPyroxeneGain,
     upsertPyroxeneEventData: mockUpsertPyroxeneEventData,
     upsertPyroxenePlannerOptions: mockUpsertPyroxenePlannerOptions,
+    updatePyroxenePlannerOptions: mockUpdatePyroxenePlannerOptions,
     upsertCollectedSources: mockUpsertCollectedSources,
     deleteCollectedSource: mockDeleteCollectedSource,
     deletePyroxeneTimelineItem: mockDeletePyroxeneTimelineItem,
@@ -94,6 +96,7 @@ const validActions = [
     method: "POST",
   },
   { intent: "save-options", payload: { options: defaultPyroxenePlannerOptions }, method: "POST" },
+  { intent: "remove-ap-charge-exception", payload: { uid: "exception-1" }, method: "DELETE" },
   { intent: "collect-source", payload: { sourceKey: "source-1" }, method: "POST" },
   { intent: "uncollect-source", payload: { sourceKey: "source-1" }, method: "DELETE" },
   {
@@ -126,6 +129,10 @@ beforeEach(() => {
   mockCreateOtherPyroxeneGain.mockResolvedValue(undefined);
   mockUpsertPyroxeneEventData.mockResolvedValue(undefined);
   mockUpsertPyroxenePlannerOptions.mockResolvedValue(undefined);
+  mockUpdatePyroxenePlannerOptions.mockImplementation(async (...args: unknown[]) => {
+    const update = args[2] as (current: typeof defaultPyroxenePlannerOptions) => { result: unknown };
+    return update(defaultPyroxenePlannerOptions).result;
+  });
   mockUpsertCollectedSources.mockResolvedValue(undefined);
   mockDeleteCollectedSource.mockResolvedValue(undefined);
   mockDeletePyroxeneTimelineItem.mockResolvedValue(undefined);
@@ -193,6 +200,87 @@ describe("Pyroxene action payload", () => {
     ).toEqual({ intent: "save-options", payload: { options: defaultPyroxenePlannerOptions } });
   });
 
+  it("normalizes AP charge exceptions missing from an older options submission", () => {
+    const options = structuredClone(defaultPyroxenePlannerOptions) as typeof defaultPyroxenePlannerOptions;
+    const storedOptions = options as unknown as { consumption: { apChargeExceptions?: unknown } };
+    delete storedOptions.consumption.apChargeExceptions;
+
+    expect(decodePyroxeneActionPayload({ intent: "save-options", payload: { options } }, "POST")).toEqual({
+      intent: "save-options",
+      payload: { options: defaultPyroxenePlannerOptions },
+    });
+  });
+
+  it("rejects overlapping AP refill exception ranges in submitted options", () => {
+    const options = {
+      ...defaultPyroxenePlannerOptions,
+      consumption: {
+        ...defaultPyroxenePlannerOptions.consumption,
+        apChargeExceptions: [
+          { uid: "one", startDate: "2026-09-30", endDate: "2026-10-02", count: 2 },
+          { uid: "two", startDate: "2026-10-02", endDate: "2026-10-03", count: 3 },
+        ],
+      },
+    };
+
+    expect(() => decodePyroxeneActionPayload({ intent: "save-options", payload: { options } }, "POST")).toThrow(
+      "기간별 AP 충전 예외가 겹쳐요.",
+    );
+  });
+
+  it("preserves stored refill exceptions for save-options regardless of the submitted list", async () => {
+    const existingException = {
+      uid: "exception-1",
+      startDate: "2026-09-30",
+      endDate: "2026-10-01",
+      count: 2,
+    };
+    const current = {
+      ...defaultPyroxenePlannerOptions,
+      consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeExceptions: [existingException] },
+    };
+    const staleOptions = structuredClone(defaultPyroxenePlannerOptions) as Record<string, unknown>;
+    delete (staleOptions.consumption as Record<string, unknown>).apChargeExceptions;
+    mockUpdatePyroxenePlannerOptions.mockImplementationOnce(async (...args: unknown[]) => {
+      const update = args[2] as (state: typeof defaultPyroxenePlannerOptions) => {
+        options: typeof defaultPyroxenePlannerOptions;
+        result: unknown;
+      };
+      expect(update(current).options.consumption.apChargeExceptions).toEqual([existingException]);
+    });
+
+    await action(actionArgs("save-options", { options: staleOptions }, "POST"));
+
+    mockUpdatePyroxenePlannerOptions.mockImplementationOnce(async (...args: unknown[]) => {
+      const update = args[2] as (state: typeof defaultPyroxenePlannerOptions) => {
+        options: typeof defaultPyroxenePlannerOptions;
+        result: unknown;
+      };
+      expect(update(current).options.consumption.apChargeExceptions).toEqual([existingException]);
+    });
+    await action(actionArgs("save-options", { options: defaultPyroxenePlannerOptions }, "POST"));
+  });
+
+  it("removes one exception through the dedicated exception-scoped action", async () => {
+    const existingExceptions = [
+      { uid: "exception-1", startDate: "2026-09-30", endDate: "2026-10-01", count: 2 },
+      { uid: "exception-2", startDate: "2026-10-03", endDate: "2026-10-04", count: 3 },
+    ];
+    const current = {
+      ...defaultPyroxenePlannerOptions,
+      consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeExceptions: existingExceptions },
+    };
+    mockUpdatePyroxenePlannerOptions.mockImplementationOnce(async (...args: unknown[]) => {
+      const update = args[2] as (state: typeof defaultPyroxenePlannerOptions) => {
+        options: typeof defaultPyroxenePlannerOptions;
+        result: unknown;
+      };
+      expect(update(current).options.consumption.apChargeExceptions).toEqual([existingExceptions[1]]);
+    });
+
+    await action(actionArgs("remove-ap-charge-exception", { uid: "exception-1" }, "DELETE"));
+  });
+
   it.each(validActions)("ignores unrelated payload fields for $intent", ({ intent, payload, method }) => {
     const expected = decodePyroxeneActionPayload({ intent, payload }, method);
     const decoratedPayload = { ...payload, metadata: { source: "future" } };
@@ -246,6 +334,7 @@ describe("Pyroxene action payload", () => {
     ["save-other", { resources: { pyroxene: 1, oneTimeTicket: 0, tenTimeTicket: 0 }, description: "other" }, "POST"],
     ["update-event-data", { expectedTrials: 1 }, "POST"],
     ["save-options", {}, "POST"],
+    ["remove-ap-charge-exception", {}, "DELETE"],
     ["collect-source", {}, "POST"],
     ["uncollect-source", {}, "DELETE"],
     ["delete-pickup-completion", {}, "DELETE"],
@@ -315,6 +404,7 @@ describe("Pyroxene action payload", () => {
     ["update-event-data", { eventUid: 1, expectedTrials: 1 }, "POST"],
     ["update-event-data", { eventUid: "event-1", expectedTrials: "1" }, "POST"],
     ["save-options", { options: { ...defaultPyroxenePlannerOptions, event: { pickupChance: "invalid" } } }, "POST"],
+    ["remove-ap-charge-exception", { uid: "" }, "DELETE"],
     ["collect-source", { sourceKey: "" }, "POST"],
     ["collect-source", { sourceKey: 1 }, "POST"],
     ["uncollect-source", { sourceKey: 1 }, "DELETE"],
@@ -386,7 +476,7 @@ const dispatchCases = [
     method: "POST",
     verify: () => {
       expect(mockCreatePyroxeneMonthlyPackage).toHaveBeenCalledWith(env, 1, "2026-08-08T00:00:00.000Z", "half", true);
-      expect(mockUpsertPyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, defaultPyroxenePlannerOptions);
+      expect(mockUpdatePyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, expect.any(Function), { ctx });
     },
   },
   {
@@ -400,7 +490,7 @@ const dispatchCases = [
     method: "POST",
     verify: () => {
       expect(mockCreatePyroxeneApPackage).toHaveBeenCalledWith(env, 1, "2026-08-08T00:00:00.000Z", false);
-      expect(mockUpsertPyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, defaultPyroxenePlannerOptions);
+      expect(mockUpdatePyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, expect.any(Function), { ctx });
     },
   },
   {
@@ -440,7 +530,7 @@ const dispatchCases = [
     payload: { options: defaultPyroxenePlannerOptions },
     method: "POST",
     verify: () => {
-      expect(mockUpsertPyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, defaultPyroxenePlannerOptions);
+      expect(mockUpdatePyroxenePlannerOptions).toHaveBeenCalledWith(env, 1, expect.any(Function), { ctx });
     },
   },
   {

@@ -71,6 +71,12 @@ describe("global navigation catalog", () => {
     );
   });
 
+  it("exposes AP planner as a favoritable sibling utility", () => {
+    const planner = getNavigationCatalog(guestOptions).find((item) => item.to === "/utils/ap");
+
+    expect(planner).toMatchObject({ name: "AP 플래너", favoriteId: "ap-planner" });
+  });
+
   it.each(["/planner", "/planner/import"])("activates the integrated planner at %s", (pathname) => {
     const planner = getDesktopNavigation({ ...guestOptions, pathname }).groups.find(({ id }) => id === "planner");
 
@@ -124,6 +130,7 @@ describe("global navigation catalog", () => {
     expect(itemsByGroup.planner).toEqual([
       "/planner",
       "/utils/pyroxene",
+      "/utils/ap",
       "/utils/growth/students",
       "/utils/resources/inventory",
       "/utils/resources/farming",

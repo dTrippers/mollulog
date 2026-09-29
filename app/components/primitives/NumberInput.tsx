@@ -1,5 +1,5 @@
 import type { ComponentPropsWithoutRef } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { cn } from "~/lib/utils";
 import Field from "./Field";
 
@@ -9,6 +9,9 @@ type NumberInputElementProps = Omit<
 >;
 
 type NumberInputBaseProps = {
+  id?: string;
+  "aria-describedby"?: ComponentPropsWithoutRef<"input">["aria-describedby"];
+  "aria-invalid"?: ComponentPropsWithoutRef<"input">["aria-invalid"];
   label?: string;
   maxValue?: number;
   minValue?: number;
@@ -59,6 +62,9 @@ export function clampNumberInputValue(nextValue: number, minValue?: number, maxV
 }
 
 export default function NumberInput({
+  id,
+  "aria-describedby": ariaDescribedBy,
+  "aria-invalid": ariaInvalid,
   label,
   defaultValue,
   value,
@@ -76,6 +82,8 @@ export default function NumberInput({
   onChange,
   ...rest
 }: NumberInputProps) {
+  const generatedId = useId();
+  const inputId = id ?? inputProps?.id ?? (label ? generatedId : undefined);
   const nullable = "nullable" in rest && rest.nullable === true;
   const effectiveMin = minValue ?? (nullable ? undefined : 0);
   const allowNegative = effectiveMin !== undefined && effectiveMin < 0;
@@ -121,6 +129,8 @@ export default function NumberInput({
   return (
     <Field
       label={label}
+      htmlFor={inputId}
+      setChildId={false}
       containerClassName={size === "sm" ? "space-y-1" : size === "lg" ? "space-y-1.5" : undefined}
       labelClassName={size === "sm" || size === "lg" ? "text-sm font-medium text-foreground" : undefined}
     >
@@ -170,6 +180,9 @@ export default function NumberInput({
         )}
         <input
           {...inputProps}
+          id={inputId}
+          aria-describedby={[inputProps?.["aria-describedby"], ariaDescribedBy].filter(Boolean).join(" ") || undefined}
+          aria-invalid={ariaInvalid ?? inputProps?.["aria-invalid"]}
           type="text"
           inputMode={allowNegative ? "decimal" : "numeric"}
           pattern={allowNegative ? "-?[0-9]*" : "[0-9]*"}

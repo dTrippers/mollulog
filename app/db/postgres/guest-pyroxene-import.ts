@@ -17,7 +17,15 @@ import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/
 import { nowUtcIso } from "~/lib/date-time";
 import { pgPyroxeneGuestImportItemsTable, pgPyroxeneTimelineItemsTable } from "./schema";
 
-export type GuestImportItemType = "resources" | "options" | "record" | "source" | "event" | "eventShop" | "favorite";
+export type GuestImportItemType =
+  | "resources"
+  | "options"
+  | "record"
+  | "source"
+  | "event"
+  | "eventShop"
+  | "ap"
+  | "favorite";
 
 export type GuestImportItem = {
   type: GuestImportItemType;
@@ -31,6 +39,7 @@ export type GuestPlannerImportSelection = {
   sourceKeys: string[];
   eventUids: string[];
   eventShopUids: string[];
+  ap: boolean;
 };
 
 export type GuestPlannerImportSource = {
@@ -350,6 +359,7 @@ function selectedGuestPlannerItems(source: GuestPlannerImportSource): GuestPlann
     ...selection.sourceKeys.map((key) => ({ type: "source" as const, key })),
     ...selection.eventUids.map((key) => ({ type: "event" as const, key })),
     ...selection.eventShopUids.map((key) => ({ type: "eventShop" as const, key })),
+    ...(selection.ap && document.ap ? [{ type: "ap" as const, key: "current" }] : []),
   ];
   if (selection.recordUids.some((uid) => !recordsByUid.has(uid))) throw new Error("Unknown guest timeline record");
   if (selection.sourceKeys.some((key) => !document.pyroxene.collectedSourceKeys.includes(key))) {
@@ -361,6 +371,7 @@ function selectedGuestPlannerItems(source: GuestPlannerImportSource): GuestPlann
   if (selection.eventShopUids.some((uid) => !Object.hasOwn(document.eventShops, uid))) {
     throw new Error("Unknown guest event shop plan");
   }
+  if (selection.ap && !document.ap) throw new Error("Missing guest AP planner state");
   return selected.map((item) => ({ ...item, datasetId, sourceId: source.sourceId }));
 }
 
@@ -508,6 +519,11 @@ export async function runPostgresGuestPlannerImport(
                     if (eventShopStatesEqual(document.eventShops[item.key], state)) break;
                     const normalizedState = await upsertEventShopStateInDatabase(tx, userId, item.key, state);
                     document = withImportedEventShop(document, item.key, normalizedState);
+                    break;
+                  }
+                  case "ap": {
+                    if (!source.document.ap) throw new Error("Missing guest AP planner state");
+                    document = { ...document, ap: source.document.ap };
                     break;
                   }
                   case "favorite":

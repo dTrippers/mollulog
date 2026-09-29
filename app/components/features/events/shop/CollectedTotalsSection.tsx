@@ -1,5 +1,6 @@
 import { Transition } from "@headlessui/react";
 import { memo, useMemo, useState } from "react";
+import { Link } from "react-router";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
@@ -219,6 +220,14 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                     <span>{value.toLocaleString()}</span>
                   </div>
                 ))}
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Link
+                  className="text-xs font-medium text-green-700 hover:underline dark:text-green-300"
+                  to={`/utils/ap?eventUid=${encodeURIComponent(eventUid)}`}
+                >
+                  AP 플래너에서 확보 가능한 AP 보기 →
+                </Link>
               </div>
             </div>
           )}

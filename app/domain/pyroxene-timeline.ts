@@ -1,5 +1,9 @@
 import type { Dayjs } from "dayjs";
-import type { PyroxeneCalculationOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
+import {
+  getPyroxeneApChargeCountForDate,
+  type PyroxeneCalculationOptions,
+  type TimelineSourceType,
+} from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import {
@@ -1112,8 +1116,6 @@ export function buildTimeline(
 
   const dateFrom = dayjs(initialDate);
   const tacticalPyroxene = PYROXENE.TACTICAL[options.tactical.level];
-  const dailyApChargePyroxene = calculateDailyApChargePyroxene(options.consumption.apChargeCount);
-
   let dailyEntryCount = 0;
   for (
     let date = dateFrom;
@@ -1121,6 +1123,9 @@ export function buildTimeline(
     date = date.add(1, "day")
   ) {
     dailyEntryCount++;
+    const dailyApChargePyroxene = calculateDailyApChargePyroxene(
+      getPyroxeneApChargeCountForDate(date.toDate(), options.consumption),
+    );
     timelineDeltas.push({
       date,
       source: { type: "daily_mission", description: "일일 임무" },

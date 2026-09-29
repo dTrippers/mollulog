@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
 import { createEmptyGuestEventShopPlanner, upsertGuestEventShopPlan } from "~/domain/guest-event-shop-planner";
 import {
+  addGuestPlannerApChargeException,
   clearGuestPlannerItemsIfUnchanged,
   clearGuestPlannerLegacyConflictItemsIfUnchanged,
   createEmptyGuestPlanner,
@@ -13,6 +14,8 @@ import {
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
   patchGuestPlannerEventShopOwnedQuantities,
+  removeGuestPlannerApChargeException,
+  setGuestPlannerApChargeCount,
   updateGuestPlannerOptions,
 } from "~/domain/guest-planner";
 import {
@@ -33,7 +36,35 @@ describe("guest planner envelope", () => {
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: [] } })).toBeNull();
   });
 
-  it("accepts and preserves null or opaque JSON object AP data", () => {
+  it("normalizes AP charge exceptions missing from an older guest document", () => {
+    const envelope = createEmptyGuestPlanner();
+    const oldShape = JSON.parse(JSON.stringify(envelope)) as typeof envelope;
+    const storedOptions = oldShape.document.pyroxene.options as unknown as {
+      consumption: { apChargeExceptions?: unknown };
+    };
+    delete storedOptions.consumption.apChargeExceptions;
+
+    const normalized = normalizeGuestPlanner(oldShape);
+
+    expect(normalized?.document.pyroxene.options.consumption.apChargeExceptions).toEqual([]);
+    expect(
+      normalizeGuestPlanner({
+        ...oldShape,
+        document: {
+          ...oldShape.document,
+          pyroxene: {
+            ...oldShape.document.pyroxene,
+            options: {
+              ...oldShape.document.pyroxene.options,
+              consumption: { ...oldShape.document.pyroxene.options.consumption, apChargeExceptions: null },
+            },
+          },
+        },
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts null and bounded forward-compatible AP data through the typed normalizer", () => {
     const envelope = createEmptyGuestPlanner();
     expect(normalizeGuestPlanner(envelope)?.document.ap).toBeNull();
 
@@ -44,21 +75,45 @@ describe("guest planner envelope", () => {
     });
 
     expect(normalized).not.toBeNull();
-    expect(normalized?.document.ap).toEqual(ap);
-    expect(JSON.stringify(normalized?.document.ap)).toBe(JSON.stringify(ap));
+    expect(normalized?.document.ap).toMatchObject({
+      ...ap,
+      accountLevel: null,
+      cafeRank: null,
+      comfort: null,
+      eventPlans: {},
+    });
     expect(normalized?.document.ap).not.toBe(ap);
   });
 
-  it("rejects non-object or oversized opaque AP data and accepts the exact size limit", () => {
+  it("rejects non-object or oversized AP data and accepts the exact M2-compatible size limit", () => {
     const envelope = createEmptyGuestPlanner();
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: [] } })).toBeNull();
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: "ap" } })).toBeNull();
 
-    const emptyPayloadLength = JSON.stringify({ payload: "" }).length;
-    const exactLimitAp = { payload: "x".repeat(65_536 - emptyPayloadLength) };
+    const emptyPayload = {
+      accountLevel: null,
+      cafeRank: null,
+      comfort: null,
+      eventPlans: {},
+      payload: ["", "", "", ""],
+    };
+    const remainingLength = 65_536 - JSON.stringify(emptyPayload).length;
+    const eachPayloadLength = Math.floor(remainingLength / 4);
+    const extraPayloadLength = remainingLength % 4;
+    const exactLimitAp = {
+      ...emptyPayload,
+      payload: Array.from({ length: 4 }, (_, index) =>
+        "x".repeat(eachPayloadLength + Number(index < extraPayloadLength)),
+      ),
+    };
     expect(JSON.stringify(exactLimitAp)).toHaveLength(65_536);
-    expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: exactLimitAp } })).not.toBeNull();
-    const oversizedAp = { payload: `${exactLimitAp.payload}x` };
+    const normalizedLimit = normalizeGuestPlanner({
+      ...envelope,
+      document: { ...envelope.document, ap: exactLimitAp },
+    });
+    expect(normalizedLimit).not.toBeNull();
+    expect(JSON.stringify(normalizedLimit?.document.ap)).toHaveLength(65_536);
+    const oversizedAp = { ...exactLimitAp, payload: [`${exactLimitAp.payload[0]}x`, ...exactLimitAp.payload.slice(1)] };
     expect(normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: oversizedAp } })).toBeNull();
   });
 
@@ -197,6 +252,14 @@ describe("guest planner envelope", () => {
       }),
     ).toBeNull();
     expect(normalizeGuestPlanner({ ...envelope, legacyConflicts: Array.from({ length: 21 }, () => ({})) })).toBeNull();
+    expect(
+      normalizeGuestPlanner({ ...envelope, document: { ...envelope.document, ap: {} } })?.document.ap,
+    ).toMatchObject({
+      accountLevel: null,
+      cafeRank: null,
+      comfort: null,
+      eventPlans: {},
+    });
   });
 
   it("preserves the legacy optionsChanged flag for planner comparisons", () => {
@@ -222,6 +285,75 @@ describe("guest planner envelope", () => {
     expect(hasUnresolvedGuestPlannerOptions(false, legacy.data.options, accountOptions)).toBe(false);
     expect(hasUnresolvedGuestPlannerOptions(true, legacy.data.options, accountOptions)).toBe(true);
     expect(updateGuestPlannerOptions(createEmptyGuestPlanner(), legacy.data.options).pyroxeneOptionsChanged).toBe(true);
+  });
+
+  it("preserves the envelope's latest AP charge exceptions on a full-options update", () => {
+    const envelope = createEmptyGuestPlanner();
+    const exception = { uid: "latest", startDate: "2026-10-01", endDate: "2026-10-03", count: 4 };
+    envelope.document.pyroxene.options = {
+      ...envelope.document.pyroxene.options,
+      consumption: { ...envelope.document.pyroxene.options.consumption, apChargeExceptions: [exception] },
+    };
+    const staleOptions = structuredClone(defaultPyroxenePlannerOptions);
+
+    const updated = updateGuestPlannerOptions(envelope, staleOptions);
+
+    expect(updated.document.pyroxene.options.consumption.apChargeExceptions).toEqual([exception]);
+  });
+
+  it("changes only the AP charge count while preserving exceptions on the fresh envelope", () => {
+    const envelope = createEmptyGuestPlanner();
+    const exception = { uid: "applied", startDate: "2026-10-01", endDate: "2026-10-03", count: 4 };
+    envelope.document.pyroxene.options = {
+      ...envelope.document.pyroxene.options,
+      consumption: { ...envelope.document.pyroxene.options.consumption, apChargeExceptions: [exception] },
+    };
+
+    const updated = setGuestPlannerApChargeCount(envelope, 7);
+
+    expect(updated.document.pyroxene.options.consumption.apChargeCount).toBe(7);
+    expect(updated.document.pyroxene.options.consumption.apChargeExceptions).toEqual([exception]);
+  });
+
+  it("adds an AP charge exception to the fresh list and refuses overlaps in that list", () => {
+    const envelope = createEmptyGuestPlanner();
+    const applied = { uid: "tab-a", startDate: "2026-10-01", endDate: "2026-10-03", count: 4 };
+    const fromStaleTab = { uid: "tab-b", startDate: "2026-10-04", endDate: "2026-10-05", count: 5 };
+    envelope.document.pyroxene.options = {
+      ...envelope.document.pyroxene.options,
+      consumption: { ...envelope.document.pyroxene.options.consumption, apChargeExceptions: [applied] },
+    };
+
+    const added = addGuestPlannerApChargeException(envelope, fromStaleTab);
+
+    expect(added.overlap).toBe(false);
+    expect(added.envelope.document.pyroxene.options.consumption.apChargeExceptions).toEqual([applied, fromStaleTab]);
+
+    const overlapping = addGuestPlannerApChargeException(added.envelope, {
+      uid: "tab-b-overlap",
+      startDate: "2026-10-03",
+      endDate: "2026-10-06",
+      count: 2,
+    });
+
+    expect(overlapping.overlap).toBe(true);
+    expect(overlapping.envelope).toBe(added.envelope);
+  });
+
+  it("removes only the requested guest AP charge exception through the scoped update", () => {
+    const envelope = createEmptyGuestPlanner();
+    const exceptions = [
+      { uid: "remove", startDate: "2026-10-01", endDate: "2026-10-02", count: 2 },
+      { uid: "keep", startDate: "2026-10-04", endDate: "2026-10-05", count: 3 },
+    ];
+    envelope.document.pyroxene.options = {
+      ...envelope.document.pyroxene.options,
+      consumption: { ...envelope.document.pyroxene.options.consumption, apChargeExceptions: exceptions },
+    };
+
+    const updated = removeGuestPlannerApChargeException(envelope, "remove");
+
+    expect(updated.document.pyroxene.options.consumption.apChargeExceptions).toEqual([exceptions[1]]);
   });
 
   it("clears every confirmed source item, including entries omitted from the selection", () => {
@@ -257,6 +389,12 @@ describe("guest planner envelope", () => {
     envelope.favorites = [{ contentUid: "content-1", studentUid: "student-1" }];
     envelope.document.eventShops = { "shop-1": createDefaultEventShopState([], []) };
     envelope.eventShopTimelineUids = { "shop-1": "timeline-1" };
+    envelope.document.ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-09-30T03:00:00.000Z" } },
+    };
 
     const cleared = clearGuestPlannerItemsIfUnchanged(envelope, envelope, [
       { type: "resources", key: "current" },
@@ -266,6 +404,7 @@ describe("guest planner envelope", () => {
       { type: "favorite", key: "content-1\u0000student-1" },
       { type: "source", key: "source-1" },
       { type: "eventShop", key: "shop-1" },
+      { type: "ap", key: "current" },
     ]);
 
     expect(cleared.document.pyroxene.resources).toBeNull();
@@ -277,7 +416,24 @@ describe("guest planner envelope", () => {
     expect(cleared.favorites).toEqual([]);
     expect(cleared.document.eventShops).toEqual({});
     expect(cleared.eventShopTimelineUids).toEqual({});
+    expect(cleared.document.ap).toBeNull();
     expect(guestPlannerHasData(cleared)).toBe(false);
+  });
+
+  it("keeps AP when the guest source changed after the submitted import snapshot", () => {
+    const submitted = createEmptyGuestPlanner();
+    submitted.document.ap = { accountLevel: 85, cafeRank: 8, comfort: 4_500, eventPlans: {} };
+    const current = {
+      ...submitted,
+      document: {
+        ...submitted.document,
+        ap: { ...submitted.document.ap, accountLevel: 86 },
+      },
+    };
+
+    const result = clearGuestPlannerItemsIfUnchanged(current, submitted, [{ type: "ap", key: "current" }]);
+
+    expect(result.document.ap).toEqual(current.document.ap);
   });
 
   it("keeps an item when the current guest source changed after the submitted snapshot", () => {
@@ -414,9 +570,11 @@ describe("guest planner envelope", () => {
     }));
     pyroxene.data.records = records;
     const envelope = createGuestPlannerFromLegacySources({ pyroxene, eventShops: null });
+    const ap = { accountLevel: 85, cafeRank: 8, comfort: 4_500, eventPlans: {} };
+    envelope.document.ap = ap;
 
     expect(envelope.document.pyroxene.records).toHaveLength(502);
-    expect(normalizeGuestPlanner(envelope)).not.toBeNull();
+    expect(normalizeGuestPlanner(envelope)?.document.ap).toEqual(ap);
 
     const overLimit = createEmptyGuestPyroxenePlanner();
     overLimit.data.records = [
@@ -427,6 +585,7 @@ describe("guest planner envelope", () => {
       })),
     ];
     const invalid = createGuestPlannerFromLegacySources({ pyroxene: overLimit, eventShops: null });
+    invalid.document.ap = ap;
     expect(normalizeGuestPlanner(invalid)).toBeNull();
     expect(guestPyroxeneTimelineItems(pyroxene.data)).toHaveLength(502);
   });
@@ -444,8 +603,13 @@ describe("guest planner envelope", () => {
     pyroxene.data.records = [record("record000001", "기존 1"), record("record000002", "기존 2")];
     const shops = createEmptyGuestEventShopPlanner();
     const base = createGuestPlannerFromLegacySources({ pyroxene, eventShops: shops });
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
-    base.document.ap = ap;
+    const apState = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { event: { accessAt: "2026-09-30T03:00:00.000Z" } },
+    };
+    base.document.ap = apState;
     base.legacyMirror = createGuestPlannerLegacyMirror(base, { pyroxene, eventShops: shops });
     const submittedPyroxene = {
       ...pyroxene,
@@ -462,7 +626,7 @@ describe("guest planner envelope", () => {
     expect(descriptions).toContain("수정된 값");
     expect(descriptions).toContain("새 계획");
     expect(descriptions).not.toContain("기존 2");
-    expect(result.envelope.document.ap).toEqual(ap);
+    expect(result.envelope.document.ap).toEqual(apState);
     expect(result.conflict).toBeNull();
   });
 

@@ -12,7 +12,7 @@ export function plannerPlanMarkState(
   shopPlannedEventUids: ReadonlySet<string>,
 ): PlannerPlanMarkState {
   return {
-    recruitment: period.isPlanned === true,
+    recruitment: period.hasRecruitmentPlan ?? period.isPlanned === true,
     shop:
       (period.kind === "event" || period.kind === "shop") &&
       Boolean(period.eventUid && shopPlannedEventUids.has(period.eventUid)),

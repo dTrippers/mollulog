@@ -1,5 +1,7 @@
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { normalizeApPlannerState } from "~/domain/ap-planner";
+import { normalizePyroxenePlannerOptions, type StoredPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   type PlannerStateDocumentV1,
   type PlannerStateProjectionRows,
@@ -186,7 +188,14 @@ function readStoredPlannerStateDocument(value: unknown): PlannerStateDocumentV1 
   ) {
     throw new Error("Unable to read planner state document");
   }
-  return value as unknown as PlannerStateDocumentV1;
+  const options = normalizePyroxenePlannerOptions(pyroxene.options as StoredPyroxenePlannerOptions);
+  const ap = value.ap == null ? null : normalizeApPlannerState(value.ap);
+  if (value.ap != null && ap === null) throw new Error("Unable to read planner state document");
+  return {
+    ...(value as unknown as PlannerStateDocumentV1),
+    pyroxene: { ...pyroxene, options } as PlannerStateDocumentV1["pyroxene"],
+    ap,
+  };
 }
 
 export async function getPlannerStateDocumentInDatabase(

@@ -2,12 +2,7 @@ import type Decimal from "decimal.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MinigameConfig, MinigamePayment, ShopResource, Stage } from "~/domain/event-shop";
 import type { ItemBreakdownResult } from "../calculations";
-import {
-  calculateItemBreakdowns,
-  calculateResourceLedger,
-  calculateStageInfos,
-  optimizeStageRuns,
-} from "../calculations";
+import { calculateShopApRequirement } from "../calculations/calculate-shop-ap";
 import type { ShopState } from "./useShopState";
 
 type UseShopCalculationsParams = {
@@ -114,43 +109,30 @@ export function useShopCalculations({
 
     // Debounce calculation by 300ms to prevent excessive recalculations
     debounceTimerRef.current = setTimeout(() => {
-      const resourceLedger = calculateResourceLedger({
-        shopResources,
-        itemQuantities: state.itemQuantities,
-        itemPurchaseDays: state.itemPurchaseDays,
-        existingPaymentItemQuantities: state.existingPaymentItemQuantities,
-        stages,
-        includeFirstClear: state.includeFirstClear,
-        minigameStartRound: state.minigameStartRound,
-        minigamePlayCount: state.minigamePlayCount,
-        minigameConfig,
-        minigamePaymentCosts,
-        excludedShopResourceUids,
-        overriddenRequiredQuantities: state.overriddenRequiredQuantities,
-      });
-
-      const targets = Object.entries(resourceLedger.remainingToFarm).filter(([, qty]) => (qty || 0) > 0);
-      const stageInfos = calculateStageInfos(stages, state.enabledStages, appliedBonusRatio);
-      const optimizationResult = optimizeStageRuns(stageInfos, targets as [string, number][]);
-
-      const itemBreakdownResult = calculateItemBreakdowns({
-        stages,
-        enabledStages: state.enabledStages,
-        stageRuns: optimizationResult.stageRuns,
-        extraStageRuns: state.extraStageRuns,
-        appliedBonusRatio,
-        includeFirstClear: state.includeFirstClear,
-        resourceLedger,
-      });
-
-      setResult({
-        stageRuns: optimizationResult.stageRuns,
-        unobtainableTargets: optimizationResult.unobtainableTargets,
-        ...itemBreakdownResult,
-      });
+      setResult(
+        calculateShopApRequirement({
+          state: {
+            itemQuantities: state.itemQuantities,
+            itemPurchaseDays: state.itemPurchaseDays,
+            existingPaymentItemQuantities: state.existingPaymentItemQuantities,
+            includeFirstClear: state.includeFirstClear,
+            minigameStartRound: state.minigameStartRound,
+            minigamePlayCount: state.minigamePlayCount,
+            enabledStages: state.enabledStages,
+            extraStageRuns: state.extraStageRuns,
+            overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+          },
+          stages,
+          shopResources,
+          appliedBonusRatio,
+          minigamePaymentCosts,
+          excludedShopResourceUids,
+          minigameConfig,
+        }),
+      );
       lastCompletedInputsRef.current = calculationInputs;
       setIsCalculating(false);
-    }, 150);
+    }, 300);
 
     return () => {
       if (debounceTimerRef.current) {

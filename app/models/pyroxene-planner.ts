@@ -13,6 +13,7 @@ import {
   ensurePostgresCollectedSource,
   type PostgresPyroxeneOptions,
   updatePostgresPyroxeneOneOffTimelineItem,
+  updatePostgresPyroxenePlannerOptions,
   upsertPostgresCollectedSource,
   upsertPostgresCollectedSources,
   upsertPostgresPyroxeneEventData,
@@ -179,6 +180,15 @@ export async function upsertPyroxenePlannerOptions(
   options: PyroxenePlannerOptions,
 ): Promise<void> {
   return upsertPostgresPyroxenePlannerOptions(env, userId, options);
+}
+
+export async function updatePyroxenePlannerOptions<T>(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  update: (current: PyroxenePlannerOptions) => { options: PyroxenePlannerOptions; result: T },
+  options: PostgresPyroxeneOptions = {},
+): Promise<T> {
+  return updatePostgresPyroxenePlannerOptions(env, userId, update, options);
 }
 
 export async function getPyroxeneEventData(

@@ -1,3 +1,4 @@
+import type { ApPlannerState } from "~/domain/ap-planner";
 import { type EventShopState, normalizeEventShopState } from "~/domain/event-shop-state";
 import type { GuestPyroxeneResources } from "~/domain/guest-pyroxene-planner";
 import {
@@ -23,7 +24,7 @@ export type PlannerStateDocumentV1 = {
     eventData: Record<string, PlannerStateEventData>;
   };
   eventShops: Record<string, EventShopState>;
-  ap: null;
+  ap: ApPlannerState | null;
 };
 
 /** Sort planner records by event time while keeping same-time insertion order stable. */
@@ -259,11 +260,22 @@ export function plannerStateDocumentDifferences(expected: PlannerStateDocumentV1
   if (!isRecord(actualPyroxene)) return ["pyroxene"];
   if (actual.schemaVersion !== expected.schemaVersion) differences.push("schemaVersion");
   for (const field of ["resources", "records", "options", "collectedSourceKeys", "eventData"] as const) {
-    if (stableJson(actualPyroxene[field]) !== stableJson(expected.pyroxene[field])) {
+    let actualValue = actualPyroxene[field];
+    if (field === "options") {
+      try {
+        if (!isRecord(actualValue)) throw new Error("Invalid planner options");
+        actualValue = normalizePyroxenePlannerOptions(actualValue as StoredPyroxenePlannerOptions);
+      } catch {
+        differences.push("pyroxene.options");
+        continue;
+      }
+    }
+    if (stableJson(actualValue) !== stableJson(expected.pyroxene[field])) {
       differences.push(`pyroxene.${field}`);
     }
   }
   if (stableJson(actual.eventShops) !== stableJson(expected.eventShops)) differences.push("eventShops");
-  if (stableJson(actual.ap) !== stableJson(expected.ap)) differences.push("ap");
+  // AP has no legacy table projection. Preserve it without treating a difference
+  // from the legacy projection as a parity mismatch.
   return differences;
 }
