@@ -20,8 +20,11 @@ import { getUserFavoritedStudents } from "~/models/favorite-students";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getHomeYoutubeSections } from "~/models/youtube";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
-import { getIndexContents, type IndexRecruitment } from "~/views/home";
+import { getHomeOverviewSources, getIndexContents, type IndexRecruitment } from "~/views/home";
+import HomeMainStoryCard from "./_index._components/HomeMainStoryCard";
+import HomeRaidEmptyState from "./_index._components/HomeRaidEmptyState";
 import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
+import HomeStatusSummary from "./_index._components/HomeStatusSummary";
 
 export const meta: MetaFunction = ({ location }) => {
   return [
@@ -54,6 +57,9 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     const indexContentsPromise = ctx.tracing.enterSpan("index_contents", () =>
       getIndexContents(publicReadEnv, false, ctx),
+    );
+    const homeOverviewPromise = ctx.tracing.enterSpan("home_overview", () =>
+      getHomeOverviewSources(publicReadEnv, false, ctx),
     );
     const recentCommunityPagePromise = ctx.tracing.enterSpan("community", () =>
       getCommunityFeedPage(env, {
@@ -97,10 +103,8 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       })),
     );
 
-    const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents] = await Promise.all([
-      indexContentsPromise,
-      favoritedStudentsPromise,
-    ]);
+    const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents, homeOverview] =
+      await Promise.all([indexContentsPromise, favoritedStudentsPromise, homeOverviewPromise]);
     const favoritedStudentUids = currentUserId
       ? favoritedStudents
           .filter((favorited) =>
@@ -119,6 +123,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     return {
       mainEvent,
+      homeOverview,
       currentRecruitments,
       favoritedCounts,
       favoritedStudentUids,
@@ -134,6 +139,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 export default function Index() {
   const {
     mainEvent,
+    homeOverview,
     currentRecruitments,
     favoritedCounts,
     favoritedStudentUids,
@@ -159,6 +165,7 @@ export default function Index() {
       <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
         <div className="min-w-0 lg:flex-1">
           <MainEvent event={mainEvent} />
+          <HomeStatusSummary campaigns={homeOverview.campaigns} jointFiringDrills={homeOverview.jointFiringDrills} />
 
           {currentRecruitments.length > 0 && (
             <CurrentRecruitments
@@ -169,24 +176,30 @@ export default function Index() {
             />
           )}
 
-          <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
-            {currentTotalAssualt && (
+          <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
+            {currentTotalAssualt ? (
               <Link
                 to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
-                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
               >
                 <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
               </Link>
+            ) : (
+              <HomeRaidEmptyState message="예정된 총력전·대결전이 없어요" />
             )}
-            {currentUnlimit && (
+            {currentUnlimit ? (
               <Link
                 to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
-                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
               >
                 <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
               </Link>
+            ) : (
+              <HomeRaidEmptyState message="예정된 제약해제결전이 없어요" />
             )}
           </div>
+          <SubTitle text="최근 공개된 스토리" />
+          <HomeMainStoryCard source={homeOverview.mainStoryContent} />
         </div>
         <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
           <Suspense fallback={<HomeRightRailSkeleton />}>
@@ -219,7 +232,7 @@ function MainEvent({ event }: { event: TimelineContent | null }) {
   return (
     <Link
       to={`/events/${event.uid}`}
-      className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+      className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
     >
       <EventHeader
         name={event.name}

@@ -1,13 +1,17 @@
+import type { HomeCampaign, HomeJointFiringDrill } from "~/domain/home-content";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
-import { isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { compareInstantAsc, isInstantAfter, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
+import { getLogger } from "~/lib/observability.server";
 import type { Role } from "~/models/content.d";
 import { getFavoritedCounts } from "~/models/favorite-students";
+import { getHomeCampaigns, getHomeJointFiringDrills } from "~/models/home-overview";
 import { getAllRecruitmentGroups } from "~/models/recruitment";
 import type { TimelineContent, TimelineContentType } from "~/models/timeline-content";
 import {
   findEventsForRecruitmentStudent,
+  getHomeMainStoryContent,
   getTimelineContentsByContentTypes,
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
@@ -18,18 +22,12 @@ function isOngoingContent(content: TimelineContent, now: UtcIsoString): boolean 
 }
 
 export function selectHomeMainEvent(contents: TimelineContent[], now: UtcIsoString): TimelineContent | null {
-  const ongoingEvents = contents.filter((content) => content.contentType === "event" && isOngoingContent(content, now));
-  const ongoingMainStories = contents.filter(
-    (content) => content.contentType === "main_story" && isOngoingContent(content, now),
-  );
+  const ongoingEvent = contents.find((content) => content.contentType === "event" && isOngoingContent(content, now));
+  const upcomingEvent = contents
+    .filter((content) => content.contentType === "event" && isInstantAfter(content.startAt, now))
+    .sort((a, b) => compareInstantAsc(a.startAt, b.startAt))[0];
 
-  return (
-    ongoingEvents[0] ??
-    ongoingMainStories.find((content) => content.recruitmentGroupUid !== null) ??
-    ongoingMainStories[0] ??
-    contents.find((content) => content.contentType === "event" && isInstantAfter(content.startAt, now)) ??
-    null
-  );
+  return ongoingEvent ?? upcomingEvent ?? null;
 }
 
 export type IndexRecruitment = {
@@ -50,11 +48,52 @@ export type IndexContents = {
   favoritedCounts: Awaited<ReturnType<typeof getFavoritedCounts>>;
 };
 
+export type HomeSourceResult<T> = { status: "success"; data: T } | { status: "error" };
+
+export type HomeOverviewSources = {
+  campaigns: HomeSourceResult<HomeCampaign[]>;
+  jointFiringDrills: HomeSourceResult<HomeJointFiringDrill[]>;
+  mainStoryContent: HomeSourceResult<TimelineContent | null>;
+};
+
+async function loadHomeSource<T>(
+  load: () => Promise<T>,
+  onError: (error: unknown) => void,
+): Promise<HomeSourceResult<T>> {
+  try {
+    return { status: "success", data: await load() };
+  } catch (error) {
+    onError(error);
+    return { status: "error" };
+  }
+}
+
+export async function getHomeOverviewSources(env: Env, forceRefresh = false, ctx?: ExecutionContext) {
+  const logger = getLogger(env, ctx, { route: "home.overview" });
+  const now = nowUtcIso();
+  const [campaigns, jointFiringDrills, mainStoryContent] = await Promise.all([
+    loadHomeSource(
+      () => getHomeCampaigns(env, forceRefresh),
+      (error) => logger.error("Failed to load home campaigns", error),
+    ),
+    loadHomeSource(
+      () => getHomeJointFiringDrills(env, forceRefresh),
+      (error) => logger.error("Failed to load home joint firing drills", error),
+    ),
+    loadHomeSource(
+      () => getHomeMainStoryContent(env, now, { ctx }),
+      (error) => logger.error("Failed to load home main story contents", error),
+    ),
+  ]);
+
+  return { campaigns, jointFiringDrills, mainStoryContent } satisfies HomeOverviewSources;
+}
+
 export async function getIndexContents(env: Env, forceRefresh = false, ctx?: ExecutionContext): Promise<IndexContents> {
   return fetchRouteCached<IndexContents>(
     env,
     ctx,
-    cacheKey("route", "index", 3, "all"),
+    cacheKey("route", "index", 4, "all"),
     async () => {
       const now = nowUtcIso();
       const nowDate = new Date(now);

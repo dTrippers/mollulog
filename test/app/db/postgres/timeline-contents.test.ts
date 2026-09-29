@@ -5,6 +5,7 @@ import {
   getPostgresAllTimelineContentsMeta,
   getPostgresContentUidsByRecruitmentGroup,
   getPostgresFutureRaidContents,
+  getPostgresHomeMainStoryContent,
   getPostgresTimelineContent,
   getPostgresTimelineContentDatesByContentUids,
   getPostgresTimelineContents,
@@ -109,6 +110,70 @@ describe("PostgreSQL timeline contents read", () => {
     );
     expect(ctx.tracing.enterSpan).toHaveBeenCalledWith("postgres.end", expect.any(Function));
     expect(setAttribute).toHaveBeenCalledWith("db.response.returned_rows", 1);
+  });
+
+  it("returns only the latest started main story, including ended chapters", async () => {
+    const connect = jest.fn(async () => undefined);
+    const end = jest.fn(async () => undefined);
+    const query = jest.fn(async (_query: unknown, _values: unknown[]) => ({
+      rows: [
+        postgresRow({
+          uid: "ended-main-story",
+          contentType: "main_story",
+          startAt: new Date("2026-08-01T00:00:00.000Z"),
+          endAt: new Date("2026-08-10T00:00:00.000Z"),
+          imageUrl: "https://assets.example/main-story.webp",
+          nameI18n: { ko: "끝난 챕터" },
+        }),
+      ],
+      rowCount: 1,
+    }));
+    const client = { connect, end, query } as unknown as Client;
+    const now = "2026-09-27T12:00:00.000Z";
+
+    const result = await getPostgresHomeMainStoryContent(
+      { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive },
+      now,
+      { createClient: () => client },
+    );
+
+    const [statement, values] = query.mock.calls[0] ?? [];
+    const sql = (statement as { text: string }).text;
+    expect(sql).toMatch(
+      /where \("timeline_contents"\."content_type" = \$1 and "timeline_contents"\."start_at" <= \$2\)/,
+    );
+    expect(sql).toContain('order by "timeline_contents"."start_at" desc, "timeline_contents"."uid" desc');
+    expect(sql).toContain("limit $3");
+    expect(sql).not.toMatch(/where .*"end_at"/);
+    expect(values).toEqual(["main_story", now, 1]);
+    expect(result).toEqual(
+      expect.objectContaining({
+        uid: "ended-main-story",
+        name: "끝난 챕터",
+        startAt: "2026-08-01T00:00:00.000Z",
+        endAt: "2026-08-10T00:00:00.000Z",
+        imageUrl: "https://assets.example/main-story.webp",
+      }),
+    );
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(end).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns null when no main story has started", async () => {
+    const connect = jest.fn(async () => undefined);
+    const end = jest.fn(async () => undefined);
+    const query = jest.fn(async (_query: unknown, _values: unknown[]) => ({ rows: [], rowCount: 0 }));
+    const client = { connect, end, query } as unknown as Client;
+
+    await expect(
+      getPostgresHomeMainStoryContent(
+        { HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive },
+        "2026-09-27T12:00:00.000Z",
+        { createClient: () => client },
+      ),
+    ).resolves.toBeNull();
+    expect(connect).toHaveBeenCalledTimes(1);
+    expect(end).toHaveBeenCalledTimes(1);
   });
 
   it("covers every Phase 3.5 lookup shape with deterministic PostgreSQL queries", async () => {
