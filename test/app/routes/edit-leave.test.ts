@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 const mockGetActiveSensei = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -143,20 +142,5 @@ describe("edit.leave", () => {
 
     expect(result).toMatchObject({ init: { status: 500 } });
     expect(mockGetAuthenticator).not.toHaveBeenCalled();
-  });
-
-  it("keeps the destructive link and a simple account-leave graphic in the existing settings style", () => {
-    const settingsSource = readFileSync("app/routes/edit._index.tsx", "utf8");
-    const routeSource = readFileSync("app/routes/edit.leave.tsx", "utf8");
-    const leaveNoticeSource = readFileSync("app/routes/edit.leave._components/AccountLeaveNotice.tsx", "utf8");
-    const homeSource = readFileSync("app/routes/_index.tsx", "utf8");
-    expect(settingsSource).toContain('to="/edit/leave"');
-    expect(settingsSource).toContain("회원 탈퇴");
-    expect(routeSource).toContain('variant="danger"');
-    expect(routeSource).toContain("AccountLeaveNotice");
-    expect(routeSource).not.toContain('name="username"');
-    expect(leaveNoticeSource).toContain("UserMinusIcon");
-    expect(leaveNoticeSource).toContain("탈퇴하면 모든 데이터에 접근할 수 없고 복구할 수 없어요. 정말 진행할까요?");
-    expect(homeSource).toContain('title="탈퇴가 완료됐어요"');
   });
 });

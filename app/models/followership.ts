@@ -112,25 +112,6 @@ export async function getFollowershipSummary(
   );
 }
 
-export async function getFollowerIds(
-  env: Env,
-  followeeId: number,
-  options: IdentityRepositoryOptions = {},
-): Promise<number[]> {
-  return withIdentityDatabase(
-    env,
-    "follower_ids",
-    async (db) => {
-      const rows = await db
-        .select({ followerId: pgFollowershipsTable.followerId })
-        .from(pgFollowershipsTable)
-        .where(eq(pgFollowershipsTable.followeeId, followeeId));
-      return rows.map((row) => row.followerId);
-    },
-    options,
-  );
-}
-
 export async function getFollowers(
   env: Env,
   followeeId: number,
@@ -138,25 +119,6 @@ export async function getFollowers(
   options: IdentityRepositoryOptions = {},
 ): Promise<Sensei[]> {
   return getSenseisForRelationship(env, "followers", followeeId, viewerId, options);
-}
-
-export async function getFollowingIds(
-  env: Env,
-  followerId: number,
-  options: IdentityRepositoryOptions = {},
-): Promise<number[]> {
-  return withIdentityDatabase(
-    env,
-    "following_ids",
-    async (db) => {
-      const rows = await db
-        .select({ followeeId: pgFollowershipsTable.followeeId })
-        .from(pgFollowershipsTable)
-        .where(eq(pgFollowershipsTable.followerId, followerId));
-      return rows.map((row) => row.followeeId);
-    },
-    options,
-  );
 }
 
 export async function getFollowings(

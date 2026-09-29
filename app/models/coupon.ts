@@ -3,7 +3,6 @@ import {
   getPostgresCouponRegistrations,
   getPostgresCoupons,
   hasPostgresActiveCoupons,
-  hasPostgresUnregisteredActiveCoupons,
   type PostgresCouponOptions,
   registerPostgresCoupon,
   unregisterPostgresCoupon,
@@ -18,10 +17,6 @@ export function getAllCoupons(env: Env, options: PostgresCouponOptions = {}) {
 
 export function hasActiveCoupons(env: Env, options: PostgresCouponOptions = {}) {
   return hasPostgresActiveCoupons(env, options);
-}
-
-export function hasUnregisteredActiveCoupons(env: Env, userId: number, options: PostgresCouponOptions = {}) {
-  return hasPostgresUnregisteredActiveCoupons(env, userId, options);
 }
 
 export function countUnregisteredActiveCoupons(env: Env, userId: number, options: PostgresCouponOptions = {}) {

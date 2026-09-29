@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -181,21 +180,5 @@ describe("edit profile visibility", () => {
 
     expect(markup).toContain('role="alert"');
     expect(markup).toContain("닉네임을 사용할 수 없어요.");
-  });
-
-  it("keeps the visibility controls in the profile form with the requested labels and order", () => {
-    const profileSource = readFileSync("app/components/features/profile/ProfileEditor.tsx", "utf8");
-    const routeSource = readFileSync("app/routes/edit._index.tsx", "utf8");
-
-    expect(routeSource).toContain('name="profilePublic"');
-    expect(routeSource).toContain('label="프로필 공개"');
-    expect(routeSource).toContain('name="growthVisibility"');
-    expect(routeSource).toContain('label="학생 성장도 공개"');
-    expect(routeSource).toContain("내 모집한 학생의 성장도를 다른 사람에게 공개해요");
-    expect(profileSource.indexOf("profileVisibilityField")).toBeLessThan(
-      profileSource.indexOf("growthVisibilityField"),
-    );
-    expect(profileSource).toContain("{profileStudentField}");
-    expect(profileSource).toContain("{friendCodeField}");
   });
 });

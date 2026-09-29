@@ -107,41 +107,6 @@ export async function hasPostgresActiveCoupons(
   );
 }
 
-export async function hasPostgresUnregisteredActiveCoupons(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresCouponOptions = {},
-): Promise<boolean> {
-  return withCouponDatabase(
-    env,
-    "has_unregistered_active",
-    async (db) => {
-      const rows = await db
-        .select({ id: pgCouponsTable.id })
-        .from(pgCouponsTable)
-        .where(
-          and(
-            or(isNull(pgCouponsTable.expiresAt), gt(pgCouponsTable.expiresAt, new Date())),
-            notExists(
-              db
-                .select({ id: pgCouponRegistrationsTable.id })
-                .from(pgCouponRegistrationsTable)
-                .where(
-                  and(
-                    eq(pgCouponRegistrationsTable.userId, userId),
-                    eq(pgCouponRegistrationsTable.couponId, pgCouponsTable.id),
-                  ),
-                ),
-            ),
-          ),
-        )
-        .limit(1);
-      return rows.length > 0;
-    },
-    options,
-  );
-}
-
 export async function countPostgresUnregisteredActiveCoupons(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,

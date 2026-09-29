@@ -194,34 +194,6 @@ export async function getPostgresFeedbackThreadByUidForUser(
   );
 }
 
-export async function hasPostgresUnreadAdminFeedbackReplies(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  options: PostgresFeedbackOptions = {},
-): Promise<boolean> {
-  return withFeedbackDatabase(
-    env,
-    "has_unread_admin_replies",
-    async (db) => {
-      const rows = await db
-        .select({ id: pgFeedbackRepliesTable.id })
-        .from(pgFeedbackTicketsTable)
-        .innerJoin(
-          pgFeedbackRepliesTable,
-          and(
-            eq(pgFeedbackRepliesTable.ticketId, pgFeedbackTicketsTable.id),
-            eq(pgFeedbackRepliesTable.isAdmin, true),
-            gt(pgFeedbackRepliesTable.id, pgFeedbackTicketsTable.lastSeenAdminReplyId),
-          ),
-        )
-        .where(eq(pgFeedbackTicketsTable.userId, userId))
-        .limit(1);
-      return rows.length > 0;
-    },
-    options,
-  );
-}
-
 export async function markPostgresFeedbackTicketAdminRepliesSeen(
   env: Pick<Env, "HYPERDRIVE">,
   ticket: Pick<FeedbackTicket, "id" | "userId" | "lastSeenAdminReplyId">,

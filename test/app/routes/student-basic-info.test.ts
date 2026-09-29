@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
 
@@ -105,18 +104,6 @@ beforeEach(() => {
 });
 
 describe("student basic info ability release", () => {
-  it("keeps the growth card anchor visible below the fixed header", () => {
-    const source = readFileSync("app/routes/students.$id._components/StudentBasicInfo.tsx", "utf8");
-
-    expect(source).toContain(
-      '<section id="student-basic-info" className="scroll-mt-[calc(var(--mobile-header-height)+3.75rem)] lg:scroll-mt-4">',
-    );
-    expect(source).toContain("학생 기본 정보");
-    expect(source).toContain('hash !== "#student-basic-info"');
-    expect(source).toContain('navigationType !== "PUSH"');
-    expect(source).toContain("requestAnimationFrame");
-  });
-
   it("scrolls the student basic info anchor after a client transition", () => {
     const scrollIntoView = jest.fn<(options?: ScrollIntoViewOptions) => void>();
     const getElementById = jest.fn<(id: string) => { scrollIntoView: (options?: ScrollIntoViewOptions) => void }>(

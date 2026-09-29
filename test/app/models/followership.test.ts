@@ -10,13 +10,7 @@ jest.mock("~/db/postgres/identity", () => ({
   withIdentityDatabase: (...args: unknown[]) => mockWithIdentityDatabase(...args),
 }));
 
-import {
-  follow,
-  getFollowerIds,
-  getFollowershipLists,
-  getFollowershipSummary,
-  getFollowingIds,
-} from "~/models/followership";
+import { follow, getFollowershipLists, getFollowershipSummary } from "~/models/followership";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -29,8 +23,6 @@ beforeEach(() => {
       const value = countCall++ === 0 ? [{ count: 2 }] : [{ count: 2 }];
       return createBuilder(value);
     }
-    if (keys.includes("followerId")) return createBuilder([{ followerId: 2 }, { followerId: 4 }]);
-    if (keys.includes("followeeId")) return createBuilder([{ followeeId: 2 }, { followeeId: 3 }]);
     if (keys.includes("sensei")) {
       return createBuilder([
         {
@@ -101,13 +93,6 @@ describe("PostgreSQL followership model", () => {
       expect.any(Function),
       expect.objectContaining({ ctx: expect.anything() }),
     );
-  });
-
-  it("selects only the required relationship IDs", async () => {
-    await expect(getFollowerIds(env, 1)).resolves.toEqual([2, 4]);
-    await expect(getFollowingIds(env, 1)).resolves.toEqual([2, 3]);
-    expect(mockIdentityDb.select).toHaveBeenCalledWith(expect.objectContaining({ followerId: expect.anything() }));
-    expect(mockIdentityDb.select).toHaveBeenCalledWith(expect.objectContaining({ followeeId: expect.anything() }));
   });
 
   it("uses a conflict-safe insert for repeated follows", async () => {

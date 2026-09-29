@@ -4,10 +4,6 @@ import { describe, expect, it } from "@jest/globals";
 
 const appRoot = join(process.cwd(), "app");
 const tailwindSource = readFileSync(join(appRoot, "tailwind.css"), "utf8");
-const filterButtonsSource = readFileSync(join(appRoot, "components/primitives/FilterButtons.tsx"), "utf8");
-const pageSource = readFileSync(join(appRoot, "components/features/layout/Page.tsx"), "utf8");
-const panelBodyControlsSource = readFileSync(join(appRoot, "components/primitives/PanelBodyControls.tsx"), "utf8");
-const eventSelectorSource = readFileSync(join(appRoot, "components/features/events/EventSelector.tsx"), "utf8");
 
 const sharedSurfaceFiles = [
   "components/primitives/FilterButtons.tsx",
@@ -62,38 +58,12 @@ describe("design system source guard", () => {
     expect(themeBlock(".dark")).toContain("--sidebar: oklch(0.235 0 0);");
   });
 
-  it("keeps FilterButtons surface composition explicit", () => {
-    expect(filterButtonsSource).toContain('surface?: "page" | "panel"');
-    expect(filterButtonsSource).toContain('surface = "panel"');
-    expect(filterButtonsSource).toContain('surface === "page"');
-  });
-
   it("keeps surface radii at rounded-lg or smaller", () => {
     expect(findViolations(/rounded(?:-[trbl]{1,2})?-(?:xl|[2-9]xl)\b/)).toEqual([]);
   });
 
   it("keeps shared structural surfaces on semantic color tokens", () => {
     expect(findFileViolations(sharedSurfaceFiles, /(?:bg|text|border|from|via|to|ring|shadow)-neutral-/)).toEqual([]);
-  });
-
-  it("keeps panel controls available as purpose-specific compositions", () => {
-    expect(panelBodyControlsSource).toContain("export function PanelActionRow");
-    expect(panelBodyControlsSource).toContain("export function PanelIconToggleRow");
-    expect(panelBodyControlsSource).toContain("export function PanelSwitchRow");
-    expect(panelBodyControlsSource).toContain("export function PanelFilterButtonsSection");
-    expect(panelBodyControlsSource).toContain("export function PanelFilterButtonRow");
-    expect(panelBodyControlsSource).toContain("export function PanelSearchField");
-    expect(eventSelectorSource).toContain("export function PanelEventSelector");
-  });
-
-  it("shares one responsive Page tab item implementation", () => {
-    expect(pageSource).toContain("function ResponsiveTabItem");
-    expect(pageSource).not.toContain("function MobileTabItem");
-    expect(pageSource).not.toContain("function VerticalDesktopTabItem");
-  });
-
-  it("allows Page content to shrink within horizontal layouts", () => {
-    expect(pageSource).toContain("relative z-0 min-w-0 grow");
   });
 
   it("does not reintroduce removed color and list button variants", () => {

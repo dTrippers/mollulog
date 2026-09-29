@@ -121,17 +121,6 @@ export function parseStudentDetailVideoResult(value: unknown): StudentDetailVide
   };
 }
 
-export function getRecognizedStudentFields(
-  student: StudentDetailVideoStudent,
-): Partial<Record<StudentVideoFieldName, number>> {
-  return Object.fromEntries(
-    studentVideoFieldNames.flatMap((field) => {
-      const detail = student.fieldDetails[field];
-      return detail.state === "recognized" ? [[field, detail.value as number]] : [];
-    }),
-  );
-}
-
 function parseStudent(value: unknown): StudentDetailVideoStudent {
   const student = asRecord(value, "학생 인식 결과");
   const studentUid = parseNonEmptyString(student.studentUid, "학생 UID");

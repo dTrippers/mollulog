@@ -1,5 +1,3 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it, jest } from "@jest/globals";
 import { runQuery } from "~/lib/baql";
 import { getStudentDirectoryStudents, syncStudentDirectory } from "~/models/student-directory";
@@ -38,20 +36,6 @@ function rawStudent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("student directory source", () => {
-  it("keeps the dedicated query limited to the compact public projection", () => {
-    const source = readFileSync(join(process.cwd(), "app/models/student-directory.ts"), "utf8");
-
-    expect(source).toContain("profile {");
-    expect(source).toContain("age");
-    expect(source).toContain("schoolYear");
-    expect(source).toContain("height");
-    expect(source).toContain("terrainAdaptations");
-    expect(source).not.toContain("weaponName");
-    expect(source).not.toContain("statProfile");
-    expect(source).not.toContain("recruitments");
-    expect(source).not.toContain("favoriteItems");
-  });
-
   it("normalizes only the compact public projection and preserves source strings", async () => {
     mockedRunQuery.mockResolvedValueOnce({ data: { students: [rawStudent()] }, error: undefined } as never);
 

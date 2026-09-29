@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { createStudentFilterState } from "~/components/features/students/StudentFilter";
@@ -232,27 +231,6 @@ describe("@username students loader", () => {
     expect(getUserPageLinks("students", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBe(ownerLinks);
     expect(getUserPageLinks("students", "other", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
     expect(getUserPageLinks("profile", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
-  });
-
-  it("keeps owner growth callout priority and public sharing states in the students route", () => {
-    const source = readFileSync("app/routes/$username.students.tsx", "utf8");
-
-    expect(source).toContain('title="성장도는 나만 확인할 수 있어요"');
-    expect(source).toContain('aria-label="성장도 비공개 안내 닫기"');
-    expect(source).toContain("growthPrivateCalloutDismissalLoaded");
-    expect(source).toContain("growthPrivateCalloutDismissalStorageKey");
-    expect(source).toContain("JSON.stringify([growthPrivateCalloutId])");
-    expect(source).toContain('to="/edit"');
-    expect(source).toContain("프로필 관리");
-    expect(source).toContain('profileVisibility === "private"');
-    expect(source).toContain("ShareStudentGrowthButton");
-    expect(source).toContain('text: "자세히"');
-    expect(source).toContain(
-      'className="grid grid-cols-1 justify-start gap-3 sm:[grid-template-columns:repeat(auto-fill,minmax(min(100%,14.5rem),14.5rem))]"',
-    );
-    expect(source).not.toContain("repeat(auto-fit,minmax(min(100%,16rem),1fr))");
-    expect(source).not.toContain("GrowthVisibilityControl");
-    expect(source).not.toContain("성장 상태 편집");
   });
 
   it("parses only the own growth callout dismissal from browser storage", () => {

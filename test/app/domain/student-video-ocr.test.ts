@@ -1,10 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { OcrResultEnvelope } from "~/domain/ocr";
-import {
-  getRecognizedStudentFields,
-  parseStudentDetailVideoEnvelope,
-  parseStudentDetailVideoResult,
-} from "~/domain/student-video-ocr";
+import { parseStudentDetailVideoEnvelope, parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
 import fixture from "../../fixtures/student-detail-video-result.v1.json";
 
 describe("student detail video result contract", () => {
@@ -12,16 +8,14 @@ describe("student detail video result contract", () => {
     const result = parseStudentDetailVideoResult(fixture);
     const student = result.students[0];
 
-    expect(getRecognizedStudentFields(student)).toMatchObject({
+    expect(student.fields).toMatchObject({
       weaponLevel: 0,
       abilityHp: 0,
       abilityAtk: 0,
       abilityHeal: 0,
+      skillEnhanced: null,
+      equip3: null,
     });
-    expect(getRecognizedStudentFields(student)).not.toHaveProperty("skillEnhanced");
-    expect(getRecognizedStudentFields(student)).not.toHaveProperty("skillSub");
-    expect(getRecognizedStudentFields(student)).not.toHaveProperty("equip3");
-    expect(getRecognizedStudentFields(student)).not.toHaveProperty("equipSpecial");
   });
 
   it("rejects out-of-range values for all server-authoritative details", () => {

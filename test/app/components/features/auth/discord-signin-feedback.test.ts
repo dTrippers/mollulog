@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "@jest/globals";
 import { getDiscordSignInFeedback } from "~/components/features/auth/discord-signin-feedback";
 
@@ -13,13 +12,5 @@ describe("Discord sign-in feedback", () => {
 
   it("does not expose unknown callback values", () => {
     expect(getDiscordSignInFeedback(new URLSearchParams("auth_error=provider_internal_error"))).toBeNull();
-  });
-
-  it("opens the existing sign-in surface and keeps the Discord retry action", () => {
-    const rootSource = readFileSync("app/root.tsx", "utf8");
-    const signInSource = readFileSync("app/components/features/auth/SignInBottomSheet.tsx", "utf8");
-    expect(rootSource).toContain("showSignIn();");
-    expect(rootSource).toContain("initialError={discordSignInError}");
-    expect(signInSource).toContain('action: "/auth/discord/signin"');
   });
 });

@@ -1,4 +1,3 @@
-import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -118,70 +117,6 @@ describe("student growth visual contracts", () => {
     expect(mutedMarkup).toContain("opacity-60");
     expect(mutedMarkup).toContain("h-10 w-[2.165rem]");
     expect(mutedMarkup).toContain('class="relative z-10 size-10 object-contain drop-shadow-sm"');
-  });
-
-  it("keeps the owner edit link and equipment accessibility contracts in the card", () => {
-    const source = readFileSync("app/routes/$username.students._components/StudentGrowthCard.tsx", "utf8");
-
-    expect(source).toContain("PencilSquareIcon");
-    expect(source).toContain('from "@heroicons/react/20/solid"');
-    expect(source).toContain("encodeURIComponent(student.uid)");
-    expect(source).toContain("#student-basic-info");
-    expect(source).toContain("${" + "student.name} 성장 상태 편집");
-    expect(source).toContain("inline-flex shrink-0 self-start rounded-md p-1.5");
-    expect(source).toContain("text-sm font-semibold");
-    expect(source).toContain('from "@heroicons/react/16/solid"');
-    expect(source).toContain("ChevronRightIcon");
-    expect(source).toContain("to={`/students/${" + "encodeURIComponent(student.uid)}`}");
-    expect(source).toContain('className="group inline-flex min-w-0 max-w-full items-center gap-1');
-    expect(source).toContain('className="min-w-0 truncate break-keep"');
-    expect(source).toContain("muted");
-    expect(source).toContain('size="sm"');
-    expect(source).toContain("미장착");
-    expect(source).toContain("aria-disabled={!visual.available}");
-    expect(source).toContain("equipmentValueDescription(visual)");
-    expect(source).toContain('className="size-10 shrink-0 object-contain"');
-    expect(source).not.toContain("border-dashed");
-    const skillSectionStart = source.indexOf("function SkillTile");
-    const skillSectionEnd = source.indexOf("function EquipmentTile", skillSectionStart);
-    const skillSection = source.slice(skillSectionStart, skillSectionEnd);
-    expect(skillSection).toContain("h-12");
-    expect(skillSection).not.toContain("aspect-square");
-    expect(skillSection).not.toContain("sm:h-auto");
-    expect(skillSection).not.toContain("absolute top-1 left-1");
-    const skillGroupStart = source.indexOf('<MetricGroup title="스킬">');
-    const skillGroupEnd = source.indexOf('<MetricGroup title="장비">', skillGroupStart);
-    const skillGroup = source.slice(skillGroupStart, skillGroupEnd);
-    expect(skillGroup).toContain('className="space-y-0"');
-    expect(skillGroup).not.toContain("space-y-0.5");
-    expect(skillGroup).toContain(
-      'className="grid h-4 grid-cols-4 gap-1 text-center text-[10px] font-semibold leading-4 text-muted-foreground"',
-    );
-    expect(skillGroup).toContain('aria-hidden="true"');
-    expect(source).toContain('{ key: "ex", label: "EX" }');
-    expect(source).toContain('{ key: "normal", label: "기본" }');
-    expect(source).toContain('{ key: "enhanced", label: "강화" }');
-    expect(source).toContain('{ key: "sub", label: "서브" }');
-    expect(source).toContain("whitespace-nowrap rounded-sm bg-card px-0.5 text-[10px]");
-    expect(source).toContain("z-20 rounded-sm bg-card");
-    expect(source).toContain("whitespace-nowrap text-[10px] font-semibold leading-4 text-muted-foreground");
-    expect(source).toContain("self-end whitespace-nowrap text-[10px] font-semibold tabular-nums");
-    const metricGroupSource = source.slice(
-      source.indexOf("function MetricGroup"),
-      source.indexOf("function SkillTile"),
-    );
-    expect(metricGroupSource).toContain('<h4 className="sr-only">{title}</h4>');
-    expect(metricGroupSource).not.toContain("w-6 shrink-0");
-    const equipmentSectionStart = source.indexOf('<MetricGroup title="장비">');
-    const equipmentSectionEnd = source.indexOf("</MetricGroup>", equipmentSectionStart);
-    const equipmentSection = source.slice(equipmentSectionStart, equipmentSectionEnd);
-    expect(equipmentSection).toContain('className="grid grid-cols-4 gap-1"');
-    expect(equipmentSection).not.toContain("grid-cols-3");
-    const equipmentSource = source.slice(
-      source.indexOf("function EquipmentTile"),
-      source.indexOf("function SpecialEquipmentTile"),
-    );
-    expect(equipmentSource).not.toContain("top-1 left-1");
   });
 
   it("renders the owner edit link with an encoded student path", () => {

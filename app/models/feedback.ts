@@ -6,7 +6,6 @@ import {
   getPostgresFeedbackThreadByUidForUser,
   getPostgresFeedbackTicketByUidForUser,
   getPostgresFeedbackTicketsByUserId,
-  hasPostgresUnreadAdminFeedbackReplies,
   markPostgresFeedbackTicketAdminRepliesSeen,
   type PostgresFeedbackOptions,
 } from "~/db/postgres/feedback";
@@ -34,10 +33,6 @@ export function getFeedbackThreadByUidForUser(
   options: PostgresFeedbackOptions = {},
 ) {
   return getPostgresFeedbackThreadByUidForUser(env, uid, userId, options);
-}
-
-export function hasUnreadAdminFeedbackReplies(env: Env, userId: number, options: PostgresFeedbackOptions = {}) {
-  return hasPostgresUnreadAdminFeedbackReplies(env, userId, options);
 }
 
 export function getLatestAdminFeedbackReplyId(replies: FeedbackReply[]): number {
