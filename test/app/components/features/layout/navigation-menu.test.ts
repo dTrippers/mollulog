@@ -49,6 +49,8 @@ describe("global navigation catalog", () => {
 
     expect(catalogIds).toEqual([...NAVIGATION_MENU_IDS].sort());
     expect(namesById).toMatchObject({
+      "integrated-planner": "통합 플래너",
+      "ap-planner": "AP 플래너",
       "resource-planner": "재화 플래너",
       "farming-calculator": "파밍 계산기",
       profile: "프로필",
@@ -61,6 +63,7 @@ describe("global navigation catalog", () => {
     const items = getNavigationCatalog(guestOptions);
 
     expect(items.find((item) => item.to === "/planner")).toMatchObject({
+      menuId: "integrated-planner",
       name: "통합 플래너",
       favoriteId: "integrated-planner",
       mobileNavigationId: "integrated-planner",
@@ -74,7 +77,7 @@ describe("global navigation catalog", () => {
   it("exposes AP planner as a favoritable sibling utility", () => {
     const planner = getNavigationCatalog(guestOptions).find((item) => item.to === "/utils/ap");
 
-    expect(planner).toMatchObject({ name: "AP 플래너", favoriteId: "ap-planner" });
+    expect(planner).toMatchObject({ menuId: "ap-planner", name: "AP 플래너", favoriteId: "ap-planner" });
   });
 
   it.each(["/planner", "/planner/import"])("activates the integrated planner at %s", (pathname) => {
@@ -348,6 +351,13 @@ describe("global navigation catalog", () => {
       hasRecentNews: true,
       hasUnreadFeedbackReplies: true,
       menuBadgeOverrides: {
+        "integrated-planner": {
+          menuId: "integrated-planner",
+          labelMode: "custom",
+          label: "새 달력",
+          redDotMode: "show",
+        },
+        "ap-planner": { menuId: "ap-planner", labelMode: "custom", label: "새 기능", redDotMode: "show" },
         raids: { menuId: "raids", labelMode: "custom", label: "새 시즌", redDotMode: "hidden" },
         coupons: { menuId: "coupons", labelMode: "auto", label: null, redDotMode: "hidden" },
         news: { menuId: "news", labelMode: "hidden", label: null, redDotMode: "show" },
@@ -355,6 +365,8 @@ describe("global navigation catalog", () => {
     });
     const itemById = new Map(catalog.flatMap((item) => (item.menuId ? [[item.menuId, item] as const] : [])));
 
+    expect(itemById.get("integrated-planner")).toMatchObject({ badgeLabel: "새 달력", showRedDot: true });
+    expect(itemById.get("ap-planner")).toMatchObject({ badgeLabel: "새 기능", showRedDot: true });
     expect(itemById.get("raids")).toMatchObject({ badgeLabel: "새 시즌", showRedDot: false });
     expect(itemById.get("coupons")).toMatchObject({ badgeLabel: undefined, showRedDot: false });
     expect(itemById.get("news")).toMatchObject({ badgeLabel: undefined, showRedDot: true });
