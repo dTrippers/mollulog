@@ -11,14 +11,22 @@ export type {
   TreasureHuntRoundEconomics,
 } from "./statistics";
 export {
+  analyzeTreasureHuntBoard,
   countTreasureHuntArrangements,
   createTreasureHuntSimulator,
   InvalidTreasureHuntCompositionError,
+  InvalidTreasureHuntObservationError,
   isValidTreasureHuntComposition,
 } from "./solver";
 export type {
+  TreasureHuntBoardAnalysis,
+  TreasureHuntBoardCoordinate,
+  TreasureHuntBoardObservation,
+  TreasureHuntBoardOrientation,
+  TreasureHuntFoundTreasure,
   OpenedCellDistribution,
   OpenedCellHistogram,
+  TreasureHuntRemainingPieceCount,
   TreasureHuntComposition,
   TreasureHuntPieceSpec,
   TreasureHuntSimulationGoal,

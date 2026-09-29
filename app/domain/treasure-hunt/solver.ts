@@ -1,7 +1,11 @@
 import {
   TREASURE_HUNT_ENGINE_VERSION,
   type TreasureHuntComposition,
+  type TreasureHuntBoardAnalysis,
+  type TreasureHuntBoardObservation,
+  type TreasureHuntBoardCoordinate,
   type TreasureHuntPieceSpec,
+  type TreasureHuntRemainingPieceCount,
   type TreasureHuntSimulationGoal,
   type TreasureHuntSimulator,
 } from "./types";
@@ -49,6 +53,13 @@ export class InvalidTreasureHuntCompositionError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "InvalidTreasureHuntCompositionError";
+  }
+}
+
+export class InvalidTreasureHuntObservationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "InvalidTreasureHuntObservationError";
   }
 }
 
@@ -228,6 +239,10 @@ class PlacementSolver {
       throw new InvalidTreasureHuntCompositionError("No non-overlapping treasure layout fits this board.");
     }
     return total;
+  }
+
+  analyzeBoard(knownEmpty: Uint8Array, knownOccupied: Uint8Array, remaining: number[]) {
+    return this.analyze(knownEmpty, knownOccupied, remaining, false);
   }
 
   createSimulator(goal: TreasureHuntSimulationGoal): TreasureHuntSimulator {
@@ -710,6 +725,198 @@ function createGameRandom(gameIndex: number, width: number, height: number, piec
 
 export function countTreasureHuntArrangements(composition: TreasureHuntComposition): number {
   return new PlacementSolver(canonicalizeComposition(composition)).countArrangements();
+}
+
+function normalizedShape(width: number, height: number): [number, number] {
+  return [Math.min(width, height), Math.max(width, height)];
+}
+
+function shapeKey(width: number, height: number): string {
+  const [shortSide, longSide] = normalizedShape(width, height);
+  return `${shortSide}x${longSide}`;
+}
+
+function groupCompositionPieces(composition: TreasureHuntComposition): TreasureHuntPieceSpec[] {
+  const groups = new Map<string, TreasureHuntPieceSpec>();
+  for (const piece of composition.pieces) {
+    const [width, height] = normalizedShape(piece.width, piece.height);
+    const key = `${width}x${height}`;
+    const existing = groups.get(key);
+    if (existing) {
+      const count = existing.count + piece.count;
+      if (!Number.isSafeInteger(count)) {
+        throw new InvalidTreasureHuntCompositionError("Treasure count exceeds exact integer limits.");
+      }
+      existing.count = count;
+    } else {
+      groups.set(key, { width, height, count: piece.count });
+    }
+  }
+  return [...groups.values()].sort(comparePieceSpecs);
+}
+
+function assertCoordinate(
+  coordinate: TreasureHuntBoardCoordinate,
+  boardWidth: number,
+  boardHeight: number,
+  label: string,
+): void {
+  if (
+    !coordinate ||
+    !Number.isSafeInteger(coordinate.x) ||
+    !Number.isSafeInteger(coordinate.y) ||
+    coordinate.x < 0 ||
+    coordinate.y < 0 ||
+    coordinate.x >= boardWidth ||
+    coordinate.y >= boardHeight
+  ) {
+    throw new InvalidTreasureHuntObservationError(`${label} must be an integer coordinate on the board.`);
+  }
+}
+
+/**
+ * Analyze a partially observed board using the same exact placement counts as
+ * the statistics engine. Coordinates are zero-based from the top-left and the
+ * returned cell matrix is row-major as [y][x].
+ */
+export function analyzeTreasureHuntBoard(
+  composition: TreasureHuntComposition,
+  observation: TreasureHuntBoardObservation,
+): TreasureHuntBoardAnalysis {
+  const canonical = canonicalizeComposition(composition);
+  if (
+    !observation ||
+    !Array.isArray(observation.knownEmpty) ||
+    !Array.isArray(observation.foundTreasures)
+  ) {
+    throw new InvalidTreasureHuntObservationError("Board observations must include empty cells and found treasures.");
+  }
+
+  const boardWidth = composition.boardWidth;
+  const boardHeight = composition.boardHeight;
+  const solverWidth = canonical.boardWidth;
+  const solverHeight = canonical.boardHeight;
+  const boardCells = boardWidth * boardHeight;
+  const solverEmpty = new Uint8Array(boardCells);
+  const solverOccupied = new Uint8Array(boardCells);
+  const recordedCells = new Uint8Array(boardCells);
+  const groups = groupCompositionPieces(composition);
+  const groupCounts = new Map(groups.map((piece) => [shapeKey(piece.width, piece.height), piece.count]));
+  const foundCounts = new Map(groups.map((piece) => [shapeKey(piece.width, piece.height), 0]));
+
+  const toSolverIndex = (x: number, y: number) =>
+    boardWidth === solverWidth && boardHeight === solverHeight ? y * solverWidth + x : x * solverWidth + y;
+
+  for (const coordinate of observation.knownEmpty) {
+    assertCoordinate(coordinate, boardWidth, boardHeight, "Empty-cell coordinate");
+    const originalIndex = coordinate.y * boardWidth + coordinate.x;
+    const solverIndex = toSolverIndex(coordinate.x, coordinate.y);
+    if (recordedCells[originalIndex] || solverEmpty[solverIndex]) {
+      throw new InvalidTreasureHuntObservationError("A cell cannot be recorded as empty more than once.");
+    }
+    recordedCells[originalIndex] = 1;
+    solverEmpty[solverIndex] = 1;
+  }
+
+  for (const treasure of observation.foundTreasures) {
+    if (
+      !treasure ||
+      !Number.isSafeInteger(treasure.width) ||
+      !Number.isSafeInteger(treasure.height) ||
+      treasure.width <= 0 ||
+      treasure.height <= 0 ||
+      (treasure.orientation !== "horizontal" && treasure.orientation !== "vertical")
+    ) {
+      throw new InvalidTreasureHuntObservationError("Found treasures must include a valid shape and orientation.");
+    }
+    assertCoordinate(treasure, boardWidth, boardHeight, "Treasure top-left coordinate");
+
+    const key = shapeKey(treasure.width, treasure.height);
+    const group = groups.find((piece) => shapeKey(piece.width, piece.height) === key);
+    const recordedCount = foundCounts.get(key);
+    const configuredCount = groupCounts.get(key);
+    if (!group || recordedCount === undefined || configuredCount === undefined) {
+      throw new InvalidTreasureHuntObservationError("Found treasure shape is not present in the composition.");
+    }
+    if (recordedCount >= configuredCount) {
+      throw new InvalidTreasureHuntObservationError("Found treasure count exceeds the composition.");
+    }
+    foundCounts.set(key, recordedCount + 1);
+
+    const [shortSide, longSide] = normalizedShape(group.width, group.height);
+    const placedWidth = shortSide === longSide || treasure.orientation === "vertical" ? shortSide : longSide;
+    const placedHeight = shortSide === longSide || treasure.orientation === "vertical" ? longSide : shortSide;
+    if (treasure.x + placedWidth > boardWidth || treasure.y + placedHeight > boardHeight) {
+      throw new InvalidTreasureHuntObservationError("Found treasure placement extends beyond the board.");
+    }
+
+    for (let dy = 0; dy < placedHeight; dy++) {
+      for (let dx = 0; dx < placedWidth; dx++) {
+        const x = treasure.x + dx;
+        const y = treasure.y + dy;
+        const originalIndex = y * boardWidth + x;
+        const solverIndex = toSolverIndex(x, y);
+        if (recordedCells[originalIndex] || solverOccupied[solverIndex]) {
+          throw new InvalidTreasureHuntObservationError("Found treasures cannot overlap recorded cells or each other.");
+        }
+        recordedCells[originalIndex] = 1;
+        solverOccupied[solverIndex] = 1;
+      }
+    }
+  }
+
+  const remainingPieces: TreasureHuntRemainingPieceCount[] = groups.map((piece) => ({
+    width: piece.width,
+    height: piece.height,
+    count:
+      (groupCounts.get(shapeKey(piece.width, piece.height)) ?? 0) -
+      (foundCounts.get(shapeKey(piece.width, piece.height)) ?? 0),
+  }));
+  const remainingCounts = remainingPieces.map((piece) => piece.count);
+  const analysisComposition: TreasureHuntComposition = {
+    boardWidth,
+    boardHeight,
+    pieces: groups,
+  };
+  const solver = new PlacementSolver(canonicalizeComposition(analysisComposition));
+  const analysis = solver.analyzeBoard(solverEmpty, solverOccupied, remainingCounts);
+
+  if (analysis.total === 0) {
+    return { status: "inconsistent", cells: null, recommended: [], remaining: remainingPieces };
+  }
+
+  const cells = Array.from({ length: boardHeight }, (_, y) =>
+    Array.from({ length: boardWidth }, (_, x) => {
+      const originalIndex = y * boardWidth + x;
+      if (recordedCells[originalIndex]) {
+        return null;
+      }
+      return (analysis.coverageCounts[toSolverIndex(x, y)] ?? 0) / analysis.total;
+    }),
+  );
+
+  let maximumCoverage = -1;
+  const recommended: TreasureHuntBoardCoordinate[] = [];
+  const hasRemainingTreasures = remainingPieces.some((piece) => piece.count > 0);
+  if (hasRemainingTreasures) {
+    for (let y = 0; y < boardHeight; y++) {
+      for (let x = 0; x < boardWidth; x++) {
+        if (recordedCells[y * boardWidth + x]) {
+          continue;
+        }
+        const coverage = analysis.coverageCounts[toSolverIndex(x, y)] ?? 0;
+        if (coverage > maximumCoverage) {
+          maximumCoverage = coverage;
+          recommended.length = 0;
+          recommended.push({ x, y });
+        } else if (coverage === maximumCoverage) {
+          recommended.push({ x, y });
+        }
+      }
+    }
+  }
+
+  return { status: "ok", cells, recommended, remaining: remainingPieces };
 }
 
 export function createTreasureHuntSimulator(
