@@ -1,8 +1,9 @@
 import { describe, expect, it } from "@jest/globals";
-import type { ApPlannerEvent } from "../../../app/domain/ap-planner";
+import type { ApPackagePurchaseRecord, ApPlannerEvent } from "../../../app/domain/ap-planner";
 import {
   AP_PER_REFILL,
   addApChargeException,
+  apPackagePanelSummary,
   cafeProduction,
   calculateApPlannerEvent,
   comfortMaximum,
@@ -382,13 +383,16 @@ describe("AP planner domain", () => {
   it("keeps AP state bounded and retains unknown fields for forward compatibility", () => {
     const empty = createEmptyApPlannerState();
     expect(normalizeApPlannerState(empty)).toEqual(empty);
-    expect(normalizeApPlannerState({ futureField: { value: "kept" } })).toMatchObject({
+    expect(normalizeApPlannerState({ futureField: { value: "kept" } })).toEqual({
       accountLevel: null,
       cafeRank: null,
       comfort: null,
       eventPlans: {},
       futureField: { value: "kept" },
     });
+    expect(normalizeApPlannerState({ tacticalApShopCount: null })?.tacticalApShopCount).toBeUndefined();
+    expect(normalizeApPlannerState({ tacticalApShopCount: 0 })?.tacticalApShopCount).toBe(0);
+    expect(normalizeApPlannerState({ tacticalApShopCount: 5 })).toBeNull();
     expect(normalizeApPlannerState({ futureField: "x".repeat(120_000) })).toBeNull();
     expect(normalizeApPlannerState({ cafeRank: 8 })?.comfort).toBe(4_500);
   });
@@ -469,10 +473,172 @@ describe("AP planner domain", () => {
       expect(calculateApPlannerEvent(base).supplyBreakdown).toMatchObject({ dailyTaskDays: 2, dailyTasks: 300 });
     });
 
+    it("counts all 14 AP package game days across the stockpile and event period", () => {
+      const packageEvent: ApPlannerEvent = {
+        ...nextEvent,
+        startAt: "2026-10-01T11:00:00+09:00",
+        endAt: "2026-10-20T11:00:00+09:00",
+      };
+      const packageRecords: ApPackagePurchaseRecord[] = [
+        { eventAt: "2026-10-01T04:00:00+09:00", autoRepurchase: false },
+      ];
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        event: packageEvent,
+        plan: { accessAt: packageEvent.startAt },
+        packageRecords,
+      });
+
+      expect(calculation.supplyBreakdown?.apPackage).toBe(2_100);
+      expect(calculation.stockpileSteps).toContainEqual(
+        expect.objectContaining({ kind: "ap-package", receivedAp: 150, at: "2026-09-30T19:00:00.000Z" }),
+      );
+      expect(calculation.stockpileSteps.at(-1)?.ap).toBe(calculation.supplyBreakdown?.stockpile);
+    });
+
+    it("repeats auto-renewed packages every 14 game days and adds overlapping records", () => {
+      const packageEvent: ApPlannerEvent = {
+        ...nextEvent,
+        startAt: "2026-10-15T11:00:00+09:00",
+        endAt: "2026-10-30T11:00:00+09:00",
+      };
+      const packageRecords: ApPackagePurchaseRecord[] = [
+        { eventAt: "2026-10-01T04:00:00+09:00", autoRepurchase: true },
+        { eventAt: "2026-10-15T04:00:00+09:00", autoRepurchase: false },
+      ];
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        event: packageEvent,
+        plan: { accessAt: packageEvent.startAt },
+        packageRecords,
+      });
+
+      expect(calculation.supplyBreakdown?.apPackage).toBe(4_500);
+      expect(calculation.stockpileSteps).toContainEqual(
+        expect.objectContaining({ kind: "ap-package", receivedAp: 300, at: "2026-10-14T19:00:00.000Z" }),
+      );
+    });
+
+    it("summarizes future coverage from AP package records", () => {
+      expect(
+        apPackagePanelSummary(
+          [{ eventAt: "2026-09-20T04:00:00+09:00", autoRepurchase: false }],
+          "2026-09-30T12:00:00+09:00",
+        ),
+      ).toBe("10/3까지");
+      expect(
+        apPackagePanelSummary(
+          [{ eventAt: "2026-09-20T04:00:00+09:00", autoRepurchase: true }],
+          "2026-09-30T12:00:00+09:00",
+        ),
+      ).toBe("자동 재구매 중");
+      expect(apPackagePanelSummary([], "2026-09-30T12:00:00+09:00")).toBe("구매 기록 없음");
+      expect(
+        apPackagePanelSummary(
+          [{ eventAt: "2026-09-01T04:00:00+09:00", autoRepurchase: false }],
+          "2026-09-30T12:00:00+09:00",
+        ),
+      ).toBe("진행 중인 패키지 없음");
+    });
+
+    it("counts tactical AP once per 04:00 reset across stockpiling and the event period", () => {
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        conditions: { ...conditions, tacticalApShopCount: 2 },
+      });
+
+      expect(calculation.supplyBreakdown).toMatchObject({
+        tacticalApShopCount: 2,
+        tacticalApShop: 360,
+        tacticalApShopDays: 2,
+      });
+      expect(calculation.stockpileSteps.filter((step) => step.kind === "tactical-purchase")).toEqual([
+        expect.objectContaining({ at: "2026-09-29T19:00:00.000Z", receivedAp: 180 }),
+      ]);
+    });
+
+    it("applies the 999 AP stockpile purchase cap to each tactical shop item", () => {
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        conditions: { ...conditions, accountLevel: 90, tacticalApShopCount: 4 },
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeCount: 20 },
+        },
+      });
+      const tacticalStep = calculation.stockpileSteps.find((step) => step.kind === "tactical-purchase");
+
+      expect(tacticalStep).toMatchObject({ ap: 970, receivedAp: 90 });
+      expect(tacticalStep?.label).toContain("360 AP 중 90 AP만");
+      expect(tacticalStep?.ap).toBeLessThanOrEqual(999);
+    });
+
+    it.each([
+      {
+        itemAp: 60,
+        accessAt: "2026-09-30T09:00:00+09:00",
+        eventStartAt: "2026-09-30T08:00:00+09:00",
+        expectedAp: 970,
+      },
+      {
+        itemAp: 30,
+        accessAt: "2026-09-30T04:00:00+09:00",
+        eventStartAt: "2026-09-30T03:00:00+09:00",
+        expectedAp: 990,
+      },
+    ])("buys the $itemAp AP item when only that lineup item fits under 999", ({
+      itemAp,
+      accessAt,
+      eventStartAt,
+      expectedAp,
+    }) => {
+      const calculation = calculateApPlannerEvent({
+        ...base,
+        event: { ...nextEvent, startAt: eventStartAt },
+        conditions: { ...conditions, accountLevel: 90, tacticalApShopCount: 1 },
+        plan: { accessAt },
+        options: {
+          ...defaultPyroxenePlannerOptions,
+          consumption: { ...defaultPyroxenePlannerOptions.consumption, apChargeCount: 20 },
+        },
+      });
+      const tacticalStep = calculation.stockpileSteps.find((step) => step.kind === "tactical-purchase");
+
+      expect(tacticalStep).toMatchObject({ ap: expectedAp, receivedAp: itemAp });
+      expect(tacticalStep?.ap).toBeLessThanOrEqual(999);
+    });
+
     it("assumes today's daily tasks were already received for an ongoing event", () => {
       const ongoing = calculateApPlannerEvent({ ...base, plan: null, currentAt: "2026-09-30T12:00:00+09:00" });
       expect(ongoing.status).toBe("ongoing");
       expect(ongoing.supplyBreakdown).toMatchObject({ dailyTaskDays: 1, dailyTasks: 150 });
+    });
+
+    it("counts tactical purchases for the same game days as daily missions while ongoing", () => {
+      const ongoing = calculateApPlannerEvent({
+        ...base,
+        conditions: { ...conditions, tacticalApShopCount: 1 },
+        plan: null,
+        currentAt: "2026-09-30T12:00:00+09:00",
+      });
+
+      expect(ongoing.supplyBreakdown).toMatchObject({
+        dailyTaskDays: 1,
+        tacticalApShopDays: 1,
+        tacticalApShop: 90,
+      });
+    });
+
+    it("keeps the result for an ongoing event while exposing its future registered access plan", () => {
+      const ongoing = calculateApPlannerEvent({
+        ...base,
+        plan: { accessAt: "2026-10-01T03:00:00+09:00" },
+        currentAt: "2026-09-30T12:00:00+09:00",
+      });
+
+      expect(ongoing.status).toBe("ongoing");
+      expect(ongoing.accessTimePassed).toBe(false);
+      expect(ongoing.stockpileSteps.some((step) => step.kind === "access")).toBe(true);
     });
 
     it("never refills above 999 held AP while stockpiling and suggests only useful refills", () => {

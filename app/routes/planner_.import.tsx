@@ -1658,7 +1658,7 @@ export default function UnifiedGuestPlannerImportPage() {
                   {apPlannerStateHasData(guest.document.ap) && (
                     <SectionCard
                       title="AP 플래너"
-                      description="플레이 조건과 이벤트별 계획·접속 시간을 비교해 가져올 내용을 선택해주세요."
+                      description="플레이 조건과 이벤트별 AP 모으기 계산·접속할 시각을 비교해 가져올 내용을 선택해주세요."
                     >
                       {sourceMarker}
                       <p className="mb-3 text-sm text-muted-foreground">
@@ -1926,20 +1926,22 @@ function ApPlannerSummary({
       <p className="text-muted-foreground">
         {state.accountLevel === null ? "계정 레벨 미입력" : `계정 레벨 Lv.${state.accountLevel}`} ·{" "}
         {state.cafeRank === null ? "카페 랭크 미입력" : `카페 랭크 ${state.cafeRank}`} ·{" "}
-        {state.comfort === null ? "편의성 랭크 최대" : `편의성 ${state.comfort.toLocaleString()}`}
+        {state.comfort === null ? "쾌적도 랭크 최대" : `쾌적도 ${state.comfort.toLocaleString()}`}
       </p>
-      <p className="font-medium">이벤트 계획 {plans.length}건</p>
+      <p className="font-medium">AP 모으기 계산 {plans.length}건</p>
       {plans.length > 0 ? (
         <ul className="space-y-1 text-muted-foreground">
           {plans.map(([eventUid, plan]) => (
             <li key={eventUid}>
               {names.get(eventUid) ?? "이벤트 일정 확인 중"} ·{" "}
-              {plan.accessAt ? formatApShortDate(plan.accessAt) : "접속 시간 미입력"}
+              {plan.accessAt ? formatApShortDate(plan.accessAt) : "접속할 시각 미입력"}
             </li>
           ))}
         </ul>
       ) : null}
-      {Object.keys(state).some((key) => !["accountLevel", "cafeRank", "comfort", "eventPlans"].includes(key)) ? (
+      {Object.keys(state).some(
+        (key) => !["accountLevel", "cafeRank", "comfort", "tacticalApShopCount", "eventPlans"].includes(key),
+      ) ? (
         <p className="text-xs text-muted-foreground">현재 화면에서 편집할 수 없는 이전 버전 정보도 함께 유지해요.</p>
       ) : null}
     </div>

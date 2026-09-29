@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 
 type CardProps = {
-  event: { timelineUid: string };
+  event: { timelineUid: string; runType?: string | null };
   calculation: ApPlannerCalculation | null;
   calculationError: string | null;
   shopTargetExists: boolean;
@@ -47,6 +47,7 @@ const previous = {
   uid: "previous",
   name: "앞 이벤트",
   contentType: "event",
+  runType: "first",
   startAt: "2026-09-25T11:00:00+09:00",
   endAt: "2026-09-30T10:00:00+09:00",
 };
@@ -54,6 +55,7 @@ const next = {
   uid: "next",
   name: "다음 이벤트",
   contentType: "event",
+  runType: "rerun",
   startAt: "2026-09-30T11:00:00+09:00",
   endAt: "2026-10-01T11:00:00+09:00",
 };
@@ -76,6 +78,10 @@ function loaderData(overriddenRequiredQuantities: Record<string, number> = {}) {
         eventPlans: { previous: { accessAt: previous.startAt }, next: { accessAt: nextAccessAt } },
       },
       options: defaultPyroxenePlannerOptions,
+      timelineItems: [
+        { uid: "ap-package", source: "package_ap", eventAt: "2026-09-30T04:00:00+09:00", autoRepurchase: false },
+        { uid: "other-record", source: "buy", eventAt: "2026-09-30T04:00:00+09:00", autoRepurchase: false },
+      ],
     },
     shopEvents: [previous, next].map((event) => ({
       timelineUid: event.uid,
@@ -103,6 +109,16 @@ describe("AP planner route", () => {
     mockUseLoaderData.mockReset();
   });
 
+  it("uses the renamed section title and passes runType from the timeline events", () => {
+    mockUseLoaderData.mockReturnValue(loaderData());
+    renderedCards.length = 0;
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(ApPlannerRoute)));
+
+    expect(markup).toContain("이벤트 별 AP 계획");
+    expect(markup).not.toContain("이벤트별 AP</h2>");
+    expect(renderedCards.find((card) => card.event.timelineUid === "next")?.event.runType).toBe("rerun");
+  });
+
   it("keeps a hidden, just-ended planned event as the owner of its AP period", () => {
     const card = renderNextCard(loaderData());
 
@@ -121,11 +137,12 @@ describe("AP planner route", () => {
       plan: { accessAt: nextAccessAt },
       currentAt: now,
       options: defaultPyroxenePlannerOptions,
+      packageRecords: [{ eventAt: "2026-09-30T04:00:00+09:00", autoRepurchase: false }],
       previousPlannedEvents: [{ ...previous, timelineUid: previous.uid }],
     });
     expect(card?.calculation?.overlapEventName).toBe("앞 이벤트");
     expect(card?.calculation?.availableAp).toBe(expected.availableAp);
-    expect(card?.calculation?.supplyBreakdown).toMatchObject({ stockpile: 70, dailyTasks: 150 });
+    expect(card?.calculation?.supplyBreakdown).toMatchObject({ stockpile: 70, dailyTasks: 150, apPackage: 150 });
   });
 
   it("reports a shop target with unobtainable currency instead of a partial AP verdict", () => {
@@ -133,6 +150,6 @@ describe("AP planner route", () => {
 
     expect(card?.calculation).toBeNull();
     expect(card?.shopTargetExists).toBe(true);
-    expect(card?.calculationError).toBe("선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어 AP를 계산할 수 없어요.");
+    expect(card?.calculationError).toBe("선택한 스테이지에서 얻을 수 없는 이벤트 재화가 있어요.");
   });
 });

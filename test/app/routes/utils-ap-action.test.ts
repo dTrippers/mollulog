@@ -28,7 +28,7 @@ const eventContent = {
   startAt: "2026-09-30T02:00:00.000Z",
   endAt: "2026-10-13T01:59:00.000Z",
 };
-let accountApState = { accountLevel: null, cafeRank: null, comfort: null, eventPlans: {} };
+let accountApState = { accountLevel: null, cafeRank: null, comfort: null, tacticalApShopCount: 0, eventPlans: {} };
 let pyroxeneOptions = defaultPyroxenePlannerOptions;
 
 function actionArgs(fields: Record<string, string>) {
@@ -40,15 +40,22 @@ function actionArgs(fields: Record<string, string>) {
 }
 
 async function runAction(fields: Record<string, string>) {
-  return (await action(actionArgs(fields))) as {
-    data: { success: boolean; error?: string; revisionConflict?: boolean };
+  const submittedFields = fields.intent === "save-conditions" ? { tacticalApShopCount: "0", ...fields } : fields;
+  return (await action(actionArgs(submittedFields))) as {
+    data: {
+      success: boolean;
+      error?: string;
+      revisionConflict?: boolean;
+      requestId?: string;
+      failedDocuments?: Array<"ap" | "pyroxene">;
+    };
     init: { status: number };
   };
 }
 
 beforeEach(() => {
   jest.clearAllMocks();
-  accountApState = { accountLevel: null, cafeRank: null, comfort: null, eventPlans: {} };
+  accountApState = { accountLevel: null, cafeRank: null, comfort: null, tacticalApShopCount: 0, eventPlans: {} };
   pyroxeneOptions = defaultPyroxenePlannerOptions;
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
   mockGetEventMetadata.mockResolvedValue({ contentType: "event", shopAvailable: true });
@@ -79,20 +86,177 @@ describe("AP planner action", () => {
     ["cafeRank", "11"],
     ["apChargeCount", "21"],
     ["comfort", "5501"],
+    ["tacticalApShopCount", "5"],
   ])("rejects out-of-range %s values", async (field, value) => {
-    const response = await runAction({ intent: "save-condition", field, value });
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "8",
+      comfort: "4500",
+      tacticalApShopCount: "2",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+      [field]: value,
+    });
 
-    expect(response.init.status).toBe(400);
+    expect(response.init?.status).toBe(400);
     expect(response.data.success).toBe(false);
     expect(mockUpdateApPlannerState).not.toHaveBeenCalled();
     expect(mockUpdatePyroxenePlannerOptions).not.toHaveBeenCalled();
   });
 
   it("rejects comfort updates until the cafe rank is set", async () => {
-    const response = await runAction({ intent: "save-condition", field: "comfort", value: "1000" });
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "",
+      cafeRank: "",
+      comfort: "1000",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+    });
 
     expect(response.init.status).toBe(400);
     expect(response.data.error).toBe("카페 랭크를 먼저 입력해주세요.");
+  });
+
+  it("saves the other conditions when cafe rank and comfort are both empty", async () => {
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "",
+      comfort: "",
+      tacticalApShopCount: "2",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+    });
+
+    expect(response.data.success).toBe(true);
+    expect(response.init?.status).toBe(200);
+    expect(mockUpdateApPlannerState).toHaveBeenCalledTimes(1);
+    expect(accountApState).toMatchObject({
+      accountLevel: 85,
+      cafeRank: null,
+      comfort: null,
+      tacticalApShopCount: 2,
+    });
+  });
+
+  it("requires the tactical shop count on a conditions save", async () => {
+    const response = await action(
+      actionArgs({
+        intent: "save-conditions",
+        accountLevel: "85",
+        cafeRank: "8",
+        comfort: "4500",
+        apChargeCount: "0",
+        saveAp: "true",
+        savePyroxene: "false",
+      }),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(mockUpdateApPlannerState).not.toHaveBeenCalled();
+  });
+
+  it("writes only the AP document when only AP conditions changed", async () => {
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "8",
+      comfort: "4500",
+      tacticalApShopCount: "2",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+    });
+
+    expect(response.data.success).toBe(true);
+    expect(mockUpdateApPlannerState).toHaveBeenCalledTimes(1);
+    expect(mockUpdatePyroxenePlannerOptions).not.toHaveBeenCalled();
+    expect(accountApState).toMatchObject({ accountLevel: 85, cafeRank: 8, comfort: 4_500, tacticalApShopCount: 2 });
+  });
+
+  it("writes only the Pyroxene options document when only the charge count changed", async () => {
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "",
+      cafeRank: "",
+      comfort: "",
+      apChargeCount: "3",
+      saveAp: "false",
+      savePyroxene: "true",
+    });
+
+    expect(response.data.success).toBe(true);
+    expect(mockUpdateApPlannerState).not.toHaveBeenCalled();
+    expect(mockUpdatePyroxenePlannerOptions).toHaveBeenCalledTimes(1);
+    expect(pyroxeneOptions.consumption.apChargeCount).toBe(3);
+  });
+
+  it("reports which document failed when a conditions save is partial", async () => {
+    mockUpdatePyroxenePlannerOptions.mockRejectedValue(new Error("private storage detail"));
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "8",
+      comfort: "4500",
+      apChargeCount: "3",
+      saveAp: "true",
+      savePyroxene: "true",
+    });
+
+    expect(response.init.status).toBe(500);
+    expect(response.data.success).toBe(false);
+    expect(response.data.failedDocuments).toEqual(["pyroxene"]);
+    expect(response.data.error).toContain("매일 AP 충전 설정");
+    expect(JSON.stringify(response)).not.toContain("private storage detail");
+    expect(accountApState).toMatchObject({ accountLevel: 85, cafeRank: 8, comfort: 4_500 });
+  });
+
+  it("validates the full conditions draft before writing either document", async () => {
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "",
+      comfort: "1000",
+      apChargeCount: "3",
+      saveAp: "true",
+      savePyroxene: "true",
+    });
+
+    expect(response.init.status).toBe(400);
+    expect(response.data.error).toBe("카페 랭크를 먼저 입력해주세요.");
+    expect(mockUpdateApPlannerState).not.toHaveBeenCalled();
+    expect(mockUpdatePyroxenePlannerOptions).not.toHaveBeenCalled();
+  });
+
+  it("adds the plan and access time in one AP state update", async () => {
+    const response = await runAction({
+      intent: "add-plan-with-access",
+      eventUid: "event-1",
+      accessAt: eventContent.startAt,
+      requestId: "request-1",
+    });
+
+    expect(response.data.success).toBe(true);
+    expect(response.data.requestId).toBe("request-1");
+    expect(mockUpdateApPlannerState).toHaveBeenCalledTimes(1);
+    expect(accountApState.eventPlans).toEqual({ "event-1": { accessAt: eventContent.startAt } });
+  });
+
+  it("rejects a combined add when access time is outside the event range", async () => {
+    const response = await runAction({
+      intent: "add-plan-with-access",
+      eventUid: "event-1",
+      accessAt: eventContent.endAt,
+    });
+
+    expect(response.init.status).toBe(400);
+    expect(response.data.error).toBe("이벤트 시작 이후 종료 전 시각을 입력해주세요.");
+    expect(mockUpdateApPlannerState).not.toHaveBeenCalled();
   });
 
   it("rejects an access time outside the event date range", async () => {
@@ -115,7 +279,21 @@ describe("AP planner action", () => {
     });
 
     expect(response.init.status).toBe(400);
-    expect(response.data.error).toBe("먼저 AP 모으기 계획에 추가해주세요.");
+    expect(response.data.error).toBe("먼저 AP 모으기 계산을 등록해주세요.");
+  });
+
+  it("saves an access time for an existing plan that has no access time yet", async () => {
+    accountApState.eventPlans = { "event-1": { accessAt: null } };
+    const response = await runAction({
+      intent: "save-access-time",
+      eventUid: "event-1",
+      accessAt: eventContent.startAt,
+      requestId: "request-access",
+    });
+
+    expect(response.data.success).toBe(true);
+    expect(response.data.requestId).toBe("request-access");
+    expect(accountApState.eventPlans).toEqual({ "event-1": { accessAt: eventContent.startAt } });
   });
 
   it("returns 404 when adding a plan for an event without a shop", async () => {
@@ -151,7 +329,15 @@ describe("AP planner action", () => {
 
   it("returns the revision-conflict flag and message", async () => {
     mockUpdateApPlannerState.mockRejectedValue(new PlannerStateRevisionConflictError());
-    const response = await runAction({ intent: "save-condition", field: "accountLevel", value: "85" });
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "",
+      comfort: "",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+    });
 
     expect(response.init.status).toBe(409);
     expect(response.data).toMatchObject({
@@ -163,10 +349,18 @@ describe("AP planner action", () => {
 
   it("maps generic failures without exposing raw errors", async () => {
     mockUpdateApPlannerState.mockRejectedValue(new Error("sensitive database failure"));
-    const response = await runAction({ intent: "save-condition", field: "accountLevel", value: "85" });
+    const response = await runAction({
+      intent: "save-conditions",
+      accountLevel: "85",
+      cafeRank: "",
+      comfort: "",
+      apChargeCount: "0",
+      saveAp: "true",
+      savePyroxene: "false",
+    });
 
     expect(response.init.status).toBe(500);
-    expect(response.data.error).toBe("플레이 조건을 저장하지 못했어요. 다시 시도해주세요.");
+    expect(response.data.error).toBe("AP 조건을 저장하지 못했어요. 입력값은 유지돼요. 다시 시도해주세요.");
     expect(JSON.stringify(response)).not.toContain("sensitive database failure");
   });
 });

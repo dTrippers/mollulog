@@ -1,265 +1,152 @@
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { useEffect, useId, useState } from "react";
-import { Callout } from "~/components/primitives";
-import type { ApPlannerCalculation, ApPlannerConditions } from "~/domain/ap-planner";
-import {
-  cafeProduction,
-  comfortMaximum,
-  formatApDate,
-  formatApShortDate,
-  formatCafeApPerHour,
-  maxApForAccountLevel,
-} from "~/domain/ap-planner";
-import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { Button } from "~/components/primitives";
+import type { ApPlannerCalculation } from "~/domain/ap-planner";
+import { formatApDate, formatApShortDate } from "~/domain/ap-planner";
 import dayjs from "~/lib/dayjs";
+import ApDisclosureButton from "./ApDisclosureButton";
 
 const KST = "Asia/Seoul";
 
-export function UnverifiedRuleHelp({
-  label = "확인되지 않은 규칙 안내",
-  message = "공식 확인이 되지 않은 커뮤니티 정보입니다. 계산 결과를 보장하는 규칙으로 사용하지 않아요.",
-}: {
-  label?: string;
-  message?: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const tooltipId = useId();
-  return (
-    <span className="group relative inline-flex">
-      <button
-        type="button"
-        className="inline-grid size-5 place-items-center rounded-full bg-muted text-xs font-semibold text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        aria-label={label}
-        aria-expanded={open}
-        aria-describedby={open ? tooltipId : undefined}
-        onClick={() => setOpen((value) => !value)}
-      >
-        ?
-      </button>
-      <span
-        id={tooltipId}
-        role="tooltip"
-        className={`absolute bottom-full left-1/2 z-20 mb-2 w-64 -translate-x-1/2 rounded-md bg-popover p-3 text-xs font-normal text-popover-foreground shadow-lg ${open ? "block" : "hidden group-hover:block group-focus-within:block"}`}
-      >
-        {message}
-      </span>
-    </span>
-  );
-}
-
-function CalculationConditions({
-  conditions,
-  options,
-  exceptionCount,
-}: {
-  conditions: ApPlannerConditions;
-  options: PyroxenePlannerOptions;
-  exceptionCount: number;
-}) {
-  const cafe = conditions.cafeRank === null ? null : cafeProduction(conditions.cafeRank, conditions.comfort);
-  const levelMax = conditions.accountLevel === null ? null : maxApForAccountLevel(conditions.accountLevel);
-  return (
-    <div className="space-y-2 rounded-md bg-muted/60 p-3 text-sm">
-      <ul className="list-disc space-y-1 pl-5 text-muted-foreground">
-        <li>
-          {levelMax === null
-            ? "최대 AP와 레벨을 입력하지 않았어요."
-            : `최대 AP ${levelMax} (계정 레벨 ${conditions.accountLevel})`}
-        </li>
-        <li>자연 회복은 6분마다 1 AP이며 최대 AP에서 멈춰요.</li>
-        <li>
-          {cafe
-            ? `카페 시간당 약 ${formatCafeApPerHour(conditions.cafeRank as number, conditions.comfort)} AP (추정) · 보관 최대 ${cafe.storageMax}`
-            : "카페 랭크를 입력하지 않았어요."}
-        </li>
-        <li>일일 과제 AP는 하루 150 AP (가정)</li>
-        <li>
-          매일 AP 충전은 청휘석 플래너의 {options.consumption.apChargeCount}회 설정
-          {exceptionCount > 0 ? `(예외 ${exceptionCount}건 반영)` : ""}을 사용해요. (일일 초기화 오전 4시)
-        </li>
-        <li>
-          보유 AP가 999를 넘게 되는 AP 충전은 할 수 없다고 보고 계산해요. (커뮤니티 정보){" "}
-          <UnverifiedRuleHelp
-            label="AP 999 충전 제한 안내"
-            message="공식 확인이 되지 않은 커뮤니티 정보예요. 모으는 동안에는 충전 후 999 AP를 넘지 않는 횟수까지만 반영해요."
-          />
-        </li>
-        <li>
-          점검 중 자연 회복·카페 생산 여부는 확인되지 않았어요. <UnverifiedRuleHelp />
-        </li>
-        <li>AP 패키지로 받는 AP는 포함하지 않았어요.</li>
-      </ul>
-      {conditions.cafeRank !== null && conditions.comfort !== null ? (
-        <p className="text-xs text-muted-foreground">
-          편의성 최대 {comfortMaximum(conditions.cafeRank).toLocaleString()} · 카페 1호 생산량을 기준으로 추정해요.
-        </p>
-      ) : null}
-    </div>
-  );
+function dayDifference(fromDate: string, toDate: string) {
+  return dayjs.tz(`${fromDate}T12:00:00`, KST).diff(dayjs.tz(`${toDate}T12:00:00`, KST), "day");
 }
 
 export default function ApStockpileSteps({
   calculation,
-  conditions,
-  options,
-  eventEndAt = null,
+  eventStartAt,
+  accessAt,
+  disabled = false,
   initialExpanded = false,
-  initialConditionsExpanded = false,
+  onChangeAccessAt,
 }: {
   calculation: ApPlannerCalculation;
-  conditions: ApPlannerConditions;
-  options: PyroxenePlannerOptions;
-  eventEndAt?: string | null;
+  eventStartAt: string;
+  accessAt: string;
+  disabled?: boolean;
   initialExpanded?: boolean;
-  initialConditionsExpanded?: boolean;
+  onChangeAccessAt: () => void;
 }) {
   const [expanded, setExpanded] = useState(initialExpanded);
-  const [conditionsExpanded, setConditionsExpanded] = useState(initialConditionsExpanded);
+  const listId = useId();
   useEffect(() => setExpanded(initialExpanded), [initialExpanded]);
-  const access = calculation.stockpileSteps.find((step) => step.kind === "access");
-  const groups = new Map<string, typeof calculation.stockpileSteps>();
+
+  const accessStep = calculation.stockpileSteps.find((step) => step.kind === "access");
+  const accessDateKey = dayjs(accessAt).tz(KST).format("YYYY-MM-DD");
+  const eventDateKey = dayjs(eventStartAt).tz(KST).format("YYYY-MM-DD");
+  const groupedSteps = new Map<string, typeof calculation.stockpileSteps>();
   for (const step of calculation.stockpileSteps) {
-    const key = dayjs(step.at).tz(KST).format("YYYY-MM-DD");
-    groups.set(key, [...(groups.get(key) ?? []), step]);
+    const dateKey = dayjs(step.at).tz(KST).format("YYYY-MM-DD");
+    groupedSteps.set(dateKey, [...(groupedSteps.get(dateKey) ?? []), step]);
   }
-  const accessDateKey = access ? dayjs(access.at).tz(KST).format("YYYY-MM-DD") : null;
-  const startDateKey = calculation.stockpileStartsAt
-    ? dayjs(calculation.stockpileStartsAt).tz(KST).format("YYYY-MM-DD")
-    : null;
-  const chargeWindowStartDate = startDateKey ?? accessDateKey;
-  const chargeWindowEndDate = eventEndAt ? dayjs(eventEndAt).tz(KST).format("YYYY-MM-DD") : accessDateKey;
-  const appliedExceptionCount = options.consumption.apChargeExceptions.filter(
-    (exception) =>
-      chargeWindowStartDate !== null &&
-      chargeWindowEndDate !== null &&
-      exception.startDate <= chargeWindowEndDate &&
-      exception.endDate >= chargeWindowStartDate,
-  ).length;
+
+  const stockpileStart = calculation.stockpileStartsAt;
+  const startDateKey = stockpileStart ? dayjs(stockpileStart).tz(KST).format("YYYY-MM-DD") : null;
+  const startDaysBeforeAccess = startDateKey ? dayDifference(accessDateKey, startDateKey) : null;
+  const startLabel =
+    startDaysBeforeAccess === null
+      ? null
+      : startDaysBeforeAccess === 1
+        ? "하루 전"
+        : startDaysBeforeAccess === 0
+          ? accessDateKey === eventDateKey
+            ? "개최일"
+            : "접속일"
+          : `${startDaysBeforeAccess}일 전`;
+  const startValue =
+    stockpileStart && startLabel
+      ? `${startLabel} ${formatApDate(stockpileStart)} ${dayjs(stockpileStart).tz(KST).format("HH:mm")}`
+      : "모을 수 없어요";
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <p className="text-sm font-medium">AP 모으기</p>
-          <p className="text-sm text-muted-foreground">
-            {calculation.status === "ongoing"
-              ? "이벤트 종료까지 확보할 수 있는 AP를 계산해요"
-              : access && calculation.stockpileStartsAt
-                ? `${formatApDate(calculation.stockpileStartsAt)} ${dayjs(calculation.stockpileStartsAt).tz(KST).format("HH:mm")}부터 · 접속 시 약 ${access.ap.toLocaleString()} AP`
-                : calculation.overlapEventName
-                  ? "앞 이벤트가 접속 시간 뒤에 끝나서 미리 모을 AP가 없어요"
-                  : "접속 시간을 입력해주세요"}
-          </p>
+    <section className="space-y-3 break-keep">
+      <h4 className="text-sm font-semibold">AP 모으기</h4>
+      <dl className="space-y-2 text-sm sm:max-w-xl">
+        <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] gap-3">
+          <dt className="text-muted-foreground">모으기 시작</dt>
+          <dd className="font-medium tabular-nums">{startValue}</dd>
         </div>
-        {calculation.status !== "ongoing" && calculation.stockpileSteps.length > 0 ? (
-          <button
-            type="button"
-            aria-expanded={expanded}
-            className="inline-flex shrink-0 items-center gap-1 rounded-sm bg-muted px-2 py-1 text-xs font-medium hover:bg-muted/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded ? "접기" : "순서 보기"}
-            {expanded ? (
-              <ChevronUpIcon aria-hidden="true" className="size-3.5" />
-            ) : (
-              <ChevronDownIcon aria-hidden="true" className="size-3.5" />
-            )}
-          </button>
+        <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-3">
+          <dt className="text-muted-foreground">접속할 시각</dt>
+          <dd className="flex min-w-0 flex-wrap items-center gap-2 font-medium tabular-nums">
+            <span>{formatApShortDate(accessAt)}</span>
+            <Button text="변경" size="xs" variant="secondary" disabled={disabled} onClick={onChangeAccessAt} />
+          </dd>
+        </div>
+        {accessStep ? (
+          <div className="grid grid-cols-[5.25rem_minmax(0,1fr)] gap-3">
+            <dt className="text-muted-foreground">접속 시</dt>
+            <dd className="font-semibold tabular-nums">약 {accessStep.ap.toLocaleString()} AP 보유</dd>
+          </div>
         ) : null}
-      </div>
+      </dl>
+
       {calculation.overlapEventName ? (
         <p className="text-xs text-muted-foreground">
           {calculation.stockpileStartsAt
             ? `앞 이벤트(${calculation.overlapEventName})가 끝난 뒤부터 모아요.`
-            : `앞 이벤트(${calculation.overlapEventName})가 끝난 뒤부터 AP를 계산해요.`}
+            : `앞 이벤트(${calculation.overlapEventName})가 접속할 시각 뒤에 끝나서 미리 모을 AP가 없어요.`}
         </p>
       ) : null}
       {calculation.stockpileStartPassed && calculation.stockpileStartsAt ? (
-        <p className="text-xs text-amber-700 dark:text-amber-300">
-          모으기 시작 시각({formatApShortDate(calculation.stockpileStartsAt)})이 지났어요. 그때부터 AP를 쓰지 않았다고
-          가정한 값이에요.
-        </p>
+        <p className="text-xs text-muted-foreground">모으기 시작 시각이 지났어요. 그 뒤 AP를 쓰지 않았다고 가정해요.</p>
       ) : null}
-      {calculation.status === "ongoing" ? (
-        <p className="text-xs text-muted-foreground">
-          현재 보유 AP와 오늘 일일 과제 AP는 포함하지 않았어요. 오늘 과제는 이미 받았다고 보고 계산해요.
-        </p>
-      ) : expanded ? (
-        <Callout tone="default" className="p-3">
-          <div className="space-y-2">
-            <p className="text-sm font-normal text-muted-foreground">
-              계산 방식 및 계정 상태에 따라 정확하지 않을 수 있어요.
-            </p>
-            <button
-              type="button"
-              aria-expanded={conditionsExpanded}
-              className="inline-flex items-center gap-1 rounded-sm text-sm font-medium hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-              onClick={() => setConditionsExpanded((value) => !value)}
-            >
-              계산 조건 확인
-              {conditionsExpanded ? (
-                <ChevronUpIcon aria-hidden="true" className="size-4 text-muted-foreground" />
-              ) : (
-                <ChevronDownIcon aria-hidden="true" className="size-4 text-muted-foreground" />
-              )}
-            </button>
-            {conditionsExpanded ? (
-              <CalculationConditions conditions={conditions} options={options} exceptionCount={appliedExceptionCount} />
-            ) : null}
-          </div>
-          <ol className="mt-3 space-y-2">
-            {[...groups.entries()].map(([dateKey, steps]) => {
-              const daysBeforeAccess =
-                accessDateKey === null
-                  ? 1
-                  : dayjs.tz(`${accessDateKey}T12:00:00`, KST).diff(dayjs.tz(`${dateKey}T12:00:00`, KST), "day");
-              const label = dateKey === accessDateKey ? "· 시작" : `· D-${Math.max(1, daysBeforeAccess)}`;
-              return (
-                <li key={dateKey}>
-                  <div className="flex items-center gap-3 pb-2 pt-3">
-                    <span className="text-sm font-semibold tabular-nums text-muted-foreground">
-                      {dayjs.tz(`${dateKey}T12:00:00`, KST).format("M/D (ddd)")} {label}
-                    </span>
-                    <span className="h-px flex-1 bg-border" />
-                  </div>
-                  <ul className="space-y-1">
-                    {steps.map((step) => (
-                      <li
-                        key={`${step.at}:${step.kind}`}
-                        className="grid grid-cols-[3.5rem_minmax(0,1fr)_auto] items-baseline gap-2 px-2 py-1.5 text-sm"
-                      >
-                        <span className="font-medium tabular-nums">{dayjs(step.at).tz(KST).format("HH:mm")}</span>
-                        <span className="min-w-0 break-keep text-muted-foreground">
-                          {step.label}
-                          {step.kind === "drain" ? (
-                            <span className="ml-1 align-middle">
-                              <UnverifiedRuleHelp
-                                label="D-1 AP 사용 가정 안내"
-                                message="시작 전 모은 AP를 계산하기 위해 D-1 시작에 AP를 모두 사용하고 이후 AP를 쓰지 않는다고 가정해요."
-                              />
-                            </span>
-                          ) : null}
-                        </span>
-                        <span
-                          className={
-                            step.kind === "access"
-                              ? "whitespace-nowrap font-semibold tabular-nums text-foreground"
-                              : "whitespace-nowrap text-xs tabular-nums text-muted-foreground"
-                          }
+
+      {calculation.stockpileSteps.length > 0 ? (
+        <>
+          <ApDisclosureButton expanded={expanded} controls={listId} onClick={() => setExpanded((value) => !value)}>
+            모으기 순서 보기
+          </ApDisclosureButton>
+          <div id={listId} hidden={!expanded} className="space-y-4">
+            <ol className="space-y-4">
+              {[...groupedSteps.entries()].map(([dateKey, steps]) => {
+                const date = dayjs.tz(`${dateKey}T12:00:00`, KST);
+                const daysBeforeAccess = dayDifference(accessDateKey, dateKey);
+                const dayLabel =
+                  dateKey === accessDateKey
+                    ? accessDateKey === eventDateKey
+                      ? "개최일"
+                      : "접속일"
+                    : daysBeforeAccess === 1
+                      ? "하루 전"
+                      : `${Math.max(1, daysBeforeAccess)}일 전`;
+                return (
+                  <li key={dateKey} className="grid min-w-0 gap-1 md:grid-cols-[4.25rem_minmax(0,1fr)] md:gap-4">
+                    <div className="md:pt-1">
+                      <p className="whitespace-nowrap text-sm font-semibold text-foreground md:hidden">
+                        {dayLabel} · {date.format("M/D(ddd)")}
+                      </p>
+                      <p className="hidden text-sm font-semibold text-foreground md:block">{dayLabel}</p>
+                      <p className="hidden text-xs text-muted-foreground md:block">{date.format("M/D(ddd)")}</p>
+                    </div>
+                    <ul className="min-w-0 space-y-1">
+                      {steps.map((step) => (
+                        <li
+                          key={`${step.at}:${step.kind}`}
+                          className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-baseline gap-x-2 gap-y-1 py-1 text-sm md:grid-cols-[3.5rem_minmax(0,1fr)_auto]"
                         >
-                          {step.kind === "access"
-                            ? `사용 가능 약 ${step.ap.toLocaleString()} AP`
-                            : `보유 ${step.ap.toLocaleString()}`}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              );
-            })}
-          </ol>
-        </Callout>
+                          <span className="font-medium tabular-nums">{dayjs(step.at).tz(KST).format("HH:mm")}</span>
+                          <span className="min-w-0 text-muted-foreground">{step.label}</span>
+                          <span
+                            className={
+                              step.kind === "access"
+                                ? "whitespace-nowrap font-semibold tabular-nums"
+                                : "whitespace-nowrap text-xs tabular-nums text-muted-foreground"
+                            }
+                          >
+                            {step.kind === "access"
+                              ? `사용 가능 약 ${step.ap.toLocaleString()} AP`
+                              : `보유 ${step.ap.toLocaleString()}`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </>
       ) : null}
-    </div>
+    </section>
   );
 }
