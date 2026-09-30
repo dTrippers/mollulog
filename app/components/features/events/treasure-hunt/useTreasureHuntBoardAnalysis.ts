@@ -21,12 +21,13 @@ export function useTreasureHuntBoardAnalysis(
   const latestRequestIdRef = useRef(0);
   const spinnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const workerFailedRef = useRef(false);
+  const hasReceivedResultRef = useRef(false);
   const [workerGeneration, setWorkerGeneration] = useState(0);
   const [workerReadyGeneration, setWorkerReadyGeneration] = useState<number | null>(null);
   const [analysis, setAnalysis] = useState<TreasureHuntAnalysisState>({
     status: "calculating",
     result: null,
-    showSpinner: false,
+    showSpinner: true,
   });
 
   useEffect(() => {
@@ -49,6 +50,7 @@ export function useTreasureHuntBoardAnalysis(
           setAnalysis((current) => ({ ...current, status: "failed", showSpinner: false }));
           return;
         }
+        hasReceivedResultRef.current = true;
         setAnalysis({
           status: response.status,
           result: response,
@@ -96,7 +98,8 @@ export function useTreasureHuntBoardAnalysis(
     }
     const requestId = latestRequestIdRef.current + 1;
     latestRequestIdRef.current = requestId;
-    setAnalysis((current) => ({ ...current, status: "calculating", showSpinner: false }));
+    const showSpinnerImmediately = !hasReceivedResultRef.current;
+    setAnalysis((current) => ({ ...current, status: "calculating", showSpinner: showSpinnerImmediately }));
 
     const worker = workerRef.current;
     if (!worker) {
@@ -104,11 +107,13 @@ export function useTreasureHuntBoardAnalysis(
       return;
     }
 
-    spinnerTimerRef.current = setTimeout(() => {
-      if (latestRequestIdRef.current === requestId) {
-        setAnalysis((current) => ({ ...current, showSpinner: true }));
-      }
-    }, 300);
+    if (!showSpinnerImmediately) {
+      spinnerTimerRef.current = setTimeout(() => {
+        if (latestRequestIdRef.current === requestId) {
+          setAnalysis((current) => ({ ...current, showSpinner: true }));
+        }
+      }, 300);
+    }
 
     try {
       worker.postMessage({ type: "analyze", requestId, composition, observation });

@@ -59,7 +59,6 @@ export function TreasureHuntRoundDetails({ config }: { config: TreasureHuntConfi
                 label={isLoop ? treasureHuntLocale.roundAfter(config.loopRound) : `${round.round}회차`}
                 theoreticalMinCost={occupiedCells * round.cellCost.quantity}
                 theoreticalMaxCost={totalCells * round.cellCost.quantity}
-                presentation="details"
               />
             );
           })}

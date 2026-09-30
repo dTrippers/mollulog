@@ -14,7 +14,6 @@ type TreasureHuntRoundRowProps = {
   label: string;
   theoreticalMinCost: number;
   theoreticalMaxCost: number;
-  presentation?: "shop" | "details";
   simulation?: TreasureHuntRoundSimulation;
 };
 
@@ -39,15 +38,9 @@ export function ShapeIcon({ width, height }: { width: number; height: number }) 
   );
 }
 
-export function TreasureHuntResourceCards({
-  rewards,
-  className,
-}: {
-  rewards: readonly RewardItem[];
-  className?: string;
-}) {
+export function TreasureHuntResourceCards({ rewards }: { rewards: readonly RewardItem[] }) {
   return (
-    <div className={`flex flex-wrap gap-1 ${className ?? ""}`}>
+    <div className="flex flex-wrap gap-1">
       {rewards.map((reward) => (
         <ResourceCard
           key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
@@ -68,66 +61,53 @@ export function TreasureHuntRoundRow({
   label,
   theoreticalMinCost,
   theoreticalMaxCost,
-  presentation = "details",
   simulation,
 }: TreasureHuntRoundRowProps) {
-  if (presentation === "shop") {
-    return (
-      <div className="flex flex-col gap-1.5 rounded-md bg-muted p-2 sm:flex-row sm:items-start">
-        <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-foreground sm:w-28">{label}</span>
-        <div className="min-w-0 flex-1 space-y-2">
-          <div className="flex flex-col items-start gap-0.5 sm:items-end">
+  return (
+    <div className="space-y-2 rounded-md bg-muted p-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="whitespace-nowrap text-sm font-semibold text-foreground">{label}</span>
+        <div className="ml-auto flex flex-col items-end gap-0.5 text-right">
+          {simulation ? (
             <div className="flex items-center gap-1">
               <span className="text-xs font-medium text-muted-foreground">{treasureHuntLocale.requiredResources}</span>
               <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground">
-                {simulation?.requiredText}
-                {simulation?.isCalculating && <RoundProgressSpinner />}
+                {simulation.requiredText}
+                {simulation.isCalculating && <RoundProgressSpinner />}
               </span>
             </div>
-            <span className="text-xs text-muted-foreground">
-              이론상 {theoreticalMinCost.toLocaleString()}~{theoreticalMaxCost.toLocaleString()}
-            </span>
+          ) : null}
+          <span className="text-xs tabular-nums text-muted-foreground">
+            이론상 {theoreticalMinCost.toLocaleString()}~{theoreticalMaxCost.toLocaleString()}
+          </span>
+        </div>
+      </div>
+      <div className="space-y-3 sm:space-y-2">
+        {config.treasures.map((treasure) => (
+          <div
+            key={treasure.uid}
+            className="grid grid-cols-1 gap-y-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start sm:gap-x-2"
+          >
+            <TreasureRowLabel treasure={treasure} className="sm:h-10" />
+            <TreasureHuntResourceCards
+              rewards={treasure.rewards.map((reward) => ({ ...reward, quantity: reward.quantity * treasure.count }))}
+            />
           </div>
-          {config.treasures.map((treasure) => (
-            <div
-              key={treasure.uid}
-              className="grid min-w-0 grid-cols-1 gap-y-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-x-2"
-            >
-              <TreasureRowLabel treasure={treasure} />
-              <TreasureHuntResourceCards
-                rewards={treasure.rewards.map((reward) => ({ ...reward, quantity: reward.quantity * treasure.count }))}
-              />
-            </div>
-          ))}
-        </div>
+        ))}
       </div>
-    );
-  }
-
-  return (
-    <div className="space-y-2 rounded-md bg-muted p-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold text-foreground">{label}</span>
-        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-          이론상 {theoreticalMinCost.toLocaleString()}~{theoreticalMaxCost.toLocaleString()}
-        </span>
-      </div>
-      {config.treasures.map((treasure) => (
-        <div key={treasure.uid} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2">
-          <TreasureRowLabel treasure={treasure} />
-          <TreasureHuntResourceCards
-            rewards={treasure.rewards.map((reward) => ({ ...reward, quantity: reward.quantity * treasure.count }))}
-            className="min-w-0"
-          />
-        </div>
-      ))}
     </div>
   );
 }
 
-function TreasureRowLabel({ treasure }: { treasure: TreasureHuntRoundConfig["treasures"][number] }) {
+function TreasureRowLabel({
+  treasure,
+  className,
+}: {
+  treasure: TreasureHuntRoundConfig["treasures"][number];
+  className?: string;
+}) {
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className={`flex min-w-0 items-center gap-2 ${className ?? ""}`}>
       <ShapeIcon width={treasure.width} height={treasure.height} />
       <span className="min-w-0 whitespace-nowrap text-xs text-muted-foreground">
         {treasure.width}×{treasure.height} · {treasure.count.toLocaleString()}개

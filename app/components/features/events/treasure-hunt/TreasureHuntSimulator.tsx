@@ -1,3 +1,4 @@
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Callout, FilterButtons, Section } from "~/components/primitives";
 import type { TreasureHuntConfig } from "~/domain/event-shop";
@@ -401,145 +402,155 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
           ) : null}
 
           <div className="space-y-3 rounded-md bg-card p-2 md:p-3">
-            <div className="mb-2 flex min-h-5 items-center justify-between gap-2 text-xs text-muted-foreground">
+            <div className="mb-2 min-h-5 text-xs text-muted-foreground">
               <p>{treasureHuntLocale.boardCaption}</p>
-              {isCalculating && analysis.showSpinner ? (
-                <span className="inline-flex items-center gap-1.5" role="status">
-                  <span className="size-3.5 animate-spin rounded-full border-2 border-muted-foreground/40 border-t-primary motion-reduce:animate-none" />
-                  {treasureHuntLocale.boardCalculating}
-                </span>
-              ) : null}
             </div>
-            {/* biome-ignore lint/a11y/useSemanticElements: The interactive CSS grid uses roving focus and spanning treasure blocks that a native table cannot preserve. */}
-            <div
-              ref={gridRef}
-              role="grid"
-              aria-label={treasureHuntLocale.boardTitle}
-              aria-rowcount={composition.boardHeight}
-              aria-colcount={composition.boardWidth}
-              className={`relative grid w-full gap-0.5 ${isCalculating && probabilityAvailable ? "opacity-50" : ""}`}
-              style={{
-                gridTemplateColumns: `repeat(${composition.boardWidth}, minmax(0, 1fr))`,
-                gridTemplateRows: `repeat(${composition.boardHeight}, minmax(0, 1fr))`,
-                aspectRatio: `${composition.boardWidth} / ${composition.boardHeight}`,
-              }}
-            >
-              {boardCoordinates.map(({ x, y }) => {
-                const key = coordinateKey(x, y);
-                if (foundByCell.has(key)) return null;
-                const isEmpty = knownEmpty.has(key);
-                const probability = analysis.result?.cells?.[y]?.[x];
-                const canShowProbability =
-                  !complete && probabilityAvailable && !isEmpty && probability !== null && probability !== undefined;
-                const isRecommended = recommendationsVisible && recommended.has(key);
-                const isFocused = focusedCell.x === x && focusedCell.y === y;
-                const isInvalid = invalidCell?.x === x && invalidCell?.y === y;
-                const ghostAnchor = placement && cellPointer?.x === x && cellPointer.y === y;
-                const tileClass = isEmpty
-                  ? "border border-border bg-background text-transparent"
-                  : canShowProbability
-                    ? probabilityClass(probabilityPercent(probability))
-                    : complete
-                      ? "bg-muted text-transparent"
-                      : "bg-muted text-muted-foreground";
-                return (
-                  // biome-ignore lint/a11y/useSemanticElements: Native buttons provide keyboard-operable controls for this custom ARIA gridcell.
-                  <button
-                    key={key}
-                    type="button"
-                    role="gridcell"
-                    aria-rowindex={y + 1}
-                    aria-colindex={x + 1}
-                    aria-label={getCellLabel({
-                      x,
-                      y,
-                      probability: canShowProbability ? probability : null,
-                      recommended: isRecommended,
-                      empty: isEmpty,
-                      complete,
-                    })}
-                    disabled={complete}
-                    tabIndex={isFocused ? 0 : -1}
-                    data-board-x={x}
-                    data-board-y={y}
-                    onFocus={() => {
-                      setKeyboardCoordinate({ x, y });
-                      setCellPointer({ x, y });
-                    }}
-                    onBlur={() => setCellPointer(null)}
-                    onMouseEnter={() => setCellPointer({ x, y })}
-                    onMouseLeave={() => setCellPointer(null)}
-                    onClick={() => handleCellClick({ x, y })}
-                    className={`relative z-0 flex aspect-square min-w-0 items-center justify-center rounded-sm text-xs tabular-nums transition-colors md:text-sm ${tileClass} ${isRecommended ? "ring-2 ring-inset ring-primary font-bold" : ""} ${isFocused ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""} ${isInvalid ? "!border-2 !border-destructive" : ""} ${ghostAnchor && placementPreview?.valid ? "ring-2 ring-inset ring-primary" : ""} ${ghostAnchor && placementPreview && !placementPreview.valid ? "!border-2 !border-destructive" : ""}`}
-                    style={{ gridColumn: x + 1, gridRow: y + 1 }}
-                  >
-                    {canShowProbability ? probabilityPercent(probability) : null}
-                  </button>
-                );
-              })}
+            <div className="relative">
+              {/* biome-ignore lint/a11y/useSemanticElements: The interactive CSS grid uses roving focus and spanning treasure blocks that a native table cannot preserve. */}
+              <div
+                ref={gridRef}
+                role="grid"
+                aria-label={treasureHuntLocale.boardTitle}
+                aria-rowcount={composition.boardHeight}
+                aria-colcount={composition.boardWidth}
+                className={`relative grid w-full gap-0.5 transition-opacity duration-150 motion-reduce:transition-none ${isCalculating && (probabilityAvailable || analysis.showSpinner) ? "opacity-50" : ""}`}
+                style={{
+                  gridTemplateColumns: `repeat(${composition.boardWidth}, minmax(0, 1fr))`,
+                  gridTemplateRows: `repeat(${composition.boardHeight}, minmax(0, 1fr))`,
+                  aspectRatio: `${composition.boardWidth} / ${composition.boardHeight}`,
+                }}
+              >
+                {boardCoordinates.map(({ x, y }) => {
+                  const key = coordinateKey(x, y);
+                  if (foundByCell.has(key)) return null;
+                  const isEmpty = knownEmpty.has(key);
+                  const probability = analysis.result?.cells?.[y]?.[x];
+                  const canShowProbability =
+                    !complete && probabilityAvailable && !isEmpty && probability !== null && probability !== undefined;
+                  const isRecommended = recommendationsVisible && recommended.has(key);
+                  const isFocused = focusedCell.x === x && focusedCell.y === y;
+                  const isInvalid = invalidCell?.x === x && invalidCell?.y === y;
+                  const ghostAnchor = placement && cellPointer?.x === x && cellPointer.y === y;
+                  const tileClass = isEmpty
+                    ? "border border-border bg-background text-transparent"
+                    : canShowProbability
+                      ? probabilityClass(probabilityPercent(probability))
+                      : complete
+                        ? "bg-muted text-transparent"
+                        : "bg-muted text-muted-foreground";
+                  return (
+                    // biome-ignore lint/a11y/useSemanticElements: Native buttons provide keyboard-operable controls for this custom ARIA gridcell.
+                    <button
+                      key={key}
+                      type="button"
+                      role="gridcell"
+                      aria-rowindex={y + 1}
+                      aria-colindex={x + 1}
+                      aria-label={getCellLabel({
+                        x,
+                        y,
+                        probability: canShowProbability ? probability : null,
+                        recommended: isRecommended,
+                        empty: isEmpty,
+                        complete,
+                      })}
+                      disabled={complete}
+                      tabIndex={isFocused ? 0 : -1}
+                      data-board-x={x}
+                      data-board-y={y}
+                      onFocus={() => {
+                        setKeyboardCoordinate({ x, y });
+                        setCellPointer({ x, y });
+                      }}
+                      onBlur={() => setCellPointer(null)}
+                      onMouseEnter={() => setCellPointer({ x, y })}
+                      onMouseLeave={() => setCellPointer(null)}
+                      onClick={() => handleCellClick({ x, y })}
+                      className={`relative z-0 flex aspect-square min-w-0 items-center justify-center rounded-sm text-xs tabular-nums transition-colors md:text-sm ${tileClass} ${isRecommended ? "ring-2 ring-inset ring-primary font-bold" : ""} ${isFocused ? "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" : ""} ${isInvalid ? "!border-2 !border-destructive" : ""} ${ghostAnchor && placementPreview?.valid ? "ring-2 ring-inset ring-primary" : ""} ${ghostAnchor && placementPreview && !placementPreview.valid ? "!border-2 !border-destructive" : ""}`}
+                      style={{ gridColumn: x + 1, gridRow: y + 1 }}
+                    >
+                      {canShowProbability ? probabilityPercent(probability) : null}
+                    </button>
+                  );
+                })}
 
-              {persisted.board.foundTreasures.map((treasure) => {
-                if (
-                  treasure.x < 0 ||
-                  treasure.y < 0 ||
-                  treasure.x >= composition.boardWidth ||
-                  treasure.y >= composition.boardHeight
-                ) {
-                  return null;
-                }
-                const size = placementSize(treasure.width, treasure.height, treasure.orientation);
-                const visibleWidth = Math.min(size.width, composition.boardWidth - treasure.x);
-                const visibleHeight = Math.min(size.height, composition.boardHeight - treasure.y);
-                const selected = selectedTreasureId === treasure.id;
-                return (
-                  // biome-ignore lint/a11y/useSemanticElements: Native buttons provide keyboard-operable controls for this custom ARIA gridcell.
-                  <button
-                    key={`treasure-${treasure.id}`}
-                    type="button"
-                    role="gridcell"
-                    aria-rowindex={treasure.y + 1}
-                    aria-colindex={treasure.x + 1}
-                    aria-label={`${treasure.y + 1}행 ${treasure.x + 1}열, ${treasure.width}×${treasure.height} 보물`}
-                    aria-selected={selected}
-                    tabIndex={focusedCell.x === treasure.x && focusedCell.y === treasure.y ? 0 : -1}
-                    data-board-x={treasure.x}
-                    data-board-y={treasure.y}
-                    onFocus={() => {
-                      setKeyboardCoordinate({ x: treasure.x, y: treasure.y });
-                      setCellPointer({ x: treasure.x, y: treasure.y });
-                    }}
-                    onBlur={() => setCellPointer(null)}
-                    onMouseEnter={() => setCellPointer({ x: treasure.x, y: treasure.y })}
-                    onMouseLeave={() => setCellPointer(null)}
-                    onClick={() => {
-                      if (placement) {
-                        handleCellClick({ x: treasure.x, y: treasure.y });
-                        return;
-                      }
-                      setLastRecordedTreasure(null);
-                      setSelectedTreasureId(treasure.id);
-                      setToolAnnouncement(treasureHuntLocale.treasureSelected(treasure.width, treasure.height));
-                    }}
-                    className={`z-10 flex min-h-0 items-center justify-center rounded-sm bg-foreground/60 text-xs font-medium text-background ${selected ? "ring-2 ring-inset ring-primary" : ""}`}
+                {persisted.board.foundTreasures.map((treasure) => {
+                  if (
+                    treasure.x < 0 ||
+                    treasure.y < 0 ||
+                    treasure.x >= composition.boardWidth ||
+                    treasure.y >= composition.boardHeight
+                  ) {
+                    return null;
+                  }
+                  const size = placementSize(treasure.width, treasure.height, treasure.orientation);
+                  const visibleWidth = Math.min(size.width, composition.boardWidth - treasure.x);
+                  const visibleHeight = Math.min(size.height, composition.boardHeight - treasure.y);
+                  const selected = selectedTreasureId === treasure.id;
+                  return (
+                    // biome-ignore lint/a11y/useSemanticElements: Native buttons provide keyboard-operable controls for this custom ARIA gridcell.
+                    <button
+                      key={`treasure-${treasure.id}`}
+                      type="button"
+                      role="gridcell"
+                      aria-rowindex={treasure.y + 1}
+                      aria-colindex={treasure.x + 1}
+                      aria-label={`${treasure.y + 1}행 ${treasure.x + 1}열, ${treasure.width}×${treasure.height} 보물`}
+                      aria-selected={selected}
+                      tabIndex={focusedCell.x === treasure.x && focusedCell.y === treasure.y ? 0 : -1}
+                      data-board-x={treasure.x}
+                      data-board-y={treasure.y}
+                      onFocus={() => {
+                        setKeyboardCoordinate({ x: treasure.x, y: treasure.y });
+                        setCellPointer({ x: treasure.x, y: treasure.y });
+                      }}
+                      onBlur={() => setCellPointer(null)}
+                      onMouseEnter={() => setCellPointer({ x: treasure.x, y: treasure.y })}
+                      onMouseLeave={() => setCellPointer(null)}
+                      onClick={() => {
+                        if (placement) {
+                          handleCellClick({ x: treasure.x, y: treasure.y });
+                          return;
+                        }
+                        setLastRecordedTreasure(null);
+                        setSelectedTreasureId(treasure.id);
+                        setToolAnnouncement(treasureHuntLocale.treasureSelected(treasure.width, treasure.height));
+                      }}
+                      className={`z-10 flex min-h-0 items-center justify-center rounded-sm bg-foreground/60 text-xs font-medium text-background ${selected ? "ring-2 ring-inset ring-primary" : ""}`}
+                      style={{
+                        gridColumn: `${treasure.x + 1} / span ${visibleWidth}`,
+                        gridRow: `${treasure.y + 1} / span ${visibleHeight}`,
+                      }}
+                    >
+                      {treasure.width}×{treasure.height}
+                    </button>
+                  );
+                })}
+
+                {placementPreview && cellPointer ? (
+                  <div
+                    aria-hidden="true"
+                    className={`pointer-events-none z-20 rounded-sm border-2 border-dashed ${placementPreview.valid ? "border-primary bg-primary/20" : "border-destructive bg-destructive/20"}`}
                     style={{
-                      gridColumn: `${treasure.x + 1} / span ${visibleWidth}`,
-                      gridRow: `${treasure.y + 1} / span ${visibleHeight}`,
+                      gridColumn: `${cellPointer.x + 1} / span ${placementPreview.width}`,
+                      gridRow: `${cellPointer.y + 1} / span ${placementPreview.height}`,
                     }}
+                  />
+                ) : null}
+              </div>
+              {isCalculating && analysis.showSpinner ? (
+                <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center">
+                  <span
+                    role="status"
+                    className="inline-flex items-center gap-1.5 rounded-md bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20"
                   >
-                    {treasure.width}×{treasure.height}
-                  </button>
-                );
-              })}
-
-              {placementPreview && cellPointer ? (
-                <div
-                  aria-hidden="true"
-                  className={`pointer-events-none z-20 rounded-sm border-2 border-dashed ${placementPreview.valid ? "border-primary bg-primary/20" : "border-destructive bg-destructive/20"}`}
-                  style={{
-                    gridColumn: `${cellPointer.x + 1} / span ${placementPreview.width}`,
-                    gridRow: `${cellPointer.y + 1} / span ${placementPreview.height}`,
-                  }}
-                />
+                    <ArrowPathIcon
+                      className="size-4 shrink-0 animate-spin text-muted-foreground motion-reduce:animate-none"
+                      aria-hidden="true"
+                    />
+                    {treasureHuntLocale.boardCalculating}
+                  </span>
+                </div>
               ) : null}
             </div>
             <div className="space-y-3">

@@ -394,7 +394,6 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
                   label={loopLabel}
                   theoreticalMinCost={round.theoreticalMin * round.config.cellCost.quantity}
                   theoreticalMaxCost={round.theoreticalMax * round.config.cellCost.quantity}
-                  presentation="shop"
                   simulation={{ requiredText, isCalculating: round.isCalculating }}
                 />
               );
