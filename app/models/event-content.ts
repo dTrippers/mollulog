@@ -47,6 +47,8 @@ export async function getEventMetadata(env: Env, timelineUid: string, ctx?: Exec
   };
 }
 
+type EventMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+
 export type ShopAvailableEvent = {
   uid: string;
   name: string;
@@ -269,6 +271,16 @@ const eventContentShopContentQuery = graphql(`
           }
           rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
         }
+      }
+    }
+  }
+`);
+
+const eventContentMinigameTypeQuery = graphql(`
+  query EventContentMinigameType($eventUid: String!, $runType: RunTypeEnum!) {
+    eventContent(uid: $eventUid) {
+      minigameConfigs(runType: $runType) {
+        minigameType
       }
     }
   }
@@ -564,6 +576,10 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
     return null;
   }
 
+  return getEventShopContentForMetadata(env, metadata, forceRefresh);
+}
+
+export async function getEventShopContentForMetadata(env: Env, metadata: EventMetadata, forceRefresh = false) {
   const shopContentUid = metadata.shopContentUid ?? metadata.contentUid;
   if (!shopContentUid) {
     return null;
@@ -590,6 +606,38 @@ export async function getEventShopContent(env: Env, timelineUid: string, forceRe
         eventRewardBonus: transformBonuses(bonuses),
         minigameConfig: transformMinigameConfigs(minigameConfigs),
       };
+    },
+    EVENT_STATIC_CONTENT_TTL,
+    forceRefresh,
+  );
+}
+
+/** Gets the cached minigame type using event metadata already loaded by the caller. */
+export async function getEventMinigameType(
+  env: Env,
+  metadata: EventMetadata,
+  forceRefresh = false,
+): Promise<MinigameConfig["minigameType"] | null> {
+  const contentUid = metadata.shopContentUid ?? metadata.contentUid;
+  if (!contentUid) {
+    return null;
+  }
+
+  const { runType } = metadata;
+  return fetchLazySourceCached(
+    env,
+    cacheKey("source", "event-minigame-type", 1, cacheQuery({ contentUid, runType })),
+    async () => {
+      const { data, error } = await runQuery(eventContentMinigameTypeQuery, {
+        eventUid: contentUid,
+        runType: toRunTypeEnum(runType),
+      });
+      if (error || !data) {
+        throw error ?? new Error("Failed to fetch event minigame type.");
+      }
+
+      const minigameType = data.eventContent?.minigameConfigs[0]?.minigameType;
+      return (minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
     },
     EVENT_STATIC_CONTENT_TTL,
     forceRefresh,

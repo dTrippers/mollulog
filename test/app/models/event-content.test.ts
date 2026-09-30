@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { print } from "graphql";
+import { RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { fetchLazySourceCached, fetchRouteCached, fetchSourceCached } from "~/lib/cache";
 import { getAllTimelineContentsMeta, getTimelineContent, getTimelineContents } from "~/models/timeline-content.server";
 import {
   getEventContentSchedule,
   getEventMetadata,
+  getEventMinigameType,
   getEventShopContent,
   getShopAvailableEvents,
 } from "../../../app/models/event-content";
@@ -45,6 +48,35 @@ const mockedFetchSourceCached = fetchSourceCached as jest.MockedFunction<typeof 
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
 
 const env = {} as Env;
+
+type EventMetadata = Parameters<typeof getEventMinigameType>[1];
+
+function createEventMetadata(overrides: Partial<EventMetadata> = {}): EventMetadata {
+  return {
+    name: "이벤트",
+    contentType: "event",
+    runType: "first",
+    since: "2026-01-01T00:00:00.000Z",
+    until: null,
+    contentUid: "event-content",
+    shopContentUid: "shop-content",
+    recruitmentGroupUid: null,
+    isSpoiler: false,
+    shopAvailable: true,
+    ...overrides,
+  };
+}
+
+function queryResult(data: unknown, error?: unknown) {
+  return {
+    data,
+    error,
+    extensions: undefined,
+    operation: {} as never,
+    stale: false,
+    hasNext: false,
+  };
+}
 
 function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType<typeof getTimelineContent>>>> = {}) {
   return {
@@ -709,5 +741,93 @@ describe("getEventContentSchedule", () => {
       7 * 24 * 60 * 60,
       true,
     );
+  });
+});
+
+describe("getEventMinigameType", () => {
+  it("uses a focused query, its own source key, and the first run-specific config", async () => {
+    mockedRunQuery.mockResolvedValue(
+      queryResult({
+        eventContent: {
+          minigameConfigs: [{ minigameType: "dice" }, { minigameType: "treasure_hunt" }],
+        },
+      }) as never,
+    );
+
+    await expect(
+      getEventMinigameType(
+        env,
+        createEventMetadata({ runType: "rerun", contentUid: "timeline-content", shopContentUid: "shop-content" }),
+        true,
+      ),
+    ).resolves.toBe("dice");
+
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-minigame-type::v1::contentUid=shop-content::runType=rerun",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      true,
+    );
+    expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
+      eventUid: "shop-content",
+      runType: RunTypeEnum.Rerun,
+    });
+    const queryCall = mockedRunQuery.mock.calls[0];
+    if (!queryCall) throw new Error("Expected the focused minigame type query to run.");
+    const queryText = print(queryCall[0]);
+    expect(queryText).toContain("minigameConfigs(runType: $runType)");
+    expect(queryText).toContain("minigameType");
+    expect(queryText).not.toContain("shopResources");
+    expect(queryText).not.toContain("stages(");
+    expect(queryText).not.toContain("bonuses(");
+  });
+
+  it("falls back to contentUid and caches successful absence by run type", async () => {
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: { minigameConfigs: [] } }) as never);
+
+    await expect(
+      getEventMinigameType(
+        env,
+        createEventMetadata({ contentUid: "base-content", shopContentUid: null, runType: "permanent" }),
+      ),
+    ).resolves.toBeNull();
+
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-minigame-type::v1::contentUid=base-content::runType=permanent",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      false,
+    );
+    expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
+      eventUid: "base-content",
+      runType: RunTypeEnum.Permanent,
+    });
+  });
+
+  it("returns null when BAQL successfully reports no event content", async () => {
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: null }) as never);
+
+    await expect(getEventMinigameType(env, createEventMetadata())).resolves.toBeNull();
+  });
+
+  it("preserves GraphQL and transport failures instead of converting them to absence", async () => {
+    const graphQLError = new Error("upstream GraphQL failure");
+    mockedRunQuery.mockResolvedValue(queryResult(null, graphQLError) as never);
+    await expect(getEventMinigameType(env, createEventMetadata())).rejects.toBe(graphQLError);
+
+    const transportError = new Error("upstream transport failure");
+    mockedRunQuery.mockRejectedValue(transportError);
+    await expect(getEventMinigameType(env, createEventMetadata())).rejects.toBe(transportError);
+  });
+
+  it("does not query or cache when neither content UID is available", async () => {
+    await expect(
+      getEventMinigameType(env, createEventMetadata({ contentUid: null, shopContentUid: null })),
+    ).resolves.toBeNull();
+
+    expect(mockedFetchLazySourceCached).not.toHaveBeenCalled();
+    expect(mockedRunQuery).not.toHaveBeenCalled();
   });
 });

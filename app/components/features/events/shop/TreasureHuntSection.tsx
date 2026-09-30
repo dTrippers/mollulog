@@ -1,16 +1,14 @@
 import { ArrowPathIcon, ChevronDownIcon } from "@heroicons/react/16/solid";
+import { Squares2X2Icon } from "@heroicons/react/24/outline";
 import { useId, useState } from "react";
+import { useParams } from "react-router";
 import {
-  Button,
-  Callout,
-  Checkbox,
-  FilterButtons,
-  HoverTooltip,
-  NumberInput,
-  ResourceCard,
-  Section,
-} from "~/components/primitives";
-import type { RewardItem, TreasureHuntConfig } from "~/domain/event-shop";
+  TreasureHuntResourceCards,
+  TreasureHuntRoundRow as TreasureHuntRoundDetailRow,
+} from "~/components/features/events/treasure-hunt/TreasureHuntRoundRow";
+import PageLink from "~/components/features/layout/PageLink";
+import { Button, Callout, Checkbox, FilterButtons, NumberInput, ResourceCard, Section } from "~/components/primitives";
+import type { TreasureHuntConfig } from "~/domain/event-shop";
 import { treasureHuntLocale } from "~/locales/ko";
 import type { ShopActions, ShopState } from "./hooks";
 import {
@@ -61,45 +59,6 @@ function ProgressSpinner({
   );
 }
 
-function ResourceCards({ rewards }: { rewards: readonly RewardItem[] }) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {rewards.map((reward) => (
-        <ResourceCard
-          key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
-          resourceType={reward.resourceType}
-          itemUid={reward.resourceUid}
-          imageUrl={reward.imageUrl ?? undefined}
-          rarity={reward.rarity}
-          label={resourceCountLabel(reward.quantity)}
-          name={reward.resourceName}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ShapeIcon({ width, height }: { width: number; height: number }) {
-  const ariaLabel = `가로 ${width} 세로 ${height} 보물`;
-  return (
-    <HoverTooltip content={`${width}×${height} · 회전해서 놓일 수 있어요`} focusable>
-      <span role="img" aria-label={ariaLabel} className="inline-flex w-7 shrink-0 items-center justify-center">
-        <span
-          className="grid gap-px"
-          style={{ gridTemplateColumns: `repeat(${width}, minmax(0, 1fr))` }}
-          aria-hidden="true"
-        >
-          {Array.from({ length: width * height }, (_, index) => {
-            const row = Math.floor(index / width);
-            const column = index % width;
-            return <span key={`${row}-${column}`} className="size-1.5 bg-foreground/60" />;
-          })}
-        </span>
-      </span>
-    </HoverTooltip>
-  );
-}
-
 function RoundRangeText({
   rows,
   targetRound,
@@ -118,6 +77,7 @@ function RoundRangeText({
 }
 
 export function TreasureHuntSection({ treasureHunt, state, actions, calculation }: TreasureHuntSectionProps) {
+  const { uid } = useParams();
   const [showCompletedRound, setShowCompletedRound] = useState(state.minigameStartRound > 1);
   const [showRoundDetails, setShowRoundDetails] = useState(false);
   const costGroupId = useId();
@@ -182,6 +142,7 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
         defaultExpanded
       >
         <Callout>{treasureHuntLocale.incompatible}</Callout>
+        {treasureHunt && uid && <TreasureHuntSimulatorLink eventUid={uid} />}
       </Section>
     );
   }
@@ -330,7 +291,7 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
           <div className="mt-2 space-y-3">
             <div>
               <p className="mb-2 text-xs font-medium text-muted-foreground">{treasureHuntLocale.treasureRewards}</p>
-              <ResourceCards rewards={treasureRewards} />
+              <TreasureHuntResourceCards rewards={treasureRewards} />
             </div>
             <div>
               <p className="mb-2 text-xs font-medium tabular-nums text-muted-foreground">
@@ -353,7 +314,7 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
                   ))}
                 </div>
               ) : (
-                <ResourceCards rewards={openCellRewards} />
+                <TreasureHuntResourceCards rewards={openCellRewards} />
               )}
             </div>
           </div>
@@ -417,60 +378,43 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
 
         {showRoundDetails && (
           <div id={roundDetailsId} className="mt-2 space-y-1.5">
-            {roundEstimates.map((round) => (
-              <RoundDetailRow key={`${round.round}:${round.isLoop ? "loop" : "round"}`} round={round} />
-            ))}
+            {roundEstimates.map((round) => {
+              const requiredText = round.failed
+                ? treasureHuntLocale.calculationFailed
+                : round.payment
+                  ? `${round.payment.quantity.toLocaleString()}개`
+                  : treasureHuntLocale.calculatingShort;
+              const loopLabel = round.isLoop
+                ? `${round.round}회차 이후 ×${round.multiplicity.toLocaleString()}`
+                : `${round.round}회차`;
+              return (
+                <TreasureHuntRoundDetailRow
+                  key={`${round.round}:${round.isLoop ? "loop" : "round"}`}
+                  config={round.config}
+                  label={loopLabel}
+                  theoreticalMinCost={round.theoreticalMin * round.config.cellCost.quantity}
+                  theoreticalMaxCost={round.theoreticalMax * round.config.cellCost.quantity}
+                  simulation={{ requiredText, isCalculating: round.isCalculating }}
+                />
+              );
+            })}
           </div>
         )}
       </div>
+      {treasureHunt && uid && <TreasureHuntSimulatorLink eventUid={uid} />}
     </Section>
   );
 }
 
-function RoundDetailRow({ round }: { round: TreasureHuntEstimate["rounds"][number] }) {
-  const requiredText = round.failed
-    ? treasureHuntLocale.calculationFailed
-    : round.payment
-      ? `${round.payment.quantity.toLocaleString()}개`
-      : treasureHuntLocale.calculatingShort;
-  const loopLabel = round.isLoop
-    ? `${round.round}회차 이후 ×${round.multiplicity.toLocaleString()}`
-    : `${round.round}회차`;
-  const theoreticalMinCost = round.theoreticalMin * round.config.cellCost.quantity;
-  const theoreticalMaxCost = round.theoreticalMax * round.config.cellCost.quantity;
+function TreasureHuntSimulatorLink({ eventUid }: { eventUid: string }) {
   return (
-    <div className="flex flex-col gap-1.5 rounded-md bg-muted p-2 sm:flex-row sm:items-start">
-      <span className="shrink-0 whitespace-nowrap text-sm font-semibold text-foreground sm:w-28">{loopLabel}</span>
-      <div className="min-w-0 flex-1 space-y-2">
-        <div className="flex flex-col items-start gap-0.5 sm:items-end">
-          <div className="flex items-center gap-1">
-            <span className="text-xs font-medium text-muted-foreground">{treasureHuntLocale.requiredResources}</span>
-            <span className="flex items-center gap-1 text-sm font-medium tabular-nums text-foreground">
-              {requiredText}
-              {round.isCalculating && <ProgressSpinner label="계산 중" labelled size="sm" />}
-            </span>
-          </div>
-          <span className="text-xs text-muted-foreground">
-            이론상 {theoreticalMinCost.toLocaleString()}~{theoreticalMaxCost.toLocaleString()}
-          </span>
-        </div>
-        {round.config.treasures.map((treasure) => (
-          <div
-            key={treasure.uid}
-            className="grid min-w-0 grid-cols-1 gap-y-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-x-2"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <ShapeIcon width={treasure.width} height={treasure.height} />
-              <span className="min-w-0 whitespace-nowrap text-xs text-muted-foreground">
-                {treasure.width}×{treasure.height} · {treasure.count.toLocaleString()}개
-              </span>
-            </div>
-            <ResourceCards
-              rewards={treasure.rewards.map((reward) => ({ ...reward, quantity: reward.quantity * treasure.count }))}
-            />
-          </div>
-        ))}
-      </div>
+    <div className="mt-4">
+      <PageLink
+        Icon={Squares2X2Icon}
+        title={treasureHuntLocale.simulatorTitle}
+        description={treasureHuntLocale.simulatorDescription}
+        to={`/events/${eventUid}/treasure-hunt`}
+      />
     </div>
   );
 }
