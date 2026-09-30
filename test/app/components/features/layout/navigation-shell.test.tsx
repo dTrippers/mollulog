@@ -134,7 +134,7 @@ describe("desktop navigation shell rendering", () => {
     expect(favoritesGroupIndex).toBe(-1);
     expect(gameGroupIndex).toBeGreaterThan(homeIndex);
     expect(expandedNav).not.toContain("☆를 눌러 즐겨찾기에 추가");
-    expect(expandedNav).toContain('<section class="mt-2"><button type="button" class="flex min-h-6.5');
+    expect(expandedNav).toContain('<section class="mt-4"><button type="button" class="flex min-h-7');
   });
 
   it("renders saved favorites as normal menu rows under Home in saved order", () => {
@@ -185,10 +185,10 @@ describe("desktop navigation shell rendering", () => {
   it("uses the specified compact expanded-menu spacing and rail pitch", () => {
     const html = renderNavigation("/@sensei/students", true, "sensei");
 
-    expect(html).toContain('class="mt-2"');
+    expect(html).toContain('class="mt-4"');
     expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors");
-    expect(html).toContain("min-h-6.5 w-full items-center gap-2 rounded-md px-2 text-left text-xs");
-    expect(html).toContain('class="mt-0.5 space-y-0.5"');
+    expect(html).toContain("min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs");
+    expect(html).toContain('class="mt-1 space-y-0.5"');
     expect(html).toContain("gap-1.5 overflow-y-auto px-1.5 py-2");
     expect(html).toContain("min-h-12 w-full flex-col items-center");
   });
@@ -198,7 +198,7 @@ describe("desktop navigation shell rendering", () => {
     const desktopSearchInput = html.match(/<input type="search"[^>]*aria-label="전역 검색"[^>]*>/)?.[0];
 
     expect(html).toContain("px-2 text-xs transition-colors");
-    expect(html).toContain("px-2 text-left text-xs font-medium");
+    expect(html).toContain("px-2 text-left text-xs font-semibold");
     expect(desktopSearchInput).toContain("text-xs");
     expect(desktopSearchInput).toContain("placeholder:text-muted-foreground/70");
   });

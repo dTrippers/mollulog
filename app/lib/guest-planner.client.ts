@@ -46,12 +46,25 @@ export type GuestPlannerSnapshot =
 type GuestPlannerUpdate = (current: GuestPlannerEnvelope) => GuestPlannerEnvelope;
 type RawStorage = { envelope: string | null; pyroxene: string | null; eventShops: string | null };
 
-// M2 keeps AP opaque. A later AP writer must change this helper; otherwise AP-only edits are reverted and treated as unchanged.
-function preserveGuestPlannerAp(current: GuestPlannerEnvelope, updated: GuestPlannerEnvelope): GuestPlannerEnvelope {
+function preserveGuestPlannerAp(
+  current: GuestPlannerEnvelope,
+  updated: GuestPlannerEnvelope,
+  allowApUpdate = false,
+): GuestPlannerEnvelope {
   return {
     ...updated,
-    document: { ...updated.document, ap: current.document.ap },
+    document: {
+      ...updated.document,
+      ap: allowApUpdate && updated.document.ap !== undefined ? updated.document.ap : current.document.ap,
+    },
   };
+}
+
+function applyGuestPlannerUpdate(current: GuestPlannerEnvelope, update: GuestPlannerUpdate): GuestPlannerEnvelope {
+  const updated = update(current);
+  const apChanged =
+    updated.document.ap !== undefined && JSON.stringify(updated.document.ap) !== JSON.stringify(current.document.ap);
+  return preserveGuestPlannerAp(current, updated, apChanged);
 }
 
 let memorySnapshot: GuestPlannerSnapshot | null = null;
@@ -464,7 +477,7 @@ export function updateGuestPlanner(update: GuestPlannerUpdate): Promise<GuestPla
     if (!("envelope" in reconciled) || reconciled.status === "conflict") {
       return reconciled;
     }
-    const nextFromUpdate = preserveGuestPlannerAp(reconciled.envelope, update(reconciled.envelope));
+    const nextFromUpdate = applyGuestPlannerUpdate(reconciled.envelope, update);
     if (guestPlannerEnvelopeEqual(nextFromUpdate, reconciled.envelope)) return reconciled;
     const envelope: GuestPlannerEnvelope = {
       ...nextFromUpdate,
@@ -506,7 +519,7 @@ function updateGuestPlannerImmediately(update: GuestPlannerUpdate): GuestPlanner
   const reconciled = reconcileCurrentStorage();
   if (!("envelope" in reconciled) || reconciled.status === "conflict") return reconciled;
 
-  const nextFromUpdate = preserveGuestPlannerAp(reconciled.envelope, update(reconciled.envelope));
+  const nextFromUpdate = applyGuestPlannerUpdate(reconciled.envelope, update);
   if (guestPlannerEnvelopeEqual(nextFromUpdate, reconciled.envelope)) return reconciled;
   const envelope: GuestPlannerEnvelope = {
     ...nextFromUpdate,

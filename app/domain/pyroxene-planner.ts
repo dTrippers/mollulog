@@ -1,8 +1,16 @@
 import { DEFAULT_PYROXENE_TIMELINE_DISPLAY, type PyroxeneSourceType } from "~/domain/pyroxene-sources";
+import dayjs from "~/lib/dayjs";
 
 export type TimelineSourceType = PyroxeneSourceType;
 export const PYROXENE_PICKUP_CHANCES = ["average", "average_pity", "ceil"] as const;
 export type PyroxenePickupChance = (typeof PYROXENE_PICKUP_CHANCES)[number];
+
+export type PyroxeneApChargeException = {
+  uid: string;
+  startDate: string;
+  endDate: string;
+  count: number;
+};
 
 export type PyroxenePlannerOptions = {
   event: {
@@ -16,6 +24,7 @@ export type PyroxenePlannerOptions = {
   };
   consumption: {
     apChargeCount: number;
+    apChargeExceptions: PyroxeneApChargeException[];
   };
   timeline: {
     display: TimelineSourceType[];
@@ -45,6 +54,7 @@ export const defaultPyroxenePlannerOptions: PyroxenePlannerOptions = {
   },
   consumption: {
     apChargeCount: 0,
+    apChargeExceptions: [],
   },
   timeline: {
     display: DEFAULT_PYROXENE_TIMELINE_DISPLAY,
@@ -60,6 +70,71 @@ export type StoredPyroxenePlannerOptions = Partial<
   consumption?: Partial<PyroxenePlannerOptions["consumption"]>;
   timeline?: Partial<PyroxenePlannerOptions["timeline"]>;
 };
+
+const AP_CHARGE_EXCEPTION_MAX_COUNT = 100;
+
+function isCalendarDate(value: unknown): value is string {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+export function apChargeExceptionRangesOverlap(
+  left: Pick<PyroxeneApChargeException, "startDate" | "endDate">,
+  right: Pick<PyroxeneApChargeException, "startDate" | "endDate">,
+): boolean {
+  return left.startDate <= right.endDate && right.startDate <= left.endDate;
+}
+
+export function normalizePyroxeneApChargeExceptions(value: unknown): PyroxeneApChargeException[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.length > AP_CHARGE_EXCEPTION_MAX_COUNT) {
+    throw new Error("기간별 AP 충전 예외를 확인할 수 없어요.");
+  }
+
+  const exceptions: PyroxeneApChargeException[] = [];
+  const uids = new Set<string>();
+  for (const entry of value) {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) {
+      throw new Error("기간별 AP 충전 예외를 확인할 수 없어요.");
+    }
+    const row = entry as Record<string, unknown>;
+    if (
+      typeof row.uid !== "string" ||
+      row.uid.length === 0 ||
+      row.uid.length > 128 ||
+      uids.has(row.uid) ||
+      !isCalendarDate(row.startDate) ||
+      !isCalendarDate(row.endDate) ||
+      row.startDate > row.endDate ||
+      typeof row.count !== "number" ||
+      !Number.isSafeInteger(row.count) ||
+      row.count < 0 ||
+      row.count > 20
+    ) {
+      throw new Error("기간별 AP 충전 예외를 확인할 수 없어요.");
+    }
+    const exception = { uid: row.uid, startDate: row.startDate, endDate: row.endDate, count: row.count };
+    if (exceptions.some((existing) => apChargeExceptionRangesOverlap(existing, exception))) {
+      throw new Error("기간별 AP 충전 예외가 겹쳐요.");
+    }
+    uids.add(exception.uid);
+    exceptions.push(exception);
+  }
+  return exceptions.sort((left, right) => left.startDate.localeCompare(right.startDate));
+}
+
+/** Resolve the charge count for the game day (04:00 KST to the next 04:00 KST) that contains `date`. */
+export function getPyroxeneApChargeCountForDate(
+  date: Date | string,
+  consumption: PyroxenePlannerOptions["consumption"],
+): number {
+  const dateKey = dayjs(date).tz("Asia/Seoul").subtract(4, "hour").format("YYYY-MM-DD");
+  return (
+    consumption.apChargeExceptions.find((exception) => exception.startDate <= dateKey && dateKey <= exception.endDate)
+      ?.count ?? consumption.apChargeCount
+  );
+}
 
 export function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOptions | null): PyroxenePlannerOptions {
   return {
@@ -79,6 +154,7 @@ export function normalizePyroxenePlannerOptions(options: StoredPyroxenePlannerOp
     consumption: {
       ...defaultPyroxenePlannerOptions.consumption,
       ...options?.consumption,
+      apChargeExceptions: normalizePyroxeneApChargeExceptions(options?.consumption?.apChargeExceptions),
     },
     timeline: {
       display: options?.timeline?.display ?? defaultPyroxenePlannerOptions.timeline.display,

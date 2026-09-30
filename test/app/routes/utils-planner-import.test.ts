@@ -243,6 +243,7 @@ describe("unified planner import action", () => {
         eventUids: [],
         eventShopUids: [],
         favorites: [],
+        ap: false,
       },
     };
 
@@ -273,6 +274,7 @@ describe("unified planner import action", () => {
         eventUids: [],
         eventShopUids: [],
         favorites: [],
+        ap: false,
       },
     };
     const unselectedCount = uids.length - 1;
@@ -551,10 +553,155 @@ describe("unified planner import action", () => {
     });
   });
 
-  it("accepts an AP-bearing guest envelope but excludes AP from the milestone-2 import write", async () => {
+  it("passes a selected AP section through to the planner-state import", async () => {
     const envelope = createEmptyGuestPlanner();
-    const ap = { profile: { level: 85 }, plans: [{ timelineUid: "event-1" }] };
+    const ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
     envelope.document.ap = ap;
+    mockImportGuestPlannerState.mockImplementationOnce(async (...args: unknown[]) => {
+      const plan = args[2] as {
+        sources: Array<{ document: { ap: unknown }; selection: { ap: boolean } }>;
+      };
+      expect(plan.sources[0]?.selection.ap).toBe(true);
+      expect(plan.sources[0]?.document.ap).toEqual(ap);
+      return {
+        verified: [{ sourceId: "current", datasetId: envelope.datasetId, type: "ap", key: "current" }],
+        failed: [],
+        revisionConflict: false,
+      };
+    });
+
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope,
+                selection: {
+                  resources: false,
+                  options: false,
+                  ap: true,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      success: true,
+      verified: 1,
+      cleanupItems: { current: [{ type: "ap", key: "current" }] },
+    });
+  });
+
+  it("retains a selected AP section when its import item fails", async () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.ap = {
+      accountLevel: 85,
+      cafeRank: 8,
+      comfort: 4_500,
+      eventPlans: { "event-1": { accessAt: "2026-10-01T03:00:00.000Z" } },
+    };
+    mockImportGuestPlannerState.mockResolvedValueOnce({
+      verified: [],
+      failed: [{ sourceId: "current", datasetId: envelope.datasetId, type: "ap", key: "current" }],
+      revisionConflict: false,
+    });
+
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope,
+                selection: {
+                  resources: false,
+                  options: false,
+                  ap: true,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      failedLabels: ["AP 플래너"],
+      cleanupItems: { current: [] },
+    });
+  });
+
+  it("does not report an unselected AP section as safe to clear", async () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.ap = { accountLevel: 85, cafeRank: null, comfort: null, eventPlans: {} };
+    const result = await action(
+      actionArgs(
+        new Request("https://mollulog.test/planner/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sources: [
+              {
+                id: "current",
+                envelope,
+                selection: {
+                  resources: false,
+                  options: false,
+                  ap: false,
+                  recordUids: [],
+                  sourceKeys: [],
+                  eventUids: [],
+                  eventShopUids: [],
+                  favorites: [],
+                },
+              },
+            ],
+          }),
+        }),
+      ),
+    );
+
+    expect(result).toMatchObject({ success: true, cleanupItems: { current: [] } });
+    expect(mockImportGuestPlannerState).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({
+        sources: [expect.objectContaining({ selection: expect.objectContaining({ ap: false }) })],
+        favorites: [],
+      }),
+      { ctx },
+    );
+  });
+
+  it("preserves an unselected AP section when importing other guest sections", async () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.ap = { accountLevel: 85, cafeRank: null, comfort: null, eventPlans: {} };
     envelope.document.pyroxene.resources = {
       inputAt: "2026-09-01T00:00:00.000Z",
       pyroxene: 1200,
@@ -562,11 +709,9 @@ describe("unified planner import action", () => {
       tenTimeTicket: 0,
     };
     mockImportGuestPlannerState.mockImplementationOnce(async (...args: unknown[]) => {
-      const plan = args[2] as {
-        sources: Array<{ document: { ap: unknown }; selection: { resources: boolean } }>;
-      };
+      const plan = args[2] as { sources: Array<{ document: { ap: unknown }; selection: { resources: boolean } }> };
       expect(plan.sources[0]?.selection.resources).toBe(true);
-      expect(plan.sources[0]?.document.ap).toBeNull();
+      expect(plan.sources[0]?.document.ap).toEqual(envelope.document.ap);
       return {
         verified: [{ sourceId: "current", datasetId: envelope.datasetId, type: "resources", key: "current" }],
         failed: [],
@@ -587,6 +732,7 @@ describe("unified planner import action", () => {
                 selection: {
                   resources: true,
                   options: false,
+                  ap: false,
                   recordUids: [],
                   sourceKeys: [],
                   eventUids: [],
@@ -802,6 +948,7 @@ describe("withComparedEventShopSelections", () => {
     eventUids: [],
     eventShopUids: ["shop-1", "shop-2"],
     favorites: [],
+    ap: false,
   };
   const availableRow = (shopStateUid: string) => ({
     timelineUid: `timeline-${shopStateUid}`,

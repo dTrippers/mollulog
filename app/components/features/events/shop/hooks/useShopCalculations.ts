@@ -2,12 +2,7 @@ import type Decimal from "decimal.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { ItemBreakdownResult } from "../calculations";
-import {
-  calculateItemBreakdowns,
-  calculateResourceLedger,
-  calculateStageInfos,
-  optimizeStageRuns,
-} from "../calculations";
+import { calculateShopApRequirement } from "../calculations/calculate-shop-ap";
 import type { ShopState } from "./useShopState";
 
 type UseShopCalculationsParams = {
@@ -235,49 +230,22 @@ export function useShopCalculations({
 
     // Debounce calculation by 300ms to prevent excessive recalculations
     debounceTimerRef.current = setTimeout(() => {
-      const resourceLedger = calculateResourceLedger({
-        shopResources: calculationShopResources,
-        itemQuantities: calculationState.itemQuantities,
-        itemPurchaseDays: calculationState.itemPurchaseDays,
-        existingPaymentItemQuantities: calculationState.existingPaymentItemQuantities,
-        stages: calculationStages,
-        includeFirstClear: calculationState.includeFirstClear,
-        minigameStartRound: calculationState.minigameStartRound,
-        minigamePlayCount: calculationState.minigamePlayCount,
-        minigameConfig: calculationMinigameConfig,
-        minigamePaymentCosts: calculationMinigamePaymentCosts,
-        minigameRewards: calculationMinigameRewards,
-        excludedShopResourceUids: calculationExcludedShopResourceUids,
-        overriddenRequiredQuantities: calculationState.overriddenRequiredQuantities,
-      });
-
-      const targets = Object.entries(resourceLedger.remainingToFarm).filter(([, qty]) => (qty || 0) > 0);
-      const stageInfos = calculateStageInfos(
-        calculationStages,
-        calculationState.enabledStages,
-        calculationAppliedBonusRatio,
+      setResult(
+        calculateShopApRequirement({
+          state: calculationState,
+          stages: calculationStages,
+          shopResources: calculationShopResources,
+          appliedBonusRatio: calculationAppliedBonusRatio,
+          minigamePaymentCosts: calculationMinigamePaymentCosts,
+          minigameRewards: calculationMinigameRewards,
+          excludedShopResourceUids: calculationExcludedShopResourceUids,
+          minigameConfig: calculationMinigameConfig,
+        }),
       );
-      const optimizationResult = optimizeStageRuns(stageInfos, targets as [string, number][]);
-
-      const itemBreakdownResult = calculateItemBreakdowns({
-        stages: calculationStages,
-        enabledStages: calculationState.enabledStages,
-        stageRuns: optimizationResult.stageRuns,
-        extraStageRuns: calculationState.extraStageRuns,
-        appliedBonusRatio: calculationAppliedBonusRatio,
-        includeFirstClear: calculationState.includeFirstClear,
-        resourceLedger,
-      });
-
-      setResult({
-        stageRuns: optimizationResult.stageRuns,
-        unobtainableTargets: optimizationResult.unobtainableTargets,
-        ...itemBreakdownResult,
-      });
       lastCompletedInputsRef.current = inputSets.calculation;
       lastCompletedUserInputsRef.current = inputSets.user;
       setIsCalculating(false);
-    }, 150);
+    }, 300);
 
     return () => {
       if (debounceTimerRef.current) {

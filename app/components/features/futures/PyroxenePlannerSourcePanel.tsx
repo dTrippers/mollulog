@@ -11,6 +11,7 @@ import {
   PanelOptionChip,
   PanelOptionIconButton,
 } from "~/components/primitives";
+import { formatPlannerPeriodRangeParts, plannerPeriodRangeLabel } from "~/domain/integrated-planner";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { PyroxeneMonthlyPackageType } from "~/domain/pyroxene-sources";
 import {
@@ -20,6 +21,7 @@ import {
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
+import dayjs from "~/lib/dayjs";
 import type { PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import AttendanceInput from "./planner-input/AttendanceInput";
 import BuyInput from "./planner-input/BuyInput";
@@ -27,9 +29,20 @@ import PackageInput, { ApPackageInput } from "./planner-input/PackageInput";
 import ResourcesInput from "./planner-input/ResourcesInput";
 import { PYROXENE_SOURCE_ROW_DEFINITIONS, PYROXENE_SOURCE_ROW_GROUP_LABELS } from "./pyroxene-source-config";
 
+const KST = "Asia/Seoul";
+
+export function formatApChargeExceptionPeriod(startDate: string, endDate: string): string {
+  const startAt = dayjs.tz(`${startDate}T04:00:00`, KST).toISOString();
+  const endAt = dayjs.tz(`${endDate}T04:00:00`, KST).add(1, "day").toISOString();
+  const parts = formatPlannerPeriodRangeParts(startAt, endAt, KST);
+  if (!parts) throw new Error("기간별 AP 충전 예외를 확인할 수 없어요.");
+  return plannerPeriodRangeLabel(parts);
+}
+
 type PyroxenePlannerSourcePanelProps = {
   options: PyroxenePlannerOptions;
   onOptionsChange: (options: PyroxenePlannerOptions) => void;
+  onRemoveApChargeException: (uid: string) => void;
   onSaveBuy: (
     quantity: number,
     date: Date,
@@ -75,6 +88,7 @@ const tacticalLevelLabels: Record<PyroxenePlannerOptions["tactical"]["level"], s
 export default function PyroxenePlannerSourcePanel({
   options,
   onOptionsChange,
+  onRemoveApChargeException,
   onSaveBuy,
   onSaveMonthlyPackage,
   onSaveApPackage,
@@ -160,6 +174,7 @@ export default function PyroxenePlannerSourcePanel({
             rowId={openRow.id}
             options={options}
             onOptionsChange={onOptionsChange}
+            onRemoveApChargeException={onRemoveApChargeException}
             onClose={() => setOpenRowId(null)}
             onSaveBuy={(quantity, date, options) => {
               onSaveBuy(quantity, date, options);
@@ -193,6 +208,7 @@ function SourceSheetContent({
   rowId,
   options,
   onOptionsChange,
+  onRemoveApChargeException,
   onSaveBuy,
   onSaveMonthlyPackage,
   onSaveApPackage,
@@ -268,7 +284,14 @@ function SourceSheetContent({
   }
 
   if (rowId === "ap_charge") {
-    return <ApChargeInput options={options} onOptionsChange={onOptionsChange} onClose={onClose} />;
+    return (
+      <ApChargeInput
+        options={options}
+        onOptionsChange={onOptionsChange}
+        onRemoveApChargeException={onRemoveApChargeException}
+        onClose={onClose}
+      />
+    );
   }
 
   return null;
@@ -281,7 +304,8 @@ function getSelectedOptionText(rowId: string, options: PyroxenePlannerOptions) {
   } else if (rowId === "tactical") {
     text = tacticalLevelLabels[options.tactical.level];
   } else if (rowId === "ap_charge") {
-    text = options.consumption.apChargeCount === 0 ? "0회" : `매일 ${options.consumption.apChargeCount}회`;
+    const exceptions = options.consumption.apChargeExceptions;
+    text = `매일 ${options.consumption.apChargeCount}회${exceptions.length > 0 ? ` · 예외 ${exceptions.length}건` : ""}`;
   }
 
   return text;
@@ -290,10 +314,12 @@ function getSelectedOptionText(rowId: string, options: PyroxenePlannerOptions) {
 function ApChargeInput({
   options,
   onOptionsChange,
+  onRemoveApChargeException,
   onClose,
 }: {
   options: PyroxenePlannerOptions;
   onOptionsChange: (options: PyroxenePlannerOptions) => void;
+  onRemoveApChargeException: (uid: string) => void;
   onClose: () => void;
 }) {
   const [apChargeCount, setApChargeCount] = useState(options.consumption.apChargeCount);
@@ -329,6 +355,26 @@ function ApChargeInput({
         onChange={setApChargeCount}
       />
       <p className="text-xs text-muted-foreground">매일 {dailyPyroxene.toLocaleString()}개 소비</p>
+      {options.consumption.apChargeExceptions.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="text-sm font-medium">기간별 예외</h3>
+          <ul className="space-y-2">
+            {options.consumption.apChargeExceptions.map((exception) => (
+              <li key={exception.uid} className="flex items-center justify-between gap-3 rounded-md bg-muted p-3">
+                <span className="text-sm">
+                  {formatApChargeExceptionPeriod(exception.startDate, exception.endDate)} · 매일 {exception.count}회
+                </span>
+                <Button
+                  text="삭제"
+                  variant="secondary"
+                  size="xs"
+                  onClick={() => onRemoveApChargeException(exception.uid)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <Button text="저장" variant="primary" fullWidth onClick={handleSave} />
     </div>
   );

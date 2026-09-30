@@ -33,4 +33,9 @@ describe("BottomSheet accessibility and optional layout contract", () => {
     expect(bottomSheetSource).toContain("{footer ?");
     expect(bottomSheetSource).toContain("overflow-y-auto overscroll-contain no-scrollbar");
   });
+
+  it("keeps a sheet panel opaque when another sheet is underneath it", () => {
+    expect(bottomSheetSource).toContain("rounded-t-lg bg-popover shadow-t-xl backdrop-blur-sm");
+    expect(bottomSheetSource).not.toContain("bg-popover/90");
+  });
 });

@@ -1689,6 +1689,48 @@ describe("integrated planner calendar domain", () => {
     ]);
   });
 
+  test("C15: marks only AP-planned event periods as planned and retains the AP indicator", () => {
+    const event = (eventUid: string): PlannerPeriod => ({
+      key: `event:${eventUid}`,
+      kind: "event",
+      name: eventUid,
+      startDate: "2026-09-30",
+      endDate: "2026-10-13",
+      startAt: "2026-09-30T02:00:00.000Z",
+      endAt: "2026-10-13T01:59:00.000Z",
+      href: `/events/${eventUid}`,
+      eventUid,
+    });
+    const apPlannedUid = "event-ap-planned";
+    const favoriteUid = "event-favorite";
+    const periods = [event(apPlannedUid), event(favoriteUid), event("event-unplanned")];
+    const plannedUids = getPlannerPlannedEventUids({
+      favorites: [{ contentUid: favoriteUid, studentUid: "student-1" }],
+      eventTrials: [],
+    });
+    const displayPeriods = buildPlannerDisplayPeriods(
+      [periods[0] as PlannerPeriod, periods[1] as PlannerPeriod],
+      periods,
+      plannedUids,
+      new Set([apPlannedUid]),
+    );
+
+    expect(displayPeriods.find(({ eventUid }) => eventUid === apPlannedUid)).toMatchObject({
+      isPlanned: true,
+      isApPlanned: true,
+      hasRecruitmentPlan: false,
+    });
+    expect(displayPeriods.find(({ eventUid }) => eventUid === favoriteUid)).toMatchObject({
+      isPlanned: true,
+      isApPlanned: false,
+      hasRecruitmentPlan: true,
+    });
+    expect(displayPeriods.find(({ eventUid }) => eventUid === "event-unplanned")).toMatchObject({
+      isPlanned: false,
+      isApPlanned: false,
+    });
+  });
+
   test("groups favorite students sharing a recruitment period and keeps different periods separate", () => {
     const periods = buildPlannerPeriods({
       contents: [

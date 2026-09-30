@@ -9,7 +9,7 @@ import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/do
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { captureServerError, getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content.server";
 import {
   favoriteStudent,
@@ -167,7 +167,7 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
     { property: "og:title", content: title },
-    { property: "og:image", content: eventContent.imageUrl },
+    { property: "og:image", content: eventContent.imageUrl || DEFAULT_OPEN_GRAPH_IMAGE_URL },
     { property: "og:description", content: description },
     { property: "og:url", content: `https://mollulog.net/events/${timelineUid}` },
     { name: "twitter:title", content: title },
@@ -176,6 +176,8 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params, location
     canonicalLink(location.pathname),
   ];
 };
+
+export const handle = { ownsOpenGraphImage: true } as const;
 
 export default function EventIndex() {
   const {

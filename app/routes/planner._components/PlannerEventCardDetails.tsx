@@ -66,6 +66,11 @@ export default function PlannerEventCardDetails({
     <div className="space-y-3">
       <PlannerEventCardActions
         eventPeriod={eventPeriod?.kind === "event" ? eventPeriod : undefined}
+        apPlannerHref={
+          eventUid && (shopPeriod || eventShopPlans.length > 0)
+            ? `/utils/ap?eventUid=${encodeURIComponent(eventUid)}`
+            : undefined
+        }
         shopCalculatorHref={shopCalculatorHref}
         recruitmentActions={recruitmentActions}
       />

@@ -1,5 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it, jest } from "@jest/globals";
-import { normalizePyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import {
+  normalizePyroxeneApChargeExceptions,
+  normalizePyroxenePlannerOptions,
+  type PyroxenePlannerOptions,
+} from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
   buildTimeline,
@@ -33,6 +37,7 @@ const defaultOptions: PyroxenePlannerOptions = {
   },
   consumption: {
     apChargeCount: 0,
+    apChargeExceptions: [],
   },
   timeline: {
     display: [],
@@ -230,6 +235,16 @@ describe("normalizePyroxenePlannerOptions", () => {
         event: { pickupChance: "unexpected" as PyroxenePlannerOptions["event"]["pickupChance"] },
       }).event.pickupChance,
     ).toBe("average_pity");
+  });
+
+  it("normalizes old options to no exceptions and rejects overlapping ranges", () => {
+    expect(normalizePyroxenePlannerOptions({}).consumption.apChargeExceptions).toEqual([]);
+    expect(() =>
+      normalizePyroxeneApChargeExceptions([
+        { uid: "one", startDate: "2026-09-30", endDate: "2026-10-02", count: 2 },
+        { uid: "two", startDate: "2026-10-02", endDate: "2026-10-03", count: 3 },
+      ]),
+    ).toThrow("겹쳐요");
   });
 });
 

@@ -1,3 +1,4 @@
+import type { ApPlannerState } from "~/domain/ap-planner";
 import { type EventShopState, normalizeEventShopState } from "~/domain/event-shop-state";
 import type { GuestPyroxeneResources } from "~/domain/guest-pyroxene-planner";
 import {
@@ -23,7 +24,7 @@ export type PlannerStateDocumentV1 = {
     eventData: Record<string, PlannerStateEventData>;
   };
   eventShops: Record<string, EventShopState>;
-  ap: null;
+  ap: ApPlannerState | null;
 };
 
 /** Sort planner records by event time while keeping same-time insertion order stable. */
@@ -239,31 +240,4 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
     eventShops: Object.fromEntries(Object.entries(eventShops).sort(([left], [right]) => left.localeCompare(right))),
     ap: null,
   };
-}
-
-function stableJson(value: unknown): string {
-  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
-  if (isRecord(value)) {
-    return `{${Object.keys(value)
-      .sort()
-      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
-      .join(",")}}`;
-  }
-  return JSON.stringify(value);
-}
-
-export function plannerStateDocumentDifferences(expected: PlannerStateDocumentV1, actual: unknown): string[] {
-  if (!isRecord(actual)) return ["document"];
-  const differences: string[] = [];
-  const actualPyroxene = actual.pyroxene;
-  if (!isRecord(actualPyroxene)) return ["pyroxene"];
-  if (actual.schemaVersion !== expected.schemaVersion) differences.push("schemaVersion");
-  for (const field of ["resources", "records", "options", "collectedSourceKeys", "eventData"] as const) {
-    if (stableJson(actualPyroxene[field]) !== stableJson(expected.pyroxene[field])) {
-      differences.push(`pyroxene.${field}`);
-    }
-  }
-  if (stableJson(actual.eventShops) !== stableJson(expected.eventShops)) differences.push("eventShops");
-  if (stableJson(actual.ap) !== stableJson(expected.ap)) differences.push("ap");
-  return differences;
 }

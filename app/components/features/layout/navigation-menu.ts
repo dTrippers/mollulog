@@ -217,8 +217,12 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return pathname === "/furniture" || pathname.startsWith("/furniture/");
     case "coupons":
       return pathname.startsWith("/coupons");
+    case "integrated-planner":
+      return pathname.startsWith("/planner");
     case "pyroxene-planner":
       return pathname.startsWith("/utils/pyroxene");
+    case "ap-planner":
+      return pathname.startsWith("/utils/ap");
     case "student-growth-planner":
       return pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students");
     case "resource-planner":
@@ -400,6 +404,7 @@ export function getNavigationCatalog({
       showRedDot: hasUnconsumedCoupons,
     },
     {
+      menuId: "integrated-planner",
       group: "planner",
       surfaces: ["desktop", "mobileBottom", "more", "search"],
       to: "/planner",
@@ -410,7 +415,7 @@ export function getNavigationCatalog({
       description: "모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요",
       OutlineIcon: CalendarIconOutline,
       SolidIcon: CalendarIconSolid,
-      isActive: pathname.startsWith("/planner"),
+      isActive: itemIsActive("integrated-planner", pathname, currentUsername),
     },
     {
       menuId: "pyroxene-planner",
@@ -425,6 +430,18 @@ export function getNavigationCatalog({
       OutlineIcon: CreditCardIconOutline,
       SolidIcon: CreditCardIconSolid,
       isActive: itemIsActive("pyroxene-planner", pathname, currentUsername),
+    },
+    {
+      menuId: "ap-planner",
+      group: "planner",
+      surfaces: ["desktop", "more", "search"],
+      to: "/utils/ap",
+      name: "AP 플래너",
+      favoriteId: "ap-planner",
+      description: "상점 목표에 필요한 AP를 준비해보세요",
+      OutlineIcon: BoltIconOutline,
+      SolidIcon: BoltIconSolid,
+      isActive: itemIsActive("ap-planner", pathname, currentUsername),
     },
     {
       menuId: "student-growth-planner",

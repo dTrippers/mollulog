@@ -1,5 +1,11 @@
 import { nanoid } from "nanoid/non-secure";
 import {
+  type ApPlannerState,
+  addApChargeException,
+  apPlannerStateHasData,
+  normalizeApPlannerState,
+} from "~/domain/ap-planner";
+import {
   type EventShopOwnedQuantityPatch,
   type EventShopState,
   mergeEventShopStateChanges,
@@ -34,6 +40,7 @@ import {
 import {
   defaultPyroxenePlannerOptions,
   normalizePyroxenePlannerOptions,
+  type PyroxeneApChargeException,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
 import {
@@ -46,8 +53,6 @@ import dayjs from "~/lib/dayjs";
 
 export const GUEST_PLANNER_STORAGE_KEY = "mollulog::guest-planner::v1";
 
-const MAX_GUEST_PLANNER_AP_JSON_LENGTH = 65_536;
-
 const MAX_GUEST_PLANNER_RECORDS = 500;
 const MAX_GUEST_PLANNER_COLLECTED_SOURCE_KEYS = 1_000;
 const MAX_GUEST_PLANNER_FAVORITES = 1_000;
@@ -57,15 +62,7 @@ const MAX_GUEST_PLANNER_LEGACY_CONFLICTS = 20;
 const MAX_GUEST_PLANNER_ID_LENGTH = 200;
 const MAX_EVENT_SHOP_STATE_ENTRIES = 5_000;
 
-export interface GuestPlannerJsonObject {
-  [key: string]: GuestPlannerJsonValue;
-}
-
-export type GuestPlannerJsonValue = string | number | boolean | null | GuestPlannerJsonObject | GuestPlannerJsonValue[];
-
-export type GuestPlannerDocument = Omit<PlannerStateDocumentV1, "ap"> & {
-  ap: GuestPlannerJsonObject | null;
-};
+export type GuestPlannerDocument = Omit<PlannerStateDocumentV1, "ap"> & { ap: ApPlannerState | null };
 
 export type GuestPlannerEnvelope = {
   datasetId: string;
@@ -118,10 +115,11 @@ export type GuestPlannerSection =
   | "options"
   | "recruitment"
   | "collectedSourceKeys"
-  | "eventShops";
+  | "eventShops"
+  | "ap";
 
 export type GuestPlannerItemReference = {
-  type: "resources" | "options" | "record" | "source" | "event" | "eventShop" | "favorite";
+  type: "resources" | "options" | "record" | "source" | "event" | "eventShop" | "favorite" | "ap";
   key: string;
 };
 
@@ -136,21 +134,6 @@ export type GuestPlannerLegacySources = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function cloneGuestPlannerAp(value: unknown): GuestPlannerJsonObject | null | undefined {
-  if (value === null) return null;
-  if (!isRecord(value)) return undefined;
-  try {
-    const prototype = Object.getPrototypeOf(value) as unknown;
-    if (prototype !== Object.prototype && prototype !== null) return undefined;
-    const serialized = JSON.stringify(value);
-    if (typeof serialized !== "string" || serialized.length > MAX_GUEST_PLANNER_AP_JSON_LENGTH) return undefined;
-    const clone: unknown = JSON.parse(serialized);
-    return isRecord(clone) ? (clone as GuestPlannerJsonObject) : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function isStableId(value: unknown): value is string {
@@ -371,8 +354,6 @@ function projectDocument(value: unknown): GuestPlannerDocument | null {
   if (!isRecord(value) || value.schemaVersion !== 1 || !isRecord(value.pyroxene) || !isRecord(value.eventShops)) {
     return null;
   }
-  const ap = cloneGuestPlannerAp(value.ap);
-  if (ap === undefined) return null;
   const pyroxene = value.pyroxene;
   const recordPlanCount = Array.isArray(pyroxene.records)
     ? new Set(pyroxene.records.filter(isRecord).map((item) => extractPyroxeneTimelineBaseUid(String(item.uid ?? ""))))
@@ -410,6 +391,8 @@ function projectDocument(value: unknown): GuestPlannerDocument | null {
   ) {
     return null;
   }
+  const ap = value.ap === null ? null : normalizeApPlannerState(value.ap);
+  if (ap === null && value.ap !== null) return null;
 
   try {
     const projected = projectPlannerStateDocument({
@@ -1083,6 +1066,7 @@ export function guestPlannerHasPrimaryData(envelope: GuestPlannerEnvelope): bool
       pyroxene.collectedSourceKeys.length ||
       Object.keys(pyroxene.eventData).length ||
       Object.keys(envelope.document.eventShops).length ||
+      apPlannerStateHasData(envelope.document.ap) ||
       envelope.favorites.length,
   );
 }
@@ -1198,12 +1182,78 @@ export function updateGuestPlannerOptions(
   envelope: GuestPlannerEnvelope,
   options: PyroxenePlannerOptions,
 ): GuestPlannerEnvelope {
+  const normalized = normalizePyroxenePlannerOptions(options);
   return {
     ...envelope,
     pyroxeneOptionsChanged: true,
     document: {
       ...envelope.document,
-      pyroxene: { ...envelope.document.pyroxene, options: normalizePyroxenePlannerOptions(options) },
+      pyroxene: {
+        ...envelope.document.pyroxene,
+        options: {
+          ...normalized,
+          consumption: {
+            ...normalized.consumption,
+            apChargeExceptions: envelope.document.pyroxene.options.consumption.apChargeExceptions,
+          },
+        },
+      },
+    },
+  };
+}
+
+export function setGuestPlannerApChargeCount(envelope: GuestPlannerEnvelope, count: number): GuestPlannerEnvelope {
+  const options = envelope.document.pyroxene.options;
+  return updateGuestPlannerOptions(envelope, {
+    ...options,
+    consumption: { ...options.consumption, apChargeCount: count },
+  });
+}
+
+export function addGuestPlannerApChargeException(
+  envelope: GuestPlannerEnvelope,
+  exception: PyroxeneApChargeException,
+): { envelope: GuestPlannerEnvelope; overlap: boolean } {
+  const options = envelope.document.pyroxene.options;
+  const result = addApChargeException(options.consumption.apChargeExceptions, exception);
+  if (result.overlap) return { envelope, overlap: true };
+  return {
+    envelope: {
+      ...envelope,
+      pyroxeneOptionsChanged: true,
+      document: {
+        ...envelope.document,
+        pyroxene: {
+          ...envelope.document.pyroxene,
+          options: {
+            ...options,
+            consumption: { ...options.consumption, apChargeExceptions: result.exceptions },
+          },
+        },
+      },
+    },
+    overlap: false,
+  };
+}
+
+export function removeGuestPlannerApChargeException(envelope: GuestPlannerEnvelope, uid: string): GuestPlannerEnvelope {
+  return {
+    ...envelope,
+    pyroxeneOptionsChanged: true,
+    document: {
+      ...envelope.document,
+      pyroxene: {
+        ...envelope.document.pyroxene,
+        options: {
+          ...envelope.document.pyroxene.options,
+          consumption: {
+            ...envelope.document.pyroxene.options.consumption,
+            apChargeExceptions: envelope.document.pyroxene.options.consumption.apChargeExceptions.filter(
+              (exception) => exception.uid !== uid,
+            ),
+          },
+        },
+      },
     },
   };
 }
@@ -1421,6 +1471,15 @@ export function clearGuestPlannerItemsIfUnchanged(
         }
         break;
       }
+      case "ap":
+        if (
+          current.document.ap !== null &&
+          submitted.document.ap !== null &&
+          stableJson(current.document.ap) === stableJson(submitted.document.ap)
+        ) {
+          nextDocument.ap = null;
+        }
+        break;
     }
   }
 
@@ -1598,7 +1657,14 @@ export function clearGuestPlannerLegacyConflictSections(
   source: "pyroxene" | "eventShops",
   sections: readonly GuestPlannerSection[],
 ): GuestPlannerEnvelope {
-  const legacyConflicts = clearLegacyConflictSections(current.legacyConflicts, conflictId, source, new Set(sections));
+  const legacySections = sections.filter((section) => section !== "ap");
+  if (legacySections.length === 0) return current;
+  const legacyConflicts = clearLegacyConflictSections(
+    current.legacyConflicts,
+    conflictId,
+    source,
+    new Set(legacySections),
+  );
   return { ...current, legacyConflicts };
 }
 

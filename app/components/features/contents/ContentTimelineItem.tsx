@@ -934,11 +934,13 @@ export function getRecruitmentStudentCards({
                   recruitmentCompleted
                     ? {
                         Icon: XCircleIcon,
+                        iconClassName: "text-green-600 dark:text-green-400",
                         text: "모집 완료 취소",
                         onClick: () => onRecruitmentComplete(studentUid, false, recruitmentResultStudent),
                       }
                     : {
                         Icon: CheckCircleIcon,
+                        iconClassName: "text-green-600 dark:text-green-400",
                         text: "모집 완료로 표시",
                         onClick: () => onRecruitmentComplete(studentUid, true, recruitmentResultStudent),
                       },
@@ -946,12 +948,14 @@ export function getRecruitmentStudentCards({
               : []),
             isFavorited
               ? {
-                  Icon: FilledHeartIcon,
+                  Icon: EmptyHeartIcon,
+                  iconClassName: "text-red-500 dark:text-red-400",
                   text: "관심 학생에서 해제",
                   onClick: () => onFavorite?.(favoriteKey, false),
                 }
               : {
-                  Icon: EmptyHeartIcon,
+                  Icon: FilledHeartIcon,
+                  iconClassName: "text-red-500 dark:text-red-400",
                   text: "관심 학생에 등록",
                   onClick: () => onFavorite?.(favoriteKey, true),
                 },

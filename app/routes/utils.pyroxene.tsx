@@ -21,7 +21,11 @@ import {
 import Page from "~/components/features/layout/Page";
 import { Button, Callout } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { guestPlannerHasData, updateGuestPlannerOptions } from "~/domain/guest-planner";
+import {
+  guestPlannerHasData,
+  removeGuestPlannerApChargeException,
+  updateGuestPlannerOptions,
+} from "~/domain/guest-planner";
 import {
   createGuestRecord,
   type GuestPyroxeneRecord,
@@ -54,9 +58,9 @@ import {
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
   getPyroxeneUserState,
+  updatePyroxenePlannerOptions,
   upsertCollectedSources,
   upsertPyroxeneEventData,
-  upsertPyroxenePlannerOptions,
 } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import {
@@ -142,6 +146,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
   };
 };
+
+function preserveApChargeExceptions(
+  submitted: PyroxenePlannerOptions,
+  current: PyroxenePlannerOptions,
+): PyroxenePlannerOptions {
+  return {
+    ...submitted,
+    consumption: {
+      ...submitted.consumption,
+      apChargeExceptions: current.consumption.apChargeExceptions,
+    },
+  };
+}
 
 export const action = async ({ request, context }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -237,7 +254,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           actionData.payload.autoRepurchase,
         );
         if (actionData.payload.options) {
-          await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+          await updatePyroxenePlannerOptions(
+            env,
+            currentUser.id,
+            (current) => ({
+              options: preserveApChargeExceptions(actionData.payload.options as PyroxenePlannerOptions, current),
+              result: undefined,
+            }),
+            { ctx },
+          );
         }
         break;
       case "save-ap-package":
@@ -248,7 +273,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           actionData.payload.autoRepurchase,
         );
         if (actionData.payload.options) {
-          await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+          await updatePyroxenePlannerOptions(
+            env,
+            currentUser.id,
+            (current) => ({
+              options: preserveApChargeExceptions(actionData.payload.options as PyroxenePlannerOptions, current),
+              result: undefined,
+            }),
+            { ctx },
+          );
         }
         break;
       case "save-attendance":
@@ -271,7 +304,34 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         });
         break;
       case "save-options":
-        await upsertPyroxenePlannerOptions(env, currentUser.id, actionData.payload.options);
+        await updatePyroxenePlannerOptions(
+          env,
+          currentUser.id,
+          (current) => ({
+            options: preserveApChargeExceptions(actionData.payload.options, current),
+            result: undefined,
+          }),
+          { ctx },
+        );
+        break;
+      case "remove-ap-charge-exception":
+        await updatePyroxenePlannerOptions(
+          env,
+          currentUser.id,
+          (current) => ({
+            options: {
+              ...current,
+              consumption: {
+                ...current.consumption,
+                apChargeExceptions: current.consumption.apChargeExceptions.filter(
+                  (exception) => exception.uid !== actionData.payload.uid,
+                ),
+              },
+            },
+            result: undefined,
+          }),
+          { ctx },
+        );
         break;
       case "collect-source":
         await upsertCollectedSources(env, currentUser.id, [actionData.payload.sourceKey]);
@@ -862,6 +922,24 @@ export default function PyroxenePlanner() {
     }, 500);
   };
 
+  const handleRemoveApChargeException = (uid: string) => {
+    setOptions((current) => ({
+      ...current,
+      consumption: {
+        ...current.consumption,
+        apChargeExceptions: current.consumption.apChargeExceptions.filter((exception) => exception.uid !== uid),
+      },
+    }));
+    if (!signedIn) {
+      void guestPlanner.update((envelope) => removeGuestPlannerApChargeException(envelope, uid));
+      return;
+    }
+    fetcher.submit(
+      { intent: "remove-ap-charge-exception", payload: { uid } },
+      { method: "DELETE", encType: "application/json" },
+    );
+  };
+
   const eventDataMap = useMemo(() => {
     const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
     for (const data of localEventData) {
@@ -932,6 +1010,7 @@ export default function PyroxenePlanner() {
               <PyroxenePlannerSourcePanel
                 options={options}
                 onOptionsChange={handleOptionsChange}
+                onRemoveApChargeException={handleRemoveApChargeException}
                 onSaveBuy={(quantity, date, options) => handleSaveBuy(quantity, date, options)}
                 onSaveMonthlyPackage={(startDate, packageType, autoRepurchase) =>
                   handleSaveMonthlyPackage(startDate, packageType, autoRepurchase)

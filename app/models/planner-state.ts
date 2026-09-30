@@ -5,6 +5,7 @@ import {
   type PlannerStateRevisionConflictError,
   updatePostgresPlannerStateDocument,
 } from "~/db/postgres/planner-states";
+import { type ApPlannerState, normalizeApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 
@@ -13,6 +14,7 @@ export { PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/db/postgres/planner-s
 export type PlannerState = PlannerStateDocumentV1;
 export type PyroxenePlannerState = PlannerStateDocumentV1["pyroxene"];
 export type EventShopPlannerStates = PlannerStateDocumentV1["eventShops"];
+export type ApPlannerStoredState = ApPlannerState | null;
 
 export function isPlannerStateRevisionConflictError(error: unknown): error is PlannerStateRevisionConflictError {
   return error instanceof Error && error.name === "PlannerStateRevisionConflictError";
@@ -60,45 +62,23 @@ export async function getEventShopPlannerStates(
   );
 }
 
-export async function updatePyroxenePlannerState<T>(
+export async function updateApPlannerState<T>(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   update: (
     transaction: PlannerStateDatabase,
-    current: PyroxenePlannerState,
-  ) => Promise<{ state: PyroxenePlannerState; result: T }>,
+    current: ApPlannerStoredState,
+  ) => Promise<{ state: ApPlannerStoredState; result: T }>,
   options: PlannerStateDatabaseOptions = {},
 ): Promise<T> {
   return updatePostgresPlannerStateDocument(
     env,
     userId,
     async (transaction, currentDocument) => {
-      const { state, result } = await update(transaction, currentDocument.pyroxene);
-      return { document: { ...currentDocument, pyroxene: state }, result };
-    },
-    { ...options, retryable: true },
-  );
-}
-
-export async function updateEventShopState<T>(
-  env: Pick<Env, "HYPERDRIVE">,
-  userId: number,
-  eventUid: string,
-  update: (
-    transaction: PlannerStateDatabase,
-    current: EventShopState | null,
-  ) => Promise<{ state: EventShopState | null; result: T }>,
-  options: PlannerStateDatabaseOptions = {},
-): Promise<T> {
-  return updatePostgresPlannerStateDocument(
-    env,
-    userId,
-    async (transaction, currentDocument) => {
-      const { state, result } = await update(transaction, currentDocument.eventShops[eventUid] ?? null);
-      const eventShops = { ...currentDocument.eventShops };
-      if (state === null) delete eventShops[eventUid];
-      else eventShops[eventUid] = state;
-      return { document: { ...currentDocument, eventShops }, result };
+      const { state, result } = await update(transaction, currentDocument.ap);
+      const normalized = state === null ? null : normalizeApPlannerState(state);
+      if (state !== null && normalized === null) throw new Error("AP 플래너 내용을 확인해주세요.");
+      return { document: { ...currentDocument, ap: normalized }, result };
     },
     { ...options, retryable: true },
   );

@@ -173,7 +173,7 @@ export default function Index() {
             {currentTotalAssualt && (
               <Link
                 to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
-                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
               >
                 <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
               </Link>
@@ -181,7 +181,7 @@ export default function Index() {
             {currentUnlimit && (
               <Link
                 to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
-                className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
+                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
               >
                 <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
               </Link>

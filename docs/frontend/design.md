@@ -90,6 +90,7 @@ Panel, FilterButtons, and option composition rules are collected in
 - Shared button variants express roles rather than colors: `default`, `primary`, `secondary`, `danger`, `danger-subtle`, and `inverse`.
 - Focusable controls use `ring-ring/30`; do not introduce route-specific blue or neutral focus rings.
 - Dropdowns, popovers, and pickers must connect visually to their trigger.
+- Student card popups and Navigation popovers (account, notifications, search, and collapsed menu flyouts) use `popover-surface`: the existing floating palette at 90% opacity in light mode and 80% in dark mode, subtle backdrop blur, a faint boundary, and a subdued shadow. Text and controls inherit the floating palette. Search results inside a flyout do not add a second floating surface.
 - Controls in the same row align in height and rhythm.
 - Avoid interactions that feel slow or leave their state ambiguous.
 

@@ -8,11 +8,11 @@ import {
   createPostgresPyroxeneOwnedResource,
   deletePostgresCollectedSource,
   deletePostgresPyroxeneEventData,
-  deletePostgresPyroxeneOwnedResourceByUid,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
   type PostgresPyroxeneOptions,
   updatePostgresPyroxeneOneOffTimelineItem,
+  updatePostgresPyroxenePlannerOptions,
   upsertPostgresCollectedSource,
   upsertPostgresCollectedSources,
   upsertPostgresPyroxeneEventData,
@@ -46,13 +46,9 @@ export async function createPyroxeneOwnedResource(
   env: Env,
   userId: number,
   resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
-  options: { uid?: string; inputAt?: string } = {},
+  options: { inputAt?: string } = {},
 ): Promise<void> {
   return createPostgresPyroxeneOwnedResource(env, userId, resources, options);
-}
-
-export async function deletePyroxeneOwnedResourceByUid(env: Env, userId: number, uid: string): Promise<void> {
-  return deletePostgresPyroxeneOwnedResourceByUid(env, userId, uid);
 }
 
 export async function getCollectedSourceKeys(
@@ -179,6 +175,15 @@ export async function upsertPyroxenePlannerOptions(
   options: PyroxenePlannerOptions,
 ): Promise<void> {
   return upsertPostgresPyroxenePlannerOptions(env, userId, options);
+}
+
+export async function updatePyroxenePlannerOptions<T>(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  update: (current: PyroxenePlannerOptions) => { options: PyroxenePlannerOptions; result: T },
+  options: PostgresPyroxeneOptions = {},
+): Promise<T> {
+  return updatePostgresPyroxenePlannerOptions(env, userId, update, options);
 }
 
 export async function getPyroxeneEventData(

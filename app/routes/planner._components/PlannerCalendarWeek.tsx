@@ -1,3 +1,4 @@
+import { BoltIcon } from "@heroicons/react/16/solid";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { useRef, useState } from "react";
 import {
@@ -212,7 +213,8 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string, plan
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
   const plan = planLabels.map((label) => `${label} · `).join("");
-  return `${plan}${title} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
+  const apPlan = strip.period.isApPlanned ? " · AP 모으기 계획" : "";
+  return `${plan}${title}${apPlan} · ${formatStripInterval(strip, timeZone)}${studentNames}${continuation}${timing}`;
 }
 
 function visualStripTitle(strip: PlannerCalendarStrip): string | null {
@@ -420,7 +422,7 @@ export default function PlannerCalendarWeek({
                 strip.kind === "event"
                   ? calendarEventPlanMarkState(strip.period, shopPlannedEventUids)
                   : plannerPlanMarkState(strip.period, shopPlannedEventUids);
-              const isPlanned = hasPlannerPlanMark(planMarks);
+              const isPlanned = hasPlannerPlanMark(planMarks) || strip.period.isApPlanned === true;
               const accessibleName = stripAccessibleName(strip, timeZone, plannerPlanMarkLabels(planMarks));
               const kindLabel = calendarStripKindLabel(strip);
               const visualTitle = visualStripTitle(strip);
@@ -463,6 +465,12 @@ export default function PlannerCalendarWeek({
                       {visualTitle}
                     </span>
                   ) : null}
+                  {strip.period.isApPlanned ? (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600">
+                      <BoltIcon aria-hidden="true" className="size-2.5" />
+                      AP
+                    </span>
+                  ) : null}
                   {students.length > 0 ? <PlannerRecruitmentAvatars students={students} maxVisible={3} /> : null}
                   {strip.timingStatus !== "exact" ? (
                     <ExclamationTriangleIcon
@@ -491,7 +499,7 @@ export default function PlannerCalendarWeek({
               const label = `${runType ? `${runType} · ` : ""}${marker.period.name}`;
               const startsAt = marker.period.startAt ? formatPlannerPeriodPoint(marker.period.startAt, timeZone) : null;
               const planMarks = calendarEventPlanMarkState(marker.period, shopPlannedEventUids);
-              const isPlanned = hasPlannerPlanMark(planMarks);
+              const isPlanned = hasPlannerPlanMark(planMarks) || marker.period.isApPlanned === true;
               const planPrefix = plannerPlanMarkLabels(planMarks)
                 .map((planLabel) => `${planLabel} · `)
                 .join("");
@@ -526,6 +534,12 @@ export default function PlannerCalendarWeek({
                     </span>
                   ) : null}
                   <span className="min-w-0 truncate">{marker.period.name}</span>
+                  {marker.period.isApPlanned ? (
+                    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600">
+                      <BoltIcon aria-hidden="true" className="size-2.5" />
+                      AP
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
