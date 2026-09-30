@@ -76,6 +76,12 @@ describe("minigame payment calculations", () => {
     ]);
   });
 
+  it("keeps the treasure-hunt-only target limit from affecting other minigames", () => {
+    const costs = calculateMinigamePaymentCosts(createMinigameConfig(), 101);
+
+    expect(costs[0]?.quantity).toBe(20_000);
+  });
+
   it("calculates round-based payment costs using selected min and max quantity modes", () => {
     const config = createMinigameConfig();
 

@@ -5,16 +5,32 @@ import type {
   TreasureHuntConfig,
   TreasureHuntRoundConfig,
 } from "~/domain/event-shop";
-import { normalizeClueSearchRoundRange } from "./clue-search";
 import {
   areTreasureHuntRoundEconomicsCompatible,
   combineOpenedCellHistograms,
   histogramPercentile,
-  openedCellPercentile,
-  treasureHuntCompositionSignature,
   type OpenedCellHistogram,
+  openedCellPercentile,
   type TreasureHuntComposition,
+  treasureHuntCompositionSignature,
 } from "~/domain/treasure-hunt";
+import { normalizeClueSearchRoundRange } from "./clue-search";
+
+export const TREASURE_HUNT_MAX_TARGET_ROUND = 100;
+
+export type TreasureHuntCalculationStatus =
+  | "empty"
+  | "failed"
+  | "incompatible"
+  | "no-data"
+  | "pending"
+  | "provisional"
+  | "round-limit"
+  | "ready";
+
+export function isTreasureHuntTargetRoundOverLimit(targetRound: number): boolean {
+  return targetRound > TREASURE_HUNT_MAX_TARGET_ROUND;
+}
 
 export type TreasureHuntRoundRow = {
   round: number;
@@ -86,6 +102,10 @@ export function getTreasureHuntRoundRows(
   startRound: number,
   endRound: number,
 ): TreasureHuntRoundRow[] {
+  if (isTreasureHuntTargetRoundOverLimit(endRound)) {
+    return [];
+  }
+
   if (!Number.isSafeInteger(config.loopRound) || config.loopRound < 1) {
     throw new Error("Treasure hunt loop round is invalid.");
   }
@@ -136,6 +156,35 @@ export function getTreasureHuntUniqueCompositions(rows: readonly TreasureHuntRou
     seen.add(signature);
     return [{ signature, composition }];
   });
+}
+
+export function getTreasureHuntRoundSelection(
+  config: TreasureHuntConfig | null,
+  startRound: number,
+  targetRound: number,
+): {
+  targetRoundOverLimit: boolean;
+  rows: TreasureHuntRoundRow[];
+  workerItems: { signature: string; composition: TreasureHuntComposition }[];
+  economicsCompatible: boolean;
+} {
+  const targetRoundOverLimit = isTreasureHuntTargetRoundOverLimit(targetRound);
+  if (!config || targetRound <= 0 || targetRoundOverLimit) {
+    return { targetRoundOverLimit, rows: [], workerItems: [], economicsCompatible: true };
+  }
+
+  const rows = getTreasureHuntRoundRows(config, startRound, targetRound);
+  const economicsCompatible = rows.length === 0 || areTreasureHuntRangeEconomicsCompatible(rows);
+  return {
+    targetRoundOverLimit,
+    rows,
+    workerItems: economicsCompatible ? getTreasureHuntUniqueCompositions(rows) : [],
+    economicsCompatible,
+  };
+}
+
+export function shouldHoldTreasureHuntShopCalculations(status: TreasureHuntCalculationStatus): boolean {
+  return status === "pending" || status === "failed" || status === "round-limit";
 }
 
 export function areTreasureHuntRangeEconomicsCompatible(rows: readonly TreasureHuntRoundRow[]): boolean {

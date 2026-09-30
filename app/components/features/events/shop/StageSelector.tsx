@@ -12,7 +12,7 @@ type StagesProps = {
   stageRuns: Record<string, number>;
   state: ShopState;
   actions: ShopActions;
-  treasureHuntStatus?: "pending" | "provisional" | "failed";
+  treasureHuntStatus?: "pending" | "provisional" | "failed" | "round-limit";
   onRetryTreasureHunt?: () => void;
 };
 
@@ -56,6 +56,8 @@ export function StageSelector({
               <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
               <span>{treasureHuntLocale.calculating}</span>
             </>
+          ) : treasureHuntStatus === "round-limit" ? (
+            <span role="alert">{treasureHuntLocale.roundLimitResult}</span>
           ) : (
             <>
               <span role="alert">{treasureHuntLocale.failedResult}</span>

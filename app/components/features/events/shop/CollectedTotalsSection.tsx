@@ -1,5 +1,5 @@
-import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { Transition } from "@headlessui/react";
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { memo, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
@@ -22,7 +22,7 @@ type CollectedTotalsSectionProps = {
   savedShopStateSource: SavedShopStateSource;
   minigameConfig?: MinigameConfig | null;
   minigameRewards?: RewardItem[];
-  treasureHuntStatus?: "pending" | "provisional" | "failed";
+  treasureHuntStatus?: "pending" | "provisional" | "failed" | "round-limit";
   onRetryTreasureHunt?: () => void;
   provisionalMinigameResourceUid?: string;
   state: ShopState;
@@ -230,7 +230,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     />
   ) : null;
 
-  if (treasureHuntStatus === "pending" || treasureHuntStatus === "failed") {
+  if (treasureHuntStatus === "pending" || treasureHuntStatus === "failed" || treasureHuntStatus === "round-limit") {
     return (
       <>
         <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요">
@@ -240,6 +240,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                 <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                 <span>{treasureHuntLocale.pendingResult}</span>
               </>
+            ) : treasureHuntStatus === "round-limit" ? (
+              <span role="alert">{treasureHuntLocale.roundLimitResult}</span>
             ) : (
               <>
                 <span role="alert">{treasureHuntLocale.failedResult}</span>

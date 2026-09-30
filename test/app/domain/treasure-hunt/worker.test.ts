@@ -33,6 +33,7 @@ describe("treasure hunt stats worker scheduling", () => {
   it("retains the active result and reprioritizes pending work without recalculation", async () => {
     const messages: { message: TreasureHuntStatsWorkerResponse; at: number }[] = [];
     const factoryCalls = new Map<string, number>();
+    const simulatedIndexes = new Map<string, number[]>();
     let clock = 0;
     let resolveFirstYield: (() => void) | undefined;
     let signalFirstYield: (() => void) | undefined;
@@ -50,7 +51,16 @@ describe("treasure hunt stats worker scheduling", () => {
       createSimulator: (item) => {
         const signature = treasureHuntCompositionSignature(item);
         factoryCalls.set(signature, (factoryCalls.get(signature) ?? 0) + 1);
-        return fakeSimulator(item.boardWidth);
+        const simulator = fakeSimulator(item.boardWidth);
+        return {
+          ...simulator,
+          simulateGame: (gameIndex) => {
+            const indexes = simulatedIndexes.get(signature) ?? [];
+            indexes.push(gameIndex);
+            simulatedIndexes.set(signature, indexes);
+            return simulator.simulateGame(gameIndex);
+          },
+        };
       },
       yieldToEventLoop: () => {
         yieldCount++;
@@ -83,7 +93,7 @@ describe("treasure hunt stats worker scheduling", () => {
       third.signature,
       second.signature,
     ]);
-    expect([...factoryCalls.values()]).toEqual([1, 1, 1]);
+    expect([...factoryCalls.values()]).toEqual([2, 2, 2]);
 
     for (const item of [first, second, third]) {
       const progress = messages
@@ -93,6 +103,9 @@ describe("treasure hunt stats worker scheduling", () => {
       const done = doneMessages.find(({ message }) => message.signature === item.signature)?.message;
       expect(done?.targetGames).toBe(TREASURE_HUNT_TARGET_GAMES);
       expect(done?.histogram.counts.reduce((sum, count) => sum + count, 0)).toBe(TREASURE_HUNT_TARGET_GAMES);
+      expect(simulatedIndexes.get(item.signature)).toEqual(
+        Array.from({ length: TREASURE_HUNT_TARGET_GAMES }, (_, index) => index),
+      );
     }
 
     const previousFactoryCalls = new Map(factoryCalls);
@@ -100,6 +113,120 @@ describe("treasure hunt stats worker scheduling", () => {
     await runtime.waitUntilIdle();
     expect(factoryCalls).toEqual(previousFactoryCalls);
     expect(messages.filter(({ message }) => message.type === "done")).toHaveLength(6);
+  });
+
+  it("emits an initial histogram for every requested composition before completing any", async () => {
+    const messages: TreasureHuntStatsWorkerResponse[] = [];
+    const items = [scheduleItem(2), scheduleItem(3), scheduleItem(4), scheduleItem(5)];
+    const runtime = new TreasureHuntStatsWorkerRuntime({
+      batchSize: TREASURE_HUNT_TARGET_GAMES,
+      postMessage: (message) => messages.push(message),
+      createSimulator: (item) => fakeSimulator(item.boardWidth),
+      yieldToEventLoop: () => Promise.resolve(),
+    });
+
+    runtime.schedule({ type: "schedule", items });
+    await runtime.waitUntilIdle();
+
+    const firstDoneIndex = messages.findIndex((message) => message.type === "done");
+    const initialProgress = messages.filter(
+      (message): message is Extract<TreasureHuntStatsWorkerResponse, { type: "progress" }> =>
+        message.type === "progress" && message.completedGames === 8,
+    );
+    expect(new Set(initialProgress.map(({ signature }) => signature))).toEqual(
+      new Set(items.map(({ signature }) => signature)),
+    );
+    expect(
+      initialProgress.every((message) => message.histogram.counts.reduce((sum, count) => sum + count, 0) === 8),
+    ).toBe(true);
+    expect(initialProgress.every((message) => messages.indexOf(message) < firstDoneIndex)).toBe(true);
+    expect(messages.filter((message) => message.type === "done")).toHaveLength(items.length);
+  });
+
+  it("resumes accumulated game indexes when a new composition is added during scheduling", async () => {
+    const messages: TreasureHuntStatsWorkerResponse[] = [];
+    const factoryCalls = new Map<string, number>();
+    const simulatedIndexes = new Map<string, number[]>();
+    let yieldCount = 0;
+    let releaseFourthYield: (() => void) | undefined;
+    let signalFourthYield: (() => void) | undefined;
+    const fourthYield = new Promise<void>((resolve) => {
+      signalFourthYield = resolve;
+    });
+    const first = scheduleItem(2);
+    const second = scheduleItem(3);
+    const third = scheduleItem(4);
+    const fourth = scheduleItem(5);
+    const runtime = new TreasureHuntStatsWorkerRuntime({
+      batchSize: 100,
+      postMessage: (message) => messages.push(message),
+      createSimulator: (item) => {
+        const signature = treasureHuntCompositionSignature(item);
+        factoryCalls.set(signature, (factoryCalls.get(signature) ?? 0) + 1);
+        const simulator = fakeSimulator(item.boardWidth);
+        return {
+          ...simulator,
+          simulateGame: (gameIndex) => {
+            const indexes = simulatedIndexes.get(signature) ?? [];
+            indexes.push(gameIndex);
+            simulatedIndexes.set(signature, indexes);
+            return simulator.simulateGame(gameIndex);
+          },
+        };
+      },
+      yieldToEventLoop: () => {
+        yieldCount++;
+        if (yieldCount === 4) {
+          return new Promise<void>((resolve) => {
+            releaseFourthYield = resolve;
+            signalFourthYield?.();
+          });
+        }
+        return Promise.resolve();
+      },
+    });
+
+    runtime.schedule({ type: "schedule", items: [first, second, third] });
+    await fourthYield;
+    runtime.schedule({ type: "schedule", items: [first, second, third, fourth] });
+    releaseFourthYield?.();
+    await runtime.waitUntilIdle();
+
+    const expectedIndexes = Array.from({ length: TREASURE_HUNT_TARGET_GAMES }, (_, index) => index);
+    for (const item of [first, second, third, fourth]) {
+      expect(simulatedIndexes.get(item.signature)).toEqual(expectedIndexes);
+      const progress = messages
+        .filter(
+          (message): message is Extract<TreasureHuntStatsWorkerResponse, { type: "progress" }> =>
+            message.type === "progress" && message.signature === item.signature,
+        )
+        .map(({ completedGames }) => completedGames);
+      expect(progress.every((games, index) => index === 0 || games >= (progress[index - 1] ?? 0))).toBe(true);
+    }
+    expect([...factoryCalls.values()]).toEqual([3, 2, 2, 2]);
+    expect(messages.filter((message) => message.type === "done")).toHaveLength(4);
+  });
+
+  it("completes five compositions once despite the four-entry completed cache", async () => {
+    const messages: TreasureHuntStatsWorkerResponse[] = [];
+    const factoryCalls = new Map<string, number>();
+    const items = [2, 3, 4, 5, 6].map(scheduleItem);
+    const runtime = new TreasureHuntStatsWorkerRuntime({
+      batchSize: TREASURE_HUNT_TARGET_GAMES,
+      postMessage: (message) => messages.push(message),
+      createSimulator: (item) => {
+        const signature = treasureHuntCompositionSignature(item);
+        factoryCalls.set(signature, (factoryCalls.get(signature) ?? 0) + 1);
+        return fakeSimulator(item.boardWidth);
+      },
+      yieldToEventLoop: () => Promise.resolve(),
+    });
+
+    runtime.schedule({ type: "schedule", items });
+    await runtime.waitUntilIdle();
+
+    expect(messages.filter((message) => message.type === "done")).toHaveLength(items.length);
+    expect([...factoryCalls.values()]).toEqual([2, 2, 2, 2, 2]);
   });
 
   it("reports invalid compositions and engine failures without exposing raw errors", async () => {
@@ -144,7 +271,7 @@ describe("treasure hunt stats worker scheduling", () => {
     runtime.schedule({ type: "schedule", items: [item] });
     await runtime.waitUntilIdle();
 
-    expect(factoryCalls).toBe(2);
+    expect(factoryCalls).toBe(3);
     expect(messages.filter((message) => message.type === "error")).toEqual([
       { type: "error", signature: item.signature, reason: "engine-failure" },
     ]);

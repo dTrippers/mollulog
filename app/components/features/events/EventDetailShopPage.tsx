@@ -20,14 +20,6 @@ import {
   resolveClueSearchExchange,
 } from "./shop/clue-search";
 import {
-  areTreasureHuntRangeEconomicsCompatible,
-  calculateTreasureHuntEstimate,
-  getTreasureHuntCellCostResources,
-  getTreasureHuntRoundRows,
-  getTreasureHuntUniqueCompositions,
-  type TreasureHuntEstimate,
-} from "./shop/treasure-hunt";
-import {
   type GuestPlannerStatus,
   useAutoSave,
   useBonusCalculation,
@@ -36,6 +28,13 @@ import {
 } from "./shop/hooks";
 import { useTreasureHuntStats } from "./shop/hooks/useTreasureHuntStats";
 import type { TreasureHuntSectionStatus } from "./shop/TreasureHuntSection";
+import {
+  calculateTreasureHuntEstimate,
+  getTreasureHuntCellCostResources,
+  getTreasureHuntRoundSelection,
+  shouldHoldTreasureHuntShopCalculations,
+  type TreasureHuntEstimate,
+} from "./shop/treasure-hunt";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
 
 type EventDetailShopPageProps = {
@@ -162,19 +161,19 @@ export default function EventDetailShopPage({
     signedIn,
   });
 
-  const selectedTreasureHuntRows = useMemo(() => {
-    if (!isTreasureHunt || !treasureHunt || state.minigamePlayCount <= 0) return [];
-    return getTreasureHuntRoundRows(treasureHunt, state.minigameStartRound, state.minigamePlayCount);
-  }, [isTreasureHunt, state.minigamePlayCount, state.minigameStartRound, treasureHunt]);
-  const treasureHuntEconomicsCompatible =
-    selectedTreasureHuntRows.length === 0 || areTreasureHuntRangeEconomicsCompatible(selectedTreasureHuntRows);
-  const treasureHuntWorkerItems = useMemo(
+  const treasureHuntRoundSelection = useMemo(
     () =>
-      isTreasureHunt && treasureHunt && selectedTreasureHuntRows.length > 0 && treasureHuntEconomicsCompatible
-        ? getTreasureHuntUniqueCompositions(selectedTreasureHuntRows)
-        : [],
-    [isTreasureHunt, selectedTreasureHuntRows, treasureHunt, treasureHuntEconomicsCompatible],
+      getTreasureHuntRoundSelection(
+        isTreasureHunt ? treasureHunt : null,
+        state.minigameStartRound,
+        state.minigamePlayCount,
+      ),
+    [isTreasureHunt, state.minigamePlayCount, state.minigameStartRound, treasureHunt],
   );
+  const treasureHuntTargetRoundOverLimit = isTreasureHunt && treasureHuntRoundSelection.targetRoundOverLimit;
+  const selectedTreasureHuntRows = treasureHuntRoundSelection.rows;
+  const treasureHuntEconomicsCompatible = treasureHuntRoundSelection.economicsCompatible;
+  const treasureHuntWorkerItems = treasureHuntRoundSelection.workerItems;
   const treasureHuntStats = useTreasureHuntStats(treasureHuntWorkerItems, treasureHuntWorkerItems.length > 0);
   const treasureHuntCalculation = useMemo(() => {
     let status: TreasureHuntSectionStatus = "empty";
@@ -182,7 +181,9 @@ export default function EventDetailShopPage({
     let progress: number | null = null;
     const statsBySignature = treasureHuntStats.statsBySignature;
 
-    if (isTreasureHunt && !treasureHunt) {
+    if (treasureHuntTargetRoundOverLimit) {
+      status = "round-limit";
+    } else if (isTreasureHunt && !treasureHunt) {
       status = "no-data";
     } else if (isTreasureHunt && selectedTreasureHuntRows.length > 0 && !treasureHuntEconomicsCompatible) {
       status = "incompatible";
@@ -224,6 +225,7 @@ export default function EventDetailShopPage({
     };
   }, [
     isTreasureHunt,
+    treasureHuntTargetRoundOverLimit,
     selectedTreasureHuntRows,
     state.minigamePaymentQuantityMode,
     treasureHunt,
@@ -295,7 +297,7 @@ export default function EventDetailShopPage({
     return estimate ? [...estimate.treasureRewards, ...estimate.openCellRewards] : [];
   }, [isTreasureHunt, treasureHuntCalculation.estimate]);
   const holdTreasureHuntCalculations =
-    isTreasureHunt && (treasureHuntCalculation.status === "pending" || treasureHuntCalculation.status === "failed");
+    isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
   const minigameConfigForCalculations = isTreasureHunt ? null : minigameConfig;
 
   // Shop calculations
@@ -315,7 +317,8 @@ export default function EventDetailShopPage({
     isTreasureHunt &&
     (treasureHuntCalculation.status === "pending" ||
       treasureHuntCalculation.status === "provisional" ||
-      treasureHuntCalculation.status === "failed")
+      treasureHuntCalculation.status === "failed" ||
+      treasureHuntCalculation.status === "round-limit")
       ? treasureHuntCalculation.status
       : undefined;
 

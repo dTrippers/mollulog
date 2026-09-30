@@ -16,20 +16,15 @@ import type { ShopActions, ShopState } from "./hooks";
 import {
   calculateTreasureHuntRoundEstimates,
   getTreasureHuntTreasureRewards,
+  TREASURE_HUNT_MAX_TARGET_ROUND,
+  type TreasureHuntCalculationStatus,
   type TreasureHuntEstimate,
   type TreasureHuntHistogramState,
   type TreasureHuntRoundRow,
 } from "./treasure-hunt";
 import { resourceCountLabel } from "./utils";
 
-export type TreasureHuntSectionStatus =
-  | "empty"
-  | "failed"
-  | "incompatible"
-  | "no-data"
-  | "pending"
-  | "provisional"
-  | "ready";
+export type TreasureHuntSectionStatus = TreasureHuntCalculationStatus;
 
 export type TreasureHuntSectionState = {
   status: TreasureHuntSectionStatus;
@@ -201,7 +196,14 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-sm font-medium text-foreground">{treasureHuntLocale.targetRound}</span>
         <div className="w-32">
-          <NumberInput value={targetRound} minValue={0} onChange={handleTargetRoundChange} />
+          <NumberInput
+            value={targetRound}
+            minValue={0}
+            maxValue={TREASURE_HUNT_MAX_TARGET_ROUND}
+            aria-invalid={status === "round-limit"}
+            aria-describedby={status === "round-limit" ? "treasure-hunt-target-round-error" : undefined}
+            onChange={handleTargetRoundChange}
+          />
         </div>
         <Checkbox
           label={treasureHuntLocale.excludeCompleted}
@@ -209,6 +211,12 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
           onChange={handleCompletedRoundToggle}
         />
       </div>
+
+      {status === "round-limit" && (
+        <div id="treasure-hunt-target-round-error" role="alert" className="mt-2">
+          <Callout tone="destructive">{treasureHuntLocale.targetRoundLimit}</Callout>
+        </div>
+      )}
 
       {showCompletedRound && (
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -282,7 +290,9 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
       <div className="mt-4 rounded-md bg-card p-3">
         <p className="text-sm font-semibold text-foreground">{treasureHuntLocale.requiredResources}</p>
         {rows.length === 0 ? (
-          <p className="mt-2 text-sm text-muted-foreground">{treasureHuntLocale.selectTarget}</p>
+          status === "round-limit" ? null : (
+            <p className="mt-2 text-sm text-muted-foreground">{treasureHuntLocale.selectTarget}</p>
+          )
         ) : (
           <>
             {(isPending || isFailed) && (
@@ -328,7 +338,7 @@ export function TreasureHuntSection({ treasureHunt, state, actions, calculation 
                   ? `${treasureHuntLocale.openRewards} · ${treasureHuntLocale.calculatingShort}`
                   : isFailed
                     ? `${treasureHuntLocale.openRewards} · ${treasureHuntLocale.calculationFailed}`
-                  : treasureHuntLocale.openRewards}
+                    : treasureHuntLocale.openRewards}
               </p>
               {isPending || isFailed ? (
                 <div className="flex flex-wrap gap-1">

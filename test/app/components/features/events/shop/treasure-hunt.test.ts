@@ -5,8 +5,12 @@ import {
   calculateTreasureHuntEstimate,
   getTreasureHuntCellCostResources,
   getTreasureHuntRoundRows,
+  getTreasureHuntRoundSelection,
   getTreasureHuntTreasureRewards,
   getTreasureHuntUniqueCompositions,
+  isTreasureHuntTargetRoundOverLimit,
+  shouldHoldTreasureHuntShopCalculations,
+  TREASURE_HUNT_MAX_TARGET_ROUND,
 } from "~/components/features/events/shop/treasure-hunt";
 import type { TreasureHuntConfig, TreasureHuntRoundConfig } from "~/domain/event-shop";
 import { ResourceTypeEnum } from "~/graphql/graphql";
@@ -75,6 +79,25 @@ describe("treasure hunt round range and estimates", () => {
       { round: 2, multiplicity: 1, isLoop: false },
       { round: 3, multiplicity: 6, isLoop: true },
     ]);
+  });
+
+  it("limits treasure-hunt expansion to 100 target rounds", () => {
+    const config = createConfig([createRound(1), createRound(2), createRound(3)]);
+
+    expect(TREASURE_HUNT_MAX_TARGET_ROUND).toBe(100);
+    expect(isTreasureHuntTargetRoundOverLimit(100)).toBe(false);
+    expect(isTreasureHuntTargetRoundOverLimit(101)).toBe(true);
+    expect(getTreasureHuntRoundRows(config, 1, 100)).toHaveLength(3);
+    expect(getTreasureHuntRoundRows(config, 1, 101)).toEqual([]);
+
+    const selection = getTreasureHuntRoundSelection(config, 1, 101);
+    expect(selection).toMatchObject({
+      targetRoundOverLimit: true,
+      rows: [],
+      workerItems: [],
+    });
+    expect(shouldHoldTreasureHuntShopCalculations("round-limit")).toBe(true);
+    expect(shouldHoldTreasureHuntShopCalculations("incompatible")).toBe(false);
   });
 
   it("rejects a selected range whose per-cell economics differ", () => {

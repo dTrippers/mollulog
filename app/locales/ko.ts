@@ -315,6 +315,9 @@ export function minigameDescription(minigameType: string): string | null {
 export const treasureHuntLocale = {
   title: "보물찾기",
   targetRound: "목표 회차",
+  targetRoundLimit: "보물찾기 목표 회차는 최대 100회차까지 설정할 수 있어요.",
+  roundLimitResult:
+    "목표 회차가 100회를 넘어 소탕 횟수와 필요 AP를 계산할 수 없어요. 목표 회차를 100회 이하로 낮춰주세요.",
   excludeCompleted: "완료한 회차 제외",
   completedRound: "완료 회차",
   completedRoundHelp: "완료한 다음 회차부터 계산해요",
