@@ -276,6 +276,16 @@ const eventContentShopContentQuery = graphql(`
   }
 `);
 
+const eventContentMinigameTypeQuery = graphql(`
+  query EventContentMinigameType($eventUid: String!, $runType: RunTypeEnum!) {
+    eventContent(uid: $eventUid) {
+      minigameConfigs(runType: $runType) {
+        minigameType
+      }
+    }
+  }
+`);
+
 type EventContentData = NonNullable<EventContentShopContentQuery["eventContent"]>;
 type EventStageRewardResource = NonNullable<EventContentData["stages"][number]["rewards"][number]["resource"]>;
 
@@ -606,7 +616,30 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 export async function getEventMinigameType(
   env: Env,
   metadata: EventMetadata,
+  forceRefresh = false,
 ): Promise<MinigameConfig["minigameType"] | null> {
-  const content = await getEventShopContentForMetadata(env, metadata);
-  return content?.minigameConfig?.minigameType ?? null;
+  const contentUid = metadata.shopContentUid ?? metadata.contentUid;
+  if (!contentUid) {
+    return null;
+  }
+
+  const { runType } = metadata;
+  return fetchLazySourceCached(
+    env,
+    cacheKey("source", "event-minigame-type", 1, cacheQuery({ contentUid, runType })),
+    async () => {
+      const { data, error } = await runQuery(eventContentMinigameTypeQuery, {
+        eventUid: contentUid,
+        runType: toRunTypeEnum(runType),
+      });
+      if (error || !data) {
+        throw error ?? new Error("Failed to fetch event minigame type.");
+      }
+
+      const minigameType = data.eventContent?.minigameConfigs[0]?.minigameType;
+      return (minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
+    },
+    EVENT_STATIC_CONTENT_TTL,
+    forceRefresh,
+  );
 }
