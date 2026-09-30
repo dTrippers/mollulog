@@ -48,6 +48,7 @@ export function calculateResourceLedger({
   minigamePlayCount,
   minigameConfig,
   minigamePaymentCosts,
+  minigameRewards,
   excludedShopResourceUids,
   overriddenRequiredQuantities,
 }: RequiredQuantitiesInput): ResourceLedger {
@@ -106,12 +107,11 @@ export function calculateResourceLedger({
   }
 
   const fromMinigame: DecimalMap = {};
-  if (minigameConfig && minigamePlayCount > 0) {
-    for (const { resourceUid, quantity } of calculateMinigameRewards(
-      minigameConfig,
-      minigamePlayCount,
-      minigameStartRound ?? 1,
-    )) {
+  if (minigamePlayCount > 0) {
+    const rewards =
+      minigameRewards ??
+      (minigameConfig ? calculateMinigameRewards(minigameConfig, minigamePlayCount, minigameStartRound ?? 1) : []);
+    for (const { resourceUid, quantity } of rewards) {
       addQuantity(fromMinigame, resourceUid, quantity);
     }
   }

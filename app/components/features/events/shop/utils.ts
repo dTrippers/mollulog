@@ -99,6 +99,9 @@ export function calculateMinigamePaymentCosts(
   if (playCount <= 0) {
     return [];
   }
+  if (config.minigameType === "treasure_hunt") {
+    return [];
+  }
 
   const costMap = new Map<string, MinigamePayment>();
   const addCost = (payment: MinigamePayment, multiplier: number) => {
@@ -208,6 +211,9 @@ export function calculateMinigamePaymentCosts(
 
 export function calculateMinigameRewards(config: MinigameConfig, playCount: number, startRound = 1): RewardItem[] {
   if (playCount <= 0) {
+    return [];
+  }
+  if (config.minigameType === "treasure_hunt") {
     return [];
   }
 

@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import type { MinigameConfig } from "~/domain/event-shop";
 import { createDefaultEventShopState, type EventShopState } from "~/domain/event-shop-state";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
 import { getEventMetadata, getEventShopContent } from "~/models/event-content";
@@ -43,6 +44,7 @@ export type EventShopPlanDisplayCatalog = {
   sweepStageUids: string[];
   studentNamesByUid: Record<string, string>;
   hasMinigame: boolean;
+  minigameType?: MinigameConfig["minigameType"] | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -104,16 +106,25 @@ function getEventShopPlanDisplayCatalog(
 
   const minigame = content.minigameConfig;
   if (minigame) {
-    const payments = [
-      minigame.payment,
-      ...minigame.payments,
-      ...minigame.rewardGroups.flatMap((group) => group.payments),
-    ];
-    for (const payment of payments) {
-      addName(resourceNamesByUid, payment.resourceUid, payment.resourceName);
-    }
-    for (const reward of minigame.rewardGroups.flatMap((group) => group.rewards)) {
-      addName(resourceNamesByUid, reward.resourceUid, reward.resourceName);
+    if (minigame.minigameType === "treasure_hunt") {
+      for (const round of minigame.treasureHunt?.rounds ?? []) {
+        addName(resourceNamesByUid, round.cellCost.resourceUid, round.cellCost.resourceName);
+        for (const reward of [...round.openCellRewards, ...round.treasures.flatMap((treasure) => treasure.rewards)]) {
+          addName(resourceNamesByUid, reward.resourceUid, reward.resourceName);
+        }
+      }
+    } else {
+      const payments = [
+        minigame.payment,
+        ...minigame.payments,
+        ...minigame.rewardGroups.flatMap((group) => group.payments),
+      ];
+      for (const payment of payments) {
+        addName(resourceNamesByUid, payment.resourceUid, payment.resourceName);
+      }
+      for (const reward of minigame.rewardGroups.flatMap((group) => group.rewards)) {
+        addName(resourceNamesByUid, reward.resourceUid, reward.resourceName);
+      }
     }
   }
 
@@ -125,6 +136,7 @@ function getEventShopPlanDisplayCatalog(
     sweepStageUids: content.stages.filter(({ difficulty }) => difficulty === 1).map(({ uid }) => uid),
     studentNamesByUid,
     hasMinigame: minigame !== null,
+    minigameType: minigame?.minigameType ?? null,
   };
 }
 

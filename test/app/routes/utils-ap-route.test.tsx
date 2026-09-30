@@ -35,10 +35,11 @@ jest.mock("~/routes/utils.ap._components/ApTimelineEvent", () => ({
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useLoaderData } from "react-router";
-import type { Stage } from "~/domain/event-shop";
+import type { MinigameConfig, Stage } from "~/domain/event-shop";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
 import { type ApPlannerCalculation, calculateApPlannerEvent } from "~/domain/ap-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import ApPlannerRoute from "~/routes/utils.ap";
 
 const mockUseLoaderData = useLoaderData as unknown as jest.Mock;
@@ -93,7 +94,7 @@ function loaderData(overriddenRequiredQuantities: Record<string, number> = {}) {
       startAt: event.startAt,
       endAt: event.endAt,
       accountState: shopState,
-      content: { stages, shopResources: [], eventRewardBonus: [], minigameConfig: null },
+      content: { stages, shopResources: [], eventRewardBonus: [], minigameConfig: null as MinigameConfig | null },
     })),
   };
 }
@@ -153,5 +154,24 @@ describe("AP planner route", () => {
     expect(card?.shopTargetExists).toBe(true);
     expect(card?.rewardDataPending).toBe(true);
     expect(card?.calculationError).toBe("해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.");
+  });
+
+  it.each([false, true])("does not undercount a treasure-hunt plan with first-clear AP %s", (includeFirstClear) => {
+    const data = loaderData();
+    for (const shop of data.shopEvents) {
+      shop.accountState.includeFirstClear = includeFirstClear;
+      shop.accountState.minigamePlayCount = 6;
+      shop.content.minigameConfig = {
+        minigameType: "treasure_hunt",
+        payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "treasure-ticket", quantity: 1 },
+        payments: [],
+        rewardGroups: [],
+      };
+    }
+    const card = renderNextCard(data);
+
+    expect(card?.calculation).toBeNull();
+    expect(card?.shopTargetExists).toBe(true);
+    expect(card?.calculationError).toBe("보물찾기가 포함된 AP는 이벤트 상점 계산기에서 확인해주세요.");
   });
 });

@@ -4,6 +4,7 @@ import {
   getInitialMinigameStartRound,
   getPostSignInState,
 } from "../../../../../../../app/components/features/events/shop/hooks/useShopState";
+import { isTreasureHuntTargetRoundOverLimit } from "../../../../../../../app/components/features/events/shop/treasure-hunt";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 import type { EventShopState } from "../../../../../../../app/models/event-shop-state";
@@ -148,6 +149,18 @@ describe("getPostSignInState", () => {
         enabledStages: { "stage-1": true },
       }),
     );
+  });
+
+  it("preserves a restored treasure-hunt target above the calculation limit for correction", () => {
+    const restoredState = getPostSignInState({
+      savedShopState: createSavedShopState({ minigamePlayCount: 101 }),
+      recruitedStudentUids: [],
+      shopResources: [],
+      stages: [],
+    });
+
+    expect(restoredState?.minigamePlayCount).toBe(101);
+    expect(isTreasureHuntTargetRoundOverLimit(restoredState?.minigamePlayCount ?? 0)).toBe(true);
   });
 
   it("keeps the saved minigame start round within the valid range and the saved bonus selection", () => {

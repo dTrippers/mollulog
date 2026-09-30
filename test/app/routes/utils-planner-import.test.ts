@@ -43,6 +43,7 @@ import {
   describeImportSelectionSummary,
   describeImportSuccess,
   describeTimelineGroup,
+  formatMinigamePlanSummary,
   formatStudents,
   getGuestPlannerImportDisplayState,
   getMissingGuestCollectedSourceKeys,
@@ -137,6 +138,24 @@ function recordGroups(envelope: ReturnType<typeof createPlannerWithGuestRecords>
   const guestRecordsById = guestPyroxeneRecordsById(envelope);
   return guestTimelineRecordGroupsById(envelope.document.pyroxene.records, guestRecordsById);
 }
+
+describe("formatMinigamePlanSummary", () => {
+  it.each([
+    ["treasure_hunt", "expected", "6회 · 2회차부터 · 보통 비용"],
+    ["treasure_hunt", "min", "6회 · 2회차부터 · 상위 10% 비용"],
+    ["treasure_hunt", "max", "6회 · 2회차부터 · 하위 10% 비용"],
+    ["dice", "expected", "6회 · 2라운드부터 · 기대 비용"],
+    ["dice", "min", "6회 · 2라운드부터 · 최소 비용"],
+    ["dice", "max", "6회 · 2라운드부터 · 최대 비용"],
+  ] as const)("formats %s plans in %s mode", (minigameType, mode, expected) => {
+    expect(
+      formatMinigamePlanSummary(
+        { minigamePaymentQuantityMode: mode, minigamePlayCount: 6, minigameStartRound: 2 },
+        minigameType,
+      ),
+    ).toBe(expected);
+  });
+});
 
 describe("unified planner import action", () => {
   it("rejects oversized normalized guest data before starting an import", async () => {

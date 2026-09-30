@@ -503,9 +503,12 @@ function calculateShopRequiredAp(
   requiredAp: number;
   breakdown: { firstClearAp: number; questSweepAp: number; extraSweepAp: number };
   hasUnobtainableTargets: boolean;
-} {
+} | null {
   if (!shop.content || !state) throw new Error("상점 계산 상태를 확인할 수 없어요.");
   const { stages, shopResources, eventRewardBonus, minigameConfig } = shop.content;
+  // Treasure hunt needs the shop screen's worker-backed estimate. Never present
+  // the legacy helpers' empty result as a complete AP requirement.
+  if (minigameConfig?.minigameType === "treasure_hunt" && state.minigamePlayCount > 0) return null;
   const clueExchange = resolveClueSearchExchange(minigameConfig, shopResources);
   const visibleShopResources = filterClueSearchShopResources(shopResources, clueExchange);
   const bonusSummary = calculateBonusSummary({
@@ -682,7 +685,8 @@ export default function ApPlannerRoute() {
         const shopState = loaderData.signedIn ? entry.shop.accountState : getGuestShopState(guestPlans, entry.shop);
         if (!shopState) return [];
         try {
-          return calculateShopRequiredAp(entry.shop, shopState).hasUnobtainableTargets ? [entry.timelineUid] : [];
+          const required = calculateShopRequiredAp(entry.shop, shopState);
+          return !required || required.hasUnobtainableTargets ? [entry.timelineUid] : [];
         } catch {
           return [];
         }
@@ -721,8 +725,10 @@ export default function ApPlannerRoute() {
       if (!calculationError && shopState) {
         try {
           const required = calculateShopRequiredAp(entry.shop, shopState);
-          shopTargetExists = required.hasUnobtainableTargets || hasApShopTarget(required.requiredAp);
-          if (shopTargetExists) {
+          shopTargetExists = !required || required.hasUnobtainableTargets || hasApShopTarget(required.requiredAp);
+          if (!required) {
+            calculationError = "보물찾기가 포함된 AP는 이벤트 상점 계산기에서 확인해주세요.";
+          } else if (shopTargetExists) {
             if (required.hasUnobtainableTargets) {
               rewardDataPending = true;
               calculationError = "해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.";

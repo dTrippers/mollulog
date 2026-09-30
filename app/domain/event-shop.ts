@@ -50,6 +50,28 @@ export type DiceMinigameConfig = {
   nodeRewards?: DiceNodeReward[];
 };
 
+export type TreasureHuntTreasure = {
+  uid: string;
+  width: number;
+  height: number;
+  count: number;
+  rewards: RewardItem[];
+};
+
+export type TreasureHuntRoundConfig = {
+  round: number;
+  boardWidth: number;
+  boardHeight: number;
+  cellCost: MinigamePayment;
+  openCellRewards: RewardItem[];
+  treasures: TreasureHuntTreasure[];
+};
+
+export type TreasureHuntConfig = {
+  loopRound: number;
+  rounds: TreasureHuntRoundConfig[];
+};
+
 export type MinigameConfig = {
   minigameType:
     | "roguelike"
@@ -59,7 +81,8 @@ export type MinigameConfig = {
     | "card_flip"
     | "fortune_gacha"
     | "box_gacha"
-    | "clue_search";
+    | "clue_search"
+    | "treasure_hunt";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
@@ -70,6 +93,7 @@ export type MinigameConfig = {
   payments: MinigamePayment[];
   rewardGroups: RewardGroup[];
   dice?: DiceMinigameConfig;
+  treasureHunt?: TreasureHuntConfig | null;
 };
 
 export type MinigamePayment = {

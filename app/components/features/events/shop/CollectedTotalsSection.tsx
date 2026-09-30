@@ -1,10 +1,12 @@
 import { Transition } from "@headlessui/react";
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { memo, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Button, NumberInput, ResourceCard, Section } from "~/components/primitives";
-import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import type { CollectableResource, MinigameConfig, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
+import { treasureHuntLocale } from "~/locales/ko";
 import BugReportModal from "./BugReportModal";
 import { calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
 import type { ShopActions, ShopState } from "./hooks";
@@ -19,6 +21,10 @@ type CollectedTotalsSectionProps = {
   shopStateUid: string;
   savedShopStateSource: SavedShopStateSource;
   minigameConfig?: MinigameConfig | null;
+  minigameRewards?: RewardItem[];
+  treasureHuntStatus?: "pending" | "provisional" | "failed" | "round-limit";
+  onRetryTreasureHunt?: () => void;
+  provisionalMinigameResourceUid?: string;
   state: ShopState;
   actions: ShopActions;
   stageCalculations: CalculationResult;
@@ -103,6 +109,10 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   shopStateUid,
   savedShopStateSource,
   minigameConfig,
+  minigameRewards,
+  treasureHuntStatus,
+  onRetryTreasureHunt,
+  provisionalMinigameResourceUid,
   state,
   actions,
   stageCalculations,
@@ -181,15 +191,19 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     }
 
     // Add minigame rewards
-    if (minigameConfig && state.minigamePlayCount > 0) {
-      const rewards = calculateMinigameRewards(minigameConfig, state.minigamePlayCount, state.minigameStartRound);
+    if (state.minigamePlayCount > 0) {
+      const rewards =
+        minigameRewards ??
+        (minigameConfig
+          ? calculateMinigameRewards(minigameConfig, state.minigamePlayCount, state.minigameStartRound)
+          : []);
       for (const { resourceType, resourceUid, resourceName, imageUrl, quantity, rarity } of rewards) {
         addResource(resourceType, resourceUid, quantity, rarity ?? 1, resourceName ?? "재화", imageUrl);
       }
     }
 
     return Array.from(resourceMap.values());
-  }, [boughtShopResources, minigameConfig, state.minigamePlayCount, state.minigameStartRound]);
+  }, [boughtShopResources, minigameConfig, minigameRewards, state.minigamePlayCount, state.minigameStartRound]);
 
   const apBreakdown = useMemo(
     () =>
@@ -201,10 +215,56 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
     [firstClearAp, questSweepAp, extraSweepAp],
   );
 
+  const bugReportModal = signedIn ? (
+    <BugReportModal
+      show={showBugReportModal}
+      eventUid={eventUid}
+      shopStateUid={shopStateUid}
+      savedShopStateSource={savedShopStateSource}
+      stages={stages}
+      shopResources={shopResources}
+      collectableResources={collectableResources}
+      stageCalculations={stageCalculations}
+      shopState={state}
+      onClose={() => setShowBugReportModal(false)}
+    />
+  ) : null;
+
+  if (treasureHuntStatus === "pending" || treasureHuntStatus === "failed" || treasureHuntStatus === "round-limit") {
+    return (
+      <>
+        <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요">
+          <div className="flex flex-wrap items-center gap-2 py-2 text-sm text-muted-foreground">
+            {treasureHuntStatus === "pending" ? (
+              <>
+                <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                <span>{treasureHuntLocale.pendingResult}</span>
+              </>
+            ) : treasureHuntStatus === "round-limit" ? (
+              <span role="alert">{treasureHuntLocale.roundLimitResult}</span>
+            ) : (
+              <>
+                <span role="alert">{treasureHuntLocale.failedResult}</span>
+                <Button text={treasureHuntLocale.retry} size="sm" variant="secondary" onClick={onRetryTreasureHunt} />
+              </>
+            )}
+          </div>
+        </Section>
+        {bugReportModal}
+      </>
+    );
+  }
+
   return (
     <>
       <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요">
         <div>
+          {treasureHuntStatus === "provisional" && (
+            <div className="my-2 flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+              <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <span>{treasureHuntLocale.provisionalResult}</span>
+            </div>
+          )}
           {totalApWithExtras > 0 && (
             <div className="my-4 rounded-md border border-green-200 bg-gradient-to-r from-green-50 to-blue-50 p-4 dark:border-green-800 dark:from-green-950 dark:to-teal-950">
               <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-green-200 dark:border-green-800">
@@ -276,7 +336,13 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               const acquiredLines: BreakdownLine[] = [
                 existingCount > 0 && { label: "기존 보유", value: existingCount },
                 firstRunCount > 0 && { label: "스토리 / 초회 보상", value: firstRunCount },
-                fromMinigameCount > 0 && { label: "미니게임", value: fromMinigameCount },
+                fromMinigameCount > 0 && {
+                  label:
+                    treasureHuntStatus === "provisional" && itemUid === provisionalMinigameResourceUid
+                      ? "미니게임 (계산 중)"
+                      : "미니게임",
+                  value: fromMinigameCount,
+                },
                 repeatedRunsCount > 0 && { label: "퀘스트", value: repeatedRunsCount },
                 fromShopCount > 0 && { label: "상점 구매", value: fromShopCount },
               ].filter(Boolean) as BreakdownLine[];
@@ -284,7 +350,13 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               const requiredLines: BreakdownLine[] = !hasOverride
                 ? ([
                     toBuyCount > 0 && { label: "상점 구매", value: toBuyCount },
-                    toPlayMinigameCount > 0 && { label: "미니게임", value: toPlayMinigameCount },
+                    toPlayMinigameCount > 0 && {
+                      label:
+                        treasureHuntStatus === "provisional" && itemUid === provisionalMinigameResourceUid
+                          ? "미니게임 (계산 중)"
+                          : "미니게임",
+                      value: toPlayMinigameCount,
+                    },
                   ].filter(Boolean) as BreakdownLine[])
                 : [];
 
@@ -437,20 +509,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
         </div>
       </Section>
 
-      {signedIn && (
-        <BugReportModal
-          show={showBugReportModal}
-          eventUid={eventUid}
-          shopStateUid={shopStateUid}
-          savedShopStateSource={savedShopStateSource}
-          stages={stages}
-          shopResources={shopResources}
-          collectableResources={collectableResources}
-          stageCalculations={stageCalculations}
-          shopState={state}
-          onClose={() => setShowBugReportModal(false)}
-        />
-      )}
+      {bugReportModal}
     </>
   );
 });

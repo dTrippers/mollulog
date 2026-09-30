@@ -26,6 +26,15 @@ import {
   useShopCalculations,
   useShopState,
 } from "./shop/hooks";
+import { useTreasureHuntStats } from "./shop/hooks/useTreasureHuntStats";
+import type { TreasureHuntSectionStatus } from "./shop/TreasureHuntSection";
+import {
+  calculateTreasureHuntEstimate,
+  getTreasureHuntCellCostResources,
+  getTreasureHuntRoundSelection,
+  shouldHoldTreasureHuntShopCalculations,
+  type TreasureHuntEstimate,
+} from "./shop/treasure-hunt";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
 
 type EventDetailShopPageProps = {
@@ -65,6 +74,8 @@ export default function EventDetailShopPage({
     () => filterClueSearchShopResources(shopResources, clueSearchExchange),
     [clueSearchExchange, shopResources],
   );
+  const isTreasureHunt = minigameConfig?.minigameType === "treasure_hunt";
+  const treasureHunt = isTreasureHunt ? (minigameConfig.treasureHunt ?? null) : null;
 
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
@@ -93,7 +104,20 @@ export default function EventDetailShopPage({
       }
     }
 
-    if (minigameConfig) {
+    if (minigameConfig?.minigameType === "treasure_hunt") {
+      const cellCosts = getTreasureHuntCellCostResources(minigameConfig.treasureHunt?.rounds ?? []);
+      for (const payment of cellCosts) {
+        if (!items.some(({ uid }) => uid === payment.resourceUid)) {
+          items.push({
+            type: payment.resourceType,
+            uid: payment.resourceUid,
+            name: payment.resourceName ?? "재화",
+            imageUrl: payment.imageUrl,
+            forPayment: false,
+          });
+        }
+      }
+    } else if (minigameConfig) {
       const minigamePaymentResources = [
         minigameConfig.payment,
         ...minigameConfig.payments,
@@ -137,6 +161,81 @@ export default function EventDetailShopPage({
     signedIn,
   });
 
+  const treasureHuntRoundSelection = useMemo(
+    () =>
+      getTreasureHuntRoundSelection(
+        isTreasureHunt ? treasureHunt : null,
+        state.minigameStartRound,
+        state.minigamePlayCount,
+      ),
+    [isTreasureHunt, state.minigamePlayCount, state.minigameStartRound, treasureHunt],
+  );
+  const treasureHuntTargetRoundOverLimit = isTreasureHunt && treasureHuntRoundSelection.targetRoundOverLimit;
+  const selectedTreasureHuntRows = treasureHuntRoundSelection.rows;
+  const treasureHuntEconomicsCompatible = treasureHuntRoundSelection.economicsCompatible;
+  const treasureHuntWorkerItems = treasureHuntRoundSelection.workerItems;
+  const treasureHuntStats = useTreasureHuntStats(treasureHuntWorkerItems, treasureHuntWorkerItems.length > 0);
+  const treasureHuntCalculation = useMemo(() => {
+    let status: TreasureHuntSectionStatus = "empty";
+    let estimate: TreasureHuntEstimate | null = null;
+    let progress: number | null = null;
+    const statsBySignature = treasureHuntStats.statsBySignature;
+
+    if (treasureHuntTargetRoundOverLimit) {
+      status = "round-limit";
+    } else if (isTreasureHunt && !treasureHunt) {
+      status = "no-data";
+    } else if (isTreasureHunt && selectedTreasureHuntRows.length > 0 && !treasureHuntEconomicsCompatible) {
+      status = "incompatible";
+    } else if (isTreasureHunt && selectedTreasureHuntRows.length > 0) {
+      const signatures = treasureHuntWorkerItems.map(({ signature }) => signature);
+      const hasFailure = signatures.some((signature) => statsBySignature[signature]?.failed);
+      const hasHistogram = signatures.every((signature) => !!statsBySignature[signature]?.histogram);
+      const isComplete = signatures.every((signature) => {
+        const stats = statsBySignature[signature];
+        return !!stats?.histogram && !stats.failed && stats.completedGames >= stats.targetGames;
+      });
+      if (hasFailure) {
+        status = "failed";
+      } else if (!hasHistogram) {
+        status = "pending";
+      } else if (isComplete) {
+        status = "ready";
+      } else {
+        status = "provisional";
+      }
+
+      progress = treasureHuntStats.progress;
+      if (hasHistogram && !hasFailure) {
+        estimate = calculateTreasureHuntEstimate(
+          selectedTreasureHuntRows,
+          statsBySignature,
+          state.minigamePaymentQuantityMode,
+        );
+      }
+    }
+
+    return {
+      status,
+      progress,
+      rows: selectedTreasureHuntRows,
+      statsBySignature,
+      estimate,
+      retry: treasureHuntStats.retry,
+    };
+  }, [
+    isTreasureHunt,
+    treasureHuntTargetRoundOverLimit,
+    selectedTreasureHuntRows,
+    state.minigamePaymentQuantityMode,
+    treasureHunt,
+    treasureHuntEconomicsCompatible,
+    treasureHuntStats.retry,
+    treasureHuntStats.progress,
+    treasureHuntStats.statsBySignature,
+    treasureHuntWorkerItems,
+  ]);
+
   // Track initial load for auto-save
   const [isInitialLoad, setIsInitialLoad] = useState(() => !savedShopState);
   const hasSavedShopStateRef = useRef(savedShopState !== null);
@@ -171,6 +270,9 @@ export default function EventDetailShopPage({
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
+    if (minigameConfig.minigameType === "treasure_hunt") {
+      return treasureHuntCalculation.estimate ? [treasureHuntCalculation.estimate.payment] : [];
+    }
     const clueCosts = calculateMinigamePaymentCosts(
       minigameConfig,
       state.minigamePlayCount,
@@ -183,10 +285,20 @@ export default function EventDetailShopPage({
   }, [
     clueSearchExchange,
     minigameConfig,
+    treasureHuntCalculation.estimate,
     state.minigamePaymentQuantityMode,
     state.minigamePlayCount,
     state.minigameStartRound,
   ]);
+
+  const minigameRewards = useMemo(() => {
+    if (!isTreasureHunt) return undefined;
+    const estimate = treasureHuntCalculation.estimate;
+    return estimate ? [...estimate.treasureRewards, ...estimate.openCellRewards] : [];
+  }, [isTreasureHunt, treasureHuntCalculation.estimate]);
+  const holdTreasureHuntCalculations =
+    isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
+  const minigameConfigForCalculations = isTreasureHunt ? null : minigameConfig;
 
   // Shop calculations
   const stageCalculations = useShopCalculations({
@@ -195,9 +307,20 @@ export default function EventDetailShopPage({
     shopResources: visibleShopResources,
     appliedBonusRatio: appliedBonusRatios,
     minigamePaymentCosts,
+    minigameRewards,
     excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
-    minigameConfig,
+    minigameConfig: minigameConfigForCalculations,
+    holdCalculations: holdTreasureHuntCalculations,
   });
+  const showCalculationToast = isTreasureHunt ? stageCalculations.isUserCalculating : stageCalculations.isCalculating;
+  const resultTreasureHuntStatus =
+    isTreasureHunt &&
+    (treasureHuntCalculation.status === "pending" ||
+      treasureHuntCalculation.status === "provisional" ||
+      treasureHuntCalculation.status === "failed" ||
+      treasureHuntCalculation.status === "round-limit")
+      ? treasureHuntCalculation.status
+      : undefined;
 
   return (
     <>
@@ -210,7 +333,7 @@ export default function EventDetailShopPage({
       )}
 
       {/* Calculating indicator */}
-      {stageCalculations.isCalculating && (
+      {showCalculationToast && (
         <div className="fixed right-4 bottom-[var(--mobile-bottom-offset)] z-layer-toast flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-white shadow-lg md:right-8 lg:bottom-4">
           <ArrowPathIcon className="size-4 animate-spin" />
           <span className="text-sm font-medium">계산중...</span>
@@ -266,14 +389,22 @@ export default function EventDetailShopPage({
           )}
 
           {minigameConfig && (
-            <MiniGameSection config={minigameConfig} state={state} actions={actions} exchange={clueSearchExchange} />
+            <MiniGameSection
+              config={minigameConfig}
+              state={state}
+              actions={actions}
+              exchange={clueSearchExchange}
+              treasureHuntCalculation={treasureHuntCalculation}
+            />
           )}
           <StageSelector
             stages={stages}
             appliedBonusRatio={appliedBonusRatios}
-            stageRuns={stageCalculations.stageRuns}
+            stageRuns={holdTreasureHuntCalculations ? {} : stageCalculations.stageRuns}
             state={state}
             actions={actions}
+            treasureHuntStatus={resultTreasureHuntStatus}
+            onRetryTreasureHunt={treasureHuntCalculation.retry}
           />
 
           <CollectedTotalsSection
@@ -283,7 +414,11 @@ export default function EventDetailShopPage({
             eventUid={eventUid}
             shopStateUid={shopStateUid}
             savedShopStateSource={savedShopStateSource}
-            minigameConfig={minigameConfig}
+            minigameConfig={minigameConfigForCalculations}
+            minigameRewards={minigameRewards}
+            treasureHuntStatus={resultTreasureHuntStatus}
+            onRetryTreasureHunt={treasureHuntCalculation.retry}
+            provisionalMinigameResourceUid={treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid}
             state={state}
             actions={actions}
             stageCalculations={stageCalculations}

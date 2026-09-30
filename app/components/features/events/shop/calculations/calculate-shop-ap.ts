@@ -1,5 +1,5 @@
 import type Decimal from "decimal.js";
-import type { MinigameConfig, MinigamePayment, ShopResource, Stage } from "~/domain/event-shop";
+import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { CalculationResult } from "../hooks/useShopCalculations";
 import type { ShopState } from "../hooks/useShopState";
 import { calculateItemBreakdowns, calculateResourceLedger, calculateStageInfos, optimizeStageRuns } from ".";
@@ -23,6 +23,7 @@ export function calculateShopApRequirement(input: {
   shopResources: ShopResource[];
   appliedBonusRatio: Record<string, Decimal>;
   minigamePaymentCosts?: MinigamePayment[];
+  minigameRewards?: RewardItem[];
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
 }): CalculationResult {
@@ -32,6 +33,7 @@ export function calculateShopApRequirement(input: {
     shopResources,
     appliedBonusRatio,
     minigamePaymentCosts,
+    minigameRewards,
     excludedShopResourceUids,
     minigameConfig,
   } = input;
@@ -46,6 +48,7 @@ export function calculateShopApRequirement(input: {
     minigamePlayCount: state.minigamePlayCount,
     minigameConfig,
     minigamePaymentCosts,
+    minigameRewards,
     excludedShopResourceUids,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities,
   });
