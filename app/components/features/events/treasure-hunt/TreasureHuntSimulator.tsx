@@ -239,7 +239,7 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
   function handleRoundChange(round: number) {
     setLastRecordedTreasure(null);
     if (round === persisted.board.round) return;
-    commitBoard({ ...persisted.board, round });
+    commitBoard({ round, knownEmpty: [], foundTreasures: [] });
     setToolAnnouncement("");
   }
 
