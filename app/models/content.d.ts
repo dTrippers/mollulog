@@ -9,6 +9,7 @@ export type TacticRole = "attacker" | "tank" | "support" | "healer" | "tactical_
 // 컨텐츠 관련
 export type EventType =
   | "live"
+  | "offline_event"
   | "event"
   | "mini_event"
   | "guide_mission"

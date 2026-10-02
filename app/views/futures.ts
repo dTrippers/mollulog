@@ -100,7 +100,7 @@ export async function getFutureContents(
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "futures", 3, "all"),
+    cacheKey("route", "futures", 4, "all"),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
         getTimelineContents(env, nowUtcIso(), { ctx }),

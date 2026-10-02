@@ -25,6 +25,7 @@ const defaultTimelineContentRow = {
   rewardExchangeEndAt: null,
   endless: false,
   imageUrl: null,
+  externalLink: null,
   videos: [],
   contentType: "event",
   runType: "first",
@@ -62,7 +63,7 @@ describe("PostgreSQL timeline contents read", () => {
     const connect = jest.fn(async () => undefined);
     const end = jest.fn(async () => undefined);
     const query = jest.fn(async (_query: unknown, _values: unknown[]) => ({
-      rows: [postgresRow()],
+      rows: [postgresRow({ externalLink: "https://event.example/info" })],
       rowCount: 1,
     }));
     const client = { connect, end, query } as unknown as Client;
@@ -84,17 +85,19 @@ describe("PostgreSQL timeline contents read", () => {
 
     expect(query).toHaveBeenCalledWith(
       expect.objectContaining({
-        text: expect.stringContaining('where ("timeline_contents"."end_at" is null or'),
+        text: expect.stringContaining('"timeline_contents"."content_type" = $'),
         rowMode: "array",
       }),
-      [now],
+      expect.arrayContaining([now, "offline_event"]),
     );
+    expect((query.mock.calls[0]?.[0] as { text: string }).text).toContain('"timeline_contents"."start_at" >= $');
     expect(result).toEqual([
       expect.objectContaining({
         uid: "future-event",
         name: "미래 이벤트",
         startAt: "2099-08-25T02:00:00.000Z",
         endAt: "2099-09-15T02:00:00.000Z",
+        externalLink: "https://event.example/info",
         recruitmentStudentUids: ["student-a"],
         confirmed: true,
         tags: ["event"],
