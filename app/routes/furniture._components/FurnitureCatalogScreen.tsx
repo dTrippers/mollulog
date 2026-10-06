@@ -686,7 +686,8 @@ function FurnitureCollection({
                 : FURNITURE_CATEGORY_LABELS[category]}
             </h2>
           </div>
-          <div className="flex flex-wrap gap-x-1 gap-y-0 px-3 py-2">
+          {/* Route-local 96px minimum keeps compact cards readable; auto-fill prevents sparse groups from stretching. */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-2 gap-y-1 px-3 py-2">
             {categoryItems.map((item) => (
               <FurnitureCard
                 key={item.uid}
@@ -775,7 +776,7 @@ function FurnitureCard({
   return (
     <article
       aria-label={`${item.name} · ${FURNITURE_RARITY_LABELS[item.rarity]} 등급`}
-      className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-md px-0.5 py-1.5"
+      className={`grid min-w-0 grid-cols-1 grid-rows-subgrid items-start justify-items-center gap-1 rounded-md px-0.5 py-1.5 ${signedIn ? "row-span-4" : "row-span-2"}`}
     >
       <div
         className="relative flex h-12 w-full items-center justify-center md:h-14"
@@ -783,11 +784,11 @@ function FurnitureCard({
       >
         {image}
       </div>
-      <h3 className="line-clamp-2 h-8 min-h-8 w-full break-keep text-center text-xs leading-tight text-foreground">
+      <h3 className="min-w-0 w-full break-keep wrap-break-word text-center text-xs font-normal leading-snug text-foreground">
         {item.name}
       </h3>
       {signedIn ? (
-        <div className="w-full">
+        <div className="min-w-0 w-full">
           <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">보유</p>
           <NumberInput
             nullable
@@ -812,10 +813,10 @@ function FurnitureCard({
         </div>
       ) : null}
       {signedIn && saveState ? (
-        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2">
+        <div className="flex min-w-0 w-full max-w-full flex-wrap items-center justify-center gap-x-2">
           <p
             role={saveState.kind === "error" || saveState.kind === "invalid" ? "alert" : "status"}
-            className={`min-w-0 break-words text-center text-xs ${saveState.kind === "error" || saveState.kind === "invalid" ? "text-destructive" : "text-muted-foreground"}`}
+            className={`min-w-0 break-keep break-words text-center text-xs ${saveState.kind === "error" || saveState.kind === "invalid" ? "text-destructive" : "text-muted-foreground"}`}
           >
             {saveStateText(saveState)}
           </p>
