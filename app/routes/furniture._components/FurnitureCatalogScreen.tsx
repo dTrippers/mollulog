@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
 import {
+  type AttributeBadgeColor,
   Button,
   EmptyView,
   FilterButtons,
@@ -48,11 +49,11 @@ const furnitureCategoryFilterOptions: { text: string; value: FurnitureCategory }
   { text: FURNITURE_CATEGORY_LABELS.decorations, value: "decorations" },
   { text: FURNITURE_CATEGORY_LABELS.interiors, value: "interiors" },
 ];
-const furnitureRarityFilterOptions: { text: string; value: FurnitureRarity }[] = [
-  { text: FURNITURE_RARITY_LABELS[1], value: 1 },
-  { text: FURNITURE_RARITY_LABELS[2], value: 2 },
-  { text: FURNITURE_RARITY_LABELS[3], value: 3 },
-  { text: FURNITURE_RARITY_LABELS[4], value: 4 },
+const furnitureRarityFilterOptions: { text: string; value: FurnitureRarity; color: AttributeBadgeColor }[] = [
+  { text: FURNITURE_RARITY_LABELS[1], value: 1, color: "grey" },
+  { text: FURNITURE_RARITY_LABELS[2], value: 2, color: "blue" },
+  { text: FURNITURE_RARITY_LABELS[3], value: 3, color: "orange" },
+  { text: FURNITURE_RARITY_LABELS[4], value: 4, color: "purple" },
 ];
 
 function toggleFurnitureFilterValue<T>(current: T[], value: T, selected: boolean): T[] {
@@ -435,8 +436,9 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
                         <FilterButtons
                           size="sm"
                           className="my-0 shrink-0"
-                          buttonProps={furnitureRarityFilterOptions.map(({ text, value }) => ({
+                          buttonProps={furnitureRarityFilterOptions.map(({ text, value, color }) => ({
                             text,
+                            color,
                             active: selectedRarities.includes(value),
                             onToggle: (selected) =>
                               setSelectedRarities((current) =>
