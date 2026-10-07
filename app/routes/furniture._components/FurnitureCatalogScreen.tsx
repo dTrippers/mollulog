@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
 import {
+  type AttributeBadgeColor,
   Button,
   EmptyView,
   FilterButtons,
@@ -48,11 +49,11 @@ const furnitureCategoryFilterOptions: { text: string; value: FurnitureCategory }
   { text: FURNITURE_CATEGORY_LABELS.decorations, value: "decorations" },
   { text: FURNITURE_CATEGORY_LABELS.interiors, value: "interiors" },
 ];
-const furnitureRarityFilterOptions: { text: string; value: FurnitureRarity }[] = [
-  { text: FURNITURE_RARITY_LABELS[1], value: 1 },
-  { text: FURNITURE_RARITY_LABELS[2], value: 2 },
-  { text: FURNITURE_RARITY_LABELS[3], value: 3 },
-  { text: FURNITURE_RARITY_LABELS[4], value: 4 },
+const furnitureRarityFilterOptions: { text: string; value: FurnitureRarity; color: AttributeBadgeColor }[] = [
+  { text: FURNITURE_RARITY_LABELS[1], value: 1, color: "grey" },
+  { text: FURNITURE_RARITY_LABELS[2], value: 2, color: "blue" },
+  { text: FURNITURE_RARITY_LABELS[3], value: 3, color: "orange" },
+  { text: FURNITURE_RARITY_LABELS[4], value: 4, color: "purple" },
 ];
 
 function toggleFurnitureFilterValue<T>(current: T[], value: T, selected: boolean): T[] {
@@ -435,8 +436,9 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
                         <FilterButtons
                           size="sm"
                           className="my-0 shrink-0"
-                          buttonProps={furnitureRarityFilterOptions.map(({ text, value }) => ({
+                          buttonProps={furnitureRarityFilterOptions.map(({ text, value, color }) => ({
                             text,
+                            color,
                             active: selectedRarities.includes(value),
                             onToggle: (selected) =>
                               setSelectedRarities((current) =>
@@ -686,7 +688,8 @@ function FurnitureCollection({
                 : FURNITURE_CATEGORY_LABELS[category]}
             </h2>
           </div>
-          <div className="flex flex-wrap gap-x-1 gap-y-0 px-3 py-2">
+          {/* Route-local 96px minimum keeps compact cards readable; auto-fill prevents sparse groups from stretching. */}
+          <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-2 gap-y-1 px-3 py-2">
             {categoryItems.map((item) => (
               <FurnitureCard
                 key={item.uid}
@@ -775,7 +778,7 @@ function FurnitureCard({
   return (
     <article
       aria-label={`${item.name} · ${FURNITURE_RARITY_LABELS[item.rarity]} 등급`}
-      className="flex w-20 shrink-0 flex-col items-center gap-1 rounded-md px-0.5 py-1.5"
+      className={`grid min-w-0 grid-cols-1 grid-rows-subgrid items-start justify-items-center gap-1 rounded-md px-0.5 py-1.5 ${signedIn ? "row-span-4" : "row-span-2"}`}
     >
       <div
         className="relative flex h-12 w-full items-center justify-center md:h-14"
@@ -783,11 +786,11 @@ function FurnitureCard({
       >
         {image}
       </div>
-      <h3 className="line-clamp-2 h-8 min-h-8 w-full break-keep text-center text-xs leading-tight text-foreground">
+      <h3 className="min-w-0 w-full break-keep wrap-break-word text-center text-xs font-normal leading-snug text-foreground">
         {item.name}
       </h3>
       {signedIn ? (
-        <div className="w-full">
+        <div className="min-w-0 w-full">
           <p className="mb-0.5 text-left text-xs font-medium leading-tight text-muted-foreground">보유</p>
           <NumberInput
             nullable
@@ -812,10 +815,10 @@ function FurnitureCard({
         </div>
       ) : null}
       {signedIn && saveState ? (
-        <div className="flex min-w-0 max-w-full flex-wrap items-center justify-center gap-x-2">
+        <div className="flex min-w-0 w-full max-w-full flex-wrap items-center justify-center gap-x-2">
           <p
             role={saveState.kind === "error" || saveState.kind === "invalid" ? "alert" : "status"}
-            className={`min-w-0 break-words text-center text-xs ${saveState.kind === "error" || saveState.kind === "invalid" ? "text-destructive" : "text-muted-foreground"}`}
+            className={`min-w-0 break-keep break-words text-center text-xs ${saveState.kind === "error" || saveState.kind === "invalid" ? "text-destructive" : "text-muted-foreground"}`}
           >
             {saveStateText(saveState)}
           </p>
