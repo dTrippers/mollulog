@@ -204,6 +204,12 @@ const studentHeaderQuery = graphql(`
       club {
         name
       }
+      interactionFurnitures {
+        uid
+        name
+        imageUrl
+        rarity
+      }
       catalog {
         profile {
           schoolYear

@@ -41,10 +41,34 @@ describe("furniture catalog inventory state", () => {
 
   it("matches selected categories and rarities as unions, then combines them with the name query", () => {
     const items = [
-      { name: "Bronze Trophy", themeUids: [], category: "decorations" as const, rarity: 1 as const },
-      { name: "Silver Trophy", themeUids: [], category: "decorations" as const, rarity: 2 as const },
-      { name: "Cafe Chair", themeUids: ["cafe"], category: "furnitures" as const, rarity: 3 as const },
-      { name: "Cafe Wallpaper", themeUids: ["cafe"], category: "interiors" as const, rarity: 4 as const },
+      {
+        name: "Bronze Trophy",
+        themeUids: [],
+        category: "decorations" as const,
+        rarity: 1 as const,
+        interactionStudents: [],
+      },
+      {
+        name: "Silver Trophy",
+        themeUids: [],
+        category: "decorations" as const,
+        rarity: 2 as const,
+        interactionStudents: [{ uid: "student-1", name: "Student One" }],
+      },
+      {
+        name: "Cafe Chair",
+        themeUids: ["cafe"],
+        category: "furnitures" as const,
+        rarity: 3 as const,
+        interactionStudents: [{ uid: "student-2", name: "Student Two" }],
+      },
+      {
+        name: "Cafe Wallpaper",
+        themeUids: ["cafe"],
+        category: "interiors" as const,
+        rarity: 4 as const,
+        interactionStudents: [],
+      },
     ];
 
     expect(filterFurnitureCatalogItems(items, { categories: ["decorations"] })).toEqual(items.slice(0, 2));
@@ -59,6 +83,15 @@ describe("furniture catalog inventory state", () => {
     ).toEqual([items[2]]);
     expect(filterFurnitureCatalogItems(items, { categories: [], rarities: [] })).toEqual(items);
     expect(filterFurnitureCatalogItems(items, { query: "missing", categories: ["interiors"] })).toEqual([]);
+    expect(filterFurnitureCatalogItems(items, { onlyWithInteractionStudents: true })).toEqual(items.slice(1, 3));
+    expect(
+      filterFurnitureCatalogItems(items, {
+        onlyWithInteractionStudents: true,
+        categories: ["furnitures"],
+        rarities: [3],
+        query: "chair",
+      }),
+    ).toEqual([items[2]]);
   });
 });
 
