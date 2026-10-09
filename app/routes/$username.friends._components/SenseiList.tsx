@@ -1,6 +1,6 @@
 import { Link } from "react-router";
 import { ProfileUsername } from "~/components/features/profile";
-import { studentImageUrl } from "~/models/assets";
+import type { AccountLabel } from "~/domain/account-label";
 
 type SenseiListProps = {
   senseis: {
@@ -8,6 +8,7 @@ type SenseiListProps = {
     bio: string | null;
     profileStudentId: string | null;
     friendCode: string | null;
+    labels?: AccountLabel[];
   }[];
 };
 
@@ -23,6 +24,7 @@ export default function SenseiList({ senseis }: SenseiListProps) {
                 username={sensei.username}
                 bio={sensei.bio}
                 friendCode={sensei.friendCode}
+                labels={sensei.labels}
               />
             </div>
           </Link>

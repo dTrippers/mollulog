@@ -27,6 +27,7 @@ const row: typeof pgSenseisTable.$inferSelect = {
   hideRecruitmentOpinions: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+  labels: [],
 };
 
 function selectDb(result: unknown[]) {
@@ -55,6 +56,7 @@ describe("identity PostgreSQL repository contract", () => {
       profileVisibility: "private",
       growthVisibility: false,
       hideRecruitmentOpinions: false,
+      labels: [],
     });
     expect(Object.keys(toSenseiModel(row))).toEqual([
       "id",
@@ -68,7 +70,12 @@ describe("identity PostgreSQL repository contract", () => {
       "profileVisibility",
       "growthVisibility",
       "hideRecruitmentOpinions",
+      "labels",
     ]);
+  });
+
+  it("maps an official account label from the PostgreSQL row", () => {
+    expect(toSenseiModel({ ...row, labels: ["official"] })).toMatchObject({ labels: ["official"] });
   });
 
   it("reads a sensei through the operation-scoped PostgreSQL wrapper", async () => {

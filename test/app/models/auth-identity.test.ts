@@ -38,6 +38,7 @@ const senseiRow: typeof pgSenseisTable.$inferSelect = {
   hideRecruitmentOpinions: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+  labels: [],
 };
 
 function createIdentityDb() {
@@ -156,18 +157,22 @@ describe("OAuth identity contracts", () => {
     ["google", "google-1"],
     ["github", "github-1"],
   ] as const)("looks up the %s identity through the PostgreSQL join", async (provider, providerUserId) => {
+    const officialSenseiRow: typeof pgSenseisTable.$inferSelect = { ...senseiRow, labels: ["official"] };
     const selectBuilder = {
       from: () => selectBuilder,
       innerJoin: () => selectBuilder,
       where: () => selectBuilder,
-      limit: async () => [{ sensei: senseiRow }],
+      limit: async () => [{ sensei: officialSenseiRow }],
     };
     const db = { select: jest.fn(() => selectBuilder) };
     mockWithIdentityDatabase.mockImplementation(async (_env, _queryName, operation) =>
       (operation as (database: typeof db) => unknown)(db),
     );
 
-    await expect(getSenseiByAuthIdentity(env, provider, providerUserId)).resolves.toMatchObject({ id: 12 });
+    await expect(getSenseiByAuthIdentity(env, provider, providerUserId)).resolves.toMatchObject({
+      id: 12,
+      labels: ["official"],
+    });
     expect(db.select).toHaveBeenCalled();
   });
 

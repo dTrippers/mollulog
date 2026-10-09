@@ -1,3 +1,4 @@
+import type { AccountLabel } from "~/domain/account-label";
 import {
   createWalkthroughTimelineCommunityPostBlocks,
   type WalkthroughTimelineCommunityPostBlock,
@@ -61,6 +62,7 @@ export type NestedCommunityComment = {
     me: boolean;
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   };
   subcomments?: NestedCommunityComment[];
 };
@@ -87,6 +89,7 @@ export type CommunityFeedPost = {
     id: number;
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   } | null;
   liked: boolean;
   likeCount: number;

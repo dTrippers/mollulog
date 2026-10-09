@@ -1,3 +1,4 @@
+import type { AccountLabel } from "~/domain/account-label";
 import { normalizeCommunityTimestamp } from "./community";
 import type { ContentCommentWithSensei } from "./content-comment";
 
@@ -13,6 +14,7 @@ export type NestedComment = {
     me: boolean;
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   };
   subcomments?: NestedComment[];
 };
@@ -35,6 +37,7 @@ export function nestComments(
       sensei: {
         me: currentUser?.username === comment.sensei.username,
         username: comment.sensei.username,
+        labels: comment.sensei.labels ?? [],
         profileStudentId: comment.sensei.profileStudentId,
       },
       subcomments: commentSubcomments.map((subComment) => ({
@@ -46,6 +49,7 @@ export function nestComments(
         sensei: {
           me: currentUser?.username === subComment.sensei.username,
           username: subComment.sensei.username,
+          labels: subComment.sensei.labels ?? [],
           profileStudentId: subComment.sensei.profileStudentId,
         },
       })),

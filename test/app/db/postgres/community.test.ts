@@ -1,5 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import type { Client } from "pg";
+import type { AccountLabel } from "~/domain/account-label";
 
 jest.mock("~/lib/postgres.server", () => {
   const actual = jest.requireActual<typeof import("~/lib/postgres.server")>("~/lib/postgres.server");
@@ -16,6 +17,7 @@ import {
   getPostgresCommunityLikeCountsByPostUids,
   getPostgresContentCommentIdByUid,
   getPostgresContentCommentSummaries,
+  getPostgresContentComments,
   getPostgresLikedCommunityPostUids,
   getPostgresNestedCommunityComments,
   getPostgresRecentStudentGradingsPage,
@@ -35,6 +37,7 @@ type ConfiguredAuthor = {
   username: string;
   profileStudentId: string | null;
   profileVisibility: string;
+  labels?: AccountLabel[];
 };
 let configuredAuthors = new Map<number, ConfiguredAuthor>();
 
@@ -69,19 +72,28 @@ function createClient(
                       null,
                       "guest",
                       author.profileVisibility,
+                      false,
                       new Date("2026-08-01T00:00:00.000Z"),
                       new Date("2026-08-01T00:00:00.000Z"),
-                      new Date("2026-08-01T00:00:00.000Z"),
+                      false,
+                      author.labels ?? [],
                     ]
-                  : Array.from({ length: 13 }, () => null)),
+                  : Array.from({ length: 16 }, () => null)),
               ],
             ];
           })()
       : isAuthorJoin || isAuthorLookup
         ? [...configuredAuthors.values()].map((author) =>
             isAuthorJoin
-              ? [author.id, author.id, author.username, author.profileStudentId, author.profileVisibility]
-              : [author.id, author.username, author.profileStudentId, author.profileVisibility],
+              ? [
+                  author.id,
+                  author.id,
+                  author.username,
+                  author.profileStudentId,
+                  author.profileVisibility,
+                  author.labels ?? [],
+                ]
+              : [author.id, author.username, author.profileStudentId, author.profileVisibility, author.labels ?? []],
           )
         : rowsFor(config.text, values);
     return Array.isArray(result)
@@ -141,6 +153,7 @@ function communityPostRow({
   origin = "user",
   visibility = "public",
   blocks = [{ type: "plaintext", text: "comment" }],
+  subjectContentUid = null,
 }: {
   id?: number;
   uid?: string;
@@ -149,6 +162,7 @@ function communityPostRow({
   origin?: string;
   visibility?: string;
   blocks?: unknown[];
+  subjectContentUid?: string | null;
 } = {}): unknown[] {
   const now = new Date("2026-08-01T00:00:00.000Z");
   return [
@@ -161,7 +175,7 @@ function communityPostRow({
     visibility,
     false,
     "student-1",
-    null,
+    subjectContentUid,
     null,
     null,
     blocks,
@@ -219,22 +233,22 @@ function communityPostObject({
   };
 }
 
-function authors(...values: Array<[number, "public" | "private"]>) {
+function authors(...values: Array<[number, "public" | "private", AccountLabel[]?]>) {
   return new Map(
-    values.map(([id, profileVisibility]) => [
+    values.map(([id, visibility, labels = []]) => [
       id,
-      { id, username: `user-${id}`, profileStudentId: null, profileVisibility },
+      { id, username: `user-${id}`, profileStudentId: null, profileVisibility: visibility, labels },
     ]),
   );
 }
 
-function setAuthors(...values: Array<[number, "public" | "private"]>) {
+function setAuthors(...values: Array<[number, "public" | "private", AccountLabel[]?]>) {
   configuredAuthors = authors(...values);
 }
 
 describe("PostgreSQL community repository", () => {
   it("returns every visible direct subcomment in stable query order", async () => {
-    setAuthors([2, "public"], [3, "public"], [4, "public"]);
+    setAuthors([2, "public", ["official"]], [3, "public"], [4, "public"]);
     const { client, query } = createClient((text) => {
       if (text.includes('from "community_comments"')) {
         return [
@@ -251,7 +265,11 @@ describe("PostgreSQL community repository", () => {
     ).resolves.toEqual([
       expect.objectContaining({
         uid: "top",
-        subcomments: [expect.objectContaining({ uid: "child-1" }), expect.objectContaining({ uid: "child-2" })],
+        sensei: expect.objectContaining({ labels: ["official"] }),
+        subcomments: [
+          expect.objectContaining({ uid: "child-1", sensei: expect.objectContaining({ labels: [] }) }),
+          expect.objectContaining({ uid: "child-2", sensei: expect.objectContaining({ labels: [] }) }),
+        ],
       }),
     ]);
     const commentQuery = query.mock.calls.find(([config]) => config.text.includes('from "community_comments"'));
@@ -259,6 +277,40 @@ describe("PostgreSQL community repository", () => {
     expect(commentQuery?.[0].text.match(/NOT EXISTS/g)).toHaveLength(2);
     expect(commentQuery?.[0].text).toContain("visible_post.uid");
     expect(commentQuery?.[0].text).toContain('"community_comments"."post_uid"');
+  });
+
+  it("maps account labels onto event-opinion posts and their comments", async () => {
+    setAuthors([1, "public", ["official"]], [2, "public"]);
+    const { client } = createClient((text) => {
+      if (text.includes('from "community_posts"')) {
+        return [
+          [
+            ...communityPostRow({
+              id: 1,
+              uid: "opinion-1",
+              userId: 1,
+              postType: "event_opinion",
+              subjectContentUid: "content-1",
+              blocks: [{ type: "plaintext", text: "official opinion" }],
+            }),
+            ...Array.from({ length: 11 }, () => null),
+          ],
+        ];
+      }
+      if (text.includes('from "community_comments"')) {
+        return [commentRow({ uid: "reply-1", userId: 2, postUid: "opinion-1", parentUid: "opinion-1" })];
+      }
+      return [];
+    });
+
+    await expect(
+      getPostgresContentComments(env, ["content-1"], undefined, { createClient: () => client }),
+    ).resolves.toMatchObject({
+      "content-1": [
+        { uid: "opinion-1", sensei: { username: "user-1", labels: ["official"] } },
+        { uid: "reply-1", sensei: { username: "user-2", labels: [] } },
+      ],
+    });
   });
 
   it("does not expose engagement for a post hidden from the viewer", async () => {
@@ -668,7 +720,7 @@ describe("PostgreSQL community repository", () => {
   });
 
   it("joins feed authors in count/page queries and preserves curated rows", async () => {
-    setAuthors([1, "public"], [2, "private"], [3, "public"]);
+    setAuthors([1, "public"], [2, "private"], [3, "public", ["official"]]);
     const { client, query } = createClient(() => []);
     createPgClient.mockReturnValue(client);
 
@@ -679,7 +731,7 @@ describe("PostgreSQL community repository", () => {
       pageSize: 1,
       totalCount: 2,
       totalPages: 2,
-      items: [{ uid: "curated-3" }],
+      items: [{ uid: "curated-3", author: { labels: ["official"] } }],
     });
 
     const calls = query.mock.calls.map(([config, values]) => ({ text: config.text, values }));

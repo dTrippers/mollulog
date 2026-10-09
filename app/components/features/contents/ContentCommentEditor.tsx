@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Callout, ClickableSurface, LoadingSkeleton } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import type { AccountLabel } from "~/domain/account-label";
 import { cn } from "~/lib/utils";
 import CommentView from "./CommentView";
 
@@ -24,6 +25,7 @@ type CommentData = {
     me: boolean;
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   };
   subcomments?: CommentData[];
 };

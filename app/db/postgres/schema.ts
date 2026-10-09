@@ -11,6 +11,7 @@ import {
   unique,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
+import type { AccountLabel } from "~/domain/account-label";
 import type { CacheRefreshJobStatus, CacheRefreshTaskName, CacheRefreshTaskResults } from "~/domain/cache-refresh";
 import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
@@ -82,6 +83,7 @@ export const pgSenseisTable = pgTable(
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
     hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(false),
+    labels: jsonb().$type<AccountLabel[]>().notNull().default([]),
   },
   (table) => [
     uniqueIndex("senseis_uid_uidx").on(table.uid),

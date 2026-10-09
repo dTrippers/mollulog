@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
 import LikeButton from "~/components/features/engagement/LikeButton";
+import { SenseiAvatar } from "~/components/features/profile";
 import { AttributeBadge, MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc } from "~/lib/date-time";
@@ -166,7 +167,7 @@ function CommunityPostCard({
       <div className={`flex items-start ${preview ? "gap-2.5" : "gap-3"}`}>
         {!groupedWithPrevious && post.author && (
           <Link to={`/@${post.author.username}`} className="shrink-0">
-            <ProfileImage studentUid={post.author.profileStudentId} imageSize={10} />
+            <SenseiAvatar profileStudentId={post.author.profileStudentId} labels={post.author.labels} imageSize={10} />
           </Link>
         )}
         {!groupedWithPrevious && !post.author && (
