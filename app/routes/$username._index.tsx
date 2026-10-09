@@ -1,11 +1,13 @@
-import { PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
+import { CheckBadgeIcon, PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { useCallback } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
-import { ProfileImage } from "~/components/primitives";
+import { SenseiAvatar } from "~/components/features/profile";
+import { Callout } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { type AccountLabel, hasAccountLabel } from "~/domain/account-label";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
@@ -57,6 +59,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     currentUsername: currentUser?.username ?? null,
     sensei: {
+      labels: sensei.labels ?? [],
       username: sensei.username,
       profileStudentId: sensei.profileStudentId ?? null,
       bio: sensei.bio ?? null,
@@ -149,6 +152,22 @@ export default function UserIndex() {
             : showSignIn()
         }
       />
+      {hasAccountLabel(sensei.labels, "official") && (
+        <Callout
+          tone="info"
+          Icon={CheckBadgeIcon}
+          title="몰루로그 공식 계정이에요"
+          description={
+            <>
+              문의 사항은{" "}
+              <Link to="/contact" className="font-medium text-primary underline underline-offset-2 hover:opacity-80">
+                제안/문의 페이지
+              </Link>
+              에 남겨주세요.
+            </>
+          }
+        />
+      )}
       {fetcher.data?.error?.message ? (
         <p className="rounded-md border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">
           {fetcher.data.error.message}
@@ -169,6 +188,7 @@ export default function UserIndex() {
 }
 
 type ProfileHeaderProps = {
+  labels: AccountLabel[];
   profileStudentId: string | null;
   username: string;
   bio: string | null;
@@ -185,6 +205,7 @@ type ProfileHeaderProps = {
 };
 
 function ProfileHeader({
+  labels,
   profileStudentId,
   username,
   bio,
@@ -202,7 +223,7 @@ function ProfileHeader({
   return (
     <section className="rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
       <div className="flex items-center gap-4">
-        <ProfileImage studentUid={profileStudentId} imageSize={12} />
+        <SenseiAvatar profileStudentId={profileStudentId} labels={labels} imageSize={12} />
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-neutral-900 dark:text-neutral-100">@{username}</h2>
           {friendCode && (

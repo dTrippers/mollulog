@@ -2,6 +2,7 @@ import { and, eq, inArray, or, type SQL, type SQLWrapper, sql } from "drizzle-or
 import { nanoid } from "nanoid/non-secure";
 import { type IdentityRepositoryOptions, withIdentityDatabase } from "~/db/postgres/identity";
 import { pgSenseisTable } from "~/db/postgres/schema";
+import type { AccountLabel } from "~/domain/account-label";
 import { postgresUniqueConstraintName } from "~/lib/db";
 
 export type SenseiRole = "guest" | "admin";
@@ -23,6 +24,7 @@ export type Sensei = {
   profileVisibility: ProfileVisibility;
   growthVisibility?: boolean;
   hideRecruitmentOpinions?: boolean;
+  labels?: AccountLabel[];
   config?: {
     darkMode?: boolean;
   };
@@ -234,5 +236,6 @@ export function toSenseiModel(row: SenseiRow): Sensei {
     profileVisibility: row.profileVisibility ?? "public",
     growthVisibility: row.growthVisibility ?? false,
     hideRecruitmentOpinions: row.hideRecruitmentOpinions ?? false,
+    labels: row.labels ?? [],
   };
 }
