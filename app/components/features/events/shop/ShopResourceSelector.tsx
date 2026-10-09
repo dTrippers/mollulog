@@ -14,6 +14,7 @@ import { Tabs } from "./Tabs";
 
 type ShopResourceSelectorProps = {
   shopResources: ShopResource[];
+  ownedQuantities: Record<string, number> | null;
   collectableResources: CollectableResource[];
   eventUid: string;
   state: ShopState;
@@ -34,6 +35,7 @@ function formatUnitPriceLabel(purchaseTiers: ShopResource["purchaseTiers"]) {
 
 export const ShopResourceSelector = memo(function ShopResourceSelector({
   shopResources,
+  ownedQuantities,
   collectableResources,
   eventUid,
   state,
@@ -115,7 +117,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
         setActiveTabId={setSelectedPaymentResourceUid}
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-1.5 md:gap-2">
+      <div className="grid grid-cols-2 gap-1.5 md:gap-2 lg:grid-cols-3 2xl:grid-cols-4">
         {selectedShopResources.map(({ uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount }) => {
           const shopResource = { uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount };
           const quantity = state.itemQuantities[uid] || 0;
@@ -127,9 +129,11 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
 
           const formattedResourceAmount = formatResourceAmount(resourceAmount);
           const unitPriceLabel = formatUnitPriceLabel(purchaseTiers);
+          const [minimumUnitPrice, maximumUnitPrice] = unitPriceLabel.split("~");
+          const ownedQuantity = ownedQuantities?.[uid];
           return (
             <div key={uid} className="flex flex-col gap-2 rounded-md bg-card p-3">
-              <div className="flex items-center justify-center gap-x-1">
+              <div className="flex items-start gap-2">
                 <ResourceCard
                   itemUid={resource.uid}
                   resourceType={resource.type}
@@ -138,13 +142,13 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                   label={resourceAmount === 1 ? undefined : formattedResourceAmount}
                   name={resource.name}
                 />
-                <div className="grow">
-                  <div className="flex items-center justify-center gap-1">
+                <div className="flex min-w-0 grow flex-col gap-0.5">
+                  <div className="flex min-w-0 items-center gap-1">
                     {paymentImageUrl ? (
                       <img
                         alt={paymentResource.name}
                         src={paymentImageUrl}
-                        className="-m-1 size-6 object-contain md:size-8"
+                        className="size-6 shrink-0 object-contain md:size-8"
                         loading="lazy"
                       />
                     ) : (
@@ -152,11 +156,28 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                         이미지 없음
                       </span>
                     )}
-                    <span className="mr-2 text-sm font-medium text-foreground">{unitPriceLabel}</span>
+                    <span className="min-w-0 text-sm font-medium leading-tight tabular-nums text-foreground">
+                      {maximumUnitPrice !== undefined ? (
+                        <>
+                          {minimumUnitPrice}~<wbr />
+                          {maximumUnitPrice}
+                        </>
+                      ) : (
+                        unitPriceLabel
+                      )}
+                    </span>
                   </div>
-                  <p className="text-center text-xs text-muted-foreground">
+                  <p className="break-keep text-xs leading-tight text-muted-foreground">
                     {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
                   </p>
+                  {ownedQuantity !== undefined && (
+                    <p className="break-keep text-xs leading-tight text-muted-foreground">
+                      보유{" "}
+                      <span className="whitespace-nowrap font-semibold tabular-nums text-foreground">
+                        {ownedQuantity.toLocaleString()}
+                      </span>
+                    </p>
+                  )}
                 </div>
               </div>
 
