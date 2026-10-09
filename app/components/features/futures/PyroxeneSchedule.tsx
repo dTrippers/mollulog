@@ -10,6 +10,7 @@ import {
 import { collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
+import PyroxeneCalculationAssumptions from "./PyroxeneCalculationAssumptions";
 import PyroxeneChart from "./PyroxeneChart";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
 import PyroxeneTimelineEvent from "./PyroxeneTimelineEvent";
@@ -33,6 +34,7 @@ type PyroxeneScheduleProps = {
   onCollectedSourceChange: (sourceKey: string, collected: boolean) => void;
   allowPickupCompletion: boolean;
   onFavoriteChange: (contentUid: string, studentUid: string, favorited: boolean) => void;
+  onOpenPlannerSettings: () => void;
 };
 
 const deletableTimelineSourceTypes = new Set([
@@ -83,6 +85,7 @@ export default function PyroxeneSchedule({
   onCollectedSourceChange,
   allowPickupCompletion,
   onFavoriteChange,
+  onOpenPlannerSettings,
 }: PyroxeneScheduleProps) {
   const [hideUnfavoritedEvents, setHideUnfavoritedEvents] = useState(false);
   const [selectedEventMissing, setSelectedEventMissing] = useState(false);
@@ -125,11 +128,6 @@ export default function PyroxeneSchedule({
     options: calcOptions,
     collectedSourceKeys,
   });
-  const simulationDescription =
-    options.event.pickupChance === "ceil"
-      ? "설정한 목표를 모두 천장으로 계산한 시뮬레이션 결과에요"
-      : "설정한 목표와, 상위/하위 10% 범위의 시뮬레이션 결과에요";
-
   // 관심 학생이 아직 없는 모집도 선택 진입점으로 보여주되 계산 결과에는 포함하지 않습니다.
   const displayTimeline = useMemo(
     () => buildPyroxeneDisplayTimeline(timeline, scheduleItems, initialDate ?? new Date(), initialResources),
@@ -301,16 +299,25 @@ export default function PyroxeneSchedule({
         </div>
       </Section>
 
-      <Section title="청휘석 시뮬레이션" description={simulationDescription}>
-        <SectionCard className="relative p-2 shadow-md dark:shadow-md md:p-3">
-          {isTimelinePending && (
-            <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-border bg-popover/95 px-2 py-1 text-xs font-medium text-muted-foreground shadow-md backdrop-blur">
-              <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
-              <span>계산 중...</span>
-            </div>
-          )}
-          <PyroxeneChart timeline={timeline} />
-        </SectionCard>
+      <Section title="청휘석 시뮬레이션">
+        <div className="space-y-2">
+          <PyroxeneCalculationAssumptions
+            scheduleItems={scheduleItems}
+            pickupChance={options.event.pickupChance}
+            from={initialDate ?? new Date()}
+            showRange
+            onChangePickupChance={onOpenPlannerSettings}
+          />
+          <SectionCard className="relative p-2 shadow-md dark:shadow-md md:p-3">
+            {isTimelinePending && (
+              <div className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-border bg-popover/95 px-2 py-1 text-xs font-medium text-muted-foreground shadow-md backdrop-blur">
+                <span className="inline-block size-3 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                <span>계산 중...</span>
+              </div>
+            )}
+            <PyroxeneChart timeline={timeline} />
+          </SectionCard>
+        </div>
       </Section>
 
       <section>

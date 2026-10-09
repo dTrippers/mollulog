@@ -1,23 +1,6 @@
 import { PanelOptionChip, PanelOptionGroup } from "~/components/primitives";
-import type { PyroxenePickupChance, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
-
-const pickupChanceOptions = [
-  {
-    label: "평균 (천장 미반영)",
-    value: "average",
-    description: "픽업 확률만 반영한 기댓값으로 계산해요.",
-  },
-  {
-    label: "평균 (천장 반영)",
-    value: "average_pity",
-    description: "해당 모집의 천장 규칙까지 반영한 기댓값으로 계산해요.",
-  },
-  {
-    label: "천장",
-    value: "ceil",
-    description: "모든 픽업 학생을 해당 모집의 천장까지 진행하는 최악의 상황으로 계산해요.",
-  },
-] satisfies { label: string; value: PyroxenePickupChance; description: string }[];
+import { PYROXENE_PICKUP_CHANCE_OPTIONS } from "~/domain/pyroxene-assumptions";
+import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 
 type PyroxenePlannerOptionsPanelProps = {
   options: PyroxenePlannerOptions;
@@ -26,11 +9,12 @@ type PyroxenePlannerOptionsPanelProps = {
 
 export default function PyroxenePlannerOptionsPanel({ options, onOptionsChange }: PyroxenePlannerOptionsPanelProps) {
   const selectedOption =
-    pickupChanceOptions.find(({ value }) => value === options.event.pickupChance) ?? pickupChanceOptions[0];
+    PYROXENE_PICKUP_CHANCE_OPTIONS.find(({ value }) => value === options.event.pickupChance) ??
+    PYROXENE_PICKUP_CHANCE_OPTIONS[0];
 
   return (
     <PanelOptionGroup title="★3 학생 모집 목표">
-      {pickupChanceOptions.map(({ label, value }) => (
+      {PYROXENE_PICKUP_CHANCE_OPTIONS.map(({ label, value }) => (
         <PanelOptionChip
           key={value}
           label={label}

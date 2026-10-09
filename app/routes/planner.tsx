@@ -5,6 +5,7 @@ import { data, Link, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
   GuestPlannerLegacyConflictCallout,
+  PyroxeneCalculationAssumptions,
   useGuestPlanner,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
@@ -1064,6 +1065,18 @@ export default function IntegratedPlannerRoute() {
           className="mb-4 lg:-mx-4"
         />
       )}
+      {pyroxeneForecastStatus === "ready" ? (
+        <PyroxeneCalculationAssumptions
+          className="mb-4"
+          scheduleItems={scheduleItems}
+          pickupChance={selectedPlannerOptions.event.pickupChance}
+          from={initialDate ?? new Date()}
+          showRange={false}
+          leadLabel="청휘석 예상"
+          changePickupChanceTo="/utils/pyroxene"
+          sheetDescription="달력의 청휘석 예상 재화를 이렇게 계산해요"
+        />
+      ) : null}
       <PlannerCalendar
         initialMonth={initialMonth}
         todayDateKey={todayDateKey}
