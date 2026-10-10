@@ -23,7 +23,10 @@ import {
 } from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { getRelationshipGiftPlanValidationError, getRelationshipLevelValidationError } from "~/domain/relationship-level";
+import {
+  getRelationshipGiftPlanValidationError,
+  getRelationshipLevelValidationError,
+} from "~/domain/relationship-level";
 import {
   isStaleStudentStateActionResult,
   isStaleStudentStateRequestError,
@@ -193,10 +196,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       return data({ success: false, code: STUDENT_STATE_STALE_CODE }, { status: 409 });
     }
     logger.error("Relationship level save failed", error, { userId: currentUser.id });
-    return data(
-      { success: false, code: "SAVE_FAILED", error: "저장하지 못했어요", retryable: true },
-      { status: 500 },
-    );
+    return data({ success: false, code: "SAVE_FAILED", error: "저장하지 못했어요", retryable: true }, { status: 500 });
   }
 
   return { success: true };
@@ -432,9 +432,7 @@ export default function RelationshipUtil() {
       );
       setSaveSuccess(false);
       setRetryAvailable(
-        retryOperationRef.current !== null &&
-          "retryable" in saveFetcher.data &&
-          saveFetcher.data.retryable === true,
+        retryOperationRef.current !== null && "retryable" in saveFetcher.data && saveFetcher.data.retryable === true,
       );
       setSavePending(false);
       return;

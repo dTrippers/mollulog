@@ -22,10 +22,7 @@ import {
   serializeStudentGrowthDraft,
 } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
-import {
-  isStaleStudentStateActionResult,
-  STUDENT_STATE_STALE_MESSAGE,
-} from "~/domain/student-state-errors";
+import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import {
   type Attack,
   type StudentCatalogStat,
@@ -33,8 +30,8 @@ import {
   type StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";
-import GrowthEditorSheet from "./GrowthEditorSheet";
 import type { PublicKnowledgeEntry } from "~/models/knowledge-entry";
+import GrowthEditorSheet from "./GrowthEditorSheet";
 import { KnowledgeAnnotatedDescription } from "./StudentKnowledgeAnnotations";
 
 type StudentBasicInfoProps = {
@@ -145,7 +142,11 @@ export default function StudentBasicInfo({
   const saveDisabled = fetcher.state !== "idle" || (!recruited && !draftReady) || staleWriteBlocked;
   const saving = fetcher.state !== "idle";
   const saveLabel = "내 프로필에 반영";
-  const saveError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
+  const saveError = staleWriteBlocked
+    ? STUDENT_STATE_STALE_MESSAGE
+    : fetcher.data && !fetcher.data.ok
+      ? fetcher.data.error
+      : null;
 
   useEffect(() => {
     if (hash !== "#student-basic-info" || navigationType !== "PUSH") return;
@@ -243,25 +244,25 @@ export default function StudentBasicInfo({
   const handleSave = () => {
     if (staleWriteBlockedRef.current) return;
     submitSave({
-        tier: resolved.tier,
-        bond: state.bond,
-        level: state.level,
-        skillEx: state.skillEx,
-        skillNormal: state.skillNormal,
-        skillEnhanced: state.skillEnhanced,
-        skillSub: state.skillSub,
-        equip1: state.equip1,
-        equip2: state.equip2,
-        equip3: state.equip3,
-        equip1Level: resolved.equip1Level,
-        equip2Level: resolved.equip2Level,
-        equip3Level: resolved.equip3Level,
-        equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
-        weaponLevel: state.weaponLevel,
-        abilityHp: state.abilityHp,
-        abilityAtk: state.abilityAtk,
-        abilityHeal: state.abilityHeal,
-      });
+      tier: resolved.tier,
+      bond: state.bond,
+      level: state.level,
+      skillEx: state.skillEx,
+      skillNormal: state.skillNormal,
+      skillEnhanced: state.skillEnhanced,
+      skillSub: state.skillSub,
+      equip1: state.equip1,
+      equip2: state.equip2,
+      equip3: state.equip3,
+      equip1Level: resolved.equip1Level,
+      equip2Level: resolved.equip2Level,
+      equip3Level: resolved.equip3Level,
+      equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
+      weaponLevel: state.weaponLevel,
+      abilityHp: state.abilityHp,
+      abilityAtk: state.abilityAtk,
+      abilityHeal: state.abilityHeal,
+    });
   };
 
   const handleRetry = () => {

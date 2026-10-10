@@ -1,16 +1,16 @@
 import { and, eq, getTableColumns, inArray, sql } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
 import {
-  pgRelationshipLevelsTable,
   pgRecruitedStudentsTable,
+  pgRelationshipLevelsTable,
+  pgStudentGrowthTable,
   pgStudentStateAuditsTable,
   pgStudentStateMigrationControlTable,
   pgStudentStatesTable,
   pgStudentTargetsTable,
-  pgStudentGrowthTable,
 } from "~/db/postgres/schema";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
 
 type StudentStateDatabase = NodePgDatabase;
 export type StudentStateTransaction = Parameters<Parameters<StudentStateDatabase["transaction"]>[0]>[0];
@@ -143,11 +143,16 @@ async function readLegacyStudentStates(
   studentUids: readonly string[],
 ): Promise<Map<string, LegacyStudentState>> {
   const uniqueStudentUids = [...new Set(studentUids)].sort();
-  const states = new Map(uniqueStudentUids.map((studentUid) => [studentUid, {
-    recruited: null,
-    growth: null,
-    relationship: null,
-  } as LegacyStudentState]));
+  const states = new Map(
+    uniqueStudentUids.map((studentUid) => [
+      studentUid,
+      {
+        recruited: null,
+        growth: null,
+        relationship: null,
+      } as LegacyStudentState,
+    ]),
+  );
 
   for (let offset = 0; offset < uniqueStudentUids.length; offset += QUERY_CHUNK_SIZE) {
     const chunk = uniqueStudentUids.slice(offset, offset + QUERY_CHUNK_SIZE);
@@ -263,7 +268,12 @@ function auditSnapshot(value: LegacyStudentState): Record<string, unknown> {
   }) as Record<string, unknown>;
 }
 
-function expectedStateProjection(userId: number, studentUid: string, value: LegacyStudentState, deletedAt: Date | null) {
+function expectedStateProjection(
+  userId: number,
+  studentUid: string,
+  value: LegacyStudentState,
+  deletedAt: Date | null,
+) {
   const recruited = value.recruited;
   const relationship = value.relationship;
   return {
@@ -295,7 +305,12 @@ function expectedStateProjection(userId: number, studentUid: string, value: Lega
   };
 }
 
-function expectedTargetProjection(userId: number, studentUid: string, value: LegacyStudentState, deletedAt: Date | null) {
+function expectedTargetProjection(
+  userId: number,
+  studentUid: string,
+  value: LegacyStudentState,
+  deletedAt: Date | null,
+) {
   const growth = value.growth;
   const relationship = value.relationship;
   return {
@@ -345,7 +360,9 @@ async function writeProjectionRows(
   const existingStates = await db
     .select({
       ...getTableColumns(pgStudentStatesTable),
-      recruitedAtExact: sql<string | null>`case when ${pgStudentStatesTable.recruitedAt} is null then null else to_char(${pgStudentStatesTable.recruitedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end`,
+      recruitedAtExact: sql<
+        string | null
+      >`case when ${pgStudentStatesTable.recruitedAt} is null then null else to_char(${pgStudentStatesTable.recruitedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end`,
     })
     .from(pgStudentStatesTable)
     .where(and(eq(pgStudentStatesTable.userId, userId), inArray(pgStudentStatesTable.studentUid, studentUids)));
@@ -353,7 +370,9 @@ async function writeProjectionRows(
   const existingTargets = await db
     .select({
       ...getTableColumns(pgStudentTargetsTable),
-      plannerAddedAtExact: sql<string | null>`case when ${pgStudentTargetsTable.plannerAddedAt} is null then null else to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end`,
+      plannerAddedAtExact: sql<
+        string | null
+      >`case when ${pgStudentTargetsTable.plannerAddedAt} is null then null else to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') end`,
     })
     .from(pgStudentTargetsTable)
     .where(and(eq(pgStudentTargetsTable.userId, userId), inArray(pgStudentTargetsTable.studentUid, studentUids)));
@@ -366,7 +385,7 @@ async function writeProjectionRows(
       ? null
       : hasCurrentStateSources(previous) || (existingState != null && existingState.deletedAt == null)
         ? new Date()
-        : existingState?.deletedAt ?? null;
+        : (existingState?.deletedAt ?? null);
     if (hasCurrentStateSources(current) || stateDeletedAt != null) {
       const projected = expectedStateProjection(userId, studentUid, current, stateDeletedAt);
       if (
@@ -390,7 +409,7 @@ async function writeProjectionRows(
       ? null
       : hasTargetSources(previous) || (existingTarget != null && existingTarget.deletedAt == null)
         ? new Date()
-        : existingTarget?.deletedAt ?? null;
+        : (existingTarget?.deletedAt ?? null);
     if (hasTargetSources(current) || targetDeletedAt != null) {
       const projected = expectedTargetProjection(userId, studentUid, current, targetDeletedAt);
       if (
@@ -448,9 +467,7 @@ export async function withStudentStateProjection<T>(
 }
 
 /** P1 keeps this server-side semantic switch off until a later release explicitly enables it. */
-export async function isStudentNullableSemanticsEnabledInTransaction(
-  db: StudentStateTransaction,
-): Promise<boolean> {
+export async function isStudentNullableSemanticsEnabledInTransaction(db: StudentStateTransaction): Promise<boolean> {
   const [row] = await db
     .select({ enabled: pgStudentStateMigrationControlTable.nullableSemanticsEnabled })
     .from(pgStudentStateMigrationControlTable)

@@ -6,7 +6,11 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import { validateStudentEquipmentLevels } from "~/domain/student-calculator";
-import { isStaleStudentStateRequestError, STUDENT_STATE_STALE_CODE, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
+import {
+  isStaleStudentStateRequestError,
+  STUDENT_STATE_STALE_CODE,
+  STUDENT_STATE_STALE_MESSAGE,
+} from "~/domain/student-state-errors";
 import { isActionValidationError } from "~/lib/action-errors";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";

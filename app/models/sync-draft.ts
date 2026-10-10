@@ -9,7 +9,7 @@ import {
   pgSyncDraftEntriesTable,
   pgSyncDraftsTable,
 } from "~/db/postgres/schema";
-import { withStudentStateProjection, type StudentStateTransaction } from "~/db/postgres/student-state-projection";
+import { type StudentStateTransaction, withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import { parseStudentStateDraftValue, type StudentStateDraftValue } from "~/domain/student-state";
 import { withPostgresClient } from "~/lib/postgres.server";
 
@@ -539,12 +539,14 @@ async function applyEntries(
           const chunk = recruitedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
           await lockedTx
             .insert(pgRecruitedStudentsTable)
-            .values(chunk.map((entry) => ({
-              uid: nanoid(8),
-              userId,
-              studentUid: entry.entryKey,
-              tier: Number(entry.value),
-            })))
+            .values(
+              chunk.map((entry) => ({
+                uid: nanoid(8),
+                userId,
+                studentUid: entry.entryKey,
+                tier: Number(entry.value),
+              })),
+            )
             .onConflictDoUpdate({
               target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
               set: { tier: sql`excluded.tier`, updatedAt: new Date() },

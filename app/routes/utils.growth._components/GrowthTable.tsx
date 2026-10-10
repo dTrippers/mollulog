@@ -7,14 +7,11 @@ import { Button, NumberInput, ProfileImage, ResourceCard, useNumberInputGridNavi
 import { CHARACTER_EXP_REPORTS, EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
-  isStaleStudentStateActionResult,
-  STUDENT_STATE_STALE_MESSAGE,
-} from "~/domain/student-state-errors";
-import {
   ABILITY_RELEASE_MAX_LEVEL,
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
+import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
 import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
 import { useGrowthViewSettings } from "./growth-view-settings";
@@ -434,11 +431,19 @@ function rowReducer(state: RowState, action: RowAction): RowState {
     case "enrollSuccess":
       return { ...state, enrollError: null, retryAvailable: { ...state.retryAvailable, enroll: false } };
     case "enrollFailure":
-      return { ...state, enrollError: action.error, retryAvailable: { ...state.retryAvailable, enroll: action.retryable } };
+      return {
+        ...state,
+        enrollError: action.error,
+        retryAvailable: { ...state.retryAvailable, enroll: action.retryable },
+      };
     case "removeSuccess":
       return { ...state, removeError: null, retryAvailable: { ...state.retryAvailable, remove: false } };
     case "removeFailure":
-      return { ...state, removeError: action.error, retryAvailable: { ...state.retryAvailable, remove: action.retryable } };
+      return {
+        ...state,
+        removeError: action.error,
+        retryAvailable: { ...state.retryAvailable, remove: action.retryable },
+      };
   }
 
   return state;
@@ -725,7 +730,13 @@ function GrowthRow({
         dispatchRow({ type: "relationshipFailure", error: err, retryable });
       }
     }
-  }, [relationshipFetcher.state, relationshipFetcher.data, onStudentUpdate, requestResourceRequirements, blockRowWritesAsStale]);
+  }, [
+    relationshipFetcher.state,
+    relationshipFetcher.data,
+    onStudentUpdate,
+    requestResourceRequirements,
+    blockRowWritesAsStale,
+  ]);
 
   useEffect(() => {
     if (tierFetcher.state !== "idle") return;
@@ -758,13 +769,7 @@ function GrowthRow({
         dispatchRow({ type: "tierFailure", error: err, retryable, persistedTier: persistedTierRef.current });
       }
     }
-  }, [
-    tierFetcher.state,
-    tierFetcher.data,
-    onStudentUpdate,
-    requestResourceRequirements,
-    blockRowWritesAsStale,
-  ]);
+  }, [tierFetcher.state, tierFetcher.data, onStudentUpdate, requestResourceRequirements, blockRowWritesAsStale]);
 
   useEffect(() => {
     if (enrollFetcher.state !== "idle") return;

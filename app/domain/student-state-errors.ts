@@ -1,5 +1,6 @@
 export const STUDENT_STATE_STALE_CODE = "STUDENT_STATE_STALE" as const;
-export const STUDENT_STATE_STALE_MESSAGE = "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.";
+export const STUDENT_STATE_STALE_MESSAGE =
+  "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.";
 
 export class StaleStudentStateRequestError extends Error {
   readonly code = STUDENT_STATE_STALE_CODE;

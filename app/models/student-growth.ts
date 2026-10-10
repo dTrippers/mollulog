@@ -4,17 +4,17 @@ import { nanoid } from "nanoid/non-secure";
 import { pgRecruitedStudentsTable, pgStudentGrowthTable } from "~/db/postgres/schema";
 import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import {
-  RecruitedStudentValidationError,
-  type RecruitedStudentCurrentStateInput,
-  validateRecruitedStudentCurrentStateInput,
-} from "~/models/recruited-student";
-import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
   assertWeaponLevelRange,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
 import { withPostgresClient } from "~/lib/postgres.server";
+import {
+  type RecruitedStudentCurrentStateInput,
+  RecruitedStudentValidationError,
+  validateRecruitedStudentCurrentStateInput,
+} from "~/models/recruited-student";
 
 type StudentGrowthDb = NodePgDatabase;
 export const studentGrowthTable = pgStudentGrowthTable;
@@ -151,10 +151,7 @@ export async function saveStudentGrowthAndCurrentState(
               })
               .from(pgRecruitedStudentsTable)
               .where(
-                and(
-                  eq(pgRecruitedStudentsTable.userId, senseiId),
-                  eq(pgRecruitedStudentsTable.studentUid, studentUid),
-                ),
+                and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
               )
               .limit(1)
               .for("update")
@@ -173,16 +170,15 @@ export async function saveStudentGrowthAndCurrentState(
               "능력 해방",
             );
           } catch (error) {
-            throw new RecruitedStudentValidationError(error instanceof Error ? error.message : "현재 상태를 확인해주세요");
+            throw new RecruitedStudentValidationError(
+              error instanceof Error ? error.message : "현재 상태를 확인해주세요",
+            );
           }
           await lockedTx
             .update(pgRecruitedStudentsTable)
             .set({ ...currentState, updatedAt: new Date() })
             .where(
-              and(
-                eq(pgRecruitedStudentsTable.userId, senseiId),
-                eq(pgRecruitedStudentsTable.studentUid, studentUid),
-              ),
+              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
             );
         }
 
@@ -269,11 +265,13 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
 }
 
 export async function removeStudentGrowth(env: Env, senseiId: number, studentUid: string) {
-  await withDb(env, (db) => db.transaction(async (tx) => {
-    await withStudentStateProjection(tx, senseiId, [studentUid], "student_growth", async (lockedTx) => {
-      await lockedTx
-        .delete(pgStudentGrowthTable)
-        .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)));
-    });
-  }));
+  await withDb(env, (db) =>
+    db.transaction(async (tx) => {
+      await withStudentStateProjection(tx, senseiId, [studentUid], "student_growth", async (lockedTx) => {
+        await lockedTx
+          .delete(pgStudentGrowthTable)
+          .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)));
+      });
+    }),
+  );
 }

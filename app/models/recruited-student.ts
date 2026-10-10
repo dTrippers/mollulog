@@ -2,7 +2,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { pgRecruitedStudentsTable } from "~/db/postgres/schema";
-import { withStudentStateProjection, type StudentStateTransaction } from "~/db/postgres/student-state-projection";
+import { type StudentStateTransaction, withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
@@ -192,7 +192,9 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
             abilityHeal: pgRecruitedStudentsTable.abilityHeal,
           })
           .from(pgRecruitedStudentsTable)
-          .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          )
           .limit(1)
           .for("update");
         // A missing business-key row cannot be row-locked; the unique index and
@@ -271,7 +273,9 @@ export async function addRecruitedStudents(env: Env, senseiId: number, items: re
         async (lockedTx) => {
           await lockedTx
             .insert(pgRecruitedStudentsTable)
-            .values(normalizedItems.map(({ studentUid, tier }) => ({ uid: nanoid(8), userId: senseiId, studentUid, tier })))
+            .values(
+              normalizedItems.map(({ studentUid, tier }) => ({ uid: nanoid(8), userId: senseiId, studentUid, tier })),
+            )
             .onConflictDoNothing({
               target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
             });
@@ -328,7 +332,9 @@ export async function updateRecruitedStudentCurrentState(
         const [existing] = await lockedTx
           .select({ tier: pgRecruitedStudentsTable.tier })
           .from(pgRecruitedStudentsTable)
-          .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          )
           .limit(1)
           .for("update");
         assertWeaponLevelRange(input.weaponLevel, existing?.tier ?? null, "고유무기 레벨");
@@ -340,7 +346,9 @@ export async function updateRecruitedStudentCurrentState(
         await lockedTx
           .update(pgRecruitedStudentsTable)
           .set({ ...input, updatedAt: new Date() })
-          .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          );
       });
     });
   });
@@ -361,7 +369,9 @@ export async function updateRecruitedStudentTier(env: Env, senseiId: number, stu
             abilityHeal: pgRecruitedStudentsTable.abilityHeal,
           })
           .from(pgRecruitedStudentsTable)
-          .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)))
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          )
           .limit(1)
           .for("update");
         if (!existing) throw new RecruitedStudentValidationError("모집하지 않은 학생이에요");
@@ -381,18 +391,24 @@ export async function updateRecruitedStudentTier(env: Env, senseiId: number, stu
         await lockedTx
           .update(pgRecruitedStudentsTable)
           .set({ tier, updatedAt: new Date() })
-          .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          );
       });
     });
   });
 }
 
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
-  await withDb(env, (db) => db.transaction(async (tx) => {
-    await withStudentStateProjection(tx, senseiId, [studentUid], "recruited_student", async (lockedTx) => {
-      await lockedTx
-        .delete(pgRecruitedStudentsTable)
-        .where(and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)));
-    });
-  }));
+  await withDb(env, (db) =>
+    db.transaction(async (tx) => {
+      await withStudentStateProjection(tx, senseiId, [studentUid], "recruited_student", async (lockedTx) => {
+        await lockedTx
+          .delete(pgRecruitedStudentsTable)
+          .where(
+            and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
+          );
+      });
+    }),
+  );
 }

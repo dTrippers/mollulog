@@ -184,7 +184,7 @@ export async function updateRelationshipLevel(
               updatedAt: new Date(),
             },
           });
-        });
+      });
     });
   });
 }
