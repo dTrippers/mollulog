@@ -10,6 +10,7 @@ import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
+import { eventCardImageUrl } from "./assets";
 import type { RunType } from "./timeline-content";
 import { getTimelineContent, getTimelineContents } from "./timeline-content.server";
 
@@ -260,6 +261,16 @@ const eventContentShopContentQuery = graphql(`
             }
           }
         }
+        cardFlip {
+          cardCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+          cards {
+            uid
+            cardGroupUid
+            name(lang: ko)
+            rarity
+            rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+        }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -410,6 +421,7 @@ function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {
 
 type ServerCondition = NonNullable<EventContentData>["minigameConfigs"][number]["rewardGroups"][number]["condition"];
 type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][number]["treasureHunt"];
+type ServerCardFlip = NonNullable<EventContentData>["minigameConfigs"][number]["cardFlip"];
 
 function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups"][number]["rounds"] {
   if (condition.type === "exact" && condition.values) {
@@ -503,35 +515,105 @@ function transformTreasureHunt(treasureHunt: ServerTreasureHunt | null): Minigam
   };
 }
 
+function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"] {
+  if (!cardFlip) {
+    return { status: "unavailable" };
+  }
+
+  const cardCostResource = cardFlip.cardCost?.resource;
+  if (!cardCostResource || !Array.isArray(cardFlip.cards) || cardFlip.cards.length === 0) {
+    return { status: "invalid" };
+  }
+
+  const cards = [];
+  for (const card of cardFlip.cards) {
+    if (!Array.isArray(card.rewards) || card.rewards.length === 0) {
+      return { status: "invalid" };
+    }
+
+    const rewards: RewardItem[] = [];
+    for (const { quantity, resource } of card.rewards) {
+      if (!resource) {
+        return { status: "invalid" };
+      }
+      rewards.push({
+        resourceType: resource.type,
+        resourceUid: resource.uid,
+        resourceName: resource.name,
+        imageUrl: getEmblemImageUrl(resource),
+        quantity,
+        rarity: resource.rarity ?? undefined,
+      });
+    }
+
+    cards.push({
+      uid: card.uid,
+      name: card.name?.trim() || null,
+      rarity: card.rarity,
+      imageUrl: card.cardGroupUid ? eventCardImageUrl(card.cardGroupUid) : null,
+      rewards,
+    });
+  }
+
+  return {
+    status: "available",
+    cardCost: {
+      resourceType: cardCostResource.type,
+      resourceUid: cardCostResource.uid,
+      resourceName: cardCostResource.name,
+      imageUrl: getEmblemImageUrl(cardCostResource),
+      quantity: cardFlip.cardCost.quantity,
+    },
+    cards,
+  };
+}
+
 function transformMinigameConfigs(configs: NonNullable<EventContentData>["minigameConfigs"]): MinigameConfig | null {
   if (configs.length === 0) return null;
   const serverConfig = configs[0];
-  const paymentResource = serverConfig.payment.resource;
+  const transformedCardFlip =
+    serverConfig.minigameType === "card_flip" ? transformCardFlip(serverConfig.cardFlip) : undefined;
+  const cardFlipCostResource =
+    serverConfig.minigameType === "card_flip" ? serverConfig.cardFlip?.cardCost?.resource : null;
+  const paymentResource = cardFlipCostResource ?? serverConfig.payment.resource;
   if (!paymentResource) return null;
 
-  const payments = serverConfig.payments.flatMap((payment) =>
-    payment.resource
-      ? [
-          {
-            resourceType: payment.resource.type,
-            resourceUid: payment.resource.uid,
-            resourceName: payment.resource.name,
-            imageUrl: getEmblemImageUrl(payment.resource),
-            quantity: payment.quantity,
-          },
-        ]
-      : [],
-  );
+  const cardFlipCost =
+    cardFlipCostResource && serverConfig.cardFlip?.cardCost
+      ? {
+          resourceType: cardFlipCostResource.type,
+          resourceUid: cardFlipCostResource.uid,
+          resourceName: cardFlipCostResource.name,
+          imageUrl: getEmblemImageUrl(cardFlipCostResource),
+          quantity: serverConfig.cardFlip.cardCost.quantity,
+        }
+      : null;
+  const payments = cardFlipCost
+    ? [cardFlipCost]
+    : serverConfig.payments.flatMap((payment) =>
+        payment.resource
+          ? [
+              {
+                resourceType: payment.resource.type,
+                resourceUid: payment.resource.uid,
+                resourceName: payment.resource.name,
+                imageUrl: getEmblemImageUrl(payment.resource),
+                quantity: payment.quantity,
+              },
+            ]
+          : [],
+      );
 
   return {
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
     treasureHunt: transformTreasureHunt(serverConfig.treasureHunt),
+    cardFlip: transformedCardFlip,
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
       resourceName: paymentResource.name,
       imageUrl: getEmblemImageUrl(paymentResource),
-      quantity: serverConfig.payment.quantity,
+      quantity: cardFlipCost?.quantity ?? serverConfig.payment.quantity,
     },
     payments,
     rewardGroups: serverConfig.rewardGroups.map((group) => ({
@@ -589,7 +671,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 2, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 3, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

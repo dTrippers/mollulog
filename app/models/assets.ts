@@ -22,6 +22,10 @@ export function eventIconImageUrl(contentUid: string | null, locale: "kr" | "jp"
   return `https://assets.baql.net/images/events/icon/${encodeURIComponent(contentUid)}_${locale}.webp`;
 }
 
+export function eventCardImageUrl(cardGroupUid: string): string {
+  return `https://assets.baql.net/images/events/cards/${encodeURIComponent(cardGroupUid)}.webp`;
+}
+
 const RESOURCE_IMAGE_DIRECTORIES = {
   item: "items",
   currency: "currencies",

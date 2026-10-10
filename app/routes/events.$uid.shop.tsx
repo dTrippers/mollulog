@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import { Outlet, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
+import type { EventShopPlanContext } from "~/components/features/events/shop/ShopCalculatorScreen";
 import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
 import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
@@ -104,8 +105,9 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
 
 export default function EventShop() {
   const loaderData = useLoaderData<typeof loader>();
+  const renderScreen = (plan: EventShopPlanContext) => <Outlet context={plan} />;
   if (loaderData.empty) {
-    return <EventShopContent empty />;
+    return <EventShopContent empty renderScreen={renderScreen} />;
   }
 
   return (
@@ -122,6 +124,7 @@ export default function EventShop() {
       availablePurchaseDays={loaderData.availablePurchaseDays}
       signedIn={loaderData.signedIn}
       minigameConfig={loaderData.minigameConfig}
+      renderScreen={renderScreen}
     />
   );
 }

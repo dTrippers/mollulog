@@ -1,19 +1,11 @@
-import { ArrowPathIcon, ExclamationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowPathIcon } from "@heroicons/react/16/solid";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/primitives";
-import { useSignIn } from "~/contexts/SignInProvider";
 import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
-import EventInfoCard from "./EventInfoCard";
-import {
-  CollectedTotalsSection,
-  MiniGameSection,
-  ShopResourceSelector,
-  StageSelector,
-  StudentBonusSelector,
-} from "./shop";
+import type { EventShopPlanContext } from "./shop";
 import {
   convertClueSearchCostsToPoints,
   filterClueSearchShopResources,
@@ -50,6 +42,7 @@ type EventDetailShopPageProps = {
   signedIn: boolean;
   guestPlannerStatus?: GuestPlannerStatus;
   minigameConfig?: MinigameConfig | null;
+  renderScreen: (plan: EventShopPlanContext) => ReactNode;
 };
 
 export default function EventDetailShopPage({
@@ -65,6 +58,7 @@ export default function EventDetailShopPage({
   signedIn,
   guestPlannerStatus = "none",
   minigameConfig = null,
+  renderScreen,
 }: EventDetailShopPageProps) {
   const clueSearchExchange = useMemo(
     () => resolveClueSearchExchange(minigameConfig, shopResources),
@@ -149,8 +143,6 @@ export default function EventDetailShopPage({
 
     return items;
   }, [clueSearchExchange, minigameConfig, stages, visibleShopResources]);
-
-  const { showSignIn } = useSignIn();
 
   // Unified state management
   const { state, actions } = useShopState({
@@ -321,6 +313,32 @@ export default function EventDetailShopPage({
       treasureHuntCalculation.status === "round-limit")
       ? treasureHuntCalculation.status
       : undefined;
+  const plan: EventShopPlanContext = {
+    stages,
+    shopResources: visibleShopResources,
+    eventRewardBonus,
+    appliedBonusRatio: appliedBonusRatios,
+    recruitedStudentUids,
+    eventUid,
+    shopStateUid,
+    savedShopStateSource,
+    availablePurchaseDays,
+    signedIn,
+    state,
+    actions,
+    minigameConfig,
+    minigameConfigForCalculations,
+    collectableResources,
+    clueSearchExchange,
+    treasureHuntCalculation,
+    holdTreasureHuntCalculations,
+    resultTreasureHuntStatus,
+    provisionalMinigameResourceUid: treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid,
+    minigamePaymentCosts,
+    minigameRewards,
+    stageCalculations,
+    isCalculating: stageCalculations.isCalculating,
+  };
 
   return (
     <>
@@ -351,80 +369,7 @@ export default function EventDetailShopPage({
             <Button text="다시 시도" size="sm" variant="secondary" onClick={retrySave} disabled={isSaving} />
           </div>
         )}
-        <div className="my-8">
-          <EventInfoCard
-            Icon={ExclamationCircleIcon}
-            title="데이터가 부정확할 수 있어요"
-            description="오류가 있거나 일본 서비스와 차이가 있을 수 있으니 참고용으로만 사용해주세요"
-          />
-          {!signedIn && (
-            <EventInfoCard
-              Icon={UserIcon}
-              title="로그인 후 더 많은 기능을 이용할 수 있어요"
-              description="모집 학생 데이터가 자동으로 반영되며, 입력한 정보를 저장하고 언제든지 불러올 수 있어요"
-              onClick={showSignIn}
-              showArrow
-            />
-          )}
-        </div>
-
-        <div className="space-y-8">
-          <StudentBonusSelector
-            eventRewardBonus={eventRewardBonus}
-            recruitedStudentUids={recruitedStudentUids}
-            state={state}
-            actions={actions}
-            signedIn={signedIn}
-          />
-
-          {collectableResources && (
-            <ShopResourceSelector
-              shopResources={visibleShopResources}
-              collectableResources={collectableResources}
-              eventUid={shopStateUid}
-              state={state}
-              actions={actions}
-              availablePurchaseDays={availablePurchaseDays}
-            />
-          )}
-
-          {minigameConfig && (
-            <MiniGameSection
-              config={minigameConfig}
-              state={state}
-              actions={actions}
-              exchange={clueSearchExchange}
-              treasureHuntCalculation={treasureHuntCalculation}
-            />
-          )}
-          <StageSelector
-            stages={stages}
-            appliedBonusRatio={appliedBonusRatios}
-            stageRuns={holdTreasureHuntCalculations ? {} : stageCalculations.stageRuns}
-            state={state}
-            actions={actions}
-            treasureHuntStatus={resultTreasureHuntStatus}
-            onRetryTreasureHunt={treasureHuntCalculation.retry}
-          />
-
-          <CollectedTotalsSection
-            stages={stages}
-            collectableResources={collectableResources}
-            shopResources={visibleShopResources}
-            eventUid={eventUid}
-            shopStateUid={shopStateUid}
-            savedShopStateSource={savedShopStateSource}
-            minigameConfig={minigameConfigForCalculations}
-            minigameRewards={minigameRewards}
-            treasureHuntStatus={resultTreasureHuntStatus}
-            onRetryTreasureHunt={treasureHuntCalculation.retry}
-            provisionalMinigameResourceUid={treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid}
-            state={state}
-            actions={actions}
-            stageCalculations={stageCalculations}
-            signedIn={signedIn}
-          />
-        </div>
+        {renderScreen(plan)}
       </div>
     </>
   );

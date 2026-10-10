@@ -1,5 +1,10 @@
+export { CardFlipSection } from "./CardFlipSection";
 export { CollectedTotalsSection } from "./CollectedTotalsSection";
+export type { CardFlipPlanSummary } from "./card-flip";
+export { cardFlipCardAccessibleName, summarizeCardFlipPlan } from "./card-flip";
 export { MiniGameSection } from "./MiniGameSection";
+export type { EventShopPlanContext } from "./ShopCalculatorScreen";
+export { ShopCalculatorScreen } from "./ShopCalculatorScreen";
 export { ShopResourceSelector } from "./ShopResourceSelector";
 export { StageCard } from "./StageCard";
 export { StageSelector } from "./StageSelector";

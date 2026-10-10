@@ -8,6 +8,7 @@ import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { treasureHuntLocale } from "~/locales/ko";
 import BugReportModal from "./BugReportModal";
+import { type BreakdownLine, buildResourceBreakdownLines } from "./calculations/resource-breakdown-lines";
 import { calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
 import type { ShopActions, ShopState } from "./hooks";
 import type { CalculationResult } from "./hooks/useShopCalculations";
@@ -29,11 +30,6 @@ type CollectedTotalsSectionProps = {
   actions: ShopActions;
   stageCalculations: CalculationResult;
   signedIn: boolean;
-};
-
-type BreakdownLine = {
-  label: string;
-  value: number;
 };
 
 type EditPopupProps = {
@@ -120,16 +116,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
 }: CollectedTotalsSectionProps) {
   const { itemBreakdown, totalApWithExtras, firstClearAp, questSweepAp, extraSweepAp, unobtainableTargets } =
     stageCalculations;
-  const {
-    existing,
-    fromFirstRun,
-    fromRepeatedRuns,
-    fromShop,
-    toPlayMinigame,
-    toBuyShopItems,
-    fromMinigame,
-    remaining,
-  } = itemBreakdown;
+  const { fromFirstRun, fromRepeatedRuns, toPlayMinigame, toBuyShopItems, fromMinigame } = itemBreakdown;
 
   // State for managing popup visibility per item
   const [editingItemUid, setEditingItemUid] = useState<string | null>(null);
@@ -314,51 +301,17 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
               </p>
             )}
             {collectableResources.map(({ type: resourceType, uid: itemUid, name: itemName, imageUrl }) => {
-              // Gather all counts
-              const existingCount = existing[itemUid] || 0;
-              const firstRunCount = fromFirstRun[itemUid] || 0;
-              const fromMinigameCount = fromMinigame[itemUid] || 0;
-              const fromShopCount = fromShop[itemUid] || 0;
-              const repeatedRunsCount = fromRepeatedRuns[itemUid] || 0;
-              const toPlayMinigameCount = toPlayMinigame[itemUid] || 0;
-              const toBuyCount = toBuyShopItems[itemUid] || 0;
-
-              // Calculate subtotals
-              const acquiredSubtotal =
-                existingCount + firstRunCount + fromMinigameCount + repeatedRunsCount + fromShopCount;
-              const requiredSubtotal = toBuyCount + toPlayMinigameCount;
-              const hasOverride = state.overriddenRequiredQuantities[itemUid] !== undefined;
-              const overrideValue = state.overriddenRequiredQuantities[itemUid];
-              const actualRequired = hasOverride ? overrideValue : requiredSubtotal;
-              const remainingCount = remaining[itemUid] ?? 0;
-
-              // Build breakdown lines
-              const acquiredLines: BreakdownLine[] = [
-                existingCount > 0 && { label: "기존 보유", value: existingCount },
-                firstRunCount > 0 && { label: "스토리 / 초회 보상", value: firstRunCount },
-                fromMinigameCount > 0 && {
-                  label:
-                    treasureHuntStatus === "provisional" && itemUid === provisionalMinigameResourceUid
-                      ? "미니게임 (계산 중)"
-                      : "미니게임",
-                  value: fromMinigameCount,
-                },
-                repeatedRunsCount > 0 && { label: "퀘스트", value: repeatedRunsCount },
-                fromShopCount > 0 && { label: "상점 구매", value: fromShopCount },
-              ].filter(Boolean) as BreakdownLine[];
-
-              const requiredLines: BreakdownLine[] = !hasOverride
-                ? ([
-                    toBuyCount > 0 && { label: "상점 구매", value: toBuyCount },
-                    toPlayMinigameCount > 0 && {
-                      label:
-                        treasureHuntStatus === "provisional" && itemUid === provisionalMinigameResourceUid
-                          ? "미니게임 (계산 중)"
-                          : "미니게임",
-                      value: toPlayMinigameCount,
-                    },
-                  ].filter(Boolean) as BreakdownLine[])
-                : [];
+              const minigameLabel =
+                treasureHuntStatus === "provisional" && itemUid === provisionalMinigameResourceUid
+                  ? "미니게임 (계산 중)"
+                  : "미니게임";
+              const lines = buildResourceBreakdownLines(itemBreakdown, itemUid, state.overriddenRequiredQuantities, {
+                minigameRequired: minigameLabel,
+                minigameAcquired: minigameLabel,
+              });
+              const { acquiredLines, acquiredSubtotal, actualRequired, hasOverride, remaining: remainingCount } = lines;
+              const existingCount = itemBreakdown.existing[itemUid] ?? 0;
+              const requiredLines = lines.requiredLines;
 
               return (
                 <div key={itemUid} className="relative flex items-start gap-2 rounded-md bg-card p-3">
@@ -371,7 +324,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                   />
                   <div className="grow space-y-3 text-sm relative">
                     {/* 필요 수량 */}
-                    {(toBuyCount > 0 || toPlayMinigameCount > 0 || hasOverride) && (
+                    {(lines.requiredSubtotal > 0 || hasOverride) && (
                       <div className="space-y-1">
                         <div className="flex justify-between items-center">
                           <span className="font-medium text-foreground">필요 수량</span>
@@ -453,7 +406,9 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                           size="xs"
                           onClick={() => {
                             const currentOverride = state.overriddenRequiredQuantities[itemUid];
-                            setEditRequiredValue(currentOverride !== undefined ? currentOverride : requiredSubtotal);
+                            setEditRequiredValue(
+                              currentOverride !== undefined ? currentOverride : lines.requiredSubtotal,
+                            );
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
                           }}

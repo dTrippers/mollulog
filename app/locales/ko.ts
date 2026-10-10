@@ -299,9 +299,59 @@ export function formatResourceAmount(amount: number): string {
   return amount.toLocaleString();
 }
 
+export const cardFlipLocale = {
+  menuTitle: "카드 뒤집기",
+  menuDescription: "카드 비용과 카드별 보상을 확인해보세요",
+  minigameDescription: "카드 1장 단위로 평균 보상을 계산해요",
+  countLabel: "뒤집을 카드 수",
+  countDescription: "카드를 1장 뒤집을 때마다 1로 세요. 한 판에 여러 장을 뒤집었다면 뒤집은 장 수만큼 입력해주세요",
+  requiredResources: "필요 재화",
+  perCardCost: "카드 1장당",
+  totalCost: (count: number) => `카드 ${count}장 합계`,
+  averageRewards: "평균 획득 보상",
+  averageBadge: "평균",
+  averageDisclosure: "평균값이라 실제 획득량은 달라질 수 있어요",
+  listLinkTitle: "카드별 보상 보기",
+  listLinkDescription: (count: number) => `카드 ${count}종의 보상 구성과 현재 계획 요약을 확인해보세요`,
+  listLinkDescriptionWithoutCount: "카드별 보상 구성과 현재 계획 요약을 확인해보세요",
+  cardListTitle: (count: number) => `카드별 보상 (${count}종)`,
+  cardListDescription: "카드 1장을 뒤집었을 때 나올 수 있는 보상 구성이에요. 뒤집는 순서와는 관계없어요",
+  currentPlan: "현재 계획",
+  currentPlanDescription: "상점 계산기에 입력한 값으로 계산했어요",
+  cardCount: "뒤집을 카드 수",
+  minigameRequiredLabel: "카드 뒤집기",
+  averageMinigameLabel: "카드 뒤집기 (평균)",
+  returnToCalculator: "상점 계산기로 돌아가기",
+  returnToCalculatorDescription: "카드 수·구매 수량·보유 수량은 상점 계산기에서 바꿀 수 있어요",
+  enterCardCount: "상점 계산기에서 카드 수 입력하기",
+  noCardCountTitle: "아직 뒤집을 카드 수를 입력하지 않았어요",
+  noCardCountDescription:
+    "상점 계산기의 '카드 뒤집기'에서 카드 수를 입력하면 비용과 평균 보상, 재화별 남은 수량을 여기서 확인할 수 있어요",
+  unavailableTitle: "카드별 보상 정보가 아직 없어요",
+  unavailableDescription: "정보가 준비되면 이곳에 표시돼요. 상점 계산기의 평균 보상 계산은 그대로 사용할 수 있어요.",
+  invalidTitle: "카드별 보상 정보를 불러오지 못했어요",
+  invalidDescription:
+    "일부 카드 정보가 올바르지 않아 표시하지 않았어요. 상점 계산기의 평균 보상 계산에는 영향이 없어요.",
+  cardCostStatement: (resourceName: string, quantity: number) =>
+    `카드 1장당 ${resourceName} ${quantity.toLocaleString()}개가 필요해요`,
+  rarity: {
+    1: { text: "N", color: "grey" },
+    2: { text: "R", color: "blue" },
+    3: { text: "SR", color: "orange" },
+    4: { text: "SSR", color: "purple" },
+  },
+} as const;
+
+export function getCardFlipRarity(rarity: number | null): (typeof cardFlipLocale.rarity)[1 | 2 | 3 | 4] | null {
+  if (rarity === 1 || rarity === 2 || rarity === 3 || rarity === 4) {
+    return cardFlipLocale.rarity[rarity];
+  }
+  return null;
+}
+
 export function minigameDescription(minigameType: string): string | null {
   if (minigameType === "card_flip") {
-    return "예상 보상은 전체 카드를 뒤집었을 때의 평균 결과를 기준으로 계산해요";
+    return cardFlipLocale.minigameDescription;
   } else if (minigameType === "fortune_gacha") {
     return "예상 보상은 평균값으로 계산하며 각종 보정치는 적용되지 않아요";
   } else if (minigameType === "box_gacha") {

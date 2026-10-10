@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { calculateMinigamePaymentCosts } from "~/components/features/events/shop/utils";
 import { calculateResourceLedger } from "../../../../../../../app/components/features/events/shop/calculations/ledger";
 import type { MinigameConfig, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
@@ -183,6 +184,45 @@ describe("calculateResourceLedger", () => {
     expect(ledger.requiredForMinigame).toEqual({ "event-points": 400 });
     expect(ledger.requiredTotals).toEqual({ "event-points": 800 });
     expect(ledger.fromShop).toEqual({ "target-reward": 1 });
+  });
+
+  it("counts card-flip costs and average rewards once in the resource ledger", () => {
+    const cardFlipCost = {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "photo-card",
+      resourceName: "포토 카드",
+      quantity: 200,
+    };
+    const minigameConfig: MinigameConfig = {
+      minigameType: "card_flip",
+      payment: cardFlipCost,
+      payments: [cardFlipCost],
+      rewardGroups: [
+        {
+          rounds: "subsequent",
+          payments: [],
+          rewards: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "average-reward", quantity: 2 }],
+        },
+      ],
+    };
+    const playCount = 4;
+    const minigamePaymentCosts = calculateMinigamePaymentCosts(minigameConfig, playCount);
+    const ledger = calculateResourceLedger({
+      shopResources: [],
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: playCount,
+      minigameConfig,
+      minigamePaymentCosts,
+    });
+
+    expect(ledger.requiredForMinigame).toEqual({ "photo-card": 800 });
+    expect(ledger.fromMinigame).toEqual({ "average-reward": 8 });
+    expect(ledger.requiredForMinigame).not.toHaveProperty("average-reward");
+    expect(ledger.fromMinigame).not.toHaveProperty("photo-card");
   });
 
   it("uses external treasure-hunt costs and rewards instead of legacy minigame estimates", () => {
