@@ -162,11 +162,15 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
         {student.interactionFurnitures.length > 0 ? (
           <div className="mt-3.5 md:mt-4">
             <span className="text-xs text-muted-foreground">상호작용 가구</span>
-            <ul className="mt-1.5 flex flex-col gap-1.5">
+            <ul className="mt-1.5 flex flex-wrap gap-1.5">
               {student.interactionFurnitures.map((furniture) => (
-                <li key={furniture.uid} className="flex items-center gap-2 text-sm">
-                  <ResourceCard imageUrl={furniture.imageUrl} rarity={furniture.rarity} expandImageArea />
-                  <span className="min-w-0 break-keep wrap-break-word leading-snug">{furniture.name}</span>
+                <li key={furniture.uid}>
+                  <ResourceCard
+                    imageUrl={furniture.imageUrl}
+                    rarity={furniture.rarity}
+                    name={furniture.name}
+                    expandImageArea
+                  />
                 </li>
               ))}
             </ul>

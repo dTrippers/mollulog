@@ -113,7 +113,7 @@ describe("Furniture interaction students popover input modality", () => {
 });
 
 describe("StudentInfo interaction furniture section", () => {
-  it("renders the label, furniture name and icon for interaction furniture", () => {
+  it("renders the label and icon without an inline furniture name", () => {
     const markup = renderStudentInfo([
       {
         uid: "beach-chair",
@@ -124,7 +124,7 @@ describe("StudentInfo interaction furniture section", () => {
     ]);
 
     expect(markup).toContain("상호작용 가구");
-    expect(markup).toContain("해변 의자 세트");
+    expect(markup).not.toContain("해변 의자 세트");
     expect(markup).toContain('src="https://assets.test/furniture.webp"');
   });
 
