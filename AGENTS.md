@@ -54,3 +54,8 @@ activities, and plan events.
 - Keep repository edits, commits, pushes, deploys, and other external mutations
   within the authorization actually given. Do not invent approval gates or
   model-specific assumptions. Use `mise exec` for runtime commands.
+- Write commit messages, PR titles, and PR descriptions in English, whatever
+  language the conversation uses. Fill in `.github/PULL_REQUEST_TEMPLATE.md` as
+  written: keep its sections and Verification checklist, and check only items
+  that are true. Korean is fine where the content itself is Korean, such as a
+  quoted UI string.
