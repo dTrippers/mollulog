@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode, ShopResource, Stage } from "~/domain/event-shop";
+import {
+  DEFAULT_CARD_FLIP_STRATEGY,
+  type BonusStudentSelectionMode,
+  type CardFlipStrategy,
+  type MinigamePaymentQuantityMode,
+  type ShopResource,
+  type Stage,
+} from "~/domain/event-shop";
 import type { EventShopState } from "~/models/event-shop-state";
 import { isDailyResetShopResource } from "../calculations/shop-costs";
 
@@ -17,6 +24,7 @@ export type ShopState = {
   minigameStartRound: number;
   minigamePlayCount: number;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
+  cardFlipStrategy: CardFlipStrategy;
   overriddenRequiredQuantities: Record<string, number>;
 };
 
@@ -38,6 +46,7 @@ export type ShopActions = {
   setMinigameStartRound: (round: number) => void;
   setMinigamePlayCount: (count: number) => void;
   setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => void;
+  setCardFlipStrategy: (strategy: CardFlipStrategy) => void;
   updateExistingQuantity: (uid: string, value: number) => void;
   updateOverriddenRequired: (uid: string, value: number) => void;
   resetOverriddenRequired: (uid: string) => void;
@@ -54,7 +63,7 @@ type UseShopStateParams = {
 function getDefaultEnabledStages(stages: Stage[]) {
   const initialEnabledStages: Record<string, boolean> = {};
   for (const stage of stages) {
-    initialEnabledStages[stage.uid] = Number.parseInt(stage.index) >= 9;
+    initialEnabledStages[stage.uid] = Number.parseInt(stage.index, 10) >= 9;
   }
   return initialEnabledStages;
 }
@@ -105,6 +114,7 @@ export function toEventShopState(state: ShopState): EventShopState {
     minigameStartRound: state.minigameStartRound,
     minigamePlayCount: state.minigamePlayCount,
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
+    cardFlipStrategy: state.cardFlipStrategy,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities,
   };
 }
@@ -155,6 +165,7 @@ export function getPostSignInState({
     minigameStartRound: getInitialMinigameStartRound(savedShopState),
     minigamePlayCount: savedShopState?.minigamePlayCount ?? 0,
     minigamePaymentQuantityMode: savedShopState?.minigamePaymentQuantityMode ?? "expected",
+    cardFlipStrategy: savedShopState?.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: savedShopState?.overriddenRequiredQuantities ?? {},
   };
 }
@@ -201,6 +212,9 @@ export function useShopState({
   const [minigamePaymentQuantityMode, setMinigamePaymentQuantityMode] = useState<MinigamePaymentQuantityMode>(
     savedShopState?.minigamePaymentQuantityMode ?? "expected",
   );
+  const [cardFlipStrategy, setCardFlipStrategy] = useState<CardFlipStrategy>(
+    savedShopState?.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
+  );
 
   const [overriddenRequiredQuantities, setOverriddenRequiredQuantities] = useState<Record<string, number>>(
     savedShopState?.overriddenRequiredQuantities ?? {},
@@ -234,6 +248,7 @@ export function useShopState({
     setMinigameStartRound(syncedState.minigameStartRound);
     setMinigamePlayCount(syncedState.minigamePlayCount);
     setMinigamePaymentQuantityMode(syncedState.minigamePaymentQuantityMode);
+    setCardFlipStrategy(syncedState.cardFlipStrategy);
     setOverriddenRequiredQuantities(syncedState.overriddenRequiredQuantities);
   }, [signedIn, savedShopState, recruitedStudentUids, shopResources, stages]);
 
@@ -345,6 +360,10 @@ export function useShopState({
         setMinigamePaymentQuantityMode(mode);
       },
 
+      setCardFlipStrategy: (strategy: CardFlipStrategy) => {
+        setCardFlipStrategy(strategy);
+      },
+
       updateExistingQuantity: (uid: string, value: number) => {
         setExistingPaymentItemQuantities((prev) => ({ ...prev, [uid]: value }));
       },
@@ -378,6 +397,7 @@ export function useShopState({
     minigameStartRound,
     minigamePlayCount,
     minigamePaymentQuantityMode,
+    cardFlipStrategy,
     overriddenRequiredQuantities,
   };
 

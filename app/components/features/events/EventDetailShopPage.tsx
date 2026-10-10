@@ -5,6 +5,7 @@ import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResourc
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
+import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
 import type { EventShopPlanContext } from "./shop";
 import {
   convertClueSearchCostsToPoints,
@@ -154,6 +155,13 @@ export default function EventDetailShopPage({
     stages,
     signedIn,
   });
+  const cardFlipComparison = useMemo(() => {
+    if (minigameConfig?.minigameType !== "card_flip" || minigameConfig.cardFlip?.status !== "available") {
+      return null;
+    }
+    return calculateCardFlipStrategyComparison(minigameConfig.cardFlip, state.minigamePlayCount);
+  }, [minigameConfig, state.minigamePlayCount]);
+  const selectedCardFlipResult = cardFlipComparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
 
   const treasureHuntRoundSelection = useMemo(
     () =>
@@ -267,6 +275,9 @@ export default function EventDetailShopPage({
     if (minigameConfig.minigameType === "treasure_hunt") {
       return treasureHuntCalculation.estimate ? [treasureHuntCalculation.estimate.payment] : [];
     }
+    if (minigameConfig.minigameType === "card_flip") {
+      return selectedCardFlipResult?.costs ?? [];
+    }
     const clueCosts = calculateMinigamePaymentCosts(
       minigameConfig,
       state.minigamePlayCount,
@@ -280,16 +291,18 @@ export default function EventDetailShopPage({
     clueSearchExchange,
     minigameConfig,
     treasureHuntCalculation.estimate,
+    selectedCardFlipResult,
     state.minigamePaymentQuantityMode,
     state.minigamePlayCount,
     state.minigameStartRound,
   ]);
 
   const minigameRewards = useMemo(() => {
+    if (minigameConfig?.minigameType === "card_flip") return selectedCardFlipResult?.rewards ?? [];
     if (!isTreasureHunt) return undefined;
     const estimate = treasureHuntCalculation.estimate;
     return estimate ? [...estimate.treasureRewards, ...estimate.openCellRewards] : [];
-  }, [isTreasureHunt, treasureHuntCalculation.estimate]);
+  }, [isTreasureHunt, minigameConfig, selectedCardFlipResult, treasureHuntCalculation.estimate]);
   const holdTreasureHuntCalculations =
     isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
   const minigameConfigForCalculations = isTreasureHunt ? null : minigameConfig;
@@ -339,6 +352,7 @@ export default function EventDetailShopPage({
     provisionalMinigameResourceUid: treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid,
     minigamePaymentCosts,
     minigameRewards,
+    cardFlipComparison,
     stageCalculations,
     isCalculating: stageCalculations.isCalculating,
   };

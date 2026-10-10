@@ -1,4 +1,5 @@
 import type { ApPlannerState } from "~/domain/ap-planner";
+import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
 import { type EventShopState, normalizeEventShopState } from "~/domain/event-shop-state";
 import type { GuestPyroxeneResources } from "~/domain/guest-pyroxene-planner";
 import {
@@ -171,6 +172,7 @@ function parseEventShop(value: unknown): { eventUid: string; state: EventShopSta
     minigameStartRound: row.minigameStartRound,
     minigamePlayCount: row.minigamePlayCount,
     minigamePaymentQuantityMode: row.minigamePaymentQuantityMode,
+    cardFlipStrategy: row.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: jsonValue(
       row.overriddenRequiredQuantities,
       "event_shop_states.overridden_required_quantities",

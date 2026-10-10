@@ -1,9 +1,12 @@
+import type { MinigameConfig } from "~/domain/event-shop";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { cacheKey, fetchRouteCached } from "~/lib/cache";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { isInstantAfter, normalizeInstant, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import type { Role } from "~/models/content.d";
+import { getEventMinigameType } from "~/models/event-content";
 import {
   type getRecruitmentGroupByUid,
   getRecruitmentGroupsByUidsStrict,
@@ -31,6 +34,7 @@ export type RecruitmentInfo = {
 };
 
 export type FutureContent = TimelineContent & {
+  minigameType: MinigameConfig["minigameType"] | null;
   recruitments: RecruitmentInfo[];
   recruitmentPeriod: RecruitmentPeriod | null;
   raidInfo?: RaidInfo;
@@ -100,7 +104,7 @@ export async function getFutureContents(
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "futures", 3, "all"),
+    cacheKey("route", "futures", 4, "all"),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
         getTimelineContents(env, nowUtcIso(), { ctx }),
@@ -113,36 +117,40 @@ export async function getFutureContents(
       const recruitmentGroups = await getRecruitmentGroupsByUidsStrict(env, recruitmentGroupUids, forceRefresh);
       const recruitmentGroupMap = new Map(recruitmentGroups.map((group) => [group.uid, group]));
 
-      return Promise.all(
-        contents.map(async (content) => {
-          const group = content.recruitmentGroupUid
-            ? (recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null)
-            : null;
-          if (content.recruitmentGroupUid && !group) {
-            throw new Error(`recruitment group not found: ${content.recruitmentGroupUid}`);
-          }
-          const recruitmentPeriod = group ? normalizeRecruitmentGroupPeriod(group) : null;
+      // Enrich only when rebuilding the shared route cache, with bounded source lookups.
+      return mapWithConcurrencyLimit(contents, 4, async (content) => {
+        const group = content.recruitmentGroupUid
+          ? (recruitmentGroupMap.get(content.recruitmentGroupUid) ?? null)
+          : null;
+        if (content.recruitmentGroupUid && !group) {
+          throw new Error(`recruitment group not found: ${content.recruitmentGroupUid}`);
+        }
+        const recruitmentPeriod = group ? normalizeRecruitmentGroupPeriod(group) : null;
 
-          if (content.contentType === "raid") {
-            return {
-              ...content,
-              recruitments: [],
-              recruitmentPeriod,
-              raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo,
-            };
-          }
+        if (content.contentType === "raid") {
+          return {
+            ...content,
+            minigameType: null,
+            recruitments: [],
+            recruitmentPeriod,
+            raidInfo: upcomingRaidMap.get(content.uid)?.raidInfo,
+          };
+        }
 
-          if (group) {
-            return {
-              ...content,
-              recruitments: toRecruitmentInfos(group, content.recruitmentStudentUids),
-              recruitmentPeriod,
-            };
-          }
+        const minigameType =
+          content.contentType === "live" ? null : await getEventMinigameType(env, content, forceRefresh);
 
-          return { ...content, recruitments: [], recruitmentPeriod };
-        }),
-      );
+        if (group) {
+          return {
+            ...content,
+            minigameType,
+            recruitments: toRecruitmentInfos(group, content.recruitmentStudentUids),
+            recruitmentPeriod,
+          };
+        }
+
+        return { ...content, minigameType, recruitments: [], recruitmentPeriod };
+      });
     },
     forceRefresh,
   );

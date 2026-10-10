@@ -13,6 +13,8 @@ import {
 import { calculateBonusSummary } from "~/components/features/events/shop/hooks/useBonusCalculation";
 import type { ShopState } from "~/components/features/events/shop/hooks/useShopState";
 import { calculateMinigamePaymentCosts } from "~/components/features/events/shop/utils";
+import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
+import { resolveCardFlipMinigameInputs } from "~/domain/card-flip-strategy";
 import { useGuestPlanner } from "~/components/features/futures";
 import Page from "~/components/features/layout/Page";
 import { Button, Callout, EmptyView } from "~/components/primitives";
@@ -520,22 +522,38 @@ function calculateShopRequiredAp(
   const appliedBonusRatio = Object.fromEntries(
     bonusSummary.map((bonus) => [bonus.uid, bonus.appliedStrikerRatio.plus(bonus.appliedSpecialRatio)]),
   );
+  const cardFlipInputs =
+    minigameConfig?.minigameType === "card_flip"
+      ? resolveCardFlipMinigameInputs(
+          minigameConfig,
+          state.minigamePlayCount,
+          state.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
+        )
+      : null;
   const costs = minigameConfig
-    ? calculateMinigamePaymentCosts(
-        minigameConfig,
-        state.minigamePlayCount,
-        state.minigamePaymentQuantityMode,
-        state.minigameStartRound,
-      )
+    ? minigameConfig.minigameType === "card_flip"
+      ? (cardFlipInputs?.costs ?? [])
+      : calculateMinigamePaymentCosts(
+          minigameConfig,
+          state.minigamePlayCount,
+          state.minigamePaymentQuantityMode,
+          state.minigameStartRound,
+        )
     : undefined;
   const minigamePaymentCosts =
-    clueExchange?.supported && costs ? convertClueSearchCostsToPoints(costs, clueExchange) : costs;
+    minigameConfig?.minigameType === "card_flip"
+      ? costs
+      : clueExchange?.supported && costs
+        ? convertClueSearchCostsToPoints(costs, clueExchange)
+        : costs;
+  const minigameRewards = minigameConfig?.minigameType === "card_flip" ? (cardFlipInputs?.rewards ?? []) : undefined;
   const calculation = calculateShopApRequirement({
     state: state as ShopState,
     stages,
     shopResources: visibleShopResources,
     appliedBonusRatio,
     minigamePaymentCosts,
+    minigameRewards,
     excludedShopResourceUids: clueExchange?.hiddenShopResourceUids,
     minigameConfig,
   });

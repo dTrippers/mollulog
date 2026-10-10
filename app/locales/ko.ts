@@ -301,38 +301,66 @@ export function formatResourceAmount(amount: number): string {
 
 export const cardFlipLocale = {
   menuTitle: "카드 뒤집기",
-  menuDescription: "카드 비용과 카드별 보상을 확인해보세요",
-  minigameDescription: "카드 1장 단위로 평균 보상을 계산해요",
+  menuDescription: "전략별 소비 재화와 기대 획득 보상을 비교해보세요",
+  minigameDescription: "선택한 전략의 기대값으로 계산해요",
   countLabel: "뒤집을 카드 수",
-  requiredResources: "필요 재화",
-  perCardCost: "카드 1장당",
-  totalCost: (count: number) => `카드 ${count}장 합계`,
-  averageRewards: "평균 획득 보상",
-  averageBadge: "평균",
-  averageDisclosure: "평균값이라 실제 획득량은 달라질 수 있어요",
-  listLinkTitle: "카드별 보상 보기",
-  listLinkDescription: (count: number) => `카드 ${count}종의 보상 구성과 현재 계획 요약을 확인해보세요`,
-  listLinkDescriptionWithoutCount: "카드별 보상 구성과 현재 계획 요약을 확인해보세요",
+  strategyTitle: "전략별 비교",
+  strategyDescription: "같은 카드 수를 뒤집을 때 전략마다 소비 재화와 획득 보상을 비교해요. 선택한 전략만 상점 계산에 반영돼요",
+  strategyControlLabel: "카드 뒤집기 전략",
+  strategies: {
+    "one-open": {
+      label: (_count: number) => "1장만 열기",
+      shortLabel: "1장만 열기",
+      rule: () => "1장만 열고 바로 셔플해요",
+    },
+    "sr-reset": {
+      label: (_count: number) => "SR 이상 셔플",
+      shortLabel: "SR 이상 셔플",
+      rule: (_count: number) => "SR 이상이 나오면 셔플해요",
+    },
+    "all-open": {
+      label: (_count: number) => "모두 열기",
+      shortLabel: "모두 열기",
+      rule: (count: number) => `항상 ${count}장을 모두 열어요`,
+    },
+  },
+  costLabel: "소비 재화",
+  rewardLabel: "획득 보상",
+  rewardHeaders: { resource: "보상", quantity: "기대량" },
+  noCardCountTitle: "뒤집을 카드 수를 입력해 주세요",
+  noCardCountDescription: "카드 수를 입력하면 전략별 소비 재화와 획득 보상을 비교할 수 있어요",
+  averageRewards: "기대 획득 보상",
+  resourceNameUnavailable: "리소스 이름을 불러오지 못했어요",
+  amountUnavailable: "계산 불가",
+  maximumAmount: "최대 기대량",
+  maximumAmountDescription: "반올림 전 기대량이 가장 많아요",
+  averageBadge: "기대값",
+  averageDisclosure: "기대값이라 실제 획득량은 달라질 수 있어요",
+  listLinkTitle: "전략 비교와 카드별 보상 보기",
+  listLinkDescription: (count: number) => `세 전략의 소비 재화·획득 보상과 카드 ${count}종의 보상 구성을 확인해보세요`,
+  listLinkDescriptionWithoutCount: "세 전략의 소비 재화·획득 보상과 카드별 보상 구성을 확인해보세요",
   cardListTitle: (count: number) => `카드별 보상 (${count}종)`,
   cardListDescription: "카드 1장을 뒤집었을 때 나올 수 있는 보상 구성이에요. 뒤집는 순서와는 관계없어요",
   currentPlan: "현재 계획",
   currentPlanDescription: "상점 계산기와 같은 입력값으로 계산해요",
-  cardCount: "뒤집을 카드 수",
+  strategyLabel: "전략",
   minigameRequiredLabel: "카드 뒤집기",
-  averageMinigameLabel: "카드 뒤집기 (평균)",
+  averageMinigameLabel: "카드 뒤집기 (기대값)",
   returnToCalculator: "상점 계산기로 돌아가기",
   returnToCalculatorDescription: "구매 수량·보유 수량은 상점 계산기에서 바꿀 수 있어요",
-  enterCardCount: "상점 계산기에서 카드 수 입력하기",
-  noCardCountTitle: "아직 뒤집을 카드 수를 입력하지 않았어요",
-  noCardCountDescription:
-    "위에서 카드 수를 입력하면 비용과 평균 보상, 재화별 남은 수량을 확인할 수 있어요",
+  noCardCountShortDescription: "뒤집을 카드 수를 입력하면 선택 전략의 결과를 확인할 수 있어요",
   unavailableTitle: "카드별 보상 정보가 아직 없어요",
-  unavailableDescription: "정보가 준비되면 이곳에 표시돼요. 상점 계산기의 평균 보상 계산은 그대로 사용할 수 있어요.",
+  unavailableDescription: "상점 계산기의 카드 뒤집기 계산도 할 수 없어요",
   invalidTitle: "카드별 보상 정보를 불러오지 못했어요",
-  invalidDescription:
-    "일부 카드 정보가 올바르지 않아 표시하지 않았어요. 상점 계산기의 평균 보상 계산에는 영향이 없어요.",
-  cardCostStatement: (resourceName: string, quantity: number) =>
-    `카드 1장당 ${resourceName} ${quantity.toLocaleString()}개가 필요해요`,
+  invalidDescription: "일부 카드 정보가 올바르지 않아 상점 계산기의 카드 뒤집기 계산도 할 수 없어요",
+  cardCostStatement: (resourceName: string, costs: { flip: number; quantity: number }[]) => {
+    if (costs.every(({ quantity }) => quantity === costs[0]?.quantity)) {
+      return `카드 1장당 ${resourceName} ${costs[0]?.quantity.toLocaleString() ?? 0}개가 필요해요`;
+    }
+    return `뒤집는 순서별 소비 재화: ${costs
+      .map(({ flip, quantity }) => `${flip}장째 ${resourceName} ${quantity.toLocaleString()}개`)
+      .join(" · ")}`;
+  },
   rarity: {
     1: { text: "N", color: "grey" },
     2: { text: "R", color: "blue" },

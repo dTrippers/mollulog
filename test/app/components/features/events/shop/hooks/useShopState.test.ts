@@ -50,6 +50,7 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     minigameStartRound: 1,
     minigamePlayCount: 0,
     minigamePaymentQuantityMode: "expected",
+    cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},
     ...overrides,
   };
@@ -134,6 +135,7 @@ describe("getPostSignInState", () => {
       itemQuantities: { "daily-ticket": 60 },
       selectedBonusStudentUids: ["student-9"],
       enabledStages: { "stage-1": true },
+      cardFlipStrategy: "sr-reset",
     });
     const syncedState = getPostSignInState({
       savedShopState,
@@ -147,6 +149,7 @@ describe("getPostSignInState", () => {
         itemQuantities: { "daily-ticket": 60 },
         selectedBonusStudentUids: ["student-9"],
         enabledStages: { "stage-1": true },
+        cardFlipStrategy: "sr-reset",
       }),
     );
   });
