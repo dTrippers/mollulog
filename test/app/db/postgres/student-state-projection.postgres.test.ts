@@ -15,6 +15,7 @@ import {
   pgStudentTargetsTable,
 } from "~/db/postgres/schema";
 import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
+import { StudentStateMergeConflictError } from "~/domain/student-state-errors";
 import {
   getRecruitedStudents,
   getRecruitedStudentTiers,
@@ -1410,6 +1411,90 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         { level: 75, skillEx: null },
       ]);
       expect((await reviewedImportEntry())?.status).toBe("applied");
+
+      // Import patches are checked against the values stored at write time, not only against the draft.
+      const importStudentState = async (
+        current: { tier?: number; level?: number; weaponLevel?: number } | null,
+        target: { targetTier?: number; targetWeaponLevel?: number } | null,
+        providedCurrent = Object.keys(current ?? {}),
+      ) => {
+        const draftUid = await createSyncDraft(modelEnv, canonicalUserId, {
+          source: "web",
+          type: "student_state",
+          entries: [
+            {
+              entryKey: "student-merge-conflict",
+              value: current?.tier ?? target?.targetTier ?? 1,
+              valueJson: JSON.stringify({
+                current,
+                target,
+                providedFields: { current: providedCurrent, target: Object.keys(target ?? {}) },
+              }),
+            },
+          ],
+        });
+        await applySyncDraft(modelEnv, canonicalUserId, draftUid, {
+          mergeReviewedStudentState: true,
+          studentStateMetadataByKey: { "student-merge-conflict": { initialTier: 1, hasGear: true } },
+          studentStateRequestMode: "nullable",
+        });
+        return draftUid;
+      };
+      const mergeConflictRow = async () =>
+        (
+          await admin.query(
+            [
+              "SELECT s.tier, s.level, s.weapon_level, t.target_tier, t.target_weapon_level",
+              "FROM student_states s JOIN student_targets t USING (user_id, student_uid)",
+              "WHERE s.user_id = 9 AND s.student_uid = 'student-merge-conflict'",
+            ].join(" "),
+          )
+        ).rows[0];
+      await importStudentState({ tier: 7, weaponLevel: 30 }, { targetTier: 9, targetWeaponLevel: 60 });
+      expect(await mergeConflictRow()).toEqual({
+        tier: 7,
+        level: null,
+        weapon_level: 30,
+        target_tier: 9,
+        target_weapon_level: 60,
+      });
+      const auditCountBeforeMergeConflict = (await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9"))
+        .rows.length;
+      await expect(importStudentState({ tier: 5 }, null)).rejects.toThrow(StudentStateMergeConflictError);
+      await expect(importStudentState(null, { targetTier: 6 })).rejects.toThrow(StudentStateMergeConflictError);
+      await expect(
+        createAndApplySyncDraft(modelEnv, canonicalUserId, {
+          source: "first_party_ocr",
+          sourceRef: "merge-conflict-ocr",
+          type: "student_state",
+          entries: [
+            {
+              entryKey: "student-merge-conflict",
+              value: 5,
+              valueJson: JSON.stringify({ current: { tier: 5 }, target: null, providedFields: { current: ["tier"] } }),
+            },
+          ],
+        }),
+      ).rejects.toThrow(StudentStateMergeConflictError);
+      expect(await mergeConflictRow()).toEqual({
+        tier: 7,
+        level: null,
+        weapon_level: 30,
+        target_tier: 9,
+        target_weapon_level: 60,
+      });
+      expect((await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9")).rows).toHaveLength(
+        auditCountBeforeMergeConflict,
+      );
+      expect(
+        (await admin.query("SELECT uid FROM sync_drafts WHERE user_id = 9 AND source_ref = 'merge-conflict-ocr'")).rows,
+      ).toHaveLength(0);
+      // Stored values that already break the tier rule do not block a patch that leaves tier-bound fields alone.
+      await admin.query(
+        "UPDATE student_states SET weapon_level = 60 WHERE user_id = 9 AND student_uid = 'student-merge-conflict'",
+      );
+      await importStudentState({ tier: 7, level: 80 }, null, ["level"]);
+      expect(await mergeConflictRow()).toMatchObject({ tier: 7, level: 80, weapon_level: 60 });
 
       await removeRecruitedStudent(modelEnv, canonicalUserId, "student-canonical");
       const afterRecruitmentRemoval = await admin.query(

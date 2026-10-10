@@ -21,3 +21,13 @@ export function isStaleStudentStateActionResult(value: unknown): boolean {
   if ("error" in value && isStaleStudentStateRequestError(value.error)) return true;
   return false;
 }
+
+export const STUDENT_STATE_MERGE_CONFLICT_MESSAGE = "다른 곳에서 값이 변경되었어요. 새로고침 후 다시 확인해주세요.";
+
+/** Submitted student-state values no longer fit the stored values they are merged with at write time. */
+export class StudentStateMergeConflictError extends Error {
+  constructor() {
+    super(STUDENT_STATE_MERGE_CONFLICT_MESSAGE);
+    this.name = "StudentStateMergeConflictError";
+  }
+}

@@ -445,7 +445,7 @@ async function userSnapshotTransaction(client, operation) {
   }
 }
 
-// Writers time out after 5 seconds, so every control-row exclusive lock stays well below that.
+// Writers time out after 5 seconds, so every control-row exclusive lock, including the wait for it, ends well below that.
 const ACTIVATION_LOCK_TIMEOUT = "1s";
 const ACTIVATION_LOCKED_BUDGET_MS = 2000;
 const ACTIVATION_MAX_ROUNDS = 10;
@@ -456,11 +456,27 @@ function isLockTimeout(error) {
   return error?.code === "55P03";
 }
 
-async function lockActivationControl(client) {
+/** Lock timeout, the statement timeout that enforces the deadline, or the deadline itself: release and retry. */
+function isActivationRetryable(error) {
+  return error instanceof ActivationLockBudgetExceeded || isLockTimeout(error) || error?.code === "57014";
+}
+
+/** A client whose every statement is bounded by the time left before the deadline. */
+function withDeadline(client, deadline) {
+  return {
+    async query(...args) {
+      const remaining = Math.floor(deadline - Date.now());
+      if (remaining <= 0) throw new ActivationLockBudgetExceeded();
+      await client.query(`SET LOCAL statement_timeout = ${remaining}`);
+      return client.query(...args);
+    },
+  };
+}
+
+async function lockActivationControl(client, lockedClient) {
   await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
   await client.query(`SET LOCAL lock_timeout = '${ACTIVATION_LOCK_TIMEOUT}'`);
-  await client.query(`SET LOCAL statement_timeout = '${ACTIVATION_LOCKED_BUDGET_MS}ms'`);
-  const { rows } = await client.query(
+  const { rows } = await lockedClient.query(
     "SELECT nullable_semantics_enabled FROM student_state_migration_control WHERE key = 'default' FOR UPDATE",
   );
   if (rows.length === 0) throw new Error("Student-state migration control row 'default' is missing.");
@@ -475,14 +491,15 @@ async function lockActivationControl(client) {
  */
 async function readAuditMarkAfterWriters(client) {
   for (let attempt = 0; attempt < ACTIVATION_MAX_ROUNDS; attempt += 1) {
+    const lockedClient = withDeadline(client, Date.now() + ACTIVATION_LOCKED_BUDGET_MS);
     try {
-      await lockActivationControl(client);
-      const { rows } = await client.query("SELECT COALESCE(max(id), 0)::int AS mark FROM student_state_audits");
+      await lockActivationControl(client, lockedClient);
+      const { rows } = await lockedClient.query("SELECT COALESCE(max(id), 0)::int AS mark FROM student_state_audits");
       await client.query("COMMIT");
       return rows[0].mark;
     } catch (error) {
       await client.query("ROLLBACK");
-      if (!isLockTimeout(error)) throw error;
+      if (!isActivationRetryable(error)) throw error;
     }
   }
   throw new Error("Student-state activation could not briefly lock the control row; the switch remains off.");
@@ -503,20 +520,18 @@ async function checkUsersInSnapshots(client, userIds) {
 }
 
 async function activateAfterLockedRecheck(client, mark) {
-  const startedAt = Date.now();
+  // The deadline covers the lock wait, every locked statement, and the switch update; COMMIT only releases the lock.
+  const lockedClient = withDeadline(client, Date.now() + ACTIVATION_LOCKED_BUDGET_MS);
   try {
-    await lockActivationControl(client);
-    const userIds = await listUsersAuditedAfter(client, mark);
+    await lockActivationControl(client, lockedClient);
+    const userIds = await listUsersAuditedAfter(lockedClient, mark);
     let mismatches = 0;
-    for (const userId of userIds) {
-      if (Date.now() - startedAt > ACTIVATION_LOCKED_BUDGET_MS) throw new ActivationLockBudgetExceeded();
-      mismatches += await checkParity(client, userId);
-    }
+    for (const userId of userIds) mismatches += await checkParity(lockedClient, userId);
     if (mismatches !== 0) {
       await client.query("ROLLBACK");
       return { status: "mismatch", mismatches, lockedUsers: userIds.length };
     }
-    const update = await client.query(
+    const update = await lockedClient.query(
       "UPDATE student_state_migration_control SET nullable_semantics_enabled = true, updated_at = now() WHERE key = 'default' AND nullable_semantics_enabled = false",
     );
     if (update.rowCount !== 1) throw new Error("Student-state migration control could not be activated.");
@@ -524,10 +539,7 @@ async function activateAfterLockedRecheck(client, mark) {
     return { status: "activated", mismatches: 0, lockedUsers: userIds.length };
   } catch (error) {
     await client.query("ROLLBACK");
-    // 57014 is the statement timeout that bounds a single locked statement.
-    if (error instanceof ActivationLockBudgetExceeded || isLockTimeout(error) || error?.code === "57014") {
-      return { status: "retry" };
-    }
+    if (isActivationRetryable(error)) return { status: "retry" };
     throw error;
   }
 }

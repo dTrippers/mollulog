@@ -19,6 +19,7 @@ import {
   type StudentStateTransaction,
   withStudentStateProjection,
 } from "~/db/postgres/student-state-projection";
+import { assertAbilityReleaseAvailable, assertWeaponLevelRange } from "~/domain/student-growth-state";
 import {
   isStudentStateDraftFieldProvided,
   mergeStudentStateDraftValueForUpdate,
@@ -29,6 +30,7 @@ import {
   studentStateCurrentFields,
   studentStateTargetFields,
 } from "~/domain/student-state";
+import { StudentStateMergeConflictError } from "~/domain/student-state-errors";
 import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_WRITE_CHUNK_SIZE = 500;
@@ -979,6 +981,7 @@ async function applyCanonicalStudentStateEntries(
           currentPatch.recruitedAt = new Date().toISOString();
           if (!Object.hasOwn(currentPatch, "tier")) currentPatch.tier = metadata.initialTier;
         }
+        assertMergedStateFitsTier(existing, currentPatch);
         await patchCanonicalStudentState(
           db,
           userId,
@@ -1020,6 +1023,14 @@ async function applyCanonicalStudentStateEntries(
         }
       }
       if (hasGrowthTargetField) {
+        if (tierBoundTargetFields.some((field) => Object.hasOwn(targetPatch, field))) {
+          const [currentState] = await db
+            .select({ tier: pgStudentStatesTable.tier })
+            .from(pgStudentStatesTable)
+            .where(and(eq(pgStudentStatesTable.userId, userId), eq(pgStudentStatesTable.studentUid, studentUid)))
+            .limit(1);
+          assertMergedTargetFitsTier(existing, targetPatch, currentState?.tier ?? null);
+        }
         targetPatch.studentGrowthUid = existing?.studentGrowthUid ?? nanoid(8);
         targetPatch.plannerAddedAt = existing?.plannerAddedAt ?? new Date().toISOString();
         await patchCanonicalStudentTarget(
@@ -1041,6 +1052,63 @@ async function applyCanonicalStudentStateEntries(
         await patchCanonicalRelationship(db, userId, studentUid, { targetLevel: state.target.targetBond });
       }
     }
+  }
+}
+
+const tierBoundCurrentFields = ["tier", "weaponLevel", "abilityHp", "abilityAtk", "abilityHeal"] as const;
+const tierBoundTargetFields = [
+  "targetTier",
+  "targetWeaponLevel",
+  "targetAbilityHp",
+  "targetAbilityAtk",
+  "targetAbilityHeal",
+] as const;
+
+/** Merge a patch over the stored row: an own key (even null) replaces the stored value, an omitted key keeps it. */
+function mergeStoredFields<Field extends string>(
+  stored: Partial<Record<Field, number | null>> | null | undefined,
+  patch: Record<string, unknown>,
+  fields: readonly Field[],
+): Record<Field, number | null> {
+  return Object.fromEntries(
+    fields.map((field) => [
+      field,
+      Object.hasOwn(patch, field) ? ((patch[field] as number | null) ?? null) : (stored?.[field] ?? null),
+    ]),
+  ) as Record<Field, number | null>;
+}
+
+/** Only patches that touch a tier-bound field are checked, so unrelated edits are not blocked by stored data. */
+function assertMergedStateFitsTier(
+  stored: Partial<Record<(typeof tierBoundCurrentFields)[number], number | null>> | null | undefined,
+  patch: Record<string, unknown>,
+) {
+  if (!tierBoundCurrentFields.some((field) => Object.hasOwn(patch, field))) return;
+  const merged = mergeStoredFields(stored, patch, tierBoundCurrentFields);
+  try {
+    assertWeaponLevelRange(merged.weaponLevel, merged.tier, "고유무기 레벨");
+    assertAbilityReleaseAvailable([merged.abilityHp, merged.abilityAtk, merged.abilityHeal], merged.tier, "능력 해방");
+  } catch {
+    throw new StudentStateMergeConflictError();
+  }
+}
+
+function assertMergedTargetFitsTier(
+  stored: Partial<Record<(typeof tierBoundTargetFields)[number], number | null>> | null | undefined,
+  patch: Record<string, unknown>,
+  currentTier: number | null,
+) {
+  const merged = mergeStoredFields(stored, patch, tierBoundTargetFields);
+  const tier = merged.targetTier ?? currentTier;
+  try {
+    assertWeaponLevelRange(merged.targetWeaponLevel, tier, "목표 고유무기 레벨");
+    assertAbilityReleaseAvailable(
+      [merged.targetAbilityHp, merged.targetAbilityAtk, merged.targetAbilityHeal],
+      tier,
+      "목표 능력 해방",
+    );
+  } catch {
+    throw new StudentStateMergeConflictError();
   }
 }
 

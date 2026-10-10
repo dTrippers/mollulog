@@ -13,7 +13,11 @@ import {
   studentStateCurrentFields,
   studentStateTargetFields,
 } from "~/domain/student-state";
-import { isStaleStudentStateRequestError, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
+import {
+  isStaleStudentStateRequestError,
+  STUDENT_STATE_STALE_MESSAGE,
+  StudentStateMergeConflictError,
+} from "~/domain/student-state-errors";
 import { routeError } from "~/lib/http-errors";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
@@ -127,6 +131,12 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     if (isStaleStudentStateRequestError(error)) {
       return data<ActionData>(
         { intent: typeof intent === "string" ? toActionIntent(intent) : undefined, error: STUDENT_STATE_STALE_MESSAGE },
+        { status: 409 },
+      );
+    }
+    if (error instanceof StudentStateMergeConflictError) {
+      return data<ActionData>(
+        { intent: typeof intent === "string" ? toActionIntent(intent) : undefined, error: error.message },
         { status: 409 },
       );
     }
