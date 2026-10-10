@@ -3,6 +3,7 @@ export { calculateResourceLedger } from "./ledger";
 export { calculateStageInfos, optimizeStageRuns } from "./optimization";
 export { calculateShopPurchaseDays, getShopResourcePurchaseDaysLimit } from "./purchase-days";
 export { calculateRequiredQuantities } from "./requirements";
+export { buildResourceBreakdownLines } from "./resource-breakdown-lines";
 export {
   calculateEffectiveShopPurchaseCount,
   calculateShopResourcePaymentCostForResource,

@@ -20,6 +20,19 @@ export type RewardItem = {
   rarity?: number;
 };
 
+export type CardFlipCard = {
+  uid: string;
+  name: string | null;
+  rarity: number | null;
+  imageUrl: string | null;
+  rewards: RewardItem[];
+};
+
+export type CardFlipData =
+  | { status: "available"; cardCost: MinigamePayment; cards: CardFlipCard[] }
+  | { status: "unavailable" }
+  | { status: "invalid" };
+
 export type DivisorRoundCondition = {
   divisor: number;
   remainders: number[];
@@ -95,6 +108,7 @@ export type MinigameConfig = {
   rewardGroups: RewardGroup[];
   dice?: DiceMinigameConfig;
   treasureHunt?: TreasureHuntConfig | null;
+  cardFlip?: CardFlipData;
 };
 
 export type MinigamePayment = {

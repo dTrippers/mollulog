@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { EventDetailShopPage } from "~/components/features/events";
+import type { EventShopPlanContext } from "~/components/features/events/shop/ShopCalculatorScreen";
 import { EmptyView } from "~/components/primitives";
 import { guestPlannerEventShopPlans } from "~/domain/guest-planner";
 import { type GuestPlannerSnapshot, readGuestPlanner, subscribeGuestPlanner } from "~/lib/guest-planner.client";
@@ -7,9 +8,11 @@ import { type GuestPlannerSnapshot, readGuestPlanner, subscribeGuestPlanner } fr
 type EventShopContentProps =
   | {
       empty: true;
+      renderScreen: (plan: EventShopPlanContext) => ReactNode;
     }
   | {
       empty: false;
+      renderScreen: (plan: EventShopPlanContext) => ReactNode;
       stages: Parameters<typeof EventDetailShopPage>[0]["stages"];
       shopResources: Parameters<typeof EventDetailShopPage>[0]["shopResources"];
       ownedQuantities: Parameters<typeof EventDetailShopPage>[0]["ownedQuantities"];
@@ -79,6 +82,7 @@ function ConnectedEventShopContent(props: Extract<EventShopContentProps, { empty
       signedIn={props.signedIn}
       guestPlannerStatus={guestPlannerStatus}
       minigameConfig={props.minigameConfig}
+      renderScreen={props.renderScreen}
     />
   );
 }
