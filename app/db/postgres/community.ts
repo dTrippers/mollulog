@@ -10,6 +10,7 @@ import {
   pgCommunityPostTagsTable,
   pgSenseisTable,
 } from "~/db/postgres/schema";
+import type { AccountLabel } from "~/domain/account-label";
 import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -73,6 +74,7 @@ type CommunityAuthor = {
   username: string;
   profileStudentId: string | null;
   profileVisibility: "public" | "private";
+  labels: AccountLabel[];
 };
 
 function toUtc(value: Date | string | null | undefined): UtcIsoString | null {
@@ -108,6 +110,7 @@ function toNestedComment(
       me: row.userId === currentUserId,
       username: author.username,
       profileStudentId: author.profileStudentId,
+      labels: author.labels ?? [],
     },
   };
 }
@@ -233,7 +236,12 @@ function mapPost(
     updatedAt: requireUtc(row.updatedAt, "community_posts.updated_at"),
     author:
       author && (row.origin === "curated" || authorVisible(author, currentUserId))
-        ? { id: row.userId, username: author.username, profileStudentId: author.profileStudentId }
+        ? {
+            id: row.userId,
+            username: author.username,
+            profileStudentId: author.profileStudentId,
+            labels: author.labels ?? [],
+          }
         : null,
     liked: false,
     likeCount: 0,
@@ -281,6 +289,7 @@ async function loadAuthors(
           username: pgSenseisTable.username,
           profileStudentId: pgSenseisTable.profileStudentId,
           profileVisibility: pgSenseisTable.profileVisibility,
+          labels: pgSenseisTable.labels,
         })
         .from(pgSenseisTable)
         .where(inArray(pgSenseisTable.id, uniqueIds)),
@@ -294,6 +303,7 @@ async function loadAuthors(
         username: author.username,
         profileStudentId: author.profileStudentId ?? null,
         profileVisibility: author.profileVisibility ?? "public",
+        labels: author.labels ?? [],
       },
     ]),
   );
@@ -317,6 +327,7 @@ async function loadAllowedAuthorIds(
           username: pgSenseisTable.username,
           profileStudentId: pgSenseisTable.profileStudentId,
           profileVisibility: pgSenseisTable.profileVisibility,
+          labels: pgSenseisTable.labels,
         })
         .from(pgCommunityPostsTable)
         .innerJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
@@ -338,6 +349,7 @@ async function loadAllowedAuthorIds(
         username: row.username,
         profileStudentId: row.profileStudentId ?? null,
         profileVisibility: row.profileVisibility ?? "public",
+        labels: row.labels ?? [],
       },
     ]),
   );
@@ -477,6 +489,7 @@ export async function getPostgresCommunityFeedPage(
             username: row.senseis.username,
             profileStudentId: row.senseis.profileStudentId ?? null,
             profileVisibility: row.senseis.profileVisibility ?? "public",
+            labels: row.senseis.labels ?? [],
           }
         : undefined;
       const post = mapPost(row.community_posts, author, options.currentUserId);
@@ -1101,7 +1114,7 @@ export async function getPostgresContentComments(
       parentCommentId: null,
       pinned: post.pinned,
       createdAt: requireUtc(post.createdAt, "community_posts.created_at"),
-      sensei: { username: author.username, profileStudentId: author.profileStudentId },
+      sensei: { username: author.username, profileStudentId: author.profileStudentId, labels: author.labels ?? [] },
     });
   }
   for (const comment of comments) {
@@ -1118,7 +1131,7 @@ export async function getPostgresContentComments(
       parentCommentId: post.id,
       pinned: false,
       createdAt: requireUtc(comment.createdAt, "community_comments.created_at"),
-      sensei: { username: author.username, profileStudentId: author.profileStudentId },
+      sensei: { username: author.username, profileStudentId: author.profileStudentId, labels: author.labels ?? [] },
     });
   }
   return result;

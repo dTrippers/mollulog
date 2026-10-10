@@ -1,5 +1,7 @@
 export type FurnitureInventoryStatus = "unregistered" | "not-owned" | "owned";
 
+export type FurnitureInteractionStudent = { uid: string; name: string };
+
 export const FURNITURE_CATEGORY_LABELS = {
   decorations: "장식",
   furnitures: "가구",
@@ -39,6 +41,7 @@ export type FurnitureCatalogItem = {
   category: FurnitureCategory;
   subCategory: string | null;
   tags: string[];
+  interactionStudents: FurnitureInteractionStudent[];
   themeUids: string[];
   quantity: number | null;
   status: FurnitureInventoryStatus;
@@ -66,6 +69,7 @@ export type FurnitureCatalogFilter = {
   themeUid?: string | null;
   categories?: FurnitureCategory[];
   rarities?: FurnitureRarity[];
+  onlyWithInteractionStudents?: boolean;
 };
 
 export function getFurnitureInventoryStatus(quantity: number | undefined): FurnitureInventoryStatus {
@@ -103,17 +107,15 @@ export function getFurnitureCatalogProgress(
 
 export function filterFurnitureCatalogItems<
   T extends Pick<FurnitureCatalogItem, "name" | "themeUids"> &
-    Partial<Pick<FurnitureCatalogItem, "category" | "rarity">>,
->(
-  items: T[],
-  filter: FurnitureCatalogFilter,
-): T[] {
+    Partial<Pick<FurnitureCatalogItem, "category" | "rarity" | "interactionStudents">>,
+>(items: T[], filter: FurnitureCatalogFilter): T[] {
   const query = filter.query?.trim().toLocaleLowerCase();
   return items.filter((item) => {
     if (query && !item.name.toLocaleLowerCase().includes(query)) return false;
     if (filter.themeUid && !item.themeUids.includes(filter.themeUid)) return false;
     if (filter.categories?.length && (!item.category || !filter.categories.includes(item.category))) return false;
     if (filter.rarities?.length && (item.rarity === undefined || !filter.rarities.includes(item.rarity))) return false;
+    if (filter.onlyWithInteractionStudents && !item.interactionStudents?.length) return false;
     return true;
   });
 }

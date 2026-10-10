@@ -1,3 +1,4 @@
+import type { AccountLabel } from "~/domain/account-label";
 import type { UtcIsoString } from "~/lib/date-time";
 
 export type ContentCommentVisibility = "private" | "public";
@@ -17,6 +18,7 @@ export type ContentCommentWithSensei = ContentComment & {
   sensei: {
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   };
 };
 

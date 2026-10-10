@@ -1,7 +1,8 @@
 import { LockClosedIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
-import { ProfileImage } from "~/components/primitives";
+import { SenseiAvatar } from "~/components/features/profile";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { AccountLabel } from "~/domain/account-label";
 import { formatInstant } from "~/lib/date-time";
 
 type CommentViewProps = {
@@ -12,6 +13,7 @@ type CommentViewProps = {
   sensei: {
     username: string;
     profileStudentId: string | null;
+    labels?: AccountLabel[];
   };
 };
 
@@ -22,7 +24,7 @@ export default function CommentView({ body, visibility, createdAt, sensei, varia
   return (
     <div className="flex gap-x-2 items-begin">
       <Link to={`/@${sensei.username}`} className={`${compact ? "mt-0.5" : "mt-1"} shrink-0`}>
-        <ProfileImage studentUid={sensei.profileStudentId} imageSize={compact ? 6 : 8} />
+        <SenseiAvatar profileStudentId={sensei.profileStudentId} labels={sensei.labels} imageSize={compact ? 6 : 8} />
       </Link>
       <div className="flex-1">
         <div className="flex items-center gap-x-1 text-xs">

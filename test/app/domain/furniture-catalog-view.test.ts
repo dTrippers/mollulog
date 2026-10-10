@@ -12,6 +12,7 @@ const source: FurnitureCatalogSource = {
       category: "furnitures",
       subCategory: "Chair",
       tags: [],
+      interactionStudents: [{ uid: "student-1", name: "Student One" }],
     },
     {
       uid: "table",
@@ -21,6 +22,7 @@ const source: FurnitureCatalogSource = {
       category: "furnitures",
       subCategory: "Table",
       tags: [],
+      interactionStudents: [],
     },
     {
       uid: "lamp",
@@ -30,6 +32,7 @@ const source: FurnitureCatalogSource = {
       category: "decorations",
       subCategory: "Lamp",
       tags: [],
+      interactionStudents: [],
     },
   ],
   themes: [
@@ -60,6 +63,9 @@ describe("furniture catalog view composition", () => {
     expect(view.items.find((item) => item.uid === "chair"))?.toMatchObject({ quantity: 8, status: "owned" });
     expect(view.items.find((item) => item.uid === "table"))?.toMatchObject({ quantity: 0, status: "not-owned" });
     expect(view.items.find((item) => item.uid === "lamp"))?.toMatchObject({ quantity: null, status: "unregistered" });
+    expect(view.items.find((item) => item.uid === "chair")?.interactionStudents).toEqual([
+      { uid: "student-1", name: "Student One" },
+    ]);
   });
 
   it("fails explicitly when a theme membership references missing furniture", () => {

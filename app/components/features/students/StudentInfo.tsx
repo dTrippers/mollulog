@@ -1,5 +1,5 @@
 import { Link } from "react-router";
-import { AttributeBadge, ProfileImage, SectionCard } from "~/components/primitives";
+import { AttributeBadge, ProfileImage, ResourceCard, SectionCard } from "~/components/primitives";
 import type { StudentHeaderQuery, StudentTerrainAdaptationRank } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import {
@@ -29,6 +29,7 @@ type StudentInfoProps = {
     | "catalog"
     | "character"
     | "studentVariant"
+    | "interactionFurnitures"
   >;
   className?: string;
 };
@@ -155,6 +156,20 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
                   </Link>
                 ))}
             </div>
+          </div>
+        ) : null}
+
+        {student.interactionFurnitures.length > 0 ? (
+          <div className="mt-3.5 md:mt-4">
+            <span className="text-xs text-muted-foreground">상호작용 가구</span>
+            <ul className="mt-1.5 flex flex-col gap-1.5">
+              {student.interactionFurnitures.map((furniture) => (
+                <li key={furniture.uid} className="flex items-center gap-2 text-sm">
+                  <ResourceCard imageUrl={furniture.imageUrl} rarity={furniture.rarity} expandImageArea />
+                  <span className="min-w-0 break-keep wrap-break-word leading-snug">{furniture.name}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         ) : null}
       </div>

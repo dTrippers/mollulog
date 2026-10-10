@@ -4,10 +4,12 @@ import { studentImageUrl } from "~/models/assets";
 
 type ProfileImageProps = {
   studentUid: string | null;
+  imageUrl?: string;
+  alt?: string;
   imageSize?: 16 | 12 | 10 | 6 | 8;
 };
 
-export default function ProfileImage({ studentUid, imageSize }: ProfileImageProps) {
+export default function ProfileImage({ studentUid, imageUrl, alt, imageSize }: ProfileImageProps) {
   let [imageSizeClass, iconSizeClass]: string[] = [];
   switch (imageSize) {
     case 16:
@@ -24,6 +26,16 @@ export default function ProfileImage({ studentUid, imageSize }: ProfileImageProp
       break;
     default:
       [imageSizeClass, iconSizeClass] = ["size-8", "size-6"];
+  }
+
+  if (imageUrl) {
+    return (
+      <img
+        className={cn(imageSizeClass, "inline rounded-full bg-muted object-cover dark:ring-1 dark:ring-white/10")}
+        src={imageUrl}
+        alt={alt ?? ""}
+      />
+    );
   }
 
   return studentUid ? (

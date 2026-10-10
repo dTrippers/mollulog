@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, type ReactNode } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import { type ResourceImageType, resourceImageUrl } from "~/models/assets";
@@ -8,7 +8,7 @@ type ResourceCardProps = {
   resourceType?: ResourceTypeEnum;
   rarity?: number;
   favoriteLevel?: number;
-  label?: number | string;
+  label?: ReactNode;
   labelColor?: "white" | "yellow" | "red";
   labelBgColor?: "black" | "red";
   name?: string;
@@ -62,12 +62,7 @@ function ResourceCard({
           className={`shrink-0 ${sizeClass} flex items-center justify-center overflow-hidden rounded-lg ${rarityBgClass(rarity)}`}
         >
           {imageUrl ? (
-            <img
-              alt="아이템 이미지"
-              src={imageUrl}
-              className={imageClassName}
-              loading="lazy"
-            />
+            <img alt="아이템 이미지" src={imageUrl} className={imageClassName} loading="lazy" />
           ) : (
             <span
               role="img"

@@ -1,13 +1,16 @@
-import { PencilSquareIcon, UserIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
+import { PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
 import { Link } from "react-router";
-import { Button, ProfileImage } from "~/components/primitives";
+import { Button } from "~/components/primitives";
+import type { AccountLabel } from "~/domain/account-label";
 import { cn } from "~/lib/utils";
+import SenseiAvatar from "./SenseiAvatar";
 
 type ProfileUsernameProps = {
   profileStudentUid: string | null;
   username: string;
   bio: string | null;
   friendCode: string | null;
+  labels?: AccountLabel[];
   loading?: boolean;
   followability?: "followable" | "following" | "unable";
   followingCount?: number;
@@ -21,6 +24,7 @@ export default function ProfileUsername({
   username,
   bio,
   friendCode,
+  labels,
   loading,
   followability,
   followerCount,
@@ -31,7 +35,7 @@ export default function ProfileUsername({
   return (
     <div className="m-4 md:m-6">
       <div className="flex items-center">
-        <ProfileImage studentUid={profileStudentUid} imageSize={16} />
+        <SenseiAvatar profileStudentId={profileStudentUid} labels={labels} imageSize={16} />
         <div className="ml-2 md:ml-4 grow">
           <p className="font-bold text-lg md:text-xl">@{username}</p>
           <div className="flex flex-col md:flex-row text-sm">
