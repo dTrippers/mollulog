@@ -919,103 +919,6 @@ export const pgRecruitmentResultsTable = pgTable(
   ],
 );
 
-/** Canonical PostgreSQL tables for authenticated student state and imports. */
-export const pgRecruitedStudentsTable = pgTable(
-  "recruited_students",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    uid: text().notNull(),
-    userId: integer("user_id").notNull(),
-    studentUid: text("student_uid").notNull(),
-    tier: integer().notNull(),
-    level: integer(),
-    skillEx: integer("skill_ex"),
-    skillNormal: integer("skill_normal"),
-    skillEnhanced: integer("skill_enhanced"),
-    skillSub: integer("skill_sub"),
-    equip1: integer(),
-    equip2: integer(),
-    equip3: integer(),
-    equip1Level: integer("equip1_level"),
-    equip2Level: integer("equip2_level"),
-    equip3Level: integer("equip3_level"),
-    equipSpecial: integer("equip_special"),
-    weaponLevel: integer("weapon_level"),
-    abilityHp: integer("ability_hp"),
-    abilityAtk: integer("ability_atk"),
-    abilityHeal: integer("ability_heal"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("recruited_students_uid_uidx").on(table.uid),
-    uniqueIndex("recruited_students_user_student_uidx").on(table.userId, table.studentUid),
-    index("recruited_students_user_id_idx").on(table.userId),
-    index("recruited_students_student_uid_idx").on(table.studentUid),
-  ],
-);
-
-export const pgStudentGrowthTable = pgTable(
-  "student_growth",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    uid: text().notNull(),
-    userId: integer("user_id").notNull(),
-    studentUid: text("student_uid").notNull(),
-    level: integer(),
-    skillEx: integer("skill_ex"),
-    skillNormal: integer("skill_normal"),
-    skillEnhanced: integer("skill_enhanced"),
-    skillSub: integer("skill_sub"),
-    equip1: integer(),
-    equip2: integer(),
-    equip3: integer(),
-    equipSpecial: integer("equip_special"),
-    targetLevel: integer("target_level"),
-    targetSkillEx: integer("target_skill_ex"),
-    targetSkillNormal: integer("target_skill_normal"),
-    targetSkillEnhanced: integer("target_skill_enhanced"),
-    targetSkillSub: integer("target_skill_sub"),
-    targetEquip1: integer("target_equip1"),
-    targetEquip2: integer("target_equip2"),
-    targetEquip3: integer("target_equip3"),
-    targetEquipSpecial: integer("target_equip_special"),
-    targetTier: integer("target_tier"),
-    targetWeaponLevel: integer("target_weapon_level"),
-    targetAbilityHp: integer("target_ability_hp"),
-    targetAbilityAtk: integer("target_ability_atk"),
-    targetAbilityHeal: integer("target_ability_heal"),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("student_growth_uid_uidx").on(table.uid),
-    uniqueIndex("student_growth_user_student_uidx").on(table.userId, table.studentUid),
-    index("student_growth_user_id_idx").on(table.userId),
-  ],
-);
-
-export const pgRelationshipLevelsTable = pgTable(
-  "user_relationship_levels",
-  {
-    id: integer().primaryKey().generatedByDefaultAsIdentity(),
-    uid: text().notNull(),
-    userId: integer("user_id").notNull(),
-    studentId: text("student_id").notNull(),
-    currentLevel: integer("current_level").notNull(),
-    currentExp: integer("current_exp"),
-    targetLevel: integer("target_level").notNull(),
-    items: jsonb().$type<Record<string, number>>().notNull().default({}),
-    createdAt: timestamptz("created_at").notNull().defaultNow(),
-    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-  },
-  (table) => [
-    uniqueIndex("user_relationship_levels_uid_uidx").on(table.uid),
-    uniqueIndex("user_relationship_levels_user_student_uidx").on(table.userId, table.studentId),
-    index("user_relationship_levels_user_id_idx").on(table.userId),
-  ],
-);
-
 /** Canonical runtime student-state reads while participating writers still mirror legacy tables. */
 export const pgStudentStatesTable = pgTable(
   "student_states",
@@ -1095,14 +998,7 @@ export const pgStudentTargetsTable = pgTable(
   ],
 );
 
-/** One-row control record; its seeded default keeps P4 semantics disabled. */
-export const pgStudentStateMigrationControlTable = pgTable("student_state_migration_control", {
-  key: text().primaryKey(),
-  nullableSemanticsEnabled: boolean("nullable_semantics_enabled").notNull().default(false),
-  updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-});
-
-/** User-visible changes only; migration backfills never write this table. */
+/** Canonical user-visible changes, written atomically with current state and targets. */
 export const pgStudentStateAuditsTable = pgTable(
   "student_state_audits",
   {

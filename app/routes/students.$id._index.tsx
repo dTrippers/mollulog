@@ -19,7 +19,7 @@ import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudents, type RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
-import { getRelationshipLevels, getStudentStateWriteMode } from "~/models/relationship-level";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import { getStudentDetailData } from "~/models/student";
 import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
@@ -140,7 +140,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const studentDetailContentPromise = getStudentDetailContent(publicReadEnv, uid, { ctx });
 
   const currentUser = await currentUserPromise;
-  const writeModePromise = currentUser ? getStudentStateWriteMode(env) : Promise.resolve("legacy" as const);
   const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
   const variantPrimaryStudentUids = student.character.studentVariants.map((variant) => variant.primaryStudent.uid);
   const recruitedStudentsPromise = currentUser ? getRecruitedStudents(env, currentUser.id) : Promise.resolve([]);
@@ -156,7 +155,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudents,
     relationshipLevels,
     studentDetailContent,
-    writeMode,
   ] = await Promise.all([
     getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
     getTagCountsByStudent(env, uid),
@@ -165,7 +163,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentsPromise,
     relationshipLevelsPromise,
     studentDetailContentPromise,
-    writeModePromise,
   ]);
 
   if (studentDetailContent.publishedSummaryError) {
@@ -219,7 +216,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     knowledgeEntries: studentDetailContent.knowledgeEntries,
     knowledgeLookupStatus: studentDetailContent.knowledgeLookupStatus,
     currentUser,
-    initialWriteMode: writeMode,
     allRaids,
   };
 };
@@ -364,12 +360,10 @@ export default function StudentDetail() {
     studentCatalog,
     myStudentState,
     myRelationshipLevels,
-    initialWriteMode,
     publishedSummary,
     knowledgeEntries,
     knowledgeLookupStatus,
   } = useLoaderData<typeof loader>();
-  const [writeMode] = useState(initialWriteMode);
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
   useEffect(() => {
@@ -415,7 +409,6 @@ export default function StudentDetail() {
               released={student.released}
               recruited={myStudentState !== null}
               relatedRelationshipLevels={myRelationshipLevels}
-              nullableSemantics={writeMode === "nullable"}
               knowledgeEntries={knowledgeEntries}
               knowledgeLookupStatus={knowledgeLookupStatus}
               aiSummary={

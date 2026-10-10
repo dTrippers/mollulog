@@ -1,0 +1,72 @@
+import type { pgStudentStatesTable, pgStudentTargetsTable } from "~/db/postgres/schema";
+
+export function studentStateRow(
+  patch: Partial<typeof pgStudentStatesTable.$inferSelect> = {},
+): typeof pgStudentStatesTable.$inferSelect {
+  return {
+    id: 1,
+    uid: "state-a",
+    userId: 1,
+    studentUid: "student-a",
+    recruitedStudentUid: "recruited-a",
+    relationshipLevelUid: null,
+    tier: 7,
+    level: 80,
+    skillEx: null,
+    skillNormal: null,
+    skillEnhanced: null,
+    skillSub: null,
+    equip1: null,
+    equip2: null,
+    equip3: null,
+    equipSpecial: null,
+    equip1Level: null,
+    equip2Level: null,
+    equip3Level: null,
+    weaponLevel: null,
+    abilityHp: null,
+    abilityAtk: null,
+    abilityHeal: null,
+    relationshipCurrentLevel: null,
+    relationshipCurrentExp: null,
+    recruitedAt: "2026-10-10T00:00:00.123456Z",
+    deletedAt: null,
+    createdAt: new Date("2026-10-10T00:00:00Z"),
+    updatedAt: new Date("2026-10-10T00:00:00Z"),
+    ...patch,
+  };
+}
+
+export function studentTargetRow(
+  patch: Partial<typeof pgStudentTargetsTable.$inferSelect> = {},
+): typeof pgStudentTargetsTable.$inferSelect {
+  return {
+    id: 1,
+    uid: "target-a",
+    userId: 1,
+    studentUid: "student-a",
+    studentGrowthUid: "growth-a",
+    relationshipLevelUid: null,
+    targetLevel: 60,
+    targetSkillEx: null,
+    targetSkillNormal: null,
+    targetSkillEnhanced: null,
+    targetSkillSub: null,
+    targetEquip1: null,
+    targetEquip2: null,
+    targetEquip3: null,
+    targetEquipSpecial: null,
+    targetTier: null,
+    targetWeaponLevel: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
+    relationshipTargetLevel: null,
+    giftPlan: {},
+    plannerAddedAt: "2026-10-10T00:00:00.234567Z",
+    deletedAt: null,
+    createdAt: new Date("2026-10-10T00:00:00Z"),
+    updatedAt: new Date("2026-10-10T00:00:00Z"),
+    ...patch,
+  };
+}

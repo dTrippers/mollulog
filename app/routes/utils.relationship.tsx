@@ -38,7 +38,6 @@ import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import {
   getRelationshipLevels,
-  getStudentStateWriteMode,
   type RelationshipLevel,
   removeRelationshipLevel,
   upsertRelationshipLevel,
@@ -84,7 +83,6 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const [allStudents, currentUser] = await Promise.all([getAllStudents(env, true), getActiveSensei(env, request)]);
-  const writeMode = currentUser ? await getStudentStateWriteMode(env) : "legacy";
 
   let savedRelationships: Record<string, RelationshipLevel> = {};
   let ownedQuantities: Record<string, number> | null = null;
@@ -132,7 +130,6 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       return bLevel - aLevel;
     }),
     allStudentsFavoriteItems: getAllStudentsFavoriteItems(env),
-    writeMode,
     isAuthenticated: !!currentUser,
     ownedQuantities,
   };
@@ -184,21 +181,10 @@ export function updateRelationshipStudentState(
 }
 
 export function buildRelationshipSavePayload(
-  writeMode: "legacy" | "nullable",
   studentId: string,
   relationship: Relationship,
   saved: Relationship,
 ): ActionData {
-  if (writeMode === "legacy") {
-    return {
-      studentId,
-      currentLevel: relationship.currentLevel,
-      currentExp: relationship.currentExp,
-      targetLevel: relationship.targetLevel,
-      items: relationship.items,
-    };
-  }
-
   const patch: ActionData = { studentId, stateFormat: "nullable" };
   if (relationship.currentLevel !== saved.currentLevel) patch.currentLevel = relationship.currentLevel;
   if (relationship.currentExp !== saved.currentExp) patch.currentExp = relationship.currentExp;
@@ -254,10 +240,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           );
         }
         const validationError =
-          getRelationshipLevelValidationError(
-            { currentLevel: actionData.currentLevel ?? null, targetLevel: actionData.targetLevel ?? null },
-            actionData.stateFormat === "nullable",
-          ) ?? (actionData.items == null ? null : getRelationshipGiftPlanValidationError(actionData.items));
+          getRelationshipLevelValidationError({
+            currentLevel: actionData.currentLevel ?? null,
+            targetLevel: actionData.targetLevel ?? null,
+          }) ?? (actionData.items == null ? null : getRelationshipGiftPlanValidationError(actionData.items));
         if (validationError) {
           return data(
             { success: false, code: "INVALID_INPUT", error: validationError, retryable: false },
@@ -302,19 +288,13 @@ const RELATIONSHIP_ITEM_SEARCH = "?mode=item";
 const EMPTY_GIFT_QUANTITIES: Record<string, number> = {};
 
 export default function RelationshipUtil() {
-  const {
-    students,
-    allStudentsFavoriteItems,
-    isAuthenticated,
-    ownedQuantities,
-    writeMode: loadedWriteMode,
-  } = useLoaderData<typeof loader>();
-  const [writeMode] = useState(loadedWriteMode);
-  const [emptyRelationship] = useState<Relationship>(() =>
-    writeMode === "nullable"
-      ? { currentLevel: null, currentExp: null, targetLevel: null, items: {} }
-      : { currentLevel: 1, currentExp: null, targetLevel: 50, items: {} },
-  );
+  const { students, allStudentsFavoriteItems, isAuthenticated, ownedQuantities } = useLoaderData<typeof loader>();
+  const [emptyRelationship] = useState<Relationship>(() => ({
+    currentLevel: isAuthenticated ? null : 1,
+    currentExp: null,
+    targetLevel: isAuthenticated ? null : 50,
+    items: {},
+  }));
   const [searchParams] = useSearchParams();
   const queryStudentUid = searchParams.get("studentUid");
   const { showSignIn } = useSignIn();
@@ -427,18 +407,12 @@ export default function RelationshipUtil() {
     setSelectedStudentUid(queryStudentUid);
   }, [queryStudentUid, managedStudents]);
 
-  const validateRelationship = useCallback(
-    (relationship: Relationship): string | null => {
-      return getRelationshipLevelValidationError(
-        {
-          currentLevel: relationship.currentLevel,
-          targetLevel: relationship.targetLevel,
-        },
-        writeMode === "nullable",
-      );
-    },
-    [writeMode],
-  );
+  const validateRelationship = useCallback((relationship: Relationship): string | null => {
+    return getRelationshipLevelValidationError({
+      currentLevel: relationship.currentLevel,
+      targetLevel: relationship.targetLevel,
+    });
+  }, []);
 
   const submitRelationship = useCallback(
     (relationship: Relationship, requestedStudentUid?: string) => {
@@ -478,7 +452,7 @@ export default function RelationshipUtil() {
       submittedDeleteRef.current = null;
       submittedRelationshipRef.current = { studentUid, relationship };
 
-      saveFetcher.submit(buildRelationshipSavePayload(writeMode, studentUid, relationship, saved), {
+      saveFetcher.submit(buildRelationshipSavePayload(studentUid, relationship, saved), {
         method: "POST",
         encType: "application/json",
       });
@@ -492,7 +466,6 @@ export default function RelationshipUtil() {
       selectedStudentUid,
       showSignIn,
       validateRelationship,
-      writeMode,
     ],
   );
 
@@ -779,7 +752,6 @@ export default function RelationshipUtil() {
     <RelationshipStudentPicker
       students={managedStudents}
       selectedStudentUid={selectedStudentUid}
-      nullableSemantics={writeMode === "nullable"}
       onSelectStudentUid={handleSelectStudentUid}
     />
   );
@@ -833,7 +805,6 @@ export default function RelationshipUtil() {
           students={managedStudents}
           isAuthenticated={isAuthenticated}
           ownedQuantities={ownedQuantities}
-          writeMode={writeMode}
           staleWriteBlocked={staleWriteBlocked}
           onStaleWriteBlocked={handleStaleWriteBlocked}
           onStudentItemsSaved={handleSavedGiftPlans}
@@ -843,7 +814,6 @@ export default function RelationshipUtil() {
           studentPicker={studentPicker}
           selectedStudentUid={selectedStudentUid}
           selectedStudent={selectedStudent}
-          writeMode={writeMode}
           currentRelationship={currentRelationship}
           giftCalculationMode={giftCalculationMode}
           selectedItemExp={selectedItemExp}
@@ -869,7 +839,6 @@ function RelationshipStudentScreen({
   studentPicker,
   selectedStudentUid,
   selectedStudent,
-  writeMode,
   currentRelationship,
   giftCalculationMode,
   selectedItemExp,
@@ -889,7 +858,6 @@ function RelationshipStudentScreen({
   studentPicker: ReactNode;
   selectedStudentUid: string | null;
   selectedStudent: RelationshipStudentState | null;
-  writeMode: "legacy" | "nullable";
   currentRelationship: Relationship;
   giftCalculationMode: RelationshipGiftCalculationModeValue;
   selectedItemExp: number;
@@ -964,7 +932,6 @@ function RelationshipStudentScreen({
 
           <StudentRelationshipLevel
             studentName={selectedStudent.name}
-            nullableSemantics={writeMode === "nullable"}
             currentExp={currentRelationship.currentExp}
             currentLevel={currentRelationship.currentLevel}
             targetLevel={currentRelationship.targetLevel}
@@ -976,7 +943,6 @@ function RelationshipStudentScreen({
           />
 
           <RequiredGifts
-            nullableSemantics={writeMode === "nullable"}
             currentLevel={currentRelationship.currentLevel}
             currentExp={currentRelationship.currentExp}
             targetLevel={currentRelationship.targetLevel}

@@ -1,13 +1,13 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRecruitedStudentsTable, pgRelationshipLevelsTable, pgStudentStatesTable } from "~/db/postgres/schema";
+import { pgStudentStatesTable } from "~/db/postgres/schema";
 import {
   patchCanonicalRelationship,
   patchCanonicalStudentState,
   type StudentStateRequestMode,
-  withStudentStateProjection,
-} from "~/db/postgres/student-state-projection";
+  withStudentStateWrite,
+} from "~/db/postgres/student-state";
 import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
   type StudentCalculatorCatalog,
@@ -21,7 +21,6 @@ import {
   type RecruitedStudentCurrentStateInput,
   validateRecruitedStudentCurrentStateInput,
 } from "~/models/recruited-student";
-import { normalizeRelationshipItems } from "~/models/relationship-level";
 
 type StudentBasicInfoDatabase = NodePgDatabase;
 
@@ -107,137 +106,72 @@ export async function saveStudentBasicInfo(
     env,
     async (db) => {
       await db.transaction(async (tx) => {
-        await withStudentStateProjection(
+        await withStudentStateWrite(
           tx,
           senseiId,
           [studentUid, ...Object.keys(input.relationshipBonds)],
           "student_basic_info",
-          async (lockedTx, context) => {
-            if (context.mode === "nullable") {
-              const [existing] = await lockedTx
-                .select()
-                .from(pgStudentStatesTable)
-                .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-                .limit(1);
-              const tier = input.tier ?? existing?.tier ?? null;
-              if (tier == null) throw new ActionValidationError("학생 성급을 확인해주세요");
-              const equipmentFields = [
-                "equip1",
-                "equip2",
-                "equip3",
-                "equip1Level",
-                "equip2Level",
-                "equip3Level",
-              ] as const;
-              const hasEquipmentChanges = equipmentFields.some((field) => Object.hasOwn(input.currentState, field));
-              try {
-                validateRecruitedStudentCurrentStateInput(input.currentState);
-                if (hasEquipmentChanges) {
-                  if (!options.equipmentValidation) {
-                    throw new ActionValidationError("장비 정보를 확인하지 못했어요");
-                  }
-                  validateStudentEquipmentLevels(
-                    options.equipmentValidation.student,
-                    options.equipmentValidation.catalog,
-                    mergeStudentBasicInfoEquipmentState(existing, input.currentState),
-                  );
+          async (lockedTx) => {
+            const [existing] = await lockedTx
+              .select()
+              .from(pgStudentStatesTable)
+              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+              .limit(1);
+            const tier = input.tier ?? existing?.tier ?? null;
+            if (tier == null) throw new ActionValidationError("학생 성급을 확인해주세요");
+            const equipmentFields = [
+              "equip1",
+              "equip2",
+              "equip3",
+              "equip1Level",
+              "equip2Level",
+              "equip3Level",
+            ] as const;
+            const hasEquipmentChanges = equipmentFields.some((field) => Object.hasOwn(input.currentState, field));
+            try {
+              validateRecruitedStudentCurrentStateInput(input.currentState);
+              if (hasEquipmentChanges) {
+                if (!options.equipmentValidation) {
+                  throw new ActionValidationError("장비 정보를 확인하지 못했어요");
                 }
-                const nextWeaponLevel = Object.hasOwn(input.currentState, "weaponLevel")
-                  ? (input.currentState.weaponLevel ?? null)
-                  : (existing?.weaponLevel ?? null);
-                const ability = [
-                  Object.hasOwn(input.currentState, "abilityHp")
-                    ? (input.currentState.abilityHp ?? null)
-                    : (existing?.abilityHp ?? null),
-                  Object.hasOwn(input.currentState, "abilityAtk")
-                    ? (input.currentState.abilityAtk ?? null)
-                    : (existing?.abilityAtk ?? null),
-                  Object.hasOwn(input.currentState, "abilityHeal")
-                    ? (input.currentState.abilityHeal ?? null)
-                    : (existing?.abilityHeal ?? null),
-                ];
-                assertWeaponLevelRange(nextWeaponLevel, tier, "고유무기 레벨");
-                assertAbilityReleaseAvailable(ability, tier, "능력 해방");
-              } catch (error) {
-                throw new ActionValidationError(error instanceof Error ? error.message : "육성 상태를 확인해주세요");
+                validateStudentEquipmentLevels(
+                  options.equipmentValidation.student,
+                  options.equipmentValidation.catalog,
+                  mergeStudentBasicInfoEquipmentState(existing, input.currentState),
+                );
               }
-              await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
-                ...(existing?.recruitedStudentUid == null
-                  ? { recruitedStudentUid: nanoid(8), recruitedAt: new Date().toISOString() }
-                  : {}),
-                ...(input.tier != null ? { tier: input.tier } : {}),
-                ...input.currentState,
-              });
-              for (const [relationshipStudentUid, relationshipBond] of Object.entries(input.relationshipBonds)) {
-                await patchCanonicalRelationship(lockedTx, senseiId, relationshipStudentUid, {
-                  currentLevel: relationshipBond,
-                });
-              }
-              return;
+              const nextWeaponLevel = Object.hasOwn(input.currentState, "weaponLevel")
+                ? (input.currentState.weaponLevel ?? null)
+                : (existing?.weaponLevel ?? null);
+              const ability = [
+                Object.hasOwn(input.currentState, "abilityHp")
+                  ? (input.currentState.abilityHp ?? null)
+                  : (existing?.abilityHp ?? null),
+                Object.hasOwn(input.currentState, "abilityAtk")
+                  ? (input.currentState.abilityAtk ?? null)
+                  : (existing?.abilityAtk ?? null),
+                Object.hasOwn(input.currentState, "abilityHeal")
+                  ? (input.currentState.abilityHeal ?? null)
+                  : (existing?.abilityHeal ?? null),
+              ];
+              assertWeaponLevelRange(nextWeaponLevel, tier, "고유무기 레벨");
+              assertAbilityReleaseAvailable(ability, tier, "능력 해방");
+            } catch (error) {
+              throw new ActionValidationError(error instanceof Error ? error.message : "육성 상태를 확인해주세요");
             }
-            if (input.tier == null) throw new ActionValidationError("학생 성급을 확인해주세요");
-            await lockedTx
-              .insert(pgRecruitedStudentsTable)
-              .values({
-                uid: nanoid(8),
-                userId: senseiId,
-                studentUid,
-                tier: input.tier!,
-                ...input.currentState,
-              })
-              .onConflictDoUpdate({
-                target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-                set: { tier: input.tier!, ...input.currentState, updatedAt: new Date() },
-              });
-
+            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
+              ...(existing?.recruitedStudentUid == null
+                ? { recruitedStudentUid: nanoid(8), recruitedAt: new Date().toISOString() }
+                : {}),
+              ...(input.tier != null ? { tier: input.tier } : {}),
+              ...input.currentState,
+            });
             for (const [relationshipStudentUid, relationshipBond] of Object.entries(input.relationshipBonds)) {
-              const [existingRelationship] = await lockedTx
-                .select()
-                .from(pgRelationshipLevelsTable)
-                .where(
-                  and(
-                    eq(pgRelationshipLevelsTable.userId, senseiId),
-                    eq(pgRelationshipLevelsTable.studentId, relationshipStudentUid),
-                  ),
-                )
-                .limit(1)
-                .for("update");
-              if (relationshipBond == null) {
-                await lockedTx
-                  .delete(pgRelationshipLevelsTable)
-                  .where(
-                    and(
-                      eq(pgRelationshipLevelsTable.userId, senseiId),
-                      eq(pgRelationshipLevelsTable.studentId, relationshipStudentUid),
-                    ),
-                  );
-                continue;
-              }
-              const targetLevel = Math.max(relationshipBond, existingRelationship?.targetLevel ?? relationshipBond);
-              const currentExp =
-                existingRelationship?.currentLevel === relationshipBond ? existingRelationship.currentExp : null;
-              const items = normalizeRelationshipItems(existingRelationship?.items);
-              await lockedTx
-                .insert(pgRelationshipLevelsTable)
-                .values({
-                  uid: nanoid(8),
-                  userId: senseiId,
-                  studentId: relationshipStudentUid,
-                  currentLevel: relationshipBond,
-                  currentExp,
-                  targetLevel,
-                  items,
-                })
-                .onConflictDoUpdate({
-                  target: [pgRelationshipLevelsTable.userId, pgRelationshipLevelsTable.studentId],
-                  set: {
-                    currentLevel: relationshipBond,
-                    currentExp: sql`case when ${pgRelationshipLevelsTable.currentLevel} = ${relationshipBond} then ${pgRelationshipLevelsTable.currentExp} else ${currentExp} end`,
-                    targetLevel: sql`greatest(${pgRelationshipLevelsTable.targetLevel}, excluded.target_level)`,
-                    updatedAt: new Date(),
-                  },
-                });
+              await patchCanonicalRelationship(lockedTx, senseiId, relationshipStudentUid, {
+                currentLevel: relationshipBond,
+              });
             }
+            return;
           },
           null,
           options.requestMode ?? "legacy",

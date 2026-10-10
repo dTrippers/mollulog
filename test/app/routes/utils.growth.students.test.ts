@@ -155,7 +155,7 @@ describe("utils.growth.students action", () => {
     );
   });
 
-  it("rejects a legacy target below current before calling the model", async () => {
+  it("rejects an out-of-range relationship target before calling the model", async () => {
     const response = await action({
       context: { cloudflare: { env } },
       request: new Request("http://localhost/utils/growth/students", {
@@ -164,14 +164,14 @@ describe("utils.growth.students action", () => {
           _intent: "relationship",
           studentUid: "studentA",
           currentLevel: 20,
-          targetLevel: 10,
+          targetLevel: 101,
         }),
         headers: { "Content-Type": "application/json" },
       }),
     } as never);
 
     expect(response).toMatchObject({
-      data: { error: "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요" },
+      data: { error: "목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요" },
       init: { status: 400 },
     });
     expect(mockUpdateRelationshipLevel).not.toHaveBeenCalled();

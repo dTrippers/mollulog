@@ -36,10 +36,10 @@ describe("student-state-diff", () => {
         { current: existing, target: createExistingTarget() },
         defaultOptions,
       ).current,
-    ).toEqual(expect.objectContaining({ tier: 9, level: 90, skillEx: 4, equip1: 1 }));
+    ).toEqual(expect.objectContaining({ tier: 9, level: 90, skillEx: 4, equip1: 10 }));
   });
 
-  it("filters external minimums and applies explicit clears only in nullable mode", () => {
+  it("filters external minimums and applies explicit clears with field presence", () => {
     const existing = createExistingCurrent({ tier: 9, level: 90, bond: 50, equip1: 10 });
     const imported = setStudentStateDraftFieldPresence(
       { current: createImportedCurrent({ tier: 9, level: 80, bond: null, equip1: 1 }), target: null },
@@ -50,7 +50,6 @@ describe("student-state-diff", () => {
       imported,
       { current: existing, target: createExistingTarget() },
       defaultOptions,
-      "nullable",
     );
 
     expect(nullable.current).toEqual(
@@ -72,11 +71,8 @@ describe("student-state-diff", () => {
     const copied = { ...imported, current: { ...imported.current! } };
 
     expect(isStudentStateCurrentChanged(copied.current, createExistingCurrent({ bond: 50 }), defaultOptions)).toBe(
-      false,
+      true,
     );
-    expect(
-      isStudentStateCurrentChanged(copied.current, createExistingCurrent({ bond: 50 }), defaultOptions, "nullable"),
-    ).toBe(true);
   });
 
   it("detects a new recruited current state from an unrecruited existing state", () => {

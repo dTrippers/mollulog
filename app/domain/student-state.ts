@@ -489,8 +489,6 @@ export type StudentStateTargetComparisonValue = Omit<StudentStateDraftTargetValu
   targetTier: number | null;
 };
 
-export type StudentStateDiffMode = "legacy" | "nullable";
-
 type StudentStateDiffOptions = {
   initialTier: number;
   hasGear: boolean;
@@ -508,30 +506,24 @@ export function isStudentStateCurrentChanged(
   imported: StudentStateDraftCurrentValueWithPresence | null,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): boolean {
   if (imported == null) {
     return false;
   }
 
-  return currentComparisonFields.some((field) =>
-    isStudentStateCurrentFieldChanged(field, imported, existing, options, mode),
-  );
+  return currentComparisonFields.some((field) => isStudentStateCurrentFieldChanged(field, imported, existing, options));
 }
 
 export function isStudentStateTargetChanged(
   imported: StudentStateDraftTargetValueWithPresence | null,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): boolean {
   if (imported == null) {
     return false;
   }
 
-  return targetComparisonFields.some((field) =>
-    isStudentStateTargetFieldChanged(field, imported, existing, options, mode),
-  );
+  return targetComparisonFields.some((field) => isStudentStateTargetFieldChanged(field, imported, existing, options));
 }
 
 export function isStudentStateCurrentFieldUpdateTarget(
@@ -539,10 +531,9 @@ export function isStudentStateCurrentFieldUpdateTarget(
   imported: StudentStateDraftCurrentValueWithPresence,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): boolean {
   const field = currentComparisonFields.find((field) => field.key === key);
-  return field ? isStudentStateCurrentFieldChanged(field, imported, existing, options, mode) : false;
+  return field ? isStudentStateCurrentFieldChanged(field, imported, existing, options) : false;
 }
 
 export function isStudentStateTargetFieldUpdateTarget(
@@ -550,10 +541,9 @@ export function isStudentStateTargetFieldUpdateTarget(
   imported: StudentStateDraftTargetValueWithPresence,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): boolean {
   const field = targetComparisonFields.find((field) => field.key === key);
-  return field ? isStudentStateTargetFieldChanged(field, imported, existing, options, mode) : false;
+  return field ? isStudentStateTargetFieldChanged(field, imported, existing, options) : false;
 }
 
 export function mergeStudentStateDraftValueForUpdate(
@@ -563,10 +553,9 @@ export function mergeStudentStateDraftValueForUpdate(
     target: StudentStateTargetComparisonValue | null | undefined;
   },
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): StudentStateDraftValue {
-  const current = mergeStudentStateCurrentValueForUpdate(imported.current, existing.current, options, mode);
-  const target = mergeStudentStateTargetValueForUpdate(imported.target, existing.target, options, mode);
+  const current = mergeStudentStateCurrentValueForUpdate(imported.current, existing.current, options);
+  const target = mergeStudentStateTargetValueForUpdate(imported.target, existing.target, options);
   return setStudentStateDraftFieldPresence(
     { current, target },
     {
@@ -579,7 +568,6 @@ export function mergeStudentStateDraftValueForUpdate(
                   imported.current as StudentStateDraftCurrentValueWithPresence,
                   existing.current,
                   options,
-                  mode,
                 ),
               )
               .map((field) => field.key)
@@ -593,7 +581,6 @@ export function mergeStudentStateDraftValueForUpdate(
                   imported.target as StudentStateDraftTargetValueWithPresence,
                   existing.target,
                   options,
-                  mode,
                 ),
               )
               .map((field) => field.key)
@@ -606,30 +593,29 @@ export function mergeStudentStateCurrentValueForUpdate(
   imported: StudentStateDraftCurrentValueWithPresence | null,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): StudentStateDraftCurrentValue | null {
-  if (!isStudentStateCurrentChanged(imported, existing, options, mode) || imported == null) {
+  if (!isStudentStateCurrentChanged(imported, existing, options) || imported == null) {
     return null;
   }
 
   return {
-    tier: isStudentStateCurrentFieldUpdateTarget("tier", imported, existing, options, mode)
+    tier: isStudentStateCurrentFieldUpdateTarget("tier", imported, existing, options)
       ? imported.tier
       : (existing?.tier ?? options.initialTier),
-    weaponLevel: getMergedCurrentFieldValue("weaponLevel", imported, existing, options, mode),
-    level: getMergedCurrentFieldValue("level", imported, existing, options, mode),
-    abilityHp: getMergedCurrentFieldValue("abilityHp", imported, existing, options, mode),
-    abilityAtk: getMergedCurrentFieldValue("abilityAtk", imported, existing, options, mode),
-    abilityHeal: getMergedCurrentFieldValue("abilityHeal", imported, existing, options, mode),
-    skillEx: getMergedCurrentFieldValue("skillEx", imported, existing, options, mode),
-    skillNormal: getMergedCurrentFieldValue("skillNormal", imported, existing, options, mode),
-    skillEnhanced: getMergedCurrentFieldValue("skillEnhanced", imported, existing, options, mode),
-    skillSub: getMergedCurrentFieldValue("skillSub", imported, existing, options, mode),
-    equip1: getMergedCurrentFieldValue("equip1", imported, existing, options, mode),
-    equip2: getMergedCurrentFieldValue("equip2", imported, existing, options, mode),
-    equip3: getMergedCurrentFieldValue("equip3", imported, existing, options, mode),
-    equipSpecial: getMergedCurrentFieldValue("equipSpecial", imported, existing, options, mode),
-    bond: getMergedCurrentFieldValue("bond", imported, existing, options, mode),
+    weaponLevel: getMergedCurrentFieldValue("weaponLevel", imported, existing, options),
+    level: getMergedCurrentFieldValue("level", imported, existing, options),
+    abilityHp: getMergedCurrentFieldValue("abilityHp", imported, existing, options),
+    abilityAtk: getMergedCurrentFieldValue("abilityAtk", imported, existing, options),
+    abilityHeal: getMergedCurrentFieldValue("abilityHeal", imported, existing, options),
+    skillEx: getMergedCurrentFieldValue("skillEx", imported, existing, options),
+    skillNormal: getMergedCurrentFieldValue("skillNormal", imported, existing, options),
+    skillEnhanced: getMergedCurrentFieldValue("skillEnhanced", imported, existing, options),
+    skillSub: getMergedCurrentFieldValue("skillSub", imported, existing, options),
+    equip1: getMergedCurrentFieldValue("equip1", imported, existing, options),
+    equip2: getMergedCurrentFieldValue("equip2", imported, existing, options),
+    equip3: getMergedCurrentFieldValue("equip3", imported, existing, options),
+    equipSpecial: getMergedCurrentFieldValue("equipSpecial", imported, existing, options),
+    bond: getMergedCurrentFieldValue("bond", imported, existing, options),
   };
 }
 
@@ -637,30 +623,29 @@ export function mergeStudentStateTargetValueForUpdate(
   imported: StudentStateDraftTargetValueWithPresence | null,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode = "legacy",
 ): StudentStateDraftTargetValue | null {
-  if (!isStudentStateTargetChanged(imported, existing, options, mode) || imported == null) {
+  if (!isStudentStateTargetChanged(imported, existing, options) || imported == null) {
     return null;
   }
 
   return {
-    targetTier: isStudentStateTargetFieldUpdateTarget("targetTier", imported, existing, options, mode)
+    targetTier: isStudentStateTargetFieldUpdateTarget("targetTier", imported, existing, options)
       ? imported.targetTier
       : (existing?.targetTier ?? options.initialTier),
-    targetWeaponLevel: getMergedTargetFieldValue("targetWeaponLevel", imported, existing, options, mode),
-    targetBond: getMergedTargetFieldValue("targetBond", imported, existing, options, mode),
-    targetLevel: getMergedTargetFieldValue("targetLevel", imported, existing, options, mode),
-    targetAbilityHp: getMergedTargetFieldValue("targetAbilityHp", imported, existing, options, mode),
-    targetAbilityAtk: getMergedTargetFieldValue("targetAbilityAtk", imported, existing, options, mode),
-    targetAbilityHeal: getMergedTargetFieldValue("targetAbilityHeal", imported, existing, options, mode),
-    targetSkillEx: getMergedTargetFieldValue("targetSkillEx", imported, existing, options, mode),
-    targetSkillNormal: getMergedTargetFieldValue("targetSkillNormal", imported, existing, options, mode),
-    targetSkillEnhanced: getMergedTargetFieldValue("targetSkillEnhanced", imported, existing, options, mode),
-    targetSkillSub: getMergedTargetFieldValue("targetSkillSub", imported, existing, options, mode),
-    targetEquip1: getMergedTargetFieldValue("targetEquip1", imported, existing, options, mode),
-    targetEquip2: getMergedTargetFieldValue("targetEquip2", imported, existing, options, mode),
-    targetEquip3: getMergedTargetFieldValue("targetEquip3", imported, existing, options, mode),
-    targetEquipSpecial: getMergedTargetFieldValue("targetEquipSpecial", imported, existing, options, mode),
+    targetWeaponLevel: getMergedTargetFieldValue("targetWeaponLevel", imported, existing, options),
+    targetBond: getMergedTargetFieldValue("targetBond", imported, existing, options),
+    targetLevel: getMergedTargetFieldValue("targetLevel", imported, existing, options),
+    targetAbilityHp: getMergedTargetFieldValue("targetAbilityHp", imported, existing, options),
+    targetAbilityAtk: getMergedTargetFieldValue("targetAbilityAtk", imported, existing, options),
+    targetAbilityHeal: getMergedTargetFieldValue("targetAbilityHeal", imported, existing, options),
+    targetSkillEx: getMergedTargetFieldValue("targetSkillEx", imported, existing, options),
+    targetSkillNormal: getMergedTargetFieldValue("targetSkillNormal", imported, existing, options),
+    targetSkillEnhanced: getMergedTargetFieldValue("targetSkillEnhanced", imported, existing, options),
+    targetSkillSub: getMergedTargetFieldValue("targetSkillSub", imported, existing, options),
+    targetEquip1: getMergedTargetFieldValue("targetEquip1", imported, existing, options),
+    targetEquip2: getMergedTargetFieldValue("targetEquip2", imported, existing, options),
+    targetEquip3: getMergedTargetFieldValue("targetEquip3", imported, existing, options),
+    targetEquipSpecial: getMergedTargetFieldValue("targetEquipSpecial", imported, existing, options),
   };
 }
 
@@ -669,7 +654,6 @@ function isStudentStateCurrentFieldChanged(
   imported: StudentStateDraftCurrentValueWithPresence,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode,
 ): boolean {
   if (field.gearOnly && !options.hasGear) {
     return false;
@@ -677,10 +661,7 @@ function isStudentStateCurrentFieldChanged(
 
   const importedValue = imported[field.key];
   const minimumValue = getMinimumValue(field, options.initialTier);
-  if (mode === "legacy") {
-    if (importedValue == null) return false;
-    return effectiveValue(importedValue, minimumValue) !== effectiveValue(existing?.[field.key], minimumValue);
-  }
+
   if (!isStudentStateDraftFieldProvided(imported, "current", field.key)) return false;
   if (importedValue == null) return existing?.[field.key] != null;
   if (importedValue <= minimumValue) return false;
@@ -692,7 +673,6 @@ function isStudentStateTargetFieldChanged(
   imported: StudentStateDraftTargetValueWithPresence,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode,
 ): boolean {
   if (field.gearOnly && !options.hasGear) {
     return false;
@@ -700,10 +680,7 @@ function isStudentStateTargetFieldChanged(
 
   const importedValue = imported[field.key];
   const minimumValue = getMinimumValue(field, options.initialTier);
-  if (mode === "legacy") {
-    if (importedValue == null) return false;
-    return effectiveValue(importedValue, minimumValue) !== effectiveValue(existing?.[field.key], minimumValue);
-  }
+
   if (!isStudentStateDraftFieldProvided(imported, "target", field.key)) return false;
   if (importedValue == null) return existing?.[field.key] != null;
   if (importedValue <= minimumValue) return false;
@@ -715,9 +692,8 @@ function getMergedCurrentFieldValue(
   imported: StudentStateDraftCurrentValueWithPresence,
   existing: StudentStateCurrentComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode,
 ): number | null {
-  return isStudentStateCurrentFieldUpdateTarget(key, imported, existing, options, mode)
+  return isStudentStateCurrentFieldUpdateTarget(key, imported, existing, options)
     ? imported[key]
     : (existing?.[key] ?? null);
 }
@@ -727,9 +703,8 @@ function getMergedTargetFieldValue(
   imported: StudentStateDraftTargetValueWithPresence,
   existing: StudentStateTargetComparisonValue | null | undefined,
   options: StudentStateDiffOptions,
-  mode: StudentStateDiffMode,
 ): number | null {
-  return isStudentStateTargetFieldUpdateTarget(key, imported, existing, options, mode)
+  return isStudentStateTargetFieldUpdateTarget(key, imported, existing, options)
     ? imported[key]
     : (existing?.[key] ?? null);
 }

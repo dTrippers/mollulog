@@ -8,7 +8,6 @@ type StudentRelationshipLevelProps = {
   currentLevel: number | null;
   targetLevel: number | null;
   studentName: string;
-  nullableSemantics: boolean;
   selectedItemExp: number;
 
   onCurrentLevelUpdate: ({ level, exp }: { level: number | null; exp: number | null }) => void;
@@ -20,12 +19,11 @@ export default function StudentRelationshipLevel({
   currentLevel,
   targetLevel,
   studentName,
-  nullableSemantics,
   selectedItemExp,
   onCurrentLevelUpdate,
   onTargetLevelUpdate,
 }: StudentRelationshipLevelProps) {
-  const canCalculate = !nullableSemantics || (currentLevel != null && targetLevel != null);
+  const canCalculate = currentLevel != null && targetLevel != null;
   const currentExp = useMemo(() => {
     if (currentExpProp != null) return currentExpProp;
     if (currentLevel == null) return null;
@@ -47,7 +45,6 @@ export default function StudentRelationshipLevel({
     expectedLevel == null || expectedExp == null || expectedLevel === 100
       ? 0
       : getAccumulatedRelationshipExpForLevel(expectedLevel + 1) - expectedExp;
-  const SummaryGroup = nullableSemantics ? "fieldset" : "div";
 
   return (
     <SectionCard
@@ -59,34 +56,22 @@ export default function StudentRelationshipLevel({
       <div className="grid grid-cols-2 gap-2 md:gap-3">
         <div>
           {useCurrentExp ? (
-            nullableSemantics ? (
-              <NumberInput
-                label="현재 경험치"
-                value={currentExp}
-                nullable
-                inputProps={{ "aria-label": `${studentName} 현재 경험치` }}
-                minValue={0}
-                size="lg"
-                fullWidth
-                onChange={(value) =>
-                  onCurrentLevelUpdate({
-                    level: value == null ? currentLevel : getLevelForExp(value),
-                    exp: value,
-                  })
-                }
-              />
-            ) : (
-              <NumberInput
-                label="현재 경험치"
-                value={currentExp ?? 0}
-                aria-label={`${studentName} 현재 경험치`}
-                minValue={0}
-                size="lg"
-                fullWidth
-                onChange={(value) => onCurrentLevelUpdate({ level: getLevelForExp(value), exp: value })}
-              />
-            )
-          ) : nullableSemantics ? (
+            <NumberInput
+              label="현재 경험치"
+              value={currentExp}
+              nullable
+              inputProps={{ "aria-label": `${studentName} 현재 경험치` }}
+              minValue={0}
+              size="lg"
+              fullWidth
+              onChange={(value) =>
+                onCurrentLevelUpdate({
+                  level: value == null ? currentLevel : getLevelForExp(value),
+                  exp: value,
+                })
+              }
+            />
+          ) : (
             <NumberInput
               label="현재 랭크"
               value={currentLevel}
@@ -98,20 +83,9 @@ export default function StudentRelationshipLevel({
               fullWidth
               onChange={(value) => onCurrentLevelUpdate({ level: value, exp: null })}
             />
-          ) : (
-            <NumberInput
-              label="현재 랭크"
-              value={currentLevel ?? 1}
-              aria-label={`${studentName} 현재 랭크`}
-              minValue={1}
-              maxValue={100}
-              size="lg"
-              fullWidth
-              onChange={(value) => onCurrentLevelUpdate({ level: value, exp: null })}
-            />
           )}
           <p className="mt-1 truncate text-left text-xs text-neutral-500 dark:text-neutral-400 md:text-center">
-            {currentLevel == null && nullableSemantics ? (
+            {currentLevel == null ? (
               <span className="opacity-40" aria-hidden="true">
                 -
               </span>
@@ -123,7 +97,7 @@ export default function StudentRelationshipLevel({
           </p>
         </div>
 
-        {nullableSemantics ? (
+        {
           <NumberInput
             label="목표 랭크"
             value={targetLevel}
@@ -135,30 +109,18 @@ export default function StudentRelationshipLevel({
             fullWidth
             onChange={onTargetLevelUpdate}
           />
-        ) : (
-          <NumberInput
-            label="목표 랭크"
-            value={targetLevel ?? 50}
-            aria-label={`${studentName} 목표 랭크`}
-            minValue={1}
-            maxValue={100}
-            size="lg"
-            fullWidth
-            onChange={(value) => onTargetLevelUpdate(value)}
-          />
-        )}
+        }
       </div>
 
-      <SummaryGroup
-        className={`mt-2 grid grid-cols-3 divide-x divide-border/70 rounded-md bg-muted md:mt-3${nullableSemantics ? " min-w-0 border-0 p-0" : ""}`}
-        role={nullableSemantics ? undefined : "group"}
-        aria-label={nullableSemantics && !canCalculate ? "계산 보류" : undefined}
+      <fieldset
+        className={`mt-2 grid grid-cols-3 divide-x divide-border/70 rounded-md bg-muted md:mt-3 min-w-0 border-0 p-0`}
+        aria-label={!canCalculate ? "계산 보류" : undefined}
       >
         <div className="min-w-0 px-2 py-2 text-center md:px-3">
           <p className="text-xs font-medium text-muted-foreground">선물 후 랭크</p>
           <p className="mt-1 flex items-center justify-center gap-1 text-base font-bold leading-none text-foreground md:text-xl">
             <HeartIcon className="size-4 text-rose-500" />
-            {nullableSemantics && !canCalculate ? (
+            {!canCalculate ? (
               <span className="opacity-40" aria-hidden="true">
                 -
               </span>
@@ -170,7 +132,7 @@ export default function StudentRelationshipLevel({
         <div className="min-w-0 px-2 py-2 text-center md:px-3">
           <p className="text-xs font-medium text-muted-foreground">다음 랭크까지</p>
           <p className="mt-1 truncate text-xs font-bold leading-none text-foreground sm:text-sm md:text-lg">
-            {nullableSemantics && !canCalculate ? (
+            {!canCalculate ? (
               <span className="opacity-40" aria-hidden="true">
                 -
               </span>
@@ -184,7 +146,7 @@ export default function StudentRelationshipLevel({
         <div className="min-w-0 px-2 py-2 text-center md:px-3">
           <p className="text-xs font-medium text-muted-foreground">목표 랭크까지</p>
           <p className="mt-1 truncate text-xs font-bold leading-none text-foreground sm:text-sm md:text-lg">
-            {nullableSemantics && !canCalculate ? (
+            {!canCalculate ? (
               <span className="opacity-40" aria-hidden="true">
                 -
               </span>
@@ -195,7 +157,7 @@ export default function StudentRelationshipLevel({
             )}
           </p>
         </div>
-      </SummaryGroup>
+      </fieldset>
     </SectionCard>
   );
 }

@@ -5,7 +5,6 @@ const mockGetStudentDetailData = jest.fn<(env: Env, uid: string) => Promise<unkn
 const mockGetRecruitedStudents = jest.fn<(env: Env, senseiId: number) => Promise<unknown[]>>();
 const mockGetRelationshipLevels =
   jest.fn<(env: Env, senseiId: number, studentIds: readonly string[]) => Promise<unknown[]>>();
-const mockGetStudentStateWriteMode = jest.fn<(env: Env) => Promise<"legacy" | "nullable">>();
 const mockGetAllRaidSchedules = jest.fn<(env: Env) => Promise<unknown[]>>();
 const mockGetStudentGradingsByStudentWithUsers =
   jest.fn<(env: Env, studentUid: string, includeTags: boolean, viewerUserId?: number) => Promise<unknown[]>>();
@@ -42,7 +41,6 @@ jest.mock("~/models/recruited-student", () => ({
 
 jest.mock("~/models/relationship-level", () => ({
   getRelationshipLevels: mockGetRelationshipLevels,
-  getStudentStateWriteMode: mockGetStudentStateWriteMode,
 }));
 
 jest.mock("~/models/raid", () => ({
@@ -96,7 +94,6 @@ beforeEach(() => {
   });
   mockGetRecruitedStudents.mockResolvedValue([]);
   mockGetRelationshipLevels.mockResolvedValue([]);
-  mockGetStudentStateWriteMode.mockResolvedValue("legacy");
   mockGetAllRaidSchedules.mockResolvedValue([]);
   mockGetStudentGradingsByStudentWithUsers.mockResolvedValue([]);
   mockGetTagCountsByStudent.mockResolvedValue([]);
