@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import {
   addRecruitedStudents,
   getRecruitedStudents,
+  getRecruitedStudentTiers,
   RecruitedStudentValidationError,
   updateRecruitedStudentCurrentState,
   upsertRecruitedStudent,
@@ -72,6 +73,41 @@ function createEnv(db = new FakePostgresClient()): { db: FakePostgresClient; env
   return {
     db,
     env: { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+  };
+}
+
+function createStudentStateRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    uid: "state-a",
+    userId: 1,
+    studentUid: "student-a",
+    recruitedStudentUid: "recruited-a",
+    relationshipLevelUid: null,
+    tier: 3,
+    level: null,
+    skillEx: null,
+    skillNormal: null,
+    skillEnhanced: null,
+    skillSub: null,
+    equip1: null,
+    equip2: null,
+    equip3: null,
+    equipSpecial: null,
+    equip1Level: null,
+    equip2Level: null,
+    equip3Level: null,
+    weaponLevel: null,
+    abilityHp: null,
+    abilityAtk: null,
+    abilityHeal: null,
+    relationshipCurrentLevel: null,
+    relationshipCurrentExp: null,
+    recruitedAt: "2026-06-13T00:00:00.000Z",
+    deletedAt: null,
+    createdAt: "2026-06-13T00:00:00.000Z",
+    updatedAt: "2026-06-13T00:00:00.000Z",
+    ...overrides,
   };
 }
 
@@ -280,8 +316,8 @@ describe("recruited-student current state", () => {
 
   it("loads recruited current fields with the tier", async () => {
     const { db, env } = createEnv();
-    db.rows.push(
-      createRecruitedStudentRow({
+    db.tables.student_states.push(
+      createStudentStateRow({
         level: 80,
         skillEx: 4,
         equip1: 7,
@@ -289,10 +325,27 @@ describe("recruited-student current state", () => {
         equip2Level: 45,
         equip3Level: 30,
       }),
+      createStudentStateRow({
+        id: 2,
+        uid: "state-relationship-only",
+        studentUid: "student-relationship-only",
+        recruitedStudentUid: null,
+        relationshipLevelUid: "relationship-only",
+        tier: null,
+      }),
+      createStudentStateRow({
+        id: 3,
+        uid: "state-tombstone",
+        studentUid: "student-tombstone",
+        recruitedStudentUid: "recruited-tombstone",
+        deletedAt: new Date("2026-06-14T00:00:00.000Z"),
+      }),
+      createStudentStateRow({ id: 4, userId: 2, studentUid: "student-other-user" }),
     );
 
     await expect(getRecruitedStudents(env, 1)).resolves.toEqual([
       expect.objectContaining({
+        uid: "recruited-a",
         studentUid: "student-a",
         tier: 3,
         level: 80,
@@ -303,19 +356,28 @@ describe("recruited-student current state", () => {
         equip3Level: 30,
       }),
     ]);
+    await expect(getRecruitedStudentTiers(env, 1)).resolves.toEqual({ "student-a": 3 });
+    const readSelects = db.statements.filter((statement) => /^select/i.test(statement.trim()));
+    expect(readSelects).toHaveLength(2);
+    expect(readSelects.every((statement) => statement.includes('"student_states"'))).toBe(true);
   });
 
   it("loads a large student UID filter with PostgreSQL chunking", async () => {
     const { db, env } = createEnv();
-    const studentUids = Array.from({ length: 181 }, (_, index) => `student-${index}`);
-    db.rows.push(
+    const studentUids = Array.from({ length: 501 }, (_, index) => `student-${index}`);
+    db.tables.student_states.push(
       ...studentUids.map((studentUid, index) =>
-        createRecruitedStudentRow({ id: index + 1, uid: `recruited-${index}`, studentUid }),
+        createStudentStateRow({
+          id: index + 1,
+          uid: `state-${index}`,
+          recruitedStudentUid: `recruited-${index}`,
+          studentUid,
+        }),
       ),
     );
 
-    await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(181);
-    expect(db.selectParameterCounts).toEqual([182]);
+    await expect(getRecruitedStudents(env, 1, [...studentUids, studentUids[0]])).resolves.toHaveLength(501);
+    expect(db.selectParameterCounts).toEqual([501, 2]);
   });
 
   it("normalizes duplicate UIDs and dual-writes a batch in one transaction", async () => {

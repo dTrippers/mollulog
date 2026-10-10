@@ -1,7 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRelationshipLevelsTable } from "~/db/postgres/schema";
+import { pgRelationshipLevelsTable, pgStudentStatesTable, pgStudentTargetsTable } from "~/db/postgres/schema";
 import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import {
   getRelationshipGiftPlanValidationError,
@@ -55,15 +55,100 @@ export function normalizeRelationshipItems(value: unknown): Record<string, numbe
   );
 }
 
-function toModel(relationshipLevel: typeof relationshipLevelsTable.$inferSelect): RelationshipLevel {
+type RelationshipStateRow = typeof pgStudentStatesTable.$inferSelect;
+type RelationshipTargetRow = typeof pgStudentTargetsTable.$inferSelect;
+
+function toModel(state: RelationshipStateRow, target: RelationshipTargetRow): RelationshipLevel {
+  if (
+    state.relationshipLevelUid == null ||
+    target.relationshipLevelUid == null ||
+    state.relationshipLevelUid !== target.relationshipLevelUid
+  ) {
+    throw new Error("Student relationship projection is inconsistent between current state and targets.");
+  }
+  if (state.relationshipCurrentLevel == null || target.relationshipTargetLevel == null) {
+    throw new Error("Student relationship projection is missing required rank data.");
+  }
+
   return {
-    uid: relationshipLevel.uid,
-    studentId: relationshipLevel.studentId,
-    currentLevel: relationshipLevel.currentLevel,
-    currentExp: relationshipLevel.currentExp,
-    targetLevel: relationshipLevel.targetLevel,
-    items: normalizeRelationshipItems(relationshipLevel.items),
+    uid: state.relationshipLevelUid,
+    studentId: state.studentUid,
+    currentLevel: state.relationshipCurrentLevel,
+    currentExp: state.relationshipCurrentExp,
+    targetLevel: target.relationshipTargetLevel,
+    items: normalizeRelationshipItems(target.giftPlan),
   };
+}
+
+async function readRelationshipLevels(
+  db: NodePgDatabase,
+  senseiId: number,
+  studentIds?: readonly string[],
+): Promise<RelationshipLevel[]> {
+  const uniqueStudentIds = studentIds ? [...new Set(studentIds)] : undefined;
+
+  return db.transaction(
+    async (tx) => {
+      const stateRows: RelationshipStateRow[] = [];
+      const targetRows: RelationshipTargetRow[] = [];
+      const chunks = uniqueStudentIds
+        ? Array.from({ length: Math.ceil(uniqueStudentIds.length / PG_IN_QUERY_CHUNK_SIZE) }, (_, index) =>
+            uniqueStudentIds.slice(index * PG_IN_QUERY_CHUNK_SIZE, (index + 1) * PG_IN_QUERY_CHUNK_SIZE),
+          )
+        : [undefined];
+
+      for (const studentIdChunk of chunks) {
+        const stateWhere = studentIdChunk
+          ? and(
+              eq(pgStudentStatesTable.userId, senseiId),
+              inArray(pgStudentStatesTable.studentUid, studentIdChunk),
+              isNotNull(pgStudentStatesTable.relationshipLevelUid),
+              isNull(pgStudentStatesTable.deletedAt),
+            )
+          : and(
+              eq(pgStudentStatesTable.userId, senseiId),
+              isNotNull(pgStudentStatesTable.relationshipLevelUid),
+              isNull(pgStudentStatesTable.deletedAt),
+            );
+        const targetWhere = studentIdChunk
+          ? and(
+              eq(pgStudentTargetsTable.userId, senseiId),
+              inArray(pgStudentTargetsTable.studentUid, studentIdChunk),
+              isNotNull(pgStudentTargetsTable.relationshipLevelUid),
+              isNull(pgStudentTargetsTable.deletedAt),
+            )
+          : and(
+              eq(pgStudentTargetsTable.userId, senseiId),
+              isNotNull(pgStudentTargetsTable.relationshipLevelUid),
+              isNull(pgStudentTargetsTable.deletedAt),
+            );
+        const [states, targets] = await Promise.all([
+          tx.select().from(pgStudentStatesTable).where(stateWhere),
+          tx.select().from(pgStudentTargetsTable).where(targetWhere),
+        ]);
+        stateRows.push(...states);
+        targetRows.push(...targets);
+      }
+
+      const targetsByStudentId = new Map(targetRows.map((row) => [row.studentUid, row]));
+      const pairedStudentIds = new Set<string>();
+      const result = stateRows.map((state) => {
+        const target = targetsByStudentId.get(state.studentUid);
+        if (!target) {
+          throw new Error("Student relationship projection is missing a matching target row.");
+        }
+        pairedStudentIds.add(state.studentUid);
+        return toModel(state, target);
+      });
+
+      if (pairedStudentIds.size !== targetRows.length) {
+        throw new Error("Student relationship projection is missing a matching current-state row.");
+      }
+
+      return result;
+    },
+    { isolationLevel: "repeatable read", accessMode: "read only" },
+  );
 }
 
 export function resolveRelationshipLevelInput(
@@ -93,32 +178,7 @@ export async function getRelationshipLevels(
   if (studentIds?.length === 0) return [];
 
   return withPostgresClient(env, async (client) => {
-    const db = drizzle(client);
-    const relationshipLevels: (typeof relationshipLevelsTable.$inferSelect)[] = [];
-
-    if (!studentIds) {
-      relationshipLevels.push(
-        ...(await db.select().from(relationshipLevelsTable).where(eq(relationshipLevelsTable.userId, senseiId))),
-      );
-    } else {
-      const uniqueStudentIds = [...new Set(studentIds)];
-      for (let offset = 0; offset < uniqueStudentIds.length; offset += PG_IN_QUERY_CHUNK_SIZE) {
-        const studentIdChunk = uniqueStudentIds.slice(offset, offset + PG_IN_QUERY_CHUNK_SIZE);
-        relationshipLevels.push(
-          ...(await db
-            .select()
-            .from(relationshipLevelsTable)
-            .where(
-              and(
-                eq(relationshipLevelsTable.userId, senseiId),
-                inArray(relationshipLevelsTable.studentId, studentIdChunk),
-              ),
-            )),
-        );
-      }
-    }
-
-    return relationshipLevels.map(toModel);
+    return readRelationshipLevels(drizzle(client), senseiId, studentIds);
   });
 }
 
@@ -128,14 +188,8 @@ export async function getRelationshipLevel(
   studentId: string,
 ): Promise<RelationshipLevel | null> {
   return withPostgresClient(env, async (client) => {
-    const db = drizzle(client);
-    const [relationshipLevel] = await db
-      .select()
-      .from(relationshipLevelsTable)
-      .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
-      .limit(1);
-
-    return relationshipLevel ? toModel(relationshipLevel) : null;
+    const [relationshipLevel] = await readRelationshipLevels(drizzle(client), senseiId, [studentId]);
+    return relationshipLevel ?? null;
   });
 }
 

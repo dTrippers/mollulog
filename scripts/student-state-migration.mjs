@@ -1,12 +1,18 @@
 import { nanoid } from "nanoid";
 import { Client } from "pg";
+import { assertMigrationHost } from "./student-state-migration-host.mjs";
 
 const usage = `Usage:
   node scripts/student-state-migration.mjs preflight --schema <schema>
   node scripts/student-state-migration.mjs backfill --schema <schema> --confirm-no-external-writers
   node scripts/student-state-migration.mjs parity --schema <schema> --confirm-no-external-writers
 
-The schema is always explicit and may be a service schema such as public. The command only accepts PGHOST=127.0.0.1.`;
+The schema is always explicit and may be a service schema such as public.
+For a PGHOST other than 127.0.0.1, append --confirm-db-host <PGHOST> to any command after verifying the target database.
+After reviewing legacy student_growth current values, append --confirm-legacy-growth-current-reviewed to preserve them unchanged and migrate current values only from recruited_students.`;
+
+const legacyGrowthCurrentReviewed = process.argv.includes("--confirm-legacy-growth-current-reviewed");
+const legacyGrowthPolicySummary = legacyGrowthCurrentReviewed ? " legacy_growth_current_policy=preserve-reviewed" : "";
 
 const requiredColumns = {
   recruited_students: [
@@ -85,9 +91,7 @@ function sameValue(left, right) {
 }
 
 async function connect() {
-  if (process.env.PGHOST !== "127.0.0.1") {
-    throw new Error("Student-state migration tooling only accepts PGHOST=127.0.0.1.");
-  }
+  assertMigrationHost(process.env.PGHOST, argument("confirm-db-host"));
   const client = new Client();
   await client.connect();
   return client;
@@ -132,9 +136,13 @@ async function listUserIds(client) {
 }
 
 async function readLegacyRows(client, userId) {
+  return readLegacyRowsForUsers(client, [userId]);
+}
+
+async function readLegacyRowsForUsers(client, userIds) {
   const { rows } = await client.query(
     `
-      SELECT keys.student_uid, s.uid AS state_projection_uid, t.uid AS target_projection_uid,
+      SELECT keys.user_id, keys.student_uid, s.uid AS state_projection_uid, t.uid AS target_projection_uid,
         r.uid AS recruited_uid, r.tier, r.level, r.skill_ex, r.skill_normal, r.skill_enhanced, r.skill_sub,
         r.equip1, r.equip2, r.equip3, r.equip_special, r.equip1_level, r.equip2_level, r.equip3_level,
         r.weapon_level, r.ability_hp, r.ability_atk, r.ability_heal,
@@ -151,25 +159,26 @@ async function readLegacyRows(client, userId) {
         l.current_exp AS relationship_current_exp, l.target_level AS relationship_target_level,
         l.items AS gift_plan
       FROM (
-        SELECT student_uid FROM recruited_students WHERE user_id = $1
-        UNION SELECT student_uid FROM student_growth WHERE user_id = $1
-        UNION SELECT student_id AS student_uid FROM user_relationship_levels WHERE user_id = $1
-        UNION SELECT student_uid FROM student_states WHERE user_id = $1
-        UNION SELECT student_uid FROM student_targets WHERE user_id = $1
+        SELECT user_id, student_uid FROM recruited_students WHERE user_id = ANY($1::int[])
+        UNION SELECT user_id, student_uid FROM student_growth WHERE user_id = ANY($1::int[])
+        UNION SELECT user_id, student_id AS student_uid FROM user_relationship_levels WHERE user_id = ANY($1::int[])
+        UNION SELECT user_id, student_uid FROM student_states WHERE user_id = ANY($1::int[])
+        UNION SELECT user_id, student_uid FROM student_targets WHERE user_id = ANY($1::int[])
       ) AS keys
-      LEFT JOIN recruited_students r ON r.user_id = $1 AND r.student_uid = keys.student_uid
-      LEFT JOIN student_growth g ON g.user_id = $1 AND g.student_uid = keys.student_uid
-      LEFT JOIN user_relationship_levels l ON l.user_id = $1 AND l.student_id = keys.student_uid
-      LEFT JOIN student_states s ON s.user_id = $1 AND s.student_uid = keys.student_uid
-      LEFT JOIN student_targets t ON t.user_id = $1 AND t.student_uid = keys.student_uid
-      ORDER BY keys.student_uid
+      LEFT JOIN recruited_students r ON r.user_id = keys.user_id AND r.student_uid = keys.student_uid
+      LEFT JOIN student_growth g ON g.user_id = keys.user_id AND g.student_uid = keys.student_uid
+      LEFT JOIN user_relationship_levels l ON l.user_id = keys.user_id AND l.student_id = keys.student_uid
+      LEFT JOIN student_states s ON s.user_id = keys.user_id AND s.student_uid = keys.student_uid
+      LEFT JOIN student_targets t ON t.user_id = keys.user_id AND t.student_uid = keys.student_uid
+      ORDER BY keys.user_id, keys.student_uid
     `,
-    [userId],
+    [userIds],
   );
   return rows;
 }
 
 function assertSupportedLegacyGrowth(rows) {
+  if (legacyGrowthCurrentReviewed) return;
   const unsupported = rows.find((row) =>
     [
       row.legacy_growth_level,
@@ -183,13 +192,29 @@ function assertSupportedLegacyGrowth(rows) {
       row.legacy_growth_equip_special,
     ].some((value) => value != null),
   );
-  if (unsupported) throw new Error(`Legacy student_growth current values require an operator review for ${unsupported.student_uid}.`);
+  if (unsupported) throw new Error(`Legacy student_growth current values require an operator review for ${unsupported.student_uid}. After review, pass --confirm-legacy-growth-current-reviewed to preserve the legacy values and use recruited_students as the current source.`);
 }
 
-async function upsertState(client, userId, row) {
-  const recruited = row.recruited_uid != null;
-  const relationship = row.relationship_uid != null;
-  if (!recruited && !relationship && row.state_projection_uid == null) return false;
+const BACKFILL_BATCH_SIZE = 200;
+
+async function upsertStates(client, userId, rows) {
+  const values = rows
+    .filter((row) => row.recruited_uid != null || row.relationship_uid != null || row.state_projection_uid != null)
+    .map((row) => [
+      nanoid(8), userId, row.student_uid, row.recruited_uid, row.relationship_uid, row.tier, row.level,
+      row.skill_ex, row.skill_normal, row.skill_enhanced, row.skill_sub, row.equip1, row.equip2,
+      row.equip3, row.equip_special, row.equip1_level, row.equip2_level, row.equip3_level,
+      row.weapon_level, row.ability_hp, row.ability_atk, row.ability_heal,
+      row.relationship_current_level, row.relationship_current_exp, row.recruited_at,
+      row.recruited_uid != null || row.relationship_uid != null,
+    ]);
+  if (values.length === 0) return 0;
+  const tuples = values.map((_, index) => {
+    const parameters = Array.from({ length: 26 }, (_, column) => `$${index * 26 + column + 1}`);
+    parameters[24] += "::timestamptz";
+    parameters[25] = `CASE WHEN ${parameters[25]}::boolean THEN NULL ELSE now() END`;
+    return `(${parameters.join(", ")})`;
+  });
   await client.query(
     `
       INSERT INTO student_states (
@@ -198,11 +223,7 @@ async function upsertState(client, userId, row) {
         equip_special, equip1_level, equip2_level, equip3_level, weapon_level,
         ability_hp, ability_atk, ability_heal, relationship_current_level, relationship_current_exp,
         recruited_at, deleted_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21, $22, $23, $24, $25::timestamptz,
-        CASE WHEN $26::boolean THEN NULL ELSE now() END
-      )
+      ) VALUES ${tuples.join(", ")}
       ON CONFLICT (user_id, student_uid) DO UPDATE SET
         recruited_student_uid = EXCLUDED.recruited_student_uid,
         relationship_level_uid = EXCLUDED.relationship_level_uid,
@@ -223,22 +244,31 @@ async function upsertState(client, userId, row) {
         END,
         updated_at = now()
     `,
-    [
-      nanoid(8), userId, row.student_uid, row.recruited_uid, row.relationship_uid, row.tier, row.level,
-      row.skill_ex, row.skill_normal, row.skill_enhanced, row.skill_sub, row.equip1, row.equip2,
-      row.equip3, row.equip_special, row.equip1_level, row.equip2_level, row.equip3_level,
-      row.weapon_level, row.ability_hp, row.ability_atk, row.ability_heal,
-      row.relationship_current_level, row.relationship_current_exp, row.recruited_at, recruited || relationship,
-    ],
+    values.flat(),
   );
-  return true;
+  return values.length;
 }
 
-async function upsertTargets(client, userId, row) {
-  const growth = row.growth_uid != null;
-  const relationship = row.relationship_uid != null;
-  if (!growth && !relationship && row.target_projection_uid == null) return false;
-  const giftPlan = relationship ? normalizeObject(row.gift_plan, row.student_uid) : {};
+async function upsertTargets(client, userId, rows) {
+  const values = rows
+    .filter((row) => row.growth_uid != null || row.relationship_uid != null || row.target_projection_uid != null)
+    .map((row) => [
+      nanoid(8), userId, row.student_uid, row.growth_uid, row.relationship_uid,
+      row.target_level, row.target_skill_ex, row.target_skill_normal, row.target_skill_enhanced,
+      row.target_skill_sub, row.target_equip1, row.target_equip2, row.target_equip3,
+      row.target_equip_special, row.target_tier, row.target_weapon_level, row.target_ability_hp,
+      row.target_ability_atk, row.target_ability_heal, row.relationship_target_level,
+      JSON.stringify(row.relationship_uid != null ? normalizeObject(row.gift_plan, row.student_uid) : {}),
+      row.planner_added_at, row.growth_uid != null || row.relationship_uid != null,
+    ]);
+  if (values.length === 0) return 0;
+  const tuples = values.map((_, index) => {
+    const parameters = Array.from({ length: 23 }, (_, column) => `$${index * 23 + column + 1}`);
+    parameters[20] += "::jsonb";
+    parameters[21] += "::timestamptz";
+    parameters[22] = `CASE WHEN ${parameters[22]}::boolean THEN NULL ELSE now() END`;
+    return `(${parameters.join(", ")})`;
+  });
   await client.query(
     `
       INSERT INTO student_targets (
@@ -247,11 +277,7 @@ async function upsertTargets(client, userId, row) {
         target_equip1, target_equip2, target_equip3, target_equip_special, target_tier,
         target_weapon_level, target_ability_hp, target_ability_atk, target_ability_heal,
         relationship_target_level, gift_plan, planner_added_at, deleted_at
-      ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-        $18, $19, $20, $21::jsonb, $22::timestamptz,
-        CASE WHEN $23::boolean THEN NULL ELSE now() END
-      )
+      ) VALUES ${tuples.join(", ")}
       ON CONFLICT (user_id, student_uid) DO UPDATE SET
         student_growth_uid = EXCLUDED.student_growth_uid,
         relationship_level_uid = EXCLUDED.relationship_level_uid,
@@ -270,29 +296,22 @@ async function upsertTargets(client, userId, row) {
         END,
         updated_at = now()
     `,
-    [
-      nanoid(8), userId, row.student_uid, row.growth_uid, row.relationship_uid,
-      row.target_level, row.target_skill_ex, row.target_skill_normal, row.target_skill_enhanced,
-      row.target_skill_sub, row.target_equip1, row.target_equip2, row.target_equip3,
-      row.target_equip_special, row.target_tier, row.target_weapon_level, row.target_ability_hp,
-      row.target_ability_atk, row.target_ability_heal, row.relationship_target_level,
-      JSON.stringify(giftPlan), row.planner_added_at, growth || relationship,
-    ],
+    values.flat(),
   );
-  return true;
+  return values.length;
 }
 
-async function readProjectionRows(client, table, userId) {
+async function readProjectionRows(client, table, userIds) {
   if (table === "student_states") {
     const { rows } = await client.query(
-      `SELECT *, CASE WHEN recruited_at IS NULL THEN NULL ELSE to_char(recruited_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS recruited_at_exact FROM student_states WHERE user_id = $1`,
-      [userId],
+      `SELECT *, CASE WHEN recruited_at IS NULL THEN NULL ELSE to_char(recruited_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS recruited_at_exact FROM student_states WHERE user_id = ANY($1::int[])`,
+      [userIds],
     );
     return rows;
   }
   const { rows } = await client.query(
-    `SELECT *, CASE WHEN planner_added_at IS NULL THEN NULL ELSE to_char(planner_added_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS planner_added_at_exact FROM student_targets WHERE user_id = $1`,
-    [userId],
+    `SELECT *, CASE WHEN planner_added_at IS NULL THEN NULL ELSE to_char(planner_added_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') END AS planner_added_at_exact FROM student_targets WHERE user_id = ANY($1::int[])`,
+    [userIds],
   );
   return rows;
 }
@@ -351,25 +370,28 @@ function compareTarget(row, projected) {
   return Boolean(projected) && projected.deleted_at == null && Object.entries(expected).every(([key, value]) => sameValue(projected[key], value));
 }
 
-async function checkParity(client, userId) {
-  const sourceRows = await readLegacyRows(client, userId);
+async function checkParity(client, userIdOrIds) {
+  const userIds = Array.isArray(userIdOrIds) ? userIdOrIds : [userIdOrIds];
+  const rowKey = (row) => JSON.stringify([row.user_id, row.student_uid]);
+  const sourceRows = await readLegacyRowsForUsers(client, userIds);
   assertSupportedLegacyGrowth(sourceRows);
-  const states = new Map((await readProjectionRows(client, "student_states", userId)).map((row) => [row.student_uid, row]));
-  const targets = new Map((await readProjectionRows(client, "student_targets", userId)).map((row) => [row.student_uid, row]));
-  const sourceUids = new Set(sourceRows.map((row) => row.student_uid));
+  const states = new Map((await readProjectionRows(client, "student_states", userIds)).map((row) => [rowKey(row), row]));
+  const targets = new Map((await readProjectionRows(client, "student_targets", userIds)).map((row) => [rowKey(row), row]));
+  const sourceUids = new Set(sourceRows.map(rowKey));
   let mismatches = 0;
   for (const row of sourceRows) {
     const stateExpected = row.recruited_uid != null || row.relationship_uid != null;
     const targetExpected = row.growth_uid != null || row.relationship_uid != null;
-    const projectedState = states.get(row.student_uid);
-    const projectedTarget = targets.get(row.student_uid);
+    const key = rowKey(row);
+    const projectedState = states.get(key);
+    const projectedTarget = targets.get(key);
     if (stateExpected ? !compareState(row, projectedState) : Boolean(projectedState && projectedState.deleted_at == null)) mismatches += 1;
     if (targetExpected ? !compareTarget(row, projectedTarget) : Boolean(projectedTarget && projectedTarget.deleted_at == null)) mismatches += 1;
-    states.delete(row.student_uid);
-    targets.delete(row.student_uid);
+    states.delete(key);
+    targets.delete(key);
   }
-  for (const row of states.values()) if (row.deleted_at == null && !sourceUids.has(row.student_uid)) mismatches += 1;
-  for (const row of targets.values()) if (row.deleted_at == null && !sourceUids.has(row.student_uid)) mismatches += 1;
+  for (const row of states.values()) if (row.deleted_at == null && !sourceUids.has(rowKey(row))) mismatches += 1;
+  for (const row of targets.values()) if (row.deleted_at == null && !sourceUids.has(rowKey(row))) mismatches += 1;
   return mismatches;
 }
 
@@ -450,39 +472,58 @@ async function main() {
           )
       `);
       process.stdout.write(
-        `preflight users=${userIds.length} unsupported_student_growth_current_rows=${rows[0].count} invalid_gift_plan_rows=${giftPlanRows[0].count}\n`,
+        `preflight users=${userIds.length} unsupported_student_growth_current_rows=${rows[0].count} invalid_gift_plan_rows=${giftPlanRows[0].count}${legacyGrowthPolicySummary}\n`,
       );
-      if (rows[0].count !== 0 || giftPlanRows[0].count !== 0) process.exitCode = 2;
+      if ((rows[0].count !== 0 && !legacyGrowthCurrentReviewed) || giftPlanRows[0].count !== 0) process.exitCode = 2;
       return;
     }
     if (action === "backfill") {
       let projectedStates = 0;
       let projectedTargets = 0;
+      let completedUsers = 0;
+      const startedAt = Date.now();
+      let lastProgressAt = startedAt;
       for (const userId of userIds) {
         const counts = await userTransaction(client, userId, async () => {
           const sourceRows = await readLegacyRows(client, userId);
           assertSupportedLegacyGrowth(sourceRows);
           let states = 0;
           let targets = 0;
-          for (const row of sourceRows) {
-            if (await upsertState(client, userId, row)) states += 1;
-            if (await upsertTargets(client, userId, row)) targets += 1;
+          for (let offset = 0; offset < sourceRows.length; offset += BACKFILL_BATCH_SIZE) {
+            const batch = sourceRows.slice(offset, offset + BACKFILL_BATCH_SIZE);
+            states += await upsertStates(client, userId, batch);
+            targets += await upsertTargets(client, userId, batch);
           }
           return { states, targets };
         });
         projectedStates += counts.states;
         projectedTargets += counts.targets;
+        completedUsers += 1;
+        if (completedUsers === 1 || completedUsers === userIds.length || Date.now() - lastProgressAt >= 5000) {
+          const elapsedSeconds = (Date.now() - startedAt) / 1000;
+          process.stdout.write(`backfill progress users=${completedUsers}/${userIds.length} state_rows=${projectedStates} target_rows=${projectedTargets} elapsed_seconds=${elapsedSeconds.toFixed(1)}\n`);
+          lastProgressAt = Date.now();
+        }
       }
-      process.stdout.write(`backfill users=${userIds.length} state_rows=${projectedStates} target_rows=${projectedTargets} audit_rows=0\n`);
+      process.stdout.write(`backfill users=${userIds.length} state_rows=${projectedStates} target_rows=${projectedTargets} audit_rows=0${legacyGrowthPolicySummary}\n`);
       return;
     }
     let checkedUsers = 0;
     let mismatches = 0;
-    for (const userId of userIds) {
-      mismatches += await userSnapshotTransaction(client, () => checkParity(client, userId));
-      checkedUsers += 1;
+    const parityBatchSize = 25;
+    const startedAt = Date.now();
+    let lastProgressAt = startedAt;
+    for (let offset = 0; offset < userIds.length; offset += parityBatchSize) {
+      const batch = userIds.slice(offset, offset + parityBatchSize);
+      mismatches += await userSnapshotTransaction(client, () => checkParity(client, batch));
+      checkedUsers += batch.length;
+      if (offset === 0 || checkedUsers === userIds.length || Date.now() - lastProgressAt >= 5000) {
+        const elapsedSeconds = (Date.now() - startedAt) / 1000;
+        process.stdout.write(`parity progress users=${checkedUsers}/${userIds.length} mismatches=${mismatches} elapsed_seconds=${elapsedSeconds.toFixed(1)}\n`);
+        lastProgressAt = Date.now();
+      }
     }
-    process.stdout.write(`parity users=${checkedUsers} mismatches=${mismatches}\n`);
+    process.stdout.write(`parity users=${checkedUsers} mismatches=${mismatches}${legacyGrowthPolicySummary}\n`);
     if (mismatches > 0) process.exitCode = 2;
   } finally {
     await client.end();

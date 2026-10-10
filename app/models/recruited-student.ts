@@ -1,7 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRecruitedStudentsTable } from "~/db/postgres/schema";
+import { pgRecruitedStudentsTable, pgStudentStatesTable } from "~/db/postgres/schema";
 import { type StudentStateTransaction, withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
@@ -82,11 +82,15 @@ const currentStateRanges = {
   abilityHeal: { label: "능력 개방 치유력", min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
 } satisfies Record<keyof RecruitedStudentCurrentStateInput, { label: string; min: number; max?: number }>;
 
-type RecruitedStudentRow = typeof pgRecruitedStudentsTable.$inferSelect;
+type RecruitedStudentRow = typeof pgStudentStatesTable.$inferSelect;
 
 function toModel(recruitedStudent: RecruitedStudentRow): RecruitedStudent {
+  if (recruitedStudent.recruitedStudentUid == null || recruitedStudent.tier == null) {
+    throw new Error("Recruited student projection is missing required student state.");
+  }
+
   return {
-    uid: recruitedStudent.uid,
+    uid: recruitedStudent.recruitedStudentUid,
     studentUid: recruitedStudent.studentUid,
     tier: recruitedStudent.tier,
     level: recruitedStudent.level,
@@ -145,8 +149,14 @@ export async function getRecruitedStudents(
     if (!studentUids) {
       const rows = await db
         .select()
-        .from(pgRecruitedStudentsTable)
-        .where(eq(pgRecruitedStudentsTable.userId, senseiId));
+        .from(pgStudentStatesTable)
+        .where(
+          and(
+            eq(pgStudentStatesTable.userId, senseiId),
+            isNotNull(pgStudentStatesTable.recruitedStudentUid),
+            isNull(pgStudentStatesTable.deletedAt),
+          ),
+        );
       return rows.map(toModel);
     }
     const uniqueStudentUids = [...new Set(studentUids)];
@@ -156,9 +166,14 @@ export async function getRecruitedStudents(
       rows.push(
         ...(await db
           .select()
-          .from(pgRecruitedStudentsTable)
+          .from(pgStudentStatesTable)
           .where(
-            and(eq(pgRecruitedStudentsTable.userId, senseiId), inArray(pgRecruitedStudentsTable.studentUid, chunk)),
+            and(
+              eq(pgStudentStatesTable.userId, senseiId),
+              inArray(pgStudentStatesTable.studentUid, chunk),
+              isNotNull(pgStudentStatesTable.recruitedStudentUid),
+              isNull(pgStudentStatesTable.deletedAt),
+            ),
           )),
       );
     }

@@ -1,7 +1,7 @@
-import { and, eq, getTableColumns, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRecruitedStudentsTable, pgStudentGrowthTable } from "~/db/postgres/schema";
+import { pgRecruitedStudentsTable, pgStudentGrowthTable, pgStudentTargetsTable } from "~/db/postgres/schema";
 import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
@@ -40,7 +40,44 @@ export type StudentGrowth = {
 
 export type StudentGrowthWithMetadata = StudentGrowth & { createdAt: string };
 export type StudentGrowthInput = Omit<StudentGrowth, "uid" | "studentUid">;
-type StudentGrowthMetadataRow = Omit<typeof pgStudentGrowthTable.$inferSelect, "createdAt"> & { createdAt: string };
+type StudentGrowthRow = Pick<
+  typeof pgStudentTargetsTable.$inferSelect,
+  | "studentUid"
+  | "targetLevel"
+  | "targetSkillEx"
+  | "targetSkillNormal"
+  | "targetSkillEnhanced"
+  | "targetSkillSub"
+  | "targetEquip1"
+  | "targetEquip2"
+  | "targetEquip3"
+  | "targetEquipSpecial"
+  | "targetTier"
+  | "targetWeaponLevel"
+  | "targetAbilityHp"
+  | "targetAbilityAtk"
+  | "targetAbilityHeal"
+> & { studentGrowthUid: string | null };
+type StudentGrowthMetadataRow = StudentGrowthRow & { createdAt: string | null };
+
+const studentGrowthColumns = {
+  studentGrowthUid: pgStudentTargetsTable.studentGrowthUid,
+  studentUid: pgStudentTargetsTable.studentUid,
+  targetLevel: pgStudentTargetsTable.targetLevel,
+  targetSkillEx: pgStudentTargetsTable.targetSkillEx,
+  targetSkillNormal: pgStudentTargetsTable.targetSkillNormal,
+  targetSkillEnhanced: pgStudentTargetsTable.targetSkillEnhanced,
+  targetSkillSub: pgStudentTargetsTable.targetSkillSub,
+  targetEquip1: pgStudentTargetsTable.targetEquip1,
+  targetEquip2: pgStudentTargetsTable.targetEquip2,
+  targetEquip3: pgStudentTargetsTable.targetEquip3,
+  targetEquipSpecial: pgStudentTargetsTable.targetEquipSpecial,
+  targetTier: pgStudentTargetsTable.targetTier,
+  targetWeaponLevel: pgStudentTargetsTable.targetWeaponLevel,
+  targetAbilityHp: pgStudentTargetsTable.targetAbilityHp,
+  targetAbilityAtk: pgStudentTargetsTable.targetAbilityAtk,
+  targetAbilityHeal: pgStudentTargetsTable.targetAbilityHeal,
+} as const;
 
 const growthRanges = {
   targetLevel: { label: "목표 레벨", min: 1, max: 90 },
@@ -66,9 +103,13 @@ export class StudentGrowthValidationError extends Error {
   }
 }
 
-function toModel(row: typeof pgStudentGrowthTable.$inferSelect): StudentGrowth {
+function toModel(row: StudentGrowthRow): StudentGrowth {
+  if (row.studentGrowthUid == null) {
+    throw new Error("Student growth projection is missing its source UID.");
+  }
+
   return {
-    uid: row.uid,
+    uid: row.studentGrowthUid,
     studentUid: row.studentUid,
     targetLevel: row.targetLevel,
     targetSkillEx: row.targetSkillEx,
@@ -88,8 +129,12 @@ function toModel(row: typeof pgStudentGrowthTable.$inferSelect): StudentGrowth {
 }
 
 function toModelWithMetadata(row: StudentGrowthMetadataRow): StudentGrowthWithMetadata {
+  if (row.createdAt == null) {
+    throw new Error("Student growth projection is missing its planner registration timestamp.");
+  }
+
   return {
-    ...toModel(row as unknown as typeof pgStudentGrowthTable.$inferSelect),
+    ...toModel(row),
     createdAt: row.createdAt,
   };
 }
@@ -200,7 +245,16 @@ function withDb<T>(env: Env, operation: (db: StudentGrowthDb) => Promise<T>): Pr
 
 export async function getStudentGrowths(env: Env, senseiId: number): Promise<StudentGrowth[]> {
   return withDb(env, async (db) => {
-    const rows = await db.select().from(pgStudentGrowthTable).where(eq(pgStudentGrowthTable.userId, senseiId));
+    const rows = await db
+      .select(studentGrowthColumns)
+      .from(pgStudentTargetsTable)
+      .where(
+        and(
+          eq(pgStudentTargetsTable.userId, senseiId),
+          isNotNull(pgStudentTargetsTable.studentGrowthUid),
+          isNull(pgStudentTargetsTable.deletedAt),
+        ),
+      );
     return rows.map(toModel);
   });
 }
@@ -209,11 +263,19 @@ export async function getStudentGrowthsWithMetadata(env: Env, senseiId: number):
   return withDb(env, async (db) => {
     const rows = await db
       .select({
-        ...getTableColumns(pgStudentGrowthTable),
-        createdAt: sql<string>`to_char(${pgStudentGrowthTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        ...studentGrowthColumns,
+        createdAt: sql<
+          string | null
+        >`to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
       })
-      .from(pgStudentGrowthTable)
-      .where(eq(pgStudentGrowthTable.userId, senseiId));
+      .from(pgStudentTargetsTable)
+      .where(
+        and(
+          eq(pgStudentTargetsTable.userId, senseiId),
+          isNotNull(pgStudentTargetsTable.studentGrowthUid),
+          isNull(pgStudentTargetsTable.deletedAt),
+        ),
+      );
     return rows.map(toModelWithMetadata);
   });
 }
@@ -221,9 +283,16 @@ export async function getStudentGrowthsWithMetadata(env: Env, senseiId: number):
 export async function getStudentGrowth(env: Env, senseiId: number, studentUid: string): Promise<StudentGrowth | null> {
   return withDb(env, async (db) => {
     const [row] = await db
-      .select()
-      .from(pgStudentGrowthTable)
-      .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)))
+      .select(studentGrowthColumns)
+      .from(pgStudentTargetsTable)
+      .where(
+        and(
+          eq(pgStudentTargetsTable.userId, senseiId),
+          eq(pgStudentTargetsTable.studentUid, studentUid),
+          isNotNull(pgStudentTargetsTable.studentGrowthUid),
+          isNull(pgStudentTargetsTable.deletedAt),
+        ),
+      )
       .limit(1);
     return row ? toModel(row) : null;
   });
@@ -237,11 +306,20 @@ export async function getStudentGrowthWithMetadata(
   return withDb(env, async (db) => {
     const [row] = await db
       .select({
-        ...getTableColumns(pgStudentGrowthTable),
-        createdAt: sql<string>`to_char(${pgStudentGrowthTable.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        ...studentGrowthColumns,
+        createdAt: sql<
+          string | null
+        >`to_char(${pgStudentTargetsTable.plannerAddedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
       })
-      .from(pgStudentGrowthTable)
-      .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)))
+      .from(pgStudentTargetsTable)
+      .where(
+        and(
+          eq(pgStudentTargetsTable.userId, senseiId),
+          eq(pgStudentTargetsTable.studentUid, studentUid),
+          isNotNull(pgStudentTargetsTable.studentGrowthUid),
+          isNull(pgStudentTargetsTable.deletedAt),
+        ),
+      )
       .limit(1);
     return row ? toModelWithMetadata(row) : null;
   });

@@ -1016,7 +1016,7 @@ export const pgRelationshipLevelsTable = pgTable(
   ],
 );
 
-/** Additive student-state projection used while legacy reads remain authoritative. */
+/** Canonical runtime student-state reads while participating writers still mirror legacy tables. */
 export const pgStudentStatesTable = pgTable(
   "student_states",
   {
