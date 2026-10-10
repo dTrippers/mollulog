@@ -13,6 +13,7 @@ import {
 } from "~/domain/student-growth-state";
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
+import { shouldSyncRowDraft } from "./growth-row-sync";
 import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
 import { useGrowthViewSettings } from "./growth-view-settings";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
@@ -620,19 +621,18 @@ function GrowthRow({
     // Always sync tier display
     const nextTier = student.tier ?? student.initialTier;
     dispatchRow({ type: "setTierDraft", tier: nextTier });
-    const shouldKeepSubmittedValues =
-      fetcher.state === "idle" &&
-      saveTimerRef.current == null &&
-      submittedRef.current != null &&
-      isActionSuccess(fetcher.data);
-    if (shouldKeepSubmittedValues) return;
-    // Skip draft reset if growth save is in-flight or pending
-    if (fetcher.state !== "idle" || saveTimerRef.current != null) return;
+    const shouldSync = shouldSyncRowDraft({
+      isIdle: fetcher.state === "idle",
+      hasScheduledSave: saveTimerRef.current != null,
+      hasUnhandledSubmission: submittedRef.current != null,
+      hasRetryableDraft: growthRetryRef.current != null,
+    });
+    if (!shouldSync) return;
     growthDraftRevisionRef.current = 0;
     dispatchRow({ type: "syncGrowth", values: initialValues, targetTier: student.targetTier, tier: nextTier });
     submittedRef.current = null;
     tierSubmittedRef.current = null;
-  }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state, fetcher.data]);
+  }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state]);
 
   useEffect(() => {
     if (!isResourceRequirementsOpen) {
@@ -658,16 +658,16 @@ function GrowthRow({
 
   useEffect(() => {
     if (staleWriteBlockedRef.current) return;
-    const shouldKeepSubmittedValues =
-      relationshipFetcher.state === "idle" &&
-      relationshipSaveTimerRef.current == null &&
-      relationshipSubmittedRef.current != null &&
-      isActionSuccess(relationshipFetcher.data);
-    if (shouldKeepSubmittedValues) return;
-    if (relationshipFetcher.state !== "idle" || relationshipSaveTimerRef.current != null) return;
+    const shouldSync = shouldSyncRowDraft({
+      isIdle: relationshipFetcher.state === "idle",
+      hasScheduledSave: relationshipSaveTimerRef.current != null,
+      hasUnhandledSubmission: relationshipSubmittedRef.current != null,
+      hasRetryableDraft: relationshipRetryRef.current != null,
+    });
+    if (!shouldSync) return;
     dispatchRow({ type: "syncRelationship", values: initialRelationshipValues });
     relationshipSubmittedRef.current = null;
-  }, [initialRelationshipValues, relationshipFetcher.state, relationshipFetcher.data]);
+  }, [initialRelationshipValues, relationshipFetcher.state]);
 
   useEffect(() => {
     if (fetcher.state !== "idle") return;
