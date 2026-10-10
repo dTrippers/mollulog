@@ -122,7 +122,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
       />
 
       <FurnitureInteractionStudentsPopoverGroup>
-        <div className="grid grid-cols-2 gap-1.5 md:gap-2 lg:grid-cols-3 2xl:grid-cols-4">
+        <div className="grid grid-cols-2 gap-1.5 md:gap-2 lg:grid-cols-4">
           {selectedShopResources.map(
             ({ uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount }) => {
               const shopResource = { uid, resource, resourceAmount, paymentResource, purchaseTiers, shopAmount };
