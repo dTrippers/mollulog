@@ -1,8 +1,10 @@
-import { ArrowPathIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ChevronRightIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PyroxeneCalculationMethodContent } from "~/components/features/futures";
 import { BottomSheet, Button } from "~/components/primitives";
 import type { EventShopState } from "~/domain/event-shop-state";
 import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
+import type { PyroxeneCalculationAssumptions as PyroxeneCalculationAssumptionsData } from "~/domain/pyroxene-assumptions";
 import type {
   PlannerDayResources,
   PlannerMonthLayout,
@@ -47,6 +49,7 @@ type PlannerCalendarProps = {
   scheduleAvailability: { dateFacts: boolean; ongoing: boolean };
   calendarResources: Record<string, PlannerDayResources>;
   raidScheduleFacts: readonly PlannerRaidScheduleFact[];
+  pyroxeneAssumptions: PyroxeneCalculationAssumptionsData | null;
   forecastStatus: PlannerForecastStatus;
   statusMessages: string[];
   progressMessages: string[];
@@ -63,7 +66,7 @@ type PlannerCalendarProps = {
   onLoadMore: () => void;
 };
 
-type PlannerCalendarDialogView = "summary" | "actions" | "quick-edit" | "recruitment-edit";
+type PlannerCalendarDialogView = "summary" | "actions" | "quick-edit" | "recruitment-edit" | "calculation-method";
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 const WEEKDAYS_SUNDAY_FIRST = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
 
@@ -99,6 +102,7 @@ export default function PlannerCalendar({
   scheduleAvailability,
   calendarResources,
   raidScheduleFacts,
+  pyroxeneAssumptions,
   forecastStatus,
   statusMessages,
   progressMessages,
@@ -311,6 +315,12 @@ export default function PlannerCalendar({
     setDialogView("actions");
   }
 
+  function beginCalculationMethod() {
+    rememberParentFocusTarget("planner-calculation-method");
+    setSavedNotice(null);
+    setDialogView("calculation-method");
+  }
+
   function beginQuickEdit(kind: PlannerQuickEditKind, entry?: PlannerQuickEditEntry, focusTargetKey?: string) {
     rememberParentFocusTarget(focusTargetKey ?? "planner-add-plan");
     setQuickEditKind(kind);
@@ -475,11 +485,19 @@ export default function PlannerCalendar({
                     : quickEditKind === "package"
                       ? "패키지 계획"
                       : "직접 재화 등록"
-                  : "관심 학생"
+                  : dialogView === "calculation-method"
+                    ? "계산 방식"
+                    : "관심 학생"
           }
-          description={dialogView === "summary" ? undefined : formatDateKey(selectedDate)}
+          description={
+            dialogView === "summary"
+              ? undefined
+              : dialogView === "calculation-method"
+                ? "달력의 청휘석 예상 재화를 이렇게 계산해요"
+                : formatDateKey(selectedDate)
+          }
           headerAction={
-            dialogView === "actions" ? (
+            dialogView === "actions" || dialogView === "calculation-method" ? (
               <Button text="뒤로" size="sm" variant="secondary" onClick={returnToParentView} />
             ) : undefined
           }
@@ -495,163 +513,188 @@ export default function PlannerCalendar({
           fitContent
           onClose={closeDialog}
         >
-          <div className="space-y-5">
-            {savedNotice ? (
-              <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-                {savedNotice}
-              </p>
-            ) : null}
-
-            {dialogView === "summary" ? (
-              <ul className="space-y-4 p-2">
-                {dateSchedule.items.map((item) => (
-                  <li key={item.key}>
-                    <PlannerDateScheduleRow
-                      item={item}
-                      allPeriods={periods}
-                      timeZone={timeZone}
-                      shopPlans={shopPlans}
-                      shopPlannedEventUids={shopPlannedEventUids}
-                      showResourceChanges={forecastStatus === "ready"}
-                      resourceChanges={
-                        item.period.kind === "raid"
-                          ? (dateResourceAttribution?.raidChanges[item.period.raidUid ?? ""] ?? [])
-                          : (dateResourceAttribution?.eventChanges[
-                              item.period.eventUid ?? item.eventPeriod?.eventUid ?? ""
-                            ] ?? [])
-                      }
-                      highlighted={item.key === highlightedScheduleItemKey}
-                      focusOnMount={item.key === focusScheduleItemKey}
-                      onHighlightedFocusComplete={() => setFocusScheduleItemKey(null)}
-                      onAddRecruitment={beginRecruitmentEditForEvent}
-                      onEditRecruitment={beginRecruitmentEditForEvent}
-                    />
-                  </li>
-                ))}
-                {dateResourceAttribution?.unmatchedRaidSources.map((source) => (
-                  <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <span className="break-keep text-sm font-medium text-foreground">총력전/대결전 보상</span>
-                    {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
-                  </li>
-                ))}
-                {selectedOneOffEntries.map((entry) => {
-                  const focusTargetKey = `planner-quick-edit-${entry.id}`;
-                  const entryName = entry.description?.trim() || (entry.kind === "buy" ? "청휘석 구매" : "직접 재화");
-                  const changes =
-                    dateResourceAttribution?.directSources.find((source) => source.key === entry.id)?.changes ?? [];
-                  return (
-                    <li key={entry.id} className="flex min-h-14 items-center justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="break-keep text-sm font-medium text-foreground">{entryName}</h3>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        {forecastStatus === "ready" ? <DailyResourceChanges changes={changes} /> : null}
-                        <span className="inline-flex shrink-0" data-planner-focus-key={focusTargetKey}>
-                          <Button
-                            text="수정"
-                            size="xs"
-                            variant="secondary"
-                            onClick={() => beginQuickEdit(entry.kind, entry, focusTargetKey)}
-                          />
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
-                {readOnlyBuySources.map((source) => (
-                  <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
-                      {source.label}
-                    </h3>
-                    {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
-                  </li>
-                ))}
-                {dateResourceAttribution?.unmatchedEventRewardSources.map((source) => (
-                  <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
-                      {getPlannerUnmatchedEventRewardLabel(source)}
-                    </h3>
-                    {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
-                  </li>
-                ))}
-                {dateResourceAttribution?.unmatchedEventSources.map((source) => (
-                  <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
-                    <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
-                      {source.label}
-                    </h3>
-                    {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
-                  </li>
-                ))}
-                {!scheduleAvailability.dateFacts || !scheduleAvailability.ongoing ? (
-                  <li role="status" className="py-3 text-sm text-muted-foreground">
-                    일정 정보를 확인할 수 없어요.
-                  </li>
-                ) : dateSchedule.items.length === 0 &&
-                  (dateResourceAttribution?.unmatchedRaidSources.length ?? 0) === 0 &&
-                  selectedOneOffEntries.length === 0 &&
-                  readOnlyBuySources.length === 0 &&
-                  (dateResourceAttribution?.unmatchedEventRewardSources.length ?? 0) === 0 &&
-                  (dateResourceAttribution?.unmatchedEventSources.length ?? 0) === 0 ? (
-                  <li className="py-3 text-sm text-muted-foreground">이 날 진행 중인 일정이 없어요.</li>
-                ) : null}
-              </ul>
-            ) : null}
-
-            {dialogView === "actions" ? (
-              <section aria-labelledby="planner-add-actions" className="space-y-3">
-                <h3 id="planner-add-actions" className="text-sm font-semibold">
-                  추가할 계획 선택
-                </h3>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-                  <Button text="모집" variant="secondary" fullWidth onClick={() => beginRecruitmentEdit()} />
-                  <Button text="청휘석 구매" variant="secondary" fullWidth onClick={() => beginQuickEdit("buy")} />
-                  <Button text="패키지" variant="secondary" fullWidth onClick={() => beginQuickEdit("package")} />
-                  <Button text="직접 재화" variant="secondary" fullWidth onClick={() => beginQuickEdit("other")} />
-                </div>
-              </section>
-            ) : null}
-
-            {dialogView === "quick-edit" && selectedDate ? (
-              <PlannerQuickEdit
-                key={`${selectedDate}:${editingEntry?.id ?? quickEditKind}`}
-                date={selectedDate}
-                timeZone={timeZone}
-                entries={selectedOneOffEntries}
-                isSignedIn={isSignedIn}
-                guestStorageStatus={guestStorageStatus}
-                initialKind={quickEditKind}
-                initialEntry={editingEntry ?? undefined}
-                onSaved={() => finishSavedEdit("계획을 저장했어요.")}
-                onCancel={returnToParentView}
+          {dialogView === "calculation-method" ? (
+            pyroxeneAssumptions ? (
+              <PyroxeneCalculationMethodContent
+                assumptions={pyroxeneAssumptions}
+                showRange={false}
+                changePickupChanceTo="/utils/pyroxene"
               />
-            ) : null}
+            ) : null
+          ) : (
+            <div className="space-y-5">
+              {savedNotice ? (
+                <p role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                  {savedNotice}
+                </p>
+              ) : null}
 
-            {dialogView === "recruitment-edit" && selectedDate ? (
-              recruitmentCandidates.length > 0 ? (
-                <PlannerRecruitmentEditor
-                  key={`${selectedDate}:${selectedEventUid ?? "date"}`}
-                  selectedDate={selectedDate}
-                  candidates={recruitmentCandidates}
+              {dialogView === "summary" ? (
+                <ul className="space-y-4 p-2">
+                  {dateSchedule.items.map((item) => (
+                    <li key={item.key}>
+                      <PlannerDateScheduleRow
+                        item={item}
+                        allPeriods={periods}
+                        timeZone={timeZone}
+                        shopPlans={shopPlans}
+                        shopPlannedEventUids={shopPlannedEventUids}
+                        showResourceChanges={forecastStatus === "ready"}
+                        resourceChanges={
+                          item.period.kind === "raid"
+                            ? (dateResourceAttribution?.raidChanges[item.period.raidUid ?? ""] ?? [])
+                            : (dateResourceAttribution?.eventChanges[
+                                item.period.eventUid ?? item.eventPeriod?.eventUid ?? ""
+                              ] ?? [])
+                        }
+                        highlighted={item.key === highlightedScheduleItemKey}
+                        focusOnMount={item.key === focusScheduleItemKey}
+                        onHighlightedFocusComplete={() => setFocusScheduleItemKey(null)}
+                        onAddRecruitment={beginRecruitmentEditForEvent}
+                        onEditRecruitment={beginRecruitmentEditForEvent}
+                      />
+                    </li>
+                  ))}
+                  {dateResourceAttribution?.unmatchedRaidSources.map((source) => (
+                    <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
+                      <span className="break-keep text-sm font-medium text-foreground">총력전/대결전 보상</span>
+                      {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
+                    </li>
+                  ))}
+                  {selectedOneOffEntries.map((entry) => {
+                    const focusTargetKey = `planner-quick-edit-${entry.id}`;
+                    const entryName = entry.description?.trim() || (entry.kind === "buy" ? "청휘석 구매" : "직접 재화");
+                    const changes =
+                      dateResourceAttribution?.directSources.find((source) => source.key === entry.id)?.changes ?? [];
+                    return (
+                      <li key={entry.id} className="flex min-h-14 items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="break-keep text-sm font-medium text-foreground">{entryName}</h3>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {forecastStatus === "ready" ? <DailyResourceChanges changes={changes} /> : null}
+                          <span className="inline-flex shrink-0" data-planner-focus-key={focusTargetKey}>
+                            <Button
+                              text="수정"
+                              size="xs"
+                              variant="secondary"
+                              onClick={() => beginQuickEdit(entry.kind, entry, focusTargetKey)}
+                            />
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {readOnlyBuySources.map((source) => (
+                    <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
+                      <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
+                        {source.label}
+                      </h3>
+                      {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
+                    </li>
+                  ))}
+                  {dateResourceAttribution?.unmatchedEventRewardSources.map((source) => (
+                    <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
+                      <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
+                        {getPlannerUnmatchedEventRewardLabel(source)}
+                      </h3>
+                      {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
+                    </li>
+                  ))}
+                  {dateResourceAttribution?.unmatchedEventSources.map((source) => (
+                    <li key={source.key} className="flex min-h-14 items-center justify-between gap-3">
+                      <h3 className="whitespace-pre-line break-keep text-sm font-medium text-foreground">
+                        {source.label}
+                      </h3>
+                      {forecastStatus === "ready" ? <DailyResourceChanges changes={source.changes} /> : null}
+                    </li>
+                  ))}
+                  {!scheduleAvailability.dateFacts || !scheduleAvailability.ongoing ? (
+                    <li role="status" className="py-3 text-sm text-muted-foreground">
+                      일정 정보를 확인할 수 없어요.
+                    </li>
+                  ) : dateSchedule.items.length === 0 &&
+                    (dateResourceAttribution?.unmatchedRaidSources.length ?? 0) === 0 &&
+                    selectedOneOffEntries.length === 0 &&
+                    readOnlyBuySources.length === 0 &&
+                    (dateResourceAttribution?.unmatchedEventRewardSources.length ?? 0) === 0 &&
+                    (dateResourceAttribution?.unmatchedEventSources.length ?? 0) === 0 ? (
+                    <li className="py-3 text-sm text-muted-foreground">이 날 진행 중인 일정이 없어요.</li>
+                  ) : null}
+                </ul>
+              ) : null}
+
+              {dialogView === "summary" &&
+              forecastStatus === "ready" &&
+              pyroxeneAssumptions &&
+              (calendarResources[selectedDate]?.changes.length ?? 0) > 0 ? (
+                <div className="flex justify-end px-2" data-planner-focus-key="planner-calculation-method">
+                  <Button
+                    text="계산 방식"
+                    icon={QuestionMarkCircleIcon}
+                    size="xs"
+                    variant="secondary"
+                    onClick={beginCalculationMethod}
+                  />
+                </div>
+              ) : null}
+
+              {dialogView === "actions" ? (
+                <section aria-labelledby="planner-add-actions" className="space-y-3">
+                  <h3 id="planner-add-actions" className="text-sm font-semibold">
+                    추가할 계획 선택
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    <Button text="모집" variant="secondary" fullWidth onClick={() => beginRecruitmentEdit()} />
+                    <Button text="청휘석 구매" variant="secondary" fullWidth onClick={() => beginQuickEdit("buy")} />
+                    <Button text="패키지" variant="secondary" fullWidth onClick={() => beginQuickEdit("package")} />
+                    <Button text="직접 재화" variant="secondary" fullWidth onClick={() => beginQuickEdit("other")} />
+                  </div>
+                </section>
+              ) : null}
+
+              {dialogView === "quick-edit" && selectedDate ? (
+                <PlannerQuickEdit
+                  key={`${selectedDate}:${editingEntry?.id ?? quickEditKind}`}
+                  date={selectedDate}
                   timeZone={timeZone}
-                  savedStates={recruitmentSavedStates}
-                  preferredEventUid={preferredRecruitmentEventUid ?? undefined}
-                  isSaving={recruitmentIsSaving}
-                  saveResult={recruitmentSaveResult}
-                  onSave={onSaveRecruitment}
-                  onSaved={() => finishSavedEdit("모집 계획을 저장했어요.")}
+                  entries={selectedOneOffEntries}
+                  isSignedIn={isSignedIn}
+                  guestStorageStatus={guestStorageStatus}
+                  initialKind={quickEditKind}
+                  initialEntry={editingEntry ?? undefined}
+                  onSaved={() => finishSavedEdit("계획을 저장했어요.")}
                   onCancel={returnToParentView}
                 />
-              ) : (
-                <section role="status" className="space-y-3 rounded-md bg-muted/50 p-4">
-                  <p className="text-sm text-muted-foreground">
-                    {!scheduleAvailability.ongoing
-                      ? "일정 정보를 확인할 수 없어요."
-                      : "이 날짜에 선택할 수 있는 모집 일정이 없어요. 관련 공개 일정을 확인해주세요."}
-                  </p>
-                </section>
-              )
-            ) : null}
-          </div>
+              ) : null}
+
+              {dialogView === "recruitment-edit" && selectedDate ? (
+                recruitmentCandidates.length > 0 ? (
+                  <PlannerRecruitmentEditor
+                    key={`${selectedDate}:${selectedEventUid ?? "date"}`}
+                    selectedDate={selectedDate}
+                    candidates={recruitmentCandidates}
+                    timeZone={timeZone}
+                    savedStates={recruitmentSavedStates}
+                    preferredEventUid={preferredRecruitmentEventUid ?? undefined}
+                    isSaving={recruitmentIsSaving}
+                    saveResult={recruitmentSaveResult}
+                    onSave={onSaveRecruitment}
+                    onSaved={() => finishSavedEdit("모집 계획을 저장했어요.")}
+                    onCancel={returnToParentView}
+                  />
+                ) : (
+                  <section role="status" className="space-y-3 rounded-md bg-muted/50 p-4">
+                    <p className="text-sm text-muted-foreground">
+                      {!scheduleAvailability.ongoing
+                        ? "일정 정보를 확인할 수 없어요."
+                        : "이 날짜에 선택할 수 있는 모집 일정이 없어요. 관련 공개 일정을 확인해주세요."}
+                    </p>
+                  </section>
+                )
+              ) : null}
+            </div>
+          )}
         </BottomSheet>
       ) : null}
     </div>
