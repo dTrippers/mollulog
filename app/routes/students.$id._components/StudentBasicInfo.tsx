@@ -1,6 +1,6 @@
 import { ArrowTopRightOnSquareIcon, LockClosedIcon, PencilSquareIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
 import { StudentSkillIcon, StudentTierLabel } from "~/components/features/students";
 import { Button, Callout, EmptyView, SectionCard, SubTitle, Toggle } from "~/components/primitives";
@@ -22,6 +22,10 @@ import {
   serializeStudentGrowthDraft,
 } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
+import {
+  isStaleStudentStateActionResult,
+  STUDENT_STATE_STALE_MESSAGE,
+} from "~/domain/student-state-errors";
 import {
   type Attack,
   type StudentCatalogStat,
@@ -49,7 +53,8 @@ type StudentBasicInfoProps = {
   gradingSummary?: React.ReactNode;
 };
 
-type SaveResult = { ok: true } | { ok: false; error: string };
+type SaveResult = { ok: true } | { ok: false; error: string; code?: string; retryable?: boolean };
+type StudentBasicInfoSavePayload = Record<string, number | null>;
 
 const skillSlotLabels: Record<StudentSkillTypeEnum, string> = {
   ex: "EX 스킬",
@@ -103,6 +108,10 @@ export default function StudentBasicInfo({
   const [skillEffectsState, setSkillEffectsState] = useState({ studentUid: student.uid, enabled: false });
   const [growthSheetOpen, setGrowthSheetOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [staleWriteBlocked, setStaleWriteBlocked] = useState(false);
+  const [retryAvailable, setRetryAvailable] = useState(false);
+  const staleWriteBlockedRef = useRef(false);
+  const submittedPayloadRef = useRef<StudentBasicInfoSavePayload | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const [, setDraftStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const draftStorageKey = useMemo(
@@ -133,10 +142,10 @@ export default function StudentBasicInfo({
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
   const abilityReleaseDisabledReason = getAbilityReleaseDisabledReason(resolved.tier, resolved.level);
   const saveAvailable = signedIn && released;
-  const saveDisabled = fetcher.state !== "idle" || (!recruited && !draftReady);
+  const saveDisabled = fetcher.state !== "idle" || (!recruited && !draftReady) || staleWriteBlocked;
   const saving = fetcher.state !== "idle";
   const saveLabel = "내 프로필에 반영";
-  const saveError = fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
+  const saveError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : fetcher.data && !fetcher.data.ok ? fetcher.data.error : null;
 
   useEffect(() => {
     if (hash !== "#student-basic-info" || navigationType !== "PUSH") return;
@@ -146,7 +155,20 @@ export default function StudentBasicInfo({
 
   useEffect(() => {
     if (fetcher.state !== "idle" || !fetcher.data) return;
+    if (isStaleStudentStateActionResult(fetcher.data)) {
+      staleWriteBlockedRef.current = true;
+      setStaleWriteBlocked(true);
+      setSaved(false);
+      setRetryAvailable(false);
+      return;
+    }
     setSaved(fetcher.data.ok);
+    if (fetcher.data.ok) {
+      submittedPayloadRef.current = null;
+      setRetryAvailable(false);
+    } else {
+      setRetryAvailable(fetcher.data.retryable === true);
+    }
     if (fetcher.data.ok && draftStorageKey) {
       try {
         localStorage.removeItem(draftStorageKey);
@@ -211,9 +233,16 @@ export default function StudentBasicInfo({
     }));
   };
 
+  const submitSave = (payload: StudentBasicInfoSavePayload) => {
+    if (staleWriteBlockedRef.current) return;
+    submittedPayloadRef.current = payload;
+    setRetryAvailable(false);
+    fetcher.submit(payload, { method: "post", encType: "application/json" });
+  };
+
   const handleSave = () => {
-    fetcher.submit(
-      {
+    if (staleWriteBlockedRef.current) return;
+    submitSave({
         tier: resolved.tier,
         bond: state.bond,
         level: state.level,
@@ -232,9 +261,12 @@ export default function StudentBasicInfo({
         abilityHp: state.abilityHp,
         abilityAtk: state.abilityAtk,
         abilityHeal: state.abilityHeal,
-      },
-      { method: "post", encType: "application/json" },
-    );
+      });
+  };
+
+  const handleRetry = () => {
+    if (staleWriteBlockedRef.current || !retryAvailable || !submittedPayloadRef.current) return;
+    submitSave(submittedPayloadRef.current);
   };
 
   return (
@@ -347,8 +379,13 @@ export default function StudentBasicInfo({
           </div>
         ) : null}
         {saveError ? (
-          <div className="mt-3" role="alert">
+          <div className="mt-3 flex flex-wrap items-center gap-2" role="alert">
             <Callout tone="destructive" title={saveError} />
+            {staleWriteBlocked ? (
+              <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
+            ) : retryAvailable ? (
+              <Button text="다시 시도" size="xs" onClick={handleRetry} />
+            ) : null}
           </div>
         ) : null}
 

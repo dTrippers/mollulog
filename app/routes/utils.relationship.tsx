@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { data, redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import {
@@ -23,7 +23,14 @@ import {
 } from "~/components/features/relationship";
 import { Button, ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
+import { getRelationshipGiftPlanValidationError, getRelationshipLevelValidationError } from "~/domain/relationship-level";
+import {
+  isStaleStudentStateActionResult,
+  isStaleStudentStateRequestError,
+  STUDENT_STATE_STALE_CODE,
+  STUDENT_STATE_STALE_MESSAGE,
+} from "~/domain/student-state-errors";
+import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import {
   getRelationshipLevels,
@@ -127,34 +134,69 @@ export type ActionData = {
   items: Record<string, number>;
 };
 
+type RelationshipRetryOperation =
+  | { kind: "update"; studentUid: string; relationship: Relationship }
+  | { kind: "delete"; studentUid: string };
+
 export const action = async ({ request, context }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "utils.relationship.action" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
     return redirect("/unauthorized");
   }
 
-  if (request.method === "DELETE") {
-    const actionData = await request.json<{ studentId: string }>();
-    await removeRelationshipLevel(env, currentUser.id, actionData.studentId);
-    return { success: true, kind: "relationshipDelete", studentId: actionData.studentId };
-  } else if (request.method === "POST") {
-    const data = await request.json<ActionData | ActionData[]>();
-    const actionDataArray = Array.isArray(data) ? data : [data];
-    for (const actionData of actionDataArray) {
-      await upsertRelationshipLevel(
-        env,
-        currentUser.id,
-        actionData.studentId,
-        actionData.currentLevel,
-        actionData.currentExp ?? null,
-        actionData.targetLevel,
-        actionData.items,
-      );
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return data(
+      { success: false, code: "INVALID_INPUT", error: "요청 형식이 올바르지 않아요", retryable: false },
+      { status: 400 },
+    );
+  }
+
+  try {
+    if (request.method === "DELETE") {
+      const actionData = body as { studentId: string };
+      await removeRelationshipLevel(env, currentUser.id, actionData.studentId);
+      return { success: true, kind: "relationshipDelete", studentId: actionData.studentId };
+    } else if (request.method === "POST") {
+      const actionDataArray = (Array.isArray(body) ? body : [body]) as ActionData[];
+      for (const actionData of actionDataArray) {
+        const validationError =
+          getRelationshipLevelValidationError(actionData) ?? getRelationshipGiftPlanValidationError(actionData.items);
+        if (validationError) {
+          return data(
+            { success: false, code: "INVALID_INPUT", error: validationError, retryable: false },
+            { status: 400 },
+          );
+        }
+      }
+      for (const actionData of actionDataArray) {
+        await upsertRelationshipLevel(
+          env,
+          currentUser.id,
+          actionData.studentId,
+          actionData.currentLevel,
+          actionData.currentExp ?? null,
+          actionData.targetLevel,
+          actionData.items,
+        );
+      }
+      if (!Array.isArray(body) && actionDataArray[0]?.studentId) {
+        return { success: true, kind: "relationshipUpdate", relationship: actionDataArray[0] };
+      }
     }
-    if (!Array.isArray(data) && data.studentId) {
-      return { success: true, kind: "relationshipUpdate", relationship: data };
+  } catch (error) {
+    if (isStaleStudentStateRequestError(error)) {
+      return data({ success: false, code: STUDENT_STATE_STALE_CODE }, { status: 409 });
     }
+    logger.error("Relationship level save failed", error, { userId: currentUser.id });
+    return data(
+      { success: false, code: "SAVE_FAILED", error: "저장하지 못했어요", retryable: true },
+      { status: 500 },
+    );
   }
 
   return { success: true };
@@ -248,6 +290,7 @@ export default function RelationshipUtil() {
   const [currentRelationship, setCurrentRelationship] = useState<Relationship>(emptyRelationship);
   const [savedRelationship, setSavedRelationship] = useState<Relationship>(emptyRelationship);
   const syncedSelectedStudentUidRef = useRef<string | null>(null);
+  const relationshipDraftsRef = useRef(new Map<string, Relationship>());
   useEffect(() => {
     if (syncedSelectedStudentUidRef.current === selectedStudentUid) return;
     syncedSelectedStudentUidRef.current = selectedStudentUid;
@@ -271,15 +314,20 @@ export default function RelationshipUtil() {
       targetLevel: student.targetLevel ?? emptyRelationship.targetLevel,
       items: student.items ?? emptyRelationship.items,
     };
-    setCurrentRelationship(relationship);
+    setCurrentRelationship(relationshipDraftsRef.current.get(selectedStudentUid) ?? relationship);
     setSavedRelationship(relationship);
   }, [selectedStudentUid, managedStudents]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
   const [savePending, setSavePending] = useState(false);
+  const [staleWriteBlocked, setStaleWriteBlocked] = useState(false);
+  const [retryAvailable, setRetryAvailable] = useState(false);
+  const staleWriteBlockedRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittedRelationshipRef = useRef<{ studentUid: string; relationship: Relationship } | null>(null);
+  const submittedDeleteRef = useRef<string | null>(null);
+  const retryOperationRef = useRef<RelationshipRetryOperation | null>(null);
   const processedActionDataRef = useRef<typeof saveFetcher.data | null>(null);
   const pendingSaveRef = useRef<{ studentUid: string; relationship: Relationship } | null>(null);
 
@@ -305,10 +353,11 @@ export default function RelationshipUtil() {
   }, []);
 
   const submitRelationship = useCallback(
-    (relationship: Relationship) => {
+    (relationship: Relationship, requestedStudentUid?: string) => {
       setSaveSuccess(false);
 
-      if (!selectedStudentUid) return;
+      const studentUid = requestedStudentUid ?? selectedStudentUid;
+      if (!studentUid || staleWriteBlockedRef.current) return;
       if (!isAuthenticated) {
         showSignIn();
         return;
@@ -320,11 +369,14 @@ export default function RelationshipUtil() {
         return;
       }
       setSaveError(null);
-      submittedRelationshipRef.current = { studentUid: selectedStudentUid, relationship };
+      setRetryAvailable(false);
+      retryOperationRef.current = null;
+      submittedDeleteRef.current = null;
+      submittedRelationshipRef.current = { studentUid, relationship };
 
       saveFetcher.submit(
         {
-          studentId: selectedStudentUid,
+          studentId: studentUid,
           currentLevel: relationship.currentLevel,
           currentExp: relationship.currentExp,
           targetLevel: relationship.targetLevel,
@@ -338,12 +390,65 @@ export default function RelationshipUtil() {
 
   useEffect(() => {
     if (saveFetcher.state !== "idle") return;
-    if (!saveFetcher.data?.success) return;
+    if (!saveFetcher.data) return;
     if (processedActionDataRef.current === saveFetcher.data) return;
     processedActionDataRef.current = saveFetcher.data;
 
-    if ("kind" in saveFetcher.data && saveFetcher.data.kind === "relationshipDelete") {
+    if (isStaleStudentStateActionResult(saveFetcher.data)) {
+      staleWriteBlockedRef.current = true;
+      setStaleWriteBlocked(true);
+      setSaveError(STUDENT_STATE_STALE_MESSAGE);
+      setSaveSuccess(false);
+      setRetryAvailable(false);
+      setSavePending(false);
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      if (submittedRelationshipRef.current) {
+        pendingSaveRef.current = submittedRelationshipRef.current;
+        submittedRelationshipRef.current = null;
+      }
+      submittedDeleteRef.current = null;
+      retryOperationRef.current = null;
+      return;
+    }
+
+    if (!saveFetcher.data.success) {
+      const failedUpdate = submittedRelationshipRef.current;
+      const failedDelete = submittedDeleteRef.current;
+      submittedRelationshipRef.current = null;
+      submittedDeleteRef.current = null;
+      pendingSaveRef.current = null;
+      retryOperationRef.current = failedUpdate
+        ? { kind: "update", ...failedUpdate }
+        : failedDelete
+          ? { kind: "delete", studentUid: failedDelete }
+          : null;
+      setSaveError(
+        "error" in saveFetcher.data && typeof saveFetcher.data.error === "string"
+          ? saveFetcher.data.error
+          : "저장하지 못했어요",
+      );
+      setSaveSuccess(false);
+      setRetryAvailable(
+        retryOperationRef.current !== null &&
+          "retryable" in saveFetcher.data &&
+          saveFetcher.data.retryable === true,
+      );
+      setSavePending(false);
+      return;
+    }
+
+    if (
+      "kind" in saveFetcher.data &&
+      saveFetcher.data.kind === "relationshipDelete" &&
+      "studentId" in saveFetcher.data &&
+      typeof saveFetcher.data.studentId === "string"
+    ) {
       const deletedStudentId = saveFetcher.data.studentId;
+      submittedDeleteRef.current = null;
+      retryOperationRef.current = null;
       setManagedStudents((prev) =>
         sortRelationshipStudents(
           prev.map((student) =>
@@ -363,6 +468,8 @@ export default function RelationshipUtil() {
       setSavedRelationship(emptyRelationship);
       setSaveError(null);
       setSaveSuccess(false);
+      setRetryAvailable(false);
+      relationshipDraftsRef.current.delete(deletedStudentId);
       submittedRelationshipRef.current = null;
       return;
     }
@@ -372,6 +479,12 @@ export default function RelationshipUtil() {
     submittedRelationshipRef.current = null;
 
     if ("kind" in saveFetcher.data && saveFetcher.data.kind === "relationshipUpdate") {
+      setRetryAvailable(false);
+      retryOperationRef.current = null;
+      const draft = relationshipDraftsRef.current.get(submitted.studentUid);
+      if (draft && relationshipEquals(draft, submitted.relationship)) {
+        relationshipDraftsRef.current.delete(submitted.studentUid);
+      }
       if (submitted.studentUid === selectedStudentUid) {
         setSavedRelationship(submitted.relationship);
         setSaveSuccess(true);
@@ -395,6 +508,17 @@ export default function RelationshipUtil() {
     }
   }, [saveFetcher.state, saveFetcher.data, selectedStudentUid]);
 
+  const updateCurrentRelationship: Dispatch<SetStateAction<Relationship>> = useCallback(
+    (nextValue) => {
+      setCurrentRelationship((previous) => {
+        const next = typeof nextValue === "function" ? nextValue(previous) : nextValue;
+        if (selectedStudentUid) relationshipDraftsRef.current.set(selectedStudentUid, next);
+        return next;
+      });
+    },
+    [selectedStudentUid],
+  );
+
   const submitRelationshipRef = useRef(submitRelationship);
   submitRelationshipRef.current = submitRelationship;
 
@@ -405,9 +529,21 @@ export default function RelationshipUtil() {
     }
     setSavePending(false);
 
+    if (staleWriteBlockedRef.current) return;
+
     if (!selectedStudentUid) return;
     if (relationshipEquals(currentRelationship, savedRelationship)) {
       pendingSaveRef.current = null;
+      return;
+    }
+
+    // Keep a failed save on screen until the user edits again or retries explicitly.
+    const failed = retryOperationRef.current;
+    if (
+      failed?.kind === "update" &&
+      failed.studentUid === selectedStudentUid &&
+      relationshipEquals(failed.relationship, currentRelationship)
+    ) {
       return;
     }
 
@@ -462,15 +598,23 @@ export default function RelationshipUtil() {
   useEffect(() => {
     return () => {
       const pending = pendingSaveRef.current;
+      if (staleWriteBlockedRef.current) return;
       if (!pending || pending.studentUid !== selectedStudentUid) return;
       pendingSaveRef.current = null;
-      submitRelationshipRef.current(pending.relationship);
+      submitRelationshipRef.current(pending.relationship, pending.studentUid);
     };
   }, [selectedStudentUid]);
+
+  const submitDelete = (studentUid: string) => {
+    if (staleWriteBlockedRef.current) return;
+    submittedDeleteRef.current = studentUid;
+    saveFetcher.submit({ studentId: studentUid }, { method: "DELETE", encType: "application/json" });
+  };
 
   const handleDelete = () => {
     setSaveSuccess(false);
 
+    if (staleWriteBlockedRef.current) return;
     if (!selectedStudentUid) return;
     if (!isAuthenticated) {
       showSignIn();
@@ -485,9 +629,22 @@ export default function RelationshipUtil() {
     }
     setSavePending(false);
     submittedRelationshipRef.current = null;
+    submittedDeleteRef.current = null;
+    retryOperationRef.current = null;
     pendingSaveRef.current = null;
+    setRetryAvailable(false);
+    submitDelete(selectedStudentUid);
+  };
 
-    saveFetcher.submit({ studentId: selectedStudentUid }, { method: "DELETE", encType: "application/json" });
+  const handleRetry = () => {
+    const failed = retryOperationRef.current;
+    if (!failed || !retryAvailable || staleWriteBlockedRef.current) return;
+    setRetryAvailable(false);
+    if (failed.kind === "update") {
+      submitRelationship(failed.relationship, failed.studentUid);
+    } else {
+      submitDelete(failed.studentUid);
+    }
   };
 
   const isItemScreen = searchParams.get("mode") === "item";
@@ -560,11 +717,13 @@ export default function RelationshipUtil() {
           saveState={savePending ? "pending" : saveFetcher.state}
           saveError={saveError}
           saveSuccess={saveSuccess}
+          staleWriteBlocked={staleWriteBlocked}
+          onRetry={retryAvailable ? handleRetry : null}
           itemRequiredQuantities={itemQuantityState?.requiredQuantities ?? null}
           itemQuantityBreakdowns={itemQuantityState?.breakdowns ?? null}
           ownedQuantities={ownedQuantities}
           onGiftCalculationModeChange={handleGiftCalculationModeChange}
-          onCurrentRelationshipChange={setCurrentRelationship}
+          onCurrentRelationshipChange={updateCurrentRelationship}
           onSelectedItemExpChange={setSelectedItemExp}
           onDelete={handleDelete}
         />
@@ -583,6 +742,8 @@ function RelationshipStudentScreen({
   saveState,
   saveError,
   saveSuccess,
+  staleWriteBlocked,
+  onRetry,
   itemRequiredQuantities,
   itemQuantityBreakdowns,
   ownedQuantities,
@@ -600,6 +761,8 @@ function RelationshipStudentScreen({
   saveState: SaveState;
   saveError: string | null;
   saveSuccess: boolean;
+  staleWriteBlocked: boolean;
+  onRetry: (() => void) | null;
   itemRequiredQuantities: Record<string, number> | null;
   itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
   ownedQuantities: Record<string, number> | null;
@@ -651,6 +814,8 @@ function RelationshipStudentScreen({
             saveState={saveState}
             saveError={saveError}
             saveSuccess={saveSuccess}
+            staleWriteBlocked={staleWriteBlocked}
+            onRetry={onRetry}
           />
 
           <RelationshipGiftCalculationMode
@@ -720,11 +885,15 @@ function RelationshipActionHeader({
   saveState,
   saveError,
   saveSuccess,
+  staleWriteBlocked,
+  onRetry,
 }: {
   student: { uid: string; name: string };
   saveState: SaveState;
   saveError: string | null;
   saveSuccess: boolean;
+  staleWriteBlocked: boolean;
+  onRetry: (() => void) | null;
 }) {
   const visibleName = formatVisibleName(student.name);
   const isSaving = saveState === "pending" || saveState === "submitting" || saveState === "loading";
@@ -742,7 +911,16 @@ function RelationshipActionHeader({
           ) : null}
         </div>
       </div>
-      {saveError && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{saveError}</p>}
+      {saveError && (
+        <div className="mt-2 flex flex-wrap items-center gap-2" role="alert">
+          <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+          {staleWriteBlocked ? (
+            <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
+          ) : onRetry ? (
+            <Button text="다시 시도" size="xs" onClick={onRetry} />
+          ) : null}
+        </div>
+      )}
     </div>
   );
 }

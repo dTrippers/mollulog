@@ -3,7 +3,7 @@ import type { StudentGrowthResourceRequirements } from "~/domain/growth-resource
 export type GrowthActionResult =
   | { kind: "studentUpdate"; student: GrowthStudent; submissionId?: string }
   | { kind: "listChange"; requiresRevalidation: true }
-  | { error: string };
+  | { error: string; code?: string; retryable?: boolean };
 
 export type GrowthStudent = {
   uid: string;

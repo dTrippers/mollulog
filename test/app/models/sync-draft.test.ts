@@ -310,6 +310,16 @@ describe("sync-draft", () => {
         targetEquipSpecial: 2,
       }),
     ]);
+    expect(db.tables.student_states).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          studentUid: "20048",
+          tier: 6,
+          level: 90,
+          skillEx: 5,
+        }),
+      ]),
+    );
   });
 
   it("applies unowned student_state drafts to growth and relationship targets", async () => {
@@ -520,9 +530,24 @@ describe("sync-draft", () => {
       (statement) =>
         statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"'),
     );
+    const relationshipReadIndexes = db.statements.flatMap((statement, index) =>
+      statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"')
+        ? [index]
+        : [],
+    );
+    const projectionRelationshipReads = relationshipReadIndexes.filter((index) =>
+      /\bto_char\(/i.test(db.statements[index]),
+    );
+    const relationshipReadChunkSizes = relationshipReadIndexes.map((index) =>
+      Math.max(0, (db.parameters[index]?.length ?? 1) - 1),
+    );
+    const batchCount = Math.ceil(input.entries.length / 500);
     expect(recruitedStatements).toHaveLength(3);
     expect(growthStatements).toHaveLength(3);
     expect(relationshipStatements).toHaveLength(6);
-    expect(relationshipReads).toHaveLength(3);
+    expect(relationshipReads.length).toBeGreaterThanOrEqual(batchCount * 2);
+    expect(relationshipReads.length).toBeLessThanOrEqual(batchCount * 3);
+    expect(projectionRelationshipReads).toHaveLength(batchCount * 2);
+    expect(relationshipReadChunkSizes.every((size) => size <= 500)).toBe(true);
   });
 });

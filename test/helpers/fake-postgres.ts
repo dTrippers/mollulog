@@ -145,9 +145,21 @@ function projectRows(rows: Row[], columns: string[] | null): Row[] {
   });
 }
 
-function selectColumns(text: string): string[] {
+function selectExpressions(text: string): string[] {
   const selectClause = text.match(/^\s*select\s+([\s\S]*?)\s+from\s+/i)?.[1] ?? "";
-  return [...selectClause.matchAll(/"([a-z0-9_]+)"/gi)].map(([, field]) => field);
+  return splitTopLevel(selectClause);
+}
+
+function selectedValue(expression: string, row: Row): unknown {
+  const timestampField = expression.match(/to_char\([\s\S]*?"([a-z0-9_]+)"\s+at\s+time\s+zone/i)?.[1];
+  if (timestampField) {
+    const value = row[fromPgField(timestampField)];
+    if (value instanceof Date) return value.toISOString().replace(/\.(\d{3})Z$/, ".$1000Z");
+    if (typeof value === "string") return value;
+    return null;
+  }
+  const field = [...expression.matchAll(/"([a-z0-9_]+)"/gi)].at(-1)?.[1];
+  return field ? row[fromPgField(field)] : undefined;
 }
 
 /**
@@ -175,6 +187,10 @@ export class FakePostgresClient {
       sync_draft_entries: [],
       user_resource_inventory_drafts: [],
       user_resource_inventory_draft_items: [],
+      student_states: [],
+      student_targets: [],
+      student_state_audits: [],
+      student_state_migration_control: [{ key: "default", nullableSemanticsEnabled: false }],
       ...initialTables,
     };
   }
@@ -301,8 +317,9 @@ export class FakePostgresClient {
       return { rows: [{ [field]: rows.length }], rowCount: 1 };
     }
     const resultRows = projectRows(rows, null);
+    const expressions = selectExpressions(text);
     const outputRows = rowModeArray
-      ? resultRows.map((row) => selectColumns(text).map((column) => row[column]))
+      ? rows.map((row) => expressions.map((expression) => selectedValue(expression, row)))
       : resultRows;
     return { rows: outputRows as Row[], rowCount: rows.length };
   }

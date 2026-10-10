@@ -58,6 +58,7 @@ jest.mock("~/lib/observability.server", () => ({
   getLogger: () => logger,
 }));
 
+import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
 import { StudentSkillSelectionCondition } from "~/graphql/graphql";
 import { shouldShowStickyFooterSurface } from "~/routes/students.$id._components/GrowthEditorSheet";
 import { getGrowthProgressPercent } from "~/routes/students.$id._components/GrowthFieldRow";
@@ -281,7 +282,11 @@ describe("student basic info equipment-level action", () => {
     } as never);
 
     expect(response).toMatchObject({
-      data: { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요" },
+      data: {
+        ok: false,
+        error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요",
+        retryable: true,
+      },
       init: { status: 500 },
     });
     expect(JSON.stringify(response)).not.toContain("password=secret");
@@ -290,6 +295,29 @@ describe("student basic info equipment-level action", () => {
       internalError,
       expect.objectContaining({ operation: "save", studentUid: "student-a", userId: 1 }),
     );
+  });
+
+  it("returns the typed stale response without a retryable save", async () => {
+    mockSaveStudentBasicInfo.mockRejectedValueOnce(new StaleStudentStateRequestError());
+
+    const response = await action({
+      params: { id: "student-a" },
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.test/students/student-a", {
+        method: "POST",
+        body: JSON.stringify({ tier: 3, level: 80 }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({
+      data: {
+        ok: false,
+        code: "STUDENT_STATE_STALE",
+        error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.",
+      },
+      init: { status: 409 },
+    });
   });
 });
 

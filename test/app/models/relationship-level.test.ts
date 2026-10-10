@@ -203,6 +203,24 @@ describe("relationship-level", () => {
     expect(db.statements.some((statement) => statement.toLowerCase().startsWith("insert"))).toBe(false);
   });
 
+  it("rejects a gift plan with a non-numeric quantity before writing", async () => {
+    const db = new FakePostgresClient({}, "user_relationship_levels");
+
+    await expect(
+      upsertRelationshipLevel(
+        { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env,
+        1,
+        "student-1",
+        2,
+        null,
+        20,
+        { gift: null } as unknown as Record<string, number>,
+      ),
+    ).rejects.toThrow("선물 계획 형식이 올바르지 않아요");
+    expect(db.relationshipLevels).toHaveLength(0);
+    expect(db.tables.student_state_audits).toHaveLength(0);
+  });
+
   it("creates missing relationship state with empty items in the atomic operation", async () => {
     const db = new FakePostgresClient({}, "user_relationship_levels");
 
