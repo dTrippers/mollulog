@@ -133,7 +133,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
           const ownedQuantity = ownedQuantities?.[uid];
           return (
             <div key={uid} className="flex flex-col gap-2 rounded-md bg-card p-3">
-              <div className="flex items-start gap-2">
+              <div className="flex items-center gap-2">
                 <ResourceCard
                   itemUid={resource.uid}
                   resourceType={resource.type}
@@ -142,8 +142,8 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                   label={resourceAmount === 1 ? undefined : formattedResourceAmount}
                   name={resource.name}
                 />
-                <div className="flex min-w-0 grow flex-col gap-0.5">
-                  <div className="flex min-w-0 items-center gap-1">
+                <div className="flex min-w-0 grow flex-col items-center gap-0.5 text-center">
+                  <div className="flex w-full min-w-0 items-center justify-center gap-1">
                     {paymentImageUrl ? (
                       <img
                         alt={paymentResource.name}
@@ -156,7 +156,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                         이미지 없음
                       </span>
                     )}
-                    <span className="min-w-0 text-sm font-medium leading-tight tabular-nums text-foreground">
+                    <span className="min-w-0 text-center text-sm font-medium leading-tight tabular-nums text-foreground">
                       {maximumUnitPrice !== undefined ? (
                         <>
                           {minimumUnitPrice}~<wbr />

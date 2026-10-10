@@ -41,14 +41,22 @@ function textContent(markup: string): string {
   return markup.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function hasClassTokens(markup: string, ...expectedTokens: string[]): boolean {
+  const classLists = Array.from(markup.matchAll(/class="([^"]*)"/g), ([, className]) => className.split(/\s+/));
+
+  return classLists.some((classList) => expectedTokens.every((token) => classList.includes(token)));
+}
+
 describe("ShopResourceSelector owned quantities", () => {
-  it("shows grouped quantities and wraps the unit-price range in the left-aligned info stack", () => {
+  it("shows grouped quantities and wraps the unit-price range in the centered info stack", () => {
     const markup = renderShopResourceSelector({ "shop-item-1": 1234 });
 
     expect(textContent(markup)).toContain("보유 1,234");
     expect(markup).toMatch(/1,200~<wbr\s*\/?\s*>1,500/);
-    expect(markup).toContain("flex items-start gap-2");
-    expect(markup).toContain("flex min-w-0 grow flex-col gap-0.5");
+    expect(hasClassTokens(markup, "flex", "items-center", "gap-2")).toBe(true);
+    expect(hasClassTokens(markup, "grow", "flex-col", "items-center", "text-center")).toBe(true);
+    expect(hasClassTokens(markup, "w-full", "justify-center")).toBe(true);
+    expect(hasClassTokens(markup, "min-w-0", "text-center", "tabular-nums")).toBe(true);
     expect(textContent(markup)).toContain("20회 구매 가능");
   });
 
