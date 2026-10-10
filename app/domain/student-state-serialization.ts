@@ -1,3 +1,4 @@
+import { type StudentStateDraftValue, setStudentStateDraftFieldPresence } from "~/domain/student-state";
 import type { RecruitedStudent } from "~/models/recruited-student";
 import type { RelationshipLevel } from "~/models/relationship-level";
 import type { StudentGrowth } from "~/models/student-growth";
@@ -409,7 +410,45 @@ function parseJustin163Payload(payload: { characters: unknown[] }): StudentState
     // Treat such a target as "no goal" to keep the round-trip symmetric.
     const growthTarget = current !== null && target !== null && isTargetEqualToCurrent(current, target) ? null : target;
 
-    return toEntry(String(character.id), current, growthTarget);
+    return toEntry(String(character.id), current, growthTarget, {
+      current: getProvidedFields(character.current, {
+        tier: ["star", "ue"],
+        weaponLevel: ["ue_level"],
+        level: ["level"],
+        abilityHp: ["book_hp"],
+        abilityAtk: ["book_atk"],
+        abilityHeal: ["book_heal"],
+        skillEx: ["ex"],
+        skillNormal: ["basic"],
+        skillEnhanced: ["passive"],
+        skillSub: ["sub"],
+        equip1: ["gear1"],
+        equip2: ["gear2"],
+        equip3: ["gear3"],
+        equipSpecial: ["bond_gear"],
+        bond: ["bond"],
+      }),
+      target:
+        growthTarget && isRecord(character.target)
+          ? getProvidedFields(character.target, {
+              targetTier: ["star", "ue"],
+              targetWeaponLevel: ["ue_level"],
+              targetLevel: ["level"],
+              targetAbilityHp: ["book_hp"],
+              targetAbilityAtk: ["book_atk"],
+              targetAbilityHeal: ["book_heal"],
+              targetSkillEx: ["ex"],
+              targetSkillNormal: ["basic"],
+              targetSkillEnhanced: ["passive"],
+              targetSkillSub: ["sub"],
+              targetEquip1: ["gear1"],
+              targetEquip2: ["gear2"],
+              targetEquip3: ["gear3"],
+              targetEquipSpecial: ["bond_gear"],
+              targetBond: ["bond"],
+            })
+          : [],
+    });
   });
 
   return assertNonEmptyEntries(entries);
@@ -440,7 +479,26 @@ function parseSchaleDbPayload(payload: UnknownRecord): StudentStateImportEntry[]
       bond: student.b,
     });
 
-    return toEntry(studentId, current, null);
+    return toEntry(studentId, current, null, {
+      current: getProvidedFields(student, {
+        tier: ["s", "ws"],
+        weaponLevel: ["wl"],
+        level: ["l"],
+        abilityHp: ["pm"],
+        abilityAtk: ["pa"],
+        abilityHeal: ["ph"],
+        skillEx: ["s1"],
+        skillNormal: ["s2"],
+        skillEnhanced: ["s3"],
+        skillSub: ["s4"],
+        equip1: ["e1"],
+        equip2: ["e2"],
+        equip3: ["e3"],
+        equipSpecial: ["e4"],
+        bond: ["b"],
+      }),
+      target: [],
+    });
   });
 
   return assertNonEmptyEntries(entries);
@@ -552,12 +610,29 @@ function toEntry(
   studentId: string,
   current: StudentStateImportCurrentState | null,
   target: StudentStateImportTargetState | null,
+  presence: { current: string[]; target: string[] },
 ): StudentStateImportEntry[] {
   if (current === null && target === null) {
     return [];
   }
 
-  return [{ studentId, current, target }];
+  const entry = { studentId, current, target };
+  setStudentStateDraftFieldPresence(entry as unknown as StudentStateDraftValue, presence);
+  return [entry];
+}
+
+function getProvidedFields(source: UnknownRecord, fieldSources: Record<string, readonly string[]>): string[] {
+  return Object.entries(fieldSources).flatMap(([field, keys]) => {
+    const providedKeys = keys.filter((key) => Object.hasOwn(source, key));
+    if (providedKeys.length === 0) return [];
+    const hasNonPlaceholderValue = providedKeys.some((key) => {
+      const value = source[key];
+      if (value == null) return true;
+      const normalized = typeof value === "string" && value.trim() !== "" ? Number(value) : value;
+      return typeof normalized !== "number" || !Number.isFinite(normalized) || normalized !== 0;
+    });
+    return hasNonPlaceholderValue ? [field] : [];
+  });
 }
 
 function isBaseCurrentCandidate(candidate: CurrentCandidate): boolean {

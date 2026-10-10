@@ -1,6 +1,8 @@
-import type { ActionFunctionArgs } from "react-router";
-import { data, useOutletContext } from "react-router";
+import { useState } from "react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import { data, redirect, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import type { StudentStateWriteMode } from "~/db/postgres/student-state-projection";
 import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
   isStaleStudentStateRequestError,
@@ -15,7 +17,7 @@ import {
   updateRecruitedStudentTier,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { updateRelationshipLevel } from "~/models/relationship-level";
+import { getStudentStateWriteMode, updateRelationshipLevel } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import {
   removeStudentGrowth,
@@ -61,30 +63,36 @@ const targetGrowthFieldKeys = [
   "targetAbilityHeal",
 ] as const satisfies (keyof StudentGrowthInput)[];
 
+const emptyGrowthInput = Object.fromEntries(targetGrowthFieldKeys.map((field) => [field, null])) as StudentGrowthInput;
+
 type GrowthActionData = {
   _intent?: "growth";
   studentUid: string;
   _submissionId?: string;
-} & RecruitedStudentCurrentStateInput &
-  StudentGrowthInput;
+  stateFormat?: "legacy" | "nullable";
+} & Partial<RecruitedStudentCurrentStateInput> &
+  Partial<StudentGrowthInput>;
 
 type TierActionData = {
   _intent: "tier";
   studentUid: string;
   tier: number;
   _submissionId?: string;
+  stateFormat?: "legacy" | "nullable";
 };
 
 type AddActionData = {
   _intent: "add";
   studentUid: string;
   _submissionId?: string;
+  stateFormat?: "legacy" | "nullable";
 };
 
 type RemoveActionData = {
   _intent: "remove";
   studentUid: string;
   _submissionId?: string;
+  stateFormat?: "legacy" | "nullable";
 };
 
 type EnrollActionData = {
@@ -99,12 +107,14 @@ type RelationshipActionData = {
   currentLevel: number | null;
   targetLevel: number | null;
   _submissionId?: string;
+  stateFormat?: "legacy" | "nullable";
 };
 
 type ResourceRequirementsActionData = {
   _intent: "resourceRequirements";
   studentUid: string;
   _submissionId?: string;
+  stateFormat?: "legacy" | "nullable";
 };
 
 function parseNullableInteger(value: unknown): number | null {
@@ -130,19 +140,32 @@ function parseNullableInteger(value: unknown): number | null {
   throw new ActionValidationError("숫자 형식이 올바르지 않아요");
 }
 
-function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
-  return targetGrowthFieldKeys.reduce((acc, field) => {
-    acc[field] = parseNullableInteger(payload[field]);
-    return acc;
-  }, {} as StudentGrowthInput);
+function toGrowthInput(payload: Partial<GrowthActionData>): Partial<StudentGrowthInput> {
+  return targetGrowthFieldKeys.reduce(
+    (acc, field) => {
+      if (Object.hasOwn(payload, field)) acc[field] = parseNullableInteger(payload[field]);
+      return acc;
+    },
+    {} as Partial<StudentGrowthInput>,
+  );
 }
 
-function toCurrentStateInput(payload: Partial<GrowthActionData>): RecruitedStudentCurrentStateInput {
-  return currentStateFieldKeys.reduce((acc, field) => {
-    acc[field] = parseNullableInteger(payload[field]);
-    return acc;
-  }, {} as RecruitedStudentCurrentStateInput);
+function toCurrentStateInput(payload: Partial<GrowthActionData>): Partial<RecruitedStudentCurrentStateInput> {
+  return currentStateFieldKeys.reduce(
+    (acc, field) => {
+      if (Object.hasOwn(payload, field)) acc[field] = parseNullableInteger(payload[field]);
+      return acc;
+    },
+    {} as Partial<RecruitedStudentCurrentStateInput>,
+  );
 }
+
+export const loader = async ({ context, request }: LoaderFunctionArgs) => {
+  const env = context.cloudflare.env;
+  const currentUser = await getActiveSensei(env, request);
+  if (!currentUser) return redirect("/unauthorized");
+  return { writeMode: await getStudentStateWriteMode(env) } satisfies { writeMode: StudentStateWriteMode };
+};
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -169,6 +192,14 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
           | ResourceRequirementsActionData
         >
       >();
+    if (
+      "stateFormat" in payload &&
+      payload.stateFormat != null &&
+      payload.stateFormat !== "legacy" &&
+      payload.stateFormat !== "nullable"
+    ) {
+      return data<GrowthActionResult>({ error: "저장 형식이 올바르지 않아요" }, { status: 400 });
+    }
     if (!payload.studentUid) {
       return data<GrowthActionResult>({ error: "학생 정보가 필요해요" }, { status: 400 });
     }
@@ -187,20 +218,35 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       }
       await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, student.initialTier);
     } else if (payload._intent === "add") {
-      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, toGrowthInput({}));
+      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, emptyGrowthInput);
       return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "remove") {
       await removeStudentGrowth(env, currentUser.id, payload.studentUid);
       return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
-      const relationshipInput = {
-        currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
-        targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
-      };
-      const relationshipError = getRelationshipLevelValidationError(relationshipInput);
+      const relationshipInput: { currentLevel?: number | null; targetLevel?: number | null } = {};
+      if (Object.hasOwn(relationshipPayload, "currentLevel")) {
+        relationshipInput.currentLevel = parseNullableInteger(relationshipPayload.currentLevel);
+      }
+      if (Object.hasOwn(relationshipPayload, "targetLevel")) {
+        relationshipInput.targetLevel = parseNullableInteger(relationshipPayload.targetLevel);
+      }
+      if (Object.keys(relationshipInput).length === 0) {
+        throw new ActionValidationError("현재 또는 목표 인연 랭크를 입력해주세요");
+      }
+      const relationshipError = getRelationshipLevelValidationError(
+        { currentLevel: relationshipInput.currentLevel ?? null, targetLevel: relationshipInput.targetLevel ?? null },
+        relationshipPayload.stateFormat === "nullable",
+      );
       if (relationshipError) throw new ActionValidationError(relationshipError);
-      await updateRelationshipLevel(env, currentUser.id, payload.studentUid, relationshipInput);
+      await updateRelationshipLevel(
+        env,
+        currentUser.id,
+        payload.studentUid,
+        relationshipInput,
+        payload.stateFormat ?? "legacy",
+      );
     } else if (payload._intent === "tier") {
       const tierPayload = payload as Partial<TierActionData>;
       if (tierPayload.tier == null || tierPayload.tier < 1 || tierPayload.tier > 9) {
@@ -218,6 +264,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
         currentInput,
         growthInput,
         allStudentsMap[payload.studentUid]?.initialTier ?? null,
+        growthPayload.stateFormat ?? "legacy",
       );
     }
 
@@ -253,8 +300,15 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
 export default function GrowthStudentsPage() {
   const { managedStudents, availableStudents, updateStudent } = useOutletContext<GrowthLayoutContext>();
+  const loaderData = useLoaderData<typeof loader>();
+  const [writeMode] = useState(loaderData.writeMode);
 
   return (
-    <GrowthTable students={managedStudents} availableStudents={availableStudents} onStudentUpdate={updateStudent} />
+    <GrowthTable
+      students={managedStudents}
+      availableStudents={availableStudents}
+      onStudentUpdate={updateStudent}
+      writeMode={writeMode}
+    />
   );
 }

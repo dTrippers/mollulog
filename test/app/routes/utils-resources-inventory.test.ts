@@ -148,6 +148,22 @@ describe("resource inventory canonical identity", () => {
     mockedUpsertInventory.mockResolvedValue(undefined);
   });
 
+  it("keeps saved gift-plan requirements when current and target ranks are null", async () => {
+    mockedGetRelationshipLevels.mockResolvedValue([
+      { studentId: "student-a", currentLevel: null, currentExp: null, targetLevel: null, items: { "23": 4 } },
+    ] as never);
+
+    const result = await loader(routeArgs(new Request("https://mollulog.net/utils/resources/inventory")));
+
+    expect(result).toMatchObject({
+      relationshipGiftRequirements: {
+        items: [expect.objectContaining({ uid: "23", amount: 4, source: "relationship" })],
+        characterExp: 0,
+        credit: 0,
+      },
+    });
+  });
+
   it("keeps colliding catalog resources distinct in editor-facing data", () => {
     const resources = buildInventoryResources(
       catalogResources.map((resource) => ({

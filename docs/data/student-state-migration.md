@@ -43,7 +43,28 @@ Parity fetches legacy rows, projected states, and projected targets in three que
 
 Before deploying 1-2, verify that the 1-1 operational parity run reports `mismatches=0`. Runtime reads then use `student_states` and `student_targets`; participating writers continue mirroring every change to the legacy tables and projection in one transaction. No runtime fallback to legacy reads is provided.
 
-If the read switch must be rolled back, redeploy the 1-1 version while legacy writes are still mirrored. Before entering 1-3, verify that the 1-1 version and its in-flight requests have exited, then confirm the screen results against the expected student state and planner data.
+While nullable semantics is off, the 1-2 version can be redeployed because it still mirrors writes to the legacy tables. Once nullable semantics has been activated, do not redeploy 1-1 or 1-2: their writes are rejected with a stale-state conflict and switching the control row off would make canonical-only data diverge from the legacy tables.
+
+## 1-3/1-4 canonical writes and nullable semantics
+
+The `nullable_semantics_enabled` control value is the single activation point. While it is false, the new Worker keeps the 1-2 write path and UI semantics. After activation, it writes only `student_states` and `student_targets`, allows current and target values to be independent, and rejects requests from 1-1/1-2 clients with the typed stale-state conflict. Activation is irreversible; recover from problems with a compatible forward fix.
+
+Before activation, verify all of the following against the target database: the running Worker version and in-flight requests; preview and local services that share the database; and every direct SQL, external integration, or other writer. Stop every nonparticipating writer before acknowledging the command. The acknowledgement is an operator assertion, not an automated discovery mechanism.
+
+Run the gates in order, then activate with the same explicit schema:
+
+```bash
+mllg local pnpm student-state:migration preflight --schema student_state_validation
+mllg local pnpm student-state:migration backfill --schema student_state_validation --confirm-no-external-writers
+mllg local pnpm student-state:migration parity --schema student_state_validation --confirm-no-external-writers
+mllg local pnpm student-state:migration activate --schema student_state_validation --confirm-no-external-writers
+```
+
+`activate` uses a READ COMMITTED transaction, sets a 60-second `lock_timeout`, and locks the control row `FOR UPDATE`. It waits for writers that already hold the row's shared lock; later writers wait until activation commits and then use nullable semantics. The command checks parity for every user while it holds the lock. It leaves the switch off and exits with a nonzero status if parity reports any mismatch. An already enabled switch is an explicit error. After a successful commit it reports the recruited, planner, and relationship display-column invariant counts; all must be zero before proceeding.
+
+Never turn the switch off after activation. Canonical-only writes no longer update the legacy tables, so disabling the switch would expose stale legacy data and allow old-version writes to overwrite the canonical state. Use forward fixes only. Do not use `backfill` or `parity` after activation; the CLI rejects those commands.
+
+The 1-5 stage may begin only after activation completed with `mismatches=0`, every display-column invariant count was zero, and all 1-1/1-2 Workers and in-flight requests have exited. Before archiving legacy tables, also verify that the application and operational tooling no longer reference them.
 
 ## Operator use against a service schema
 
@@ -93,6 +114,6 @@ mllg local env STUDENT_STATE_POSTGRES_VALIDATION=1 node --test scripts/student-s
 
 Before each later release or backfill, verify the actual running Worker versions and in-flight requests, all direct SQL writers and external integrations, and every preview or local service connected to the same database. A repository SHA or deployment record alone does not prove that a nonparticipating writer has stopped. If any such writer remains, or parity is nonzero, stop before advancing the stage.
 
-The required sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, canonical-only writes after every dual-write version exits, independent nullable semantics after all servers and clients are compatible, and legacy-table archive only after every reference has ended. The P1 release establishes dual-write; 1-2 delivers the read switch while legacy writes remain mirrored. Do not enable nullable semantics, remove legacy writes, archive tables, or perform a production migration as part of this runbook.
+The sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, then one release that combines canonical-only writes with independent nullable semantics. Archive legacy tables only after every version and tool that references them has exited. The P1 release establishes dual-write; 1-2 delivers the read switch while legacy writes remain mirrored. This runbook documents the operator gates; it does not authorize production migrations, activation, deployment, or stage transitions.
 
 After canonical-only writes begin, do not roll back to a version that reads stale legacy tables. Recover with a compatible version that understands canonical student state.

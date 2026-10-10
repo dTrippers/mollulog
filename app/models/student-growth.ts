@@ -1,8 +1,18 @@
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRecruitedStudentsTable, pgStudentGrowthTable, pgStudentTargetsTable } from "~/db/postgres/schema";
-import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
+import {
+  pgRecruitedStudentsTable,
+  pgStudentGrowthTable,
+  pgStudentStatesTable,
+  pgStudentTargetsTable,
+} from "~/db/postgres/schema";
+import {
+  patchCanonicalStudentState,
+  patchCanonicalStudentTarget,
+  type StudentStateRequestMode,
+  withStudentStateProjection,
+} from "~/db/postgres/student-state-projection";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
@@ -139,7 +149,7 @@ function toModelWithMetadata(row: StudentGrowthMetadataRow): StudentGrowthWithMe
   };
 }
 
-export function validateStudentGrowthInput(input: StudentGrowthInput) {
+export function validateStudentGrowthInput(input: Partial<StudentGrowthInput>) {
   try {
     for (const [field, range] of Object.entries(growthRanges) as [
       keyof StudentGrowthInput,
@@ -160,7 +170,9 @@ export function validateStudentGrowthInput(input: StudentGrowthInput) {
 }
 
 export function validateStudentGrowthTargetStateForTier(
-  input: Pick<StudentGrowthInput, "targetWeaponLevel" | "targetAbilityHp" | "targetAbilityAtk" | "targetAbilityHeal">,
+  input: Partial<
+    Pick<StudentGrowthInput, "targetWeaponLevel" | "targetAbilityHp" | "targetAbilityAtk" | "targetAbilityHeal">
+  >,
   targetTier: number | null | undefined,
 ) {
   try {
@@ -180,61 +192,124 @@ export async function saveStudentGrowthAndCurrentState(
   env: Env,
   senseiId: number,
   studentUid: string,
-  currentState: RecruitedStudentCurrentStateInput | null,
-  targets: StudentGrowthInput,
+  currentState: Partial<RecruitedStudentCurrentStateInput> | null,
+  targets: Partial<StudentGrowthInput>,
   fallbackTier: number | null,
+  requestMode: StudentStateRequestMode = "legacy",
 ): Promise<void> {
   validateStudentGrowthInput(targets);
 
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentUid], "student_growth_form", async (lockedTx) => {
-        const [recruited] = currentState
-          ? await lockedTx
-              .select({
-                tier: pgRecruitedStudentsTable.tier,
-              })
-              .from(pgRecruitedStudentsTable)
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentUid],
+        "student_growth_form",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            const [state] = await lockedTx
+              .select()
+              .from(pgStudentStatesTable)
+              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+              .limit(1);
+            const [existingTarget] =
+              Object.keys(targets).length > 0
+                ? await lockedTx
+                    .select({
+                      studentGrowthUid: pgStudentTargetsTable.studentGrowthUid,
+                      plannerAddedAt: pgStudentTargetsTable.plannerAddedAt,
+                      targetTier: pgStudentTargetsTable.targetTier,
+                    })
+                    .from(pgStudentTargetsTable)
+                    .where(
+                      and(eq(pgStudentTargetsTable.userId, senseiId), eq(pgStudentTargetsTable.studentUid, studentUid)),
+                    )
+                    .limit(1)
+                : [];
+            const effectiveTier = targets.targetTier ?? existingTarget?.targetTier ?? state?.tier ?? fallbackTier;
+            validateStudentGrowthTargetStateForTier(targets, effectiveTier);
+            if (currentState && state?.recruitedStudentUid != null) {
+              try {
+                validateRecruitedStudentCurrentStateInput(currentState);
+                const weaponLevel = Object.hasOwn(currentState, "weaponLevel")
+                  ? (currentState.weaponLevel ?? null)
+                  : state.weaponLevel;
+                const ability = [
+                  Object.hasOwn(currentState, "abilityHp") ? (currentState.abilityHp ?? null) : state.abilityHp,
+                  Object.hasOwn(currentState, "abilityAtk") ? (currentState.abilityAtk ?? null) : state.abilityAtk,
+                  Object.hasOwn(currentState, "abilityHeal") ? (currentState.abilityHeal ?? null) : state.abilityHeal,
+                ];
+                assertWeaponLevelRange(weaponLevel, state.tier, "고유무기 레벨");
+                assertAbilityReleaseAvailable(ability, state.tier, "능력 해방");
+              } catch (error) {
+                throw new RecruitedStudentValidationError(
+                  error instanceof Error ? error.message : "현재 상태를 확인해주세요",
+                );
+              }
+              await patchCanonicalStudentState(lockedTx, senseiId, studentUid, currentState);
+            }
+            if (Object.keys(targets).length > 0) {
+              await patchCanonicalStudentTarget(lockedTx, senseiId, studentUid, {
+                ...targets,
+                studentGrowthUid: existingTarget?.studentGrowthUid ?? nanoid(8),
+                plannerAddedAt: existingTarget?.plannerAddedAt ?? new Date().toISOString(),
+              });
+            }
+            return;
+          }
+          const [recruited] = currentState
+            ? await lockedTx
+                .select({
+                  tier: pgRecruitedStudentsTable.tier,
+                })
+                .from(pgRecruitedStudentsTable)
+                .where(
+                  and(
+                    eq(pgRecruitedStudentsTable.userId, senseiId),
+                    eq(pgRecruitedStudentsTable.studentUid, studentUid),
+                  ),
+                )
+                .limit(1)
+                .for("update")
+            : [];
+          const effectiveTier = targets.targetTier ?? recruited?.tier ?? fallbackTier;
+          validateStudentGrowthTargetStateForTier(targets, effectiveTier);
+
+          // Current values only apply to a recruited student, as before the growth form was unified.
+          if (currentState && recruited) {
+            try {
+              validateRecruitedStudentCurrentStateInput(currentState);
+              assertWeaponLevelRange(currentState.weaponLevel, recruited.tier, "고유무기 레벨");
+              assertAbilityReleaseAvailable(
+                [currentState.abilityHp, currentState.abilityAtk, currentState.abilityHeal],
+                recruited.tier,
+                "능력 해방",
+              );
+            } catch (error) {
+              throw new RecruitedStudentValidationError(
+                error instanceof Error ? error.message : "현재 상태를 확인해주세요",
+              );
+            }
+            await lockedTx
+              .update(pgRecruitedStudentsTable)
+              .set({ ...currentState, updatedAt: new Date() })
               .where(
                 and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-              )
-              .limit(1)
-              .for("update")
-          : [];
-        const effectiveTier = targets.targetTier ?? recruited?.tier ?? fallbackTier;
-        validateStudentGrowthTargetStateForTier(targets, effectiveTier);
-
-        // Current values only apply to a recruited student, as before the growth form was unified.
-        if (currentState && recruited) {
-          try {
-            validateRecruitedStudentCurrentStateInput(currentState);
-            assertWeaponLevelRange(currentState.weaponLevel, recruited.tier, "고유무기 레벨");
-            assertAbilityReleaseAvailable(
-              [currentState.abilityHp, currentState.abilityAtk, currentState.abilityHeal],
-              recruited.tier,
-              "능력 해방",
-            );
-          } catch (error) {
-            throw new RecruitedStudentValidationError(
-              error instanceof Error ? error.message : "현재 상태를 확인해주세요",
-            );
+              );
           }
-          await lockedTx
-            .update(pgRecruitedStudentsTable)
-            .set({ ...currentState, updatedAt: new Date() })
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            );
-        }
 
-        await lockedTx
-          .insert(pgStudentGrowthTable)
-          .values({ uid: nanoid(8), userId: senseiId, studentUid, ...targets })
-          .onConflictDoUpdate({
-            target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
-            set: { ...targets, updatedAt: new Date() },
-          });
-      });
+          await lockedTx
+            .insert(pgStudentGrowthTable)
+            .values({ uid: nanoid(8), userId: senseiId, studentUid, ...targets })
+            .onConflictDoUpdate({
+              target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
+              set: { ...targets, updatedAt: new Date() },
+            });
+        },
+        null,
+        requestMode,
+      );
     });
   });
 }
@@ -329,15 +404,44 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
   validateStudentGrowthInput(input);
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentUid], "student_growth", async (lockedTx) => {
-        await lockedTx
-          .insert(pgStudentGrowthTable)
-          .values({ uid: nanoid(8), userId: senseiId, studentUid, ...input })
-          .onConflictDoUpdate({
-            target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
-            set: { ...input, updatedAt: new Date() },
-          });
-      });
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentUid],
+        "student_growth",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            const [existing] = await lockedTx
+              .select()
+              .from(pgStudentTargetsTable)
+              .where(and(eq(pgStudentTargetsTable.userId, senseiId), eq(pgStudentTargetsTable.studentUid, studentUid)))
+              .limit(1);
+            const patch: Record<string, unknown> = {
+              studentGrowthUid: existing?.studentGrowthUid ?? nanoid(8),
+              plannerAddedAt: existing?.plannerAddedAt ?? new Date().toISOString(),
+            };
+            for (const [key, value] of Object.entries(input)) {
+              if (value != null) patch[key] = value;
+            }
+            await patchCanonicalStudentTarget(
+              lockedTx,
+              senseiId,
+              studentUid,
+              patch as Parameters<typeof patchCanonicalStudentTarget>[3],
+            );
+            return;
+          }
+          await lockedTx
+            .insert(pgStudentGrowthTable)
+            .values({ uid: nanoid(8), userId: senseiId, studentUid, ...input })
+            .onConflictDoUpdate({
+              target: [pgStudentGrowthTable.userId, pgStudentGrowthTable.studentUid],
+              set: { ...input, updatedAt: new Date() },
+            });
+        },
+        null,
+        null,
+      );
     });
   });
 }
@@ -345,11 +449,40 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
 export async function removeStudentGrowth(env: Env, senseiId: number, studentUid: string) {
   await withDb(env, (db) =>
     db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentUid], "student_growth", async (lockedTx) => {
-        await lockedTx
-          .delete(pgStudentGrowthTable)
-          .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)));
-      });
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentUid],
+        "student_growth",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            await patchCanonicalStudentTarget(lockedTx, senseiId, studentUid, {
+              studentGrowthUid: null,
+              plannerAddedAt: null,
+              targetLevel: null,
+              targetSkillEx: null,
+              targetSkillNormal: null,
+              targetSkillEnhanced: null,
+              targetSkillSub: null,
+              targetEquip1: null,
+              targetEquip2: null,
+              targetEquip3: null,
+              targetEquipSpecial: null,
+              targetTier: null,
+              targetWeaponLevel: null,
+              targetAbilityHp: null,
+              targetAbilityAtk: null,
+              targetAbilityHeal: null,
+            });
+            return;
+          }
+          await lockedTx
+            .delete(pgStudentGrowthTable)
+            .where(and(eq(pgStudentGrowthTable.userId, senseiId), eq(pgStudentGrowthTable.studentUid, studentUid)));
+        },
+        null,
+        null,
+      );
     }),
   );
 }

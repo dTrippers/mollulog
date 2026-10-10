@@ -114,10 +114,16 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", {
-      currentLevel: 10,
-      targetLevel: 30,
-    });
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(
+      env,
+      1,
+      "studentA",
+      {
+        currentLevel: 10,
+        targetLevel: 30,
+      },
+      "legacy",
+    );
   });
 
   it("passes empty relationship ranks to the atomic model operation for deletion", async () => {
@@ -137,10 +143,89 @@ describe("utils.growth.students action", () => {
       }),
     } as never);
 
-    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(env, 1, "studentA", {
-      currentLevel: null,
-      targetLevel: null,
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(
+      env,
+      1,
+      "studentA",
+      {
+        currentLevel: null,
+        targetLevel: null,
+      },
+      "legacy",
+    );
+  });
+
+  it("rejects a legacy target below current before calling the model", async () => {
+    const response = await action({
+      context: { cloudflare: { env } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          _intent: "relationship",
+          studentUid: "studentA",
+          currentLevel: 20,
+          targetLevel: 10,
+        }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({
+      data: { error: "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요" },
+      init: { status: 400 },
     });
+    expect(mockUpdateRelationshipLevel).not.toHaveBeenCalled();
+  });
+
+  it("allows a nullable target below current through the route validation", async () => {
+    const response = await action({
+      context: { cloudflare: { env } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          _intent: "relationship",
+          studentUid: "studentA",
+          currentLevel: 20,
+          targetLevel: 10,
+          stateFormat: "nullable",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({ data: { kind: "studentUpdate" } });
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(
+      env,
+      1,
+      "studentA",
+      { currentLevel: 20, targetLevel: 10 },
+      "nullable",
+    );
+  });
+
+  it("keeps missing nullable relationship ranks as null in the planner request", async () => {
+    await action({
+      context: { cloudflare: { env } },
+      request: new Request("http://localhost/utils/growth/students", {
+        method: "POST",
+        body: JSON.stringify({
+          _intent: "relationship",
+          studentUid: "studentA",
+          currentLevel: "",
+          targetLevel: "",
+          stateFormat: "nullable",
+        }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(mockUpdateRelationshipLevel).toHaveBeenCalledWith(
+      env,
+      1,
+      "studentA",
+      { currentLevel: null, targetLevel: null },
+      "nullable",
+    );
   });
 
   it("refreshes resource requirements without writing student state", async () => {
@@ -208,10 +293,6 @@ describe("utils.growth.students action", () => {
       "studentA",
       {
         level: 80,
-        weaponLevel: null,
-        abilityHp: null,
-        abilityAtk: null,
-        abilityHeal: null,
         skillEx: 4,
         skillNormal: 7,
         skillEnhanced: 8,
@@ -223,10 +304,6 @@ describe("utils.growth.students action", () => {
       },
       {
         targetLevel: 90,
-        targetWeaponLevel: null,
-        targetAbilityHp: null,
-        targetAbilityAtk: null,
-        targetAbilityHeal: null,
         targetSkillEx: 5,
         targetSkillNormal: 10,
         targetSkillEnhanced: 10,
@@ -238,6 +315,7 @@ describe("utils.growth.students action", () => {
         targetTier: 5,
       },
       3,
+      "legacy",
     );
     expect(mockUpsertStudentGrowth).not.toHaveBeenCalled();
   });
@@ -264,36 +342,12 @@ describe("utils.growth.students action", () => {
       "studentA",
       {
         level: 80,
-        weaponLevel: null,
-        abilityHp: null,
-        abilityAtk: null,
-        abilityHeal: null,
-        skillEx: null,
-        skillNormal: null,
-        skillEnhanced: null,
-        skillSub: null,
-        equip1: null,
-        equip2: null,
-        equip3: null,
-        equipSpecial: null,
       },
       {
         targetLevel: 90,
-        targetWeaponLevel: null,
-        targetAbilityHp: null,
-        targetAbilityAtk: null,
-        targetAbilityHeal: null,
-        targetSkillEx: null,
-        targetSkillNormal: null,
-        targetSkillEnhanced: null,
-        targetSkillSub: null,
-        targetEquip1: null,
-        targetEquip2: null,
-        targetEquip3: null,
-        targetEquipSpecial: null,
-        targetTier: null,
       },
       3,
+      "legacy",
     );
     expect(mockUpsertStudentGrowth).not.toHaveBeenCalled();
   });

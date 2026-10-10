@@ -21,15 +21,24 @@ import {
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { getRelationshipLevel, getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
+import {
+  getRelationshipLevel,
+  getRelationshipLevels,
+  removeRelationshipLevel,
+  updateRelationshipLevel,
+  upsertRelationshipLevel,
+} from "~/models/relationship-level";
+import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import {
   getStudentGrowth,
   getStudentGrowths,
   getStudentGrowthsWithMetadata,
   getStudentGrowthWithMetadata,
+  removeStudentGrowth,
+  saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
 } from "~/models/student-growth";
-import { createAndApplySyncDraft } from "~/models/sync-draft";
+import { applySyncDraft, createAndApplySyncDraft, createSyncDraft } from "~/models/sync-draft";
 
 const enabled = process.env.STUDENT_STATE_POSTGRES_VALIDATION === "1";
 const describePostgres = enabled ? describe : describe.skip;
@@ -159,7 +168,7 @@ async function expectLegacyAndProjectionReadsEqual(client: Client, env: Env, use
 }
 
 function runMigrationCli(
-  action: "preflight" | "backfill" | "parity",
+  action: "preflight" | "backfill" | "parity" | "activate",
   schema: string,
   applicationName: string,
   children: Set<ChildProcess>,
@@ -321,7 +330,7 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
     const migrationRuns: Promise<unknown>[] = [];
     const activeTasks: Promise<unknown>[] = [];
     const releaseGates = new Set<() => void>();
-    const runCli = (action: "preflight" | "backfill" | "parity", applicationName: string) => {
+    const runCli = (action: "preflight" | "backfill" | "parity" | "activate", applicationName: string) => {
       const run = trackTask(
         migrationRuns,
         runMigrationCli(action, schema, applicationName, migrationChildren).then((result) => {
@@ -352,7 +361,6 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
     clients.push(admin);
     await admin.connect();
     let schemaCreated = false;
-    let activationTransaction: Client | null = null;
     let testFailure: unknown;
     let cleanupFailure: AggregateError | undefined;
 
@@ -610,6 +618,67 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       ).rows.length;
       expect(writerAuditCount).toBeGreaterThan(0);
 
+      const canonicalUserId = 9;
+      await admin.query(
+        [
+          "INSERT INTO recruited_students (uid, user_id, student_uid, tier, level, equip1)",
+          "VALUES ('canonical-recruited', 9, 'student-canonical', 3, 80, NULL),",
+          "  ('legacy-import-recruited', 9, 'student-legacy-import', 3, 80, 10),",
+          "  ('nullable-import-recruited', 9, 'student-nullable-import', 3, 80, 10);",
+          "INSERT INTO recruited_students (uid, user_id, student_uid, tier, equip1, equip1_level)",
+          "VALUES ('equipment-current', 10, 'student-equipment-current', 3, 3, 10);",
+          "INSERT INTO student_growth (uid, user_id, student_uid, target_level) VALUES ('canonical-growth', 9, 'student-canonical', 25);",
+          "INSERT INTO user_relationship_levels (uid, user_id, student_id, current_level, current_exp, target_level, items)",
+          "VALUES ('canonical-relationship', 9, 'student-canonical', 20, 246, 10, '{\"gift-x\": 3}'::jsonb);",
+          "INSERT INTO user_relationship_levels (uid, user_id, student_id, current_level, current_exp, target_level, items)",
+          "VALUES ('nullable-import-relationship', 9, 'student-nullable-import', 20, 99, 40, '{}'::jsonb);",
+        ].join("\n"),
+      );
+
+      const legacyImportDraftUid = await createSyncDraft(modelEnv, canonicalUserId, {
+        source: "web",
+        type: "student_state",
+        entries: [
+          {
+            entryKey: "student-legacy-import",
+            value: 3,
+            valueJson: JSON.stringify({
+              current: { tier: 3, level: 80, equip1: 1 },
+              target: null,
+              providedFields: { current: ["tier", "level", "equip1"], target: [] },
+            }),
+          },
+        ],
+      });
+      await applySyncDraft(modelEnv, canonicalUserId, legacyImportDraftUid, {
+        mergeReviewedStudentState: true,
+        studentStateMetadataByKey: { "student-legacy-import": { initialTier: 1, hasGear: true } },
+      });
+      expect(
+        (
+          await admin.query(
+            "SELECT equip1 FROM recruited_students WHERE user_id = 9 AND student_uid = 'student-legacy-import'",
+          )
+        ).rows[0].equip1,
+      ).toBe(1);
+
+      const userAuditCountBeforeStaleRequest = (
+        await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9")
+      ).rows.length;
+      await expect(
+        updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 8 }, "nullable"),
+      ).rejects.toMatchObject({ code: "STUDENT_STATE_STALE" });
+      expect(
+        (
+          await admin.query(
+            "SELECT target_level FROM user_relationship_levels WHERE user_id = 9 AND student_id = 'student-canonical'",
+          )
+        ).rows[0].target_level,
+      ).toBe(10);
+      expect((await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9")).rows).toHaveLength(
+        userAuditCountBeforeStaleRequest,
+      );
+
       await removeRecruitedStudent(modelEnv, 7, "student-tombstone");
       const tombstone = await admin.query(
         "SELECT recruited_student_uid, deleted_at FROM student_states WHERE user_id = $1 AND student_uid = $2",
@@ -803,6 +872,24 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         rollingAuditCountAfterBackfill,
       );
 
+      await admin.query(
+        "UPDATE student_targets SET target_level = 999 WHERE user_id = 7 AND student_uid = 'student-current'",
+      );
+      const rejectedActivation = await runCli("activate", `state-activation-parity-mismatch-${process.pid}`);
+      expect(rejectedActivation.code).toBe(2);
+      expect(rejectedActivation.stdout).toMatch(/mismatches=[1-9]\d* activated=false/);
+      expect(
+        (
+          await admin.query(
+            "SELECT nullable_semantics_enabled FROM student_state_migration_control WHERE key = 'default'",
+          )
+        ).rows[0].nullable_semantics_enabled,
+      ).toBe(false);
+      await admin.query(
+        "UPDATE student_targets SET target_level = 26 WHERE user_id = 7 AND student_uid = 'student-current'",
+      );
+      expect((await runCli("parity", `state-parity-before-activation-${process.pid}`)).stdout).toMatch(/mismatches=0/);
+
       const concurrentRows = ["student-concurrent-a", "student-concurrent-b"];
       await admin.query(
         "INSERT INTO recruited_students (uid, user_id, student_uid, tier) VALUES ('recruited-concurrent-a', 7, $1, 1), ('recruited-concurrent-b', 7, $2, 1)",
@@ -864,27 +951,465 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       );
       const unlockActivationWriter = registerRelease(releaseActivationWriter);
       await waitForGateOrFailure(activationLock, activationWriter, "Activation race writer");
-      const activation = await connect(`state-activation-${process.pid}`);
-      activationTransaction = activation.client;
-      await activation.client.query("BEGIN");
-      const activationUpdate = trackTask(
-        activeTasks,
-        activation.client.query(
-          "UPDATE student_state_migration_control SET nullable_semantics_enabled = true WHERE key = 'default'",
-        ),
-      );
+      const activationApplication = `state-activation-${process.pid}`;
+      const activationResult = runCli("activate", activationApplication);
       try {
-        await waitForLockWait(admin, `state-activation-${process.pid}`, activationUpdate);
+        await waitForLockWait(admin, activationApplication, activationResult);
       } finally {
         unlockActivationWriter();
       }
       await activationWriter;
-      await activationUpdate;
-      await activation.client.query("COMMIT");
-      activationTransaction = null;
+      const activated = await activationResult;
+      expect(activated.code).toBe(0);
+      expect(activated.stdout).toMatch(/mismatches=0 activated=true/);
+      expect(activated.stdout).toMatch(/display_column_invariants recruited=0 planner=0 relationship=0/);
       expect(
         (await admin.query("SELECT tier FROM student_states WHERE student_uid = 'student-backfill-race'")).rows[0].tier,
       ).toBe(3);
+
+      const alreadyActivated = await runCli("activate", `state-activation-already-enabled-${process.pid}`);
+      expect(alreadyActivated.code).not.toBe(0);
+      expect(alreadyActivated.stderr).toContain("already activated");
+
+      const equipmentValidation = {
+        student: { equipments: ["hat"] },
+        catalog: {
+          equipment: [
+            { category: "hat", tier: 1, maxLevel: 10 },
+            { category: "hat", tier: 3, maxLevel: 20 },
+          ],
+        },
+      } as never;
+      await saveStudentBasicInfo(
+        modelEnv,
+        10,
+        "student-equipment-current",
+        { currentState: { equip1Level: 20 }, relationshipBonds: {} },
+        { requestMode: "nullable", equipmentValidation },
+      );
+      expect(
+        (
+          await admin.query(
+            "SELECT equip1, equip1_level FROM student_states WHERE user_id = 10 AND student_uid = 'student-equipment-current'",
+          )
+        ).rows[0],
+      ).toEqual({ equip1: 3, equip1_level: 20 });
+      expect(
+        (
+          await admin.query(
+            "SELECT equip1_level FROM recruited_students WHERE user_id = 10 AND student_uid = 'student-equipment-current'",
+          )
+        ).rows[0].equip1_level,
+      ).toBe(10);
+      await expect(
+        saveStudentBasicInfo(
+          modelEnv,
+          10,
+          "student-equipment-current",
+          { currentState: { equip1Level: 21 }, relationshipBonds: {} },
+          { requestMode: "nullable", equipmentValidation },
+        ),
+      ).rejects.toThrow("장비 1 레벨은(는) 1부터 20 사이만 입력할 수 있어요");
+
+      const legacyCanonicalSnapshot = {
+        recruited: (await admin.query("SELECT * FROM recruited_students WHERE user_id = 9 ORDER BY student_uid")).rows,
+        growth: (await admin.query("SELECT * FROM student_growth WHERE user_id = 9 ORDER BY student_uid")).rows,
+        relationship: (
+          await admin.query("SELECT * FROM user_relationship_levels WHERE user_id = 9 ORDER BY student_id")
+        ).rows,
+      };
+      const canonicalAuditCount = async () =>
+        (
+          await admin.query(
+            "SELECT id FROM student_state_audits WHERE user_id = 9 AND student_uid = 'student-canonical'",
+          )
+        ).rows.length;
+
+      const partialAuditCount = async () =>
+        (
+          await admin.query(
+            "SELECT id FROM student_state_audits WHERE user_id = 9 AND student_uid = 'student-concurrent-partial'",
+          )
+        ).rows.length;
+
+      await Promise.all([
+        updateRelationshipLevel(
+          modelEnv,
+          canonicalUserId,
+          "student-concurrent-partial",
+          { currentLevel: 15 },
+          "nullable",
+        ),
+        updateRelationshipLevel(
+          modelEnv,
+          canonicalUserId,
+          "student-concurrent-partial",
+          { targetLevel: 25 },
+          "nullable",
+        ),
+      ]);
+      await expect(
+        getRelationshipLevel(modelEnv, canonicalUserId, "student-concurrent-partial"),
+      ).resolves.toMatchObject({ currentLevel: 15, currentExp: null, targetLevel: 25, items: {} });
+      expect(await partialAuditCount()).toBe(2);
+
+      const nullableImportDraftUid = await createSyncDraft(modelEnv, canonicalUserId, {
+        source: "web",
+        type: "student_state",
+        entries: [
+          {
+            entryKey: "student-nullable-import",
+            value: 3,
+            valueJson: JSON.stringify({
+              current: { tier: 3, level: 80, equip1: 1, bond: null },
+              target: null,
+              providedFields: { current: ["level", "equip1", "bond"], target: [] },
+            }),
+          },
+        ],
+      });
+      await applySyncDraft(modelEnv, canonicalUserId, nullableImportDraftUid, {
+        mergeReviewedStudentState: true,
+        studentStateMetadataByKey: { "student-nullable-import": { initialTier: 1, hasGear: true } },
+      });
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-nullable-import")).resolves.toMatchObject({
+        currentLevel: null,
+        currentExp: 99,
+        targetLevel: 40,
+      });
+      expect(
+        (
+          await admin.query(
+            "SELECT tier, level, equip1 FROM student_states WHERE user_id = 9 AND student_uid = 'student-nullable-import'",
+          )
+        ).rows[0],
+      ).toMatchObject({ tier: 3, level: 80, equip1: 10 });
+
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 8 }, "nullable");
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 20,
+        currentExp: 246,
+        targetLevel: 8,
+        items: { "gift-x": 3 },
+      });
+      expect(await canonicalAuditCount()).toBe(1);
+      const canonicalAudit = await admin.query(
+        "SELECT before_state, after_state FROM student_state_audits WHERE user_id = 9 AND student_uid = 'student-canonical'",
+      );
+      expect(canonicalAudit.rows[0].after_state).toMatchObject({
+        format: "student_state_v1",
+        state: { relationshipCurrentLevel: 20, relationshipCurrentExp: 246 },
+        target: { relationshipTargetLevel: 8, giftPlan: { "gift-x": 3 } },
+      });
+
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 8 }, "nullable");
+      expect(await canonicalAuditCount()).toBe(1);
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { currentLevel: 21 }, "nullable");
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        currentExp: 246,
+        targetLevel: 8,
+      });
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { currentExp: null }, "nullable");
+      await upsertRelationshipLevel(
+        modelEnv,
+        canonicalUserId,
+        "student-canonical",
+        undefined,
+        undefined,
+        undefined,
+        { "gift-x": 5 },
+        null,
+      );
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 6 }, "nullable");
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        currentExp: null,
+        targetLevel: 6,
+        items: { "gift-x": 5 },
+      });
+
+      await expect(
+        updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 9 }),
+      ).rejects.toMatchObject({ code: "STUDENT_STATE_STALE" });
+      expect((await getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical"))?.targetLevel).toBe(6);
+
+      const beforeUnmarkedGiftWrite = await canonicalAuditCount();
+      await expect(
+        upsertRelationshipLevel(
+          modelEnv,
+          canonicalUserId,
+          "student-canonical",
+          undefined,
+          undefined,
+          undefined,
+          { "gift-x": 8 },
+          "legacy",
+        ),
+      ).rejects.toMatchObject({ code: "STUDENT_STATE_STALE" });
+      expect((await getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical"))?.items).toEqual({
+        "gift-x": 5,
+      });
+      expect(await canonicalAuditCount()).toBe(beforeUnmarkedGiftWrite);
+
+      await upsertStudentGrowth(modelEnv, canonicalUserId, "student-canonical", {
+        targetLevel: 88,
+        targetSkillEx: null,
+        targetSkillNormal: null,
+        targetSkillEnhanced: null,
+        targetSkillSub: null,
+        targetEquip1: null,
+        targetEquip2: null,
+        targetEquip3: null,
+        targetEquipSpecial: null,
+        targetTier: null,
+        targetWeaponLevel: null,
+        targetAbilityHp: null,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
+      });
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        targetLevel: 6,
+        items: { "gift-x": 5 },
+      });
+      await expect(getStudentGrowth(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        targetLevel: 88,
+      });
+      const activeDisplayPairs = await admin.query(
+        [
+          "SELECT (s.recruited_student_uid IS NOT NULL AND s.recruited_at IS NOT NULL AND s.tier IS NOT NULL) AS recruited_marker,",
+          "  (t.student_growth_uid IS NOT NULL AND t.planner_added_at IS NOT NULL) AS planner_marker,",
+          "  s.relationship_level_uid IS NOT NULL AND s.relationship_level_uid = t.relationship_level_uid AS relationship_pair",
+          "FROM student_states s JOIN student_targets t USING (user_id, student_uid)",
+          "WHERE s.user_id = 9 AND s.student_uid = 'student-canonical'",
+        ].join(" "),
+      );
+      expect(activeDisplayPairs.rows[0]).toEqual({
+        recruited_marker: true,
+        planner_marker: true,
+        relationship_pair: true,
+      });
+
+      await createAndApplySyncDraft(modelEnv, canonicalUserId, {
+        source: "first_party_ocr",
+        sourceRef: "student-state-nullable-partial-current",
+        type: "student_state",
+        toolName: "Student state PostgreSQL fixture",
+        entries: [
+          {
+            entryKey: "student-canonical",
+            value: 3,
+            valueJson: JSON.stringify({
+              current: { tier: 3, level: 70, bond: null },
+              target: null,
+              providedFields: { current: ["level"], target: [] },
+            }),
+          },
+        ],
+      });
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        targetLevel: 6,
+        items: { "gift-x": 5 },
+      });
+      await expect(getRecruitedStudents(modelEnv, canonicalUserId, ["student-canonical"])).resolves.toMatchObject([
+        { level: 70 },
+      ]);
+      await createAndApplySyncDraft(modelEnv, canonicalUserId, {
+        source: "web",
+        sourceRef: "student-state-nullable-explicit-target-delete",
+        type: "student_state",
+        toolName: "Student state PostgreSQL fixture",
+        entries: [
+          {
+            entryKey: "student-canonical",
+            value: 3,
+            valueJson: JSON.stringify({
+              current: null,
+              target: { targetTier: 3, targetBond: null },
+              providedFields: { current: [], target: ["targetBond"] },
+            }),
+          },
+        ],
+      });
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        targetLevel: null,
+        items: { "gift-x": 5 },
+      });
+
+      await updateRelationshipLevel(
+        modelEnv,
+        canonicalUserId,
+        "student-target-bond-only",
+        { targetLevel: 6 },
+        "nullable",
+      );
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-target-bond-only")).resolves.toMatchObject({
+        currentLevel: null,
+        targetLevel: 6,
+      });
+      expect(
+        (
+          await admin.query(
+            "SELECT student_growth_uid, planner_added_at FROM student_targets WHERE user_id = 9 AND student_uid = 'student-target-bond-only'",
+          )
+        ).rows[0],
+      ).toEqual({ student_growth_uid: null, planner_added_at: null });
+
+      await upsertRecruitedStudent(modelEnv, canonicalUserId, "student-neutral-recruit", 2);
+      expect(
+        (
+          await admin.query(
+            "SELECT recruited_student_uid, tier FROM student_states WHERE user_id = 9 AND student_uid = 'student-neutral-recruit'",
+          )
+        ).rows[0],
+      ).toMatchObject({ recruited_student_uid: expect.any(String), tier: 2 });
+      await saveStudentGrowthAndCurrentState(
+        modelEnv,
+        canonicalUserId,
+        "student-neutral-recruit",
+        { level: 70 },
+        {},
+        null,
+        "nullable",
+      );
+      expect(
+        (
+          await admin.query(
+            "SELECT student_uid FROM student_targets WHERE user_id = 9 AND student_uid = 'student-neutral-recruit'",
+          )
+        ).rows,
+      ).toHaveLength(0);
+      await saveStudentGrowthAndCurrentState(
+        modelEnv,
+        canonicalUserId,
+        "student-growth-target-only",
+        null,
+        { targetLevel: 75 },
+        3,
+        "nullable",
+      );
+      expect(
+        (
+          await admin.query(
+            "SELECT level FROM student_states WHERE user_id = 9 AND student_uid = 'student-growth-target-only'",
+          )
+        ).rows,
+      ).toHaveLength(0);
+      expect(
+        (
+          await admin.query(
+            "SELECT target_level, student_growth_uid, planner_added_at FROM student_targets WHERE user_id = 9 AND student_uid = 'student-growth-target-only'",
+          )
+        ).rows[0],
+      ).toMatchObject({ target_level: 75, student_growth_uid: expect.any(String), planner_added_at: expect.any(Date) });
+
+      await removeRecruitedStudent(modelEnv, canonicalUserId, "student-canonical");
+      const afterRecruitmentRemoval = await admin.query(
+        [
+          "SELECT recruited_student_uid, relationship_level_uid, tier, level, relationship_current_level, relationship_current_exp",
+          "FROM student_states WHERE user_id = 9 AND student_uid = 'student-canonical'",
+        ].join(" "),
+      );
+      expect(afterRecruitmentRemoval.rows[0]).toMatchObject({
+        recruited_student_uid: null,
+        relationship_level_uid: "canonical-relationship",
+        tier: null,
+        level: null,
+        relationship_current_level: 21,
+        relationship_current_exp: null,
+      });
+      expect(
+        (
+          await admin.query(
+            "SELECT student_growth_uid, planner_added_at FROM student_targets WHERE user_id = 9 AND student_uid = 'student-canonical'",
+          )
+        ).rows[0],
+      ).toMatchObject({
+        student_growth_uid: "canonical-growth",
+        planner_added_at: expect.any(Date),
+      });
+
+      await removeStudentGrowth(modelEnv, canonicalUserId, "student-canonical");
+      await expect(getStudentGrowth(modelEnv, canonicalUserId, "student-canonical")).resolves.toBeNull();
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        targetLevel: null,
+        items: { "gift-x": 5 },
+      });
+      const afterPlannerRemoval = await admin.query(
+        "SELECT student_growth_uid, planner_added_at, relationship_level_uid, relationship_target_level, gift_plan FROM student_targets WHERE user_id = 9 AND student_uid = 'student-canonical'",
+      );
+      expect(afterPlannerRemoval.rows[0]).toMatchObject({
+        student_growth_uid: null,
+        planner_added_at: null,
+        relationship_level_uid: "canonical-relationship",
+        relationship_target_level: null,
+        gift_plan: { "gift-x": 5 },
+      });
+
+      await removeRelationshipLevel(modelEnv, canonicalUserId, "student-canonical");
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toBeNull();
+      const removedRelationship = await admin.query(
+        [
+          "SELECT s.relationship_level_uid AS state_uid, s.deleted_at AS state_deleted_at,",
+          "  t.relationship_level_uid AS target_uid, t.relationship_target_level, t.gift_plan, t.deleted_at AS target_deleted_at",
+          "FROM student_states s JOIN student_targets t USING (user_id, student_uid)",
+          "WHERE s.user_id = 9 AND s.student_uid = 'student-canonical'",
+        ].join(" "),
+      );
+      expect(removedRelationship.rows[0]).toMatchObject({
+        state_uid: null,
+        state_deleted_at: expect.any(Date),
+        target_uid: null,
+        relationship_target_level: null,
+        gift_plan: {},
+        target_deleted_at: expect.any(Date),
+      });
+
+      expect({
+        recruited: (await admin.query("SELECT * FROM recruited_students WHERE user_id = 9 ORDER BY student_uid")).rows,
+        growth: (await admin.query("SELECT * FROM student_growth WHERE user_id = 9 ORDER BY student_uid")).rows,
+        relationship: (
+          await admin.query("SELECT * FROM user_relationship_levels WHERE user_id = 9 ORDER BY student_id")
+        ).rows,
+      }).toEqual(legacyCanonicalSnapshot);
+      const displayPairs = await admin.query(
+        [
+          "SELECT (s.recruited_student_uid IS NULL) = (s.recruited_at IS NULL)",
+          "  AND (s.recruited_student_uid IS NULL) = (s.tier IS NULL) AS recruited_pair,",
+          "  (t.student_growth_uid IS NULL) = (t.planner_added_at IS NULL) AS planner_pair,",
+          "  s.relationship_level_uid IS NOT DISTINCT FROM t.relationship_level_uid AS relationship_pair",
+          "FROM student_states s JOIN student_targets t USING (user_id, student_uid)",
+          "WHERE s.user_id = 9 AND s.student_uid = 'student-canonical'",
+        ].join(" "),
+      );
+      expect(displayPairs.rows[0]).toEqual({ recruited_pair: true, planner_pair: true, relationship_pair: true });
+
+      await admin.query(
+        [
+          "CREATE FUNCTION reject_canonical_student_state_audit() RETURNS trigger LANGUAGE plpgsql AS $$",
+          "BEGIN RAISE EXCEPTION 'canonical audit failure'; END;",
+          "$$;",
+          "CREATE TRIGGER reject_canonical_student_state_audit BEFORE INSERT ON student_state_audits",
+          "  FOR EACH ROW EXECUTE FUNCTION reject_canonical_student_state_audit();",
+        ].join("\n"),
+      );
+      const beforeFailedCanonicalWrite = await canonicalAuditCount();
+      await expect(
+        updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { targetLevel: 9 }, "nullable"),
+      ).rejects.toThrow(/insert into "student_state_audits"/);
+      await admin.query("DROP TRIGGER reject_canonical_student_state_audit ON student_state_audits");
+      await admin.query("DROP FUNCTION reject_canonical_student_state_audit()");
+      expect(await canonicalAuditCount()).toBe(beforeFailedCanonicalWrite);
+      expect(
+        (
+          await admin.query(
+            "SELECT relationship_target_level FROM student_targets WHERE user_id = 9 AND student_uid = 'student-canonical'",
+          )
+        ).rows[0].relationship_target_level,
+      ).toBeNull();
 
       await expect(
         app.db.transaction((tx) =>
@@ -1001,20 +1526,6 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
           cleanupErrors.push(error instanceof Error ? error : new Error(String(error)));
         }
       }
-
-      if (activationTransaction && !activationTransaction.connection.stream.destroyed) {
-        try {
-          await withTimeout(
-            activationTransaction.query("ROLLBACK"),
-            "Activation transaction rollback",
-            ASYNC_CLEANUP_TIMEOUT_MS,
-          );
-        } catch (error) {
-          activationTransaction.connection.stream.destroy();
-          cleanupErrors.push(error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-      activationTransaction = null;
 
       for (const client of clients) {
         if (client === admin) continue;

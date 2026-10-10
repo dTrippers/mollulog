@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { parseStudentStateDraftValue } from "~/domain/student-state";
+import { isStudentStateDraftFieldProvided, parseStudentStateDraftValue } from "~/domain/student-state";
 import { getAllStudentsMap } from "~/models/student";
 import { createSyncDraft } from "~/models/sync-draft";
 import { action } from "~/routes/connect.import._index";
@@ -253,7 +253,7 @@ describe("connect import action with the real sync draft model", () => {
     expect(storedEntries).toHaveLength(expectedCount);
     for (const entry of storedEntries) {
       const valueJson = entry.valueJson as string;
-      expect(Object.keys(JSON.parse(valueJson)).sort()).toEqual(["current", "target"]);
+      expect(Object.keys(JSON.parse(valueJson)).sort()).toEqual(["current", "providedFields", "target"]);
       const parsedValue = parseStudentStateDraftValue({ value: entry.value as number, valueJson });
       const expectedValue = parsedValue.current?.tier ?? parsedValue.target?.targetTier ?? 1;
       expect(entry.value).toBe(expectedValue);
@@ -276,7 +276,13 @@ describe("connect import action with the real sync draft model", () => {
 
     const byEntryKey = new Map(storedEntries.map((entry) => [entry.entryKey, entry]));
     expect(byEntryKey.get("1001")?.value).toBe(5);
-    expect(JSON.parse(byEntryKey.get("1001")?.valueJson as string).current).toMatchObject({ tier: 5, level: 80 });
+    const schaleDraft = parseStudentStateDraftValue({
+      value: byEntryKey.get("1001")?.value as number,
+      valueJson: byEntryKey.get("1001")?.valueJson as string,
+    });
+    expect(schaleDraft.current).toMatchObject({ tier: 5, level: 80 });
+    expect(isStudentStateDraftFieldProvided(schaleDraft, "current", "level")).toBe(true);
+    expect(isStudentStateDraftFieldProvided(schaleDraft, "current", "bond")).toBe(false);
     expect(byEntryKey.get("1002")?.value).toBe(3);
   });
 
@@ -296,6 +302,32 @@ describe("connect import action with the real sync draft model", () => {
     const value = JSON.parse(storedEntries[0]?.valueJson as string);
     expect(value.current).toMatchObject({ tier: 5, level: 80, bond: 50 });
     expect(value.target).toMatchObject({ targetTier: 6, targetLevel: 90, targetBond: 100 });
+    const parsedValue = parseStudentStateDraftValue({
+      value: storedEntries[0]?.value as number,
+      valueJson: storedEntries[0]?.valueJson as string,
+    });
+    expect(isStudentStateDraftFieldProvided(parsedValue, "current", "bond")).toBe(true);
+    expect(isStudentStateDraftFieldProvided(parsedValue, "target", "targetBond")).toBe(true);
+  });
+
+  it("preserves explicit nulls while ignoring external zero placeholders", async () => {
+    const db = new FakePostgresClient();
+    const result = await action({
+      request: importRequest(JSON.stringify({ "1001": { s: 5, b: null, l: 0, wl: 0 } })),
+      context: { cloudflare: { env: realModelEnv(db) } },
+      params: {},
+    } as never);
+
+    expect(result).toBeInstanceOf(Response);
+    const { storedEntries } = expectStoredEntriesAreReviewable(db, 1);
+    const parsedValue = parseStudentStateDraftValue({
+      value: storedEntries[0]?.value as number,
+      valueJson: storedEntries[0]?.valueJson as string,
+    });
+    expect(parsedValue.current).toMatchObject({ bond: null, level: null, weaponLevel: 0 });
+    expect(isStudentStateDraftFieldProvided(parsedValue, "current", "bond")).toBe(true);
+    expect(isStudentStateDraftFieldProvided(parsedValue, "current", "level")).toBe(false);
+    expect(isStudentStateDraftFieldProvided(parsedValue, "current", "weaponLevel")).toBe(false);
   });
 
   it("surfaces real model validation failures verbatim without logging them", async () => {

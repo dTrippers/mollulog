@@ -19,7 +19,7 @@ import { getLogger } from "~/lib/observability.server";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudents, type RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
-import { getRelationshipLevels } from "~/models/relationship-level";
+import { getRelationshipLevels, getStudentStateWriteMode } from "~/models/relationship-level";
 import { getStudentDetailData } from "~/models/student";
 import { saveStudentBasicInfo } from "~/models/student-basic-info";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
@@ -52,13 +52,6 @@ const currentStateFieldKeys = [
   "abilityHeal",
 ] as const satisfies (keyof RecruitedStudentCurrentStateInput)[];
 
-const equipmentLevelFieldKeys = ["equip1Level", "equip2Level", "equip3Level"] as const;
-type EquipmentLevelField = (typeof equipmentLevelFieldKeys)[number];
-
-function isEquipmentLevelField(field: (typeof currentStateFieldKeys)[number]): field is EquipmentLevelField {
-  return equipmentLevelFieldKeys.includes(field as EquipmentLevelField);
-}
-
 type StudentBasicInfoActionData =
   | { ok: true }
   | {
@@ -77,9 +70,9 @@ function parseNullableInteger(value: unknown): number | null {
 
 export function toStudentBasicInfoCurrentStateInput(
   payload: Record<string, unknown>,
-): RecruitedStudentCurrentStateInput {
+): Partial<RecruitedStudentCurrentStateInput> {
   return currentStateFieldKeys.reduce((result, field) => {
-    if (isEquipmentLevelField(field) && !Object.hasOwn(payload, field)) {
+    if (!Object.hasOwn(payload, field)) {
       return result;
     }
     result[field] = parseNullableInteger(payload[field]);
@@ -147,6 +140,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const studentDetailContentPromise = getStudentDetailContent(publicReadEnv, uid, { ctx });
 
   const currentUser = await currentUserPromise;
+  const writeModePromise = currentUser ? getStudentStateWriteMode(env) : Promise.resolve("legacy" as const);
   const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
   const variantPrimaryStudentUids = student.character.studentVariants.map((variant) => variant.primaryStudent.uid);
   const recruitedStudentsPromise = currentUser ? getRecruitedStudents(env, currentUser.id) : Promise.resolve([]);
@@ -162,6 +156,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudents,
     relationshipLevels,
     studentDetailContent,
+    writeMode,
   ] = await Promise.all([
     getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
     getTagCountsByStudent(env, uid),
@@ -170,6 +165,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitedStudentsPromise,
     relationshipLevelsPromise,
     studentDetailContentPromise,
+    writeModePromise,
   ]);
 
   if (studentDetailContent.publishedSummaryError) {
@@ -223,6 +219,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     knowledgeEntries: studentDetailContent.knowledgeEntries,
     knowledgeLookupStatus: studentDetailContent.knowledgeLookupStatus,
     currentUser,
+    initialWriteMode: writeMode,
     allRaids,
   };
 };
@@ -272,17 +269,30 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     return data<StudentBasicInfoActionData>({ ok: false, error: "출시되지 않은 학생이에요" }, { status: 400 });
   }
 
-  let tier: number;
-  let currentState: RecruitedStudentCurrentStateInput;
-  let relationshipBonds: Record<string, number>;
+  let tier: number | undefined;
+  let requestMode: "legacy" | "nullable";
+  let currentState: Partial<RecruitedStudentCurrentStateInput>;
+  let relationshipBonds: Record<string, number | null>;
   try {
-    tier = parseNullableInteger(payload.tier) ?? student.initialTier;
-    if (tier < student.initialTier) {
+    if (payload.stateFormat != null && payload.stateFormat !== "legacy" && payload.stateFormat !== "nullable") {
+      throw new Error("저장 형식이 올바르지 않아요");
+    }
+    requestMode = payload.stateFormat === "nullable" ? "nullable" : "legacy";
+    const parsedTier = Object.hasOwn(payload, "tier") ? parseNullableInteger(payload.tier) : null;
+    tier = requestMode === "nullable" ? (parsedTier ?? undefined) : (parsedTier ?? student.initialTier);
+    if (tier != null && tier < student.initialTier) {
       throw new Error(`성급은 최초 성급인 ${student.initialTier}성보다 낮게 설정할 수 없어요`);
     }
     currentState = toStudentBasicInfoCurrentStateInput(payload);
-    validateStudentEquipmentLevels(student, studentDetailData?.studentCatalog, currentState);
-    const bond = parseNullableInteger(payload.bond);
+    if (requestMode === "legacy") {
+      validateStudentEquipmentLevels(student, studentDetailData?.studentCatalog, {
+        equip1: currentState.equip1 ?? 1,
+        equip2: currentState.equip2 ?? 1,
+        equip3: currentState.equip3 ?? 1,
+        ...currentState,
+      });
+    }
+    const bond = Object.hasOwn(payload, "bond") ? parseNullableInteger(payload.bond) : undefined;
     if (bond != null && (bond < 1 || bond > 100)) {
       throw new Error("인연 랭크는 1부터 100 사이만 입력할 수 있어요");
     }
@@ -296,7 +306,9 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
 
     const stateStudentUid = student.studentVariant.primaryStudent.uid;
     relationshipBonds = { ...relatedBonds };
-    if (bond != null) relationshipBonds[stateStudentUid] = bond;
+    if (bond !== undefined && (requestMode === "nullable" || bond != null)) {
+      relationshipBonds[stateStudentUid] = bond;
+    }
   } catch (error) {
     return data<StudentBasicInfoActionData>(
       { ok: false, error: error instanceof Error ? error.message : "입력값을 확인해주세요" },
@@ -306,7 +318,18 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
 
   const stateStudentUid = student.studentVariant.primaryStudent.uid;
   try {
-    await saveStudentBasicInfo(env, currentUser.id, stateStudentUid, { tier, currentState, relationshipBonds });
+    await saveStudentBasicInfo(
+      env,
+      currentUser.id,
+      stateStudentUid,
+      { tier, currentState, relationshipBonds },
+      {
+        requestMode: requestMode!,
+        ...(requestMode === "nullable"
+          ? { equipmentValidation: { student, catalog: studentDetailData?.studentCatalog } }
+          : {}),
+      },
+    );
     return data<StudentBasicInfoActionData>({ ok: true });
   } catch (error) {
     if (isStaleStudentStateRequestError(error)) {
@@ -341,10 +364,12 @@ export default function StudentDetail() {
     studentCatalog,
     myStudentState,
     myRelationshipLevels,
+    initialWriteMode,
     publishedSummary,
     knowledgeEntries,
     knowledgeLookupStatus,
   } = useLoaderData<typeof loader>();
+  const [writeMode] = useState(initialWriteMode);
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
   useEffect(() => {
@@ -390,6 +415,7 @@ export default function StudentDetail() {
               released={student.released}
               recruited={myStudentState !== null}
               relatedRelationshipLevels={myRelationshipLevels}
+              nullableSemantics={writeMode === "nullable"}
               knowledgeEntries={knowledgeEntries}
               knowledgeLookupStatus={knowledgeLookupStatus}
               aiSummary={

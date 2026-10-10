@@ -33,7 +33,7 @@ export type MoreCurrentUser = {
     targetStudentCount: number;
     targetStudents: {
       uid: string;
-      currentLevel: number;
+      currentLevel: number | null;
     }[];
   };
 };
@@ -140,9 +140,15 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
         ({ source }) => source.type === "event" && source.event?.uid === nextFavoritedRecruitment.uid,
       ) ?? null)
     : null;
-  const relationshipTargets = relationshipLevels
-    .filter(({ currentLevel, targetLevel }) => targetLevel > currentLevel)
-    .sort((a, b) => b.currentLevel - a.currentLevel || b.targetLevel - a.targetLevel);
+  const savedRelationships = relationshipLevels.filter(
+    ({ currentLevel, targetLevel, items }) =>
+      currentLevel != null || targetLevel != null || Object.values(items).some((quantity) => quantity > 0),
+  );
+  const relationshipTargets = savedRelationships
+    .filter(
+      ({ currentLevel, targetLevel }) => targetLevel != null && (currentLevel == null || targetLevel > currentLevel),
+    )
+    .sort((a, b) => (b.currentLevel ?? 0) - (a.currentLevel ?? 0) || (b.targetLevel ?? 0) - (a.targetLevel ?? 0));
   const relationshipTargetStudents = relationshipTargets.slice(0, 3).map(({ studentId, currentLevel }) => ({
     uid: studentId,
     currentLevel,
@@ -173,7 +179,7 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
         }
       : null,
     relationship: {
-      savedCount: relationshipLevels.length,
+      savedCount: savedRelationships.length,
       targetStudentCount: relationshipTargets.length,
       targetStudents: relationshipTargetStudents,
     },

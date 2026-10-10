@@ -3,13 +3,20 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getOcrJob } from "~/models/ocr-job";
+import { getRecruitedStudents } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
+import { getAllStudentsMap } from "~/models/student";
 import { getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { loader } from "~/routes/api.ocr.jobs.$jobUid";
+import studentVideoResult from "../../fixtures/student-detail-video-result.v1.json";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
 jest.mock("~/models/ocr-job", () => ({ getOcrJob: jest.fn() }));
+jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: jest.fn() }));
+jest.mock("~/models/relationship-level", () => ({ getRelationshipLevels: jest.fn() }));
+jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
 jest.mock("~/models/sync-draft", () => ({ getSyncDraftBySourceRef: jest.fn() }));
 jest.mock("~/models/user-resource-inventory", () => ({ getUserResourceInventoryMapByItemUids: jest.fn() }));
 jest.mock("~/models/item-catalog", () => ({
@@ -22,6 +29,9 @@ type DataResult<T> = { type: "DataWithResponseInit"; data: T; init: ResponseInit
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetLogger = getLogger as jest.MockedFunction<typeof getLogger>;
 const mockedGetOcrJob = getOcrJob as jest.MockedFunction<typeof getOcrJob>;
+const mockedGetRecruitedStudents = getRecruitedStudents as jest.MockedFunction<typeof getRecruitedStudents>;
+const mockedGetRelationshipLevels = getRelationshipLevels as jest.MockedFunction<typeof getRelationshipLevels>;
+const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
 const mockedGetSyncDraftBySourceRef = getSyncDraftBySourceRef as jest.MockedFunction<typeof getSyncDraftBySourceRef>;
 const mockedGetInventory = getUserResourceInventoryMapByItemUids as jest.MockedFunction<
   typeof getUserResourceInventoryMapByItemUids
@@ -77,6 +87,9 @@ describe("OCR job detail cell review", () => {
     mockedGetActiveSensei.mockResolvedValue({ id: 7 } as never);
     mockedGetLogger.mockReturnValue(logger);
     mockedGetOcrJob.mockResolvedValue(job as never);
+    mockedGetRecruitedStudents.mockResolvedValue([] as never);
+    mockedGetRelationshipLevels.mockResolvedValue([] as never);
+    mockedGetAllStudentsMap.mockResolvedValue({} as never);
     mockedGetSyncDraftBySourceRef.mockResolvedValue(null);
     mockedGetInventory.mockResolvedValue({ "100": 1 });
     mockedGetCatalogMap.mockResolvedValue({
@@ -179,5 +192,25 @@ describe("OCR job detail cell review", () => {
     expect(response.data.status).toBe("processing");
     expect(response.data.reviewError).toBeUndefined();
     expect(response.data.cells).toEqual([]);
+  });
+
+  it("keeps an unset current relationship rank null in a student OCR result", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      jobKind: "student_detail_video_v1",
+      result: studentVideoResult,
+    } as never);
+    mockedGetRelationshipLevels.mockResolvedValue([
+      { studentId: "10000", currentLevel: null, currentExp: null, targetLevel: null, items: {} },
+    ] as never);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      "10000": { uid: "10000", name: "Student A", initialTier: 3 },
+    } as never);
+
+    const response = expectDataResult<{
+      currentStudentStates: Record<string, { bond: number | null }>;
+    }>(await loader(args()));
+
+    expect(response.data.currentStudentStates["10000"]?.bond).toBeNull();
   });
 });

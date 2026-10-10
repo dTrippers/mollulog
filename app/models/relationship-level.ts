@@ -2,12 +2,19 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { pgRelationshipLevelsTable, pgStudentStatesTable, pgStudentTargetsTable } from "~/db/postgres/schema";
-import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
+import {
+  isStudentNullableSemanticsEnabledInTransaction,
+  patchCanonicalRelationship,
+  type StudentStateRequestMode,
+  type StudentStateWriteMode,
+  withStudentStateProjection,
+} from "~/db/postgres/student-state-projection";
 import {
   getRelationshipGiftPlanValidationError,
   getRelationshipLevelValidationError,
   type RelationshipLevelInput,
 } from "~/domain/relationship-level";
+import { ActionValidationError } from "~/lib/action-errors";
 import { withPostgresClient } from "~/lib/postgres.server";
 
 export {
@@ -20,12 +27,19 @@ const PG_IN_QUERY_CHUNK_SIZE = 500;
 
 export const relationshipLevelsTable = pgRelationshipLevelsTable;
 
+export async function getStudentStateWriteMode(env: Env): Promise<StudentStateWriteMode> {
+  return withPostgresClient(env, async (client) => {
+    const enabled = await drizzle(client).transaction(async (tx) => isStudentNullableSemanticsEnabledInTransaction(tx));
+    return enabled ? "nullable" : "legacy";
+  });
+}
+
 export type RelationshipLevel = {
   uid: string;
   studentId: string;
-  currentLevel: number;
+  currentLevel: number | null;
   currentExp: number | null;
-  targetLevel: number;
+  targetLevel: number | null;
   items: Record<string, number>;
 };
 
@@ -66,10 +80,6 @@ function toModel(state: RelationshipStateRow, target: RelationshipTargetRow): Re
   ) {
     throw new Error("Student relationship projection is inconsistent between current state and targets.");
   }
-  if (state.relationshipCurrentLevel == null || target.relationshipTargetLevel == null) {
-    throw new Error("Student relationship projection is missing required rank data.");
-  }
-
   return {
     uid: state.relationshipLevelUid,
     studentId: state.studentUid,
@@ -197,48 +207,78 @@ export async function updateRelationshipLevel(
   env: Env,
   senseiId: number,
   studentId: string,
-  input: RelationshipLevelInput,
+  input: Partial<RelationshipLevelInput> & { currentExp?: number | null },
+  requestMode: StudentStateRequestMode = "legacy",
 ) {
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
-        const [existing] = await lockedTx
-          .select()
-          .from(relationshipLevelsTable)
-          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
-          .limit(1)
-          .for("update");
-        const resolved = resolveRelationshipLevelInput(existing ?? null, input);
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentId],
+        "relationship_level",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            const validationError = getRelationshipLevelValidationError(
+              { currentLevel: input.currentLevel ?? null, targetLevel: input.targetLevel ?? null },
+              true,
+            );
+            if (validationError) throw new ActionValidationError(validationError);
+            await patchCanonicalRelationship(lockedTx, senseiId, studentId, {
+              ...(Object.hasOwn(input, "currentLevel") ? { currentLevel: input.currentLevel } : {}),
+              ...(Object.hasOwn(input, "currentExp") ? { currentExp: input.currentExp } : {}),
+              ...(Object.hasOwn(input, "targetLevel") ? { targetLevel: input.targetLevel } : {}),
+            });
+            return;
+          }
+          const [existing] = await lockedTx
+            .select()
+            .from(relationshipLevelsTable)
+            .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
+            .limit(1)
+            .for("update");
+          if (!Object.hasOwn(input, "currentLevel") || !Object.hasOwn(input, "targetLevel")) {
+            throw new ActionValidationError("현재와 목표 인연 랭크를 입력해주세요");
+          }
+          const resolved = resolveRelationshipLevelInput(existing ?? null, {
+            currentLevel: input.currentLevel ?? null,
+            targetLevel: input.targetLevel ?? null,
+          });
 
-        if (resolved == null) {
+          if (resolved == null) {
+            await lockedTx
+              .delete(relationshipLevelsTable)
+              .where(
+                and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)),
+              );
+            return;
+          }
+
           await lockedTx
-            .delete(relationshipLevelsTable)
-            .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
-          return;
-        }
-
-        await lockedTx
-          .insert(relationshipLevelsTable)
-          .values({
-            uid: nanoid(8),
-            userId: senseiId,
-            studentId,
-            currentLevel: resolved.currentLevel,
-            currentExp: resolved.currentExp,
-            targetLevel: resolved.targetLevel,
-            items: existing ? normalizeRelationshipItems(existing.items) : {},
-          })
-          .onConflictDoUpdate({
-            target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
-            set: {
+            .insert(relationshipLevelsTable)
+            .values({
+              uid: nanoid(8),
+              userId: senseiId,
+              studentId,
               currentLevel: resolved.currentLevel,
               currentExp: resolved.currentExp,
               targetLevel: resolved.targetLevel,
-              updatedAt: new Date(),
-            },
-          });
-      });
+              items: existing ? normalizeRelationshipItems(existing.items) : {},
+            })
+            .onConflictDoUpdate({
+              target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
+              set: {
+                currentLevel: resolved.currentLevel,
+                currentExp: resolved.currentExp,
+                targetLevel: resolved.targetLevel,
+                updatedAt: new Date(),
+              },
+            });
+        },
+        null,
+        requestMode,
+      );
     });
   });
 }
@@ -247,37 +287,66 @@ export async function upsertRelationshipLevel(
   env: Env,
   senseiId: number,
   studentId: string,
-  currentLevel: number,
-  currentExp: number | null,
-  targetLevel: number,
-  items: Record<string, number>,
+  currentLevel: number | null | undefined,
+  currentExp: number | null | undefined,
+  targetLevel: number | null | undefined,
+  items: Record<string, number> | undefined,
+  requestMode: StudentStateRequestMode | null = "legacy",
 ) {
-  assertValidRelationshipLevelInput({ currentLevel, targetLevel });
-  const giftPlanError = getRelationshipGiftPlanValidationError(items);
-  if (giftPlanError) {
-    throw new Error(giftPlanError);
-  }
-
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
-        await lockedTx
-          .insert(relationshipLevelsTable)
-          .values({
-            uid: nanoid(8),
-            userId: senseiId,
-            studentId,
-            currentLevel,
-            currentExp,
-            targetLevel,
-            items,
-          })
-          .onConflictDoUpdate({
-            target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
-            set: { currentLevel, currentExp, targetLevel, items, updatedAt: new Date() },
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentId],
+        "relationship_level",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            const validationError = getRelationshipLevelValidationError(
+              { currentLevel: currentLevel ?? null, targetLevel: targetLevel ?? null },
+              true,
+            );
+            if (validationError) throw new ActionValidationError(validationError);
+            const giftPlanError = items == null ? null : getRelationshipGiftPlanValidationError(items);
+            if (giftPlanError) throw new ActionValidationError(giftPlanError);
+            await patchCanonicalRelationship(lockedTx, senseiId, studentId, {
+              ...(currentLevel !== undefined ? { currentLevel } : {}),
+              ...(currentExp !== undefined ? { currentExp } : {}),
+              ...(targetLevel !== undefined ? { targetLevel } : {}),
+              ...(items !== undefined ? { items } : {}),
+            });
+            return;
+          }
+          const validationError = getRelationshipLevelValidationError({
+            currentLevel: currentLevel ?? null,
+            targetLevel: targetLevel ?? null,
           });
-      });
+          if (validationError) throw new ActionValidationError(validationError);
+          const giftPlanError = items == null ? null : getRelationshipGiftPlanValidationError(items);
+          if (giftPlanError) throw new ActionValidationError(giftPlanError);
+          if (currentLevel == null || targetLevel == null || items == null) {
+            throw new ActionValidationError("현재와 목표 인연 랭크를 입력해주세요");
+          }
+          await lockedTx
+            .insert(relationshipLevelsTable)
+            .values({
+              uid: nanoid(8),
+              userId: senseiId,
+              studentId,
+              currentLevel,
+              currentExp: currentExp ?? null,
+              targetLevel,
+              items,
+            })
+            .onConflictDoUpdate({
+              target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
+              set: { currentLevel, currentExp: currentExp ?? null, targetLevel, items, updatedAt: new Date() },
+            });
+        },
+        null,
+        requestMode,
+      );
     });
   });
 }
@@ -286,11 +355,28 @@ export async function removeRelationshipLevel(env: Env, senseiId: number, studen
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
-        await lockedTx
-          .delete(relationshipLevelsTable)
-          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
-      });
+      await withStudentStateProjection(
+        tx,
+        senseiId,
+        [studentId],
+        "relationship_level",
+        async (lockedTx, context) => {
+          if (context.mode === "nullable") {
+            await patchCanonicalRelationship(lockedTx, senseiId, studentId, {
+              currentLevel: null,
+              currentExp: null,
+              targetLevel: null,
+              items: {},
+            });
+            return;
+          }
+          await lockedTx
+            .delete(relationshipLevelsTable)
+            .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
+        },
+        null,
+        null,
+      );
     });
   });
 }

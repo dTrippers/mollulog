@@ -6,16 +6,39 @@ import {
   pgRecruitedStudentsTable,
   pgRelationshipLevelsTable,
   pgStudentGrowthTable,
+  pgStudentStatesTable,
+  pgStudentTargetsTable,
   pgSyncDraftEntriesTable,
   pgSyncDraftsTable,
 } from "~/db/postgres/schema";
-import { type StudentStateTransaction, withStudentStateProjection } from "~/db/postgres/student-state-projection";
-import { parseStudentStateDraftValue, type StudentStateDraftValue } from "~/domain/student-state";
+import {
+  patchCanonicalRelationship,
+  patchCanonicalStudentState,
+  patchCanonicalStudentTarget,
+  type StudentStateTransaction,
+  withStudentStateProjection,
+} from "~/db/postgres/student-state-projection";
+import {
+  isStudentStateDraftFieldProvided,
+  mergeStudentStateDraftValueForUpdate,
+  parseStudentStateDraftValue,
+  type StudentStateCurrentComparisonValue,
+  type StudentStateDraftValue,
+  type StudentStateTargetComparisonValue,
+  studentStateCurrentFields,
+  studentStateTargetFields,
+} from "~/domain/student-state";
 import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_WRITE_CHUNK_SIZE = 500;
 const PG_IN_QUERY_CHUNK_SIZE = 500;
 type SyncDraftDb = StudentStateTransaction;
+
+export type SyncDraftStudentStateMetadata = { initialTier: number; hasGear: boolean };
+export type ApplySyncDraftOptions = {
+  studentStateMetadataByKey?: Record<string, SyncDraftStudentStateMetadata>;
+  mergeReviewedStudentState: boolean;
+};
 
 export const syncDraftsTable = pgSyncDraftsTable;
 export const syncDraftEntriesTable = pgSyncDraftEntriesTable;
@@ -343,6 +366,7 @@ export async function createAndApplySyncDraft(
         await applyEntries(tx, userId, input.type, appliedEntries, {
           preserveNullStudentStateFields: input.source === "first_party_ocr",
           sourceRef: draftUid,
+          source: input.source,
         });
         const now = new Date();
         await tx
@@ -410,7 +434,12 @@ export async function updateSyncDraftEntries(
   });
 }
 
-export async function applySyncDraft(env: Env, userId: number, draftUid: string) {
+export async function applySyncDraft(
+  env: Env,
+  userId: number,
+  draftUid: string,
+  options: ApplySyncDraftOptions = { mergeReviewedStudentState: false },
+) {
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
@@ -422,6 +451,9 @@ export async function applySyncDraft(env: Env, userId: number, draftUid: string)
       await applyEntries(tx, userId, draft.type, normalizedEntries, {
         preserveNullStudentStateFields: draft.source === "first_party_ocr",
         sourceRef: draftUid,
+        source: draft.source,
+        mergeReviewedStudentState: options.mergeReviewedStudentState,
+        studentStateMetadataByKey: options.studentStateMetadataByKey,
       });
       const now = new Date();
       await tx
@@ -510,7 +542,13 @@ async function applyEntries(
   userId: number,
   type: SyncDraftType,
   entries: Array<{ entryKey: string; value: number } | { entryKey: string; value: StudentStateDraftValue }>,
-  options: { preserveNullStudentStateFields: boolean; sourceRef?: string | null },
+  options: {
+    preserveNullStudentStateFields: boolean;
+    source: SyncDraftSource;
+    sourceRef?: string | null;
+    mergeReviewedStudentState?: boolean;
+    studentStateMetadataByKey?: Record<string, SyncDraftStudentStateMetadata>;
+  },
 ) {
   if (type === "student_state") {
     const studentEntries = entries.map((entry) => ({
@@ -522,8 +560,27 @@ async function applyEntries(
       userId,
       studentEntries.map((entry) => entry.entryKey),
       "sync_draft",
-      async (lockedTx) => applyStudentStateEntries(lockedTx, userId, studentEntries, options),
+      async (lockedTx, context) => {
+        if (context.mode === "nullable") {
+          await applyCanonicalStudentStateEntries(lockedTx, userId, studentEntries, {
+            source: options.source,
+            metadataByKey: options.studentStateMetadataByKey,
+          });
+          return;
+        }
+
+        const legacyEntries = options.mergeReviewedStudentState
+          ? await mergeReviewedLegacyStudentStateEntries(
+              lockedTx,
+              userId,
+              studentEntries,
+              options.studentStateMetadataByKey,
+            )
+          : studentEntries;
+        await applyStudentStateEntries(lockedTx, userId, legacyEntries, options);
+      },
       options.sourceRef ?? null,
+      null,
     );
     return;
   }
@@ -534,7 +591,25 @@ async function applyEntries(
       userId,
       recruitedEntries.map((entry) => entry.entryKey),
       "sync_draft",
-      async (lockedTx) => {
+      async (lockedTx, context) => {
+        if (context.mode === "nullable") {
+          for (const entry of recruitedEntries) {
+            const [existing] = await lockedTx
+              .select({
+                recruitedStudentUid: pgStudentStatesTable.recruitedStudentUid,
+                recruitedAt: pgStudentStatesTable.recruitedAt,
+              })
+              .from(pgStudentStatesTable)
+              .where(and(eq(pgStudentStatesTable.userId, userId), eq(pgStudentStatesTable.studentUid, entry.entryKey)))
+              .limit(1);
+            await patchCanonicalStudentState(lockedTx, userId, entry.entryKey, {
+              recruitedStudentUid: existing?.recruitedStudentUid ?? nanoid(8),
+              recruitedAt: existing?.recruitedAt ?? new Date().toISOString(),
+              tier: Number(entry.value),
+            });
+          }
+          return;
+        }
         for (let offset = 0; offset < recruitedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
           const chunk = recruitedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
           await lockedTx
@@ -554,6 +629,7 @@ async function applyEntries(
         }
       },
       options.sourceRef ?? null,
+      null,
     );
     return;
   }
@@ -749,6 +825,221 @@ async function applyStudentStateEntries(
         },
       });
   });
+}
+
+type StudentStateApplyMetadata = SyncDraftStudentStateMetadata;
+
+async function mergeReviewedLegacyStudentStateEntries(
+  db: SyncDraftDb,
+  userId: number,
+  entries: StudentStateApplyEntry[],
+  metadataByKey: Record<string, StudentStateApplyMetadata> | undefined,
+): Promise<StudentStateApplyEntry[]> {
+  const mergedEntries: StudentStateApplyEntry[] = [];
+  for (const entry of entries) {
+    const [recruited] = await db
+      .select()
+      .from(pgRecruitedStudentsTable)
+      .where(and(eq(pgRecruitedStudentsTable.userId, userId), eq(pgRecruitedStudentsTable.studentUid, entry.entryKey)))
+      .limit(1);
+    const [relationship] = await db
+      .select()
+      .from(pgRelationshipLevelsTable)
+      .where(and(eq(pgRelationshipLevelsTable.userId, userId), eq(pgRelationshipLevelsTable.studentId, entry.entryKey)))
+      .limit(1);
+    const [growth] = await db
+      .select()
+      .from(pgStudentGrowthTable)
+      .where(and(eq(pgStudentGrowthTable.userId, userId), eq(pgStudentGrowthTable.studentUid, entry.entryKey)))
+      .limit(1);
+    const existing = {
+      current: {
+        tier: recruited?.tier ?? null,
+        level: recruited?.level ?? null,
+        weaponLevel: recruited?.weaponLevel ?? null,
+        skillEx: recruited?.skillEx ?? null,
+        skillNormal: recruited?.skillNormal ?? null,
+        skillEnhanced: recruited?.skillEnhanced ?? null,
+        skillSub: recruited?.skillSub ?? null,
+        equip1: recruited?.equip1 ?? null,
+        equip2: recruited?.equip2 ?? null,
+        equip3: recruited?.equip3 ?? null,
+        equipSpecial: recruited?.equipSpecial ?? null,
+        abilityHp: recruited?.abilityHp ?? null,
+        abilityAtk: recruited?.abilityAtk ?? null,
+        abilityHeal: recruited?.abilityHeal ?? null,
+        bond: relationship?.currentLevel ?? null,
+      } satisfies StudentStateCurrentComparisonValue,
+      target: {
+        targetBond: relationship?.targetLevel ?? null,
+        targetLevel: growth?.targetLevel ?? null,
+        targetTier: growth?.targetTier ?? null,
+        targetWeaponLevel: growth?.targetWeaponLevel ?? null,
+        targetSkillEx: growth?.targetSkillEx ?? null,
+        targetSkillNormal: growth?.targetSkillNormal ?? null,
+        targetSkillEnhanced: growth?.targetSkillEnhanced ?? null,
+        targetSkillSub: growth?.targetSkillSub ?? null,
+        targetEquip1: growth?.targetEquip1 ?? null,
+        targetEquip2: growth?.targetEquip2 ?? null,
+        targetEquip3: growth?.targetEquip3 ?? null,
+        targetEquipSpecial: growth?.targetEquipSpecial ?? null,
+        targetAbilityHp: growth?.targetAbilityHp ?? null,
+        targetAbilityAtk: growth?.targetAbilityAtk ?? null,
+        targetAbilityHeal: growth?.targetAbilityHeal ?? null,
+      } satisfies StudentStateTargetComparisonValue,
+    };
+    const metadata = metadataByKey?.[entry.entryKey] ?? { initialTier: 1, hasGear: true };
+    mergedEntries.push({
+      entryKey: entry.entryKey,
+      state: mergeStudentStateDraftValueForUpdate(entry.state, existing, metadata, "legacy"),
+    });
+  }
+  return mergedEntries;
+}
+
+async function applyCanonicalStudentStateEntries(
+  db: SyncDraftDb,
+  userId: number,
+  entries: StudentStateApplyEntry[],
+  options: {
+    source: SyncDraftSource;
+    metadataByKey?: Record<string, StudentStateApplyMetadata>;
+  },
+) {
+  const currentFieldMap = {
+    tier: "tier",
+    level: "level",
+    skillEx: "skillEx",
+    skillNormal: "skillNormal",
+    skillEnhanced: "skillEnhanced",
+    skillSub: "skillSub",
+    equip1: "equip1",
+    equip2: "equip2",
+    equip3: "equip3",
+    equipSpecial: "equipSpecial",
+    weaponLevel: "weaponLevel",
+    abilityHp: "abilityHp",
+    abilityAtk: "abilityAtk",
+    abilityHeal: "abilityHeal",
+  } as const;
+  const targetFieldMap = {
+    targetTier: "targetTier",
+    targetLevel: "targetLevel",
+    targetWeaponLevel: "targetWeaponLevel",
+    targetSkillEx: "targetSkillEx",
+    targetSkillNormal: "targetSkillNormal",
+    targetSkillEnhanced: "targetSkillEnhanced",
+    targetSkillSub: "targetSkillSub",
+    targetEquip1: "targetEquip1",
+    targetEquip2: "targetEquip2",
+    targetEquip3: "targetEquip3",
+    targetEquipSpecial: "targetEquipSpecial",
+    targetAbilityHp: "targetAbilityHp",
+    targetAbilityAtk: "targetAbilityAtk",
+    targetAbilityHeal: "targetAbilityHeal",
+  } as const;
+
+  for (const { entryKey: studentUid, state } of entries) {
+    const metadata = options.metadataByKey?.[studentUid] ?? { initialTier: 1, hasGear: true };
+    if (state.current) {
+      const [existing] = await db
+        .select()
+        .from(pgStudentStatesTable)
+        .where(and(eq(pgStudentStatesTable.userId, userId), eq(pgStudentStatesTable.studentUid, studentUid)))
+        .limit(1);
+      const currentPatch: Record<string, unknown> = {};
+      for (const [sourceField, targetField] of Object.entries(currentFieldMap)) {
+        const fieldDefinition = studentStateCurrentFields.find(({ key }) => key === sourceField);
+        const value = state.current[sourceField as keyof typeof currentFieldMap];
+        if (
+          isStudentStateDraftFieldProvided(state, "current", sourceField) &&
+          shouldApplyCanonicalStudentStateField(options.source, value, fieldDefinition, metadata)
+        ) {
+          currentPatch[targetField] = value ?? null;
+        }
+      }
+      if (Object.keys(currentPatch).length > 0 || existing?.recruitedStudentUid != null) {
+        if (existing?.recruitedStudentUid == null) {
+          currentPatch.recruitedStudentUid = nanoid(8);
+          currentPatch.recruitedAt = new Date().toISOString();
+          if (!Object.hasOwn(currentPatch, "tier")) currentPatch.tier = metadata.initialTier;
+        }
+        await patchCanonicalStudentState(
+          db,
+          userId,
+          studentUid,
+          currentPatch as Parameters<typeof patchCanonicalStudentState>[3],
+        );
+      }
+
+      if (
+        isStudentStateDraftFieldProvided(state, "current", "bond") &&
+        shouldApplyCanonicalStudentStateField(
+          options.source,
+          state.current.bond,
+          studentStateCurrentFields.find(({ key }) => key === "bond"),
+          metadata,
+        )
+      ) {
+        await patchCanonicalRelationship(db, userId, studentUid, { currentLevel: state.current.bond });
+      }
+    }
+
+    if (state.target) {
+      const [existing] = await db
+        .select()
+        .from(pgStudentTargetsTable)
+        .where(and(eq(pgStudentTargetsTable.userId, userId), eq(pgStudentTargetsTable.studentUid, studentUid)))
+        .limit(1);
+      const targetPatch: Record<string, unknown> = {};
+      let hasGrowthTargetField = existing?.studentGrowthUid != null;
+      for (const [sourceField, targetField] of Object.entries(targetFieldMap)) {
+        const fieldDefinition = studentStateTargetFields.find(({ key }) => key === sourceField);
+        const value = state.target[sourceField as keyof typeof targetFieldMap];
+        if (
+          isStudentStateDraftFieldProvided(state, "target", sourceField) &&
+          shouldApplyCanonicalStudentStateField(options.source, value, fieldDefinition, metadata)
+        ) {
+          targetPatch[targetField] = value;
+          if (value != null) hasGrowthTargetField = true;
+        }
+      }
+      if (hasGrowthTargetField) {
+        targetPatch.studentGrowthUid = existing?.studentGrowthUid ?? nanoid(8);
+        targetPatch.plannerAddedAt = existing?.plannerAddedAt ?? new Date().toISOString();
+        await patchCanonicalStudentTarget(
+          db,
+          userId,
+          studentUid,
+          targetPatch as Parameters<typeof patchCanonicalStudentTarget>[3],
+        );
+      }
+      if (
+        isStudentStateDraftFieldProvided(state, "target", "targetBond") &&
+        shouldApplyCanonicalStudentStateField(
+          options.source,
+          state.target.targetBond,
+          studentStateTargetFields.find(({ key }) => key === "targetBond"),
+          metadata,
+        )
+      ) {
+        await patchCanonicalRelationship(db, userId, studentUid, { targetLevel: state.target.targetBond });
+      }
+    }
+  }
+}
+
+function shouldApplyCanonicalStudentStateField(
+  source: SyncDraftSource,
+  value: number | null,
+  field: (typeof studentStateCurrentFields)[number] | (typeof studentStateTargetFields)[number] | undefined,
+  metadata: StudentStateApplyMetadata,
+): boolean {
+  if (!field || (field.gearOnly && !metadata.hasGear)) return false;
+  if (source !== "web" && source !== "connect") return true;
+  if (value == null) return true;
+  const minimum = field.kind === "tier" ? metadata.initialTier : field.min;
+  return value > minimum;
 }
 
 function recruitedStudentConflictSet(preserveNullFields: boolean) {

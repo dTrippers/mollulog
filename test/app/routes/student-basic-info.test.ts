@@ -15,6 +15,10 @@ const mockSaveStudentBasicInfo =
         currentState: RecruitedStudentCurrentStateInput;
         relationshipBonds: Record<string, number>;
       },
+      options: {
+        requestMode: "legacy" | "nullable";
+        equipmentValidation?: { student: { equipments: string[] }; catalog: unknown };
+      },
     ) => Promise<void>
   >();
 const mockGetRelationshipLevels =
@@ -242,6 +246,33 @@ describe("student basic info equipment-level action", () => {
         currentState: expect.objectContaining({ equip1Level: 10 }),
         relationshipBonds: {},
       }),
+      { requestMode: "legacy" },
+    );
+  });
+
+  it("defers nullable equipment validation to the locked save with catalog metadata", async () => {
+    const response = await action({
+      params: { id: "student-a" },
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.test/students/student-a", {
+        method: "POST",
+        body: JSON.stringify({ stateFormat: "nullable", equip1Level: 20 }),
+        headers: { "Content-Type": "application/json" },
+      }),
+    } as never);
+
+    expect(response).toMatchObject({ data: { ok: true } });
+    expect(mockSaveStudentBasicInfo).toHaveBeenCalledWith(
+      env,
+      1,
+      "student-a",
+      expect.objectContaining({ currentState: { equip1Level: 20 } }),
+      expect.objectContaining({
+        requestMode: "nullable",
+        equipmentValidation: expect.objectContaining({
+          student: expect.objectContaining({ equipments: ["hat", "bag", "shoes"] }),
+        }),
+      }),
     );
   });
 
@@ -264,6 +295,7 @@ describe("student basic info equipment-level action", () => {
       expect.objectContaining({
         currentState: expect.not.objectContaining({ includeSkillEffects: expect.anything() }),
       }),
+      { requestMode: "legacy" },
     );
   });
 

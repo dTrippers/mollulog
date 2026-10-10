@@ -137,6 +137,7 @@ type RelationshipValues = {
   relationshipCurrentLevel: number | null;
   relationshipTargetLevel: number | null;
 };
+type GrowthWritePayload = Record<string, string | number | null>;
 
 function pickGrowthValues(student: GrowthStudent): GrowthValues {
   return {
@@ -452,12 +453,14 @@ function rowReducer(state: RowState, action: RowAction): RowState {
 
 function GrowthRow({
   student,
+  writeMode,
   rowIndexBase,
   numberInputGridNavigation,
   showNumberInputShortcuts,
   onStudentUpdate,
 }: {
   student: GrowthStudent;
+  writeMode: "legacy" | "nullable";
   rowIndexBase: number;
   numberInputGridNavigation: NumberInputGridNavigation;
   showNumberInputShortcuts: boolean;
@@ -555,26 +558,53 @@ function GrowthRow({
     if (staleWriteBlockedRef.current) return;
     const next = { ...submitted, id: nextSubmissionId() };
     submittedRef.current = next;
-    fetcher.submit(
-      { studentUid: student.uid, _submissionId: next.id, ...next.values, targetTier: next.targetTier },
-      { method: "post", encType: "application/json" },
-    );
+    const payload: GrowthWritePayload = { studentUid: student.uid, _submissionId: next.id };
+    if (writeMode === "nullable") {
+      payload.stateFormat = "nullable";
+      for (const { key, targetKey } of fieldDefinitions) {
+        if (next.values[key] !== rowState.savedValues[key]) payload[key] = next.values[key];
+        if (next.values[targetKey] !== rowState.savedValues[targetKey]) payload[targetKey] = next.values[targetKey];
+      }
+      if (next.targetTier !== rowState.targetTierSaved) payload.targetTier = next.targetTier;
+      if (Object.keys(payload).length === 3) {
+        submittedRef.current = null;
+        dispatchRow({ type: "setPendingSave", pending: false });
+        return;
+      }
+    } else {
+      Object.assign(payload, next.values, { targetTier: next.targetTier });
+    }
+    fetcher.submit(payload, { method: "post", encType: "application/json" });
   };
 
   const submitRelationship = (submitted: RelationshipSubmission) => {
     if (staleWriteBlockedRef.current) return;
     const next = { ...submitted, id: nextSubmissionId() };
     relationshipSubmittedRef.current = next;
-    relationshipFetcher.submit(
-      {
-        _intent: "relationship",
-        _submissionId: next.id,
-        studentUid: student.uid,
-        currentLevel: next.values.relationshipCurrentLevel,
-        targetLevel: next.values.relationshipTargetLevel,
-      },
-      { method: "post", encType: "application/json" },
-    );
+    const payload: GrowthWritePayload = {
+      _intent: "relationship",
+      _submissionId: next.id,
+      studentUid: student.uid,
+      ...(writeMode === "nullable"
+        ? {
+            stateFormat: "nullable",
+            ...(next.values.relationshipCurrentLevel !== rowState.savedRelationshipValues.relationshipCurrentLevel
+              ? { currentLevel: next.values.relationshipCurrentLevel }
+              : {}),
+            ...(next.values.relationshipTargetLevel !== rowState.savedRelationshipValues.relationshipTargetLevel
+              ? { targetLevel: next.values.relationshipTargetLevel }
+              : {}),
+          }
+        : {
+            currentLevel: next.values.relationshipCurrentLevel,
+            targetLevel: next.values.relationshipTargetLevel,
+          }),
+    };
+    if (writeMode === "nullable" && Object.keys(payload).length === 4) {
+      relationshipSubmittedRef.current = null;
+      return;
+    }
+    relationshipFetcher.submit(payload, { method: "post", encType: "application/json" });
   };
 
   const submitTier = (tier: number) => {
@@ -863,10 +893,13 @@ function GrowthRow({
     relationshipSaveTimerRef.current = setTimeout(() => {
       relationshipSaveTimerRef.current = null;
       if (staleWriteBlockedRef.current) return;
-      const validationError = getRelationshipLevelValidationError({
-        currentLevel: values.relationshipCurrentLevel,
-        targetLevel: values.relationshipTargetLevel,
-      });
+      const validationError = getRelationshipLevelValidationError(
+        {
+          currentLevel: values.relationshipCurrentLevel,
+          targetLevel: values.relationshipTargetLevel,
+        },
+        writeMode === "nullable",
+      );
       if (validationError) {
         dispatchRow({ type: "setRelationshipError", error: validationError });
         return;
@@ -1572,10 +1605,12 @@ export default function GrowthTable({
   students,
   availableStudents,
   onStudentUpdate,
+  writeMode,
 }: {
   students: GrowthStudent[];
   availableStudents: GrowthAvailableStudent[];
   onStudentUpdate: (student: GrowthStudent) => void;
+  writeMode: "legacy" | "nullable";
 }) {
   const numberInputGridNavigation = useNumberInputGridNavigation({ tabNavigation: true });
   const headerScrollRef = useRef<HTMLDivElement>(null);
@@ -1656,6 +1691,7 @@ export default function GrowthTable({
                     <GrowthRow
                       key={student.uid}
                       student={student}
+                      writeMode={writeMode}
                       rowIndexBase={studentIndex * 2}
                       numberInputGridNavigation={numberInputGridNavigation}
                       showNumberInputShortcuts={viewSettings.showNumberInputShortcuts}

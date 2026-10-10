@@ -80,4 +80,19 @@ describe("MoreIndexPage SSR rendering", () => {
       expect(markup.indexOf("커뮤니티")).toBeLessThan(markup.indexOf("나의 데이터"));
     }
   });
+
+  it("renders a target-only relationship chip without a current-rank badge", () => {
+    const currentUser = createCurrentUser();
+    currentUser.relationship = {
+      savedCount: 1,
+      targetStudentCount: 1,
+      targetStudents: [{ uid: "student-target-only", currentLevel: null }],
+    };
+
+    const markup = renderMore(currentUser);
+
+    expect(markup).toContain('href="/utils/relationship?studentUid=student-target-only"');
+    expect(markup).toContain("1명의 학생 관리중");
+    expect(markup).not.toContain("현재 인연 랭크");
+  });
 });

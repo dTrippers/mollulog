@@ -1,12 +1,15 @@
+import { useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import {
-  mergeStudentStateDraftValueForUpdate,
   parseStudentStateDraftValue,
   type StudentStateDraftCurrentValue,
   type StudentStateDraftTargetValue,
+  type StudentStateDraftValue,
+  serializeStudentStateDraftValue,
+  setStudentStateDraftFieldPresence,
   studentStateCurrentFields,
   studentStateTargetFields,
 } from "~/domain/student-state";
@@ -14,7 +17,7 @@ import { routeError } from "~/lib/http-errors";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getRelationshipLevels } from "~/models/relationship-level";
+import { getRelationshipLevels, getStudentStateWriteMode } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
 import {
@@ -25,6 +28,7 @@ import {
   type SyncDraft,
   type SyncDraftEntry,
   type SyncDraftEntryUpdateInput,
+  type SyncDraftStudentStateMetadata,
   type SyncDraftType,
   updateSyncDraftEntries,
 } from "~/models/sync-draft";
@@ -58,14 +62,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
 
   const entryKeys = draft.entries.map((entry) => entry.entryKey);
-  const [metadataByKey, currentValues] = await Promise.all([
+  const [metadataByKey, currentValues, writeMode] = await Promise.all([
     loadDraftMetadata(env, draft),
     loadCurrentValues(env, currentUser.id, draft.type, entryKeys),
+    draft.type === "student_state" ? getStudentStateWriteMode(env) : Promise.resolve("legacy" as const),
   ]);
   const proposedStudentStateValues =
     draft.type === "student_state" ? parseStudentStateDraftValues(draft.entries) : undefined;
 
-  return { draft, metadataByKey, currentValues, proposedStudentStateValues };
+  return { draft, metadataByKey, currentValues, proposedStudentStateValues, writeMode };
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
@@ -101,14 +106,16 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
       }
 
-      const entries =
-        draft.type === "student_state"
-          ? await mergeStudentStateDraftFormEntries(env, currentUser.id, draft, parsedForm.entries)
-          : parsedForm.entries;
+      const entries = parsedForm.entries;
 
       await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
 
-      await applySyncDraft(env, currentUser.id, draftUid);
+      const metadataByKey =
+        draft.type === "student_state" ? toStudentStateApplyMetadata(await loadDraftMetadata(env, draft)) : undefined;
+      await applySyncDraft(env, currentUser.id, draftUid, {
+        mergeReviewedStudentState: draft.type === "student_state",
+        studentStateMetadataByKey: metadataByKey,
+      });
       return redirect("/connect/import");
     }
 
@@ -130,8 +137,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 };
 
 export default function ConnectDraftDetailPage() {
-  const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
+  const { draft, metadataByKey, currentValues, proposedStudentStateValues, writeMode } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
+  const pinnedReviewMode = useRef<{ draftUid: string; mode: "legacy" | "nullable" } | null>(null);
+  if (pinnedReviewMode.current?.draftUid !== draft.uid) {
+    pinnedReviewMode.current = { draftUid: draft.uid, mode: writeMode };
+  }
+  const reviewMode = pinnedReviewMode.current.mode;
 
   const review =
     draft.type === "student_state" ? (
@@ -140,6 +152,7 @@ export default function ConnectDraftDetailPage() {
         metadataByKey={metadataByKey}
         currentValues={currentValues as StudentStateCurrentValues}
         proposedValues={proposedStudentStateValues as StudentStateProposedValues}
+        writeMode={reviewMode}
         actionData={actionData}
       />
     ) : (
@@ -321,13 +334,27 @@ const studentStateTargetDraftFields = [
   ...studentStateTargetFields.map((field) => field.key),
 ] as const satisfies readonly (keyof StudentStateDraftTargetValue)[];
 
-function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
+export function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
   const entries: SyncDraftEntryUpdateInput[] = [];
   const fieldErrors: Record<string, string> = {};
 
   for (const entry of draft.entries) {
     try {
-      const current = parseStudentStateSectionFlag(formData, `studentState:${entry.uid}:hasCurrent`)
+      const currentSection = parseStudentStateSection(
+        formData,
+        `studentState:${entry.uid}:hasCurrent`,
+        `studentState:${entry.uid}:current:providedFields`,
+        studentStateCurrentDraftFields,
+        `studentState:${entry.uid}:current`,
+      );
+      const targetSection = parseStudentStateSection(
+        formData,
+        `studentState:${entry.uid}:hasTarget`,
+        `studentState:${entry.uid}:target:providedFields`,
+        studentStateTargetDraftFields,
+        `studentState:${entry.uid}:target`,
+      );
+      const current = currentSection.enabled
         ? Object.fromEntries(
             studentStateCurrentDraftFields.map((field) => [
               field,
@@ -335,7 +362,7 @@ function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
             ]),
           )
         : null;
-      const target = parseStudentStateSectionFlag(formData, `studentState:${entry.uid}:hasTarget`)
+      const target = targetSection.enabled
         ? Object.fromEntries(
             studentStateTargetDraftFields.map((field) => [
               field,
@@ -343,7 +370,11 @@ function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
             ]),
           )
         : null;
-      const valueJson = JSON.stringify({ current, target });
+      const draftValue = setStudentStateDraftFieldPresence({ current, target } as StudentStateDraftValue, {
+        current: current ? currentSection.providedFields : [],
+        target: target ? targetSection.providedFields : [],
+      });
+      const valueJson = serializeStudentStateDraftValue(draftValue);
       const value = Number(current?.tier ?? target?.targetTier ?? 1);
 
       parseStudentStateDraftValue({ value, valueJson });
@@ -365,8 +396,37 @@ function parseStudentStateFormValue(formData: FormData, name: string): number | 
   return Number(rawValue);
 }
 
-function parseStudentStateSectionFlag(formData: FormData, name: string): boolean {
-  return formData.get(name) === "1";
+function parseStudentStateSection(
+  formData: FormData,
+  enabledName: string,
+  providedFieldsName: string,
+  fields: readonly string[],
+  valuePrefix: string,
+): { enabled: boolean; providedFields: string[] } {
+  if (formData.get(enabledName) !== "1") return { enabled: false, providedFields: [] };
+  if (!formData.has(providedFieldsName)) {
+    return {
+      enabled: true,
+      providedFields: fields.filter((field) => parseStudentStateFormValue(formData, `${valuePrefix}:${field}`) != null),
+    };
+  }
+  const encodedFields = formData.get(providedFieldsName);
+  return {
+    enabled: true,
+    providedFields:
+      typeof encodedFields === "string" ? encodedFields.split(",").filter((field) => fields.includes(field)) : [],
+  };
+}
+
+function toStudentStateApplyMetadata(
+  metadataByKey: Record<string, SyncDraftDisplayMetadata>,
+): Record<string, SyncDraftStudentStateMetadata> {
+  return Object.fromEntries(
+    Object.entries(metadataByKey).map(([studentUid, metadata]) => [
+      studentUid,
+      { initialTier: metadata.initialTier ?? 1, hasGear: metadata.hasGear ?? true },
+    ]),
+  );
 }
 
 function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStateProposedValues {
@@ -385,85 +445,6 @@ function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStatePr
       }
     }),
   );
-}
-
-async function mergeStudentStateDraftFormEntries(
-  env: Env,
-  userId: number,
-  draft: SyncDraft,
-  entries: SyncDraftEntryUpdateInput[],
-): Promise<SyncDraftEntryUpdateInput[]> {
-  const [metadataByKey, currentValues] = await Promise.all([
-    loadDraftMetadata(env, draft),
-    loadCurrentValues(
-      env,
-      userId,
-      draft.type,
-      draft.entries.map((entry) => entry.entryKey),
-    ),
-  ]);
-  const currentStateValues = currentValues as StudentStateCurrentValues;
-
-  return entries.map((entry) => {
-    const draftValue = parseStudentStateDraftValue({
-      value: Number(entry.value),
-      valueJson: entry.valueJson ?? null,
-    });
-    const metadata = metadataByKey[entry.entryKey];
-    const mergedValue = mergeStudentStateDraftValueForUpdate(
-      draftValue,
-      currentStateValues[entry.entryKey] ?? emptyStudentStateValue(),
-      {
-        initialTier: metadata?.initialTier ?? 1,
-        hasGear: metadata?.hasGear ?? true,
-      },
-    );
-
-    return {
-      entryKey: entry.entryKey,
-      value: mergedValue.current?.tier ?? mergedValue.target?.targetTier ?? 1,
-      valueJson: JSON.stringify(mergedValue),
-    };
-  });
-}
-
-function emptyStudentStateValue(): StudentStateCurrentValues[string] {
-  return {
-    current: {
-      level: null,
-      tier: null,
-      weaponLevel: null,
-      skillEx: null,
-      skillNormal: null,
-      skillEnhanced: null,
-      skillSub: null,
-      equip1: null,
-      equip2: null,
-      equip3: null,
-      equipSpecial: null,
-      abilityHp: null,
-      abilityAtk: null,
-      abilityHeal: null,
-      bond: null,
-    },
-    target: {
-      targetBond: null,
-      targetLevel: null,
-      targetTier: null,
-      targetWeaponLevel: null,
-      targetSkillEx: null,
-      targetSkillNormal: null,
-      targetSkillEnhanced: null,
-      targetSkillSub: null,
-      targetEquip1: null,
-      targetEquip2: null,
-      targetEquip3: null,
-      targetEquipSpecial: null,
-      targetAbilityHp: null,
-      targetAbilityAtk: null,
-      targetAbilityHeal: null,
-    },
-  };
 }
 
 function toActionIntent(intent: string): ActionData["intent"] {

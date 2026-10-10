@@ -6,6 +6,7 @@ const usage = `Usage:
   node scripts/student-state-migration.mjs preflight --schema <schema>
   node scripts/student-state-migration.mjs backfill --schema <schema> --confirm-no-external-writers
   node scripts/student-state-migration.mjs parity --schema <schema> --confirm-no-external-writers
+  node scripts/student-state-migration.mjs activate --schema <schema> --confirm-no-external-writers
 
 The schema is always explicit and may be a service schema such as public.
 For a PGHOST other than 127.0.0.1, append --confirm-db-host <PGHOST> to any command after verifying the target database.
@@ -444,17 +445,106 @@ async function userSnapshotTransaction(client, operation) {
   }
 }
 
+async function checkAllParity(client) {
+  const userIds = await listUserIds(client);
+  let mismatches = 0;
+  for (const userId of userIds) mismatches += await checkParity(client, userId);
+  return { users: userIds.length, mismatches };
+}
+
+async function activateNullableSemantics(client) {
+  await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+  try {
+    await client.query("SET LOCAL lock_timeout = '60s'");
+    const { rows } = await client.query(
+      "SELECT nullable_semantics_enabled FROM student_state_migration_control WHERE key = 'default' FOR UPDATE",
+    );
+    if (rows.length === 0) throw new Error("Student-state migration control row 'default' is missing.");
+    if (rows[0].nullable_semantics_enabled) {
+      throw new Error("Nullable student-state semantics are already activated; use a forward fix.");
+    }
+
+    const parity = await checkAllParity(client);
+    if (parity.mismatches !== 0) {
+      await client.query("ROLLBACK");
+      return { activated: false, ...parity };
+    }
+
+    const update = await client.query(
+      "UPDATE student_state_migration_control SET nullable_semantics_enabled = true, updated_at = now() WHERE key = 'default' AND nullable_semantics_enabled = false",
+    );
+    if (update.rowCount !== 1) throw new Error("Student-state migration control could not be activated.");
+    await client.query("COMMIT");
+    return { activated: true, ...parity };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    throw error;
+  }
+}
+
+async function checkDisplayColumnInvariants(client) {
+  const recruited = await client.query(`
+    SELECT count(*)::int AS count FROM student_states
+    WHERE (recruited_student_uid IS NULL) <> (recruited_at IS NULL)
+       OR (recruited_student_uid IS NULL) <> (tier IS NULL)
+  `);
+  const planner = await client.query(`
+    SELECT count(*)::int AS count FROM student_targets
+    WHERE (student_growth_uid IS NULL) <> (planner_added_at IS NULL)
+  `);
+  const relationship = await client.query(`
+    WITH relationship_rows AS (
+      SELECT
+        COALESCE(s.user_id, t.user_id) AS user_id,
+        COALESCE(s.student_uid, t.student_uid) AS student_uid,
+        s.relationship_level_uid AS state_uid,
+        t.relationship_level_uid AS target_uid,
+        s.relationship_current_level IS NOT NULL
+          OR s.relationship_current_exp IS NOT NULL
+          OR t.relationship_target_level IS NOT NULL
+          OR COALESCE((
+            SELECT bool_or(CASE WHEN jsonb_typeof(entry.value) = 'number' THEN entry.value::text::numeric > 0 ELSE false END)
+            FROM jsonb_each(CASE WHEN jsonb_typeof(t.gift_plan) = 'object' THEN t.gift_plan ELSE '{}'::jsonb END) AS entry
+          ), false) AS has_relationship_values
+      FROM student_states s
+      FULL OUTER JOIN student_targets t USING (user_id, student_uid)
+    )
+    SELECT count(*)::int AS count FROM relationship_rows
+    WHERE (has_relationship_values AND (state_uid IS NULL OR target_uid IS NULL OR state_uid <> target_uid))
+       OR (NOT has_relationship_values AND (state_uid IS NOT NULL OR target_uid IS NOT NULL))
+  `);
+  return {
+    recruited: recruited.rows[0].count,
+    planner: planner.rows[0].count,
+    relationship: relationship.rows[0].count,
+  };
+}
+
 async function main() {
   const action = process.argv[2];
-  if (!["preflight", "backfill", "parity"].includes(action)) throw new Error(usage);
+  if (!["preflight", "backfill", "parity", "activate"].includes(action)) throw new Error(usage);
   const schema = argument("schema");
   quoteIdentifier(schema);
   if (action !== "preflight" && !process.argv.includes("--confirm-no-external-writers")) {
-    throw new Error("Before backfill/parity, confirm all nonparticipating writers are stopped, then pass --confirm-no-external-writers.");
+    throw new Error("Before backfill/parity/activation, confirm all nonparticipating writers are stopped, then pass --confirm-no-external-writers.");
   }
   const client = await connect();
   try {
     await setSchema(client, schema);
+    if (action === "activate") {
+      const result = await activateNullableSemantics(client);
+      process.stdout.write(`activate users=${result.users} mismatches=${result.mismatches} activated=${result.activated}\n`);
+      if (!result.activated) {
+        process.exitCode = 2;
+        return;
+      }
+      const invariants = await checkDisplayColumnInvariants(client);
+      process.stdout.write(
+        `display_column_invariants recruited=${invariants.recruited} planner=${invariants.planner} relationship=${invariants.relationship}\n`,
+      );
+      if (Object.values(invariants).some((count) => count !== 0)) process.exitCode = 2;
+      return;
+    }
     if (action !== "preflight") await assertMigrationIsPreActivation(client);
     const userIds = await listUserIds(client);
     if (action === "preflight") {
