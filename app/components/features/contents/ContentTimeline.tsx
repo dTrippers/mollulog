@@ -44,6 +44,7 @@ export type ContentTimelineProps = {
     confirmed?: boolean;
     isSpoiler: boolean;
     tags: string[];
+    minigameType?: ContentTimelineItemProps["minigameType"];
     recruitments?: ContentTimelineItemProps["recruitments"];
     raidInfo?: ContentTimelineItemProps["raidInfo"];
     showStudentAnalysisFeatureBanner?: boolean;

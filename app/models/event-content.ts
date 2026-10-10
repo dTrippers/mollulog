@@ -774,7 +774,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 /** Gets the cached minigame type using event metadata already loaded by the caller. */
 export async function getEventMinigameType(
   env: Env,
-  metadata: EventMetadata,
+  metadata: Pick<EventMetadata, "contentUid" | "shopContentUid" | "runType">,
   forceRefresh = false,
 ): Promise<MinigameConfig["minigameType"] | null> {
   const contentUid = metadata.shopContentUid ?? metadata.contentUid;

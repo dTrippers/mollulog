@@ -77,6 +77,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       confirmed: content.confirmed,
       isSpoiler: content.isSpoiler,
       tags: content.tags,
+      minigameType: content.minigameType,
       recruitments: content.recruitments.map(normalizeFutureRecruitment),
       raidInfo: content.raidInfo,
     }));
@@ -182,6 +183,7 @@ type FutureContentForView = Pick<
   | "confirmed"
   | "isSpoiler"
   | "tags"
+  | "minigameType"
   | "recruitments"
   | "recruitmentPeriod"
   | "raidInfo"
@@ -242,6 +244,7 @@ function getCommonContentFields(content: FutureContentForView) {
     confirmed: content.confirmed,
     isSpoiler: content.isSpoiler,
     tags: content.tags,
+    minigameType: content.minigameType,
     link: getContentLink(content),
     raidInfo,
     contentType: raidInfo?.raidType ?? content.contentType,

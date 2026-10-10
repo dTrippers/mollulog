@@ -49,7 +49,7 @@ const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fe
 
 const env = {} as Env;
 
-type EventMetadata = Parameters<typeof getEventMinigameType>[1];
+type EventMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
 
 function createEventMetadata(overrides: Partial<EventMetadata> = {}): EventMetadata {
   return {
