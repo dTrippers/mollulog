@@ -272,6 +272,7 @@ export default function StudentStateDraftReview({
       actions={isPending ? <DraftReviewActions applyDisabled={errorRows.length > 0} draftFormId={draftFormId} /> : null}
     >
       <Form method="post" id={draftFormId} className="space-y-3">
+        <input type="hidden" name="stateFormat" value={writeMode} />
         {visibleRows.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="검토할 항목이 없어요" />

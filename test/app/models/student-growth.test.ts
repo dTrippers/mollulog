@@ -7,6 +7,7 @@ import {
   getStudentGrowthWithMetadata,
   saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
+  validateMergedStudentGrowthTarget,
 } from "~/models/student-growth";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
 
@@ -143,6 +144,16 @@ function expectNoLegacyCurrentColumnsWritten(sql: string) {
 }
 
 describe("student-growth target state", () => {
+  it("validates a partial target update together with the stored target", () => {
+    const stored = { targetTier: 9, targetWeaponLevel: 60 };
+
+    expect(() => validateMergedStudentGrowthTarget(stored, { targetTier: 6 }, 3)).toThrow();
+    expect(() =>
+      validateMergedStudentGrowthTarget(stored, { targetTier: 6, targetWeaponLevel: null }, 3),
+    ).not.toThrow();
+    expect(() => validateMergedStudentGrowthTarget(stored, { targetLevel: 90 }, 3)).not.toThrow();
+  });
+
   it("upserts targets without writing the legacy current columns", async () => {
     const { db, env } = createEnv();
     db.rows.push(rowFactory({ targetLevel: 85 }));

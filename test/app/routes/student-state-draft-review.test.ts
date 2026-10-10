@@ -4,7 +4,7 @@ jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }))
 
 import { setStudentStateDraftFieldPresence } from "~/domain/student-state";
 import { getStudentStateDraftReviewChanges } from "~/routes/connect.import._components/StudentStateDraftReview";
-import { parseStudentStateDraftFormData } from "~/routes/connect.import.$draftUid";
+import { parseStudentStateDraftFormData, parseStudentStateRequestMode } from "~/routes/connect.import.$draftUid";
 
 const existing = {
   current: {
@@ -84,5 +84,13 @@ describe("student-state draft review modes", () => {
 
     expect(value.providedFields.current).toEqual(["tier"]);
     expect(formWithCurrentSection("1").get("studentState:entry-a:hasCurrent")).toBe("1");
+  });
+
+  it("treats a review form without its rendered mode as a legacy request", () => {
+    const nullableForm = formWithCurrentSection("1");
+    nullableForm.set("stateFormat", "nullable");
+
+    expect(parseStudentStateRequestMode(nullableForm)).toBe("nullable");
+    expect(parseStudentStateRequestMode(formWithCurrentSection("1"))).toBe("legacy");
   });
 });

@@ -534,9 +534,14 @@ export async function patchCanonicalRelationship(
   const currentLevel = Object.hasOwn(patch, "currentLevel")
     ? (patch.currentLevel ?? null)
     : (state?.relationshipCurrentLevel ?? null);
+  // Accumulated EXP takes precedence over the rank in calculations, so a rank change without EXP invalidates it.
+  const clearsCurrentExp =
+    !Object.hasOwn(patch, "currentExp") && currentLevel !== (state?.relationshipCurrentLevel ?? null);
   const currentExp = Object.hasOwn(patch, "currentExp")
     ? (patch.currentExp ?? null)
-    : (state?.relationshipCurrentExp ?? null);
+    : clearsCurrentExp
+      ? null
+      : (state?.relationshipCurrentExp ?? null);
   const targetLevel = Object.hasOwn(patch, "targetLevel")
     ? (patch.targetLevel ?? null)
     : (target?.relationshipTargetLevel ?? null);
@@ -546,7 +551,7 @@ export async function patchCanonicalRelationship(
   const uid = active ? (state?.relationshipLevelUid ?? target?.relationshipLevelUid ?? nanoid(8)) : null;
   await patchCanonicalStudentState(db, userId, studentUid, {
     ...(Object.hasOwn(patch, "currentLevel") ? { relationshipCurrentLevel: patch.currentLevel ?? null } : {}),
-    ...(Object.hasOwn(patch, "currentExp") ? { relationshipCurrentExp: patch.currentExp ?? null } : {}),
+    ...(Object.hasOwn(patch, "currentExp") || clearsCurrentExp ? { relationshipCurrentExp: currentExp } : {}),
     relationshipLevelUid: uid,
   });
   await patchCanonicalStudentTarget(db, userId, studentUid, {

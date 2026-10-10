@@ -1074,7 +1074,7 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       });
       await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-nullable-import")).resolves.toMatchObject({
         currentLevel: null,
-        currentExp: 99,
+        currentExp: null,
         targetLevel: 40,
       });
       expect(
@@ -1107,7 +1107,20 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { currentLevel: 21 }, "nullable");
       await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
         currentLevel: 21,
-        currentExp: 246,
+        currentExp: null,
+        targetLevel: 8,
+      });
+      await updateRelationshipLevel(
+        modelEnv,
+        canonicalUserId,
+        "student-canonical",
+        { currentLevel: 21, currentExp: 300 },
+        "nullable",
+      );
+      await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { currentLevel: 21 }, "nullable");
+      await expect(getRelationshipLevel(modelEnv, canonicalUserId, "student-canonical")).resolves.toMatchObject({
+        currentLevel: 21,
+        currentExp: 300,
         targetLevel: 8,
       });
       await updateRelationshipLevel(modelEnv, canonicalUserId, "student-canonical", { currentExp: null }, "nullable");
@@ -1304,6 +1317,99 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
           )
         ).rows[0],
       ).toMatchObject({ target_level: 75, student_growth_uid: expect.any(String), planner_added_at: expect.any(Date) });
+
+      const mergedTarget = async () =>
+        (
+          await admin.query(
+            "SELECT target_tier, target_weapon_level FROM student_targets WHERE user_id = 9 AND student_uid = 'student-growth-target-only'",
+          )
+        ).rows[0];
+      await saveStudentGrowthAndCurrentState(
+        modelEnv,
+        canonicalUserId,
+        "student-growth-target-only",
+        null,
+        { targetTier: 9, targetWeaponLevel: 60 },
+        3,
+        "nullable",
+      );
+      await expect(
+        saveStudentGrowthAndCurrentState(
+          modelEnv,
+          canonicalUserId,
+          "student-growth-target-only",
+          null,
+          { targetTier: 6 },
+          3,
+          "nullable",
+        ),
+      ).rejects.toThrow();
+      expect(await mergedTarget()).toEqual({ target_tier: 9, target_weapon_level: 60 });
+      await saveStudentGrowthAndCurrentState(
+        modelEnv,
+        canonicalUserId,
+        "student-growth-target-only",
+        null,
+        { targetTier: 6, targetWeaponLevel: null },
+        3,
+        "nullable",
+      );
+      expect(await mergedTarget()).toEqual({ target_tier: 6, target_weapon_level: null });
+
+      const reviewedImportValueJson = JSON.stringify({
+        current: { tier: 3, level: 75 },
+        target: null,
+        providedFields: { current: ["level"], target: [] },
+      });
+      const reviewedImportDraftUid = await createSyncDraft(modelEnv, canonicalUserId, {
+        source: "web",
+        type: "student_state",
+        entries: [{ entryKey: "student-canonical", value: 3, valueJson: reviewedImportValueJson }],
+      });
+      const reviewedImportEntry = async () =>
+        (
+          await admin.query(
+            [
+              "SELECT drafts.status, entries.value_json FROM sync_drafts drafts",
+              "JOIN sync_draft_entries entries ON entries.draft_uid = drafts.uid WHERE drafts.uid = $1",
+            ].join(" "),
+            [reviewedImportDraftUid],
+          )
+        ).rows[0];
+      const auditCountBeforeStaleImport = (await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9"))
+        .rows.length;
+      // A review page rendered before activation submits every merged field without presence or mode.
+      await expect(
+        applySyncDraft(modelEnv, canonicalUserId, reviewedImportDraftUid, {
+          entryUpdates: [
+            {
+              entryKey: "student-canonical",
+              value: 3,
+              valueJson: JSON.stringify({ current: { tier: 3, level: 80, skillEx: 3 }, target: null }),
+            },
+          ],
+          mergeReviewedStudentState: true,
+          studentStateMetadataByKey: { "student-canonical": { initialTier: 1, hasGear: true } },
+          studentStateRequestMode: "legacy",
+        }),
+      ).rejects.toMatchObject({ code: "STUDENT_STATE_STALE" });
+      await expect(getRecruitedStudents(modelEnv, canonicalUserId, ["student-canonical"])).resolves.toMatchObject([
+        { level: 70, skillEx: null },
+      ]);
+      expect(await reviewedImportEntry()).toEqual({ status: "pending", value_json: reviewedImportValueJson });
+      expect((await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9")).rows).toHaveLength(
+        auditCountBeforeStaleImport,
+      );
+      await applySyncDraft(modelEnv, canonicalUserId, reviewedImportDraftUid, {
+        entryUpdates: [{ entryKey: "student-canonical", value: 3, valueJson: reviewedImportValueJson }],
+        mergeReviewedStudentState: true,
+        studentStateMetadataByKey: { "student-canonical": { initialTier: 1, hasGear: true } },
+        studentStateRequestMode: "nullable",
+      });
+      await expect(getRecruitedStudents(modelEnv, canonicalUserId, ["student-canonical"])).resolves.toMatchObject([
+        { level: 75, skillEx: null },
+      ]);
+      expect((await reviewedImportEntry())?.status).toBe("applied");
 
       await removeRecruitedStudent(modelEnv, canonicalUserId, "student-canonical");
       const afterRecruitmentRemoval = await admin.query(

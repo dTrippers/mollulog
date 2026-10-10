@@ -13,6 +13,7 @@ import {
   studentStateCurrentFields,
   studentStateTargetFields,
 } from "~/domain/student-state";
+import { isStaleStudentStateRequestError, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import { routeError } from "~/lib/http-errors";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
@@ -30,7 +31,6 @@ import {
   type SyncDraftEntryUpdateInput,
   type SyncDraftStudentStateMetadata,
   type SyncDraftType,
-  updateSyncDraftEntries,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
@@ -106,15 +106,13 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
       }
 
-      const entries = parsedForm.entries;
-
-      await updateSyncDraftEntries(env, currentUser.id, draftUid, entries);
-
       const metadataByKey =
         draft.type === "student_state" ? toStudentStateApplyMetadata(await loadDraftMetadata(env, draft)) : undefined;
       await applySyncDraft(env, currentUser.id, draftUid, {
+        entryUpdates: parsedForm.entries,
         mergeReviewedStudentState: draft.type === "student_state",
         studentStateMetadataByKey: metadataByKey,
+        studentStateRequestMode: draft.type === "student_state" ? parseStudentStateRequestMode(formData) : null,
       });
       return redirect("/connect/import");
     }
@@ -126,6 +124,12 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
     return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });
   } catch (error) {
+    if (isStaleStudentStateRequestError(error)) {
+      return data<ActionData>(
+        { intent: typeof intent === "string" ? toActionIntent(intent) : undefined, error: STUDENT_STATE_STALE_MESSAGE },
+        { status: 409 },
+      );
+    }
     return data<ActionData>(
       {
         intent: typeof intent === "string" ? toActionIntent(intent) : undefined,
@@ -394,6 +398,11 @@ function parseStudentStateFormValue(formData: FormData, name: string): number | 
   }
 
   return Number(rawValue);
+}
+
+/** A review form without the field was rendered before nullable semantics existed. */
+export function parseStudentStateRequestMode(formData: FormData): "legacy" | "nullable" {
+  return formData.get("stateFormat") === "nullable" ? "nullable" : "legacy";
 }
 
 function parseStudentStateSection(

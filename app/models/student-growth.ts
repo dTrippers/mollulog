@@ -187,6 +187,29 @@ export function validateStudentGrowthTargetStateForTier(
   }
 }
 
+const tierBoundTargetFields = [
+  "targetTier",
+  "targetWeaponLevel",
+  "targetAbilityHp",
+  "targetAbilityAtk",
+  "targetAbilityHeal",
+] as const;
+
+/** Validate the stored target merged with a partial update: an explicit null clears a field, an omitted field keeps it. */
+export function validateMergedStudentGrowthTarget(
+  existing: Partial<Pick<StudentGrowthInput, (typeof tierBoundTargetFields)[number]>> | null | undefined,
+  patch: Partial<StudentGrowthInput>,
+  currentTier: number | null,
+) {
+  const merged = Object.fromEntries(
+    tierBoundTargetFields.map((field) => [
+      field,
+      Object.hasOwn(patch, field) ? (patch[field] ?? null) : (existing?.[field] ?? null),
+    ]),
+  ) as Pick<StudentGrowthInput, (typeof tierBoundTargetFields)[number]>;
+  validateStudentGrowthTargetStateForTier(merged, merged.targetTier ?? currentTier);
+}
+
 /** Save the growth-table row's current and target values as one audited change. */
 export async function saveStudentGrowthAndCurrentState(
   env: Env,
@@ -216,19 +239,14 @@ export async function saveStudentGrowthAndCurrentState(
             const [existingTarget] =
               Object.keys(targets).length > 0
                 ? await lockedTx
-                    .select({
-                      studentGrowthUid: pgStudentTargetsTable.studentGrowthUid,
-                      plannerAddedAt: pgStudentTargetsTable.plannerAddedAt,
-                      targetTier: pgStudentTargetsTable.targetTier,
-                    })
+                    .select()
                     .from(pgStudentTargetsTable)
                     .where(
                       and(eq(pgStudentTargetsTable.userId, senseiId), eq(pgStudentTargetsTable.studentUid, studentUid)),
                     )
                     .limit(1)
                 : [];
-            const effectiveTier = targets.targetTier ?? existingTarget?.targetTier ?? state?.tier ?? fallbackTier;
-            validateStudentGrowthTargetStateForTier(targets, effectiveTier);
+            validateMergedStudentGrowthTarget(existingTarget, targets, state?.tier ?? fallbackTier);
             if (currentState && state?.recruitedStudentUid != null) {
               try {
                 validateRecruitedStudentCurrentStateInput(currentState);
@@ -416,13 +434,20 @@ export async function upsertStudentGrowth(env: Env, senseiId: number, studentUid
               .from(pgStudentTargetsTable)
               .where(and(eq(pgStudentTargetsTable.userId, senseiId), eq(pgStudentTargetsTable.studentUid, studentUid)))
               .limit(1);
+            const providedInput = Object.fromEntries(
+              Object.entries(input).filter(([, value]) => value != null),
+            ) as Partial<StudentGrowthInput>;
+            const [state] = await lockedTx
+              .select({ tier: pgStudentStatesTable.tier })
+              .from(pgStudentStatesTable)
+              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+              .limit(1);
+            validateMergedStudentGrowthTarget(existing, providedInput, state?.tier ?? null);
             const patch: Record<string, unknown> = {
               studentGrowthUid: existing?.studentGrowthUid ?? nanoid(8),
               plannerAddedAt: existing?.plannerAddedAt ?? new Date().toISOString(),
+              ...providedInput,
             };
-            for (const [key, value] of Object.entries(input)) {
-              if (value != null) patch[key] = value;
-            }
             await patchCanonicalStudentTarget(
               lockedTx,
               senseiId,

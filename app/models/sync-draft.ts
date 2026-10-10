@@ -15,6 +15,7 @@ import {
   patchCanonicalRelationship,
   patchCanonicalStudentState,
   patchCanonicalStudentTarget,
+  type StudentStateRequestMode,
   type StudentStateTransaction,
   withStudentStateProjection,
 } from "~/db/postgres/student-state-projection";
@@ -38,6 +39,10 @@ export type SyncDraftStudentStateMetadata = { initialTier: number; hasGear: bool
 export type ApplySyncDraftOptions = {
   studentStateMetadataByKey?: Record<string, SyncDraftStudentStateMetadata>;
   mergeReviewedStudentState: boolean;
+  /** Reviewed entries saved in the same transaction as the apply, so a rejected apply leaves the draft unchanged. */
+  entryUpdates?: SyncDraftEntryUpdateInput[];
+  /** The semantics the reviewing page rendered with; a student-state apply is rejected when it no longer matches. */
+  studentStateRequestMode?: StudentStateRequestMode | null;
 };
 
 export const syncDraftsTable = pgSyncDraftsTable;
@@ -410,28 +415,32 @@ export async function updateSyncDraftEntries(
     const db = drizzle(client);
     await db.transaction(async (tx) => {
       const draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
-      const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
-      assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
-      const now = new Date();
-      for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
-        const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
-        const values = sql.join(
-          chunk.map((entry) => sql`(${entry.entryKey}::text, ${entry.value}::integer, ${entry.valueJson}::text)`),
-          sql`, `,
-        );
-        await tx.execute(sql`
-          UPDATE ${syncDraftEntriesTable} AS entries
-          SET "value" = incoming."value",
-              "value_json" = incoming."value_json",
-              "updated_at" = ${now}
-          FROM (VALUES ${values}) AS incoming("entry_key", "value", "value_json")
-          WHERE entries."draft_uid" = ${draftUid}
-            AND entries."entry_key" = incoming."entry_key"
-        `);
-      }
-      await tx.update(syncDraftsTable).set({ updatedAt: now }).where(eq(syncDraftsTable.uid, draftUid));
+      await writeSyncDraftEntryUpdates(tx, draft, entries);
     });
   });
+}
+
+async function writeSyncDraftEntryUpdates(db: SyncDraftDb, draft: SyncDraft, entries: SyncDraftEntryUpdateInput[]) {
+  const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
+  assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
+  const now = new Date();
+  for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
+    const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+    const values = sql.join(
+      chunk.map((entry) => sql`(${entry.entryKey}::text, ${entry.value}::integer, ${entry.valueJson}::text)`),
+      sql`, `,
+    );
+    await db.execute(sql`
+      UPDATE ${syncDraftEntriesTable} AS entries
+      SET "value" = incoming."value",
+          "value_json" = incoming."value_json",
+          "updated_at" = ${now}
+      FROM (VALUES ${values}) AS incoming("entry_key", "value", "value_json")
+      WHERE entries."draft_uid" = ${draft.uid}
+        AND entries."entry_key" = incoming."entry_key"
+    `);
+  }
+  await db.update(syncDraftsTable).set({ updatedAt: now }).where(eq(syncDraftsTable.uid, draft.uid));
 }
 
 export async function applySyncDraft(
@@ -443,7 +452,11 @@ export async function applySyncDraft(
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
-      const draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      let draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      if (options.entryUpdates) {
+        await writeSyncDraftEntryUpdates(tx, draft, options.entryUpdates);
+        draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, false);
+      }
       const normalizedEntries =
         draft.type === "student_state"
           ? parseStudentStateDraftEntries(draft.entries)
@@ -454,6 +467,7 @@ export async function applySyncDraft(
         source: draft.source,
         mergeReviewedStudentState: options.mergeReviewedStudentState,
         studentStateMetadataByKey: options.studentStateMetadataByKey,
+        studentStateRequestMode: options.studentStateRequestMode ?? null,
       });
       const now = new Date();
       await tx
@@ -548,6 +562,7 @@ async function applyEntries(
     sourceRef?: string | null;
     mergeReviewedStudentState?: boolean;
     studentStateMetadataByKey?: Record<string, SyncDraftStudentStateMetadata>;
+    studentStateRequestMode?: StudentStateRequestMode | null;
   },
 ) {
   if (type === "student_state") {
@@ -580,7 +595,7 @@ async function applyEntries(
         await applyStudentStateEntries(lockedTx, userId, legacyEntries, options);
       },
       options.sourceRef ?? null,
-      null,
+      options.studentStateRequestMode ?? null,
     );
     return;
   }
