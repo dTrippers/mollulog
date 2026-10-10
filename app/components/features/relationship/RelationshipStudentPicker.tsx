@@ -17,14 +17,12 @@ type RelationshipStudentPickerProps = {
   students: RelationshipStudent[];
   selectedStudentUid: string | null;
   onSelectStudentUid: (studentUid: string | null) => void;
-  nullableSemantics: boolean;
 };
 
 export default function RelationshipStudentPicker({
   students,
   selectedStudentUid,
   onSelectStudentUid,
-  nullableSemantics,
 }: RelationshipStudentPickerProps) {
   const selectedStudent = useMemo(
     () => students.find((student) => student.uid === selectedStudentUid),
@@ -33,10 +31,10 @@ export default function RelationshipStudentPicker({
   const savedStudents = useMemo(
     () =>
       sortStudentsByLevel(
-        students.filter((student) => (nullableSemantics ? student.hasSavedState : student.currentLevel !== null)),
+        students.filter((student) => student.hasSavedState),
         students,
       ),
-    [students, nullableSemantics],
+    [students],
   );
 
   return (

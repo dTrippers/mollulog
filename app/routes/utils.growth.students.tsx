@@ -1,8 +1,6 @@
-import { useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { data, redirect, useLoaderData, useOutletContext } from "react-router";
+import { data, redirect, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import type { StudentStateWriteMode } from "~/db/postgres/student-state-projection";
 import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
 import {
   isStaleStudentStateRequestError,
@@ -17,7 +15,7 @@ import {
   updateRecruitedStudentTier,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { getStudentStateWriteMode, updateRelationshipLevel } from "~/models/relationship-level";
+import { updateRelationshipLevel } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import {
   removeStudentGrowth,
@@ -164,7 +162,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) return redirect("/unauthorized");
-  return { writeMode: await getStudentStateWriteMode(env) } satisfies { writeMode: StudentStateWriteMode };
+  return {};
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {
@@ -235,10 +233,10 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       if (Object.keys(relationshipInput).length === 0) {
         throw new ActionValidationError("현재 또는 목표 인연 랭크를 입력해주세요");
       }
-      const relationshipError = getRelationshipLevelValidationError(
-        { currentLevel: relationshipInput.currentLevel ?? null, targetLevel: relationshipInput.targetLevel ?? null },
-        relationshipPayload.stateFormat === "nullable",
-      );
+      const relationshipError = getRelationshipLevelValidationError({
+        currentLevel: relationshipInput.currentLevel ?? null,
+        targetLevel: relationshipInput.targetLevel ?? null,
+      });
       if (relationshipError) throw new ActionValidationError(relationshipError);
       await updateRelationshipLevel(
         env,
@@ -300,15 +298,8 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
 export default function GrowthStudentsPage() {
   const { managedStudents, availableStudents, updateStudent } = useOutletContext<GrowthLayoutContext>();
-  const loaderData = useLoaderData<typeof loader>();
-  const [writeMode] = useState(loaderData.writeMode);
 
   return (
-    <GrowthTable
-      students={managedStudents}
-      availableStudents={availableStudents}
-      onStudentUpdate={updateStudent}
-      writeMode={writeMode}
-    />
+    <GrowthTable students={managedStudents} availableStudents={availableStudents} onStudentUpdate={updateStudent} />
   );
 }

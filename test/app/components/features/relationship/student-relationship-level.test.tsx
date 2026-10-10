@@ -12,7 +12,6 @@ describe("nullable relationship calculator presentation", () => {
         currentLevel: null,
         targetLevel: 50,
         studentName: "Test Student",
-        nullableSemantics: true,
         selectedItemExp: 0,
         onCurrentLevelUpdate: () => undefined,
         onTargetLevelUpdate: () => undefined,
@@ -33,7 +32,6 @@ describe("nullable relationship calculator presentation", () => {
         currentExp: null,
         currentLevel: 20,
         targetLevel: null,
-        nullableSemantics: true,
       }),
     );
 
