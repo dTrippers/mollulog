@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { ComponentProps, ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { PyroxeneCalculationMethodContent } from "~/components/features/futures";
 import PyroxeneCalculationAssumptions from "~/components/features/futures/PyroxeneCalculationAssumptions";
 import PyroxeneCalculationMethodSheet from "~/components/features/futures/PyroxeneCalculationMethodSheet";
 import {
@@ -154,6 +155,27 @@ describe("PyroxeneCalculationAssumptions", () => {
     expect(leadIndex).toBeGreaterThanOrEqual(0);
     expect(leadIndex).toBeLessThan(listIndex);
     expect(html).toContain('aria-label="청휘석 계산 가정"');
+  });
+});
+
+describe("PyroxeneCalculationMethodContent", () => {
+  it("renders the method sections without the range and links to the pyroxene planner", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter>
+        <PyroxeneCalculationMethodContent
+          assumptions={sampleAssumptions()}
+          showRange={false}
+          changePickupChanceTo="/utils/pyroxene"
+        />
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("모집 규칙");
+    expect(html).toContain("★3 학생 모집 목표");
+    expect(html).toContain("모집 특전과 무료 모집");
+    expect(html).not.toContain("예상 범위");
+    expect(html).toContain('href="/utils/pyroxene"');
+    expect(html).toContain("청휘석 플래너에서 변경");
   });
 });
 

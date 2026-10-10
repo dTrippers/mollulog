@@ -5,7 +5,6 @@ import { data, Link, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
   GuestPlannerLegacyConflictCallout,
-  PyroxeneCalculationAssumptions,
   useGuestPlanner,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
@@ -27,6 +26,10 @@ import {
   hasUnresolvedGuestPlannerOptions,
 } from "~/domain/guest-planner";
 import { pyroxeneTimelineItemFingerprint } from "~/domain/guest-pyroxene-planner";
+import {
+  buildPyroxeneCalculationAssumptions,
+  type PyroxeneCalculationAssumptions as PyroxeneCalculationAssumptionsData,
+} from "~/domain/pyroxene-assumptions";
 import {
   buildPlannerDisplayPeriods,
   buildPlannerPeriods,
@@ -712,6 +715,15 @@ export default function IntegratedPlannerRoute() {
     [localTimelineItems],
   );
   const scheduleItems = usePyroxeneScheduleItems(pyroxeneScheduleContents, favoritedStudents, calculationTimelineItems);
+  const pyroxeneAssumptions = useMemo(
+    () =>
+      buildPyroxeneCalculationAssumptions(
+        scheduleItems,
+        selectedPlannerOptions.event.pickupChance,
+        initialDate ?? new Date(),
+      ),
+    [initialDate, scheduleItems, selectedPlannerOptions.event.pickupChance],
+  );
   const calculationOptions = useMemo(() => defaultCalculationOptions(selectedPlannerOptions), [selectedPlannerOptions]);
   const accountRecruitmentSaveResult = useMemo<PlannerRecruitmentSaveResult | null>(() => {
     const result = recruitmentFetcher.data;
@@ -1065,18 +1077,6 @@ export default function IntegratedPlannerRoute() {
           className="mb-4 lg:-mx-4"
         />
       )}
-      {pyroxeneForecastStatus === "ready" ? (
-        <PyroxeneCalculationAssumptions
-          className="mb-4"
-          scheduleItems={scheduleItems}
-          pickupChance={selectedPlannerOptions.event.pickupChance}
-          from={initialDate ?? new Date()}
-          showRange={false}
-          leadLabel="청휘석 예상"
-          changePickupChanceTo="/utils/pyroxene"
-          sheetDescription="달력의 청휘석 예상 재화를 이렇게 계산해요"
-        />
-      ) : null}
       <PlannerCalendar
         initialMonth={initialMonth}
         todayDateKey={todayDateKey}
@@ -1084,6 +1084,7 @@ export default function IntegratedPlannerRoute() {
         scheduleAvailability={scheduleAvailability}
         calendarResources={calendarResources}
         raidScheduleFacts={raidScheduleFacts}
+        pyroxeneAssumptions={pyroxeneForecastStatus === "ready" ? pyroxeneAssumptions : null}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
         progressMessages={progressMessages}

@@ -1,7 +1,10 @@
 export { default as ContentFilterPanel } from "./ContentFilterPanel";
 export { default as GuestPlannerLegacyConflictCallout } from "./GuestPlannerLegacyConflictCallout";
 export { default as PyroxeneCalculationAssumptions } from "./PyroxeneCalculationAssumptions";
-export { default as PyroxeneCalculationMethodSheet } from "./PyroxeneCalculationMethodSheet";
+export {
+  default as PyroxeneCalculationMethodSheet,
+  PyroxeneCalculationMethodContent,
+} from "./PyroxeneCalculationMethodSheet";
 export { default as PyroxenePlannerOptionsPanel } from "./PyroxenePlannerOptionsPanel";
 export { default as PyroxenePlannerSourcePanel } from "./PyroxenePlannerSourcePanel";
 export { default as PyroxeneSchedule } from "./PyroxeneSchedule";
