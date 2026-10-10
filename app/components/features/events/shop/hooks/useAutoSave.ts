@@ -72,6 +72,7 @@ function toEventShopState(state: ShopState): EventShopState {
     minigameStartRound: state.minigameStartRound,
     minigamePlayCount: state.minigamePlayCount,
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
+    cardFlipStrategy: state.cardFlipStrategy,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities,
   };
 }

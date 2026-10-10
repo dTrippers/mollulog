@@ -135,6 +135,35 @@ async function loadCardFlipContent(cardFlip: unknown, paymentResource?: unknown)
   return getEventShopContent(env, "main-story-timeline");
 }
 
+function createCardFlipFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    slotCount: 4,
+    flipCosts: [200, 210, 220, 230].map((quantity, index) => ({
+      flip: index + 1,
+      payments: [{ quantity, resource: { type: "item", uid: "photo-card", name: "포토 카드" } }],
+    })),
+    drawRules: {
+      model: "low_rarity_count_v1",
+      initialGroup: 1,
+      maxDrawCount: 4,
+      advanceOnRarities: [1, 2],
+      resetOnShuffle: true,
+      withReplacement: true,
+    },
+    cards: [
+      {
+        uid: "card-1",
+        cardGroupUid: null,
+        name: null,
+        rarity: 1,
+        slots: [1, 2, 3, 4].map((slot) => ({ slot, weight: 1 })),
+        rewards: [{ quantity: 4, resource: { type: "item", uid: "gift", name: "선물용 특산 계화과" } }],
+      },
+    ],
+    ...overrides,
+  };
+}
+
 afterEach(() => {
   jest.clearAllMocks();
 });
@@ -518,7 +547,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v3::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -551,7 +580,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v3::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
@@ -722,82 +751,84 @@ describe("getEventShopContent", () => {
     });
   });
 
-  it("normalizes all ten card configurations in source order with the card cost", async () => {
+  it("normalizes per-flip costs, draw rules, card slots and rewards", async () => {
     const cardUids = Array.from({ length: 10 }, (_, index) => `card-${index + 1}`);
-    const shopContent = await loadCardFlipContent({
-      cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "즉석 기념 포토 카드 컬렉션" } },
-      cards: cardUids.map((uid) => ({
-        uid,
-        cardGroupUid: null,
-        name: null,
-        rarity: null,
-        rewards: [{ quantity: 4, resource: { type: "item", uid: "gift", name: "선물용 특산 계화과" } }],
-      })),
-    });
+    const shopContent = await loadCardFlipContent(
+      createCardFlipFixture({
+        flipCosts: [200, 210, 220, 230].map((quantity, index) => ({
+          flip: index + 1,
+          payments: [
+            {
+              quantity,
+              resource: { type: "item", uid: "photo-card", name: "즉석 기념 포토 카드 컬렉션" },
+            },
+          ],
+        })),
+        cards: cardUids.map((uid, index) => ({
+          uid,
+          cardGroupUid: null,
+          name: null,
+          rarity: (index % 4) + 1,
+          slots: [{ slot: 1, weight: index + 1 }],
+          rewards: [{ quantity: 4, resource: { type: "item", uid: "gift", name: "선물용 특산 계화과" } }],
+        })),
+      }),
+    );
 
     const cardFlip = shopContent?.minigameConfig?.cardFlip;
     expect(cardFlip?.status).toBe("available");
-    if (cardFlip?.status !== "available") {
-      throw new Error("Expected all card-flip reward configurations to be available");
-    }
-    expect(cardFlip.cardCost).toMatchObject({
+    if (cardFlip?.status !== "available") throw new Error("Expected card-flip data to be available");
+    expect(cardFlip.slotCount).toBe(4);
+    expect(cardFlip.flipCosts.map(({ flip, payments }) => [flip, payments[0]?.quantity])).toEqual([
+      [1, 200],
+      [2, 210],
+      [3, 220],
+      [4, 230],
+    ]);
+    expect(cardFlip.flipCosts[0]?.payments[0]).toMatchObject({
       resourceUid: "photo-card",
       resourceName: "즉석 기념 포토 카드 컬렉션",
-      quantity: 200,
     });
+    expect(cardFlip.drawRules).toEqual({ initialGroup: 1, maxDrawCount: 4, advanceOnRarities: [1, 2] });
     expect(cardFlip.cards).toHaveLength(10);
     expect(cardFlip.cards.map(({ uid }) => uid)).toEqual(cardUids);
-    expect(cardFlip.cards[0]?.rewards).toMatchObject([
-      { resourceUid: "gift", resourceName: "선물용 특산 계화과", quantity: 4 },
-    ]);
+    expect(cardFlip.cards[0]).toMatchObject({
+      slots: [{ slot: 1, weight: 1 }],
+      rewards: [{ resourceUid: "gift", quantity: 4 }],
+    });
+    expect(shopContent?.minigameConfig).toMatchObject({
+      payment: { resourceUid: "photo-card", quantity: 200 },
+      payments: [{ resourceUid: "photo-card", quantity: 200 }],
+    });
   });
 
-  it("normalizes BAQL card rewards and known identity fields without inventing missing identity", async () => {
+  it("normalizes card reward identity fields and rejects a card with unknown rarity", async () => {
     const giftImageUrl = "https://assets.baql.net/images/resources/items/gift.webp";
-    const shopContent = await loadCardFlipContent({
-      cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
-      cards: [
-        {
-          uid: "card-1",
-          cardGroupUid: "group/1",
-          name: "  축제의 추억  ",
-          rarity: 4,
-          rewards: [
-            {
-              quantity: 2,
-              resource: {
-                type: "item",
-                uid: "gift",
-                name: "선물용 특산 계화과",
-                rarity: 2,
-                imageUrl: giftImageUrl,
+    const shopContent = await loadCardFlipContent(
+      createCardFlipFixture({
+        cards: [
+          {
+            uid: "card-1",
+            cardGroupUid: "group/1",
+            name: "  축제의 추억  ",
+            rarity: 4,
+            slots: [{ slot: 1, weight: 1 }],
+            rewards: [
+              {
+                quantity: 2,
+                resource: {
+                  type: "item",
+                  uid: "gift",
+                  name: "선물용 특산 계화과",
+                  rarity: 2,
+                  imageUrl: giftImageUrl,
+                },
               },
-            },
-          ],
-        },
-        {
-          uid: "card-2",
-          cardGroupUid: null,
-          name: null,
-          rarity: null,
-          rewards: [{ quantity: 5, resource: { type: "item", uid: "credit", name: "크레딧", rarity: 1 } }],
-        },
-        {
-          uid: "card-3",
-          cardGroupUid: null,
-          name: "   ",
-          rarity: 0,
-          rewards: [{ quantity: 1, resource: { type: "item", uid: "badge", name: "뱃지" } }],
-        },
-        {
-          uid: "card-4",
-          cardGroupUid: null,
-          name: null,
-          rarity: 5,
-          rewards: [{ quantity: 1, resource: { type: "item", uid: "ticket", name: "티켓" } }],
-        },
-      ],
-    });
+            ],
+          },
+        ],
+      }),
+    );
 
     expect(shopContent?.minigameConfig).toMatchObject({
       minigameType: "card_flip",
@@ -805,12 +836,12 @@ describe("getEventShopContent", () => {
       payments: [{ resourceUid: "photo-card", quantity: 200 }],
       cardFlip: {
         status: "available",
-        cardCost: { resourceUid: "photo-card", quantity: 200 },
         cards: [
           {
             uid: "card-1",
             name: "축제의 추억",
             rarity: 4,
+            slots: [{ slot: 1, weight: 1 }],
             imageUrl: "https://assets.baql.net/images/events/cards/group%2F1.webp",
             rewards: [
               {
@@ -822,34 +853,17 @@ describe("getEventShopContent", () => {
               },
             ],
           },
-          {
-            uid: "card-2",
-            name: null,
-            rarity: null,
-            imageUrl: null,
-            rewards: [{ resourceUid: "credit", resourceName: "크레딧", quantity: 5, rarity: 1 }],
-          },
-          {
-            uid: "card-3",
-            name: null,
-            rarity: 0,
-            imageUrl: null,
-            rewards: [{ resourceUid: "badge", resourceName: "뱃지", quantity: 1 }],
-          },
-          {
-            uid: "card-4",
-            name: null,
-            rarity: 5,
-            imageUrl: null,
-            rewards: [{ resourceUid: "ticket", resourceName: "티켓", quantity: 1 }],
-          },
         ],
       },
     });
-    expect(print(mockedRunQuery.mock.calls[0]?.[0] as never)).toContain("cardFlip");
+    expect(print(mockedRunQuery.mock.calls[0]?.[0] as never)).toContain("slots");
+
+    await expect(
+      loadCardFlipContent(createCardFlipFixture({ cards: [{ ...createCardFlipFixture().cards[0], rarity: null }] })),
+    ).resolves.toMatchObject({ minigameConfig: { cardFlip: { status: "invalid" } } });
   });
 
-  it("keeps generic minigame costs when card-flip card data is unavailable or invalid", async () => {
+  it("keeps the generic payment when card-flip data is unavailable or invalid", async () => {
     await expect(loadCardFlipContent(null)).resolves.toMatchObject({
       minigameConfig: {
         minigameType: "card_flip",
@@ -859,55 +873,58 @@ describe("getEventShopContent", () => {
     });
 
     await expect(
-      loadCardFlipContent({
-        cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
-        cards: [
-          {
-            uid: "broken-card",
-            cardGroupUid: null,
-            name: null,
-            rarity: null,
-            rewards: [{ quantity: 1, resource: null }],
-          },
-        ],
-      }),
+      loadCardFlipContent(
+        createCardFlipFixture({
+          cards: [{ ...createCardFlipFixture().cards[0], rewards: [{ quantity: 1, resource: null }] }],
+        }),
+      ),
     ).resolves.toMatchObject({
       minigameConfig: {
-        payment: { resourceUid: "photo-card", quantity: 200 },
+        payment: { resourceUid: "legacy-cost", quantity: 5 },
         cardFlip: { status: "invalid" },
       },
     });
   });
 
   it.each([
+    ["null flip costs", { flipCosts: null }],
+    ["null draw rules", { drawRules: null }],
+    ["an unsupported draw model", { drawRules: { ...createCardFlipFixture().drawRules, model: "unknown" } }],
+    ["shuffle without reset", { drawRules: { ...createCardFlipFixture().drawRules, resetOnShuffle: false } }],
+    ["draws without replacement", { drawRules: { ...createCardFlipFixture().drawRules, withReplacement: false } }],
+    ["nonsequential flip costs", { flipCosts: [{ ...createCardFlipFixture().flipCosts[0], flip: 2 }] }],
     [
-      "a missing card-cost resource",
+      "multiple payments for a flip",
       {
-        cardCost: { quantity: 200, resource: null },
-        cards: [
+        flipCosts: [
           {
-            uid: "valid-card",
-            cardGroupUid: null,
-            name: null,
-            rarity: null,
-            rewards: [{ quantity: 1, resource: { type: "item", uid: "gift", name: "선물" } }],
+            ...createCardFlipFixture().flipCosts[0],
+            payments: [
+              createCardFlipFixture().flipCosts[0].payments[0],
+              createCardFlipFixture().flipCosts[0].payments[0],
+            ],
           },
         ],
       },
     ],
     [
-      "an empty card list",
-      { cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } }, cards: [] },
-    ],
-    [
-      "an empty card reward list",
+      "different payment resources",
       {
-        cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
-        cards: [{ uid: "empty-card", cardGroupUid: null, name: null, rarity: null, rewards: [] }],
+        flipCosts: createCardFlipFixture().flipCosts.map((cost, index) =>
+          index === 1
+            ? {
+                ...cost,
+                payments: [{ ...cost.payments[0], resource: { type: "item", uid: "other", name: "다른 재화" } }],
+              }
+            : cost,
+        ),
       },
     ],
-  ])("marks %s as invalid without throwing", async (_description, cardFlip) => {
-    await expect(loadCardFlipContent(cardFlip)).resolves.toMatchObject({
+    ["an initial group outside the slots", { drawRules: { ...createCardFlipFixture().drawRules, initialGroup: 5 } }],
+    ["invalid card slots", { cards: [{ ...createCardFlipFixture().cards[0], slots: [{ slot: 5, weight: 1 }] }] }],
+    ["cards with no rewards", { cards: [{ ...createCardFlipFixture().cards[0], rewards: [] }] }],
+  ])("marks %s as invalid without throwing", async (_description, overrides) => {
+    await expect(loadCardFlipContent(createCardFlipFixture(overrides))).resolves.toMatchObject({
       minigameConfig: { cardFlip: { status: "invalid" } },
     });
   });

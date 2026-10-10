@@ -1,4 +1,4 @@
-import type { MinigameConfig, RewardItem, ShopResource } from "~/domain/event-shop";
+import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource } from "~/domain/event-shop";
 import { graphql } from "~/graphql";
 import type {
   EventContentShopContentQuery,
@@ -266,12 +266,25 @@ const eventContentShopContentQuery = graphql(`
           }
         }
         cardFlip {
-          cardCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+          slotCount
+          flipCosts {
+            flip
+            payments { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+          }
+          drawRules {
+            model
+            initialGroup
+            maxDrawCount
+            advanceOnRarities
+            resetOnShuffle
+            withReplacement
+          }
           cards {
             uid
             cardGroupUid
             name(lang: ko)
             rarity
+            slots { slot weight }
             rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
           }
         }
@@ -534,23 +547,73 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
   if (!cardFlip) {
     return { status: "unavailable" };
   }
+  if (!cardFlip.flipCosts || !cardFlip.drawRules) return { status: "invalid" };
 
-  const cardCostResource = cardFlip.cardCost?.resource;
-  if (!cardCostResource || !Array.isArray(cardFlip.cards) || cardFlip.cards.length === 0) {
+  const { drawRules } = cardFlip;
+  if (
+    drawRules.model !== "low_rarity_count_v1" ||
+    drawRules.resetOnShuffle !== true ||
+    drawRules.withReplacement !== true ||
+    !Number.isSafeInteger(cardFlip.slotCount) ||
+    cardFlip.slotCount <= 0 ||
+    !Number.isSafeInteger(drawRules.maxDrawCount) ||
+    drawRules.maxDrawCount <= 0 ||
+    !Number.isSafeInteger(drawRules.initialGroup) ||
+    drawRules.initialGroup < 1 ||
+    drawRules.initialGroup > cardFlip.slotCount ||
+    !Array.isArray(drawRules.advanceOnRarities)
+  ) {
     return { status: "invalid" };
   }
 
+  const flipCosts = [...cardFlip.flipCosts].sort((left, right) => left.flip - right.flip);
+  if (
+    flipCosts.length !== drawRules.maxDrawCount ||
+    flipCosts.some(({ flip }, index) => flip !== index + 1)
+  ) {
+    return { status: "invalid" };
+  }
+  const payments: MinigamePayment[][] = [];
+  let paymentIdentity: string | null = null;
+  for (const flipCost of flipCosts) {
+    if (flipCost.payments.length !== 1) return { status: "invalid" };
+    const payment = flipCost.payments[0];
+    const resource = payment?.resource;
+    if (!payment || !resource) return { status: "invalid" };
+    const identity = `${resource.type}:${resource.uid}`;
+    if (paymentIdentity !== null && identity !== paymentIdentity) return { status: "invalid" };
+    paymentIdentity = identity;
+    payments.push([
+      {
+        resourceType: resource.type,
+        resourceUid: resource.uid,
+        resourceName: resource.name,
+        imageUrl: getEmblemImageUrl(resource),
+        quantity: payment.quantity,
+      },
+    ]);
+  }
+  if (!Array.isArray(cardFlip.cards) || cardFlip.cards.length === 0) return { status: "invalid" };
+
   const cards = [];
   for (const card of cardFlip.cards) {
-    if (!Array.isArray(card.rewards) || card.rewards.length === 0) {
+    if (card.rarity == null || !Array.isArray(card.rewards) || card.rewards.length === 0) {
+      return { status: "invalid" };
+    }
+    const slots = card.slots.map(({ slot, weight }) => ({ slot, weight }));
+    if (
+      slots.some(
+        ({ slot, weight }) =>
+          !Number.isSafeInteger(slot) || slot < 1 || slot > cardFlip.slotCount || !Number.isFinite(weight) || weight < 0,
+      ) ||
+      new Set(slots.map(({ slot }) => slot)).size !== slots.length
+    ) {
       return { status: "invalid" };
     }
 
     const rewards: RewardItem[] = [];
     for (const { quantity, resource } of card.rewards) {
-      if (!resource) {
-        return { status: "invalid" };
-      }
+      if (!resource) return { status: "invalid" };
       rewards.push({
         resourceType: resource.type,
         resourceUid: resource.uid,
@@ -566,18 +629,19 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
       name: card.name?.trim() || null,
       rarity: card.rarity,
       imageUrl: card.cardGroupUid ? eventCardImageUrl(card.cardGroupUid) : null,
+      slots,
       rewards,
     });
   }
 
   return {
     status: "available",
-    cardCost: {
-      resourceType: cardCostResource.type,
-      resourceUid: cardCostResource.uid,
-      resourceName: cardCostResource.name,
-      imageUrl: getEmblemImageUrl(cardCostResource),
-      quantity: cardFlip.cardCost.quantity,
+    slotCount: cardFlip.slotCount,
+    flipCosts: flipCosts.map(({ flip }, index) => ({ flip, payments: payments[index] })),
+    drawRules: {
+      initialGroup: drawRules.initialGroup,
+      maxDrawCount: drawRules.maxDrawCount,
+      advanceOnRarities: [...drawRules.advanceOnRarities],
     },
     cards,
   };
@@ -588,36 +652,34 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   const serverConfig = configs[0];
   const transformedCardFlip =
     serverConfig.minigameType === "card_flip" ? transformCardFlip(serverConfig.cardFlip) : undefined;
-  const cardFlipCostResource =
-    serverConfig.minigameType === "card_flip" ? serverConfig.cardFlip?.cardCost?.resource : null;
-  const paymentResource = cardFlipCostResource ?? serverConfig.payment.resource;
+  const cardFlipPayment =
+    transformedCardFlip?.status === "available" ? transformedCardFlip.flipCosts[0]?.payments[0] : null;
+  const paymentResource = cardFlipPayment
+    ? {
+        type: cardFlipPayment.resourceType,
+        uid: cardFlipPayment.resourceUid,
+        name: cardFlipPayment.resourceName ?? "재화",
+        imageUrl: cardFlipPayment.imageUrl,
+      }
+    : serverConfig.payment.resource;
   if (!paymentResource) return null;
 
-  const cardFlipCost =
-    cardFlipCostResource && serverConfig.cardFlip?.cardCost
-      ? {
-          resourceType: cardFlipCostResource.type,
-          resourceUid: cardFlipCostResource.uid,
-          resourceName: cardFlipCostResource.name,
-          imageUrl: getEmblemImageUrl(cardFlipCostResource),
-          quantity: serverConfig.cardFlip.cardCost.quantity,
-        }
-      : null;
-  const payments = cardFlipCost
-    ? [cardFlipCost]
-    : serverConfig.payments.flatMap((payment) =>
-        payment.resource
-          ? [
-              {
-                resourceType: payment.resource.type,
-                resourceUid: payment.resource.uid,
-                resourceName: payment.resource.name,
-                imageUrl: getEmblemImageUrl(payment.resource),
-                quantity: payment.quantity,
-              },
-            ]
-          : [],
-      );
+  const payments =
+    transformedCardFlip?.status === "available"
+      ? transformedCardFlip.flipCosts[0].payments
+      : serverConfig.payments.flatMap((payment) =>
+          payment.resource
+            ? [
+                {
+                  resourceType: payment.resource.type,
+                  resourceUid: payment.resource.uid,
+                  resourceName: payment.resource.name,
+                  imageUrl: getEmblemImageUrl(payment.resource),
+                  quantity: payment.quantity,
+                },
+              ]
+            : [],
+        );
 
   return {
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
@@ -628,7 +690,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
       resourceUid: paymentResource.uid,
       resourceName: paymentResource.name,
       imageUrl: getEmblemImageUrl(paymentResource),
-      quantity: cardFlipCost?.quantity ?? serverConfig.payment.quantity,
+      quantity: cardFlipPayment?.quantity ?? serverConfig.payment.quantity,
     },
     payments,
     rewardGroups: serverConfig.rewardGroups.map((group) => ({
@@ -686,7 +748,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 3, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 4, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

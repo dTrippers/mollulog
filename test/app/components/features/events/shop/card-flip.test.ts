@@ -7,11 +7,13 @@ import type { ItemBreakdownResult } from "~/components/features/events/shop/calc
 import { cardFlipCardAccessibleName, summarizeCardFlipPlan } from "~/components/features/events/shop/card-flip";
 import type { ShopActions, ShopState } from "~/components/features/events/shop/hooks";
 import { MiniGameSection } from "~/components/features/events/shop/MiniGameSection";
+import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
 import type { CollectableResource, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { eventCardImageUrl } from "~/models/assets";
 
 let mockCardCount = 0;
+let mockCardFlipStrategy: "one-open" | "sr-reset" | "all-open" = "all-open";
 
 jest.mock("~/components/features/events/shop/hooks", () => ({
   useAutoSave: () => ({ isSaving: false, saveError: null, retrySave: () => {} }),
@@ -45,6 +47,7 @@ jest.mock("~/components/features/events/shop/hooks", () => ({
       minigameStartRound: 1,
       minigamePlayCount: mockCardCount,
       minigamePaymentQuantityMode: "expected",
+      cardFlipStrategy: mockCardFlipStrategy,
       overriddenRequiredQuantities: {},
     },
     actions: {},
@@ -68,58 +71,40 @@ const candyReward = {
   quantity: 2,
   rarity: 2,
 };
-
-const creditReward = {
-  resourceType: ResourceTypeEnum.Item,
-  resourceUid: "credit",
-  resourceName: "크레딧 포인트",
-  quantity: 1_100_000,
-  rarity: 3,
-};
-
-const plannedShopReward = {
-  resourceType: ResourceTypeEnum.Item,
-  resourceUid: "shop-target",
-  resourceName: "상점 목표 재화",
-  quantity: 1,
-};
-
-const overriddenShopReward = {
-  resourceType: ResourceTypeEnum.Item,
-  resourceUid: "override-target",
-  resourceName: "입력한 목표 재화",
-  quantity: 1,
-};
-
 const config: MinigameConfig = {
   minigameType: "card_flip",
   payment: photoCost,
   payments: [photoCost],
-  rewardGroups: [{ rounds: "subsequent", payments: [], rewards: [candyReward] }],
+  rewardGroups: [{ rounds: "subsequent", payments: [], rewards: [{ ...candyReward, quantity: 100 }] }],
   cardFlip: {
     status: "available",
-    cardCost: photoCost,
+    slotCount: 1,
+    flipCosts: [{ flip: 1, payments: [photoCost] }],
+    drawRules: { initialGroup: 1, maxDrawCount: 1, advanceOnRarities: [] },
     cards: [
       {
         uid: "card-1",
         name: "축제의 추억",
         rarity: 4,
         imageUrl: "https://assets.baql.net/images/events/cards/group-a.webp",
-        rewards: [candyReward, creditReward, plannedShopReward, overriddenShopReward],
+        slots: [{ slot: 1, weight: 1 }],
+        rewards: [candyReward],
       },
     ],
   },
 };
+const cardFlipData = config.cardFlip;
+if (cardFlipData?.status !== "available") throw new Error("Expected an available card flip fixture");
+const cardFlip = cardFlipData as Extract<NonNullable<MinigameConfig["cardFlip"]>, { status: "available" }>;
+const comparison = calculateCardFlipStrategyComparison(cardFlip, 4);
+const selected = comparison.find(({ strategy }) => strategy === "all-open");
+if (!selected) throw new Error("Expected an all-open strategy fixture");
 
 const collectableResources: CollectableResource[] = [
   { type: ResourceTypeEnum.Item, uid: "photo-card", name: "포토 카드", forPayment: true },
   { type: ResourceTypeEnum.Item, uid: "candy", name: "선물용 특산 계화과", forPayment: true },
-  { type: ResourceTypeEnum.Item, uid: "credit", name: "크레딧 포인트", forPayment: false },
-  { type: ResourceTypeEnum.Item, uid: "shop-target", name: "상점 목표 재화", forPayment: false },
-  { type: ResourceTypeEnum.Item, uid: "override-target", name: "입력한 목표 재화", forPayment: false },
   { type: ResourceTypeEnum.Item, uid: "unrelated", name: "기타 재화", forPayment: false },
 ];
-
 const itemBreakdown: ItemBreakdownResult["itemBreakdown"] = {
   existing: { "photo-card": 50 },
   fromFirstRun: {},
@@ -130,41 +115,40 @@ const itemBreakdown: ItemBreakdownResult["itemBreakdown"] = {
   fromMinigame: { candy: 8 },
   remaining: { "photo-card": 50, candy: 8 },
 };
+const planSummaryInput = {
+  config,
+  cardCount: 4,
+  strategy: "all-open" as const,
+  costs: selected.costs,
+  rewards: selected.rewards,
+  collectableResources,
+  itemBreakdown,
+  overriddenRequiredQuantities: { "photo-card": 900 },
+};
 
 describe("card flip plan", () => {
   it("builds card images from the BAQL card-group UID without a fallback asset", () => {
     expect(eventCardImageUrl("group/1")).toBe("https://assets.baql.net/images/events/cards/group%2F1.webp");
   });
 
-  it("summarizes per-card cost, total cost, average rewards, and related resource ledgers", () => {
-    const summary = summarizeCardFlipPlan({
-      config,
-      cardCount: 4,
-      collectableResources,
-      itemBreakdown,
-      overriddenRequiredQuantities: { "photo-card": 900 },
-    });
+  it("summarizes only the selected strategy values and related resource ledgers", () => {
+    const summary = summarizeCardFlipPlan(planSummaryInput);
 
     expect(summary).toMatchObject({
       cardCount: 4,
-      perCardCosts: [{ resourceUid: "photo-card", quantity: 200 }],
-      totalCosts: [{ resourceUid: "photo-card", quantity: 800 }],
-      averageRewards: [{ resourceUid: "candy", quantity: 8 }],
+      strategy: "all-open",
+      costs: [{ resourceUid: "photo-card", quantity: 800 }],
+      rewards: [{ resourceUid: "candy", quantity: 8 }],
       resources: [
         {
           resource: { uid: "photo-card" },
-          breakdown: {
-            requiredSubtotal: 800,
-            acquiredSubtotal: 50,
-            hasOverride: true,
-            actualRequired: 900,
-          },
+          breakdown: { requiredSubtotal: 800, acquiredSubtotal: 50, hasOverride: true, actualRequired: 900 },
         },
         {
           resource: { uid: "candy" },
           breakdown: {
             acquiredSubtotal: 8,
-            acquiredLines: [{ label: "카드 뒤집기 (평균)", value: 8 }],
+            acquiredLines: [{ label: "카드 뒤집기 (기대값)", value: 8 }],
           },
         },
       ],
@@ -172,101 +156,34 @@ describe("card flip plan", () => {
     expect(summary?.resources.map(({ resource }) => resource.uid)).toEqual(["photo-card", "candy"]);
   });
 
-  it("limits the plan summary to card costs and average-reward resources", () => {
+  it("limits related-resource ledgers to the selected costs and rewards without recalculating reward groups", () => {
     const summary = summarizeCardFlipPlan({
-      config,
-      cardCount: 4,
+      ...planSummaryInput,
       collectableResources: [...collectableResources].reverse(),
-      itemBreakdown: {
-        ...itemBreakdown,
-        toBuyShopItems: { "shop-target": 5 },
-      },
-      overriddenRequiredQuantities: { "override-target": 7 },
+      itemBreakdown: { ...itemBreakdown, toBuyShopItems: { unrelated: 5 } },
+      overriddenRequiredQuantities: { unrelated: 7 },
     });
 
     expect(summary?.resources.map(({ resource }) => resource.uid)).toEqual(["photo-card", "candy"]);
-    expect(summary?.resources.map(({ resource }) => resource.uid)).not.toContain("shop-target");
-    expect(summary?.resources.map(({ resource }) => resource.uid)).not.toContain("override-target");
     expect(summary?.resources.map(({ resource }) => resource.uid)).not.toContain("unrelated");
-    expect(summary?.averageRewards).toMatchObject([{ resourceUid: "candy", quantity: 8 }]);
     expect(summary?.resources[0]?.breakdown.requiredLines).toEqual([{ label: "카드 뒤집기", value: 800 }]);
-    expect(summary?.resources[1]?.breakdown.acquiredLines).toEqual([{ label: "카드 뒤집기 (평균)", value: 8 }]);
+    expect(summary?.resources[1]?.breakdown.acquiredLines).toEqual([{ label: "카드 뒤집기 (기대값)", value: 8 }]);
   });
 
-  it("keeps plan resources stable when card detail data is unavailable or invalid", () => {
-    const itemBreakdownWithCandy = {
-      ...itemBreakdown,
-      toPlayMinigame: { ...itemBreakdown.toPlayMinigame, candy: 6 },
-      toBuyShopItems: { candy: 4 },
-      fromMinigame: { ...itemBreakdown.fromMinigame, candy: 8 },
-      remaining: { ...itemBreakdown.remaining, candy: 3 },
-    };
-    const summarizeForStatus = (cardFlip: NonNullable<MinigameConfig["cardFlip"]>) =>
-      summarizeCardFlipPlan({
-        config: { ...config, cardFlip },
-        cardCount: 4,
-        collectableResources,
-        itemBreakdown: itemBreakdownWithCandy,
-        overriddenRequiredQuantities: { candy: 20 },
-      });
-
-    const availableCardFlip = config.cardFlip;
-    if (!availableCardFlip) {
-      throw new Error("Expected the card-flip fixture to be available");
-    }
-    const summaries = [
-      summarizeForStatus(availableCardFlip),
-      summarizeForStatus({ status: "unavailable" }),
-      summarizeForStatus({ status: "invalid" }),
-    ];
-    const candyResource = summaries[0]?.resources.find(({ resource }) => resource.uid === "candy");
-
-    expect(summaries[1]).toEqual(summaries[0]);
-    expect(summaries[2]).toEqual(summaries[0]);
-    expect(candyResource?.breakdown).toMatchObject({
-      requiredSubtotal: 10,
-      acquiredSubtotal: 8,
-      hasOverride: true,
-      actualRequired: 20,
-      remaining: 3,
-    });
-    expect(candyResource?.breakdown.acquiredLines).toEqual([{ label: "카드 뒤집기 (평균)", value: 8 }]);
-  });
-
-  it("does not show a calculated summary when no cards are planned", () => {
+  it("does not create a current-plan summary for zero cards or unavailable card data", () => {
+    expect(summarizeCardFlipPlan({ ...planSummaryInput, cardCount: 0 })).toBeNull();
     expect(
       summarizeCardFlipPlan({
-        config,
-        cardCount: 0,
-        collectableResources,
-        itemBreakdown,
-        overriddenRequiredQuantities: {},
+        ...planSummaryInput,
+        config: { ...config, cardFlip: { status: "invalid" } },
       }),
     ).toBeNull();
   });
 
   it("builds an accessible card name from available identity and reward data only", () => {
-    expect(
-      cardFlipCardAccessibleName({
-        uid: "card-1",
-        name: "축제의 추억",
-        rarity: 4,
-        imageUrl: "https://assets.baql.net/images/events/cards/group-a.webp",
-        rewards: [
-          { ...candyReward, quantity: 2 },
-          {
-            resourceType: ResourceTypeEnum.Item,
-            resourceUid: "credit",
-            resourceName: "크레딧 포인트",
-            quantity: 1_100_000,
-          },
-        ],
-      }),
-    ).toBe("축제의 추억, SSR 등급, 선물용 특산 계화과 2개, 크레딧 포인트 1,100,000개");
-
-    expect(
-      cardFlipCardAccessibleName({ uid: "unknown", name: null, rarity: null, imageUrl: null, rewards: [candyReward] }),
-    ).toBe("선물용 특산 계화과 2개");
+    const card = cardFlip.cards[0];
+    expect(cardFlipCardAccessibleName(card)).toBe("축제의 추억, SSR 등급, 선물용 특산 계화과 2개");
+    expect(cardFlipCardAccessibleName({ ...card, name: null, rarity: null })).toBe("선물용 특산 계화과 2개");
   });
 });
 
@@ -325,6 +242,12 @@ describe("EventDetailShopPage collectable resources for card flip", () => {
         minigameConfig: config,
         renderScreen: (plan) => {
           resourceUids = plan.collectableResources.map(({ uid }) => uid);
+          expect(plan.cardFlipComparison).toHaveLength(3);
+          const currentResult = calculateCardFlipStrategyComparison(cardFlip, cardCount).find(
+            ({ strategy }) => strategy === "all-open",
+          );
+          expect(plan.minigamePaymentCosts).toEqual(currentResult?.costs);
+          expect(plan.minigameRewards).toEqual(currentResult?.rewards);
           return null;
         },
       }),
@@ -341,7 +264,7 @@ describe("EventDetailShopPage collectable resources for card flip", () => {
 });
 
 describe("MiniGameSection for card flip", () => {
-  it("uses a card-count input, per-card and total costs, average rewards, and a detail link", () => {
+  it("shows one card-count input, short strategy labels, selected results, and a detail link", () => {
     const markup = renderToStaticMarkup(
       createElement(
         MemoryRouter,
@@ -349,23 +272,27 @@ describe("MiniGameSection for card flip", () => {
         createElement(MiniGameSection, {
           config,
           eventUid: "event-1",
-          state: { minigamePlayCount: 4 } as ShopState,
-          actions: { setMinigamePlayCount: jest.fn() } as unknown as ShopActions,
+          state: { minigamePlayCount: 4, cardFlipStrategy: "all-open" } as ShopState,
+          actions: {
+            setMinigamePlayCount: jest.fn(),
+            setCardFlipStrategy: jest.fn(),
+          } as unknown as ShopActions,
           treasureHuntCalculation: null as never,
+          cardFlipComparison: comparison,
         }),
       ),
     );
 
-    expect(markup).not.toContain('aria-describedby="card-flip-count-description"');
-    expect(markup).not.toContain("카드를 1장 뒤집을 때마다 1로 세요");
-    expect(markup).toContain("카드 1장당");
-    expect(markup).toContain("카드 4장 합계");
-    expect(markup).toContain("200");
-    expect(markup).toContain("800");
-    expect(markup).toContain("평균 획득 보상");
-    expect(markup).toContain("평균값이라 실제 획득량은 달라질 수 있어요");
-    expect(markup).toContain("카드 1종의 보상 구성과 현재 계획 요약을 확인해보세요");
+    expect(markup).toContain("1장 후 셔플");
+    expect(markup).toContain("SR 이상 셔플");
+    expect(markup).toContain("모두 뒤집기");
+    expect(markup).toContain("1장 모두 뒤집기 · 등급과 관계없이 1장을 모두 뒤집은 뒤 셔플해요");
+    expect(markup).toContain("소비 재화");
+    expect(markup).toContain("기대 획득 보상");
+    expect(markup).toContain("기대값이라 실제 획득량은 달라질 수 있어요");
+    expect(markup).toContain("세 전략의 소비 재화·획득 보상과 카드 1종의 보상 구성을 확인해보세요");
     expect(markup).toContain('href="/events/event-1/shop/card-flip"');
-    expect(markup).not.toContain("소모 재화 기준");
+    expect(markup).not.toContain("1,000개당");
+    expect(markup).not.toContain("기대 소비");
   });
 });

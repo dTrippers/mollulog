@@ -27,6 +27,7 @@ function createLiveState(overrides: Partial<ShopState> = {}): ShopState {
     minigameStartRound: 1,
     minigamePlayCount: 0,
     minigamePaymentQuantityMode: "expected",
+    cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},
     ...overrides,
   };
@@ -47,14 +48,15 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     minigameStartRound: 1,
     minigamePlayCount: 0,
     minigamePaymentQuantityMode: "expected",
+    cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},
     ...overrides,
   };
 }
 
 describe("toEventShopState", () => {
-  it("serializes every live state field into the persisted shape", () => {
-    const state = createLiveState();
+  it("serializes every live state field including the selected card-flip strategy", () => {
+    const state = createLiveState({ cardFlipStrategy: "sr-reset" });
     expect(toEventShopState(state)).toEqual(createSavedShopState({ ...state }));
   });
 
@@ -68,6 +70,7 @@ describe("toEventShopState", () => {
       includeFirstClear: false,
       existingPaymentItemQuantities: { pyroxene: 120 },
       minigameStartRound: 1,
+      cardFlipStrategy: "sr-reset",
       enabledStages: { "stage-1": true },
       includeRecruitedStudents: true,
       selectedBonusStudentUidsByItem: {},
@@ -78,6 +81,7 @@ describe("toEventShopState", () => {
     };
     const sameStateDifferentOrder = createLiveState({
       minigamePlayCount: 2,
+      cardFlipStrategy: "sr-reset",
       overriddenRequiredQuantities: { "item-2": 3 },
     });
 
