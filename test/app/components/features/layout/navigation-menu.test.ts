@@ -74,6 +74,21 @@ describe("global navigation catalog", () => {
     );
   });
 
+  it("exposes the public API screens in the help group and marks nested pages active", () => {
+    const items = getNavigationCatalog({ ...guestOptions, pathname: "/developers/docs" });
+    const api = items.find(({ to }) => to === "/developers");
+
+    expect(api).toMatchObject({
+      name: "몰루로그 API",
+      group: "news",
+      surfaces: ["desktop", "more", "search"],
+      isActive: true,
+    });
+    expect(getSearchableMenuItems()).toContainEqual(
+      expect.objectContaining({ id: "/developers", name: "몰루로그 API", to: "/developers" }),
+    );
+  });
+
   it("exposes AP planner as a favoritable sibling utility", () => {
     const planner = getNavigationCatalog(guestOptions).find((item) => item.to === "/utils/ap");
 
@@ -142,7 +157,7 @@ describe("global navigation catalog", () => {
       "/utils/raidscore",
     ]);
     expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
-    expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
+    expect(itemsByGroup.news).toEqual(["/developers", "/news", "/contact"]);
   });
 
   it("keeps the mobile bottom navigation at home, futures, two saved choices, and more", () => {

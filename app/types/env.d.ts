@@ -7,6 +7,7 @@ declare global {
     /** Cloudflare API token with Queues Write permission, used only by local E2E development. */
     OCR_QUEUE_API_TOKEN?: string;
     AI: Ai;
+    API_READ_RATE_LIMITER?: RateLimit;
   }
 }
 

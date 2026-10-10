@@ -119,3 +119,13 @@ Before each later release or backfill, verify the actual running Worker versions
 The sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, then one release that combines canonical-only writes with independent nullable semantics. Archive legacy tables only after every version and tool that references them has exited. The P1 release establishes dual-write; 1-2 delivers the read switch while legacy writes remain mirrored. This runbook documents the operator gates; it does not authorize production migrations, activation, deployment, or stage transitions.
 
 After canonical-only writes begin, do not roll back to a version that reads stale legacy tables. Recover with a compatible version that understands canonical student state.
+
+## Personal API production-release prerequisites
+
+The Phase 2 API does not enable `nullable_semantics_enabled` and never falls back to legacy writes. Student API requests fail closed with `503` while the switch is off. Making `/v1` available to production users requires a separately approved operational release:
+
+1. Apply the additive API schema migration `20261010000200_add_personal_api_keys_and_audit.sql` to the selected production database.
+2. Complete the 1-3/1-4 production rollout above with a compatible Worker version. Verify preflight and backfill, require `mismatches=0` from parity and zero display-column invariant counts, stop all nonparticipating writers, then activate the control row. Keep the switch enabled after canonical-only writes begin.
+3. Before deploying the API Worker, verify that the production `API_READ_RATE_LIMITER` binding is configured for 60 requests per account and Cloudflare region per minute. The missing-binding path intentionally fails closed.
+
+These prerequisites document the release dependency; they do not authorize a production migration, activation, binding change, deployment, or staging rollout.

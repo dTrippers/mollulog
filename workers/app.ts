@@ -8,6 +8,7 @@ import {
 import { watchIo } from "~/lib/io-watchdog";
 import { createRequestDiagnostics, type RequestDiagnostics } from "~/lib/request-diagnostics";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
+import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
 import { markOcrTaskDeadLetter } from "~/models/ocr-job";
 
 export { CacheRefreshWorkflow } from "./cache-refresh-workflow";
@@ -32,6 +33,9 @@ const requestHandler = createRequestHandler(serverBuild, import.meta.env.MODE);
 
 const handler: ExportedHandler<ObservabilityEnv> = {
   async fetch(request, env, ctx) {
+    const apiResponse = await handleMolluLogApiRequest(request, env, ctx);
+    if (apiResponse) return apiResponse;
+
     const requestDiagnostics = createRequestDiagnostics(request, serverBuild.assets.version);
     const sessionValidation = await validateSessionRequest(env, request, ctx);
     if (sessionValidation.kind === "response") {

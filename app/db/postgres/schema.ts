@@ -1110,6 +1110,8 @@ export const pgStudentStateAuditsTable = pgTable(
     userId: integer("user_id").notNull(),
     studentUid: text("student_uid").notNull(),
     actorUserId: integer("actor_user_id").notNull(),
+    apiKeyUid: text("api_key_uid"),
+    apiKeyName: text("api_key_name"),
     source: text().notNull(),
     sourceRef: text("source_ref"),
     beforeState: jsonb("before_state").$type<Record<string, unknown>>().notNull(),
@@ -1119,6 +1121,58 @@ export const pgStudentStateAuditsTable = pgTable(
   (table) => [
     index("student_state_audits_user_student_created_idx").on(table.userId, table.studentUid, table.createdAt),
   ],
+);
+
+/** Personal API keys retain only a digest; the token itself is shown once at issuance. */
+export const pgApiKeysTable = pgTable(
+  "api_keys",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    name: text().notNull(),
+    keyHash: text("key_hash").notNull(),
+    keyPrefix: text("key_prefix").notNull(),
+    readScope: boolean("read_scope").notNull().default(false),
+    writeScope: boolean("write_scope").notNull().default(false),
+    expiresAt: timestamptz("expires_at").notNull(),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("api_keys_uid_uidx").on(table.uid),
+    uniqueIndex("api_keys_key_hash_uidx").on(table.keyHash),
+    index("api_keys_user_id_idx").on(table.userId, table.createdAt.desc()),
+  ],
+);
+
+/** Key issuance and revocation are separate visible events with a key-name snapshot. */
+export const pgApiKeyEventsTable = pgTable(
+  "api_key_events",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    apiKeyUid: text("api_key_uid").notNull(),
+    apiKeyName: text("api_key_name").notNull(),
+    action: text().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("api_key_events_user_created_idx").on(table.userId, table.createdAt.desc())],
+);
+
+/** One account-wide fixed window for all authorized student writes, independent of API key. */
+export const pgApiWriteQuotasTable = pgTable(
+  "api_write_quotas",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    windowStartedAt: timestamptz("window_started_at").notNull(),
+    requestCount: integer("request_count").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("api_write_quotas_user_id_uidx").on(table.userId)],
 );
 
 export const pgGrowthResourceInventoryTable = pgTable(
