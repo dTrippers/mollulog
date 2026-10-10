@@ -60,10 +60,10 @@ describe("ShopResourceSelector owned quantities", () => {
     expect(textContent(markup)).toContain("20회 구매 가능");
   });
 
-  it("shows a registered zero with the same owned-quantity label", () => {
+  it("omits the owned line when the registered quantity is zero", () => {
     const markup = renderShopResourceSelector({ "shop-item-1": 0 });
 
-    expect(textContent(markup)).toContain("보유 0");
+    expect(textContent(markup)).not.toContain("보유");
   });
 
   it.each([null, {}])("omits the owned line when data is %s", (ownedQuantities) => {

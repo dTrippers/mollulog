@@ -148,7 +148,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                       <img
                         alt={paymentResource.name}
                         src={paymentImageUrl}
-                        className="size-6 shrink-0 object-contain md:size-8"
+                        className="-m-1 size-6 shrink-0 object-contain md:size-8"
                         loading="lazy"
                       />
                     ) : (
@@ -170,7 +170,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                   <p className="break-keep text-xs leading-tight text-muted-foreground">
                     {shopAmount ? `${dailyReset ? "매일 " : ""}${shopAmount}회 구매 가능` : "구매 제한 없음"}
                   </p>
-                  {ownedQuantity !== undefined && (
+                  {ownedQuantity !== undefined && ownedQuantity !== 0 && (
                     <p className="break-keep text-xs leading-tight text-muted-foreground">
                       보유{" "}
                       <span className="whitespace-nowrap font-semibold tabular-nums text-foreground">
@@ -182,7 +182,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
               </div>
 
               {dailyReset ? (
-                <div className="space-y-1.5">
+                <div className="mt-auto space-y-1.5">
                   <div className="grid grid-cols-1 gap-1.5">
                     <div className="space-y-0.5">
                       <p className="text-xs font-medium leading-tight text-muted-foreground">하루 구매량</p>
@@ -210,7 +210,7 @@ export const ShopResourceSelector = memo(function ShopResourceSelector({
                   </p>
                 </div>
               ) : (
-                <div>
+                <div className="mt-auto">
                   <NumberInput
                     value={quantity}
                     maxValue={shopAmount ?? undefined}
