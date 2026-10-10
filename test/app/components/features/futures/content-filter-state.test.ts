@@ -23,14 +23,14 @@ describe("content-filter-state", () => {
     });
   });
 
-  it("drops unsupported types and deduplicates the remaining values", () => {
+  it("includes offline events for saved live filters and deduplicates remaining values", () => {
     expect(
       normalizeContentFilterState({
         types: ["live", "event", "event", "raid", "unknown", "allied", "mini_story"],
         onlyPickups: "true",
       }),
     ).toEqual({
-      types: ["live", "event", "allied", "mini_story"],
+      types: ["live", "offline_event", "event", "allied", "mini_story"],
       onlyPickups: false,
     });
   });

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fetchRouteCached } from "~/lib/cache";
 import { getRecruitmentGroupsByUidsStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
 import { getTimelineContents } from "~/models/timeline-content.server";
@@ -82,6 +82,10 @@ beforeEach(() => {
   mockedFetchRouteCached.mockImplementation(async (_env, _ctx, _key, fn) => fn());
 });
 
+afterEach(() => {
+  jest.useRealTimers();
+});
+
 describe("getFutureContents recruitment periods", () => {
   it("caches normalized recruitment periods and uses the versioned futures key", async () => {
     const result = await getFutureContents(env);
@@ -91,7 +95,7 @@ describe("getFutureContents recruitment periods", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::futures::v3::all",
+      "route::futures::v4::all",
       expect.any(Function),
       false,
     );
@@ -111,5 +115,38 @@ describe("getFutureContents recruitment periods", () => {
     mockedGetRecruitmentGroupsByUidsStrict.mockRejectedValue(error);
 
     await expect(getFutureContents(env)).rejects.toBe(error);
+  });
+
+  it("keeps a start-only schedule until just before its start and hides schedules at their exact boundaries", async () => {
+    const startOnly = {
+      ...timelineContent,
+      uid: "start-only",
+      startAt: "2030-01-10T10:00:00.000Z",
+      endAt: null,
+      recruitmentGroupUid: null,
+    };
+    const range = {
+      ...timelineContent,
+      uid: "start-and-end",
+      startAt: "2030-01-10T10:00:00.000Z",
+      endAt: "2030-01-10T11:00:00.000Z",
+      recruitmentGroupUid: null,
+    };
+    mockedGetTimelineContents.mockResolvedValue([startOnly, range] as never);
+    jest.useFakeTimers();
+
+    jest.setSystemTime(new Date("2030-01-10T09:59:59.999Z"));
+    await expect(getFutureContents(env)).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ uid: "start-only" }),
+        expect.objectContaining({ uid: "start-and-end" }),
+      ]),
+    );
+
+    jest.setSystemTime(new Date("2030-01-10T10:00:00.000Z"));
+    await expect(getFutureContents(env)).resolves.toEqual([expect.objectContaining({ uid: "start-and-end" })]);
+
+    jest.setSystemTime(new Date("2030-01-10T11:00:00.000Z"));
+    await expect(getFutureContents(env)).resolves.toEqual([]);
   });
 });
