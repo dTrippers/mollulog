@@ -41,42 +41,36 @@ export function CardFlipCardList({ cardFlip }: CardFlipCardListProps) {
       title={cardFlipLocale.cardListTitle(cardFlip.cards.length)}
       description={cardFlipLocale.cardListDescription}
     >
-      <ul aria-label="카드별 보상" className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-3">
+      <ul aria-label="카드별 보상" className="flex flex-col gap-3 xl:grid xl:grid-cols-2">
         {cardFlip.cards.map((card) => {
           const rarity = getCardFlipRarity(card.rarity);
-          const hasHeader = Boolean(card.imageUrl || card.name || rarity);
           const rewardKeyOccurrences = new Map<string, number>();
 
           return (
-            <li key={card.uid} className="min-w-0 space-y-2 rounded-md bg-card p-3">
+            <li key={card.uid} className="min-w-0 rounded-md bg-card p-3">
               <span className="sr-only">{cardFlipCardAccessibleName(card)}</span>
-              <div aria-hidden="true" className="space-y-2">
-                {hasHeader ? (
-                  <div className="flex min-w-0 items-center gap-3">
-                    {card.imageUrl ? (
-                      <span className="flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
-                        <img
-                          src={card.imageUrl}
-                          alt=""
-                          loading="lazy"
-                          decoding="async"
-                          width={48}
-                          height={64}
-                          className="h-full w-full object-contain"
-                        />
+              <div aria-hidden="true" className="flex min-w-0 items-start gap-3">
+                {card.imageUrl ? (
+                  <span className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-muted">
+                    <img
+                      src={card.imageUrl}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      width={48}
+                      height={64}
+                      className="h-full w-full object-contain"
+                    />
+                    {rarity ? (
+                      <span className="absolute right-0 bottom-0">
+                        <AttributeBadge text={rarity.text} color={rarity.color} />
                       </span>
                     ) : null}
-                    <div className="flex min-w-0 flex-col items-start gap-1">
-                      {card.name ? (
-                        <p className="min-w-0 text-sm font-semibold leading-snug break-keep wrap-break-word">
-                          {card.name}
-                        </p>
-                      ) : null}
-                      {rarity ? <AttributeBadge text={rarity.text} color={rarity.color} /> : null}
-                    </div>
-                  </div>
+                  </span>
+                ) : rarity ? (
+                  <AttributeBadge text={rarity.text} color={rarity.color} />
                 ) : null}
-                <div className="flex flex-wrap gap-1">
+                <div className="flex min-w-0 flex-1 flex-wrap gap-1">
                   {card.rewards.map((reward) => {
                     const baseKey = `${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}:${reward.quantity}`;
                     const occurrence = rewardKeyOccurrences.get(baseKey) ?? 0;

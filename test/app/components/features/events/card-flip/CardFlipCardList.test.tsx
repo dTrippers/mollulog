@@ -39,9 +39,9 @@ describe("CardFlipCardList", () => {
     expect(markup).toContain("SSR 등급");
     expect(markup).toContain("선물용 특산 계화과 4개, 크레딧 포인트 1,100,000개");
     expect(markup).toContain('src="https://assets.baql.net/images/events/cards/group-a.webp"');
-    expect(markup).toContain(
-      '<div aria-hidden="true" class="space-y-2"><div class="flex min-w-0 items-center gap-3">',
-    );
+    expect(markup).toContain('<div aria-hidden="true" class="flex min-w-0 items-start gap-3">');
+    expect((markup.match(/축제의 추억/g) ?? []).length).toBe(1);
+    expect(markup).toContain("absolute right-0 bottom-0");
     expect(markup).toContain("h-16 w-12");
     expect(markup).toContain('width="48" height="64"');
     expect(markup).toContain('aria-label="카드별 보상"');
@@ -49,7 +49,7 @@ describe("CardFlipCardList", () => {
     expect((markup.match(/aria-hidden="true"/g) ?? []).length).toBe(2);
   });
 
-  it("renders a supplied name or known rarity without inventing missing identity details", () => {
+  it("retains accessible names and known rarity without inventing missing identity details", () => {
     const markup = render({
       status: "available",
       cards: [
