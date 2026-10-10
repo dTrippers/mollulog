@@ -2,10 +2,11 @@ import { useMemo } from "react";
 import { FilterButtons, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { MinigameConfig } from "~/domain/event-shop";
 import { minigameDescription } from "~/locales/ko";
+import { CardFlipSection } from "./CardFlipSection";
 import { ClueSearchSection } from "./ClueSearchSection";
-import { TreasureHuntSection, type TreasureHuntSectionState } from "./TreasureHuntSection";
 import type { ClueSearchExchange } from "./clue-search";
 import type { ShopActions, ShopState } from "./hooks";
+import { TreasureHuntSection, type TreasureHuntSectionState } from "./TreasureHuntSection";
 import {
   calculateDiceMinigameStats,
   calculateMinigamePaymentCosts,
@@ -16,15 +17,17 @@ import {
 
 type MiniGameSectionProps = {
   config: MinigameConfig;
+  eventUid: string;
   state: ShopState;
   actions: ShopActions;
   exchange?: ClueSearchExchange | null;
   treasureHuntCalculation: TreasureHuntSectionState;
 };
-type GenericMiniGameSectionProps = Omit<MiniGameSectionProps, "exchange" | "treasureHuntCalculation">;
+type GenericMiniGameSectionProps = Omit<MiniGameSectionProps, "eventUid" | "exchange" | "treasureHuntCalculation">;
 
 export function MiniGameSection({
   config,
+  eventUid,
   state,
   actions,
   exchange = null,
@@ -43,6 +46,10 @@ export function MiniGameSection({
         calculation={treasureHuntCalculation}
       />
     );
+  }
+
+  if (config.minigameType === "card_flip") {
+    return <CardFlipSection config={config} eventUid={eventUid} state={state} actions={actions} />;
   }
 
   return <GenericMiniGameSection config={config} state={state} actions={actions} />;

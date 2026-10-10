@@ -102,6 +102,39 @@ function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType
   } as NonNullable<Awaited<ReturnType<typeof getTimelineContent>>>;
 }
 
+function createCardFlipSource(
+  cardFlip: unknown,
+  paymentResource: unknown = {
+    type: "item",
+    uid: "legacy-cost",
+    name: "기존 비용",
+  },
+) {
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "card_flip",
+          payment: { quantity: 5, resource: paymentResource },
+          payments: [],
+          rewardGroups: [],
+          treasureHunt: null,
+          cardFlip,
+        },
+      ],
+    },
+  }) as never;
+}
+
+async function loadCardFlipContent(cardFlip: unknown, paymentResource?: unknown) {
+  mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+  mockedRunQuery.mockResolvedValue(createCardFlipSource(cardFlip, paymentResource));
+  return getEventShopContent(env, "main-story-timeline");
+}
+
 afterEach(() => {
   jest.clearAllMocks();
 });
@@ -686,6 +719,196 @@ describe("getEventShopContent", () => {
         payment: { resourceType: "emblem", resourceUid: "3000845", imageUrl: emblemImageUrl },
         payments: [{ resourceType: "emblem", resourceUid: "3000845", imageUrl: emblemImageUrl }],
       },
+    });
+  });
+
+  it("normalizes all ten card configurations in source order with the card cost", async () => {
+    const cardUids = Array.from({ length: 10 }, (_, index) => `card-${index + 1}`);
+    const shopContent = await loadCardFlipContent({
+      cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "즉석 기념 포토 카드 컬렉션" } },
+      cards: cardUids.map((uid) => ({
+        uid,
+        cardGroupUid: null,
+        name: null,
+        rarity: null,
+        rewards: [{ quantity: 4, resource: { type: "item", uid: "gift", name: "선물용 특산 계화과" } }],
+      })),
+    });
+
+    const cardFlip = shopContent?.minigameConfig?.cardFlip;
+    expect(cardFlip?.status).toBe("available");
+    if (cardFlip?.status !== "available") {
+      throw new Error("Expected all card-flip reward configurations to be available");
+    }
+    expect(cardFlip.cardCost).toMatchObject({
+      resourceUid: "photo-card",
+      resourceName: "즉석 기념 포토 카드 컬렉션",
+      quantity: 200,
+    });
+    expect(cardFlip.cards).toHaveLength(10);
+    expect(cardFlip.cards.map(({ uid }) => uid)).toEqual(cardUids);
+    expect(cardFlip.cards[0]?.rewards).toMatchObject([
+      { resourceUid: "gift", resourceName: "선물용 특산 계화과", quantity: 4 },
+    ]);
+  });
+
+  it("normalizes BAQL card rewards and known identity fields without inventing missing identity", async () => {
+    const giftImageUrl = "https://assets.baql.net/images/resources/items/gift.webp";
+    const shopContent = await loadCardFlipContent({
+      cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
+      cards: [
+        {
+          uid: "card-1",
+          cardGroupUid: "group/1",
+          name: "  축제의 추억  ",
+          rarity: 4,
+          rewards: [
+            {
+              quantity: 2,
+              resource: {
+                type: "item",
+                uid: "gift",
+                name: "선물용 특산 계화과",
+                rarity: 2,
+                imageUrl: giftImageUrl,
+              },
+            },
+          ],
+        },
+        {
+          uid: "card-2",
+          cardGroupUid: null,
+          name: null,
+          rarity: null,
+          rewards: [{ quantity: 5, resource: { type: "item", uid: "credit", name: "크레딧", rarity: 1 } }],
+        },
+        {
+          uid: "card-3",
+          cardGroupUid: null,
+          name: "   ",
+          rarity: 0,
+          rewards: [{ quantity: 1, resource: { type: "item", uid: "badge", name: "뱃지" } }],
+        },
+        {
+          uid: "card-4",
+          cardGroupUid: null,
+          name: null,
+          rarity: 5,
+          rewards: [{ quantity: 1, resource: { type: "item", uid: "ticket", name: "티켓" } }],
+        },
+      ],
+    });
+
+    expect(shopContent?.minigameConfig).toMatchObject({
+      minigameType: "card_flip",
+      payment: { resourceUid: "photo-card", resourceName: "포토 카드", quantity: 200 },
+      payments: [{ resourceUid: "photo-card", quantity: 200 }],
+      cardFlip: {
+        status: "available",
+        cardCost: { resourceUid: "photo-card", quantity: 200 },
+        cards: [
+          {
+            uid: "card-1",
+            name: "축제의 추억",
+            rarity: 4,
+            imageUrl: "https://assets.baql.net/images/events/cards/group%2F1.webp",
+            rewards: [
+              {
+                resourceUid: "gift",
+                resourceName: "선물용 특산 계화과",
+                quantity: 2,
+                rarity: 2,
+                imageUrl: giftImageUrl,
+              },
+            ],
+          },
+          {
+            uid: "card-2",
+            name: null,
+            rarity: null,
+            imageUrl: null,
+            rewards: [{ resourceUid: "credit", resourceName: "크레딧", quantity: 5, rarity: 1 }],
+          },
+          {
+            uid: "card-3",
+            name: null,
+            rarity: 0,
+            imageUrl: null,
+            rewards: [{ resourceUid: "badge", resourceName: "뱃지", quantity: 1 }],
+          },
+          {
+            uid: "card-4",
+            name: null,
+            rarity: 5,
+            imageUrl: null,
+            rewards: [{ resourceUid: "ticket", resourceName: "티켓", quantity: 1 }],
+          },
+        ],
+      },
+    });
+    expect(print(mockedRunQuery.mock.calls[0]?.[0] as never)).toContain("cardFlip");
+  });
+
+  it("keeps generic minigame costs when card-flip card data is unavailable or invalid", async () => {
+    await expect(loadCardFlipContent(null)).resolves.toMatchObject({
+      minigameConfig: {
+        minigameType: "card_flip",
+        payment: { resourceUid: "legacy-cost", quantity: 5 },
+        cardFlip: { status: "unavailable" },
+      },
+    });
+
+    await expect(
+      loadCardFlipContent({
+        cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
+        cards: [
+          {
+            uid: "broken-card",
+            cardGroupUid: null,
+            name: null,
+            rarity: null,
+            rewards: [{ quantity: 1, resource: null }],
+          },
+        ],
+      }),
+    ).resolves.toMatchObject({
+      minigameConfig: {
+        payment: { resourceUid: "photo-card", quantity: 200 },
+        cardFlip: { status: "invalid" },
+      },
+    });
+  });
+
+  it.each([
+    [
+      "a missing card-cost resource",
+      {
+        cardCost: { quantity: 200, resource: null },
+        cards: [
+          {
+            uid: "valid-card",
+            cardGroupUid: null,
+            name: null,
+            rarity: null,
+            rewards: [{ quantity: 1, resource: { type: "item", uid: "gift", name: "선물" } }],
+          },
+        ],
+      },
+    ],
+    [
+      "an empty card list",
+      { cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } }, cards: [] },
+    ],
+    [
+      "an empty card reward list",
+      {
+        cardCost: { quantity: 200, resource: { type: "item", uid: "photo-card", name: "포토 카드" } },
+        cards: [{ uid: "empty-card", cardGroupUid: null, name: null, rarity: null, rewards: [] }],
+      },
+    ],
+  ])("marks %s as invalid without throwing", async (_description, cardFlip) => {
+    await expect(loadCardFlipContent(cardFlip)).resolves.toMatchObject({
+      minigameConfig: { cardFlip: { status: "invalid" } },
     });
   });
 

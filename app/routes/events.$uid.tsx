@@ -1,6 +1,7 @@
 import {
   InformationCircleIcon,
   ListBulletIcon,
+  RectangleStackIcon,
   ShoppingCartIcon,
   SparklesIcon,
   Squares2X2Icon,
@@ -17,7 +18,7 @@ import {
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
-import { treasureHuntLocale } from "~/locales/ko";
+import { cardFlipLocale, treasureHuntLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
@@ -134,6 +135,21 @@ export default function EventPage() {
                 disabled: !eventMetadata.recruitmentGroupUid,
                 linkState: futureLinkState,
               },
+              ...(minigameType === "card_flip"
+                ? [
+                    {
+                      text: cardFlipLocale.menuTitle,
+                      description: eventMetadata.shopAvailable
+                        ? cardFlipLocale.menuDescription
+                        : "상점이 없는 이벤트이거나 정보를 준비중이에요",
+                      Icon: RectangleStackIcon,
+                      link: `/events/${uid}/shop/card-flip`,
+                      active: pathname === `/events/${uid}/shop/card-flip`,
+                      disabled: !eventMetadata.shopAvailable,
+                      linkState: futureLinkState,
+                    },
+                  ]
+                : []),
               ...(minigameType === "treasure_hunt"
                 ? [
                     {
