@@ -5,9 +5,7 @@ import { CARD_FLIP_STRATEGIES, type CardFlipStrategy, type MinigameConfig } from
 import type { CardFlipStrategyResult } from "~/domain/card-flip-strategy";
 import { cardFlipLocale } from "~/locales/ko";
 import type { ShopActions, ShopState } from "./hooks";
-import { resourceCountLabel } from "./utils";
-
-
+import { formatCardFlipAmount } from "./card-flip";
 
 type CardFlipSectionProps = {
   config: MinigameConfig;
@@ -21,8 +19,12 @@ export function CardFlipSection({ config, eventUid, state, actions, comparison }
   const cardCount = config.cardFlip?.status === "available" ? config.cardFlip.cards.length : null;
   const selectedResult = comparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
   const strategyText = cardFlipLocale.strategies[state.cardFlipStrategy];
-  const strategyLabel = strategyText.label(config.cardFlip?.status === "available" ? config.cardFlip.drawRules.maxDrawCount : 4);
-  const strategyRule = strategyText.rule(config.cardFlip?.status === "available" ? config.cardFlip.drawRules.maxDrawCount : 4);
+  const strategyLabel = strategyText.label(
+    config.cardFlip?.status === "available" ? config.cardFlip.drawRules.maxDrawCount : 4,
+  );
+  const strategyRule = strategyText.rule(
+    config.cardFlip?.status === "available" ? config.cardFlip.drawRules.maxDrawCount : 4,
+  );
   const hasResult = state.minigamePlayCount > 0 && selectedResult !== null;
 
   return (
@@ -49,8 +51,7 @@ export function CardFlipSection({ config, eventUid, state, actions, comparison }
             onChange={actions.setCardFlipStrategy}
             options={CARD_FLIP_STRATEGIES.map((strategy) => ({
               value: strategy,
-              label:
-                cardFlipLocale.strategies[strategy].shortLabel,
+              label: cardFlipLocale.strategies[strategy].shortLabel,
             }))}
           />
         </div>
@@ -70,7 +71,7 @@ export function CardFlipSection({ config, eventUid, state, actions, comparison }
                     resourceType={resourceType}
                     itemUid={resourceUid}
                     imageUrl={imageUrl ?? undefined}
-                    label={resourceCountLabel(quantity)}
+                    label={formatCardFlipAmount(quantity)}
                     name={resourceName}
                   />
                 ))}
@@ -86,17 +87,19 @@ export function CardFlipSection({ config, eventUid, state, actions, comparison }
               </div>
               <p className="text-xs text-muted-foreground">{cardFlipLocale.averageDisclosure}</p>
               <div className="flex flex-wrap gap-1">
-                {selectedResult.rewards.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity, rarity }) => (
-                  <ResourceCard
-                    key={`${resourceType}:${resourceUid}:${rarity ?? ""}`}
-                    resourceType={resourceType}
-                    itemUid={resourceUid}
-                    imageUrl={imageUrl ?? undefined}
-                    rarity={rarity}
-                    label={resourceCountLabel(quantity)}
-                    name={resourceName}
-                  />
-                ))}
+                {selectedResult.rewards.map(
+                  ({ resourceType, resourceUid, resourceName, imageUrl, quantity, rarity }) => (
+                    <ResourceCard
+                      key={`${resourceType}:${resourceUid}:${rarity ?? ""}`}
+                      resourceType={resourceType}
+                      itemUid={resourceUid}
+                      imageUrl={imageUrl ?? undefined}
+                      rarity={rarity}
+                      label={formatCardFlipAmount(quantity)}
+                      name={resourceName}
+                    />
+                  ),
+                )}
               </div>
             </div>
           </div>

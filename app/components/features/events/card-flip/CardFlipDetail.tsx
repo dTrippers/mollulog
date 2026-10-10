@@ -3,9 +3,8 @@ import PageLink from "~/components/features/layout/PageLink";
 import { ResourceCard, Section } from "~/components/primitives";
 import type { MinigamePayment, RewardItem } from "~/domain/event-shop";
 import { cardFlipLocale } from "~/locales/ko";
-import { summarizeCardFlipPlan } from "../shop/card-flip";
+import { formatCardFlipAmount, summarizeCardFlipPlan } from "../shop/card-flip";
 import type { EventShopPlanContext } from "../shop/ShopCalculatorScreen";
-import { resourceCountLabel } from "../shop/utils";
 import { CardFlipCardList } from "./CardFlipCardList";
 import { CardFlipStrategyComparison } from "./CardFlipStrategyComparison";
 
@@ -20,18 +19,19 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
   const cardCount = plan.state.minigamePlayCount;
   const comparison = plan.cardFlipComparison;
   const selectedResult = comparison?.find(({ strategy }) => strategy === plan.state.cardFlipStrategy) ?? null;
-  const summary = config && selectedResult
-    ? summarizeCardFlipPlan({
-        config,
-        cardCount,
-        strategy: plan.state.cardFlipStrategy,
-        costs: selectedResult.costs,
-        rewards: selectedResult.rewards,
-        collectableResources: plan.collectableResources,
-        itemBreakdown: plan.stageCalculations.itemBreakdown,
-        overriddenRequiredQuantities: plan.state.overriddenRequiredQuantities,
-      })
-    : null;
+  const summary =
+    config && selectedResult
+      ? summarizeCardFlipPlan({
+          config,
+          cardCount,
+          strategy: plan.state.cardFlipStrategy,
+          costs: selectedResult.costs,
+          rewards: selectedResult.rewards,
+          collectableResources: plan.collectableResources,
+          itemBreakdown: plan.stageCalculations.itemBreakdown,
+          overriddenRequiredQuantities: plan.state.overriddenRequiredQuantities,
+        })
+      : null;
   const cardCostStatement =
     cardFlip.status === "available" && cardFlip.flipCosts[0]?.payments[0]?.resourceName
       ? cardFlipLocale.cardCostStatement(
@@ -74,11 +74,11 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
           <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
             {summary.resources
               .map(({ resource, breakdown }) => {
-                const requiredValue = Math.floor(breakdown.actualRequired);
-                const acquiredValue = Math.floor(breakdown.acquiredSubtotal);
-                const remainingValue = Math.floor(breakdown.remaining);
-                const requiredLines = breakdown.requiredLines.filter(({ value }) => Math.floor(value) !== 0);
-                const acquiredLines = breakdown.acquiredLines.filter(({ value }) => Math.floor(value) !== 0);
+                const requiredValue = Math.round(breakdown.actualRequired);
+                const acquiredValue = Math.round(breakdown.acquiredSubtotal);
+                const remainingValue = Math.round(breakdown.remaining);
+                const requiredLines = breakdown.requiredLines.filter(({ value }) => Math.round(value) !== 0);
+                const acquiredLines = breakdown.acquiredLines.filter(({ value }) => Math.round(value) !== 0);
                 const showRequired = requiredValue !== 0;
                 const showAcquired = acquiredValue !== 0 || acquiredLines.length > 0;
                 const showRemaining = remainingValue !== 0;
@@ -173,7 +173,9 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
       <PageLink
         Icon={ShoppingCartIcon}
         title={cardFlipLocale.returnToCalculator}
-        description={cardCount === 0 && cardCostStatement ? cardCostStatement : cardFlipLocale.returnToCalculatorDescription}
+        description={
+          cardCount === 0 && cardCostStatement ? cardCostStatement : cardFlipLocale.returnToCalculatorDescription
+        }
         to={shopLink}
       />
     </div>
@@ -191,7 +193,7 @@ function PaymentSummary({ label, payments }: { label: string; payments: Minigame
             resourceType={resourceType}
             itemUid={resourceUid}
             imageUrl={imageUrl ?? undefined}
-            label={resourceCountLabel(quantity)}
+            label={formatCardFlipAmount(quantity)}
             name={resourceName}
           />
         ))}
@@ -218,7 +220,7 @@ function RewardSummary({ rewards }: { rewards: RewardItem[] }) {
             itemUid={resourceUid}
             imageUrl={imageUrl ?? undefined}
             rarity={rarity}
-            label={resourceCountLabel(quantity)}
+            label={formatCardFlipAmount(quantity)}
             name={resourceName}
           />
         ))}
@@ -231,14 +233,14 @@ function BreakdownLines({ lines }: { lines: { label: string; value: number }[] }
   return (
     <>
       {lines
-        .filter(({ value }) => Math.floor(value) !== 0)
+        .filter(({ value }) => Math.round(value) !== 0)
         .map(({ label, value }) => (
           <div key={label} className="flex items-center justify-between">
             <span className="text-muted-foreground">
               <span className="mr-1.5">·</span>
               {label}
             </span>
-            <span className="text-muted-foreground">{Math.floor(value).toLocaleString()}</span>
+            <span className="text-muted-foreground">{Math.round(value).toLocaleString()}</span>
           </div>
         ))}
     </>

@@ -128,10 +128,9 @@ describe("CardFlipDetail", () => {
 
   it("uses the selected strategy for current-plan resources and keeps those rows separate", () => {
     const markup = render(2, "sr-reset");
-    const selectedCard = markup.slice(markup.indexOf("SR 이상 획득 시 셔플"), markup.indexOf("4장 모두 뒤집기"));
     const currentPlan = markup.slice(markup.indexOf("현재 계획"), markup.indexOf("카드별 보상 (2종)"));
 
-    expect(selectedCard).toContain("계획에 반영 중");
+    expect(markup).not.toContain("계획에 반영 중");
     expect(currentPlan).toContain("SR 이상 획득 시 셔플");
     expect(currentPlan).toContain("소비 재화");
     expect(currentPlan).toContain("기대 획득 보상");

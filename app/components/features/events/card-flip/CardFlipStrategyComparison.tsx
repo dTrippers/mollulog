@@ -1,12 +1,9 @@
 import { Callout, NumberInput, ResourceCard, Section } from "~/components/primitives";
-import {
-  CARD_FLIP_STRATEGIES,
-  type MinigameConfig,
-} from "~/domain/event-shop";
 import type { CardFlipStrategyResult } from "~/domain/card-flip-strategy";
+import { CARD_FLIP_STRATEGIES, type CardFlipStrategy, type MinigameConfig, type RewardItem } from "~/domain/event-shop";
 import { cardFlipLocale } from "~/locales/ko";
 import type { EventShopPlanContext } from "../shop/ShopCalculatorScreen";
-import { resourceCountLabel } from "../shop/utils";
+import { formatCardFlipAmount } from "../shop/card-flip";
 
 export function CardFlipStrategyComparison({
   plan,
@@ -19,9 +16,30 @@ export function CardFlipStrategyComparison({
 }) {
   const cardCount = plan.state.minigamePlayCount;
   const maxDrawCount = cardFlip.drawRules.maxDrawCount;
+  const selectedStrategy = plan.state.cardFlipStrategy;
+  const columns = CARD_FLIP_STRATEGIES.map((strategy) => comparison.find((result) => result.strategy === strategy));
+  const rewardResources = uniqueResources(comparison.flatMap(({ rewards }) => rewards));
+  const costResources = uniqueResources(comparison.flatMap(({ costs }) => costs));
+  const firstCosts = columns[0]?.costs;
+  const hasCommonCosts =
+    firstCosts !== undefined &&
+    columns.every(
+      (result) =>
+        result !== undefined &&
+        result.costs.length === firstCosts.length &&
+        firstCosts.every((payment) => {
+          const cost = result.costs.find((item) => resourceKey(item) === resourceKey(payment));
+          // Ignore floating-point noise from the expectation calculation, not meaningful cost differences.
+          return (
+            cost !== undefined &&
+            Math.abs(cost.quantity - payment.quantity) <=
+              Number.EPSILON * Math.max(1, cost.quantity, payment.quantity) * 32
+          );
+        }),
+    );
 
   return (
-    <Section title={cardFlipLocale.strategyTitle} description={cardFlipLocale.strategyDescription}>
+    <Section title={cardFlipLocale.strategyTitle}>
       <NumberInput
         label={cardFlipLocale.countLabel}
         id="card-flip-detail-play-count"
@@ -40,147 +58,170 @@ export function CardFlipStrategyComparison({
         </div>
       ) : null}
 
+      <p className="mt-4 text-xs text-muted-foreground">
+        {cardFlipLocale.strategies[selectedStrategy].rule(maxDrawCount)}
+      </p>
+
       <fieldset className="mt-4">
         <legend className="sr-only">{cardFlipLocale.strategyControlLabel}</legend>
-        <div className="grid grid-cols-1 gap-3 lg:grid-cols-3">
-          {CARD_FLIP_STRATEGIES.map((strategy) => {
-            const result = comparison.find((item) => item.strategy === strategy);
-            const selected = plan.state.cardFlipStrategy === strategy;
-            const strategyCopy = cardFlipLocale.strategies[strategy];
-            const label = strategyCopy.label(maxDrawCount);
-            const rule = strategyCopy.rule(maxDrawCount);
-            const labelId = `card-flip-strategy-${strategy}-label`;
-            const ruleId = `card-flip-strategy-${strategy}-rule`;
+        <table className="w-full table-fixed text-sm" aria-label={cardFlipLocale.averageRewards}>
+          <thead>
+            <tr>
+              <th scope="col" className="w-2/5 px-2 py-3 text-left text-xs font-normal text-muted-foreground sm:px-3">
+                {cardCount > 0 ? cardFlipLocale.averageRewards : null}
+              </th>
+              {CARD_FLIP_STRATEGIES.map((strategy) => {
+                const selected = selectedStrategy === strategy;
+                const strategyCopy = cardFlipLocale.strategies[strategy];
+                const labelId = `card-flip-strategy-${strategy}-label`;
+                const ruleId = `card-flip-strategy-${strategy}-rule`;
 
-            return (
-              <label
-                key={strategy}
-                className={`flex cursor-pointer flex-col gap-4 rounded-md border bg-card p-3 has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary ${
-                  selected ? "border-primary ring-1 ring-primary bg-primary/5" : "border-transparent"
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="card-flip-strategy"
-                  value={strategy}
-                  checked={selected}
-                  onChange={() => plan.actions.setCardFlipStrategy(strategy)}
-                  aria-labelledby={labelId}
-                  aria-describedby={ruleId}
-                  className="sr-only"
-                />
-
-                <div className="flex min-w-0 items-start gap-2 lg:min-h-20">
-                  <span
-                    aria-hidden="true"
-                    className={`mt-1 flex size-4 shrink-0 items-center justify-center rounded-full border ${
-                      selected ? "border-primary" : "border-muted-foreground/50"
-                    }`}
+                return (
+                  <th
+                    key={strategy}
+                    scope="col"
+                    className={`px-1 py-3 font-normal sm:px-3 ${selected ? "bg-primary/10" : ""}`}
                   >
-                    {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-                  </span>
-                  <div className="min-w-0 grow">
-                    <div className="flex min-w-0 items-center gap-2">
-                      <span id={labelId} className="min-w-0 break-keep font-semibold" title={label}>
-                        {label}
+                    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md xl:flex-row xl:justify-end has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary">
+                      <input
+                        type="radio"
+                        name="card-flip-strategy"
+                        value={strategy}
+                        checked={selected}
+                        onChange={() => plan.actions.setCardFlipStrategy(strategy)}
+                        aria-labelledby={labelId}
+                        aria-describedby={ruleId}
+                        className="sr-only"
+                      />
+                      <span
+                        aria-hidden="true"
+                        className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
+                          selected ? "border-primary" : "border-muted-foreground/50"
+                        }`}
+                      >
+                        {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
                       </span>
-                      {selected ? (
-                        <span className="shrink-0 rounded-full bg-primary/10 px-2 text-xs font-medium text-primary">
-                          {cardFlipLocale.selectedBadge}
-                        </span>
-                      ) : null}
-                    </div>
-                    <p id={ruleId} className="text-xs text-muted-foreground">
-                      {rule}
-                    </p>
-                  </div>
-                </div>
-
-                {cardCount > 0 && result ? (
-                  <>
-                    <div className="flex flex-col gap-1">
-                      <p className="text-xs text-muted-foreground">{cardFlipLocale.costLabel}</p>
-                      {result.costs.map(({ resourceType, resourceUid, resourceName, imageUrl, quantity }) => (
-                        <div
-                          key={`${resourceType}:${resourceUid}`}
-                          className="flex h-8 min-w-0 items-center gap-2"
-                        >
-                          <ResourceCard
-                            resourceType={resourceType}
-                            itemUid={resourceUid}
-                            imageUrl={imageUrl ?? undefined}
-                            size="sm"
-                            name={resourceName}
-                          />
-                          <span className="min-w-0 truncate text-sm" title={resourceName}>
-                            {resourceName}
-                          </span>
-                          <span className="ml-auto shrink-0 font-semibold tabular-nums">
-                            {quantity.toLocaleString(undefined, { maximumFractionDigits: 1 })}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <p className="text-xs text-muted-foreground">{cardFlipLocale.rewardLabel}</p>
-                      <table className="w-full table-fixed text-sm">
-                        <thead>
-                          <tr className="h-5 text-xs text-muted-foreground">
-                            <th scope="col" className="text-left font-normal">
-                              {cardFlipLocale.rewardHeaders.resource}
-                            </th>
-                            <th scope="col" className="w-16 text-right font-normal">
-                              {cardFlipLocale.rewardHeaders.quantity}
-                            </th>
-                            <th scope="col" className="w-[72px] pl-2 text-right font-normal">
-                              {cardFlipLocale.rewardHeaders.per100}
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {result.rewards.map(
-                            ({ resourceType, resourceUid, resourceName, imageUrl, rarity, quantity, per100Cards }) => (
-                              <tr key={`${resourceType}:${resourceUid}:${rarity ?? ""}`} className="h-8">
-                                <td className="min-w-0">
-                                  <div className="flex min-w-0 items-center gap-2">
-                                    <ResourceCard
-                                      resourceType={resourceType}
-                                      itemUid={resourceUid}
-                                      imageUrl={imageUrl ?? undefined}
-                                      rarity={rarity}
-                                      size="sm"
-                                      name={resourceName}
-                                    />
-                                    <span className="min-w-0 truncate" title={resourceName}>
-                                      {resourceName}
-                                    </span>
-                                  </div>
-                                </td>
-                                <td className="text-right tabular-nums">
-                                  {formatStrategyAmount(quantity, 1)}
-                                </td>
-                                <td className="pl-2 text-right tabular-nums">
-                                  {formatStrategyAmount(per100Cards, 2)}
-                                </td>
-                              </tr>
-                            ),
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </>
-                ) : null}
-              </label>
-            );
-          })}
-        </div>
+                      <span id={labelId} className="min-w-0 break-keep text-center text-sm font-medium xl:text-right">
+                        {strategyCopy.shortLabel}
+                      </span>
+                      <span id={ruleId} className="sr-only">
+                        {strategyCopy.rule(maxDrawCount)}
+                      </span>
+                    </label>
+                  </th>
+                );
+              })}
+            </tr>
+          </thead>
+          {cardCount > 0 ? (
+            <tbody>
+              {rewardResources.map((resource) => (
+                <ResourceComparisonRow
+                  key={resourceKey(resource)}
+                  resource={resource}
+                  quantities={columns.map(
+                    (result) => result?.rewards.find((item) => resourceKey(item) === resourceKey(resource))?.quantity,
+                  )}
+                  selectedStrategy={selectedStrategy}
+                  highlightMaximum
+                />
+              ))}
+            </tbody>
+          ) : null}
+          {cardCount > 0 && !hasCommonCosts ? (
+            <tfoot>
+              <tr>
+                <th colSpan={4} className="px-2 pb-1 pt-4 text-left text-xs font-normal text-muted-foreground sm:px-3">
+                  {cardFlipLocale.costLabel}
+                </th>
+              </tr>
+              {costResources.map((resource) => (
+                <ResourceComparisonRow
+                  key={resourceKey(resource)}
+                  resource={resource}
+                  quantities={columns.map(
+                    (result) => result?.costs.find((item) => resourceKey(item) === resourceKey(resource))?.quantity,
+                  )}
+                  selectedStrategy={selectedStrategy}
+                />
+              ))}
+            </tfoot>
+          ) : null}
+        </table>
       </fieldset>
     </Section>
   );
 }
 
-function formatStrategyAmount(value: number, maximumFractionDigits: number): string {
-  if (value >= 10000) return resourceCountLabel(value);
-  return value.toLocaleString(undefined, { maximumFractionDigits });
+function ResourceComparisonRow({
+  resource,
+  quantities,
+  selectedStrategy,
+  highlightMaximum = false,
+}: {
+  resource: RewardItem;
+  quantities: (number | undefined)[];
+  selectedStrategy: CardFlipStrategy;
+  highlightMaximum?: boolean;
+}) {
+  const availableQuantities = quantities.filter(
+    (quantity): quantity is number => quantity !== undefined && Number.isFinite(quantity),
+  );
+  const maximum = Math.max(...availableQuantities);
+  const tolerance = Number.EPSILON * Math.max(1, maximum) * 32;
+  const hasDifferences =
+    availableQuantities.length === CARD_FLIP_STRATEGIES.length &&
+    availableQuantities.some((quantity) => maximum - quantity > tolerance);
+
+  return (
+    <tr className="even:bg-muted/30">
+      <th scope="row" className="px-2 py-2 text-left font-normal sm:px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <ResourceCard
+            resourceType={resource.resourceType}
+            itemUid={resource.resourceUid}
+            imageUrl={resource.imageUrl ?? undefined}
+            rarity={resource.rarity}
+            size="sm"
+            name={resource.resourceName}
+          />
+          <span className="min-w-0 break-words text-foreground/85">
+            {resource.resourceName ?? cardFlipLocale.resourceNameUnavailable}
+          </span>
+        </div>
+      </th>
+      {CARD_FLIP_STRATEGIES.map((strategy, index) => {
+        const quantity = quantities[index];
+        const isMaximum =
+          highlightMaximum && hasDifferences && quantity !== undefined && maximum - quantity <= tolerance;
+        return (
+          <td
+            key={strategy}
+            className={`px-1 py-2 text-right tabular-nums text-foreground/85 sm:px-3 ${
+              selectedStrategy === strategy ? "bg-primary/10" : ""
+            }`}
+          >
+            {quantity === undefined || !Number.isFinite(quantity) ? (
+              cardFlipLocale.amountUnavailable
+            ) : isMaximum ? (
+              <strong className="font-semibold text-foreground" title={cardFlipLocale.maximumAmountDescription}>
+                <span className="sr-only">{cardFlipLocale.maximumAmount} </span>
+                {formatCardFlipAmount(quantity)}
+              </strong>
+            ) : (
+              formatCardFlipAmount(quantity)
+            )}
+          </td>
+        );
+      })}
+    </tr>
+  );
+}
+
+function resourceKey(resource: RewardItem): string {
+  return `${resource.resourceType}:${resource.resourceUid}:${resource.rarity ?? ""}`;
+}
+
+function uniqueResources(resources: RewardItem[]): RewardItem[] {
+  return [...new Map(resources.map((resource) => [resourceKey(resource), resource])).values()];
 }

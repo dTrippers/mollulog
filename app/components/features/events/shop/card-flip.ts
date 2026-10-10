@@ -9,6 +9,11 @@ import type {
 import { cardFlipLocale, getCardFlipRarity } from "~/locales/ko";
 import { buildResourceBreakdownLines, type ResourceBreakdownLines } from "./calculations/resource-breakdown-lines";
 import type { ItemBreakdownResult } from "./calculations/types";
+import { resourceCountLabel } from "./utils";
+
+export function formatCardFlipAmount(quantity: number): string {
+  return resourceCountLabel(Math.round(quantity));
+}
 
 export type CardFlipPlanSummary = {
   cardCount: number;
