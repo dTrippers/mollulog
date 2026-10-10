@@ -23,10 +23,13 @@ const shopResource: ShopResource = {
   shopAmount: 20,
 };
 
-function renderShopResourceSelector(ownedQuantities: Record<string, number> | null) {
+function renderShopResourceSelector(
+  ownedQuantities: Record<string, number> | null,
+  shopResources: ShopResource[] = [shopResource],
+) {
   return renderToStaticMarkup(
     <ShopResourceSelector
-      shopResources={[shopResource]}
+      shopResources={shopResources}
       ownedQuantities={ownedQuantities}
       collectableResources={[{ ...paymentResource, forPayment: true }]}
       eventUid="event-1"
@@ -70,5 +73,43 @@ describe("ShopResourceSelector owned quantities", () => {
     const markup = renderShopResourceSelector(ownedQuantities);
 
     expect(markup).not.toContain("보유");
+  });
+});
+
+describe("ShopResourceSelector furniture interaction students", () => {
+  const furnitureResource: ShopResource = {
+    ...shopResource,
+    resourceAmount: 5,
+    resource: {
+      type: ResourceTypeEnum.Furniture,
+      uid: "furniture-1",
+      name: "상호작용 가구",
+      rarity: 4,
+      interactionStudents: [{ uid: "student-1", name: "학생" }],
+    },
+  };
+
+  it("provides the furniture student popover trigger while preserving the item amount", () => {
+    const markup = renderShopResourceSelector(null, [furnitureResource]);
+
+    expect(markup).toContain('aria-label="상호작용 가구 상호작용 학생 1명 보기"');
+    expect(textContent(markup)).toContain("5");
+    expect(markup).toContain("<svg");
+  });
+
+  it("omits the interaction trigger for furniture without interaction students", () => {
+    const markup = renderShopResourceSelector(null, [{
+      ...furnitureResource,
+      resource: { ...furnitureResource.resource, interactionStudents: [] },
+    }]);
+
+    expect(markup).not.toContain("상호작용 학생");
+    expect(textContent(markup)).toContain("5");
+  });
+
+  it("does not add furniture interaction controls to other resource types", () => {
+    const markup = renderShopResourceSelector(null);
+
+    expect(markup).not.toContain("상호작용 학생");
   });
 });
