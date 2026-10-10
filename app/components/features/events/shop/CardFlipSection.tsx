@@ -38,14 +38,10 @@ export function CardFlipSection({ config, eventUid, state, actions }: CardFlipSe
         <NumberInput
           label={cardFlipLocale.countLabel}
           id="card-flip-play-count"
-          aria-describedby="card-flip-count-description"
           minValue={0}
           value={state.minigamePlayCount}
           onChange={actions.setMinigamePlayCount}
         />
-        <p id="card-flip-count-description" className="mt-1 text-sm text-muted-foreground">
-          {cardFlipLocale.countDescription}
-        </p>
 
         <div className="mt-4 rounded-md bg-card p-3">
           <p className="text-sm font-semibold text-foreground">{cardFlipLocale.requiredResources}</p>

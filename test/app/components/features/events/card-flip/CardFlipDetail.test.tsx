@@ -65,6 +65,7 @@ function createPlan(
       minigamePlayCount: cardCount,
       overriddenRequiredQuantities: { "photo-card": 450 },
     },
+    actions: { setMinigamePlayCount: () => {} },
     collectableResources: [
       { type: ResourceTypeEnum.Item, uid: "photo-card", name: "포토 카드", forPayment: true },
       { type: ResourceTypeEnum.Item, uid: "candy", name: "선물용 특산 계화과", forPayment: true },
@@ -114,6 +115,7 @@ describe("CardFlipDetail", () => {
 
     expectSectionOrder(markup, "카드별 보상 (2종)", "상점 계산기로 돌아가기");
     expect(markup).toContain("카드 2장 합계");
+    expect(markup).toContain('value="2"');
     expect(markup).toContain("평균 획득 보상");
     expect(markup).toContain("입력한 목표 수량");
     expect(markup).toContain("450");
@@ -121,10 +123,13 @@ describe("CardFlipDetail", () => {
     expect(markup).toContain('href="/events/event-1/shop"');
   });
 
-  it("keeps the same order at zero cards and links directly to card-cost guidance", () => {
+  it("offers card-count input at zero cards and keeps the calculator return link", () => {
     const markup = render({ status: "available", cardCost: photoCard, cards: [cardData] }, 0);
 
-    expectSectionOrder(markup, "카드별 보상 (1종)", "상점 계산기에서 카드 수 입력하기");
+    expectSectionOrder(markup, "카드별 보상 (1종)", "상점 계산기로 돌아가기");
+    expect(markup).toContain("뒤집을 카드 수");
+    expect(markup).toContain('value="0"');
+    expect(markup).toContain("위에서 카드 수를 입력하면");
     expect(markup).toContain("아직 뒤집을 카드 수를 입력하지 않았어요");
     expect(markup).toContain("카드 1장당 포토 카드 200개가 필요해요");
     expect(markup).toContain('href="/events/event-1/shop"');

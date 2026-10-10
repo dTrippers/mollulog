@@ -356,8 +356,8 @@ describe("MiniGameSection for card flip", () => {
       ),
     );
 
-    expect(markup).toContain('aria-describedby="card-flip-count-description"');
-    expect(markup).toContain("카드를 1장 뒤집을 때마다 1로 세요");
+    expect(markup).not.toContain('aria-describedby="card-flip-count-description"');
+    expect(markup).not.toContain("카드를 1장 뒤집을 때마다 1로 세요");
     expect(markup).toContain("카드 1장당");
     expect(markup).toContain("카드 4장 합계");
     expect(markup).toContain("200");

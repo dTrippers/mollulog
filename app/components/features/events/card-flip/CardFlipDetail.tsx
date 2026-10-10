@@ -1,6 +1,6 @@
 import { ArrowPathIcon, ShoppingCartIcon } from "@heroicons/react/16/solid";
 import PageLink from "~/components/features/layout/PageLink";
-import { Callout, ResourceCard, Section } from "~/components/primitives";
+import { Callout, NumberInput, ResourceCard, Section } from "~/components/primitives";
 import type { MinigamePayment, RewardItem } from "~/domain/event-shop";
 import { cardFlipLocale } from "~/locales/ko";
 import { summarizeCardFlipPlan } from "../shop/card-flip";
@@ -37,6 +37,16 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
       <CardFlipCardList cardFlip={cardFlip} />
 
       <Section title={cardFlipLocale.currentPlan} description={cardFlipLocale.currentPlanDescription}>
+        <div className="mb-4">
+          <NumberInput
+            label={cardFlipLocale.countLabel}
+            id="card-flip-detail-play-count"
+            minValue={0}
+            value={cardCount}
+            onChange={plan.actions.setMinigamePlayCount}
+            disabled={!config}
+          />
+        </div>
         {cardCount === 0 ? (
           <Callout
             tone="info"
@@ -46,10 +56,6 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
         ) : (
           <>
             <div className="flex flex-wrap gap-x-7 gap-y-3">
-              <div>
-                <p className="text-xs text-muted-foreground">{cardFlipLocale.cardCount}</p>
-                <p className="mt-1 text-sm font-semibold text-foreground">{cardCount.toLocaleString()}</p>
-              </div>
               {summary ? (
                 <>
                   <PaymentSummary label={cardFlipLocale.perCardCost} payments={summary.perCardCosts} />
@@ -170,7 +176,7 @@ export function CardFlipDetail({ eventUid, plan }: CardFlipDetailProps) {
 
       <PageLink
         Icon={ShoppingCartIcon}
-        title={cardCount === 0 ? cardFlipLocale.enterCardCount : cardFlipLocale.returnToCalculator}
+        title={cardFlipLocale.returnToCalculator}
         description={
           cardCount === 0 && cardCostStatement ? cardCostStatement : cardFlipLocale.returnToCalculatorDescription
         }
