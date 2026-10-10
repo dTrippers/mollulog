@@ -26,7 +26,8 @@
     "dev:doctor": "node scripts/local-dev.mjs doctor",
     "dev:db:status": "node scripts/local-dev.mjs db:status",
     "dev:db:migrate": "node scripts/local-dev.mjs db:migrate",
-    "test:local-dev": "node --test scripts/local-dev.test.mjs"
+    "test:local-dev": "node --test scripts/local-dev.test.mjs",
+    "student-state:migration": "node scripts/student-state-migration.mjs"
   },
   "dependencies": {
     "@cloudflare/kv-asset-handler": "^0.5.0",

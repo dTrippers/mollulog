@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
-import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { drizzle } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import {
   pgGrowthResourceInventoryTable,
@@ -9,12 +9,13 @@ import {
   pgSyncDraftEntriesTable,
   pgSyncDraftsTable,
 } from "~/db/postgres/schema";
+import { type StudentStateTransaction, withStudentStateProjection } from "~/db/postgres/student-state-projection";
 import { parseStudentStateDraftValue, type StudentStateDraftValue } from "~/domain/student-state";
 import { withPostgresClient } from "~/lib/postgres.server";
 
 const PG_WRITE_CHUNK_SIZE = 500;
 const PG_IN_QUERY_CHUNK_SIZE = 500;
-type SyncDraftDb = Pick<NodePgDatabase, "select" | "insert" | "update" | "delete" | "execute">;
+type SyncDraftDb = StudentStateTransaction;
 
 export const syncDraftsTable = pgSyncDraftsTable;
 export const syncDraftEntriesTable = pgSyncDraftEntriesTable;
@@ -341,6 +342,7 @@ export async function createAndApplySyncDraft(
             : entries;
         await applyEntries(tx, userId, input.type, appliedEntries, {
           preserveNullStudentStateFields: input.source === "first_party_ocr",
+          sourceRef: draftUid,
         });
         const now = new Date();
         await tx
@@ -419,6 +421,7 @@ export async function applySyncDraft(env: Env, userId: number, draftUid: string)
           : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
       await applyEntries(tx, userId, draft.type, normalizedEntries, {
         preserveNullStudentStateFields: draft.source === "first_party_ocr",
+        sourceRef: draftUid,
       });
       const now = new Date();
       await tx
@@ -507,62 +510,81 @@ async function applyEntries(
   userId: number,
   type: SyncDraftType,
   entries: Array<{ entryKey: string; value: number } | { entryKey: string; value: StudentStateDraftValue }>,
-  options: { preserveNullStudentStateFields: boolean },
+  options: { preserveNullStudentStateFields: boolean; sourceRef?: string | null },
 ) {
   if (type === "student_state") {
-    await applyStudentStateEntries(
+    const studentEntries = entries.map((entry) => ({
+      entryKey: entry.entryKey,
+      state: entry.value as StudentStateDraftValue,
+    }));
+    await withStudentStateProjection(
       db,
       userId,
-      entries.map((entry) => ({ entryKey: entry.entryKey, state: entry.value as StudentStateDraftValue })),
-      options,
+      studentEntries.map((entry) => entry.entryKey),
+      "sync_draft",
+      async (lockedTx) => applyStudentStateEntries(lockedTx, userId, studentEntries, options),
+      options.sourceRef ?? null,
+    );
+    return;
+  }
+  if (type === "student_tier") {
+    const recruitedEntries = entries as Array<{ entryKey: string; value: number }>;
+    await withStudentStateProjection(
+      db,
+      userId,
+      recruitedEntries.map((entry) => entry.entryKey),
+      "sync_draft",
+      async (lockedTx) => {
+        for (let offset = 0; offset < recruitedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
+          const chunk = recruitedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
+          await lockedTx
+            .insert(pgRecruitedStudentsTable)
+            .values(
+              chunk.map((entry) => ({
+                uid: nanoid(8),
+                userId,
+                studentUid: entry.entryKey,
+                tier: Number(entry.value),
+              })),
+            )
+            .onConflictDoUpdate({
+              target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+              set: { tier: sql`excluded.tier`, updatedAt: new Date() },
+            });
+        }
+      },
+      options.sourceRef ?? null,
     );
     return;
   }
   for (let offset = 0; offset < entries.length; offset += PG_WRITE_CHUNK_SIZE) {
     const chunk = entries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
-    if (type === "item_inventory") {
-      const deletes = chunk.filter((entry) => Number(entry.value) <= 0).map((entry) => entry.entryKey);
-      if (deletes.length > 0) {
-        await db
-          .delete(pgGrowthResourceInventoryTable)
-          .where(
-            and(
-              eq(pgGrowthResourceInventoryTable.userId, userId),
-              inArray(pgGrowthResourceInventoryTable.itemUid, deletes),
-            ),
-          );
-      }
-      const inserts = chunk.filter((entry) => Number(entry.value) > 0);
-      if (inserts.length > 0) {
-        await db
-          .insert(pgGrowthResourceInventoryTable)
-          .values(
-            inserts.map((entry) => ({
-              uid: nanoid(8),
-              userId,
-              itemUid: entry.entryKey,
-              quantity: Number(entry.value),
-            })),
-          )
-          .onConflictDoUpdate({
-            target: [pgGrowthResourceInventoryTable.userId, pgGrowthResourceInventoryTable.itemUid],
-            set: { quantity: sql`excluded.quantity`, updatedAt: new Date() },
-          });
-      }
-    } else {
+    const deletes = chunk.filter((entry) => Number(entry.value) <= 0).map((entry) => entry.entryKey);
+    if (deletes.length > 0) {
       await db
-        .insert(pgRecruitedStudentsTable)
+        .delete(pgGrowthResourceInventoryTable)
+        .where(
+          and(
+            eq(pgGrowthResourceInventoryTable.userId, userId),
+            inArray(pgGrowthResourceInventoryTable.itemUid, deletes),
+          ),
+        );
+    }
+    const inserts = chunk.filter((entry) => Number(entry.value) > 0);
+    if (inserts.length > 0) {
+      await db
+        .insert(pgGrowthResourceInventoryTable)
         .values(
-          chunk.map((entry) => ({
+          inserts.map((entry) => ({
             uid: nanoid(8),
             userId,
-            studentUid: entry.entryKey,
-            tier: Number(entry.value),
+            itemUid: entry.entryKey,
+            quantity: Number(entry.value),
           })),
         )
         .onConflictDoUpdate({
-          target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-          set: { tier: sql`excluded.tier`, updatedAt: new Date() },
+          target: [pgGrowthResourceInventoryTable.userId, pgGrowthResourceInventoryTable.itemUid],
+          set: { quantity: sql`excluded.quantity`, updatedAt: new Date() },
         });
     }
   }
@@ -577,7 +599,7 @@ async function applyStudentStateEntries(
   db: SyncDraftDb,
   userId: number,
   entries: StudentStateApplyEntry[],
-  options: { preserveNullStudentStateFields: boolean },
+  options: { preserveNullStudentStateFields: boolean; sourceRef?: string | null },
 ) {
   const currentStates = entries.flatMap((entry) =>
     entry.state.current ? [{ studentUid: entry.entryKey, state: entry.state.current }] : [],

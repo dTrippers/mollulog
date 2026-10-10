@@ -6,6 +6,11 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { RecruitmentHistories } from "~/components/features/students";
 import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import { validateStudentEquipmentLevels } from "~/domain/student-calculator";
+import {
+  isStaleStudentStateRequestError,
+  STUDENT_STATE_STALE_CODE,
+  STUDENT_STATE_STALE_MESSAGE,
+} from "~/domain/student-state-errors";
 import { isActionValidationError } from "~/lib/action-errors";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
@@ -59,6 +64,8 @@ type StudentBasicInfoActionData =
   | {
       ok: false;
       error: string;
+      code?: string;
+      retryable?: boolean;
     };
 
 function parseNullableInteger(value: unknown): number | null {
@@ -302,6 +309,12 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
     await saveStudentBasicInfo(env, currentUser.id, stateStudentUid, { tier, currentState, relationshipBonds });
     return data<StudentBasicInfoActionData>({ ok: true });
   } catch (error) {
+    if (isStaleStudentStateRequestError(error)) {
+      return data<StudentBasicInfoActionData>(
+        { ok: false, error: STUDENT_STATE_STALE_MESSAGE, code: STUDENT_STATE_STALE_CODE },
+        { status: 409 },
+      );
+    }
     if (isActionValidationError(error)) {
       return data<StudentBasicInfoActionData>({ ok: false, error: error.message }, { status: 400 });
     }
@@ -311,7 +324,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
       operation: "save",
     });
     return data<StudentBasicInfoActionData>(
-      { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요" },
+      { ok: false, error: "육성 상태를 저장하지 못했어요. 잠시 후 다시 시도해주세요", retryable: true },
       { status: 500 },
     );
   }

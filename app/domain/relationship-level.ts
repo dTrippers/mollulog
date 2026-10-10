@@ -127,3 +127,15 @@ export function getRelationshipLevelValidationError(input: RelationshipLevelInpu
 
   return null;
 }
+
+export function getRelationshipGiftPlanValidationError(items: unknown): string | null {
+  if (items == null || typeof items !== "object" || Array.isArray(items)) {
+    return "선물 계획 형식이 올바르지 않아요";
+  }
+  for (const quantity of Object.values(items)) {
+    if (typeof quantity !== "number" || !Number.isFinite(quantity)) {
+      return "선물 계획 형식이 올바르지 않아요";
+    }
+  }
+  return null;
+}

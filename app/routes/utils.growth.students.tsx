@@ -1,11 +1,18 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { getRelationshipLevelValidationError } from "~/domain/relationship-level";
+import {
+  isStaleStudentStateRequestError,
+  STUDENT_STATE_STALE_CODE,
+  STUDENT_STATE_STALE_MESSAGE,
+} from "~/domain/student-state-errors";
+import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
 import {
-  getRecruitedStudents,
   type RecruitedStudentCurrentStateInput,
-  updateRecruitedStudentCurrentState,
+  RecruitedStudentValidationError,
+  updateRecruitedStudentTier,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
 import { updateRelationshipLevel } from "~/models/relationship-level";
@@ -13,8 +20,9 @@ import { getAllStudentsMap } from "~/models/student";
 import {
   removeStudentGrowth,
   type StudentGrowthInput,
+  StudentGrowthValidationError,
+  saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
-  validateStudentGrowthTargetStateForTier,
 } from "~/models/student-growth";
 import GrowthTable from "./utils.growth._components/GrowthTable";
 import { loadStudentRow } from "./utils.growth._components/growth-data.server";
@@ -114,12 +122,12 @@ function parseNullableInteger(value: unknown): number | null {
       return null;
     }
     if (!/^\d+$/.test(trimmed)) {
-      throw new Error("숫자 형식이 올바르지 않아요");
+      throw new ActionValidationError("숫자 형식이 올바르지 않아요");
     }
     return Number(trimmed);
   }
 
-  throw new Error("숫자 형식이 올바르지 않아요");
+  throw new ActionValidationError("숫자 형식이 올바르지 않아요");
 }
 
 function toGrowthInput(payload: Partial<GrowthActionData>): StudentGrowthInput {
@@ -186,33 +194,31 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       return data<GrowthActionResult>({ kind: "listChange", requiresRevalidation: true });
     } else if (payload._intent === "relationship") {
       const relationshipPayload = payload as Partial<RelationshipActionData>;
-      await updateRelationshipLevel(env, currentUser.id, payload.studentUid, {
+      const relationshipInput = {
         currentLevel: parseNullableInteger(relationshipPayload.currentLevel),
         targetLevel: parseNullableInteger(relationshipPayload.targetLevel),
-      });
+      };
+      const relationshipError = getRelationshipLevelValidationError(relationshipInput);
+      if (relationshipError) throw new ActionValidationError(relationshipError);
+      await updateRelationshipLevel(env, currentUser.id, payload.studentUid, relationshipInput);
     } else if (payload._intent === "tier") {
-      const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
-      if (!recruitedStudents.some(({ studentUid }) => studentUid === payload.studentUid)) {
-        return data<GrowthActionResult>({ error: "모집하지 않은 학생이에요" }, { status: 400 });
-      }
       const tierPayload = payload as Partial<TierActionData>;
       if (tierPayload.tier == null || tierPayload.tier < 1 || tierPayload.tier > 9) {
-        return data<GrowthActionResult>({ error: "성급 범위가 올바르지 않아요" }, { status: 400 });
+        throw new ActionValidationError("성급 범위가 올바르지 않아요");
       }
-      await upsertRecruitedStudent(env, currentUser.id, payload.studentUid, tierPayload.tier);
+      await updateRecruitedStudentTier(env, currentUser.id, payload.studentUid, tierPayload.tier);
     } else {
-      const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
-      const recruitedStudent = recruitedStudents.find(({ studentUid }) => studentUid === payload.studentUid);
       const growthPayload = payload as Partial<GrowthActionData>;
       const currentInput = toCurrentStateInput(growthPayload);
       const growthInput = toGrowthInput(growthPayload);
-      const effectiveTargetTier =
-        growthInput.targetTier ?? recruitedStudent?.tier ?? allStudentsMap[payload.studentUid]?.initialTier ?? null;
-      validateStudentGrowthTargetStateForTier(growthInput, effectiveTargetTier);
-      if (recruitedStudent) {
-        await updateRecruitedStudentCurrentState(env, currentUser.id, payload.studentUid, currentInput);
-      }
-      await upsertStudentGrowth(env, currentUser.id, payload.studentUid, growthInput);
+      await saveStudentGrowthAndCurrentState(
+        env,
+        currentUser.id,
+        payload.studentUid,
+        currentInput,
+        growthInput,
+        allStudentsMap[payload.studentUid]?.initialTier ?? null,
+      );
     }
 
     const row = await loadStudentRow(env, currentUser.id, payload.studentUid, {
@@ -224,10 +230,24 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     }
     return data<GrowthActionResult>({ kind: "studentUpdate", student: row, submissionId: payload._submissionId });
   } catch (error) {
-    return data<GrowthActionResult>(
-      { error: error instanceof Error ? error.message : "데이터를 저장하지 못했어요" },
-      { status: 400 },
-    );
+    if (isStaleStudentStateRequestError(error)) {
+      return data<GrowthActionResult>(
+        {
+          error: STUDENT_STATE_STALE_MESSAGE,
+          code: STUDENT_STATE_STALE_CODE,
+        },
+        { status: 409 },
+      );
+    }
+    if (
+      error instanceof ActionValidationError ||
+      error instanceof RecruitedStudentValidationError ||
+      error instanceof StudentGrowthValidationError
+    ) {
+      return data<GrowthActionResult>({ error: error.message, retryable: false }, { status: 400 });
+    }
+    logger.error("Student growth save failed", error, { userId: currentUser.id });
+    return data<GrowthActionResult>({ error: "저장하지 못했어요", retryable: true }, { status: 500 });
   }
 };
 

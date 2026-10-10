@@ -11,7 +11,9 @@ import {
   getWeaponLevelMaxByTier,
   WEAPON_LEVEL_MAX_LEVEL,
 } from "~/domain/student-growth-state";
+import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
+import { shouldSyncRowDraft } from "./growth-row-sync";
 import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
 import { useGrowthViewSettings } from "./growth-view-settings";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
@@ -38,6 +40,10 @@ function getActionSubmissionId(actionData: GrowthActionResult | undefined): stri
 function getActionError(actionData: GrowthActionResult | undefined): string | null {
   if (actionData && "error" in actionData) return actionData.error;
   return null;
+}
+
+function isRetryableActionError(actionData: GrowthActionResult | undefined): boolean {
+  return Boolean(actionData && "error" in actionData && actionData.retryable === true);
 }
 
 const fieldDefinitions = [
@@ -255,6 +261,8 @@ type RelationshipSubmission = {
   values: RelationshipValues;
 };
 
+type RowWriteKind = "growth" | "relationship" | "tier" | "enroll" | "remove";
+
 type RowState = {
   savedValues: GrowthValues;
   draftValues: GrowthValues;
@@ -265,8 +273,12 @@ type RowState = {
   savedRelationshipValues: RelationshipValues;
   draftRelationshipValues: RelationshipValues;
   relationshipError: string | null;
+  tierError: string | null;
   tierDraft: number;
   enrollError: string | null;
+  removeError: string | null;
+  retryAvailable: Record<RowWriteKind, boolean>;
+  staleWriteBlocked: boolean;
   isPendingSave: boolean;
 };
 
@@ -280,14 +292,20 @@ type RowAction =
   | { type: "setPendingSave"; pending: boolean }
   | { type: "setGrowthError"; error: string | null }
   | { type: "setRelationshipError"; error: string | null }
+  | { type: "setTierError"; error: string | null }
+  | { type: "setRemoveError"; error: string | null }
+  | { type: "setRetryAvailable"; kind: RowWriteKind; available: boolean }
+  | { type: "setStaleWriteBlocked" }
   | { type: "clearEnrollError" }
   | { type: "growthSuccess"; submitted: GrowthSubmission }
-  | { type: "growthFailure"; error: string; submitted: GrowthSubmission }
+  | { type: "growthFailure"; error: string; retryable: boolean; submitted: GrowthSubmission }
   | { type: "relationshipSuccess"; submitted: RelationshipSubmission }
-  | { type: "relationshipFailure"; error: string }
-  | { type: "tierFailure"; tier: number }
+  | { type: "relationshipFailure"; error: string; retryable: boolean }
+  | { type: "tierFailure"; error: string; retryable: boolean; persistedTier: number }
   | { type: "enrollSuccess" }
-  | { type: "enrollFailure"; error: string };
+  | { type: "enrollFailure"; error: string; retryable: boolean }
+  | { type: "removeSuccess" }
+  | { type: "removeFailure"; error: string; retryable: boolean };
 
 function createRowState(
   initialValues: GrowthValues,
@@ -304,8 +322,12 @@ function createRowState(
     savedRelationshipValues: initialRelationshipValues,
     draftRelationshipValues: initialRelationshipValues,
     relationshipError: null,
+    tierError: null,
     tierDraft: student.tier ?? student.initialTier,
     enrollError: null,
+    removeError: null,
+    retryAvailable: { growth: false, relationship: false, tier: false, enroll: false, remove: false },
+    staleWriteBlocked: false,
     isPendingSave: false,
   };
 }
@@ -345,6 +367,14 @@ function rowReducer(state: RowState, action: RowAction): RowState {
       return { ...state, growthError: action.error };
     case "setRelationshipError":
       return { ...state, relationshipError: action.error };
+    case "setTierError":
+      return { ...state, tierError: action.error };
+    case "setRemoveError":
+      return { ...state, removeError: action.error };
+    case "setRetryAvailable":
+      return { ...state, retryAvailable: { ...state.retryAvailable, [action.kind]: action.available } };
+    case "setStaleWriteBlocked":
+      return { ...state, staleWriteBlocked: true, isPendingSave: false };
     case "clearEnrollError":
       return { ...state, enrollError: null };
     case "growthSuccess":
@@ -361,37 +391,60 @@ function rowReducer(state: RowState, action: RowAction): RowState {
             ? action.submitted.targetTier
             : state.targetTierDraft,
         growthError: null,
+        retryAvailable: { ...state.retryAvailable, growth: false },
         isPendingSave: false,
       };
-    case "growthFailure":
+    case "growthFailure": {
+      // A rejected input goes back to the saved values; a retryable failure keeps the draft for retry.
+      const revert = !action.retryable && state.growthDraftRevision === action.submitted.draftRevision;
       return {
         ...state,
         growthError: action.error,
-        draftValues:
-          state.growthDraftRevision === action.submitted.draftRevision ? state.savedValues : state.draftValues,
-        targetTierDraft:
-          state.growthDraftRevision === action.submitted.draftRevision ? state.targetTierSaved : state.targetTierDraft,
+        draftValues: revert ? state.savedValues : state.draftValues,
+        targetTierDraft: revert ? state.targetTierSaved : state.targetTierDraft,
+        retryAvailable: { ...state.retryAvailable, growth: action.retryable },
         isPendingSave: false,
       };
+    }
     case "relationshipSuccess":
       return {
         ...state,
         savedRelationshipValues: { ...action.submitted.values },
         draftRelationshipValues: { ...action.submitted.values },
         relationshipError: null,
+        retryAvailable: { ...state.retryAvailable, relationship: false },
       };
     case "relationshipFailure":
       return {
         ...state,
         relationshipError: action.error,
-        draftRelationshipValues: state.savedRelationshipValues,
+        draftRelationshipValues: action.retryable ? state.draftRelationshipValues : state.savedRelationshipValues,
+        retryAvailable: { ...state.retryAvailable, relationship: action.retryable },
       };
     case "tierFailure":
-      return { ...state, tierDraft: action.tier, isPendingSave: false };
+      return {
+        ...state,
+        tierError: action.error,
+        tierDraft: action.retryable ? state.tierDraft : action.persistedTier,
+        retryAvailable: { ...state.retryAvailable, tier: action.retryable },
+        isPendingSave: false,
+      };
     case "enrollSuccess":
-      return { ...state, enrollError: null };
+      return { ...state, enrollError: null, retryAvailable: { ...state.retryAvailable, enroll: false } };
     case "enrollFailure":
-      return { ...state, enrollError: action.error };
+      return {
+        ...state,
+        enrollError: action.error,
+        retryAvailable: { ...state.retryAvailable, enroll: action.retryable },
+      };
+    case "removeSuccess":
+      return { ...state, removeError: null, retryAvailable: { ...state.retryAvailable, remove: false } };
+    case "removeFailure":
+      return {
+        ...state,
+        removeError: action.error,
+        retryAvailable: { ...state.retryAvailable, remove: action.retryable },
+      };
   }
 
   return state;
@@ -414,22 +467,31 @@ function GrowthRow({
   const initialValues = useMemo(() => pickGrowthValues(student), [student]);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submittedRef = useRef<GrowthSubmission | null>(null);
+  const growthRetryRef = useRef<GrowthSubmission | null>(null);
 
   const relationshipFetcher = useFetcher<GrowthActionResult>();
   const initialRelationshipValues = useMemo(() => pickRelationshipValues(student), [student]);
   const relationshipSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const relationshipSubmittedRef = useRef<RelationshipSubmission | null>(null);
+  const relationshipRetryRef = useRef<RelationshipSubmission | null>(null);
 
   const tierFetcher = useFetcher<GrowthActionResult>();
   const tierSubmittedRef = useRef<{ id: string; tier: number } | null>(null);
+  const tierRetryRef = useRef<{ id: string; tier: number } | null>(null);
+  const persistedTierRef = useRef(student.tier ?? student.initialTier);
+  persistedTierRef.current = student.tier ?? student.initialTier;
 
   const removeFetcher = useFetcher<GrowthActionResult>();
+  const removeSubmittedRef = useRef<{ id: string } | null>(null);
+  const removeRetryRef = useRef(false);
   const enrollFetcher = useFetcher<GrowthActionResult>();
   const enrollSubmittedRef = useRef<{ id: string } | null>(null);
+  const enrollRetryRef = useRef(false);
   const resourceRequirementsFetcher = useFetcher<GrowthActionResult>();
   const resourceRequirementsSubmittedRef = useRef<{ id: string } | null>(null);
   const submissionSequenceRef = useRef(0);
   const growthDraftRevisionRef = useRef(0);
+  const staleWriteBlockedRef = useRef(false);
   const [rowState, dispatchRow] = useReducer(
     rowReducer,
     { initialValues, initialRelationshipValues, student },
@@ -469,6 +531,81 @@ function GrowthRow({
     growthDraftRevisionRef.current += 1;
     return growthDraftRevisionRef.current;
   };
+  const blockRowWritesAsStale = useCallback(() => {
+    if (staleWriteBlockedRef.current) return;
+    staleWriteBlockedRef.current = true;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    if (relationshipSaveTimerRef.current) clearTimeout(relationshipSaveTimerRef.current);
+    saveTimerRef.current = null;
+    relationshipSaveTimerRef.current = null;
+    submittedRef.current = null;
+    relationshipSubmittedRef.current = null;
+    tierSubmittedRef.current = null;
+    enrollSubmittedRef.current = null;
+    removeSubmittedRef.current = null;
+    growthRetryRef.current = null;
+    relationshipRetryRef.current = null;
+    tierRetryRef.current = null;
+    enrollRetryRef.current = false;
+    removeRetryRef.current = false;
+    dispatchRow({ type: "setStaleWriteBlocked" });
+  }, []);
+
+  const submitGrowth = (submitted: GrowthSubmission) => {
+    if (staleWriteBlockedRef.current) return;
+    const next = { ...submitted, id: nextSubmissionId() };
+    submittedRef.current = next;
+    fetcher.submit(
+      { studentUid: student.uid, _submissionId: next.id, ...next.values, targetTier: next.targetTier },
+      { method: "post", encType: "application/json" },
+    );
+  };
+
+  const submitRelationship = (submitted: RelationshipSubmission) => {
+    if (staleWriteBlockedRef.current) return;
+    const next = { ...submitted, id: nextSubmissionId() };
+    relationshipSubmittedRef.current = next;
+    relationshipFetcher.submit(
+      {
+        _intent: "relationship",
+        _submissionId: next.id,
+        studentUid: student.uid,
+        currentLevel: next.values.relationshipCurrentLevel,
+        targetLevel: next.values.relationshipTargetLevel,
+      },
+      { method: "post", encType: "application/json" },
+    );
+  };
+
+  const submitTier = (tier: number) => {
+    if (staleWriteBlockedRef.current) return;
+    const id = nextSubmissionId();
+    tierSubmittedRef.current = { id, tier };
+    tierFetcher.submit(
+      { _intent: "tier", _submissionId: id, studentUid: student.uid, tier },
+      { method: "post", encType: "application/json" },
+    );
+  };
+
+  const submitEnroll = () => {
+    if (staleWriteBlockedRef.current) return;
+    const id = nextSubmissionId();
+    enrollSubmittedRef.current = { id };
+    enrollFetcher.submit(
+      { _intent: "enroll", _submissionId: id, studentUid: student.uid },
+      { method: "post", encType: "application/json" },
+    );
+  };
+
+  const submitRemove = () => {
+    if (staleWriteBlockedRef.current) return;
+    const id = nextSubmissionId();
+    removeSubmittedRef.current = { id };
+    removeFetcher.submit(
+      { _intent: "remove", _submissionId: id, studentUid: student.uid },
+      { method: "post", encType: "application/json" },
+    );
+  };
   const requestResourceRequirements = useCallback(() => {
     submissionSequenceRef.current += 1;
     const submissionId = `${student.uid}:${submissionSequenceRef.current}`;
@@ -480,22 +617,22 @@ function GrowthRow({
   }, [resourceRequirementsFetcher, student.uid]);
 
   useEffect(() => {
+    if (staleWriteBlockedRef.current) return;
     // Always sync tier display
     const nextTier = student.tier ?? student.initialTier;
     dispatchRow({ type: "setTierDraft", tier: nextTier });
-    const shouldKeepSubmittedValues =
-      fetcher.state === "idle" &&
-      saveTimerRef.current == null &&
-      submittedRef.current != null &&
-      isActionSuccess(fetcher.data);
-    if (shouldKeepSubmittedValues) return;
-    // Skip draft reset if growth save is in-flight or pending
-    if (fetcher.state !== "idle" || saveTimerRef.current != null) return;
+    const shouldSync = shouldSyncRowDraft({
+      isIdle: fetcher.state === "idle",
+      hasScheduledSave: saveTimerRef.current != null,
+      hasUnhandledSubmission: submittedRef.current != null,
+      hasRetryableDraft: growthRetryRef.current != null,
+    });
+    if (!shouldSync) return;
     growthDraftRevisionRef.current = 0;
     dispatchRow({ type: "syncGrowth", values: initialValues, targetTier: student.targetTier, tier: nextTier });
     submittedRef.current = null;
     tierSubmittedRef.current = null;
-  }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state, fetcher.data]);
+  }, [initialValues, student.targetTier, student.tier, student.initialTier, fetcher.state]);
 
   useEffect(() => {
     if (!isResourceRequirementsOpen) {
@@ -520,19 +657,28 @@ function GrowthRow({
   }, [isResourceRequirementsOpen, resourceRequirements]);
 
   useEffect(() => {
-    const shouldKeepSubmittedValues =
-      relationshipFetcher.state === "idle" &&
-      relationshipSaveTimerRef.current == null &&
-      relationshipSubmittedRef.current != null &&
-      isActionSuccess(relationshipFetcher.data);
-    if (shouldKeepSubmittedValues) return;
-    if (relationshipFetcher.state !== "idle" || relationshipSaveTimerRef.current != null) return;
+    if (staleWriteBlockedRef.current) return;
+    const shouldSync = shouldSyncRowDraft({
+      isIdle: relationshipFetcher.state === "idle",
+      hasScheduledSave: relationshipSaveTimerRef.current != null,
+      hasUnhandledSubmission: relationshipSubmittedRef.current != null,
+      hasRetryableDraft: relationshipRetryRef.current != null,
+    });
+    if (!shouldSync) return;
     dispatchRow({ type: "syncRelationship", values: initialRelationshipValues });
     relationshipSubmittedRef.current = null;
-  }, [initialRelationshipValues, relationshipFetcher.state, relationshipFetcher.data]);
+  }, [initialRelationshipValues, relationshipFetcher.state]);
 
   useEffect(() => {
     if (fetcher.state !== "idle") return;
+    if (isStaleStudentStateActionResult(fetcher.data)) {
+      blockRowWritesAsStale();
+      return;
+    }
+    if (staleWriteBlockedRef.current) {
+      dispatchRow({ type: "setPendingSave", pending: false });
+      return;
+    }
     dispatchRow({ type: "setPendingSave", pending: false });
     if (!submittedRef.current) return;
     const submitted = submittedRef.current;
@@ -540,6 +686,7 @@ function GrowthRow({
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     submittedRef.current = null;
     if (isActionSuccess(fetcher.data)) {
+      growthRetryRef.current = null;
       dispatchRow({ type: "growthSuccess", submitted });
       const next = extractStudentUpdate(fetcher.data);
       if (next) {
@@ -549,18 +696,26 @@ function GrowthRow({
     } else {
       const err = getActionError(fetcher.data);
       if (err) {
-        dispatchRow({ type: "growthFailure", error: err, submitted });
+        const retryable = isRetryableActionError(fetcher.data);
+        growthRetryRef.current = retryable ? submitted : null;
+        dispatchRow({ type: "growthFailure", error: err, retryable, submitted });
       }
     }
-  }, [fetcher.state, fetcher.data, onStudentUpdate, requestResourceRequirements]);
+  }, [fetcher.state, fetcher.data, onStudentUpdate, requestResourceRequirements, blockRowWritesAsStale]);
 
   useEffect(() => {
     if (relationshipFetcher.state !== "idle" || !relationshipSubmittedRef.current) return;
+    if (isStaleStudentStateActionResult(relationshipFetcher.data)) {
+      blockRowWritesAsStale();
+      return;
+    }
+    if (staleWriteBlockedRef.current) return;
     const submitted = relationshipSubmittedRef.current;
     const responseSubmissionId = getActionSubmissionId(relationshipFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     relationshipSubmittedRef.current = null;
     if (isActionSuccess(relationshipFetcher.data)) {
+      relationshipRetryRef.current = null;
       dispatchRow({ type: "relationshipSuccess", submitted });
       const next = extractStudentUpdate(relationshipFetcher.data);
       if (next) {
@@ -570,40 +725,60 @@ function GrowthRow({
     } else {
       const err = getActionError(relationshipFetcher.data);
       if (err) {
-        dispatchRow({ type: "relationshipFailure", error: err });
+        const retryable = isRetryableActionError(relationshipFetcher.data);
+        relationshipRetryRef.current = retryable ? submitted : null;
+        dispatchRow({ type: "relationshipFailure", error: err, retryable });
       }
     }
-  }, [relationshipFetcher.state, relationshipFetcher.data, onStudentUpdate, requestResourceRequirements]);
+  }, [
+    relationshipFetcher.state,
+    relationshipFetcher.data,
+    onStudentUpdate,
+    requestResourceRequirements,
+    blockRowWritesAsStale,
+  ]);
 
   useEffect(() => {
     if (tierFetcher.state !== "idle") return;
+    if (isStaleStudentStateActionResult(tierFetcher.data)) {
+      blockRowWritesAsStale();
+      return;
+    }
+    if (staleWriteBlockedRef.current) return;
     dispatchRow({ type: "setPendingSave", pending: false });
     if (tierSubmittedRef.current == null) return;
     const submitted = tierSubmittedRef.current;
     const responseSubmissionId = getActionSubmissionId(tierFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
-    tierSubmittedRef.current = null;
     if (isActionSuccess(tierFetcher.data)) {
+      tierSubmittedRef.current = null;
+      tierRetryRef.current = null;
+      dispatchRow({ type: "setTierError", error: null });
+      dispatchRow({ type: "setRetryAvailable", kind: "tier", available: false });
       const next = extractStudentUpdate(tierFetcher.data);
       if (next) {
         onStudentUpdate(next);
         requestResourceRequirements();
       }
     } else {
-      dispatchRow({ type: "tierFailure", tier: student.tier ?? student.initialTier });
+      tierSubmittedRef.current = null;
+      const err = getActionError(tierFetcher.data);
+      if (err) {
+        const retryable = isRetryableActionError(tierFetcher.data);
+        tierRetryRef.current = retryable ? submitted : null;
+        dispatchRow({ type: "tierFailure", error: err, retryable, persistedTier: persistedTierRef.current });
+      }
     }
-  }, [
-    tierFetcher.state,
-    tierFetcher.data,
-    student.tier,
-    student.initialTier,
-    onStudentUpdate,
-    requestResourceRequirements,
-  ]);
+  }, [tierFetcher.state, tierFetcher.data, onStudentUpdate, requestResourceRequirements, blockRowWritesAsStale]);
 
   useEffect(() => {
     if (enrollFetcher.state !== "idle") return;
     if (!enrollFetcher.data) return;
+    if (isStaleStudentStateActionResult(enrollFetcher.data)) {
+      blockRowWritesAsStale();
+      return;
+    }
+    if (staleWriteBlockedRef.current) return;
     if (!enrollSubmittedRef.current) return;
     const submitted = enrollSubmittedRef.current;
     const responseSubmissionId = getActionSubmissionId(enrollFetcher.data);
@@ -622,9 +797,33 @@ function GrowthRow({
 
     const err = getActionError(enrollFetcher.data);
     if (err) {
-      dispatchRow({ type: "enrollFailure", error: err });
+      const retryable = isRetryableActionError(enrollFetcher.data);
+      enrollRetryRef.current = retryable;
+      dispatchRow({ type: "enrollFailure", error: err, retryable });
     }
-  }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate, requestResourceRequirements]);
+  }, [enrollFetcher.state, enrollFetcher.data, onStudentUpdate, requestResourceRequirements, blockRowWritesAsStale]);
+
+  useEffect(() => {
+    if (removeFetcher.state !== "idle" || !removeSubmittedRef.current) return;
+    if (isStaleStudentStateActionResult(removeFetcher.data)) {
+      blockRowWritesAsStale();
+      return;
+    }
+    if (staleWriteBlockedRef.current) return;
+    if (isActionSuccess(removeFetcher.data)) {
+      removeSubmittedRef.current = null;
+      removeRetryRef.current = false;
+      dispatchRow({ type: "removeSuccess" });
+      return;
+    }
+    removeSubmittedRef.current = null;
+    const err = getActionError(removeFetcher.data);
+    if (err) {
+      const retryable = isRetryableActionError(removeFetcher.data);
+      removeRetryRef.current = retryable;
+      dispatchRow({ type: "removeFailure", error: err, retryable });
+    }
+  }, [removeFetcher.state, removeFetcher.data, blockRowWritesAsStale]);
 
   useEffect(() => {
     if (resourceRequirementsFetcher.state !== "idle" || !resourceRequirementsSubmittedRef.current) return;
@@ -640,10 +839,12 @@ function GrowthRow({
   }, [resourceRequirementsFetcher.state, resourceRequirementsFetcher.data, onStudentUpdate]);
 
   const scheduleAutoSave = (values: GrowthValues, targetTier: number | null, draftRevision: number) => {
+    if (staleWriteBlockedRef.current) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     dispatchRow({ type: "setPendingSave", pending: true });
     saveTimerRef.current = setTimeout(() => {
       saveTimerRef.current = null;
+      if (staleWriteBlockedRef.current) return;
       const validationError = getClientValidationError(values, tierDraft, targetTier);
       if (validationError) {
         dispatchRow({ type: "setGrowthError", error: validationError });
@@ -651,19 +852,17 @@ function GrowthRow({
         return;
       }
       dispatchRow({ type: "setGrowthError", error: null });
-      const submissionId = nextSubmissionId();
-      submittedRef.current = { id: submissionId, values, targetTier, draftRevision };
-      fetcher.submit(
-        { studentUid: student.uid, _submissionId: submissionId, ...values, targetTier },
-        { method: "post", encType: "application/json" },
-      );
+      dispatchRow({ type: "setRetryAvailable", kind: "growth", available: false });
+      submitGrowth({ id: "", values, targetTier, draftRevision });
     }, 500);
   };
 
   const scheduleRelationshipSave = (values: RelationshipValues) => {
+    if (staleWriteBlockedRef.current) return;
     if (relationshipSaveTimerRef.current) clearTimeout(relationshipSaveTimerRef.current);
     relationshipSaveTimerRef.current = setTimeout(() => {
       relationshipSaveTimerRef.current = null;
+      if (staleWriteBlockedRef.current) return;
       const validationError = getRelationshipLevelValidationError({
         currentLevel: values.relationshipCurrentLevel,
         targetLevel: values.relationshipTargetLevel,
@@ -673,18 +872,8 @@ function GrowthRow({
         return;
       }
       dispatchRow({ type: "setRelationshipError", error: null });
-      const submissionId = nextSubmissionId();
-      relationshipSubmittedRef.current = { id: submissionId, values };
-      relationshipFetcher.submit(
-        {
-          _intent: "relationship",
-          _submissionId: submissionId,
-          studentUid: student.uid,
-          currentLevel: values.relationshipCurrentLevel,
-          targetLevel: values.relationshipTargetLevel,
-        },
-        { method: "post", encType: "application/json" },
-      );
+      dispatchRow({ type: "setRetryAvailable", kind: "relationship", available: false });
+      submitRelationship({ id: "", values });
     }, 500);
   };
 
@@ -712,14 +901,12 @@ function GrowthRow({
   };
 
   const handleCurrentTierChange = (newTier: number) => {
+    if (staleWriteBlockedRef.current) return;
     dispatchRow({ type: "setTierDraft", tier: newTier });
     dispatchRow({ type: "setPendingSave", pending: true });
-    const submissionId = nextSubmissionId();
-    tierSubmittedRef.current = { id: submissionId, tier: newTier };
-    tierFetcher.submit(
-      { _intent: "tier", _submissionId: submissionId, studentUid: student.uid, tier: newTier },
-      { method: "post", encType: "application/json" },
-    );
+    dispatchRow({ type: "setTierError", error: null });
+    dispatchRow({ type: "setRetryAvailable", kind: "tier", available: false });
+    submitTier(newTier);
   };
 
   const handleSetAllMaxCurrent = () => {
@@ -744,12 +931,8 @@ function GrowthRow({
     if (!validationError) {
       dispatchRow({ type: "setGrowthError", error: null });
       dispatchRow({ type: "setPendingSave", pending: true });
-      const submissionId = nextSubmissionId();
-      submittedRef.current = { id: submissionId, values: newValues, targetTier: targetTierDraft, draftRevision };
-      fetcher.submit(
-        { studentUid: student.uid, _submissionId: submissionId, ...newValues, targetTier: targetTierDraft },
-        { method: "post", encType: "application/json" },
-      );
+      dispatchRow({ type: "setRetryAvailable", kind: "growth", available: false });
+      submitGrowth({ id: "", values: newValues, targetTier: targetTierDraft, draftRevision });
     }
   };
 
@@ -770,7 +953,37 @@ function GrowthRow({
     scheduleAutoSave(newValues, targetTierDraft, draftRevision);
   };
 
-  const displayedError = enrollError ?? growthError ?? relationshipError;
+  const displayedErrors = [
+    { kind: "enroll" as const, error: enrollError },
+    { kind: "growth" as const, error: growthError },
+    { kind: "relationship" as const, error: relationshipError },
+    { kind: "tier" as const, error: rowState.tierError },
+    { kind: "remove" as const, error: rowState.removeError },
+  ].filter((failure): failure is { kind: RowWriteKind; error: string } => failure.error !== null);
+
+  const handleRetry = (kind: RowWriteKind) => {
+    if (staleWriteBlockedRef.current || !rowState.retryAvailable[kind]) return;
+    dispatchRow({ type: "setRetryAvailable", kind, available: false });
+    if (kind === "growth" && growthRetryRef.current) {
+      dispatchRow({ type: "setGrowthError", error: null });
+      submitGrowth(growthRetryRef.current);
+    } else if (kind === "relationship" && relationshipRetryRef.current) {
+      dispatchRow({ type: "setRelationshipError", error: null });
+      submitRelationship(relationshipRetryRef.current);
+    } else if (kind === "tier" && tierRetryRef.current) {
+      dispatchRow({ type: "setTierError", error: null });
+      dispatchRow({ type: "setPendingSave", pending: true });
+      submitTier(tierRetryRef.current.tier);
+    } else if (kind === "enroll" && enrollRetryRef.current) {
+      dispatchRow({ type: "clearEnrollError" });
+      enrollRetryRef.current = false;
+      submitEnroll();
+    } else if (kind === "remove" && removeRetryRef.current) {
+      dispatchRow({ type: "setRemoveError", error: null });
+      removeRetryRef.current = false;
+      submitRemove();
+    }
+  };
   const isResourceRequirementsReady = resourceRequirements != null;
   const isCalculatingResources =
     !isResourceRequirementsReady ||
@@ -872,7 +1085,21 @@ function GrowthRow({
             <div className="flex min-w-0 grow items-center gap-2">
               <ProfileImage studentUid={student.uid} />
               <span className="truncate text-sm font-semibold text-foreground">{student.name}</span>
-              {displayedError && <p className="text-xs text-red-500 dark:text-red-400">{displayedError}</p>}
+              {rowState.staleWriteBlocked ? (
+                <div className="flex flex-wrap items-center gap-2" role="alert">
+                  <p className="text-xs text-red-500 dark:text-red-400">{STUDENT_STATE_STALE_MESSAGE}</p>
+                  <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
+                </div>
+              ) : (
+                displayedErrors.map(({ kind, error }) => (
+                  <div key={kind} className="flex flex-wrap items-center gap-1.5" role="alert">
+                    <p className="text-xs text-red-500 dark:text-red-400">{error}</p>
+                    {rowState.retryAvailable[kind] ? (
+                      <Button text="다시 시도" size="xs" onClick={() => handleRetry(kind)} />
+                    ) : null}
+                  </div>
+                ))
+              )}
             </div>
             <Button size="xs" className="bg-transparent" to={`/students/${encodeURIComponent(student.uid)}`}>
               학생부
@@ -889,13 +1116,13 @@ function GrowthRow({
             <Button
               size="xs"
               variant="danger-subtle"
-              onClick={() =>
-                confirm("정말로 성장 목표를 삭제할까요? 삭제된 기록은 복구할 수 없어요.") &&
-                removeFetcher.submit(
-                  { _intent: "remove", studentUid: student.uid },
-                  { method: "post", encType: "application/json" },
-                )
-              }
+              onClick={() => {
+                if (staleWriteBlockedRef.current) return;
+                if (!confirm("정말로 성장 목표를 삭제할까요? 삭제된 기록은 복구할 수 없어요.")) return;
+                dispatchRow({ type: "setRemoveError", error: null });
+                dispatchRow({ type: "setRetryAvailable", kind: "remove", available: false });
+                submitRemove();
+              }}
             >
               삭제
             </Button>
@@ -1024,13 +1251,10 @@ function GrowthRow({
                   <Button
                     size="xs"
                     onClick={() => {
+                      if (staleWriteBlockedRef.current) return;
                       dispatchRow({ type: "clearEnrollError" });
-                      const submissionId = nextSubmissionId();
-                      enrollSubmittedRef.current = { id: submissionId };
-                      enrollFetcher.submit(
-                        { _intent: "enroll", _submissionId: submissionId, studentUid: student.uid },
-                        { method: "post", encType: "application/json" },
-                      );
+                      dispatchRow({ type: "setRetryAvailable", kind: "enroll", available: false });
+                      submitEnroll();
                     }}
                   >
                     모집 학생으로 등록

@@ -50,6 +50,7 @@ import type { RecruitmentResultStudent } from "~/models/recruitment-result";
 import type { ProfileVisibility, SenseiRole } from "~/models/sensei";
 
 const timestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "date" });
+const exactTimestamptz = (name: string) => timestamp(name, { withTimezone: true, mode: "string" });
 
 export const pgPlannerStatesTable = pgTable(
   "planner_states",
@@ -1012,6 +1013,111 @@ export const pgRelationshipLevelsTable = pgTable(
     uniqueIndex("user_relationship_levels_uid_uidx").on(table.uid),
     uniqueIndex("user_relationship_levels_user_student_uidx").on(table.userId, table.studentId),
     index("user_relationship_levels_user_id_idx").on(table.userId),
+  ],
+);
+
+/** Additive student-state projection used while legacy reads remain authoritative. */
+export const pgStudentStatesTable = pgTable(
+  "student_states",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    recruitedStudentUid: text("recruited_student_uid"),
+    relationshipLevelUid: text("relationship_level_uid"),
+    tier: integer(),
+    level: integer(),
+    skillEx: integer("skill_ex"),
+    skillNormal: integer("skill_normal"),
+    skillEnhanced: integer("skill_enhanced"),
+    skillSub: integer("skill_sub"),
+    equip1: integer(),
+    equip2: integer(),
+    equip3: integer(),
+    equipSpecial: integer("equip_special"),
+    equip1Level: integer("equip1_level"),
+    equip2Level: integer("equip2_level"),
+    equip3Level: integer("equip3_level"),
+    weaponLevel: integer("weapon_level"),
+    abilityHp: integer("ability_hp"),
+    abilityAtk: integer("ability_atk"),
+    abilityHeal: integer("ability_heal"),
+    relationshipCurrentLevel: integer("relationship_current_level"),
+    relationshipCurrentExp: integer("relationship_current_exp"),
+    recruitedAt: exactTimestamptz("recruited_at"),
+    deletedAt: timestamptz("deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_states_uid_uidx").on(table.uid),
+    uniqueIndex("student_states_user_student_uidx").on(table.userId, table.studentUid),
+    index("student_states_user_id_idx").on(table.userId),
+  ],
+);
+
+/** Growth and relationship targets stay distinct from the student's current state. */
+export const pgStudentTargetsTable = pgTable(
+  "student_targets",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    studentGrowthUid: text("student_growth_uid"),
+    relationshipLevelUid: text("relationship_level_uid"),
+    targetLevel: integer("target_level"),
+    targetSkillEx: integer("target_skill_ex"),
+    targetSkillNormal: integer("target_skill_normal"),
+    targetSkillEnhanced: integer("target_skill_enhanced"),
+    targetSkillSub: integer("target_skill_sub"),
+    targetEquip1: integer("target_equip1"),
+    targetEquip2: integer("target_equip2"),
+    targetEquip3: integer("target_equip3"),
+    targetEquipSpecial: integer("target_equip_special"),
+    targetTier: integer("target_tier"),
+    targetWeaponLevel: integer("target_weapon_level"),
+    targetAbilityHp: integer("target_ability_hp"),
+    targetAbilityAtk: integer("target_ability_atk"),
+    targetAbilityHeal: integer("target_ability_heal"),
+    relationshipTargetLevel: integer("relationship_target_level"),
+    giftPlan: jsonb("gift_plan").$type<Record<string, number>>().notNull().default({}),
+    plannerAddedAt: exactTimestamptz("planner_added_at"),
+    deletedAt: timestamptz("deleted_at"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("student_targets_uid_uidx").on(table.uid),
+    uniqueIndex("student_targets_user_student_uidx").on(table.userId, table.studentUid),
+    index("student_targets_user_id_idx").on(table.userId),
+  ],
+);
+
+/** One-row control record; its seeded default keeps P4 semantics disabled. */
+export const pgStudentStateMigrationControlTable = pgTable("student_state_migration_control", {
+  key: text().primaryKey(),
+  nullableSemanticsEnabled: boolean("nullable_semantics_enabled").notNull().default(false),
+  updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+});
+
+/** User-visible changes only; migration backfills never write this table. */
+export const pgStudentStateAuditsTable = pgTable(
+  "student_state_audits",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    studentUid: text("student_uid").notNull(),
+    actorUserId: integer("actor_user_id").notNull(),
+    source: text().notNull(),
+    sourceRef: text("source_ref"),
+    beforeState: jsonb("before_state").$type<Record<string, unknown>>().notNull(),
+    afterState: jsonb("after_state").$type<Record<string, unknown>>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("student_state_audits_user_student_created_idx").on(table.userId, table.studentUid, table.createdAt),
   ],
 );
 

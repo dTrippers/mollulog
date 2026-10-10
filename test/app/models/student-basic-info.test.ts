@@ -24,6 +24,9 @@ function createClient(options: { failRelationshipWriteAt?: number; failOnlyOnce?
   let injectedFailure = false;
   const query = jest.fn(async (config: { text: string } | string) => {
     const text = typeof config === "string" ? config : config.text;
+    if (text.includes('from "student_state_migration_control"')) {
+      return { rows: [[false]], rowCount: 1 };
+    }
     if (text.includes('insert into "user_relationship_levels"')) {
       relationshipWriteCount += 1;
       if (options.failRelationshipWriteAt === relationshipWriteCount && (!options.failOnlyOnce || !injectedFailure)) {

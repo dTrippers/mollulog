@@ -2,7 +2,12 @@ import { and, eq, inArray } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { pgRelationshipLevelsTable } from "~/db/postgres/schema";
-import { getRelationshipLevelValidationError, type RelationshipLevelInput } from "~/domain/relationship-level";
+import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
+import {
+  getRelationshipGiftPlanValidationError,
+  getRelationshipLevelValidationError,
+  type RelationshipLevelInput,
+} from "~/domain/relationship-level";
 import { withPostgresClient } from "~/lib/postgres.server";
 
 export {
@@ -143,41 +148,43 @@ export async function updateRelationshipLevel(
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
     await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(relationshipLevelsTable)
-        .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
-        .limit(1)
-        .for("update");
-      const resolved = resolveRelationshipLevelInput(existing ?? null, input);
+      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
+        const [existing] = await lockedTx
+          .select()
+          .from(relationshipLevelsTable)
+          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)))
+          .limit(1)
+          .for("update");
+        const resolved = resolveRelationshipLevelInput(existing ?? null, input);
 
-      if (resolved == null) {
-        await tx
-          .delete(relationshipLevelsTable)
-          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
-        return;
-      }
+        if (resolved == null) {
+          await lockedTx
+            .delete(relationshipLevelsTable)
+            .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
+          return;
+        }
 
-      await tx
-        .insert(relationshipLevelsTable)
-        .values({
-          uid: nanoid(8),
-          userId: senseiId,
-          studentId,
-          currentLevel: resolved.currentLevel,
-          currentExp: resolved.currentExp,
-          targetLevel: resolved.targetLevel,
-          items: existing ? normalizeRelationshipItems(existing.items) : {},
-        })
-        .onConflictDoUpdate({
-          target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
-          set: {
+        await lockedTx
+          .insert(relationshipLevelsTable)
+          .values({
+            uid: nanoid(8),
+            userId: senseiId,
+            studentId,
             currentLevel: resolved.currentLevel,
             currentExp: resolved.currentExp,
             targetLevel: resolved.targetLevel,
-            updatedAt: new Date(),
-          },
-        });
+            items: existing ? normalizeRelationshipItems(existing.items) : {},
+          })
+          .onConflictDoUpdate({
+            target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
+            set: {
+              currentLevel: resolved.currentLevel,
+              currentExp: resolved.currentExp,
+              targetLevel: resolved.targetLevel,
+              updatedAt: new Date(),
+            },
+          });
+      });
     });
   });
 }
@@ -192,32 +199,44 @@ export async function upsertRelationshipLevel(
   items: Record<string, number>,
 ) {
   assertValidRelationshipLevelInput({ currentLevel, targetLevel });
+  const giftPlanError = getRelationshipGiftPlanValidationError(items);
+  if (giftPlanError) {
+    throw new Error(giftPlanError);
+  }
 
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
-    await db
-      .insert(relationshipLevelsTable)
-      .values({
-        uid: nanoid(8),
-        userId: senseiId,
-        studentId,
-        currentLevel,
-        currentExp,
-        targetLevel,
-        items,
-      })
-      .onConflictDoUpdate({
-        target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
-        set: { currentLevel, currentExp, targetLevel, items, updatedAt: new Date() },
+    await db.transaction(async (tx) => {
+      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
+        await lockedTx
+          .insert(relationshipLevelsTable)
+          .values({
+            uid: nanoid(8),
+            userId: senseiId,
+            studentId,
+            currentLevel,
+            currentExp,
+            targetLevel,
+            items,
+          })
+          .onConflictDoUpdate({
+            target: [relationshipLevelsTable.userId, relationshipLevelsTable.studentId],
+            set: { currentLevel, currentExp, targetLevel, items, updatedAt: new Date() },
+          });
       });
+    });
   });
 }
 
 export async function removeRelationshipLevel(env: Env, senseiId: number, studentId: string) {
   await withPostgresClient(env, async (client) => {
     const db = drizzle(client);
-    await db
-      .delete(relationshipLevelsTable)
-      .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
+    await db.transaction(async (tx) => {
+      await withStudentStateProjection(tx, senseiId, [studentId], "relationship_level", async (lockedTx) => {
+        await lockedTx
+          .delete(relationshipLevelsTable)
+          .where(and(eq(relationshipLevelsTable.userId, senseiId), eq(relationshipLevelsTable.studentId, studentId)));
+      });
+    });
   });
 }

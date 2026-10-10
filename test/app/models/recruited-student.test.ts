@@ -318,7 +318,7 @@ describe("recruited-student current state", () => {
     expect(db.selectParameterCounts).toEqual([182]);
   });
 
-  it("normalizes duplicate UIDs and writes a batch in one multi-row insert", async () => {
+  it("normalizes duplicate UIDs and dual-writes a batch in one transaction", async () => {
     const { db, env } = createEnv();
 
     await addRecruitedStudents(env, 1, [
@@ -334,11 +334,16 @@ describe("recruited-student current state", () => {
         expect.objectContaining({ userId: 1, studentUid: "student-b", tier: 5 }),
       ]),
     );
-    const insertStatements = db.statements.filter((statement) => statement.toLowerCase().startsWith("insert"));
-    expect(insertStatements).toHaveLength(1);
-    expect(insertStatements[0]?.toLowerCase()).toContain("on conflict");
-    expect(insertStatements[0]?.toLowerCase()).toContain("do nothing");
-    expect(db.statements.some((statement) => statement.toLowerCase() === "begin")).toBe(false);
+    const recruitedInsertStatements = db.statements.filter((statement) =>
+      statement.toLowerCase().startsWith('insert into "recruited_students"'),
+    );
+    expect(recruitedInsertStatements).toHaveLength(1);
+    expect(recruitedInsertStatements[0]?.toLowerCase()).toContain("on conflict");
+    expect(recruitedInsertStatements[0]?.toLowerCase()).toContain("do nothing");
+    expect(db.statements.some((statement) => statement.toLowerCase() === "begin")).toBe(true);
+    expect(db.tables.student_states).toHaveLength(2);
+    expect(db.tables.student_targets).toHaveLength(0);
+    expect(db.tables.student_state_audits).toHaveLength(2);
   });
 
   it("does not open a PostgreSQL client for an empty batch", async () => {
