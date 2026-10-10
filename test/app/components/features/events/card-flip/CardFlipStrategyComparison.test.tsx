@@ -95,7 +95,11 @@ describe("CardFlipStrategyComparison", () => {
     expect(markup).not.toContain("has-focus-visible:ring-2");
     expect(markup).toContain('class="flex min-w-0 items-center gap-2"');
     expect(markup).toContain("SR 이상 셔플");
-    expect(markup).toContain("모두 뒤집기");
+    expect(markup).toContain("1장만 열기");
+    expect(markup).toContain("모두 열기");
+    expect(markup).toContain("1장만 열고 바로 셔플해요");
+    expect(markup).toContain("SR 이상이 나오면 셔플해요");
+    expect(markup).toContain("항상 4장을 모두 열어요");
     expect(markup).toContain("min-w-0 break-keep text-center text-sm font-medium");
     expect(markup).not.toContain("lg:min-h-20");
     expect(markup).not.toContain("계획에 반영 중");
@@ -103,6 +107,10 @@ describe("CardFlipStrategyComparison", () => {
     expect(markup).toContain("w-2/5");
     expect(markup).toContain("min-w-0 break-words text-foreground/85");
     expect(markup).toContain("text-right tabular-nums");
+    expect(markup).toContain("dark:text-foreground/65");
+    expect(markup).toContain('id="card-flip-strategy-sr-reset-rule" class="break-words text-center text-xs');
+    expect(markup).not.toContain('id="card-flip-strategy-sr-reset-rule" class="sr-only"');
+    expect(markup).not.toContain('<p class="mt-4 text-xs text-muted-foreground">');
     expect(markup).not.toContain("flex flex-wrap items-center gap-2");
   });
 

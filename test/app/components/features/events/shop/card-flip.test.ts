@@ -283,10 +283,10 @@ describe("MiniGameSection for card flip", () => {
       ),
     );
 
-    expect(markup).toContain("1장 후 셔플");
+    expect(markup).toContain("1장만 열기");
     expect(markup).toContain("SR 이상 셔플");
-    expect(markup).toContain("모두 뒤집기");
-    expect(markup).toContain("1장 모두 뒤집기 · 등급과 관계없이 1장을 모두 뒤집은 뒤 셔플해요");
+    expect(markup).toContain("모두 열기");
+    expect(markup).toContain("모두 열기 · 항상 1장을 모두 열어요");
     expect(markup).toContain("소비 재화");
     expect(markup).toContain("기대 획득 보상");
     expect(markup).toContain("기대값이라 실제 획득량은 달라질 수 있어요");

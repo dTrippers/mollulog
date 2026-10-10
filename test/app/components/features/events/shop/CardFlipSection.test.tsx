@@ -77,10 +77,10 @@ describe("CardFlipSection", () => {
       ),
     );
 
-    expect(markup).toContain("1장 후 셔플");
+    expect(markup).toContain("1장만 열기");
     expect(markup).toContain("SR 이상 셔플");
-    expect(markup).toContain("모두 뒤집기");
-    expect(markup).toContain("1장 모두 뒤집기 · 등급과 관계없이 1장을 모두 뒤집은 뒤 셔플해요");
+    expect(markup).toContain("모두 열기");
+    expect(markup).toContain("모두 열기 · 항상 1장을 모두 열어요");
     expect(markup).toContain("소비 재화");
     expect(markup).toContain("기대 획득 보상");
     expect(markup).toContain("기대값");
@@ -112,9 +112,9 @@ describe("CardFlipSection", () => {
     );
 
     expect(markup).toContain("카드 뒤집기 전략");
-    expect(markup).toContain("1장 후 셔플");
+    expect(markup).toContain("1장만 열기");
     expect(markup).toContain("SR 이상 셔플");
-    expect(markup).toContain("모두 뒤집기");
+    expect(markup).toContain("모두 열기");
     expect(markup).not.toContain("mt-4 flex flex-col gap-4 rounded-md bg-card p-3");
     expect(markup).not.toContain("기대 획득 보상");
   });

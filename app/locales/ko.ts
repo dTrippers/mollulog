@@ -309,19 +309,19 @@ export const cardFlipLocale = {
   strategyControlLabel: "카드 뒤집기 전략",
   strategies: {
     "one-open": {
-      label: (_count: number) => "1장 후 셔플",
-      shortLabel: "1장 후 셔플",
-      rule: () => "1장을 뒤집은 뒤 바로 셔플해요",
+      label: (_count: number) => "1장만 열기",
+      shortLabel: "1장만 열기",
+      rule: () => "1장만 열고 바로 셔플해요",
     },
     "sr-reset": {
-      label: (_count: number) => "SR 이상 획득 시 셔플",
+      label: (_count: number) => "SR 이상 셔플",
       shortLabel: "SR 이상 셔플",
-      rule: (count: number) => `SR 이상이 나오면 셔플하고, 아니면 ${count}장까지 뒤집어요`,
+      rule: (_count: number) => "SR 이상이 나오면 셔플해요",
     },
     "all-open": {
-      label: (count: number) => `${count}장 모두 뒤집기`,
-      shortLabel: "모두 뒤집기",
-      rule: (count: number) => `등급과 관계없이 ${count}장을 모두 뒤집은 뒤 셔플해요`,
+      label: (_count: number) => "모두 열기",
+      shortLabel: "모두 열기",
+      rule: (count: number) => `항상 ${count}장을 모두 열어요`,
     },
   },
   costLabel: "소비 재화",

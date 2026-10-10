@@ -58,10 +58,6 @@ export function CardFlipStrategyComparison({
         </div>
       ) : null}
 
-      <p className="mt-4 text-xs text-muted-foreground">
-        {cardFlipLocale.strategies[selectedStrategy].rule(maxDrawCount)}
-      </p>
-
       <fieldset className="mt-4">
         <legend className="sr-only">{cardFlipLocale.strategyControlLabel}</legend>
         <table className="w-full table-fixed text-sm" aria-label={cardFlipLocale.averageRewards}>
@@ -80,9 +76,9 @@ export function CardFlipStrategyComparison({
                   <th
                     key={strategy}
                     scope="col"
-                    className={`px-1 py-3 font-normal sm:px-3 ${selected ? "bg-primary/10" : ""}`}
+                    className={`px-1 py-3 align-top font-normal sm:px-3 ${selected ? "bg-primary/10" : ""}`}
                   >
-                    <label className="flex cursor-pointer flex-col items-center gap-2 rounded-md xl:flex-row xl:justify-end has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary">
+                    <label className="flex cursor-pointer flex-col gap-2 rounded-md has-focus-visible:outline has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-primary">
                       <input
                         type="radio"
                         name="card-flip-strategy"
@@ -93,18 +89,23 @@ export function CardFlipStrategyComparison({
                         aria-describedby={ruleId}
                         className="sr-only"
                       />
+                      <span className="flex flex-col items-center gap-2 xl:flex-row xl:justify-end">
+                        <span
+                          aria-hidden="true"
+                          className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
+                            selected ? "border-primary" : "border-muted-foreground/50"
+                          }`}
+                        >
+                          {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
+                        </span>
+                        <span id={labelId} className="min-w-0 break-keep text-center text-sm font-medium xl:text-right">
+                          {strategyCopy.shortLabel}
+                        </span>
+                      </span>
                       <span
-                        aria-hidden="true"
-                        className={`flex size-4 shrink-0 items-center justify-center rounded-full border ${
-                          selected ? "border-primary" : "border-muted-foreground/50"
-                        }`}
+                        id={ruleId}
+                        className="break-words text-center text-xs font-normal text-muted-foreground xl:text-right"
                       >
-                        {selected ? <span className="size-2 rounded-full bg-primary" /> : null}
-                      </span>
-                      <span id={labelId} className="min-w-0 break-keep text-center text-sm font-medium xl:text-right">
-                        {strategyCopy.shortLabel}
-                      </span>
-                      <span id={ruleId} className="sr-only">
                         {strategyCopy.rule(maxDrawCount)}
                       </span>
                     </label>
@@ -197,7 +198,7 @@ function ResourceComparisonRow({
         return (
           <td
             key={strategy}
-            className={`px-1 py-2 text-right tabular-nums text-foreground/85 sm:px-3 ${
+            className={`px-1 py-2 text-right tabular-nums text-foreground/85 dark:text-foreground/65 sm:px-3 ${
               selectedStrategy === strategy ? "bg-primary/10" : ""
             }`}
           >

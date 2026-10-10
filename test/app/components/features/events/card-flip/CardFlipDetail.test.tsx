@@ -104,7 +104,7 @@ describe("CardFlipDetail", () => {
     expect(cardListIndex).toBeLessThan(linkIndex);
     expect((markup.match(/id="card-flip-detail-play-count"/g) ?? []).length).toBe(1);
     expect(markup).not.toContain("id=\"card-flip-play-count\"");
-    expect(markup).toContain("4장 모두 뒤집기");
+    expect(markup).toContain("모두 열기");
     expect(markup).toContain("소비 재화");
     expect(markup).toContain("기대 획득 보상");
     expect(markup).toContain("기대값이라 실제 획득량은 달라질 수 있어요");
@@ -131,7 +131,7 @@ describe("CardFlipDetail", () => {
     const currentPlan = markup.slice(markup.indexOf("현재 계획"), markup.indexOf("카드별 보상 (2종)"));
 
     expect(markup).not.toContain("계획에 반영 중");
-    expect(currentPlan).toContain("SR 이상 획득 시 셔플");
+    expect(currentPlan).toContain("SR 이상 셔플");
     expect(currentPlan).toContain("소비 재화");
     expect(currentPlan).toContain("기대 획득 보상");
     expect(currentPlan).toContain("기대값");
