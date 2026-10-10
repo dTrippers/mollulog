@@ -14,9 +14,9 @@ Run the preflight against the isolated schema and review its counts:
 mllg local pnpm student-state:migration preflight --schema student_state_validation
 ```
 
-Any non-null legacy `student_growth` current field is an operator stop condition. Do not clear it, infer a replacement, or continue the backfill until its meaning is resolved. Preflight reports these rows, and backfill fails explicitly without partially projecting that user's rows. A legacy relationship gift plan that is not an object of finite numbers (`invalid_gift_plan_rows`) is the same kind of stop condition; live writers reject such input instead of storing it.
+Any non-null legacy `student_growth` current field is an operator stop condition by default. Do not clear it or infer a replacement. Preflight reports these rows, and backfill fails explicitly without partially projecting that user's rows. After reviewing their meaning and choosing to preserve the service's current values, pass `--confirm-legacy-growth-current-reviewed` to preflight, backfill, and parity. This acknowledgement permits only the reviewed shadow-current values: current growth fields are sourced exclusively from `recruited_students`, and all legacy rows, values, targets, and timestamps remain unchanged. A legacy relationship gift plan that is not an object of finite numbers (`invalid_gift_plan_rows`) still blocks migration even with the acknowledgement; live writers reject such input instead of storing it.
 
-P1 live writers leave these legacy shadow-current columns untouched; the projected current values come only from `recruited_students`. This does not relax the migration gate: while preflight or backfill reports a shadow-current value, do not complete parity or advance to the 1-2 read switch or later 1-3 legacy fadeout.
+P1 live writers leave these legacy shadow-current columns untouched; the projected current values come only from `recruited_students`. Without the acknowledgement, shadow-current values block backfill and parity. With it, preflight retains the actual `unsupported_student_growth_current_rows` count and appends `legacy_growth_current_policy=preserve-reviewed`; a nonzero count alone no longer causes an error exit. Do not require the count to become zero by clearing data. Invalid gift plans must still be zero, and parity must still report `mismatches=0` before advancing to the 1-2 read switch. The acknowledgement does not bypass host/schema validation, the external-writer confirmation, or the post-activation backfill/parity prohibition.
 
 The application-level PostgreSQL fixture creates and drops its own uniquely named isolated schema, and verifies the schema is gone before passing. Run it only when the selected local configuration resolves `PGHOST` to `127.0.0.1`:
 
@@ -24,7 +24,7 @@ The application-level PostgreSQL fixture creates and drops its own uniquely name
 mllg local env pnpm_config_verify_deps_before_run=warn STUDENT_STATE_POSTGRES_VALIDATION=1 pnpm exec jest test/app/db/postgres/student-state-projection.postgres.test.ts --runInBand
 ```
 
-Backfill acquires the same per-user transaction advisory lock as application writes, then reads both the latest legacy sources and existing projection rows. It sets or clears each source-backed side; if a legacy side disappeared during the P1 rolling period, it clears that side's fields and source UID while preserving the other side. If all relevant legacy sources disappeared, it clears the remaining values and tombstones the existing projection row without changing its UID or `created_at`. The write holds a shared lock on the migration-control row through commit. Backfill writes no audit rows. Parity reads a repeatable-read, read-only snapshot and checks the control record with an ordinary `SELECT`; it does not take row or advisory locks. Both commands require an explicit acknowledgement that nonparticipating writers are stopped:
+Backfill acquires the same per-user transaction advisory lock as application writes, then reads both the latest legacy sources and existing projection rows. It sets or clears each source-backed side; if a legacy side disappeared during the P1 rolling period, it clears that side's fields and source UID while preserving the other side. If all relevant legacy sources disappeared, it clears the remaining values and tombstones the existing projection row without changing its UID or `created_at`. The write holds a shared lock on the migration-control row through commit. Backfill writes no audit rows. Parity reads groups of up to 25 users in one repeatable-read, read-only snapshot per group and checks the control record with an ordinary `SELECT`; it does not take row or advisory locks. Both commands require an explicit acknowledgement that nonparticipating writers are stopped:
 
 ```bash
 mllg local pnpm student-state:migration backfill --schema student_state_validation --confirm-no-external-writers
@@ -32,6 +32,12 @@ mllg local pnpm student-state:migration parity --schema student_state_validation
 ```
 
 Backfill copies source registration timestamps at microsecond precision, reconciles projection-only rows left by old nonparticipating writers, preserves tombstones, and writes no user audit rows. A successful parity run reports `mismatches=0`. Re-run both commands after a live-write/backfill race and after stopping/restarting the backfill to verify resumability. Keep the fixture schema isolated and drop it only after the test evidence is collected.
+
+Backfill writes batches of at most 200 source keys per statement rather than sending a separate statement for each state/target row. Every batch for one user remains inside the same user transaction and advisory lock; a later batch failure rolls back all changes for that user. Source reads and control-row checks still happen under the lock. This reduces database round trips without parallelizing user transactions or changing reconciliation rules.
+
+The CLI reports committed progress after the first user, approximately every five seconds between user commits, and after the last user. `state_rows` and `target_rows` count upserted rows, including reconciled existing rows; they are not counts of newly created rows. A user transaction in progress is not included in these counters. After interrupting the CLI, run the same backfill command again with the same confirmed database/schema and flags. Completed users remain committed, the interrupted user's transaction rolls back when its connection closes, and replay preserves existing projection UIDs, creation times, and tombstone times. Do not delete partially backfilled projection data or replay schema migrations to restart.
+
+Parity fetches legacy rows, projected states, and projected targets in three queries per group instead of per user. Joins and comparison keys include both `user_id` and `student_uid`, so identical student UIDs in different accounts remain independent. The comparison still checks every field, source registration timestamps at microsecond precision, missing rows, extra active rows, and tombstones; invalid gift plans and unreviewed shadow-current values still fail explicitly. Progress is reported after the first group, approximately every five seconds between groups, and after the last group. Parity never updates source/projection/control/audit rows and may be interrupted and restarted with the same command. Each group has a consistent snapshot; the full command is not a single global snapshot, just as the previous per-user command was not.
 
 ## 1-2 runtime read switch
 
@@ -53,7 +59,35 @@ mllg local pnpm student-state:migration backfill --schema public --confirm-no-ex
 mllg local pnpm student-state:migration parity --schema public --confirm-no-external-writers
 ```
 
-These commands document the tool interface only. This implementation does not authorize an operational or production database connection, migration, backfill, deployment, or stage transition. The host restriction and pending environment confirmation must be resolved before connecting to any non-loopback selected target. Do not change credentials, local/remote environment selection, or database allowlists to bypass that restriction.
+For an explicitly selected remote database, keep its existing `PGHOST`, port, database, credentials, and TLS settings. Append `--confirm-db-host <verified-host>` to each command; the value must exactly match the resolved `PGHOST`. A missing `PGHOST`, an unconfirmed non-loopback host, or a mismatched confirmation stops before connecting. Existing `PGHOST=127.0.0.1` commands still work without the option. `LOCAL_DB_ALLOWED_HOSTS` is a development setting and does not replace this operator confirmation.
+
+For example, in a shell where the approved production `PG*` variables have already been resolved, replace `db.example.com` below with the independently verified target hostname:
+
+```bash
+mise exec -- pnpm student-state:migration preflight --schema public --confirm-db-host db.example.com
+mise exec -- pnpm student-state:migration backfill --schema public --confirm-db-host db.example.com --confirm-no-external-writers
+mise exec -- pnpm student-state:migration parity --schema public --confirm-db-host db.example.com --confirm-no-external-writers
+```
+
+Host confirmation does not replace schema validation or the nonparticipating-writer check. These commands document the tool interface only; production operations still require an explicitly selected and authorized target. Run the host-validation tests without database access with `mise exec -- node --test scripts/student-state-migration.test.mjs`.
+
+### Preserve reviewed legacy current values
+
+If an operator has reviewed non-null legacy growth-current values and selected the existing service values as authoritative, append the acknowledgement to every stage below. Keep the selected database's existing credentials and TLS configuration; replace the hostname with the verified target. These commands do not clear or update any legacy source row:
+
+```bash
+mise exec -- pnpm student-state:migration preflight --schema public --confirm-db-host db.example.com --confirm-legacy-growth-current-reviewed
+mise exec -- pnpm student-state:migration backfill --schema public --confirm-db-host db.example.com --confirm-no-external-writers --confirm-legacy-growth-current-reviewed
+mise exec -- pnpm student-state:migration parity --schema public --confirm-db-host db.example.com --confirm-no-external-writers --confirm-legacy-growth-current-reviewed
+```
+
+For example, a reviewed preflight can succeed with `unsupported_student_growth_current_rows=264 invalid_gift_plan_rows=0 legacy_growth_current_policy=preserve-reviewed`. The count is preserved for visibility. Conflicting old growth-current values never overwrite recruited current values, including explicit nulls and lower values. A growth row without a recruited row does not recreate ownership or contribute growth-current fields; its targets and any separate relationship record are still migrated. Original rows remain available for comparison until a separately authorized legacy archive/removal operation. This preservation is not a point-in-time database backup and does not replace the rollout's database backup.
+
+Run the CLI regression against the approved local database with an isolated, uniquely named schema; it creates and drops only its own fixture schema:
+
+```bash
+mllg local env STUDENT_STATE_POSTGRES_VALIDATION=1 node --test scripts/student-state-migration.test.mjs
+```
 
 ## Operator gates before a production stage transition
 
