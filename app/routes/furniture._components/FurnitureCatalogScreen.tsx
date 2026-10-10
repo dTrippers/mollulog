@@ -38,7 +38,7 @@ import type { FurnitureCatalogView, FurnitureCatalogViewTheme } from "~/domain/f
 import type { FurnitureInventoryActionResult, FurnitureInventorySaveJob } from "./action-data";
 import FurnitureInteractionStudentsPopover, {
   FurnitureInteractionStudentsPopoverGroup,
-} from "./FurnitureInteractionStudentsPopover";
+} from "~/components/features/furniture/FurnitureInteractionStudentsPopover";
 
 type SaveState =
   | { kind: "queued" }

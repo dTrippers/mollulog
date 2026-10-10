@@ -6,7 +6,7 @@ import StudentInfo from "~/components/features/students/StudentInfo";
 import {
   clickPopoverButtonProgrammatically,
   shouldOpenPopoverFromFocus,
-} from "~/routes/furniture._components/FurnitureInteractionStudentsPopover";
+} from "~/components/features/furniture/FurnitureInteractionStudentsPopover";
 
 type StudentInfoStudent = ComponentProps<typeof StudentInfo>["student"];
 
