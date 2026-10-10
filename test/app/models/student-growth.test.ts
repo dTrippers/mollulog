@@ -2,6 +2,7 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { RecruitedStudentCurrentStateInput } from "~/models/recruited-student";
 import {
   getStudentGrowth,
+  getStudentGrowths,
   getStudentGrowthsWithMetadata,
   getStudentGrowthWithMetadata,
   saveStudentGrowthAndCurrentState,
@@ -75,6 +76,38 @@ function rowFactory(overrides: Partial<StudentGrowthRow>): StudentGrowthRow {
     targetAbilityHp: null,
     targetAbilityAtk: null,
     targetAbilityHeal: null,
+    createdAt: "2026-06-13T00:00:00.000Z",
+    updatedAt: "2026-06-13T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function studentTargetRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 1,
+    uid: "target-row-a",
+    userId: 1,
+    studentUid: "student-a",
+    studentGrowthUid: "growth-a",
+    relationshipLevelUid: null,
+    targetLevel: null,
+    targetSkillEx: null,
+    targetSkillNormal: null,
+    targetSkillEnhanced: null,
+    targetSkillSub: null,
+    targetEquip1: null,
+    targetEquip2: null,
+    targetEquip3: null,
+    targetEquipSpecial: null,
+    targetTier: null,
+    targetWeaponLevel: null,
+    targetAbilityHp: null,
+    targetAbilityAtk: null,
+    targetAbilityHeal: null,
+    relationshipTargetLevel: null,
+    giftPlan: {},
+    plannerAddedAt: "2026-06-13T00:00:00.000000Z",
+    deletedAt: null,
     createdAt: "2026-06-13T00:00:00.000Z",
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
@@ -278,7 +311,7 @@ describe("student-growth target state", () => {
 
   it("returns target fields only at the model API", async () => {
     const { db, env } = createEnv();
-    db.rows.push(rowFactory({ level: 80, skillEx: 4, targetLevel: 90, targetTier: 5 }));
+    db.tables.student_targets.push(studentTargetRow({ targetLevel: 90, targetTier: 5 }));
 
     await expect(getStudentGrowth(env, 1, "student-a")).resolves.toEqual({
       uid: "growth-a",
@@ -302,20 +335,35 @@ describe("student-growth target state", () => {
 
   it("returns the registration timestamp only through the metadata API", async () => {
     const { db, env } = createEnv();
-    db.rows.push(rowFactory({ createdAt: "2026-07-01T03:34:56.000Z" }));
+    db.tables.student_targets.push(studentTargetRow({ plannerAddedAt: "2026-07-01T03:34:56.000000Z" }));
 
     await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).resolves.toMatchObject({
       uid: "growth-a",
       studentUid: "student-a",
-      createdAt: "2026-07-01T03:34:56.000Z",
+      createdAt: "2026-07-01T03:34:56.000000Z",
     });
+  });
+
+  it("fails explicitly when a registered target is missing its planner timestamp", async () => {
+    const { db, env } = createEnv();
+    db.tables.student_targets.push(studentTargetRow({ plannerAddedAt: null }));
+
+    await expect(getStudentGrowthWithMetadata(env, 1, "student-a")).rejects.toThrow(
+      "Student growth projection is missing its planner registration timestamp.",
+    );
   });
 
   it("preserves microsecond planner registration timestamps within the same millisecond", async () => {
     const { db, env } = createEnv();
-    db.rows.push(
-      rowFactory({ id: 1, uid: "growth-a", createdAt: "2026-07-01T03:34:56.123456Z" }),
-      rowFactory({ id: 2, uid: "growth-b", studentUid: "student-b", createdAt: "2026-07-01T03:34:56.123789Z" }),
+    db.tables.student_targets.push(
+      studentTargetRow({ id: 1, uid: "target-row-a", plannerAddedAt: "2026-07-01T03:34:56.123456Z" }),
+      studentTargetRow({
+        id: 2,
+        uid: "target-row-b",
+        studentGrowthUid: "growth-b",
+        studentUid: "student-b",
+        plannerAddedAt: "2026-07-01T03:34:56.123789Z",
+      }),
     );
 
     const growths = await getStudentGrowthsWithMetadata(env, 1);
@@ -324,6 +372,36 @@ describe("student-growth target state", () => {
       "2026-07-01T03:34:56.123456Z",
       "2026-07-01T03:34:56.123789Z",
     ]);
+  });
+
+  it("lists empty planner registrations and excludes relationship-only and tombstoned targets", async () => {
+    const { db, env } = createEnv();
+    db.tables.student_targets.push(
+      studentTargetRow(),
+      studentTargetRow({
+        id: 2,
+        uid: "target-row-relationship",
+        studentUid: "student-relationship-only",
+        studentGrowthUid: null,
+        relationshipLevelUid: "relationship-a",
+        plannerAddedAt: null,
+      }),
+      studentTargetRow({
+        id: 3,
+        uid: "target-row-tombstone",
+        studentUid: "student-tombstone",
+        studentGrowthUid: "growth-tombstone",
+        deletedAt: new Date("2026-06-14T00:00:00.000Z"),
+      }),
+      studentTargetRow({ id: 4, userId: 2, studentUid: "student-other-user" }),
+    );
+
+    await expect(getStudentGrowths(env, 1)).resolves.toEqual([
+      expect.objectContaining({ uid: "growth-a", studentUid: "student-a", targetLevel: null }),
+    ]);
+    const readSelects = db.statements.filter((statement) => /^select/i.test(statement.trim()));
+    expect(readSelects).toHaveLength(1);
+    expect(readSelects[0]).toContain('"student_targets"');
   });
 
   it("writes current and target values under one projection lock and records one audit", async () => {

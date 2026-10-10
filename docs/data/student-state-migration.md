@@ -1,6 +1,6 @@
 # Student state projection migration
 
-This runbook covers the additive P1 release. Legacy tables remain the read source; every participating writer updates legacy and the new relational projection in one PostgreSQL transaction. The nullable-semantics switch stays off. This document does not authorize an operational database change or deployment.
+This runbook covers the additive P1 release and the 1-2 runtime read switch. P1 readers use legacy tables; 1-2 readers use the new relational projection. Participating writers continue updating both sources in one PostgreSQL transaction, and the nullable-semantics switch stays off. This document does not authorize an operational database change or deployment.
 
 ## P1 local validation
 
@@ -16,7 +16,7 @@ mllg local pnpm student-state:migration preflight --schema student_state_validat
 
 Any non-null legacy `student_growth` current field is an operator stop condition. Do not clear it, infer a replacement, or continue the backfill until its meaning is resolved. Preflight reports these rows, and backfill fails explicitly without partially projecting that user's rows. A legacy relationship gift plan that is not an object of finite numbers (`invalid_gift_plan_rows`) is the same kind of stop condition; live writers reject such input instead of storing it.
 
-P1 live writers leave these legacy shadow-current columns untouched; the projected current values come only from `recruited_students`. This does not relax the migration gate: while preflight or backfill reports a shadow-current value, do not complete parity or advance to P2 read switching or later legacy fadeout.
+P1 live writers leave these legacy shadow-current columns untouched; the projected current values come only from `recruited_students`. This does not relax the migration gate: while preflight or backfill reports a shadow-current value, do not complete parity or advance to the 1-2 read switch or later 1-3 legacy fadeout.
 
 The application-level PostgreSQL fixture creates and drops its own uniquely named isolated schema, and verifies the schema is gone before passing. Run it only when the selected local configuration resolves `PGHOST` to `127.0.0.1`:
 
@@ -32,6 +32,12 @@ mllg local pnpm student-state:migration parity --schema student_state_validation
 ```
 
 Backfill copies source registration timestamps at microsecond precision, reconciles projection-only rows left by old nonparticipating writers, preserves tombstones, and writes no user audit rows. A successful parity run reports `mismatches=0`. Re-run both commands after a live-write/backfill race and after stopping/restarting the backfill to verify resumability. Keep the fixture schema isolated and drop it only after the test evidence is collected.
+
+## 1-2 runtime read switch
+
+Before deploying 1-2, verify that the 1-1 operational parity run reports `mismatches=0`. Runtime reads then use `student_states` and `student_targets`; participating writers continue mirroring every change to the legacy tables and projection in one transaction. No runtime fallback to legacy reads is provided.
+
+If the read switch must be rolled back, redeploy the 1-1 version while legacy writes are still mirrored. Before entering 1-3, verify that the 1-1 version and its in-flight requests have exited, then confirm the screen results against the expected student state and planner data.
 
 ## Operator use against a service schema
 
@@ -53,6 +59,6 @@ These commands document the tool interface only. This implementation does not au
 
 Before each later release or backfill, verify the actual running Worker versions and in-flight requests, all direct SQL writers and external integrations, and every preview or local service connected to the same database. A repository SHA or deployment record alone does not prove that a nonparticipating writer has stopped. If any such writer remains, or parity is nonzero, stop before advancing the stage.
 
-The required sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, canonical-only writes after every dual-write version exits, independent nullable semantics after all servers and clients are compatible, and legacy-table archive only after every reference has ended. This P1 implementation delivers only the first stage and its tooling. Do not enable nullable semantics, switch reads, remove legacy writes, archive tables, or perform a production migration as part of this runbook.
+The required sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, canonical-only writes after every dual-write version exits, independent nullable semantics after all servers and clients are compatible, and legacy-table archive only after every reference has ended. The P1 release establishes dual-write; 1-2 delivers the read switch while legacy writes remain mirrored. Do not enable nullable semantics, remove legacy writes, archive tables, or perform a production migration as part of this runbook.
 
 After canonical-only writes begin, do not roll back to a version that reads stale legacy tables. Recover with a compatible version that understands canonical student state.

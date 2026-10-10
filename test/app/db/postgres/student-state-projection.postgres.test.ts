@@ -15,6 +15,21 @@ import {
   pgStudentTargetsTable,
 } from "~/db/postgres/schema";
 import { withStudentStateProjection } from "~/db/postgres/student-state-projection";
+import {
+  getRecruitedStudents,
+  getRecruitedStudentTiers,
+  removeRecruitedStudent,
+  upsertRecruitedStudent,
+} from "~/models/recruited-student";
+import { getRelationshipLevel, getRelationshipLevels, upsertRelationshipLevel } from "~/models/relationship-level";
+import {
+  getStudentGrowth,
+  getStudentGrowths,
+  getStudentGrowthsWithMetadata,
+  getStudentGrowthWithMetadata,
+  upsertStudentGrowth,
+} from "~/models/student-growth";
+import { createAndApplySyncDraft } from "~/models/sync-draft";
 
 const enabled = process.env.STUDENT_STATE_POSTGRES_VALIDATION === "1";
 const describePostgres = enabled ? describe : describe.skip;
@@ -24,6 +39,124 @@ type CliResult = { code: number | null; stdout: string; stderr: string; timedOut
 const MIGRATION_CLI_TIMEOUT_MS = 15_000;
 const LOCK_OBSERVATION_TIMEOUT_MS = 8_000;
 const ASYNC_CLEANUP_TIMEOUT_MS = 10_000;
+
+function modelEnvForSchema(schema: string): Env {
+  const connection = new URL("postgresql://127.0.0.1");
+  if (process.env.PGPORT) connection.port = process.env.PGPORT;
+  if (process.env.PGUSER) connection.username = process.env.PGUSER;
+  if (process.env.PGPASSWORD) connection.password = process.env.PGPASSWORD;
+  const database = process.env.PGDATABASE ?? process.env.PGUSER;
+  if (database) connection.pathname = `/${database}`;
+  connection.searchParams.set("options", `-c search_path=${schema}`);
+  return { HYPERDRIVE: { connectionString: connection.toString() } } as unknown as Env;
+}
+
+function sortBy<T>(rows: readonly T[], key: (row: T) => string): T[] {
+  return [...rows].sort((left, right) => key(left).localeCompare(key(right)));
+}
+
+async function expectLegacyAndProjectionReadsEqual(client: Client, env: Env, userId: number): Promise<void> {
+  const legacyRecruited = await client.query(
+    [
+      "SELECT uid, student_uid, tier, level, skill_ex, skill_normal, skill_enhanced, skill_sub,",
+      "  equip1, equip2, equip3, equip1_level, equip2_level, equip3_level, equip_special, weapon_level,",
+      "  ability_hp, ability_atk, ability_heal FROM recruited_students WHERE user_id = $1",
+    ].join("\n"),
+    [userId],
+  );
+  const expectedRecruited = legacyRecruited.rows.map((row) => ({
+    uid: row.uid,
+    studentUid: row.student_uid,
+    tier: row.tier,
+    level: row.level,
+    skillEx: row.skill_ex,
+    skillNormal: row.skill_normal,
+    skillEnhanced: row.skill_enhanced,
+    skillSub: row.skill_sub,
+    equip1: row.equip1,
+    equip2: row.equip2,
+    equip3: row.equip3,
+    equip1Level: row.equip1_level,
+    equip2Level: row.equip2_level,
+    equip3Level: row.equip3_level,
+    equipSpecial: row.equip_special,
+    weaponLevel: row.weapon_level,
+    abilityHp: row.ability_hp,
+    abilityAtk: row.ability_atk,
+    abilityHeal: row.ability_heal,
+  }));
+  const recruited = await getRecruitedStudents(env, userId);
+  expect(sortBy(recruited, (row) => row.studentUid)).toEqual(sortBy(expectedRecruited, (row) => row.studentUid));
+  expect(await getRecruitedStudentTiers(env, userId)).toEqual(
+    Object.fromEntries(expectedRecruited.map((row) => [row.studentUid, row.tier])),
+  );
+
+  const legacyGrowths = await client.query(
+    [
+      "SELECT uid, student_uid, target_level, target_skill_ex, target_skill_normal, target_skill_enhanced,",
+      "  target_skill_sub, target_equip1, target_equip2, target_equip3, target_equip_special, target_tier,",
+      "  target_weapon_level, target_ability_hp, target_ability_atk, target_ability_heal,",
+      "  to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS.US\"Z\"') AS created_at_exact",
+      "FROM student_growth WHERE user_id = $1",
+    ].join("\n"),
+    [userId],
+  );
+  const expectedGrowths = legacyGrowths.rows.map((row) => ({
+    uid: row.uid,
+    studentUid: row.student_uid,
+    targetLevel: row.target_level,
+    targetSkillEx: row.target_skill_ex,
+    targetSkillNormal: row.target_skill_normal,
+    targetSkillEnhanced: row.target_skill_enhanced,
+    targetSkillSub: row.target_skill_sub,
+    targetEquip1: row.target_equip1,
+    targetEquip2: row.target_equip2,
+    targetEquip3: row.target_equip3,
+    targetEquipSpecial: row.target_equip_special,
+    targetTier: row.target_tier,
+    targetWeaponLevel: row.target_weapon_level,
+    targetAbilityHp: row.target_ability_hp,
+    targetAbilityAtk: row.target_ability_atk,
+    targetAbilityHeal: row.target_ability_heal,
+  }));
+  const growths = await getStudentGrowths(env, userId);
+  expect(sortBy(growths, (row) => row.studentUid)).toEqual(sortBy(expectedGrowths, (row) => row.studentUid));
+  const growthsWithMetadata = await getStudentGrowthsWithMetadata(env, userId);
+  const expectedGrowthsWithMetadata = legacyGrowths.rows.map((row) => ({
+    ...expectedGrowths.find((growth) => growth.studentUid === row.student_uid),
+    createdAt: row.created_at_exact,
+  }));
+  expect(sortBy(growthsWithMetadata, (row) => row.studentUid)).toEqual(
+    sortBy(expectedGrowthsWithMetadata, (row) => row.studentUid),
+  );
+  for (const growth of growths) {
+    expect(await getStudentGrowth(env, userId, growth.studentUid)).toEqual(growth);
+  }
+  for (const growth of growthsWithMetadata) {
+    expect(await getStudentGrowthWithMetadata(env, userId, growth.studentUid)).toEqual(growth);
+  }
+
+  const legacyRelationships = await client.query(
+    [
+      "SELECT uid, student_id, current_level, current_exp, target_level, items",
+      "FROM user_relationship_levels WHERE user_id = $1",
+    ].join("\n"),
+    [userId],
+  );
+  const expectedRelationships = legacyRelationships.rows.map((row) => ({
+    uid: row.uid,
+    studentId: row.student_id,
+    currentLevel: row.current_level,
+    currentExp: row.current_exp,
+    targetLevel: row.target_level,
+    items: row.items,
+  }));
+  const relationships = await getRelationshipLevels(env, userId);
+  expect(sortBy(relationships, (row) => row.studentId)).toEqual(sortBy(expectedRelationships, (row) => row.studentId));
+  for (const relationship of relationships) {
+    expect(await getRelationshipLevel(env, userId, relationship.studentId)).toEqual(relationship);
+  }
+}
 
 function runMigrationCli(
   action: "preflight" | "backfill" | "parity",
@@ -239,7 +372,8 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         [
           "INSERT INTO recruited_students (uid, user_id, student_uid, tier, level, equip1_level, created_at) VALUES",
           "  ('recruited-current', 7, 'student-current', 3, 80, 2, '2026-09-01T00:00:00.000123Z'),",
-          "  ('recruited-microsecond', 7, 'student-microsecond', 2, 40, NULL, '2026-09-01T00:00:00.000987Z');",
+          "  ('recruited-microsecond', 7, 'student-microsecond', 2, 40, NULL, '2026-09-01T00:00:00.000987Z'),",
+          "  ('recruited-tombstone', 7, 'student-tombstone', 1, 10, NULL, '2026-09-01T00:00:00.000555Z');",
           "INSERT INTO student_growth (uid, user_id, student_uid, target_level, target_tier, created_at) VALUES",
           "  ('growth-current', 7, 'student-current', 25, 2, '2026-09-01T00:00:00.000123Z'),",
           "  ('growth-empty', 7, 'student-empty-plan', NULL, NULL, '2026-09-01T00:00:00.000123Z'),",
@@ -343,6 +477,9 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       expect((await admin.query("SELECT id FROM student_state_audits")).rows).toHaveLength(0);
       expect((await runCli("parity", `state-parity-${process.pid}`)).stdout).toMatch(/mismatches=0/);
 
+      const modelEnv = modelEnvForSchema(schema);
+      await expectLegacyAndProjectionReadsEqual(admin, modelEnv, 7);
+
       const app = await connect("state-projection-validation");
       await app.db.transaction((tx) =>
         withStudentStateProjection(tx, 7, ["student-current"], "student_growth", async (lockedTx) =>
@@ -405,6 +542,81 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       expect(
         (await admin.query("SELECT id FROM student_state_audits WHERE student_uid = 'student-current'")).rows,
       ).toHaveLength(1);
+
+      const writerUserId = 8;
+      await upsertRecruitedStudent(modelEnv, writerUserId, "writer-recruited-only", 3);
+      await upsertStudentGrowth(modelEnv, writerUserId, "writer-empty-planner", {
+        targetLevel: null,
+        targetSkillEx: null,
+        targetSkillNormal: null,
+        targetSkillEnhanced: null,
+        targetSkillSub: null,
+        targetEquip1: null,
+        targetEquip2: null,
+        targetEquip3: null,
+        targetEquipSpecial: null,
+        targetTier: null,
+        targetWeaponLevel: null,
+        targetAbilityHp: null,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
+      });
+      await upsertRelationshipLevel(modelEnv, writerUserId, "writer-relationship", 15, 246, 20, { "gift-x": 3 });
+      await upsertStudentGrowth(modelEnv, writerUserId, "writer-target-only", {
+        targetLevel: 85,
+        targetSkillEx: null,
+        targetSkillNormal: null,
+        targetSkillEnhanced: null,
+        targetSkillSub: null,
+        targetEquip1: null,
+        targetEquip2: null,
+        targetEquip3: null,
+        targetEquipSpecial: null,
+        targetTier: null,
+        targetWeaponLevel: null,
+        targetAbilityHp: null,
+        targetAbilityAtk: null,
+        targetAbilityHeal: null,
+      });
+      await upsertRelationshipLevel(modelEnv, writerUserId, "writer-lower-target", 8, 321, 12, { "gift-y": 2 });
+      await createAndApplySyncDraft(modelEnv, writerUserId, {
+        source: "first_party_ocr",
+        sourceRef: "student-state-writer-lower-target",
+        type: "student_state",
+        toolName: "Student state PostgreSQL fixture",
+        entries: [
+          {
+            entryKey: "writer-lower-target",
+            value: 2,
+            valueJson: JSON.stringify({ current: { tier: 2, bond: 20 }, target: null }),
+          },
+        ],
+      });
+      await expectLegacyAndProjectionReadsEqual(admin, modelEnv, writerUserId);
+      await expect(getRelationshipLevel(modelEnv, writerUserId, "writer-relationship")).resolves.toMatchObject({
+        currentLevel: 15,
+        currentExp: 246,
+        targetLevel: 20,
+        items: { "gift-x": 3 },
+      });
+      await expect(getRelationshipLevel(modelEnv, writerUserId, "writer-lower-target")).resolves.toMatchObject({
+        currentLevel: 20,
+        currentExp: null,
+        targetLevel: 12,
+        items: { "gift-y": 2 },
+      });
+      const writerAuditCount = (
+        await admin.query("SELECT id FROM student_state_audits WHERE user_id = $1", [writerUserId])
+      ).rows.length;
+      expect(writerAuditCount).toBeGreaterThan(0);
+
+      await removeRecruitedStudent(modelEnv, 7, "student-tombstone");
+      const tombstone = await admin.query(
+        "SELECT recruited_student_uid, deleted_at FROM student_states WHERE user_id = $1 AND student_uid = $2",
+        [7, "student-tombstone"],
+      );
+      expect(tombstone.rows[0]).toMatchObject({ recruited_student_uid: null, deleted_at: expect.any(Date) });
+      await expect(getRecruitedStudents(modelEnv, 7, ["student-tombstone"])).resolves.toEqual([]);
 
       await admin.query(
         "INSERT INTO recruited_students (uid, user_id, student_uid, tier) VALUES ('recruited-race', 7, 'student-backfill-race', 1)",
@@ -699,11 +911,17 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       expect((await runCli("backfill", `state-backfill-disabled-${process.pid}`)).code).not.toBe(0);
       expect((await runCli("parity", `state-parity-disabled-${process.pid}`)).code).not.toBe(0);
 
-      expect(await app.db.select({ id: pgStudentStateAuditsTable.id }).from(pgStudentStateAuditsTable)).toHaveLength(5);
+      expect(
+        await app.db
+          .select({ id: pgStudentStateAuditsTable.id })
+          .from(pgStudentStateAuditsTable)
+          .where(eq(pgStudentStateAuditsTable.userId, 7)),
+      ).toHaveLength(6);
       const finalStates = await app.db
         .select({ studentUid: pgStudentStatesTable.studentUid, deletedAt: pgStudentStatesTable.deletedAt })
-        .from(pgStudentStatesTable);
-      expect(finalStates).toHaveLength(8);
+        .from(pgStudentStatesTable)
+        .where(eq(pgStudentStatesTable.userId, 7));
+      expect(finalStates).toHaveLength(9);
       expect(
         finalStates
           .filter((row) => row.deletedAt == null)
@@ -718,12 +936,16 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         "student-relationship-only",
         "student-rolling-side",
       ]);
-      expect(finalStates.filter((row) => row.deletedAt != null).map((row) => row.studentUid)).toEqual([
-        "student-rolling-gone",
-      ]);
+      expect(
+        finalStates
+          .filter((row) => row.deletedAt != null)
+          .map((row) => row.studentUid)
+          .sort(),
+      ).toEqual(["student-rolling-gone", "student-tombstone"]);
       const finalTargets = await app.db
         .select({ studentUid: pgStudentTargetsTable.studentUid, deletedAt: pgStudentTargetsTable.deletedAt })
-        .from(pgStudentTargetsTable);
+        .from(pgStudentTargetsTable)
+        .where(eq(pgStudentTargetsTable.userId, 7));
       expect(finalTargets).toHaveLength(6);
       expect(
         finalTargets
@@ -746,6 +968,11 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
           .from(pgStudentStateMigrationControlTable)
           .where(eq(pgStudentStateMigrationControlTable.key, "default")),
       ).toEqual([{ enabled: true }]);
+      await expectLegacyAndProjectionReadsEqual(admin, modelEnv, 7);
+      await expectLegacyAndProjectionReadsEqual(admin, modelEnv, writerUserId);
+      expect(
+        (await admin.query("SELECT id FROM student_state_audits WHERE user_id = $1", [writerUserId])).rows,
+      ).toHaveLength(writerAuditCount);
     } catch (error) {
       testFailure = error;
     } finally {
