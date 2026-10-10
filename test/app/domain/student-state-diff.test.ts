@@ -6,6 +6,7 @@ import {
   mergeStudentStateDraftValueForUpdate,
   type StudentStateCurrentComparisonValue,
   type StudentStateTargetComparisonValue,
+  setStudentStateDraftFieldPresence,
 } from "~/domain/student-state";
 
 const defaultOptions = { initialTier: 1, hasGear: true };
@@ -36,6 +37,46 @@ describe("student-state-diff", () => {
         defaultOptions,
       ).current,
     ).toEqual(expect.objectContaining({ tier: 9, level: 90, skillEx: 4, equip1: 1 }));
+  });
+
+  it("filters external minimums and applies explicit clears only in nullable mode", () => {
+    const existing = createExistingCurrent({ tier: 9, level: 90, bond: 50, equip1: 10 });
+    const imported = setStudentStateDraftFieldPresence(
+      { current: createImportedCurrent({ tier: 9, level: 80, bond: null, equip1: 1 }), target: null },
+      { current: ["level", "bond", "equip1"], target: [] },
+    );
+
+    const nullable = mergeStudentStateDraftValueForUpdate(
+      imported,
+      { current: existing, target: createExistingTarget() },
+      defaultOptions,
+      "nullable",
+    );
+
+    expect(nullable.current).toEqual(
+      expect.objectContaining({
+        tier: 9,
+        level: 80,
+        bond: null,
+        equip1: 10,
+        providedFields: expect.arrayContaining(["level", "bond"]),
+      }),
+    );
+  });
+
+  it("keeps explicit field presence through ordinary object spreads", () => {
+    const imported = setStudentStateDraftFieldPresence(
+      { current: createImportedCurrent({ bond: null }), target: null },
+      { current: ["bond"], target: [] },
+    );
+    const copied = { ...imported, current: { ...imported.current! } };
+
+    expect(isStudentStateCurrentChanged(copied.current, createExistingCurrent({ bond: 50 }), defaultOptions)).toBe(
+      false,
+    );
+    expect(
+      isStudentStateCurrentChanged(copied.current, createExistingCurrent({ bond: 50 }), defaultOptions, "nullable"),
+    ).toBe(true);
   });
 
   it("detects a new recruited current state from an unrecruited existing state", () => {

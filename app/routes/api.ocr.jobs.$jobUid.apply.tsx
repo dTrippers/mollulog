@@ -11,6 +11,7 @@ import {
   parseOcrCellPatches,
 } from "~/domain/ocr-inventory-review";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
+import { StudentStateMergeConflictError } from "~/domain/student-state-errors";
 import { buildStudentImageSyncDraftEntries, buildStudentVideoSyncDraftEntries } from "~/domain/student-video-apply";
 import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResources } from "~/models/item-catalog";
@@ -51,6 +52,12 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         toolVersion: job.versions?.model,
         catalogVersion: job.versions?.catalog,
         entries,
+      }).catch((error) => {
+        // OCR confirms only some fields, so values left stored can conflict without a concurrent edit.
+        if (error instanceof StudentStateMergeConflictError) {
+          throw new OcrPublicError("학생 성장도 값이 현재 성장 규칙에 맞지 않아요");
+        }
+        throw error;
       });
       return data(
         { application: toApplication(applied.draft), alreadyApplied: applied.alreadyApplied },

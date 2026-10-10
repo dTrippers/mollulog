@@ -33,10 +33,12 @@ import {
   STUDENT_STATE_STALE_CODE,
   STUDENT_STATE_STALE_MESSAGE,
 } from "~/domain/student-state-errors";
+import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
 import {
   getRelationshipLevels,
+  getStudentStateWriteMode,
   type RelationshipLevel,
   removeRelationshipLevel,
   upsertRelationshipLevel,
@@ -82,6 +84,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const [allStudents, currentUser] = await Promise.all([getAllStudents(env, true), getActiveSensei(env, request)]);
+  const writeMode = currentUser ? await getStudentStateWriteMode(env) : "legacy";
 
   let savedRelationships: Record<string, RelationshipLevel> = {};
   let ownedQuantities: Record<string, number> | null = null;
@@ -111,6 +114,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       currentExp: savedLevel?.currentExp ?? null,
       targetLevel: savedLevel?.targetLevel ?? null,
       items: savedLevel?.items ?? {},
+      hasSavedState: hasSavedRelationshipState({
+        currentLevel: savedLevel?.currentLevel ?? null,
+        targetLevel: savedLevel?.targetLevel ?? null,
+        items: savedLevel?.items ?? {},
+      }),
     };
   });
 
@@ -124,6 +132,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       return bLevel - aLevel;
     }),
     allStudentsFavoriteItems: getAllStudentsFavoriteItems(env),
+    writeMode,
     isAuthenticated: !!currentUser,
     ownedQuantities,
   };
@@ -131,11 +140,72 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
 export type ActionData = {
   studentId: string;
-  currentLevel: number;
+  currentLevel?: number | null;
   currentExp?: number | null;
-  targetLevel: number;
+  targetLevel?: number | null;
+  items?: Record<string, number>;
+  stateFormat?: "legacy" | "nullable";
+};
+
+type Relationship = {
+  currentLevel: number | null;
+  currentExp: number | null;
+  targetLevel: number | null;
   items: Record<string, number>;
 };
+
+type RelationshipStudentState = {
+  uid: string;
+  name: string;
+  order: number;
+  hasSavedState: boolean;
+  currentLevel: number | null;
+  currentExp: number | null;
+  targetLevel: number | null;
+  items: Record<string, number>;
+};
+
+type RelationshipStateValues = Pick<RelationshipStudentState, "currentLevel" | "currentExp" | "targetLevel" | "items">;
+
+export function hasSavedRelationshipState({
+  currentLevel,
+  targetLevel,
+  items,
+}: Pick<RelationshipStudentState, "currentLevel" | "targetLevel" | "items">): boolean {
+  return currentLevel != null || targetLevel != null || Object.values(items).some((quantity) => quantity > 0);
+}
+
+export function updateRelationshipStudentState(
+  student: RelationshipStudentState,
+  updates: Partial<RelationshipStateValues>,
+): RelationshipStudentState {
+  const updated = { ...student, ...updates };
+  return { ...updated, hasSavedState: hasSavedRelationshipState(updated) };
+}
+
+export function buildRelationshipSavePayload(
+  writeMode: "legacy" | "nullable",
+  studentId: string,
+  relationship: Relationship,
+  saved: Relationship,
+): ActionData {
+  if (writeMode === "legacy") {
+    return {
+      studentId,
+      currentLevel: relationship.currentLevel,
+      currentExp: relationship.currentExp,
+      targetLevel: relationship.targetLevel,
+      items: relationship.items,
+    };
+  }
+
+  const patch: ActionData = { studentId, stateFormat: "nullable" };
+  if (relationship.currentLevel !== saved.currentLevel) patch.currentLevel = relationship.currentLevel;
+  if (relationship.currentExp !== saved.currentExp) patch.currentExp = relationship.currentExp;
+  if (relationship.targetLevel !== saved.targetLevel) patch.targetLevel = relationship.targetLevel;
+  if (JSON.stringify(relationship.items) !== JSON.stringify(saved.items)) patch.items = relationship.items;
+  return patch;
+}
 
 type RelationshipRetryOperation =
   | { kind: "update"; studentUid: string; relationship: Relationship }
@@ -167,8 +237,27 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     } else if (request.method === "POST") {
       const actionDataArray = (Array.isArray(body) ? body : [body]) as ActionData[];
       for (const actionData of actionDataArray) {
+        if (
+          actionData.stateFormat != null &&
+          actionData.stateFormat !== "legacy" &&
+          actionData.stateFormat !== "nullable"
+        ) {
+          return data(
+            { success: false, code: "INVALID_INPUT", error: "저장 형식이 올바르지 않아요", retryable: false },
+            { status: 400 },
+          );
+        }
+        if (typeof actionData.studentId !== "string" || actionData.studentId.trim() === "") {
+          return data(
+            { success: false, code: "INVALID_INPUT", error: "학생 정보가 필요해요", retryable: false },
+            { status: 400 },
+          );
+        }
         const validationError =
-          getRelationshipLevelValidationError(actionData) ?? getRelationshipGiftPlanValidationError(actionData.items);
+          getRelationshipLevelValidationError(
+            { currentLevel: actionData.currentLevel ?? null, targetLevel: actionData.targetLevel ?? null },
+            actionData.stateFormat === "nullable",
+          ) ?? (actionData.items == null ? null : getRelationshipGiftPlanValidationError(actionData.items));
         if (validationError) {
           return data(
             { success: false, code: "INVALID_INPUT", error: validationError, retryable: false },
@@ -182,9 +271,10 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           currentUser.id,
           actionData.studentId,
           actionData.currentLevel,
-          actionData.currentExp ?? null,
+          actionData.currentExp,
           actionData.targetLevel,
           actionData.items,
+          actionData.stateFormat ?? "legacy",
         );
       }
       if (!Array.isArray(body) && actionDataArray[0]?.studentId) {
@@ -195,6 +285,9 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     if (isStaleStudentStateRequestError(error)) {
       return data({ success: false, code: STUDENT_STATE_STALE_CODE }, { status: 409 });
     }
+    if (error instanceof ActionValidationError) {
+      return data({ success: false, code: "INVALID_INPUT", error: error.message, retryable: false }, { status: 400 });
+    }
     logger.error("Relationship level save failed", error, { userId: currentUser.id });
     return data({ success: false, code: "SAVE_FAILED", error: "저장하지 못했어요", retryable: true }, { status: 500 });
   }
@@ -202,37 +295,26 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   return { success: true };
 };
 
-type Relationship = {
-  currentLevel: number;
-  currentExp: number | null;
-  targetLevel: number;
-  items: Record<string, number>;
-};
-
 type SaveState = "idle" | "pending" | "submitting" | "loading";
-type RelationshipStudentState = {
-  uid: string;
-  name: string;
-  order: number;
-  currentLevel: number | null;
-  currentExp: number | null;
-  targetLevel: number | null;
-  items: Record<string, number>;
-};
 
 const RELATIONSHIP_STUDENT_PATH = "/utils/relationship";
 const RELATIONSHIP_ITEM_SEARCH = "?mode=item";
 const EMPTY_GIFT_QUANTITIES: Record<string, number> = {};
 
-const emptyRelationship: Relationship = {
-  currentLevel: 1,
-  currentExp: null,
-  targetLevel: 50,
-  items: {},
-};
-
 export default function RelationshipUtil() {
-  const { students, allStudentsFavoriteItems, isAuthenticated, ownedQuantities } = useLoaderData<typeof loader>();
+  const {
+    students,
+    allStudentsFavoriteItems,
+    isAuthenticated,
+    ownedQuantities,
+    writeMode: loadedWriteMode,
+  } = useLoaderData<typeof loader>();
+  const [writeMode] = useState(loadedWriteMode);
+  const [emptyRelationship] = useState<Relationship>(() =>
+    writeMode === "nullable"
+      ? { currentLevel: null, currentExp: null, targetLevel: null, items: {} }
+      : { currentLevel: 1, currentExp: null, targetLevel: 50, items: {} },
+  );
   const [searchParams] = useSearchParams();
   const queryStudentUid = searchParams.get("studentUid");
   const { showSignIn } = useSignIn();
@@ -316,7 +398,7 @@ export default function RelationshipUtil() {
     };
     setCurrentRelationship(relationshipDraftsRef.current.get(selectedStudentUid) ?? relationship);
     setSavedRelationship(relationship);
-  }, [selectedStudentUid, managedStudents]);
+  }, [selectedStudentUid, managedStudents, emptyRelationship]);
 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<boolean>(false);
@@ -345,12 +427,18 @@ export default function RelationshipUtil() {
     setSelectedStudentUid(queryStudentUid);
   }, [queryStudentUid, managedStudents]);
 
-  const validateRelationship = useCallback((relationship: Relationship): string | null => {
-    return getRelationshipLevelValidationError({
-      currentLevel: relationship.currentLevel,
-      targetLevel: relationship.targetLevel,
-    });
-  }, []);
+  const validateRelationship = useCallback(
+    (relationship: Relationship): string | null => {
+      return getRelationshipLevelValidationError(
+        {
+          currentLevel: relationship.currentLevel,
+          targetLevel: relationship.targetLevel,
+        },
+        writeMode === "nullable",
+      );
+    },
+    [writeMode],
+  );
 
   const submitRelationship = useCallback(
     (relationship: Relationship, requestedStudentUid?: string) => {
@@ -363,6 +451,22 @@ export default function RelationshipUtil() {
         return;
       }
 
+      const saved =
+        studentUid === selectedStudentUid
+          ? savedRelationship
+          : (() => {
+              const student = managedStudents.find((entry) => entry.uid === studentUid);
+              return student
+                ? {
+                    currentLevel: student.currentLevel ?? emptyRelationship.currentLevel,
+                    currentExp: student.currentExp,
+                    targetLevel: student.targetLevel ?? emptyRelationship.targetLevel,
+                    items: student.items,
+                  }
+                : emptyRelationship;
+            })();
+      if (relationshipEquals(saved, relationship)) return;
+
       const validationError = validateRelationship(relationship);
       if (validationError) {
         setSaveError(validationError);
@@ -374,18 +478,22 @@ export default function RelationshipUtil() {
       submittedDeleteRef.current = null;
       submittedRelationshipRef.current = { studentUid, relationship };
 
-      saveFetcher.submit(
-        {
-          studentId: studentUid,
-          currentLevel: relationship.currentLevel,
-          currentExp: relationship.currentExp,
-          targetLevel: relationship.targetLevel,
-          items: relationship.items,
-        },
-        { method: "POST", encType: "application/json" },
-      );
+      saveFetcher.submit(buildRelationshipSavePayload(writeMode, studentUid, relationship, saved), {
+        method: "POST",
+        encType: "application/json",
+      });
     },
-    [isAuthenticated, saveFetcher, selectedStudentUid, showSignIn, validateRelationship],
+    [
+      emptyRelationship,
+      isAuthenticated,
+      managedStudents,
+      saveFetcher,
+      savedRelationship,
+      selectedStudentUid,
+      showSignIn,
+      validateRelationship,
+      writeMode,
+    ],
   );
 
   useEffect(() => {
@@ -451,13 +559,12 @@ export default function RelationshipUtil() {
         sortRelationshipStudents(
           prev.map((student) =>
             student.uid === deletedStudentId
-              ? {
-                  ...student,
+              ? updateRelationshipStudentState(student, {
                   currentLevel: null,
                   currentExp: null,
                   targetLevel: null,
                   items: {},
-                }
+                })
               : student,
           ),
         ),
@@ -492,19 +599,18 @@ export default function RelationshipUtil() {
         sortRelationshipStudents(
           prev.map((student) =>
             student.uid === submitted.studentUid
-              ? {
-                  ...student,
+              ? updateRelationshipStudentState(student, {
                   currentLevel: submitted.relationship.currentLevel,
                   currentExp: submitted.relationship.currentExp,
                   targetLevel: submitted.relationship.targetLevel,
                   items: submitted.relationship.items,
-                }
+                })
               : student,
           ),
         ),
       );
     }
-  }, [saveFetcher.state, saveFetcher.data, selectedStudentUid]);
+  }, [saveFetcher.state, saveFetcher.data, selectedStudentUid, emptyRelationship]);
 
   const updateCurrentRelationship: Dispatch<SetStateAction<Relationship>> = useCallback(
     (nextValue) => {
@@ -646,10 +752,34 @@ export default function RelationshipUtil() {
   };
 
   const isItemScreen = searchParams.get("mode") === "item";
+  const handleSavedGiftPlans = useCallback(
+    (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => {
+      const itemsByStudentUid = new Map(savedPlans.map(({ studentUid, items }) => [studentUid, items]));
+      setManagedStudents((prev) =>
+        sortRelationshipStudents(
+          prev.map((student) => {
+            if (!itemsByStudentUid.has(student.uid)) return student;
+            return updateRelationshipStudentState(student, { items: itemsByStudentUid.get(student.uid) ?? {} });
+          }),
+        ),
+      );
+    },
+    [],
+  );
+  const handleStaleWriteBlocked = useCallback(() => {
+    staleWriteBlockedRef.current = true;
+    setStaleWriteBlocked(true);
+    setSavePending(false);
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
   const studentPicker = (
     <RelationshipStudentPicker
       students={managedStudents}
       selectedStudentUid={selectedStudentUid}
+      nullableSemantics={writeMode === "nullable"}
       onSelectStudentUid={handleSelectStudentUid}
     />
   );
@@ -703,12 +833,17 @@ export default function RelationshipUtil() {
           students={managedStudents}
           isAuthenticated={isAuthenticated}
           ownedQuantities={ownedQuantities}
+          writeMode={writeMode}
+          staleWriteBlocked={staleWriteBlocked}
+          onStaleWriteBlocked={handleStaleWriteBlocked}
+          onStudentItemsSaved={handleSavedGiftPlans}
         />
       ) : (
         <RelationshipStudentScreen
           studentPicker={studentPicker}
           selectedStudentUid={selectedStudentUid}
           selectedStudent={selectedStudent}
+          writeMode={writeMode}
           currentRelationship={currentRelationship}
           giftCalculationMode={giftCalculationMode}
           selectedItemExp={selectedItemExp}
@@ -734,6 +869,7 @@ function RelationshipStudentScreen({
   studentPicker,
   selectedStudentUid,
   selectedStudent,
+  writeMode,
   currentRelationship,
   giftCalculationMode,
   selectedItemExp,
@@ -753,6 +889,7 @@ function RelationshipStudentScreen({
   studentPicker: ReactNode;
   selectedStudentUid: string | null;
   selectedStudent: RelationshipStudentState | null;
+  writeMode: "legacy" | "nullable";
   currentRelationship: Relationship;
   giftCalculationMode: RelationshipGiftCalculationModeValue;
   selectedItemExp: number;
@@ -826,6 +963,8 @@ function RelationshipStudentScreen({
           />
 
           <StudentRelationshipLevel
+            studentName={selectedStudent.name}
+            nullableSemantics={writeMode === "nullable"}
             currentExp={currentRelationship.currentExp}
             currentLevel={currentRelationship.currentLevel}
             targetLevel={currentRelationship.targetLevel}
@@ -837,6 +976,7 @@ function RelationshipStudentScreen({
           />
 
           <RequiredGifts
+            nullableSemantics={writeMode === "nullable"}
             currentLevel={currentRelationship.currentLevel}
             currentExp={currentRelationship.currentExp}
             targetLevel={currentRelationship.targetLevel}
@@ -878,7 +1018,7 @@ function RelationshipStudentScreen({
   );
 }
 
-function RelationshipActionHeader({
+export function RelationshipActionHeader({
   student,
   saveState,
   saveError,
@@ -895,6 +1035,7 @@ function RelationshipActionHeader({
 }) {
   const visibleName = formatVisibleName(student.name);
   const isSaving = saveState === "pending" || saveState === "submitting" || saveState === "loading";
+  const visibleSaveError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : saveError;
 
   return (
     <div className="my-4">
@@ -909,9 +1050,9 @@ function RelationshipActionHeader({
           ) : null}
         </div>
       </div>
-      {saveError && (
+      {visibleSaveError && (
         <div className="mt-2 flex flex-wrap items-center gap-2" role="alert">
-          <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+          <p className="text-sm text-red-600 dark:text-red-400">{visibleSaveError}</p>
           {staleWriteBlocked ? (
             <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
           ) : onRetry ? (

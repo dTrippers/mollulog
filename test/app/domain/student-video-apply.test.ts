@@ -45,6 +45,10 @@ describe("student video selective apply adapter", () => {
         abilityHeal: 0,
       },
       target: null,
+      providedFields: {
+        current: ["tier", "bond", "weaponLevel", "abilityHp", "abilityAtk", "abilityHeal"],
+        target: [],
+      },
     });
     expect(entries[0].meta).toMatchObject({
       confirmedFields: ["tier", "bond", "weaponLevel", "abilityHp", "abilityAtk", "abilityHeal"],

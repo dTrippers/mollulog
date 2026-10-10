@@ -110,7 +110,10 @@ export function getAccumulatedRelationshipExpForLevel(level: number): number {
   return RELATIONSHIP_EXP_TABLE.find((entry) => entry.level === level)?.accumulatedExp ?? 0;
 }
 
-export function getRelationshipLevelValidationError(input: RelationshipLevelInput): string | null {
+export function getRelationshipLevelValidationError(
+  input: RelationshipLevelInput,
+  allowTargetBelowCurrent = false,
+): string | null {
   const { currentLevel, targetLevel } = input;
 
   if (currentLevel != null && (!Number.isInteger(currentLevel) || currentLevel < 1 || currentLevel > 100)) {
@@ -121,7 +124,7 @@ export function getRelationshipLevelValidationError(input: RelationshipLevelInpu
     return "목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요";
   }
 
-  if (currentLevel != null && targetLevel != null && targetLevel < currentLevel) {
+  if (!allowTargetBelowCurrent && currentLevel != null && targetLevel != null && targetLevel < currentLevel) {
     return "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요";
   }
 

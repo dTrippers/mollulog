@@ -16,6 +16,7 @@ import {
   ResourceCard,
   SubTitle,
 } from "~/components/primitives";
+import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import { cn } from "~/lib/utils";
 import { type AllStudentsFavoriteItems, COMMON_FAVORITE_ITEM_UIDS } from "~/models/resource";
 import type { action } from "~/routes/utils.relationship";
@@ -32,6 +33,105 @@ type StudentWithRelationship = {
 };
 
 type StudentItemsMap = Map<string, { uid: string; items: Record<string, number> }>;
+type GiftPlanSavePayload =
+  | { studentId: string; items: Record<string, number>; stateFormat: "nullable" }
+  | {
+      studentId: string;
+      items: Record<string, number>;
+      currentLevel: number;
+      currentExp: number | null;
+      targetLevel: number;
+    };
+
+export function buildGiftPlanSavePayload(
+  studentId: string,
+  items: Record<string, number>,
+): Extract<GiftPlanSavePayload, { stateFormat: "nullable" }> {
+  return { studentId, items, stateFormat: "nullable" };
+}
+
+export function getSavedGiftPlanSnapshot(
+  payloads: readonly Pick<GiftPlanSavePayload, "studentId" | "items">[],
+): Array<{ studentUid: string; items: Record<string, number> }> {
+  return payloads.map(({ studentId, items }) => ({ studentUid: studentId, items: { ...items } }));
+}
+
+export function getGiftPlanSaveSnapshotForResult(
+  succeeded: boolean,
+  payloads: readonly Pick<GiftPlanSavePayload, "studentId" | "items">[] | null,
+): Array<{ studentUid: string; items: Record<string, number> }> | null {
+  return succeeded ? getSavedGiftPlanSnapshot(payloads ?? []) : null;
+}
+
+export function createStudentItemsMap(
+  students: Array<Pick<StudentWithRelationship, "uid" | "items">>,
+): StudentItemsMap {
+  return new Map(students.map(({ uid, items }) => [uid, { uid, items: { ...items } }]));
+}
+
+export function syncStudentItemsFromProps(
+  currentItems: StudentItemsMap,
+  savedBaseline: StudentItemsMap | null,
+  nextProps: StudentItemsMap,
+): StudentItemsMap {
+  if (savedBaseline == null) return nextProps;
+
+  const syncedItems = new Map(nextProps);
+  for (const [studentUid, nextStudent] of nextProps) {
+    const baselineStudent = savedBaseline.get(studentUid);
+    const currentStudent = currentItems.get(studentUid);
+    if (!baselineStudent || !currentStudent) continue;
+
+    const items = { ...nextStudent.items };
+    const itemUids = new Set([...Object.keys(baselineStudent.items), ...Object.keys(currentStudent.items)]);
+    for (const itemUid of itemUids) {
+      if ((currentStudent.items[itemUid] ?? 0) === (baselineStudent.items[itemUid] ?? 0)) continue;
+      if (Object.hasOwn(currentStudent.items, itemUid)) {
+        items[itemUid] = currentStudent.items[itemUid] ?? 0;
+      } else {
+        delete items[itemUid];
+      }
+    }
+    syncedItems.set(studentUid, { uid: studentUid, items });
+  }
+  return syncedItems;
+}
+
+export function updateStudentGiftPlanQuantity(
+  currentItems: StudentItemsMap,
+  studentUid: string,
+  itemUid: string,
+  quantity: number,
+): StudentItemsMap {
+  const nextItems = new Map(currentItems);
+  const student = nextItems.get(studentUid);
+  nextItems.set(studentUid, {
+    uid: studentUid,
+    items: { ...student?.items, [itemUid]: quantity },
+  });
+  return nextItems;
+}
+
+export function updateSavedGiftPlanBaseline(
+  baseline: StudentItemsMap,
+  savedPlans: Array<{ studentUid: string; items: Record<string, number> }>,
+): StudentItemsMap {
+  const nextBaseline = new Map(baseline);
+  for (const { studentUid, items } of savedPlans) {
+    nextBaseline.set(studentUid, { uid: studentUid, items: { ...items } });
+  }
+  return nextBaseline;
+}
+
+export function hasStudentGiftPlanChanges(
+  currentItems: StudentItemsMap,
+  baseline: StudentItemsMap,
+  studentUid: string,
+  itemUid: string,
+): boolean {
+  return (currentItems.get(studentUid)?.items[itemUid] ?? 0) !== (baseline.get(studentUid)?.items[itemUid] ?? 0);
+}
+
 type ItemQuantityComparison = {
   requiredQuantity: number;
   ownedQuantity: number;
@@ -43,6 +143,10 @@ type FavoritedItemSelectorProps = {
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
   ownedQuantities: Record<string, number> | null;
+  writeMode: "legacy" | "nullable";
+  staleWriteBlocked: boolean;
+  onStaleWriteBlocked: () => void;
+  onStudentItemsSaved: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
 };
 
 const INSUFFICIENT_QUANTITY_CLASS = "text-red-600 dark:text-red-400";
@@ -52,23 +156,24 @@ export default function FavoritedItemSelector({
   students,
   isAuthenticated,
   ownedQuantities,
+  writeMode,
+  staleWriteBlocked,
+  onStaleWriteBlocked,
+  onStudentItemsSaved,
 }: FavoritedItemSelectorProps) {
   const [activeItem, setActiveItem] = useState<AllStudentsFavoriteItems | null>(null);
   const [studentItemsState, setStudentItemsState] = useState<StudentItemsMap>(new Map());
   const [initialStudentItems, setInitialStudentItems] = useState<StudentItemsMap>(new Map());
+  const savedBaselineRef = useRef<StudentItemsMap | null>(null);
   const showMobileSheet = useIsRelationshipGiftSheetViewport();
 
   // Initialize state from props
   useEffect(() => {
-    const map = new Map<string, { uid: string; items: Record<string, number> }>();
-    const initialMap = new Map<string, { uid: string; items: Record<string, number> }>();
-    for (const student of students) {
-      const studentData = { uid: student.uid, items: { ...student.items } };
-      map.set(student.uid, studentData);
-      initialMap.set(student.uid, { uid: student.uid, items: { ...student.items } });
-    }
-    setStudentItemsState(map);
-    setInitialStudentItems(initialMap);
+    const nextStudents = createStudentItemsMap(students);
+    const savedBaseline = savedBaselineRef.current;
+    setStudentItemsState((currentItems) => syncStudentItemsFromProps(currentItems, savedBaseline, nextStudents));
+    setInitialStudentItems(nextStudents);
+    savedBaselineRef.current = nextStudents;
   }, [students]);
 
   const itemCounts = useMemo(() => {
@@ -93,30 +198,14 @@ export default function FavoritedItemSelector({
   }, [isAuthenticated, students, studentItemsState]);
 
   const handleQuantityChange = (studentUid: string, itemUid: string, value: number) => {
-    setStudentItemsState((prev) => {
-      const newMap = new Map(prev);
-      const student = newMap.get(studentUid);
-      if (student) {
-        newMap.set(studentUid, { ...student, items: { ...student.items, [itemUid]: value } });
-      } else {
-        newMap.set(studentUid, { uid: studentUid, items: { [itemUid]: value } });
-      }
-      return newMap;
-    });
+    setStudentItemsState((currentItems) => updateStudentGiftPlanQuantity(currentItems, studentUid, itemUid, value));
   };
 
-  const handleSave = (studentUids: string[]) => {
-    // Update initial state for saved students
-    setInitialStudentItems((prev) => {
-      const newMap = new Map(prev);
-      for (const studentUid of studentUids) {
-        const current = studentItemsState.get(studentUid);
-        if (current) {
-          newMap.set(studentUid, { uid: studentUid, items: { ...current.items } });
-        }
-      }
-      return newMap;
-    });
+  const handleSave = (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => {
+    const baseline = updateSavedGiftPlanBaseline(savedBaselineRef.current ?? initialStudentItems, savedPlans);
+    savedBaselineRef.current = baseline;
+    onStudentItemsSaved(savedPlans);
+    setInitialStudentItems(baseline);
   };
 
   return (
@@ -150,6 +239,9 @@ export default function FavoritedItemSelector({
                         itemCounts={itemCounts}
                         itemQuantityBreakdowns={itemQuantityBreakdowns}
                         ownedQuantities={ownedQuantities}
+                        writeMode={writeMode}
+                        staleWriteBlocked={staleWriteBlocked}
+                        onStaleWriteBlocked={onStaleWriteBlocked}
                         studentItemsState={studentItemsState}
                         initialStudentItems={initialStudentItems}
                         students={students}
@@ -176,6 +268,9 @@ export default function FavoritedItemSelector({
                       itemCounts={itemCounts}
                       itemQuantityBreakdowns={itemQuantityBreakdowns}
                       ownedQuantities={ownedQuantities}
+                      writeMode={writeMode}
+                      staleWriteBlocked={staleWriteBlocked}
+                      onStaleWriteBlocked={onStaleWriteBlocked}
                       studentItemsState={studentItemsState}
                       initialStudentItems={initialStudentItems}
                       students={students}
@@ -284,7 +379,10 @@ type GiftDetailCardsProps = {
   onQuantityChange: (studentUid: string, itemUid: string, value: number) => void;
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
-  onSave: (studentUids: string[]) => void;
+  onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
+  writeMode: "legacy" | "nullable";
+  staleWriteBlocked: boolean;
+  onStaleWriteBlocked: () => void;
 };
 
 function GiftDetailCards({
@@ -300,6 +398,9 @@ function GiftDetailCards({
   students,
   isAuthenticated,
   onSave,
+  writeMode,
+  staleWriteBlocked,
+  onStaleWriteBlocked,
 }: GiftDetailCardsProps) {
   const favoriteLevelEntries = Object.entries(activeItem.favoriteLevels).sort((a, b) => Number(b[0]) - Number(a[0]));
   const showDividers = surface === "sheet" && favoriteLevelEntries.length > 1;
@@ -323,6 +424,9 @@ function GiftDetailCards({
             students={students}
             isAuthenticated={isAuthenticated}
             onSave={onSave}
+            writeMode={writeMode}
+            staleWriteBlocked={staleWriteBlocked}
+            onStaleWriteBlocked={onStaleWriteBlocked}
           />
         </div>
       ))}
@@ -361,7 +465,10 @@ type UseSaveStudentItemsParams = {
   students: StudentWithRelationship[];
   activeItem: AllStudentsFavoriteItems;
   isAuthenticated: boolean;
-  onSave: (studentUids: string[]) => void;
+  onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
+  writeMode: "legacy" | "nullable";
+  staleWriteBlocked: boolean;
+  onStaleWriteBlocked: () => void;
 };
 
 function useSaveStudentItems({
@@ -372,35 +479,66 @@ function useSaveStudentItems({
   activeItem,
   isAuthenticated,
   onSave,
+  writeMode,
+  staleWriteBlocked,
+  onStaleWriteBlocked,
 }: UseSaveStudentItemsParams) {
   const revalidator = useRevalidator();
   const saveFetcher = useFetcher<typeof action>();
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const lastSuccessRef = useRef<Set<string>>(new Set());
+  const [retryAvailable, setRetryAvailable] = useState(false);
+  const retryPayloadRef = useRef<GiftPlanSavePayload[] | null>(null);
 
   // Get changed students for this level (memoized to prevent unnecessary effect re-runs)
   const changedStudents = useMemo(() => {
-    const hasChanged = (studentUid: string, itemUid: string): boolean => {
-      const current = studentItemsMap.get(studentUid)?.items[itemUid] ?? 0;
-      const initial = initialStudentItems.get(studentUid)?.items[itemUid] ?? 0;
-      return current !== initial;
-    };
-
-    return levelStudents.filter((student) => hasChanged(student.uid, activeItem.itemUid)).map((student) => student.uid);
+    return levelStudents
+      .filter((student) =>
+        hasStudentGiftPlanChanges(studentItemsMap, initialStudentItems, student.uid, activeItem.itemUid),
+      )
+      .map((student) => student.uid);
   }, [levelStudents, studentItemsMap, initialStudentItems, activeItem.itemUid]);
 
   const hasChanges = changedStudents.length > 0;
   const isSaving = saveFetcher.state !== "idle";
 
   useEffect(() => {
+    if (saveFetcher.state === "idle" && saveFetcher.data && isStaleStudentStateActionResult(saveFetcher.data)) {
+      setSaveError(STUDENT_STATE_STALE_MESSAGE);
+      setSaveSuccess(false);
+      setRetryAvailable(false);
+      retryPayloadRef.current = null;
+      onStaleWriteBlocked();
+      return;
+    }
+    if (
+      saveFetcher.state === "idle" &&
+      saveFetcher.data &&
+      "success" in saveFetcher.data &&
+      !saveFetcher.data.success
+    ) {
+      setSaveError(
+        "error" in saveFetcher.data && typeof saveFetcher.data.error === "string"
+          ? saveFetcher.data.error
+          : "저장하지 못했어요",
+      );
+      setSaveSuccess(false);
+      setRetryAvailable("retryable" in saveFetcher.data && saveFetcher.data.retryable === true);
+      return;
+    }
     if (saveFetcher.state === "idle" && saveFetcher.data?.success) {
-      const savedStudentUids = new Set(changedStudents);
+      const savedPlans = getGiftPlanSaveSnapshotForResult(true, retryPayloadRef.current) ?? [];
+      retryPayloadRef.current = null;
+      setRetryAvailable(false);
+      setSaveError(null);
+      const savedStudentUids = new Set(savedPlans.map(({ studentUid }) => studentUid));
       const diff = Array.from(savedStudentUids).filter((uid) => !lastSuccessRef.current.has(uid));
       if (diff.length > 0) {
         setSaveSuccess(true);
         revalidator.revalidate();
-        onSave(diff);
+        const changed = new Set(diff);
+        onSave(savedPlans.filter(({ studentUid }) => changed.has(studentUid)));
         lastSuccessRef.current = savedStudentUids;
       }
     }
@@ -408,7 +546,7 @@ function useSaveStudentItems({
       lastSuccessRef.current.clear();
       setSaveSuccess(false);
     }
-  }, [saveFetcher.state, saveFetcher.data, revalidator, onSave, changedStudents]);
+  }, [saveFetcher.state, saveFetcher.data, revalidator, onSave, onStaleWriteBlocked]);
 
   const handleSave = () => {
     setSaveError(null);
@@ -419,29 +557,27 @@ function useSaveStudentItems({
       return;
     }
 
-    if (changedStudents.length === 0) {
+    if (changedStudents.length === 0 || staleWriteBlocked) {
       return;
     }
 
-    const studentsToSave: Array<{
-      studentId: string;
-      currentLevel: number;
-      currentExp: number | null;
-      targetLevel: number;
-      items: Record<string, number>;
-    }> = [];
+    const studentsToSave: GiftPlanSavePayload[] = [];
 
     for (const studentUid of changedStudents) {
       const studentData = students.find((s) => s.uid === studentUid);
       const studentItems = studentItemsMap.get(studentUid);
       if (studentData && studentItems) {
-        studentsToSave.push({
-          studentId: studentUid,
-          currentLevel: studentData.currentLevel ?? 1,
-          currentExp: studentData.currentExp,
-          targetLevel: studentData.targetLevel ?? 50,
-          items: studentItems.items,
-        });
+        studentsToSave.push(
+          writeMode === "nullable"
+            ? buildGiftPlanSavePayload(studentUid, studentItems.items)
+            : {
+                studentId: studentUid,
+                currentLevel: studentData.currentLevel ?? 1,
+                currentExp: studentData.currentExp,
+                targetLevel: studentData.targetLevel ?? 50,
+                items: studentItems.items,
+              },
+        );
       }
     }
 
@@ -450,7 +586,15 @@ function useSaveStudentItems({
     }
 
     lastSuccessRef.current.clear();
+    retryPayloadRef.current = studentsToSave;
+    setRetryAvailable(false);
     saveFetcher.submit(studentsToSave, { method: "POST", encType: "application/json" });
+  };
+
+  const handleRetry = () => {
+    if (!retryAvailable || staleWriteBlocked || !retryPayloadRef.current) return;
+    setRetryAvailable(false);
+    saveFetcher.submit(retryPayloadRef.current, { method: "POST", encType: "application/json" });
   };
 
   return {
@@ -460,6 +604,8 @@ function useSaveStudentItems({
     hasChanges,
     changedStudents,
     handleSave,
+    retryAvailable,
+    handleRetry,
   };
 }
 
@@ -476,7 +622,10 @@ type FavoriteLevelCardProps = {
   onQuantityChange: (studentUid: string, itemUid: string, value: number) => void;
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
-  onSave: (studentUids: string[]) => void;
+  onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
+  writeMode: "legacy" | "nullable";
+  staleWriteBlocked: boolean;
+  onStaleWriteBlocked: () => void;
 };
 
 type FavoriteLevelCardEditModeProps = {
@@ -489,9 +638,33 @@ type FavoriteLevelCardEditModeProps = {
   isSaving: boolean;
   hasChanges: boolean;
   changedStudentCount: number;
+  staleWriteBlocked: boolean;
+  retryAvailable: boolean;
+  onRetry: () => void;
   onSave: () => void;
   onCancel: () => void;
 };
+
+export function GiftPlanSaveError({
+  saveError,
+  staleWriteBlocked,
+  retryAvailable,
+  onRetry,
+}: Pick<FavoriteLevelCardEditModeProps, "saveError" | "staleWriteBlocked" | "retryAvailable" | "onRetry">) {
+  const visibleError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : saveError;
+  if (!visibleError) return null;
+
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-2" role="alert">
+      <p className="text-xs text-red-600 dark:text-red-400">{visibleError}</p>
+      {staleWriteBlocked ? (
+        <Button size="xs" text="새로고침" onClick={() => window.location.reload()} />
+      ) : retryAvailable ? (
+        <Button size="xs" text="다시 시도" onClick={onRetry} />
+      ) : null}
+    </div>
+  );
+}
 
 function FavoriteLevelCardEditMode({
   levelStudents,
@@ -503,6 +676,9 @@ function FavoriteLevelCardEditMode({
   isSaving,
   hasChanges,
   changedStudentCount,
+  staleWriteBlocked,
+  retryAvailable,
+  onRetry,
   onSave,
   onCancel,
 }: FavoriteLevelCardEditModeProps) {
@@ -616,7 +792,12 @@ function FavoriteLevelCardEditMode({
       <div className="sticky bottom-0 z-10 mt-4 py-3">
         <FloatingActionBar className="flex items-center justify-between gap-2 p-3">
           <div className="min-w-0 flex-1">
-            {saveError && <p className="text-xs text-red-600 dark:text-red-400">{saveError}</p>}
+            <GiftPlanSaveError
+              saveError={saveError}
+              staleWriteBlocked={staleWriteBlocked}
+              retryAvailable={retryAvailable}
+              onRetry={onRetry}
+            />
             {saveSuccess && <p className="text-xs text-green-700 dark:text-green-400">저장 완료</p>}
           </div>
           <div className="flex items-center gap-2">
@@ -626,7 +807,7 @@ function FavoriteLevelCardEditMode({
               text={isSaving ? "저장 중..." : "변경 사항 저장"}
               onClick={onSave}
               variant="primary"
-              disabled={!hasChanges || isSaving}
+              disabled={!hasChanges || isSaving || staleWriteBlocked}
             />
           </div>
         </FloatingActionBar>
@@ -706,18 +887,25 @@ function FavoriteLevelCard({
   students,
   isAuthenticated,
   onSave,
+  writeMode,
+  staleWriteBlocked,
+  onStaleWriteBlocked,
 }: FavoriteLevelCardProps) {
   const [isEditMode, setIsEditMode] = useState(false);
   const isSheetSurface = surface === "sheet";
-  const { saveError, saveSuccess, isSaving, hasChanges, changedStudents, handleSave } = useSaveStudentItems({
-    studentItemsMap,
-    initialStudentItems,
-    levelStudents,
-    students,
-    activeItem,
-    isAuthenticated,
-    onSave,
-  });
+  const { saveError, saveSuccess, isSaving, hasChanges, changedStudents, handleSave, retryAvailable, handleRetry } =
+    useSaveStudentItems({
+      studentItemsMap,
+      initialStudentItems,
+      levelStudents,
+      students,
+      activeItem,
+      isAuthenticated,
+      onSave,
+      writeMode,
+      staleWriteBlocked,
+      onStaleWriteBlocked,
+    });
 
   const totalCount = levelStudents
     .map((student) => studentItemsMap.get(student.uid)?.items[activeItem.itemUid] ?? 0)
@@ -776,6 +964,9 @@ function FavoriteLevelCard({
           isSaving={isSaving}
           hasChanges={hasChanges}
           changedStudentCount={changedStudents.length}
+          staleWriteBlocked={staleWriteBlocked}
+          retryAvailable={retryAvailable}
+          onRetry={handleRetry}
           onSave={handleSave}
           onCancel={handleCancelEdit}
         />

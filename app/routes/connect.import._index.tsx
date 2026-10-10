@@ -3,15 +3,16 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SubTitle, Textarea } from "~/components/primitives";
+import { serializeStudentStateDraftValue } from "~/domain/student-state";
 import { parseStudentStateImport } from "~/domain/student-state-serialization";
+import { getLogger } from "~/lib/observability.server";
 import { getAllStudentsMap } from "~/models/student";
 import {
-  SyncDraftPersistenceError,
   createSyncDraft,
   getSyncDraftEntryCounts,
   listPendingSyncDrafts,
+  SyncDraftPersistenceError,
 } from "~/models/sync-draft";
-import { getLogger } from "~/lib/observability.server";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 import PendingSyncDraftList from "./connect._components/PendingSyncDraftList";
 
@@ -92,7 +93,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
 
   const entries = parsed.entries.map((entry) => {
     const value = Number(entry.current?.tier ?? entry.target?.targetTier ?? 1);
-    const valueJson = JSON.stringify({ current: entry.current, target: entry.target });
+    const valueJson = serializeStudentStateDraftValue(entry);
     return { entryKey: entry.studentId, value, valueJson };
   });
 

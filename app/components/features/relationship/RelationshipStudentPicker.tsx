@@ -9,18 +9,22 @@ type RelationshipStudent = {
   uid: string;
   name: string;
   currentLevel: number | null;
+  order: number;
+  hasSavedState: boolean;
 };
 
 type RelationshipStudentPickerProps = {
   students: RelationshipStudent[];
   selectedStudentUid: string | null;
   onSelectStudentUid: (studentUid: string | null) => void;
+  nullableSemantics: boolean;
 };
 
 export default function RelationshipStudentPicker({
   students,
   selectedStudentUid,
   onSelectStudentUid,
+  nullableSemantics,
 }: RelationshipStudentPickerProps) {
   const selectedStudent = useMemo(
     () => students.find((student) => student.uid === selectedStudentUid),
@@ -29,10 +33,10 @@ export default function RelationshipStudentPicker({
   const savedStudents = useMemo(
     () =>
       sortStudentsByLevel(
-        students.filter((student) => student.currentLevel !== null),
+        students.filter((student) => (nullableSemantics ? student.hasSavedState : student.currentLevel !== null)),
         students,
       ),
-    [students],
+    [students, nullableSemantics],
   );
 
   return (
@@ -113,6 +117,6 @@ function sortStudentsByLevel(candidates: RelationshipStudent[], students: Relati
   return [...candidates].sort((a, b) => {
     const aLevel = students.find((student) => student.uid === a.uid)?.currentLevel ?? 0;
     const bLevel = students.find((student) => student.uid === b.uid)?.currentLevel ?? 0;
-    return bLevel - aLevel;
+    return bLevel - aLevel || a.order - b.order;
   });
 }

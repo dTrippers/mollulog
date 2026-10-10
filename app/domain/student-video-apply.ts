@@ -4,6 +4,8 @@ import {
   parseStudentStateDraftValue,
   type StudentStateCurrentFieldKey,
   type StudentStateDraftCurrentValue,
+  serializeStudentStateDraftValue,
+  setStudentStateDraftFieldPresence,
 } from "~/domain/student-state";
 import {
   parseStudentDetailVideoResult,
@@ -51,10 +53,13 @@ export function buildStudentVideoSyncDraftEntries(
 
   return students.map(({ studentUid, current, confirmedFields }) => {
     const resultStudent = resultByUid.get(studentUid) as StudentDetailVideoStudent;
+    const valueJson = serializeStudentStateDraftValue(
+      setStudentStateDraftFieldPresence({ current, target: null }, { current: confirmedFields, target: [] }),
+    );
     return {
       entryKey: studentUid,
       value: current.tier,
-      valueJson: JSON.stringify({ current, target: null }),
+      valueJson,
       meta: {
         confirmedFields,
         fields: Object.fromEntries(
@@ -89,10 +94,13 @@ export function buildStudentImageSyncDraftEntries(
 
   return students.map(({ studentUid, current, confirmedFields }) => {
     const resultStudent = resultByUid.get(studentUid) as StudentDetailImageStudent;
+    const valueJson = serializeStudentStateDraftValue(
+      setStudentStateDraftFieldPresence({ current, target: null }, { current: confirmedFields, target: [] }),
+    );
     return {
       entryKey: studentUid,
       value: current.tier,
-      valueJson: JSON.stringify({ current, target: null }),
+      valueJson,
       meta: {
         confirmedFields,
         fields: Object.fromEntries(

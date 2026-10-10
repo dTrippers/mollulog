@@ -332,13 +332,15 @@ function RelationshipPlannerRow({
                   to={`/utils/relationship?studentUid=${encodeURIComponent(student.uid)}`}
                   key={student.uid}
                   className="pointer-events-auto inline-flex items-center gap-1 rounded-full bg-card pr-2 text-xs font-semibold text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                  title={`현재 인연 랭크 ${student.currentLevel}`}
+                  title={student.currentLevel == null ? undefined : `현재 인연 랭크 ${student.currentLevel}`}
                 >
                   <ProfileImage studentUid={student.uid} imageSize={6} />
-                  <span className="inline-flex items-center gap-1">
-                    <HeartIcon className="size-4 text-rose-500" />
-                    {student.currentLevel}
-                  </span>
+                  {student.currentLevel == null ? null : (
+                    <span className="inline-flex items-center gap-1">
+                      <HeartIcon className="size-4 text-rose-500" />
+                      {student.currentLevel}
+                    </span>
+                  )}
                 </Link>
               ))}
             </div>

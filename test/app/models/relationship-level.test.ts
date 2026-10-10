@@ -214,6 +214,51 @@ describe("relationship-level", () => {
     expect(readSelects.some((statement) => statement.includes('"user_relationship_levels"'))).toBe(false);
   });
 
+  it("reads null current and target levels without inventing defaults", async () => {
+    const { db, env } = createEnv();
+    db.tables.student_states.push(
+      studentStateRow({ relationshipCurrentLevel: null, relationshipCurrentExp: null }),
+      studentStateRow({
+        id: 2,
+        uid: "state-current-only",
+        studentUid: "student-current-only",
+        relationshipLevelUid: "relationship-current-only",
+        relationshipCurrentLevel: 18,
+        relationshipCurrentExp: null,
+      }),
+    );
+    db.tables.student_targets.push(
+      studentTargetRow({ relationshipTargetLevel: null, giftPlan: { "gift-x": 2 } }),
+      studentTargetRow({
+        id: 2,
+        uid: "target-row-current-only",
+        studentUid: "student-current-only",
+        relationshipLevelUid: "relationship-current-only",
+        relationshipTargetLevel: null,
+        giftPlan: {},
+      }),
+    );
+
+    await expect(getRelationshipLevels(env, 1)).resolves.toEqual([
+      {
+        uid: "relationship-a",
+        studentId: "student-a",
+        currentLevel: null,
+        currentExp: null,
+        targetLevel: null,
+        items: { "gift-x": 2 },
+      },
+      {
+        uid: "relationship-current-only",
+        studentId: "student-current-only",
+        currentLevel: 18,
+        currentExp: null,
+        targetLevel: null,
+        items: {},
+      },
+    ]);
+  });
+
   it.each([
     "state-only",
     "target-only",

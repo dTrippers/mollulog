@@ -20,6 +20,7 @@ import type {
 import {
   isStudentStateCurrentChanged,
   isStudentStateCurrentFieldUpdateTarget,
+  isStudentStateDraftFieldProvided,
   isStudentStateTargetChanged,
   isStudentStateTargetFieldUpdateTarget,
   mergeStudentStateDraftValueForUpdate,
@@ -27,6 +28,7 @@ import {
   type StudentStateCurrentComparisonValue,
   type StudentStateFieldDefinition,
   type StudentStateTargetComparisonValue,
+  setStudentStateDraftFieldPresence,
   studentStateComparisonFields,
   studentStateCurrentFields,
   studentStateTargetFields,
@@ -62,6 +64,8 @@ type StudentStateDraftReviewRow = {
   confidence: number | null;
   currentIsUpdate: boolean;
   targetIsUpdate: boolean;
+  submittedCurrent: StudentStateDraftValue["current"];
+  submittedTarget: StudentStateDraftValue["target"];
 };
 
 type StudentStateDraftReviewProps = {
@@ -69,6 +73,7 @@ type StudentStateDraftReviewProps = {
   metadataByKey: Record<string, SyncDraftDisplayMetadata>;
   currentValues: StudentStateCurrentValues;
   proposedValues: StudentStateProposedValues;
+  writeMode: "legacy" | "nullable";
   actionData?: SyncDraftReviewActionData;
 };
 
@@ -87,11 +92,45 @@ const rowHeaderCellClass = `${cellBase} w-32 px-2 py-1.5 text-left text-xs font-
 const importedRowHeaderCellClass = `${cellBase} w-32 px-2 py-1.5 text-left text-xs font-medium whitespace-nowrap text-blue-500 dark:text-blue-400`;
 const headerCellClass = "w-16 px-0.5 py-1.5 text-center";
 
+export function getStudentStateDraftReviewChanges(
+  draftValue: StudentStateDraftValue | null,
+  currentValue: StudentStateStoredValue,
+  options: { initialTier: number; hasGear: boolean },
+  writeMode: "legacy" | "nullable",
+  visibleFields = getVisibleComparisonFields(options.hasGear),
+): {
+  currentIsUpdate: boolean;
+  targetIsUpdate: boolean;
+  submittedCurrent: StudentStateDraftValue["current"];
+  submittedTarget: StudentStateDraftValue["target"];
+} {
+  const currentIsUpdate =
+    draftValue?.current != null &&
+    (writeMode === "nullable" || !isMinimumCurrentDraftValue(draftValue.current, visibleFields, options.initialTier)) &&
+    isStudentStateCurrentChanged(draftValue.current, currentValue.current, options, writeMode);
+  const targetIsUpdate = isStudentStateTargetChanged(
+    draftValue?.target ?? null,
+    currentValue.target,
+    options,
+    writeMode,
+  );
+  const mergedValue = draftValue
+    ? mergeStudentStateDraftValueForUpdate(draftValue, currentValue, options, writeMode)
+    : null;
+  return {
+    currentIsUpdate,
+    targetIsUpdate,
+    submittedCurrent: currentIsUpdate ? (mergedValue?.current ?? null) : null,
+    submittedTarget: targetIsUpdate ? (mergedValue?.target ?? null) : null,
+  };
+}
+
 export default function StudentStateDraftReview({
   draft,
   metadataByKey,
   currentValues,
   proposedValues,
+  writeMode,
   actionData,
 }: StudentStateDraftReviewProps) {
   const navigation = useNavigation();
@@ -122,14 +161,13 @@ export default function StudentStateDraftReview({
     const initialTier = metadata.initialTier ?? 1;
     const hasGear = metadata.hasGear ?? true;
     const visibleFields = getVisibleComparisonFields(hasGear);
-    const currentIsUpdate =
-      draftValue?.current != null &&
-      !isMinimumCurrentDraftValue(draftValue.current, visibleFields, initialTier) &&
-      isStudentStateCurrentChanged(draftValue.current, currentValue.current, { initialTier, hasGear });
-    const targetIsUpdate = isStudentStateTargetChanged(draftValue?.target ?? null, currentValue.target, {
-      initialTier,
-      hasGear,
-    });
+    const { currentIsUpdate, targetIsUpdate, submittedCurrent, submittedTarget } = getStudentStateDraftReviewChanges(
+      draftValue,
+      currentValue,
+      { initialTier, hasGear },
+      writeMode,
+      visibleFields,
+    );
 
     return [
       {
@@ -141,6 +179,8 @@ export default function StudentStateDraftReview({
         confidence: parseConfidence(entry.meta),
         currentIsUpdate,
         targetIsUpdate,
+        submittedCurrent,
+        submittedTarget,
       },
     ];
   });
@@ -157,13 +197,26 @@ export default function StudentStateDraftReview({
 
       return {
         ...values,
-        [entryUid]: {
-          ...draftValue,
-          current: {
-            ...draftValue.current,
-            [field]: value,
+        [entryUid]: setStudentStateDraftFieldPresence(
+          {
+            ...draftValue,
+            current: {
+              ...draftValue.current,
+              [field]: value,
+            },
           },
-        },
+          {
+            current: [
+              ...currentFields
+                .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "current", key))
+                .map(({ key }) => key),
+              field,
+            ],
+            target: targetFields
+              .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "target", key))
+              .map(({ key }) => key),
+          },
+        ),
       };
     });
   };
@@ -177,13 +230,26 @@ export default function StudentStateDraftReview({
 
       return {
         ...values,
-        [entryUid]: {
-          ...draftValue,
-          target: {
-            ...draftValue.target,
-            [field]: value,
+        [entryUid]: setStudentStateDraftFieldPresence(
+          {
+            ...draftValue,
+            target: {
+              ...draftValue.target,
+              [field]: value,
+            },
           },
-        },
+          {
+            current: currentFields
+              .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "current", key))
+              .map(({ key }) => key),
+            target: [
+              ...targetFields
+                .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "target", key))
+                .map(({ key }) => key),
+              field,
+            ],
+          },
+        ),
       };
     });
   };
@@ -206,23 +272,21 @@ export default function StudentStateDraftReview({
       actions={isPending ? <DraftReviewActions applyDisabled={errorRows.length > 0} draftFormId={draftFormId} /> : null}
     >
       <Form method="post" id={draftFormId} className="space-y-3">
+        <input type="hidden" name="stateFormat" value={writeMode} />
         {visibleRows.length === 0 ? (
           <div className="rounded-lg border border-border bg-card p-8">
             <EmptyView Icon={ArchiveBoxIcon} text="검토할 항목이 없어요" />
           </div>
         ) : null}
 
-        {rows.map(({ entry, metadata, currentValue, proposed, draftValue, currentIsUpdate, targetIsUpdate }) =>
+        {rows.map(({ entry, proposed, draftValue, submittedCurrent, submittedTarget }) =>
           proposed.error || draftValue == null ? null : (
             <Fragment key={`hidden:${entry.uid}`}>
               <StudentStateDraftHiddenInputs
                 entryUid={entry.uid}
-                value={draftValue}
-                currentValue={currentValue}
-                initialTier={metadata.initialTier ?? 1}
-                hasGear={metadata.hasGear ?? true}
-                currentIsUpdate={currentIsUpdate}
-                targetIsUpdate={targetIsUpdate}
+                submittedCurrent={submittedCurrent}
+                submittedTarget={submittedTarget}
+                writeMode={writeMode}
               />
             </Fragment>
           ),
@@ -237,6 +301,7 @@ export default function StudentStateDraftReview({
                   disabled={navigation.state === "submitting" || !isPending}
                   onCurrentChange={updateCurrentValue}
                   onTargetChange={updateTargetValue}
+                  writeMode={writeMode}
                 />
               </div>
             </div>
@@ -255,11 +320,13 @@ function StudentStateComparisonTable({
   disabled,
   onCurrentChange,
   onTargetChange,
+  writeMode,
 }: {
   rows: StudentStateDraftReviewRow[];
   disabled: boolean;
   onCurrentChange: (entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => void;
   onTargetChange: (entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => void;
+  writeMode: "legacy" | "nullable";
 }) {
   const fields = getVisibleComparisonFields(rows.some((row) => row.metadata.hasGear ?? true));
   const numberInputGridNavigation = useNumberInputGridNavigation();
@@ -329,6 +396,7 @@ function StudentStateComparisonTable({
                     entryUid={entry.uid}
                     navigationRowIndex={currentNavigationRowIndex ?? 0}
                     numberInputGridNavigation={numberInputGridNavigation}
+                    writeMode={writeMode}
                     onChange={onCurrentChange}
                   />
                 </>
@@ -354,6 +422,7 @@ function StudentStateComparisonTable({
                     entryUid={entry.uid}
                     navigationRowIndex={targetNavigationRowIndex ?? 0}
                     numberInputGridNavigation={numberInputGridNavigation}
+                    writeMode={writeMode}
                     onChange={onTargetChange}
                   />
                 </>
@@ -551,6 +620,7 @@ function EditableStudentStateRow({
   entryUid,
   navigationRowIndex,
   numberInputGridNavigation,
+  writeMode,
   onChange,
 }: {
   label: string;
@@ -564,6 +634,7 @@ function EditableStudentStateRow({
   entryUid: string;
   navigationRowIndex: number;
   numberInputGridNavigation: NumberInputGridNavigation;
+  writeMode: "legacy" | "nullable";
   onChange:
     | ((entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => void)
     | ((entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => void);
@@ -595,6 +666,7 @@ function EditableStudentStateRow({
                 draftValue,
                 initialTier,
                 hasGear,
+                writeMode,
               });
             const isDecreased = isChanged && base != null && imported != null && imported < base;
             return (
@@ -659,8 +731,9 @@ function EditableStudentStateRow({
   );
 }
 
-function getStudentStateValue(value: Record<string, number | null>, key: string): number | null {
-  return value[key] ?? null;
+function getStudentStateValue(value: object, key: string): number | null {
+  const entry = (value as Record<string, unknown>)[key];
+  return typeof entry === "number" ? entry : null;
 }
 
 function isStudentStateComparisonFieldUpdateTarget({
@@ -670,6 +743,7 @@ function isStudentStateComparisonFieldUpdateTarget({
   draftValue,
   initialTier,
   hasGear,
+  writeMode,
 }: {
   field: StudentStateComparisonField;
   valueType: "current" | "target";
@@ -677,6 +751,7 @@ function isStudentStateComparisonFieldUpdateTarget({
   draftValue: Exclude<EditableStudentStateRowValue, null>;
   initialTier: number;
   hasGear: boolean;
+  writeMode: "legacy" | "nullable";
 }): boolean {
   if (valueType === "current") {
     const key = field.currentKey;
@@ -688,6 +763,7 @@ function isStudentStateComparisonFieldUpdateTarget({
       draftValue as StudentStateDraftCurrentValue,
       baseValue as StudentStateStoredCurrentValue,
       { initialTier, hasGear },
+      writeMode,
     );
   }
 
@@ -700,6 +776,7 @@ function isStudentStateComparisonFieldUpdateTarget({
     draftValue as StudentStateDraftTargetValue,
     baseValue as StudentStateStoredTargetValue,
     { initialTier, hasGear },
+    writeMode,
   );
 }
 
@@ -785,46 +862,51 @@ function getEquipmentLabel(field: StudentStateDisplayField, equipments: string[]
 
 function StudentStateDraftHiddenInputs({
   entryUid,
-  value,
-  currentValue,
-  initialTier,
-  hasGear,
-  currentIsUpdate,
-  targetIsUpdate,
+  submittedCurrent,
+  submittedTarget,
+  writeMode,
 }: {
   entryUid: string;
-  value: StudentStateDraftValue;
-  currentValue: StudentStateStoredValue;
-  initialTier: number;
-  hasGear: boolean;
-  currentIsUpdate: boolean;
-  targetIsUpdate: boolean;
+  submittedCurrent: StudentStateDraftValue["current"];
+  submittedTarget: StudentStateDraftValue["target"];
+  writeMode: "legacy" | "nullable";
 }) {
-  const mergedValue = mergeStudentStateDraftValueForUpdate(value, currentValue, { initialTier, hasGear });
-  const submitCurrent = currentIsUpdate && mergedValue.current != null;
-  const submitTarget = targetIsUpdate && mergedValue.target != null;
+  const submitCurrent = submittedCurrent != null;
+  const submitTarget = submittedTarget != null;
+  const currentPresence = submittedCurrent?.providedFields ?? [];
+  const targetPresence = submittedTarget?.providedFields ?? [];
 
   return (
     <>
       <input type="hidden" name={`studentState:${entryUid}:hasCurrent`} value={submitCurrent ? "1" : "0"} />
+      {submitCurrent && writeMode === "nullable" ? (
+        <input
+          type="hidden"
+          name={`studentState:${entryUid}:current:providedFields`}
+          value={currentPresence.join(",")}
+        />
+      ) : null}
       {submitCurrent
         ? currentFields.map(({ key }) => (
             <input
               key={`current:${key}`}
               type="hidden"
               name={`studentState:${entryUid}:current:${key}`}
-              value={formatFormValue(mergedValue.current?.[key])}
+              value={formatFormValue(submittedCurrent?.[key])}
             />
           ))
         : null}
       <input type="hidden" name={`studentState:${entryUid}:hasTarget`} value={submitTarget ? "1" : "0"} />
+      {submitTarget && writeMode === "nullable" ? (
+        <input type="hidden" name={`studentState:${entryUid}:target:providedFields`} value={targetPresence.join(",")} />
+      ) : null}
       {submitTarget
         ? targetFields.map(({ key }) => (
             <input
               key={`target:${key}`}
               type="hidden"
               name={`studentState:${entryUid}:target:${key}`}
-              value={formatFormValue(mergedValue.target?.[key])}
+              value={formatFormValue(submittedTarget?.[key])}
             />
           ))
         : null}

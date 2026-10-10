@@ -7,6 +7,7 @@ import {
   getStudentGrowthWithMetadata,
   saveStudentGrowthAndCurrentState,
   upsertStudentGrowth,
+  validateMergedStudentGrowthTarget,
 } from "~/models/student-growth";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
 
@@ -143,6 +144,16 @@ function expectNoLegacyCurrentColumnsWritten(sql: string) {
 }
 
 describe("student-growth target state", () => {
+  it("validates a partial target update together with the stored target", () => {
+    const stored = { targetTier: 9, targetWeaponLevel: 60 };
+
+    expect(() => validateMergedStudentGrowthTarget(stored, { targetTier: 6 }, 3)).toThrow();
+    expect(() =>
+      validateMergedStudentGrowthTarget(stored, { targetTier: 6, targetWeaponLevel: null }, 3),
+    ).not.toThrow();
+    expect(() => validateMergedStudentGrowthTarget(stored, { targetLevel: 90 }, 3)).not.toThrow();
+  });
+
   it("upserts targets without writing the legacy current columns", async () => {
     const { db, env } = createEnv();
     db.rows.push(rowFactory({ targetLevel: 85 }));
@@ -218,38 +229,58 @@ describe("student-growth target state", () => {
     expect(db.tables.student_targets).toHaveLength(1);
   });
 
-  it("rejects a legacy writer after nullable semantics activation before changing data", async () => {
+  it("registers a planner entry without clearing an existing goal after nullable activation", async () => {
     const db = new FakePostgresClient(
       {
         student_state_migration_control: [{ key: "default", nullableSemanticsEnabled: true }],
+        student_targets: [studentTargetRow({ targetLevel: 70, studentGrowthUid: null, plannerAddedAt: null })],
       },
       "student_growth",
     );
     const env = { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env;
 
-    await expect(
-      upsertStudentGrowth(env, 1, "student-a", {
-        targetLevel: 90,
-        targetSkillEx: null,
-        targetSkillNormal: null,
-        targetSkillEnhanced: null,
-        targetSkillSub: null,
-        targetEquip1: null,
-        targetEquip2: null,
-        targetEquip3: null,
-        targetEquipSpecial: null,
-        targetTier: null,
-        targetWeaponLevel: null,
-        targetAbilityHp: null,
-        targetAbilityAtk: null,
-        targetAbilityHeal: null,
-      }),
-    ).rejects.toMatchObject({ code: "STUDENT_STATE_STALE" });
+    await upsertStudentGrowth(env, 1, "student-a", {
+      targetLevel: null,
+      targetSkillEx: null,
+      targetSkillNormal: null,
+      targetSkillEnhanced: null,
+      targetSkillSub: null,
+      targetEquip1: null,
+      targetEquip2: null,
+      targetEquip3: null,
+      targetEquipSpecial: null,
+      targetTier: null,
+      targetWeaponLevel: null,
+      targetAbilityHp: null,
+      targetAbilityAtk: null,
+      targetAbilityHeal: null,
+    });
 
     expect(db.tables.student_growth).toHaveLength(0);
     expect(db.tables.student_states).toHaveLength(0);
-    expect(db.tables.student_targets).toHaveLength(0);
-    expect(db.tables.student_state_audits).toHaveLength(0);
+    expect(db.tables.student_targets).toHaveLength(1);
+    expect(db.tables.student_targets[0]).toMatchObject({
+      studentGrowthUid: expect.any(String),
+      plannerAddedAt: expect.any(String),
+      targetLevel: 70,
+    });
+    expect(db.tables.student_state_audits).toHaveLength(1);
+  });
+
+  it("validates a partial target against the saved target tier inside the nullable write lock", async () => {
+    const db = new FakePostgresClient(
+      {
+        student_state_migration_control: [{ key: "default", nullableSemanticsEnabled: true }],
+        student_targets: [studentTargetRow({ targetTier: 6, targetWeaponLevel: 20 })],
+      },
+      "student_growth",
+    );
+    const env = { HYPERDRIVE: { connectionString: "fake://student-state" }, __pgClient: db } as unknown as Env;
+
+    await saveStudentGrowthAndCurrentState(env, 1, "student-a", null, { targetWeaponLevel: 30 }, 3, "nullable");
+
+    expect(db.tables.student_targets[0]).toMatchObject({ targetTier: 6, targetWeaponLevel: 30 });
+    expect(db.tables.student_state_audits).toHaveLength(1);
   });
 
   it("fails closed when the activation control record is missing", async () => {

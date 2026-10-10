@@ -6,6 +6,7 @@ const usage = `Usage:
   node scripts/student-state-migration.mjs preflight --schema <schema>
   node scripts/student-state-migration.mjs backfill --schema <schema> --confirm-no-external-writers
   node scripts/student-state-migration.mjs parity --schema <schema> --confirm-no-external-writers
+  node scripts/student-state-migration.mjs activate --schema <schema> --confirm-no-external-writers
 
 The schema is always explicit and may be a service schema such as public.
 For a PGHOST other than 127.0.0.1, append --confirm-db-host <PGHOST> to any command after verifying the target database.
@@ -444,17 +445,201 @@ async function userSnapshotTransaction(client, operation) {
   }
 }
 
+// Writers time out after 5 seconds, so every control-row exclusive lock, including the wait for it, ends well below that.
+const ACTIVATION_LOCK_TIMEOUT = "1s";
+const ACTIVATION_LOCKED_BUDGET_MS = 2000;
+const ACTIVATION_MAX_ROUNDS = 10;
+
+class ActivationLockBudgetExceeded extends Error {}
+
+function isLockTimeout(error) {
+  return error?.code === "55P03";
+}
+
+/** Lock timeout, the statement timeout that enforces the deadline, or the deadline itself: release and retry. */
+function isActivationRetryable(error) {
+  return error instanceof ActivationLockBudgetExceeded || isLockTimeout(error) || error?.code === "57014";
+}
+
+/** A client whose every statement is bounded by the time left before the deadline. */
+function withDeadline(client, deadline) {
+  return {
+    async query(...args) {
+      const remaining = Math.floor(deadline - Date.now());
+      if (remaining <= 0) throw new ActivationLockBudgetExceeded();
+      await client.query(`SET LOCAL statement_timeout = ${remaining}`);
+      return client.query(...args);
+    },
+  };
+}
+
+async function lockActivationControl(client, lockedClient) {
+  await client.query("BEGIN ISOLATION LEVEL READ COMMITTED");
+  await client.query(`SET LOCAL lock_timeout = '${ACTIVATION_LOCK_TIMEOUT}'`);
+  const { rows } = await lockedClient.query(
+    "SELECT nullable_semantics_enabled FROM student_state_migration_control WHERE key = 'default' FOR UPDATE",
+  );
+  if (rows.length === 0) throw new Error("Student-state migration control row 'default' is missing.");
+  if (rows[0].nullable_semantics_enabled) {
+    throw new Error("Nullable student-state semantics are already activated; use a forward fix.");
+  }
+}
+
+/**
+ * Drain in-flight writers and read the audit high-water mark. Every participating write that commits later
+ * takes the control row's shared lock after this barrier, so its audit id is above the mark.
+ */
+async function readAuditMarkAfterWriters(client) {
+  for (let attempt = 0; attempt < ACTIVATION_MAX_ROUNDS; attempt += 1) {
+    const lockedClient = withDeadline(client, Date.now() + ACTIVATION_LOCKED_BUDGET_MS);
+    try {
+      await lockActivationControl(client, lockedClient);
+      const { rows } = await lockedClient.query("SELECT COALESCE(max(id), 0)::int AS mark FROM student_state_audits");
+      await client.query("COMMIT");
+      return rows[0].mark;
+    } catch (error) {
+      await client.query("ROLLBACK");
+      if (!isActivationRetryable(error)) throw error;
+    }
+  }
+  throw new Error("Student-state activation could not briefly lock the control row; the switch remains off.");
+}
+
+async function listUsersAuditedAfter(client, mark, through = null) {
+  const { rows } = await client.query(
+    "SELECT DISTINCT user_id FROM student_state_audits WHERE id > $1 AND ($2::int IS NULL OR id <= $2) ORDER BY user_id",
+    [mark, through],
+  );
+  return rows.map((row) => row.user_id);
+}
+
+async function checkUsersInSnapshots(client, userIds) {
+  let mismatches = 0;
+  for (const userId of userIds) mismatches += await userSnapshotTransaction(client, () => checkParity(client, userId));
+  return mismatches;
+}
+
+async function activateAfterLockedRecheck(client, mark) {
+  // The deadline covers the lock wait, every locked statement, and the switch update; COMMIT only releases the lock.
+  const lockedClient = withDeadline(client, Date.now() + ACTIVATION_LOCKED_BUDGET_MS);
+  try {
+    await lockActivationControl(client, lockedClient);
+    const userIds = await listUsersAuditedAfter(lockedClient, mark);
+    let mismatches = 0;
+    for (const userId of userIds) mismatches += await checkParity(lockedClient, userId);
+    if (mismatches !== 0) {
+      await client.query("ROLLBACK");
+      return { status: "mismatch", mismatches, lockedUsers: userIds.length };
+    }
+    const update = await lockedClient.query(
+      "UPDATE student_state_migration_control SET nullable_semantics_enabled = true, updated_at = now() WHERE key = 'default' AND nullable_semantics_enabled = false",
+    );
+    if (update.rowCount !== 1) throw new Error("Student-state migration control could not be activated.");
+    await client.query("COMMIT");
+    return { status: "activated", mismatches: 0, lockedUsers: userIds.length };
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (isActivationRetryable(error)) return { status: "retry" };
+    throw error;
+  }
+}
+
+/**
+ * Check every user without blocking writers, then hold the control row only to recheck users whose writes
+ * were audited after the checked snapshot. A locked pass that would exceed its budget releases the lock and
+ * catches up without it first.
+ */
+async function activateNullableSemantics(client) {
+  let mark = await readAuditMarkAfterWriters(client);
+  const userIds = await listUserIds(client);
+  const mismatches = await checkUsersInSnapshots(client, userIds);
+  if (mismatches !== 0) return { activated: false, users: userIds.length, mismatches, lockedUsers: 0 };
+
+  for (let round = 0; round < ACTIVATION_MAX_ROUNDS; round += 1) {
+    const result = await activateAfterLockedRecheck(client, mark);
+    if (result.status === "activated") {
+      return { activated: true, users: userIds.length, mismatches: 0, lockedUsers: result.lockedUsers };
+    }
+    if (result.status === "mismatch") {
+      return { activated: false, users: userIds.length, mismatches: result.mismatches, lockedUsers: result.lockedUsers };
+    }
+    const nextMark = await readAuditMarkAfterWriters(client);
+    const catchUpMismatches = await checkUsersInSnapshots(client, await listUsersAuditedAfter(client, mark, nextMark));
+    if (catchUpMismatches !== 0) {
+      return { activated: false, users: userIds.length, mismatches: catchUpMismatches, lockedUsers: 0 };
+    }
+    mark = nextMark;
+  }
+  throw new Error(
+    "Student-state activation could not finish its locked recheck within budget; the switch remains off. Retry when write traffic is lower.",
+  );
+}
+
+async function checkDisplayColumnInvariants(client) {
+  const recruited = await client.query(`
+    SELECT count(*)::int AS count FROM student_states
+    WHERE (recruited_student_uid IS NULL) <> (recruited_at IS NULL)
+       OR (recruited_student_uid IS NULL) <> (tier IS NULL)
+  `);
+  const planner = await client.query(`
+    SELECT count(*)::int AS count FROM student_targets
+    WHERE (student_growth_uid IS NULL) <> (planner_added_at IS NULL)
+  `);
+  const relationship = await client.query(`
+    WITH relationship_rows AS (
+      SELECT
+        COALESCE(s.user_id, t.user_id) AS user_id,
+        COALESCE(s.student_uid, t.student_uid) AS student_uid,
+        s.relationship_level_uid AS state_uid,
+        t.relationship_level_uid AS target_uid,
+        s.relationship_current_level IS NOT NULL
+          OR s.relationship_current_exp IS NOT NULL
+          OR t.relationship_target_level IS NOT NULL
+          OR COALESCE((
+            SELECT bool_or(CASE WHEN jsonb_typeof(entry.value) = 'number' THEN entry.value::text::numeric > 0 ELSE false END)
+            FROM jsonb_each(CASE WHEN jsonb_typeof(t.gift_plan) = 'object' THEN t.gift_plan ELSE '{}'::jsonb END) AS entry
+          ), false) AS has_relationship_values
+      FROM student_states s
+      FULL OUTER JOIN student_targets t USING (user_id, student_uid)
+    )
+    SELECT count(*)::int AS count FROM relationship_rows
+    WHERE (has_relationship_values AND (state_uid IS NULL OR target_uid IS NULL OR state_uid <> target_uid))
+       OR (NOT has_relationship_values AND (state_uid IS NOT NULL OR target_uid IS NOT NULL))
+  `);
+  return {
+    recruited: recruited.rows[0].count,
+    planner: planner.rows[0].count,
+    relationship: relationship.rows[0].count,
+  };
+}
+
 async function main() {
   const action = process.argv[2];
-  if (!["preflight", "backfill", "parity"].includes(action)) throw new Error(usage);
+  if (!["preflight", "backfill", "parity", "activate"].includes(action)) throw new Error(usage);
   const schema = argument("schema");
   quoteIdentifier(schema);
   if (action !== "preflight" && !process.argv.includes("--confirm-no-external-writers")) {
-    throw new Error("Before backfill/parity, confirm all nonparticipating writers are stopped, then pass --confirm-no-external-writers.");
+    throw new Error("Before backfill/parity/activation, confirm all nonparticipating writers are stopped, then pass --confirm-no-external-writers.");
   }
   const client = await connect();
   try {
     await setSchema(client, schema);
+    if (action === "activate") {
+      const result = await activateNullableSemantics(client);
+      process.stdout.write(
+        `activate users=${result.users} mismatches=${result.mismatches} activated=${result.activated} locked_recheck_users=${result.lockedUsers}\n`,
+      );
+      if (!result.activated) {
+        process.exitCode = 2;
+        return;
+      }
+      const invariants = await checkDisplayColumnInvariants(client);
+      process.stdout.write(
+        `display_column_invariants recruited=${invariants.recruited} planner=${invariants.planner} relationship=${invariants.relationship}\n`,
+      );
+      if (Object.values(invariants).some((count) => count !== 0)) process.exitCode = 2;
+      return;
+    }
     if (action !== "preflight") await assertMigrationIsPreActivation(client);
     const userIds = await listUserIds(client);
     if (action === "preflight") {

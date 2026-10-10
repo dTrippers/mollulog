@@ -27,7 +27,11 @@ type GrowthEditorSheetProps = {
   saveDisabled: boolean;
   saveLabel: string;
   saveError: string | null;
+  staleWriteBlocked: boolean;
+  retryAvailable: boolean;
   onSave: () => void;
+  onRefresh: () => void;
+  onRetry: () => void;
 };
 
 export default function GrowthEditorSheet({
@@ -48,7 +52,11 @@ export default function GrowthEditorSheet({
   saveDisabled,
   saveLabel,
   saveError,
+  staleWriteBlocked,
+  retryAvailable,
   onSave,
+  onRefresh,
+  onRetry,
 }: GrowthEditorSheetProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLElement>(null);
@@ -178,8 +186,13 @@ export default function GrowthEditorSheet({
             }`}
           >
             {saveError ? (
-              <div role="alert">
+              <div className="flex flex-wrap items-center gap-2" role="alert">
                 <Callout tone="destructive" title={saveError} />
+                {staleWriteBlocked ? (
+                  <Button text="새로고침" size="xs" onClick={onRefresh} />
+                ) : retryAvailable ? (
+                  <Button text="다시 시도" size="xs" onClick={onRetry} />
+                ) : null}
               </div>
             ) : null}
             <div className="flex items-center justify-end gap-2">

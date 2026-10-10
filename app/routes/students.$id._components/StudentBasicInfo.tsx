@@ -43,7 +43,8 @@ type StudentBasicInfoProps = {
   released: boolean;
   recruited: boolean;
   savedState: StudentCalculatorState;
-  relatedRelationshipLevels: Record<string, number>;
+  relatedRelationshipLevels: Record<string, number | null>;
+  nullableSemantics: boolean;
   knowledgeEntries: PublicKnowledgeEntry[];
   knowledgeLookupStatus: "available" | "failed";
   aiSummary?: React.ReactNode;
@@ -51,7 +52,33 @@ type StudentBasicInfoProps = {
 };
 
 type SaveResult = { ok: true } | { ok: false; error: string; code?: string; retryable?: boolean };
-type StudentBasicInfoSavePayload = Record<string, number | null>;
+type StudentBasicInfoSavePayload = Record<string, number | null | string>;
+
+const nullableCurrentStateFields = [
+  "level",
+  "skillEx",
+  "skillNormal",
+  "skillEnhanced",
+  "skillSub",
+  "equip1",
+  "equip2",
+  "equip3",
+  "equip1Level",
+  "equip2Level",
+  "equip3Level",
+  "equipSpecial",
+  "weaponLevel",
+  "abilityHp",
+  "abilityAtk",
+  "abilityHeal",
+] as const satisfies (keyof StudentCalculatorState)[];
+
+export function normalizeNullableStudentBasicInfoField(
+  field: (typeof nullableCurrentStateFields)[number],
+  value: number | null,
+): number | null {
+  return field === "equipSpecial" && value === 0 ? null : value;
+}
 
 const skillSlotLabels: Record<StudentSkillTypeEnum, string> = {
   ex: "EX 스킬",
@@ -92,6 +119,7 @@ export default function StudentBasicInfo({
   recruited,
   savedState,
   relatedRelationshipLevels,
+  nullableSemantics,
   knowledgeEntries,
   knowledgeLookupStatus,
   aiSummary,
@@ -243,6 +271,19 @@ export default function StudentBasicInfo({
 
   const handleSave = () => {
     if (staleWriteBlockedRef.current) return;
+    if (nullableSemantics) {
+      const payload: StudentBasicInfoSavePayload = { stateFormat: "nullable" };
+      if (!recruited || state.tier !== savedState.tier) payload.tier = resolved.tier;
+      for (const field of nullableCurrentStateFields) {
+        if (state[field] !== savedState[field]) {
+          payload[field] = normalizeNullableStudentBasicInfoField(field, state[field]);
+        }
+      }
+      if (state.bond !== savedState.bond) payload.bond = state.bond;
+      if (recruited && Object.keys(payload).length === 1) return;
+      submitSave(payload);
+      return;
+    }
     submitSave({
       tier: resolved.tier,
       bond: state.bond,
@@ -408,7 +449,11 @@ export default function StudentBasicInfo({
           saveDisabled={saveDisabled}
           saveLabel={saveLabel}
           saveError={saveError}
+          staleWriteBlocked={staleWriteBlocked}
+          retryAvailable={retryAvailable}
           onSave={handleSave}
+          onRefresh={() => window.location.reload()}
+          onRetry={handleRetry}
         />
       </section>
 

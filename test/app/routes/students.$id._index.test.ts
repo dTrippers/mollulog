@@ -5,6 +5,7 @@ const mockGetStudentDetailData = jest.fn<(env: Env, uid: string) => Promise<unkn
 const mockGetRecruitedStudents = jest.fn<(env: Env, senseiId: number) => Promise<unknown[]>>();
 const mockGetRelationshipLevels =
   jest.fn<(env: Env, senseiId: number, studentIds: readonly string[]) => Promise<unknown[]>>();
+const mockGetStudentStateWriteMode = jest.fn<(env: Env) => Promise<"legacy" | "nullable">>();
 const mockGetAllRaidSchedules = jest.fn<(env: Env) => Promise<unknown[]>>();
 const mockGetStudentGradingsByStudentWithUsers =
   jest.fn<(env: Env, studentUid: string, includeTags: boolean, viewerUserId?: number) => Promise<unknown[]>>();
@@ -41,6 +42,7 @@ jest.mock("~/models/recruited-student", () => ({
 
 jest.mock("~/models/relationship-level", () => ({
   getRelationshipLevels: mockGetRelationshipLevels,
+  getStudentStateWriteMode: mockGetStudentStateWriteMode,
 }));
 
 jest.mock("~/models/raid", () => ({
@@ -94,6 +96,7 @@ beforeEach(() => {
   });
   mockGetRecruitedStudents.mockResolvedValue([]);
   mockGetRelationshipLevels.mockResolvedValue([]);
+  mockGetStudentStateWriteMode.mockResolvedValue("legacy");
   mockGetAllRaidSchedules.mockResolvedValue([]);
   mockGetStudentGradingsByStudentWithUsers.mockResolvedValue([]);
   mockGetTagCountsByStudent.mockResolvedValue([]);
@@ -108,6 +111,16 @@ beforeEach(() => {
 });
 
 describe("student detail loader published summary", () => {
+  it("preserves an unset relationship rank as null in the detail loader state", async () => {
+    mockGetRelationshipLevels.mockResolvedValueOnce([
+      { studentId: "student-a", currentLevel: null, currentExp: null, targetLevel: null, items: {} },
+    ] as never);
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result.myRelationshipLevels).toEqual({ "student-a": null });
+  });
+
   it("logs the read failure and omits the AI summary instead of failing the loader", async () => {
     const failure = new Error("Hyperdrive unavailable");
     mockGetStudentDetailContent.mockResolvedValueOnce({
