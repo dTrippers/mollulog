@@ -4,7 +4,7 @@ import type { FurnitureCatalogSourceQuery } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
 
-const FURNITURE_CATALOG_CACHE_KEY = cacheKey("source", "furniture-catalog", 1, "all");
+const FURNITURE_CATALOG_CACHE_KEY = cacheKey("source", "furniture-catalog", 2, "all");
 
 const furnitureCatalogQuery = graphql(`
   query FurnitureCatalogSource {
@@ -16,6 +16,10 @@ const furnitureCatalogQuery = graphql(`
       category
       subCategory
       tags
+      interactionStudents {
+        uid
+        name
+      }
     }
     furnitureThemes {
       uid
@@ -107,5 +111,6 @@ export function normalizeFurnitureCatalogItemSource(
     category: parseFurnitureCategory(furniture.category),
     subCategory: furniture.subCategory,
     tags: furniture.tags,
+    interactionStudents: furniture.interactionStudents.map(({ uid, name }) => ({ uid, name: name.trim() })),
   };
 }

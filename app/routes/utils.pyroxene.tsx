@@ -441,6 +441,7 @@ export default function PyroxenePlanner() {
     loaderData.collectedSourceKeys ?? [],
   );
   const [localFavoritedStudents, setLocalFavoritedStudents] = useState(loaderData.favoritedStudents ?? []);
+  const [plannerSettingsRequest, setPlannerSettingsRequest] = useState(0);
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
   const ownedResourcesFetcher = useFetcher<OwnedResourcesActionResult>();
   const favoriteFetcher = useFetcher();
@@ -1001,6 +1002,7 @@ export default function PyroxenePlanner() {
             to: "/futures",
           },
         ]}
+        panelRequest={plannerSettingsRequest > 0 ? { index: 1, id: plannerSettingsRequest } : null}
         panels={[
           {
             title: "수급/소비 계획",
@@ -1101,6 +1103,7 @@ export default function PyroxenePlanner() {
             onCollectedSourceChange={handleCollectedSourceChange}
             allowPickupCompletion={Boolean(signedIn)}
             onFavoriteChange={handleFavoriteChange}
+            onOpenPlannerSettings={() => setPlannerSettingsRequest((request) => request + 1)}
           />
         </div>
       </Page>

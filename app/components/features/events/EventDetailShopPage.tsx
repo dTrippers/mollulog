@@ -32,6 +32,7 @@ import { calculateMinigamePaymentCosts } from "./shop/utils";
 type EventDetailShopPageProps = {
   stages: Stage[];
   shopResources: ShopResource[];
+  ownedQuantities: Record<string, number> | null;
   eventRewardBonus: EventRewardBonus[];
   recruitedStudentUids: string[];
   eventUid: string;
@@ -48,6 +49,7 @@ type EventDetailShopPageProps = {
 export default function EventDetailShopPage({
   stages,
   shopResources,
+  ownedQuantities,
   eventRewardBonus,
   recruitedStudentUids,
   eventUid,
@@ -316,6 +318,7 @@ export default function EventDetailShopPage({
   const plan: EventShopPlanContext = {
     stages,
     shopResources: visibleShopResources,
+    ownedQuantities,
     eventRewardBonus,
     appliedBonusRatio: appliedBonusRatios,
     recruitedStudentUids,

@@ -313,6 +313,7 @@ describe("EventDetailShopPage collectable resources for card flip", () => {
       createElement(EventDetailShopPage, {
         stages,
         shopResources,
+        ownedQuantities: null,
         eventRewardBonus: [],
         recruitedStudentUids: [],
         eventUid: "859",

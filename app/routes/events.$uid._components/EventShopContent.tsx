@@ -15,6 +15,7 @@ type EventShopContentProps =
       renderScreen: (plan: EventShopPlanContext) => ReactNode;
       stages: Parameters<typeof EventDetailShopPage>[0]["stages"];
       shopResources: Parameters<typeof EventDetailShopPage>[0]["shopResources"];
+      ownedQuantities: Parameters<typeof EventDetailShopPage>[0]["ownedQuantities"];
       eventRewardBonus: Parameters<typeof EventDetailShopPage>[0]["eventRewardBonus"];
       recruitedStudentUids: Parameters<typeof EventDetailShopPage>[0]["recruitedStudentUids"];
       eventUid: Parameters<typeof EventDetailShopPage>[0]["eventUid"];
@@ -70,6 +71,7 @@ function ConnectedEventShopContent(props: Extract<EventShopContentProps, { empty
     <EventDetailShopPage
       stages={props.stages}
       shopResources={props.shopResources}
+      ownedQuantities={props.ownedQuantities}
       eventRewardBonus={props.eventRewardBonus}
       recruitedStudentUids={props.recruitedStudentUids}
       eventUid={props.eventUid}

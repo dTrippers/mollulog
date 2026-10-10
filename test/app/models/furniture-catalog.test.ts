@@ -9,6 +9,7 @@ const furniture = {
   category: "furnitures",
   subCategory: "chair",
   tags: [],
+  interactionStudents: [{ uid: "student-1", name: " Student One " }],
 };
 
 describe("normalizeFurnitureCatalogItemSource", () => {
@@ -17,6 +18,7 @@ describe("normalizeFurnitureCatalogItemSource", () => {
       ...furniture,
       name: "Sample chair",
       imageUrl: "https://assets.test/furniture.webp",
+      interactionStudents: [{ uid: "student-1", name: "Student One" }],
     });
   });
 

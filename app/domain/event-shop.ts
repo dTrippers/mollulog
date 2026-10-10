@@ -1,4 +1,5 @@
 import type { ResourceTypeEnum } from "~/graphql/graphql";
+import type { FurnitureInteractionStudent } from "./furniture-catalog";
 
 export const FIRST_CLEAR_REWARD_REQUIREMENT = "FirstClear";
 
@@ -157,6 +158,7 @@ export type ShopResource = {
     name: string;
     rarity: number;
     imageUrl?: string | null;
+    interactionStudents?: FurnitureInteractionStudent[];
   };
   resourceAmount: number;
   paymentResource: {

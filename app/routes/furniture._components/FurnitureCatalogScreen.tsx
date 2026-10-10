@@ -6,6 +6,7 @@ import {
   Squares2X2Icon,
   XMarkIcon,
 } from "@heroicons/react/24/outline";
+import { UserIcon } from "@heroicons/react/16/solid";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
@@ -18,6 +19,7 @@ import {
   PanelActionRow,
   PanelBody,
   PanelSearchField,
+  PanelSwitchRow,
   ResourceCard,
   SectionCard,
 } from "~/components/primitives";
@@ -34,6 +36,9 @@ import {
 } from "~/domain/furniture-catalog";
 import type { FurnitureCatalogView, FurnitureCatalogViewTheme } from "~/domain/furniture-catalog-view";
 import type { FurnitureInventoryActionResult, FurnitureInventorySaveJob } from "./action-data";
+import FurnitureInteractionStudentsPopover, {
+  FurnitureInteractionStudentsPopoverGroup,
+} from "~/components/features/furniture/FurnitureInteractionStudentsPopover";
 
 type SaveState =
   | { kind: "queued" }
@@ -100,6 +105,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const [query, setQuery] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<FurnitureCategory[]>([]);
   const [selectedRarities, setSelectedRarities] = useState<FurnitureRarity[]>([]);
+  const [onlyWithInteractionStudents, setOnlyWithInteractionStudents] = useState(false);
   const [ownedQuantities, setOwnedQuantities] = useState(view?.ownedQuantities ?? {});
   const [draftValues, setDraftValues] = useState<Record<string, string>>(() =>
     Object.fromEntries(
@@ -263,8 +269,13 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     query,
     categories: mode === "all" ? selectedCategories : undefined,
     rarities: mode === "all" ? selectedRarities : undefined,
+    onlyWithInteractionStudents: mode === "all" ? onlyWithInteractionStudents : undefined,
   });
-  const hasActiveAllFilters = query.trim().length > 0 || selectedCategories.length > 0 || selectedRarities.length > 0;
+  const hasActiveAllFilters =
+    query.trim().length > 0 ||
+    selectedCategories.length > 0 ||
+    selectedRarities.length > 0 ||
+    onlyWithInteractionStudents;
 
   const handleQuantityChange = (furnitureUid: string, value: string) => {
     if (value !== "") pendingUnregisteredClearUidsRef.current.delete(furnitureUid);
@@ -329,6 +340,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     setQuery("");
     setSelectedCategories([]);
     setSelectedRarities([]);
+    setOnlyWithInteractionStudents(false);
   };
 
   const handleModeChange = (nextMode: "themes" | "all") => {
@@ -448,6 +460,14 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
                         />
                       </fieldset>
                     }
+                  />
+                  <PanelSwitchRow
+                    compact
+                    title="상호작용 학생 있음"
+                    name="furniture-interaction-filter"
+                    checked={onlyWithInteractionStudents}
+                    onChange={setOnlyWithInteractionStudents}
+                    className="my-1 py-0"
                   />
                 </>
               ) : null}
@@ -679,31 +699,33 @@ function FurnitureCollection({
   const groups = groupFurnitureCatalogItems(items);
   return (
     <div className="space-y-4">
-      {groups.map(({ category, items: categoryItems }) => (
-        <SectionCard key={category} className="overflow-hidden space-y-0 p-0 md:p-0">
-          <div className="px-3 pt-3">
-            <h2 className="text-sm font-semibold text-foreground">
-              {showCategoryCounts
-                ? `${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`
-                : FURNITURE_CATEGORY_LABELS[category]}
-            </h2>
-          </div>
-          {/* Route-local 96px minimum keeps compact cards readable; auto-fill prevents sparse groups from stretching. */}
-          <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-2 gap-y-1 px-3 py-2">
-            {categoryItems.map((item) => (
-              <FurnitureCard
-                key={item.uid}
-                item={item}
-                signedIn={signedIn}
-                draftValue={draftValues[item.uid] ?? ""}
-                saveState={saveStates[item.uid]}
-                onQuantityChange={onQuantityChange}
-                onRetry={onRetry}
-              />
-            ))}
-          </div>
-        </SectionCard>
-      ))}
+      <FurnitureInteractionStudentsPopoverGroup>
+        {groups.map(({ category, items: categoryItems }) => (
+          <SectionCard key={category} className="overflow-hidden space-y-0 p-0 md:p-0">
+            <div className="px-3 pt-3">
+              <h2 className="text-sm font-semibold text-foreground">
+                {showCategoryCounts
+                  ? `${FURNITURE_CATEGORY_LABELS[category]} ${categoryItems.length.toLocaleString()}종`
+                  : FURNITURE_CATEGORY_LABELS[category]}
+              </h2>
+            </div>
+            {/* Route-local 96px minimum keeps compact cards readable; auto-fill prevents sparse groups from stretching. */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] gap-x-2 gap-y-1 px-3 py-2">
+              {categoryItems.map((item) => (
+                <FurnitureCard
+                  key={item.uid}
+                  item={item}
+                  signedIn={signedIn}
+                  draftValue={draftValues[item.uid] ?? ""}
+                  saveState={saveStates[item.uid]}
+                  onQuantityChange={onQuantityChange}
+                  onRetry={onRetry}
+                />
+              ))}
+            </div>
+          </SectionCard>
+        ))}
+      </FurnitureInteractionStudentsPopoverGroup>
     </div>
   );
 }
@@ -761,18 +783,43 @@ function FurnitureCard({
 }) {
   const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
   const imageFailed = failedImageUrl === item.imageUrl;
+  const interactionBadge = item.interactionStudents.length > 0 ? (
+    <span className="py-0.5">
+      <UserIcon className="size-3" aria-hidden="true" />
+    </span>
+  ) : undefined;
 
   const image = imageFailed ? (
-    <div
-      role="img"
-      aria-label={`${item.name}: 이미지를 불러올 수 없음`}
-      title="이미지를 불러올 수 없어요."
-      className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-muted md:h-14 md:w-14"
-    >
-      <ExclamationTriangleIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+    <div className="relative">
+      <div
+        role="img"
+        aria-label={`${item.name}: 이미지를 불러올 수 없음`}
+        title="이미지를 불러올 수 없어요."
+        className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-muted md:h-14 md:w-14"
+      >
+        <ExclamationTriangleIcon className="size-5 text-muted-foreground" aria-hidden="true" />
+      </div>
+      {interactionBadge ? (
+        <span className="flex items-center justify-center px-1 py-0.5 absolute -bottom-1 -right-1 bg-neutral-900/80 rounded border-2 border-white dark:border-neutral-800 text-white">
+          {interactionBadge}
+        </span>
+      ) : null}
     </div>
   ) : (
-    <ResourceCard imageUrl={item.imageUrl} rarity={item.rarity} size="lg" expandImageArea />
+    <ResourceCard
+      imageUrl={item.imageUrl}
+      rarity={item.rarity}
+      size="lg"
+      expandImageArea
+      label={interactionBadge}
+    />
+  );
+  const interactiveImage = item.interactionStudents.length > 0 ? (
+    <FurnitureInteractionStudentsPopover furnitureName={item.name} students={item.interactionStudents}>
+      {image}
+    </FurnitureInteractionStudentsPopover>
+  ) : (
+    image
   );
 
   return (
@@ -784,7 +831,7 @@ function FurnitureCard({
         className="relative flex h-12 w-full items-center justify-center md:h-14"
         onErrorCapture={() => setFailedImageUrl(item.imageUrl)}
       >
-        {image}
+        {interactiveImage}
       </div>
       <h3 className="min-w-0 w-full break-keep wrap-break-word text-center text-xs font-normal leading-snug text-foreground">
         {item.name}

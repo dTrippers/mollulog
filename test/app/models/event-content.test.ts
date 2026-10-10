@@ -396,6 +396,64 @@ describe("getEventMetadata", () => {
 
 describe("getEventShopContent", () => {
   it.each([
+    [[{ uid: "student-1", name: " 학생 " }], [{ uid: "student-1", name: "학생" }]],
+    [[], []],
+  ])("preserves furniture interaction students from BAQL: %j", async (interactionStudents, expectedStudents) => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(
+      queryResult({
+        eventContent: {
+          stages: [],
+          shopResources: [
+            {
+              uid: "furniture-offer",
+              resourceAmount: 1,
+              shopAmount: 1,
+              resource: { type: "furniture", uid: "furniture-1", name: "가구", rarity: 4, interactionStudents },
+              paymentResource: { type: "currency", uid: "4", name: "청휘석" },
+              purchaseTiers: [],
+            },
+          ],
+          bonuses: [],
+          minigameConfigs: [],
+        },
+      }) as never,
+    );
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      shopResources: [{ resource: { interactionStudents: expectedStudents } }],
+    });
+    expect(print(mockedRunQuery.mock.calls[0][0])).toContain("interactionStudents");
+  });
+
+  it("rejects furniture shop data that is missing interaction students", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(
+      queryResult({
+        eventContent: {
+          stages: [],
+          shopResources: [
+            {
+              uid: "furniture-offer",
+              resourceAmount: 1,
+              shopAmount: 1,
+              resource: { type: "furniture", uid: "furniture-1", name: "가구", rarity: 4 },
+              paymentResource: { type: "currency", uid: "4", name: "청휘석" },
+              purchaseTiers: [],
+            },
+          ],
+          bonuses: [],
+          minigameConfigs: [],
+        },
+      }) as never,
+    );
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow(
+      "BAQL shop furniture response is missing interaction students",
+    );
+  });
+
+  it.each([
     ["an invalid loop round", { loopRound: 0, rounds: [] }, "Treasure hunt loop round is invalid."],
     ["a missing loop round number", { loopRound: undefined, rounds: [] }, "Treasure hunt loop round is invalid."],
     ["an empty round list", { loopRound: 1, rounds: [] }, "Treasure hunt round configuration is incomplete."],

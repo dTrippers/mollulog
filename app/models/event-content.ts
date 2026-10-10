@@ -225,7 +225,11 @@ const eventContentShopContentQuery = graphql(`
       }
       shopResources(runType: $runType) {
         uid resourceAmount shopAmount
-        resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } }
+        resource {
+          type uid name rarity
+          ... on Emblem { imageUrl(lang: ko) }
+          ... on Furniture { interactionStudents { uid name } }
+        }
         paymentResource { type uid name ... on Emblem { imageUrl(lang: ko) } }
         purchaseTiers {
           tierIndex
@@ -386,6 +390,7 @@ function transformShopResources(shopResources: NonNullable<EventContentData>["sh
       name: r.resource.name,
       rarity: r.resource.rarity,
       imageUrl: getEmblemImageUrl(r.resource),
+      interactionStudents: getShopFurnitureInteractionStudents(r.resource),
     },
     paymentResource: {
       type: r.paymentResource.type,
@@ -394,6 +399,16 @@ function transformShopResources(shopResources: NonNullable<EventContentData>["sh
       imageUrl: getEmblemImageUrl(r.paymentResource),
     },
   }));
+}
+
+function getShopFurnitureInteractionStudents(
+  resource: NonNullable<NonNullable<EventContentData>["shopResources"][number]["resource"]>,
+): ShopResource["resource"]["interactionStudents"] {
+  if (resource.type !== ResourceTypeEnum.Furniture) return undefined;
+  if (!("interactionStudents" in resource)) {
+    throw new Error("BAQL shop furniture response is missing interaction students");
+  }
+  return resource.interactionStudents.map(({ uid, name }) => ({ uid, name: name.trim() }));
 }
 
 function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {

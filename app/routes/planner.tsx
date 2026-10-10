@@ -27,6 +27,10 @@ import {
 } from "~/domain/guest-planner";
 import { pyroxeneTimelineItemFingerprint } from "~/domain/guest-pyroxene-planner";
 import {
+  buildPyroxeneCalculationAssumptions,
+  type PyroxeneCalculationAssumptions as PyroxeneCalculationAssumptionsData,
+} from "~/domain/pyroxene-assumptions";
+import {
   buildPlannerDisplayPeriods,
   buildPlannerPeriods,
   buildPublicPlannerPeriods,
@@ -711,6 +715,15 @@ export default function IntegratedPlannerRoute() {
     [localTimelineItems],
   );
   const scheduleItems = usePyroxeneScheduleItems(pyroxeneScheduleContents, favoritedStudents, calculationTimelineItems);
+  const pyroxeneAssumptions = useMemo(
+    () =>
+      buildPyroxeneCalculationAssumptions(
+        scheduleItems,
+        selectedPlannerOptions.event.pickupChance,
+        initialDate ?? new Date(),
+      ),
+    [initialDate, scheduleItems, selectedPlannerOptions.event.pickupChance],
+  );
   const calculationOptions = useMemo(() => defaultCalculationOptions(selectedPlannerOptions), [selectedPlannerOptions]);
   const accountRecruitmentSaveResult = useMemo<PlannerRecruitmentSaveResult | null>(() => {
     const result = recruitmentFetcher.data;
@@ -1071,6 +1084,7 @@ export default function IntegratedPlannerRoute() {
         scheduleAvailability={scheduleAvailability}
         calendarResources={calendarResources}
         raidScheduleFacts={raidScheduleFacts}
+        pyroxeneAssumptions={pyroxeneForecastStatus === "ready" ? pyroxeneAssumptions : null}
         forecastStatus={pyroxeneForecastStatus}
         statusMessages={statusMessages}
         progressMessages={progressMessages}

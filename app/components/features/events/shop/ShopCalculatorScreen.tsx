@@ -27,6 +27,7 @@ type TreasureHuntResultStatus = "pending" | "provisional" | "failed" | "round-li
 export type EventShopPlanContext = {
   stages: Stage[];
   shopResources: ShopResource[];
+  ownedQuantities: Record<string, number> | null;
   eventRewardBonus: EventRewardBonus[];
   appliedBonusRatio: Record<string, Decimal>;
   recruitedStudentUids: string[];
@@ -54,6 +55,7 @@ export type EventShopPlanContext = {
 export function ShopCalculatorScreen({
   stages,
   shopResources,
+  ownedQuantities,
   eventRewardBonus,
   appliedBonusRatio,
   recruitedStudentUids,
@@ -108,6 +110,7 @@ export function ShopCalculatorScreen({
         {collectableResources && (
           <ShopResourceSelector
             shopResources={shopResources}
+            ownedQuantities={ownedQuantities}
             collectableResources={collectableResources}
             eventUid={shopStateUid}
             state={state}

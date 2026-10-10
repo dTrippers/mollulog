@@ -8,6 +8,7 @@ import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "
 import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
+import { getEventShopOwnedQuantities } from "~/views/event-shop-owned-quantities";
 import EventShopContent from "./events.$uid._components/EventShopContent";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -56,9 +57,14 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const currentUser = await getActiveSensei(env, request);
   let recruitedStudentUids: string[] = [];
+  let ownedQuantities: Record<string, number> | null = null;
   if (currentUser) {
-    const recruitedStudents = await getRecruitedStudents(env, currentUser.id);
+    const [recruitedStudents, userOwnedQuantities] = await Promise.all([
+      getRecruitedStudents(env, currentUser.id),
+      getEventShopOwnedQuantities(env, currentUser.id, shopResources),
+    ]);
     recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
+    ownedQuantities = userOwnedQuantities;
   }
 
   const shopStateIdentity = buildEventShopStateIdentity({
@@ -82,6 +88,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     empty: false as const,
     stages,
     shopResources,
+    ownedQuantities,
     eventRewardBonus,
     minigameConfig,
     recruitedStudentUids,
@@ -115,6 +122,7 @@ export default function EventShop() {
       empty={false}
       stages={loaderData.stages}
       shopResources={loaderData.shopResources}
+      ownedQuantities={loaderData.ownedQuantities}
       eventRewardBonus={loaderData.eventRewardBonus}
       recruitedStudentUids={loaderData.recruitedStudentUids}
       eventUid={loaderData.eventUid}
