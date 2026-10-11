@@ -72,9 +72,9 @@ describe("PlannerCalendar monthly header and initial selection", () => {
     const markup = renderCalendar();
 
     expect(markup).toContain("2026년 10월");
-    expect(markup).toContain(
-      'class="sticky top-0 z-20 space-y-1 bg-background/95 pb-2 backdrop-blur-sm max-sm:-mx-4 max-sm:px-4"',
-    );
+    expect(markup).toMatch(/<header class="sticky top-0 z-30\b/);
+    expect(markup).toContain('class="pointer-events-none relative z-20 bg-background/50"');
+    expect(markup).toContain('aria-label="확인 필요 0개"');
     expect(markup).toContain("이전 달");
     expect(markup).toContain("다음 달");
     expect(markup).toContain(">오늘</span>");

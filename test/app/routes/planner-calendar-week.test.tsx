@@ -123,7 +123,7 @@ describe("PlannerCalendarWeek rendering", () => {
     expect(markup).toContain("10/5 00:00 ~ 10/6 00:00");
   });
 
-  test("hides student avatars and end markers on short strips at every width, keeping the name", () => {
+  test("keeps the recruitment roster visible on short strips while compacting end markers", () => {
     const students = [
       { uid: "student-1", imageUid: null, name: "학생 하나" },
       { uid: "student-2", imageUid: null, name: "학생 둘" },
@@ -138,18 +138,29 @@ describe("PlannerCalendarWeek rendering", () => {
       startAt: "2026-10-04T15:00:00.000Z",
       endAt: "2026-10-05T15:00:00.000Z",
       hasRecruitmentPlan: true,
-      students,
     };
-    const shortMarkup = renderWeek({ periods: [shortPeriod] });
+    const shortRecruitmentPeriod: PlannerPeriod = {
+      key: "recruitment:short-students",
+      kind: "recruitment",
+      eventUid: "short-students",
+      name: "짧은 모집 일정",
+      startDate: shortPeriod.startDate,
+      endDate: shortPeriod.endDate,
+      startAt: shortPeriod.startAt,
+      endAt: shortPeriod.endAt,
+      students,
+      allRecruitmentStudents: students,
+    };
+    const shortMarkup = renderWeek({ periods: [shortPeriod, shortRecruitmentPeriod] });
 
     expect(shortMarkup).toContain('class="min-w-[2.5em] flex-[0_1_auto] truncate">짧은 모집 일정</span>');
-    // 짧은 띠는 아바타와 종료 점을 렌더링하지 않아, display 클래스가 충돌하지 않습니다.
-    expect(shortMarkup).not.toContain('alt="학생 하나"');
-    expect(shortMarkup).not.toContain('alt="학생 둘"');
+    // 좁은 띠에서도 사용 가능한 모집 학생은 표시하고, 종료 날짜 표시는 생략합니다.
+    expect(shortMarkup).toContain('alt="학생 하나"');
+    expect(shortMarkup).toContain('alt="학생 둘"');
     expect(shortMarkup).not.toContain("bg-current");
     expect(shortMarkup).not.toContain("text-[10px] font-normal opacity-75");
     expect(shortMarkup).not.toContain('max-sm:hidden">짧은 모집 일정');
-    expect(shortMarkup).toContain('aria-label="짧은 모집 일정');
+    expect(shortMarkup).toContain('aria-label="모집 계획 · 짧은 모집 일정 · 모집');
 
     const longPeriod: PlannerPeriod = {
       ...shortPeriod,
@@ -159,11 +170,62 @@ describe("PlannerCalendarWeek rendering", () => {
       endDate: "2026-10-11",
       endAt: "2026-10-12T14:59:59.000Z",
     };
-    const longMarkup = renderWeek({ periods: [longPeriod] });
+    const longRecruitmentPeriod: PlannerPeriod = {
+      ...shortRecruitmentPeriod,
+      key: "recruitment:long-students",
+      eventUid: "long-students",
+      name: longPeriod.name,
+      endDate: longPeriod.endDate,
+      endAt: longPeriod.endAt,
+    };
+    const longMarkup = renderWeek({ periods: [longPeriod, longRecruitmentPeriod] });
 
     expect(longMarkup).toContain('alt="학생 하나"');
     expect(longMarkup).toContain('alt="학생 둘"');
     expect(longMarkup).toContain("bg-current");
+  });
+
+  test.each([
+    { studentCount: 4, visibleNames: ["학생 하나", "학생 둘", "학생 셋", "학생 넷"], hiddenNames: [], overflowCount: 0 },
+    { studentCount: 5, visibleNames: ["학생 하나", "학생 둘", "학생 셋"], hiddenNames: ["학생 넷", "학생 다섯"], overflowCount: 2 },
+  ])("shows the expected portraits and overflow count for $studentCount available students", ({
+    studentCount,
+    visibleNames,
+    hiddenNames,
+    overflowCount,
+  }) => {
+    const students = ["하나", "둘", "셋", "넷", "다섯"].slice(0, studentCount).map((name, index) => ({
+      uid: `student-${index + 1}`,
+      imageUid: null,
+      name: `학생 ${name}`,
+    }));
+    const eventPeriod: PlannerPeriod = {
+      key: "event:many-students",
+      kind: "event",
+      eventUid: "many-students",
+      name: "학생이 많은 모집",
+      startDate: "2026-10-05",
+      endDate: "2026-10-11",
+      startAt: "2026-10-04T15:00:00.000Z",
+      endAt: "2026-10-12T14:59:59.000Z",
+    };
+    const recruitmentPeriod: PlannerPeriod = {
+      key: "recruitment:many-students",
+      kind: "recruitment",
+      eventUid: "many-students",
+      name: eventPeriod.name,
+      startDate: eventPeriod.startDate,
+      endDate: eventPeriod.endDate,
+      startAt: eventPeriod.startAt,
+      endAt: eventPeriod.endAt,
+      allRecruitmentStudents: students,
+    };
+    const markup = renderWeek({ periods: [eventPeriod, recruitmentPeriod] });
+
+    for (const name of visibleNames) expect(markup).toContain(`alt="${name}"`);
+    for (const name of hiddenNames) expect(markup).not.toContain(`alt="${name}"`);
+    if (overflowCount > 0) expect(markup).toContain(`>+${overflowCount}</span>`);
+    else expect(markup).not.toMatch(/\+\d+<\/span>/);
   });
 
   test("renders a zero total with its resource icon and quantity", () => {

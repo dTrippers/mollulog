@@ -123,12 +123,13 @@ describe("PyroxeneCalculationAssumptions", () => {
     expect(html).toContain("계산 방식");
     const methodButton = html.match(/<button\b[^>]*class="([^"]*)"[^>]*>(.*?)<\/button>/s);
     expect(methodButton?.[1]).toContain("text-xs");
-    expect(methodButton?.[1]).toContain("bg-card");
-    expect(methodButton?.[1]).toContain("dark:bg-muted");
+    expect(methodButton?.[1]).toContain("border-border");
+    expect(methodButton?.[1]).toContain("bg-background");
+    expect(methodButton?.[1]).toContain("hover:bg-muted");
     expect(methodButton?.[1]).toContain("shrink-0");
     expect(methodButton?.[2]).toContain("<svg");
-    expect(html.match(/\bbg-card\b/g)).toHaveLength(1);
-    expect(html.match(/\bdark:bg-muted\b/g)).toHaveLength(1);
+    expect(methodButton?.[1]).not.toContain("bg-card");
+    expect(methodButton?.[1]).not.toContain("dark:bg-muted");
     expect(html).not.toContain("truncate");
     expect(html).not.toContain("상위 10%");
     expect(html).not.toContain("모집 특전");
