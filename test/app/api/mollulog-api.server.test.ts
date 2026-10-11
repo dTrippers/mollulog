@@ -543,7 +543,7 @@ describe("MolluLog v1 API entry", () => {
   });
 
   it("logs 5xx causes with method, path and code, never the bearer token or the Authorization header", async () => {
-    const token = `mllg_live_${"a".repeat(64)}`;
+    const token = `mllg_${"a".repeat(64)}`;
     mockApi.authenticatePersonalApiKey.mockRejectedValueOnce(new Error("hyperdrive connection reset"));
     const unavailable = await handleMolluLogApiRequest(request("/v1/me/students", "GET", { token }), createEnv());
     expect(unavailable?.status).toBe(503);

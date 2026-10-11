@@ -112,11 +112,16 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
         writeScope: true,
       });
       expect(issued.key.name).toBe("desktop sync");
-      expect(issued.token).toMatch(/^mllg_live_[a-f0-9]{64}$/);
+      expect(issued.token).toMatch(/^mllg_[a-f0-9]{64}$/);
       const [storedKey] = await db.select().from(pgApiKeysTable).where(eq(pgApiKeysTable.uid, issued.key.uid));
       expect(storedKey.keyHash).not.toContain(issued.token);
       expect(storedKey.keyHash).toMatch(/^[a-f0-9]{64}$/);
-      expect(storedKey.expiresAt.getUTCMonth()).toBe((storedKey.createdAt.getUTCMonth() + 3) % 12);
+      expect(storedKey.expiresAt.getUTCFullYear()).toBe(storedKey.createdAt.getUTCFullYear() + 1);
+      expect(storedKey.expiresAt.getUTCMonth()).toBe(storedKey.createdAt.getUTCMonth());
+      expect(storedKey.expiresAt.getUTCDate()).toBe(storedKey.createdAt.getUTCDate());
+      expect(await authenticatePersonalApiKey(env, issued.token.replace("mllg_", "mllg_live_"))).toEqual({
+        kind: "invalid",
+      });
       expect((await getPersonalApiKeys(env, 5)).map(({ uid }) => uid)).toEqual([issued.key.uid]);
 
       const lastUsedAt = new Date(Date.now() + 1_000);
@@ -145,14 +150,15 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
         kind: "authenticated",
         key: expect.objectContaining({ readScope: true, writeScope: false }),
       });
-      const writeOnlyKey = await createPersonalApiKey(env, 5, {
-        name: "write only",
+      const writeKey = await createPersonalApiKey(env, 5, {
+        name: "write includes read",
         readScope: false,
         writeScope: true,
       });
-      expect(await authenticatePersonalApiKey(env, writeOnlyKey.token)).toEqual({
+      expect(writeKey.key).toMatchObject({ readScope: true, writeScope: true });
+      expect(await authenticatePersonalApiKey(env, writeKey.token)).toEqual({
         kind: "authenticated",
-        key: expect.objectContaining({ readScope: false, writeScope: true }),
+        key: expect.objectContaining({ readScope: true, writeScope: true }),
       });
       await admin.query("UPDATE api_keys SET expires_at = now() - interval '1 second' WHERE uid = $1", [
         readOnlyKey.key.uid,

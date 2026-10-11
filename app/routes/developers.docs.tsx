@@ -71,7 +71,7 @@ const fields: Array<{ fields: string[]; meaning: string; range: string; nullable
 
 const errors = [
   ["400", "잘못된 요청", "입력 형식·필드·성장도 조합을 확인해주세요"],
-  ["401", "인증 실패", "Bearer 키가 없거나 유효하지 않거나 만료·폐기됐어요"],
+  ["401", "인증 실패", "Bearer 키가 없거나 유효하지 않거나 만료·삭제됐어요"],
   ["403", "요청할 수 없음", "키 권한 또는 계정 상태를 확인해주세요"],
   ["404", "찾을 수 없음", "학생 또는 모집 기록을 찾을 수 없어요"],
   ["409", "등록 충돌", "이미 등록한 학생이에요"],
@@ -326,7 +326,7 @@ export default function DevelopersDocs() {
               </span>
             </dd>
             <dt className="leading-7 text-muted-foreground">키 유효 기간</dt>
-            <dd>발급 후 3개월 · 만료·폐기된 키는 401</dd>
+            <dd>발급 후 1년 · 만료·삭제된 키는 401</dd>
             <dt className="leading-7 text-muted-foreground">재시도</dt>
             <dd>
               같은 요청을 다시 보내면 다시 처리돼요

@@ -257,13 +257,11 @@ function KeyEvent({
   >;
 }) {
   const key = event.apiKeyUid ? apiKeysByUid[event.apiKeyUid] : undefined;
-  const scopes = key
-    ? [key.readScope ? "학생 읽기" : null, key.writeScope ? "학생 쓰기" : null].filter(Boolean).join(" · ")
-    : null;
+  const scopes = key ? [key.readScope ? "읽기" : null, key.writeScope ? "쓰기" : null].filter(Boolean).join("/") : null;
   if (event.action !== "issued" && event.action !== "revoked") {
     return <p className="text-sm text-muted-foreground">키 정보를 확인할 수 없어요</p>;
   }
-  const action = event.action === "revoked" ? "폐기" : "발급";
+  const action = event.action === "revoked" ? "삭제" : "발급";
 
   return (
     <div className="flex items-start gap-3">
@@ -276,7 +274,7 @@ function KeyEvent({
         </h3>
         <p className="text-sm text-muted-foreground">
           {key && scopes
-            ? `${scopes} · ${action === "발급" ? `${formatDate(key.expiresAt)} 만료` : `${formatDate(key.createdAt)} 발급`}`
+            ? `학생 ${scopes} · ${action === "발급" ? `${formatDate(key.expiresAt)} 만료` : `${formatDate(key.createdAt)} 발급`}`
             : "키 정보를 확인할 수 없어요"}
         </p>
       </div>

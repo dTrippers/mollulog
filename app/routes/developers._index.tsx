@@ -13,8 +13,7 @@ import { data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SectionCard } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { getPersonalApiKeys } from "~/models/mollulog-api";
-import { DeveloperPage, formatDate } from "./developers._components/DeveloperPage";
+import { DeveloperPage } from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "몰루로그 API" }];
 
@@ -28,34 +27,7 @@ export const headers: HeadersFunction = ({ parentHeaders }) => {
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { env, ctx } = context.cloudflare;
   const sensei = await getActiveSensei(env, request, ctx);
-  if (!sensei) return { isSignedIn: false as const };
-
-  try {
-    const keys = await getPersonalApiKeys(env, sensei.id, { ctx });
-    const activeKeys = keys.filter((key) => key.revokedAt === null && key.expiresAt.getTime() > Date.now());
-    const earliestExpiry = activeKeys.reduce<Date | null>(
-      (earliest, key) => (earliest === null || key.expiresAt < earliest ? key.expiresAt : earliest),
-      null,
-    );
-    return data(
-      {
-        isSignedIn: true as const,
-        keySummary: {
-          totalCount: keys.length,
-          activeCount: activeKeys.length,
-          earliestExpiry: earliestExpiry?.toISOString() ?? null,
-        },
-        keySummaryError: false as const,
-      },
-      { headers: privateHeaders },
-    );
-  } catch (error) {
-    console.error("[developers] failed to load personal API key summary", error);
-    return data(
-      { isSignedIn: true as const, keySummary: null, keySummaryError: true as const },
-      { headers: privateHeaders },
-    );
-  }
+  return data({ isSignedIn: Boolean(sensei) }, { headers: privateHeaders });
 }
 
 const useCases = [
@@ -110,24 +82,6 @@ export default function DevelopersIndex() {
               <ArrowUpRightIcon className="size-4" aria-hidden="true" />
             </Button>
           </div>
-          {loaderData.isSignedIn ? (
-            <p className="mt-4 text-xs text-muted-foreground" aria-live="polite">
-              {loaderData.keySummaryError ? (
-                "API 키 정보를 불러오지 못했어요. 새로고침 후 다시 확인해 주세요."
-              ) : loaderData.keySummary?.activeCount ? (
-                <>
-                  사용 중인 키 {loaderData.keySummary.activeCount}개 · 가장 빠른 만료{" "}
-                  {loaderData.keySummary.earliestExpiry
-                    ? formatDate(loaderData.keySummary.earliestExpiry)
-                    : "확인할 수 없어요"}
-                </>
-              ) : loaderData.keySummary?.totalCount ? (
-                "사용 중인 키가 없어요"
-              ) : (
-                "아직 발급한 키가 없어요"
-              )}
-            </p>
-          ) : null}
         </section>
 
         <ApiConnections />

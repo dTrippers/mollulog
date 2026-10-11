@@ -41,6 +41,7 @@ type CopyTextButtonProps = {
   label?: string;
   accessibleContext?: string;
   variant?: "icon" | "text";
+  buttonVariant?: "primary" | "secondary";
   className?: string;
   onStatusChange: (status: CopyStatus) => void;
 };
@@ -50,6 +51,7 @@ export function CopyTextButton({
   label = "복사하기",
   accessibleContext,
   variant = "text",
+  buttonVariant = "secondary",
   className = "",
   onStatusChange,
 }: CopyTextButtonProps) {
@@ -97,7 +99,7 @@ export function CopyTextButton({
           <span className="sr-only">{status === "copied" ? "복사됐어요" : label}</span>
         </Button>
       ) : (
-        <Button type="button" variant="secondary" size="sm" onClick={copy}>
+        <Button type="button" variant={buttonVariant} size="sm" onClick={copy}>
           {accessibleContext ? <span className="sr-only">{accessibleContext} </span> : null}
           {status === "copied" ? (
             <>

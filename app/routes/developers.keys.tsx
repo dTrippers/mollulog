@@ -18,6 +18,7 @@ import {
   DeveloperPage,
   formatDate,
 } from "./developers._components/DeveloperPage";
+import { formatKeyExpiryRemaining } from "./developers._components/api-key-expiry";
 
 export const meta: MetaFunction = () => [{ title: "API 키 | 몰루로그" }];
 
@@ -46,12 +47,16 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       {
         keys: keys.map(toPersonalApiKeyView),
         loadError: false,
+        loadedAt: Date.now(),
       },
       { headers: privateHeaders },
     );
   } catch (error) {
     console.error("[developers/keys] failed to load personal API keys", error);
-    return data({ keys: [] as PersonalApiKeyView[], loadError: true }, { headers: privateHeaders });
+    return data(
+      { keys: [] as PersonalApiKeyView[], loadError: true, loadedAt: Date.now() },
+      { headers: privateHeaders },
+    );
   }
 }
 
@@ -60,10 +65,6 @@ type KeyActionData =
       ok: true;
       intent: "issue";
       token: string;
-      keyName: string;
-      readScope: boolean;
-      writeScope: boolean;
-      expiresAt: string;
     }
   | { ok: true; intent: "revoke"; keyName: string }
   | { ok: false; intent: "issue" | "revoke"; message: string; fields?: ApiFieldError[] };
@@ -100,10 +101,6 @@ export async function action({ context, request }: ActionFunctionArgs) {
           ok: true,
           intent,
           token: issued.token,
-          keyName: issued.key.name,
-          readScope: issued.key.readScope,
-          writeScope: issued.key.writeScope,
-          expiresAt: issued.key.expiresAt.toISOString(),
         },
         { status: 201, headers: privateHeaders },
       );
@@ -126,7 +123,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     const uid = form.get("keyUid");
     if (typeof uid !== "string" || uid.length === 0) {
       return data<KeyActionData>(
-        { ok: false, intent, message: "폐기할 API 키를 찾지 못했어요." },
+        { ok: false, intent, message: "삭제할 API 키를 찾지 못했어요." },
         { status: 400, headers: privateHeaders },
       );
     }
@@ -135,7 +132,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       const revoked = await revokePersonalApiKey(env, sensei.id, uid, { ctx });
       if (!revoked) {
         return data<KeyActionData>(
-          { ok: false, intent, message: "폐기할 수 있는 API 키를 찾지 못했어요." },
+          { ok: false, intent, message: "삭제할 수 있는 API 키를 찾지 못했어요." },
           { status: 404, headers: privateHeaders },
         );
       }
@@ -146,7 +143,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     } catch (error) {
       console.error("[developers/keys] failed to revoke personal API key", error);
       return data<KeyActionData>(
-        { ok: false, intent, message: "API 키를 폐기하지 못했어요. 잠시 후 다시 시도해주세요." },
+        { ok: false, intent, message: "API 키를 삭제하지 못했어요. 잠시 후 다시 시도해주세요." },
         { status: 500, headers: privateHeaders },
       );
     }
@@ -169,11 +166,12 @@ function toPersonalApiKeyView(key: PersonalApiKey): PersonalApiKeyView {
 }
 
 function getKeyScopes(readScope: boolean, writeScope: boolean) {
-  return [readScope ? "학생 읽기" : null, writeScope ? "학생 쓰기" : null].filter(Boolean).join(" · ");
+  const scopes = [readScope ? "읽기" : null, writeScope ? "쓰기" : null].filter(Boolean).join("/");
+  return scopes ? `학생 ${scopes}` : "권한 없음";
 }
 
 export default function DevelopersKeys() {
-  const { keys, loadError } = useLoaderData<typeof loader>();
+  const { keys, loadError, loadedAt } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const revalidator = useRevalidator();
@@ -184,7 +182,14 @@ export default function DevelopersKeys() {
   const [readScope, setReadScope] = useState(true);
   const [writeScope, setWriteScope] = useState(false);
   const [confirmingUid, setConfirmingUid] = useState<string | null>(null);
+  const [now, setNow] = useState(loadedAt);
   const isSubmitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    setNow(loadedAt);
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, [loadedAt]);
 
   useEffect(() => {
     if (actionData?.ok && actionData.intent === "issue") {
@@ -200,7 +205,7 @@ export default function DevelopersKeys() {
     }
   }, [actionData]);
 
-  const activeKeys = keys.filter((key) => key.revokedAt === null && new Date(key.expiresAt).getTime() > Date.now());
+  const activeKeys = keys.filter((key) => key.revokedAt === null && new Date(key.expiresAt).getTime() > now);
   const inactiveKeys = keys.filter((key) => !activeKeys.includes(key));
   const reveal = actionData?.ok && actionData.intent === "issue" && isRevealVisible ? actionData : null;
   const issueError =
@@ -219,7 +224,7 @@ export default function DevelopersKeys() {
 
   return (
     <DeveloperPage>
-      <div className="space-y-6">
+      <div className="@container space-y-6">
         <header className="flex items-start justify-between gap-3">
           <SubTitle text="API 키" />
           <Button
@@ -237,7 +242,7 @@ export default function DevelopersKeys() {
         </header>
 
         {isIssueOpen ? (
-          <SectionCard title="새 API 키 발급">
+          <SectionCard title="새 API 키 발급" className="p-5 md:p-6">
             <Form method="post" className="space-y-5" onSubmit={() => setIssueResponseDismissed(false)}>
               <input type="hidden" name="intent" value="issue" />
               <Input
@@ -246,7 +251,7 @@ export default function DevelopersKeys() {
                 label="이름"
                 error={nameError}
                 className="max-w-md"
-                placeholder="어떤 도구에 쓸지 적어주세요"
+                placeholder="API 키 구분을 위한 이름"
                 maxLength={80}
                 required
                 value={name}
@@ -258,7 +263,7 @@ export default function DevelopersKeys() {
                 aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
                 aria-invalid={scopeError ? true : undefined}
               >
-                <legend className="text-sm font-semibold">허용할 데이터</legend>
+                <legend className="text-sm font-semibold">권한</legend>
                 <table className="w-full max-w-md text-sm">
                   <thead>
                     <tr className="text-left text-xs font-semibold text-muted-foreground">
@@ -277,24 +282,33 @@ export default function DevelopersKeys() {
                     <tr className="bg-muted">
                       <th className="rounded-l-md py-2.5 pl-3 text-left font-medium" scope="row">
                         학생
-                        <span className="block text-xs font-normal text-muted-foreground">모집 학생 성장도와 인연</span>
+                        <span className="block text-xs font-normal text-muted-foreground">
+                          학생 모집 여부, 성장도, 인연 랭크 등
+                        </span>
                       </th>
                       <td className="py-2.5 text-center">
+                        {writeScope ? <input type="hidden" name="readScope" value="true" /> : null}
                         <Checkbox
                           name="readScope"
                           value="true"
                           checked={readScope}
+                          disabled={writeScope}
+                          className="justify-center gap-0"
                           onChange={setReadScope}
                           label={<span className="sr-only">학생 읽기</span>}
                           aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
                         />
                       </td>
-                      <td className="rounded-r-md py-2.5 pr-3 text-center">
+                      <td className="rounded-r-md py-2.5 text-center">
                         <Checkbox
                           name="writeScope"
                           value="true"
                           checked={writeScope}
-                          onChange={setWriteScope}
+                          className="justify-center gap-0"
+                          onChange={(checked) => {
+                            setWriteScope(checked);
+                            if (checked) setReadScope(true);
+                          }}
                           label={<span className="sr-only">학생 쓰기</span>}
                           aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
                         />
@@ -308,14 +322,18 @@ export default function DevelopersKeys() {
                   </p>
                 ) : null}
               </fieldset>
-              <p className="text-sm text-muted-foreground">발급일로부터 3개월 동안 쓸 수 있어요</p>
+              <p className="text-sm text-muted-foreground">
+                <span>
+                  발급일로부터 <strong className="font-semibold text-foreground">1년</strong> 동안 사용할 수 있어요.
+                </span>
+              </p>
               {issueError && !hasFieldErrors ? (
                 <Callout tone="destructive" title="키를 발급하지 못했어요">
                   {issueError.message}
                 </Callout>
               ) : null}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="secondary" size="sm" onClick={resetIssueForm} disabled={isSubmitting}>
+                <Button type="button" variant="default" size="sm" onClick={resetIssueForm} disabled={isSubmitting}>
                   취소
                 </Button>
                 <Button type="submit" variant="primary" size="sm" className="min-w-24" disabled={isSubmitting}>
@@ -325,29 +343,20 @@ export default function DevelopersKeys() {
             </Form>
           </SectionCard>
         ) : reveal ? (
-          <SectionCard title="새 API 키 발급">
+          <SectionCard title="API 키를 발급했어요" className="p-5 md:p-6">
             <div className="space-y-5">
               <Callout
                 tone="warning"
                 Icon={ExclamationTriangleIcon}
-                title="지금만 볼 수 있는 키예요"
+                title="키는 지금만 확인할 수 있어요."
                 description="이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요."
               />
               <RevealedTokenField key={reveal.token} token={reveal.token} />
-              <p className="flex items-start gap-2 text-sm">
-                <KeyIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
-                <span>
-                  <span className="font-medium">{reveal.keyName}</span>
-                  <span className="text-muted-foreground">
-                    {` · ${getKeyScopes(reveal.readScope, reveal.writeScope)} · ${formatDate(reveal.expiresAt)} 만료`}
-                  </span>
-                </span>
-              </p>
               <footer className="flex items-center justify-end gap-4">
                 <Link to="/developers/docs" className="text-sm font-medium text-primary hover:underline">
                   API 문서 보기
                 </Link>
-                <Button type="button" variant="primary" size="sm" onClick={() => setIsRevealVisible(false)}>
+                <Button type="button" variant="default" size="sm" onClick={() => setIsRevealVisible(false)}>
                   확인했어요
                 </Button>
               </footer>
@@ -356,7 +365,7 @@ export default function DevelopersKeys() {
         ) : null}
 
         {actionData?.ok && actionData.intent === "revoke" ? (
-          <Callout tone="success" title="API 키를 폐기했어요">
+          <Callout tone="success" title="API 키를 삭제했어요">
             {actionData.keyName
               ? `“${actionData.keyName}” 키는 더 이상 사용할 수 없어요.`
               : "선택한 키는 더 이상 사용할 수 없어요."}
@@ -364,7 +373,7 @@ export default function DevelopersKeys() {
         ) : null}
 
         {actionData && !actionData.ok && actionData.intent === "revoke" ? (
-          <Callout tone="destructive" title="API 키를 폐기하지 못했어요">
+          <Callout tone="destructive" title="API 키를 삭제하지 못했어요">
             {actionData.message}
           </Callout>
         ) : null}
@@ -387,46 +396,46 @@ export default function DevelopersKeys() {
           </SectionCard>
         ) : (
           <>
-            <SectionCard className="rounded-lg bg-card p-2 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-2">
-              {activeKeys.length === 0 ? (
+            {activeKeys.length === 0 ? (
+              <SectionCard>
                 <EmptyView
                   Icon={KeyIcon}
                   text="사용할 수 있는 API 키가 없어요"
                   description="필요한 권한을 선택해 새 키를 발급해주세요."
                   className="my-8"
                 />
-              ) : (
-                <ul className="space-y-1">
-                  {activeKeys.map((key) => (
+              </SectionCard>
+            ) : (
+              <ul className="space-y-4" aria-label="사용 가능한 API 키">
+                {activeKeys.map((key) => (
+                  <KeyRow
+                    key={key.uid}
+                    keyRecord={key}
+                    now={now}
+                    confirming={confirmingUid === key.uid}
+                    isSubmitting={isSubmitting}
+                    onConfirm={() => setConfirmingUid(key.uid)}
+                    onCancel={() => setConfirmingUid(null)}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {inactiveKeys.length > 0 ? (
+              <Section title={`만료·삭제된 키 ${inactiveKeys.length}개`} collapsible defaultExpanded={false}>
+                <ul className="space-y-4">
+                  {inactiveKeys.map((key) => (
                     <KeyRow
                       key={key.uid}
                       keyRecord={key}
-                      confirming={confirmingUid === key.uid}
+                      now={now}
+                      confirming={false}
                       isSubmitting={isSubmitting}
-                      onConfirm={() => setConfirmingUid(key.uid)}
-                      onCancel={() => setConfirmingUid(null)}
+                      onConfirm={() => {}}
+                      onCancel={() => {}}
                     />
                   ))}
                 </ul>
-              )}
-            </SectionCard>
-
-            {inactiveKeys.length > 0 ? (
-              <Section title={`만료·폐기된 키 ${inactiveKeys.length}개`} collapsible defaultExpanded={false}>
-                <SectionCard className="rounded-lg bg-card p-2 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-2">
-                  <ul className="space-y-1">
-                    {inactiveKeys.map((key) => (
-                      <KeyRow
-                        key={key.uid}
-                        keyRecord={key}
-                        confirming={false}
-                        isSubmitting={isSubmitting}
-                        onConfirm={() => {}}
-                        onCancel={() => {}}
-                      />
-                    ))}
-                  </ul>
-                </SectionCard>
               </Section>
             ) : null}
           </>
@@ -438,79 +447,115 @@ export default function DevelopersKeys() {
 
 function KeyRow({
   keyRecord,
+  now,
   confirming,
   isSubmitting,
   onConfirm,
   onCancel,
 }: {
   keyRecord: PersonalApiKeyView;
+  now: number;
   confirming: boolean;
   isSubmitting: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  const isActive = keyRecord.revokedAt === null && new Date(keyRecord.expiresAt).getTime() > Date.now();
-  const date = (value: string | null) => (value ? formatDate(value) : "");
+  const isActive = keyRecord.revokedAt === null && new Date(keyRecord.expiresAt).getTime() > now;
   const scopeText = getKeyScopes(keyRecord.readScope, keyRecord.writeScope);
-  const endText = keyRecord.revokedAt ? `${date(keyRecord.revokedAt)} 폐기` : `${date(keyRecord.expiresAt)} 만료`;
+  const status = keyRecord.revokedAt ? "삭제됨" : isActive ? "사용 가능" : "만료";
+  const lastUsedTime = keyRecord.lastUsedAt
+    ? new Intl.DateTimeFormat("ko-KR", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hourCycle: "h23",
+        timeZone: "Asia/Seoul",
+      }).format(new Date(keyRecord.lastUsedAt))
+    : null;
 
   return (
-    <li
-      className={`flex flex-col gap-3 rounded-md p-3 ${confirming ? "" : "md:flex-row md:items-center md:justify-between"}`}
-    >
-      <div className="flex min-w-0 gap-3">
-        <KeyIcon
-          className={`mt-0.5 size-5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
-          aria-hidden="true"
-        />
-        <div className="min-w-0 space-y-1">
-          <p className="break-words">
-            <span className={`font-medium ${isActive ? "" : "text-muted-foreground"}`}>{keyRecord.name}</span>
-            <span className="text-sm text-muted-foreground"> · {date(keyRecord.createdAt)} 발급</span>
-          </p>
-          <p className="text-sm text-muted-foreground">
-            {isActive
-              ? `${scopeText} · ${date(keyRecord.expiresAt)} 만료 · ${keyRecord.lastUsedAt ? `마지막 사용 ${date(keyRecord.lastUsedAt)}` : "아직 사용하지 않음"}`
-              : `${scopeText} · ${endText}`}
-          </p>
+    <li>
+      <SectionCard className="space-y-5 p-5 md:p-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <KeyIcon
+              className={`mt-0.5 size-5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+              aria-hidden="true"
+            />
+            <div className="min-w-0 space-y-2">
+              <h3 className={`break-words text-base font-semibold ${isActive ? "" : "text-muted-foreground"}`}>
+                {keyRecord.name}
+              </h3>
+              <span className="inline-flex rounded-md bg-muted px-2.5 py-1 text-xs font-medium">{scopeText}</span>
+            </div>
+          </div>
+          <span
+            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
+              isActive ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"
+            }`}
+          >
+            {status}
+          </span>
         </div>
-      </div>
-      <div
-        className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pl-8 ${confirming ? "" : "md:flex-nowrap md:pl-0"}`}
-      >
-        <Link
-          to="/developers/history"
-          className="shrink-0 whitespace-nowrap text-sm font-medium text-primary hover:underline"
-        >
-          변경 기록
-        </Link>
-        {isActive ? (
-          confirming ? (
-            <>
-              <span className="order-first basis-full break-keep text-sm text-muted-foreground">
-                폐기하면 이 키를 다시 사용할 수 없어요.
-              </span>
+        <dl className="grid grid-cols-2 gap-4 text-sm @xl:grid-cols-3">
+          <div className="space-y-1">
+            <dt className="text-xs text-muted-foreground">발급일</dt>
+            <dd className="tabular-nums">{formatDate(keyRecord.createdAt)}</dd>
+          </div>
+          <div className="space-y-1">
+            <dt className="text-xs text-muted-foreground">{keyRecord.revokedAt ? "삭제일" : "만료일"}</dt>
+            <dd className="flex flex-wrap items-baseline gap-x-1 tabular-nums">
+              <span>{formatDate(keyRecord.revokedAt ?? keyRecord.expiresAt)}</span>
+              {isActive ? (
+                <span className="text-xs text-muted-foreground">
+                  ({formatKeyExpiryRemaining(keyRecord.expiresAt, now)})
+                </span>
+              ) : null}
+            </dd>
+          </div>
+          <div className="col-span-2 space-y-1 @xl:col-span-1">
+            <dt className="text-xs text-muted-foreground">마지막 사용</dt>
+            <dd className="tabular-nums">
+              {keyRecord.lastUsedAt ? `${formatDate(keyRecord.lastUsedAt)} ${lastUsedTime}` : "아직 사용하지 않음"}
+            </dd>
+          </div>
+        </dl>
+        <footer className="flex flex-wrap items-center justify-end gap-4">
+          <Link to="/developers/history" className="whitespace-nowrap text-sm font-medium text-primary hover:underline">
+            변경 기록
+          </Link>
+          {isActive ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="danger-subtle"
+              disabled={isSubmitting || confirming}
+              onClick={onConfirm}
+            >
+              <span className="sr-only">{keyRecord.name} API 키 </span>
+              삭제
+            </Button>
+          ) : null}
+        </footer>
+        {confirming ? (
+          <div className="space-y-4 rounded-md bg-destructive/10 p-4">
+            <p className="break-keep text-sm">삭제하면 이 키로 연결한 도구에서 더 이상 API를 사용할 수 없어요.</p>
+            <div className="flex flex-wrap justify-end gap-2">
+              <Button type="button" size="sm" variant="default" onClick={onCancel} disabled={isSubmitting}>
+                취소
+              </Button>
               <Form method="post">
                 <input type="hidden" name="intent" value="revoke" />
                 <input type="hidden" name="keyUid" value={keyRecord.uid} />
                 <input type="hidden" name="keyName" value={keyRecord.name} />
-                <Button type="submit" size="sm" variant="danger-subtle" disabled={isSubmitting}>
+                <Button type="submit" size="sm" variant="danger" disabled={isSubmitting}>
                   <span className="sr-only">{keyRecord.name} API 키 </span>
-                  폐기 확인
+                  {isSubmitting ? "삭제 중..." : "삭제 확인"}
                 </Button>
               </Form>
-              <Button type="button" size="sm" variant="secondary" onClick={onCancel} disabled={isSubmitting}>
-                취소
-              </Button>
-            </>
-          ) : (
-            <Button type="button" size="sm" variant="danger-subtle" onClick={onConfirm}>
-              <span className="sr-only">{keyRecord.name} API 키 </span>
-              폐기
-            </Button>
-          )
+            </div>
+          </div>
         ) : null}
-      </div>
+      </SectionCard>
     </li>
   );
 }
@@ -534,6 +579,7 @@ function RevealedTokenField({ token }: { token: string }) {
           value={token}
           label="복사하기"
           variant="text"
+          buttonVariant="primary"
           accessibleContext="API 키"
           onStatusChange={setCopyStatus}
         />

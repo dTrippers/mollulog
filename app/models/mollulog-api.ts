@@ -25,7 +25,7 @@ import {
 } from "~/domain/mollulog-api";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
-export const API_KEY_LIFETIME_MONTHS = 3;
+export const API_KEY_LIFETIME_MONTHS = 12;
 export const API_WRITE_LIMIT = 500;
 export const API_WRITE_WINDOW_MS = 10 * 60 * 1000;
 
@@ -77,7 +77,7 @@ function toHex(value: Uint8Array): string {
 }
 
 function createRawApiKey(): string {
-  return `mllg_live_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
+  return `mllg_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
 }
 
 async function hashApiKey(token: string): Promise<string> {
@@ -127,7 +127,7 @@ export async function createPersonalApiKey(
           name,
           keyHash: await hashApiKey(token),
           keyPrefix: token.slice(0, 17),
-          readScope: input.readScope,
+          readScope: input.readScope || input.writeScope,
           writeScope: input.writeScope,
           expiresAt,
         })
@@ -204,7 +204,7 @@ export async function authenticatePersonalApiKey(
   options: ApiRepositoryOptions = {},
   now = new Date(),
 ): Promise<ApiKeyAuthentication> {
-  if (!/^mllg_live_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
+  if (!/^mllg_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
   const keyHash = await hashApiKey(token);
   return withApiDatabase(env, options, async (db) =>
     db.transaction(async (tx) => {
