@@ -213,7 +213,7 @@ export async function authenticatePersonalApiKey(
         .from(pgApiKeysTable)
         .innerJoin(pgSenseisTable, eq(pgSenseisTable.id, pgApiKeysTable.userId))
         .where(eq(pgApiKeysTable.keyHash, keyHash))
-        .for("update")
+        .for("update", { of: pgApiKeysTable })
         .limit(1);
       if (!row || row.key.revokedAt != null || row.key.expiresAt <= now) return { kind: "invalid" };
       if (!row.active) return { kind: "inactive" };

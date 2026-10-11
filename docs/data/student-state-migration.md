@@ -127,5 +127,6 @@ The Phase 2 API does not enable `nullable_semantics_enabled` and never falls bac
 1. Apply the additive API schema migration `20261010000200_add_personal_api_keys_and_audit.sql` to the selected production database.
 2. Complete the 1-3/1-4 production rollout above with a compatible Worker version. Verify preflight and backfill, require `mismatches=0` from parity and zero display-column invariant counts, stop all nonparticipating writers, then activate the control row. Keep the switch enabled after canonical-only writes begin.
 3. Before deploying the API Worker, verify that the production `API_READ_RATE_LIMITER` binding is configured for 60 requests per account and Cloudflare region per minute. The missing-binding path intentionally fails closed.
+4. Before the `api.mollulog.net` DNS or CDN change is applied, an external Cloudflare rule must restrict that host to `/v1` and `/v1/*`, so that other paths do not serve the web app or the SPA. `assets.run_worker_first` covers only `/v1` and `/v1/*`, so this rule is the only control for non-API paths on the API host.
 
 These prerequisites document the release dependency; they do not authorize a production migration, activation, binding change, deployment, or staging rollout.

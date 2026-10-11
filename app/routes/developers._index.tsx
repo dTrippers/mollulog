@@ -16,7 +16,7 @@ import PageLink from "~/components/features/layout/PageLink";
 import { Button, ProfileImage, SectionCard } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { getPersonalApiKeys } from "~/models/mollulog-api";
-import { DeveloperPage } from "./developers._components/DeveloperPage";
+import { DeveloperPage, formatDate } from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "몰루로그 API" }];
 
@@ -68,16 +68,6 @@ const capabilities = [
 export default function DevelopersIndex() {
   const loaderData = useLoaderData<typeof loader>();
   const { showSignIn } = useSignIn();
-  const formatDate = (value: string) => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Seoul",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(new Date(value));
-    const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
-    return `${part("year")}.${part("month")}.${part("day")}`;
-  };
 
   return (
     <DeveloperPage>

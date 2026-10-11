@@ -15,11 +15,19 @@ const mockApi = {
 };
 const mockStudents = {
   getAllStudents: jest.fn<AsyncMock>(),
-  getStudentVariantIdentity: jest.fn<AsyncMock>(),
+  getStudentPrimaryUids: jest.fn<AsyncMock>(),
 };
+const mockLogger = { error: jest.fn<AsyncMock>() };
+const mockObservability = {
+  captureServerError: jest.fn<AsyncMock>(),
+  getLogger: jest.fn<() => typeof mockLogger>(),
+};
+/** BAQL's view of each UID: a battle-mode variant maps to its representative, a costume to itself. */
+let baqlPrimaryUids: Record<string, string> = {};
 
 jest.mock("~/models/mollulog-api", () => mockApi);
 jest.mock("~/models/student", () => mockStudents);
+jest.mock("~/lib/observability.server", () => mockObservability);
 
 import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
 
@@ -73,10 +81,12 @@ describe("MolluLog v1 API entry", () => {
     mockApi.isApiStudentStateAvailable.mockResolvedValue(true);
     mockApi.reserveApiWriteQuota.mockResolvedValue({ allowed: true, used: 1, resetsAt: new Date() });
     mockStudents.getAllStudents.mockResolvedValue([student]);
-    mockStudents.getStudentVariantIdentity.mockResolvedValue({
-      uid: "10000",
-      studentVariant: { primaryStudent: { uid: "10000" } },
+    baqlPrimaryUids = { "10000": "10000", "10001": "10000", "10002": "10002" };
+    mockStudents.getStudentPrimaryUids.mockImplementation(async (...args: unknown[]) => {
+      const uids = args[1] as string[];
+      return new Map(uids.filter((uid) => uid in baqlPrimaryUids).map((uid) => [uid, baqlPrimaryUids[uid]]));
     });
+    mockObservability.getLogger.mockReturnValue(mockLogger);
   });
 
   it("leaves non-API paths to the web session and SPA handler", async () => {
@@ -237,10 +247,6 @@ describe("MolluLog v1 API entry", () => {
 
     const mode = { ...student, uid: "10001", name: "Aru Mode" };
     mockStudents.getAllStudents.mockResolvedValue([student, mode]);
-    mockStudents.getStudentVariantIdentity.mockResolvedValueOnce({
-      uid: "10001",
-      studentVariant: { primaryStudent: { uid: "10000" } },
-    });
     const withBody = await handleMolluLogApiRequest(
       request("/v1/me/students/10001", "DELETE", { token: "bearer", body: "{}" }),
       createEnv(),
@@ -248,10 +254,6 @@ describe("MolluLog v1 API entry", () => {
     expect(withBody?.status).toBe(400);
     expect(mockApi.deleteApiRecruitedStudent).not.toHaveBeenCalled();
 
-    mockStudents.getStudentVariantIdentity.mockResolvedValueOnce({
-      uid: "10001",
-      studentVariant: { primaryStudent: { uid: "10000" } },
-    });
     mockApi.deleteApiRecruitedStudent.mockResolvedValueOnce({ kind: "deleted" });
     const deleted = await handleMolluLogApiRequest(
       request("/v1/me/students/10001", "DELETE", { token: "bearer" }),
@@ -400,10 +402,6 @@ describe("MolluLog v1 API entry", () => {
 
   it("normalizes a submitted variant UID to its own primary student UID", async () => {
     mockStudents.getAllStudents.mockResolvedValue([student, { ...student, uid: "10001", name: "Aru Mode" }]);
-    mockStudents.getStudentVariantIdentity.mockResolvedValueOnce({
-      uid: "10001",
-      studentVariant: { primaryStudent: { uid: "10000" } },
-    });
     mockApi.registerApiRecruitedStudent.mockResolvedValue({ kind: "created", state: { tier: 5, weaponTier: 0 } });
 
     const response = await handleMolluLogApiRequest(
@@ -430,20 +428,14 @@ describe("MolluLog v1 API entry", () => {
     const mode = { ...student, uid: "10001", name: "Aru Mode" };
     const costume = { ...student, uid: "10002", name: "Aru Costume" };
     mockStudents.getAllStudents.mockResolvedValue([student, mode, costume]);
-    mockStudents.getStudentVariantIdentity.mockImplementation(async (...args: unknown[]) => {
-      const uid = typeof args[1] === "string" ? args[1] : "10000";
-      return {
-        uid,
-        studentVariant: { primaryStudent: { uid: uid === "10001" ? "10000" : uid } },
-      };
-    });
-
     const response = await handleMolluLogApiRequest(
       request("/v1/students?query=Aru&limit=10", "GET", { token: "bearer" }),
       createEnv(),
     );
 
     expect(response?.status).toBe(200);
+    expect(mockStudents.getStudentPrimaryUids).toHaveBeenCalledTimes(1);
+    expect(mockStudents.getStudentPrimaryUids).toHaveBeenCalledWith(expect.anything(), ["10000", "10001", "10002"]);
     expect(await response?.json()).toEqual({
       students: [
         { studentUid: "10000", name: "Aru" },
@@ -451,6 +443,153 @@ describe("MolluLog v1 API entry", () => {
       ],
       nextCursor: null,
     });
+  });
+
+  it("resolves a battle-mode UID that the catalog omits to its representative on every student route", async () => {
+    // The catalog holds only the representative; BAQL maps the mode UID 10001 to 10000.
+    mockApi.getApiRecruitedStudent.mockResolvedValueOnce({ state: { tier: 5, weaponTier: 0, level: 80 } });
+    const read = await handleMolluLogApiRequest(
+      request("/v1/me/students/10001", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(read?.status).toBe(200);
+    expect(await read?.json()).toEqual({ studentUid: "10000", tier: 5, weaponTier: 0, level: 80 });
+    expect(mockApi.getApiRecruitedStudent).toHaveBeenCalledWith(expect.anything(), 5, "10000", { ctx: undefined });
+
+    mockApi.patchApiRecruitedStudent.mockResolvedValueOnce({
+      kind: "updated",
+      state: { tier: 5, weaponTier: 0, level: 81 },
+      changed: true,
+    });
+    const patched = await handleMolluLogApiRequest(
+      request("/v1/me/students/10001", "PATCH", { token: "bearer", body: JSON.stringify({ level: 81 }) }),
+      createEnv(),
+    );
+    expect(patched?.status).toBe(200);
+    expect(await patched?.json()).toEqual({ studentUid: "10000", tier: 5, weaponTier: 0, level: 81 });
+
+    mockApi.deleteApiRecruitedStudent.mockResolvedValueOnce({ kind: "deleted" });
+    const deleted = await handleMolluLogApiRequest(
+      request("/v1/me/students/10001", "DELETE", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(deleted?.status).toBe(200);
+    expect(await deleted?.json()).toEqual({ studentUid: "10000", deleted: true });
+
+    mockApi.registerApiRecruitedStudent.mockResolvedValueOnce({ kind: "created", state: { tier: 5, weaponTier: 0 } });
+    const registered = await handleMolluLogApiRequest(
+      request("/v1/me/students", "POST", {
+        token: "bearer",
+        body: JSON.stringify({ studentUid: "10001", tier: 5, weaponTier: 0 }),
+      }),
+      createEnv(),
+    );
+    expect(registered?.status).toBe(201);
+    expect(await registered?.json()).toEqual({ studentUid: "10000", tier: 5, weaponTier: 0 });
+  });
+
+  it("returns 404 for a UID that BAQL does not know, before any recruitment read or write", async () => {
+    const read = await handleMolluLogApiRequest(
+      request("/v1/me/students/99999", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(read?.status).toBe(404);
+    expect(await read?.json()).toMatchObject({ error: { code: "student_not_found" } });
+
+    const registered = await handleMolluLogApiRequest(
+      request("/v1/me/students", "POST", {
+        token: "bearer",
+        body: JSON.stringify({ studentUid: "99999", tier: 5, weaponTier: 0 }),
+      }),
+      createEnv(),
+    );
+    expect(registered?.status).toBe(404);
+    expect(await registered?.json()).toMatchObject({ error: { code: "student_not_found" } });
+
+    expect(mockApi.getApiRecruitedStudent).not.toHaveBeenCalled();
+    expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
+  });
+
+  it("maps a BAQL lookup failure or an unresolved candidate to 503 student_catalog_unavailable, never 404", async () => {
+    mockStudents.getStudentPrimaryUids.mockRejectedValueOnce(new Error("BAQL transport detail"));
+    const failed = await handleMolluLogApiRequest(
+      request("/v1/me/students/10001", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(failed?.status).toBe(503);
+    expect(await failed?.json()).toEqual({
+      error: {
+        code: "student_catalog_unavailable",
+        message: "학생 정보를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+      },
+    });
+
+    mockStudents.getStudentPrimaryUids.mockRejectedValueOnce(new Error("BAQL GraphQL errors"));
+    const searchFailed = await handleMolluLogApiRequest(
+      request("/v1/students?query=Aru", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(searchFailed?.status).toBe(503);
+    expect(await searchFailed?.json()).toMatchObject({ error: { code: "student_catalog_unavailable" } });
+
+    mockStudents.getAllStudents.mockResolvedValueOnce([student, { ...student, uid: "10002", name: "Aru Costume" }]);
+    mockStudents.getStudentPrimaryUids.mockResolvedValueOnce(new Map([["10000", "10000"]]));
+    const missingCandidate = await handleMolluLogApiRequest(
+      request("/v1/students?query=Aru", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(missingCandidate?.status).toBe(503);
+    expect(await missingCandidate?.json()).toMatchObject({ error: { code: "student_catalog_unavailable" } });
+  });
+
+  it("logs 5xx causes with method, path and code, never the bearer token or the Authorization header", async () => {
+    const token = `mllg_live_${"a".repeat(64)}`;
+    mockApi.authenticatePersonalApiKey.mockRejectedValueOnce(new Error("hyperdrive connection reset"));
+    const unavailable = await handleMolluLogApiRequest(request("/v1/me/students", "GET", { token }), createEnv());
+    expect(unavailable?.status).toBe(503);
+    expect(await unavailable?.json()).toEqual({
+      error: {
+        code: "authentication_unavailable",
+        message: "인증을 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+      },
+    });
+    expect(mockObservability.captureServerError).toHaveBeenLastCalledWith(expect.any(Error), {
+      handler: "mollulog_api",
+      method: "GET",
+      path: "/v1/me/students",
+      code: "authentication_unavailable",
+    });
+
+    mockApi.patchApiRecruitedStudent.mockRejectedValueOnce(new Error("insert failed"));
+    const internal = await handleMolluLogApiRequest(
+      request("/v1/me/students/10000", "PATCH", { token, body: JSON.stringify({ level: 81 }) }),
+      createEnv(),
+    );
+    expect(internal?.status).toBe(500);
+    expect(mockObservability.captureServerError).toHaveBeenLastCalledWith(expect.any(Error), {
+      handler: "mollulog_api",
+      method: "PATCH",
+      path: "/v1/me/students/10000",
+      code: "internal_error",
+    });
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      "MolluLog API request failed",
+      expect.any(Error),
+      expect.objectContaining({ method: "PATCH", path: "/v1/me/students/10000", code: "internal_error" }),
+    );
+
+    const captured = mockObservability.captureServerError.mock.calls.length;
+    const notFound = await handleMolluLogApiRequest(
+      request("/v1/me/students/99999", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+    expect(notFound?.status).toBe(404);
+    expect(mockObservability.captureServerError.mock.calls.length).toBe(captured);
+
+    const logged = JSON.stringify([mockObservability.captureServerError.mock.calls, mockLogger.error.mock.calls]);
+    expect(logged).not.toContain(token);
+    expect(logged).not.toContain("Bearer");
+    expect(logged).not.toContain("Authorization");
   });
 
   it("does not return the current state to a write-only key", async () => {

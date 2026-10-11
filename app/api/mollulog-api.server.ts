@@ -7,6 +7,7 @@ import {
   parseApiStudentStateRegistration,
 } from "~/domain/mollulog-api";
 import { isStaleStudentStateRequestError } from "~/domain/student-state-errors";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   type ApiKeyAuthentication,
   type ApiWriteQuotaResult,
@@ -20,7 +21,7 @@ import {
   reserveApiWriteQuota,
 } from "~/models/mollulog-api";
 import type { Student } from "~/models/student";
-import { getAllStudents, getStudentVariantIdentity } from "~/models/student";
+import { getAllStudents, getStudentPrimaryUids } from "~/models/student";
 
 type StudentApiEnvironment = Pick<Env, "HYPERDRIVE" | "API_READ_RATE_LIMITER">;
 
@@ -31,6 +32,8 @@ class ApiHttpError extends Error {
     message: string,
     readonly fields?: Array<{ field: string; message: string }>,
     readonly headers?: Record<string, string>,
+    /** The error that caused a 5xx response, kept for server-side logging only; never sent to clients. */
+    readonly underlying?: unknown,
   ) {
     super(message);
   }
@@ -54,6 +57,19 @@ function apiError(
   headers?: Record<string, string>,
 ) {
   return apiJson(status, { error: { code, message, ...(fields ? { fields } : {}) } }, headers);
+}
+
+/** Logs a 5xx cause with the request method, path and error code only; the token and headers are never included. */
+function reportApiServerError(
+  env: Env,
+  ctx: ExecutionContext | undefined,
+  request: Request,
+  code: string,
+  error: unknown,
+) {
+  const scope = { handler: "mollulog_api", method: request.method, path: new URL(request.url).pathname, code };
+  getLogger(env, ctx, { handler: "mollulog_api" }).error("MolluLog API request failed", error, scope);
+  captureServerError(error, scope);
 }
 
 function parseBearerToken(request: Request): string | null {
@@ -167,23 +183,38 @@ function normalizeSearch(value: string): string {
   return value.normalize("NFKC").trim().toLocaleLowerCase();
 }
 
+function catalogUnavailable(underlying?: unknown) {
+  return new ApiHttpError(
+    503,
+    "student_catalog_unavailable",
+    "학생 정보를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+    undefined,
+    undefined,
+    underlying,
+  );
+}
+
+/** One BAQL lookup for the given UIDs. Transport and GraphQL failures become 503; a UID BAQL does not know is absent. */
+async function lookupPrimaryStudentUids(env: Env, uids: string[]): Promise<Map<string, string | null>> {
+  try {
+    return await getStudentPrimaryUids(env, uids);
+  } catch (error) {
+    throw catalogUnavailable(error);
+  }
+}
+
+/**
+ * Resolves any battle-mode UID to the representative student in the catalog. Returns null for a UID BAQL does
+ * not know, or when the representative is missing from the catalog; a BAQL row without a representative is a 503.
+ */
 async function findCanonicalStudent(env: Env, uid: string, students: Map<string, Student>): Promise<Student | null> {
-  const inputStudent = students.get(uid);
-  if (!inputStudent) return null;
-  const identity = await getStudentVariantIdentity(env, uid);
-  const canonicalUid = identity?.studentVariant?.primaryStudent?.uid;
-  if (!identity || !canonicalUid) {
-    throw new ApiHttpError(
-      503,
-      "student_catalog_unavailable",
-      "학생 정보를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
-    );
+  const primaryUids = await lookupPrimaryStudentUids(env, [uid]);
+  if (!primaryUids.has(uid)) return null;
+  const canonicalUid = primaryUids.get(uid);
+  if (!canonicalUid) {
+    throw catalogUnavailable(new Error(`BAQL returned no primary student for ${uid}`));
   }
-  const canonical = students.get(canonicalUid);
-  if (!canonical) {
-    throw new ApiHttpError(404, "student_not_found", "학생을 찾을 수 없어요");
-  }
-  return canonical;
+  return students.get(canonicalUid) ?? null;
 }
 
 function requireReadScope(key: { readScope: boolean }) {
@@ -205,11 +236,14 @@ async function enforceReadLimit(env: StudentApiEnvironment, accountId: number): 
   let result: { success: boolean };
   try {
     result = await env.API_READ_RATE_LIMITER.limit({ key: String(accountId) });
-  } catch {
+  } catch (error) {
     throw new ApiHttpError(
       503,
       "rate_limiter_unavailable",
       "요청 제한 기능을 사용할 수 없어요. 잠시 후 다시 시도해주세요",
+      undefined,
+      undefined,
+      error,
     );
   }
   if (!result.success) {
@@ -247,8 +281,15 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
   let authentication: ApiKeyAuthentication;
   try {
     authentication = await authenticatePersonalApiKey(env, bearerToken, { ctx });
-  } catch {
-    throw new ApiHttpError(503, "authentication_unavailable", "인증을 확인할 수 없어요. 잠시 후 다시 시도해주세요");
+  } catch (error) {
+    throw new ApiHttpError(
+      503,
+      "authentication_unavailable",
+      "인증을 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+      undefined,
+      undefined,
+      error,
+    );
   }
   if (authentication.kind === "invalid") throw new ApiHttpError(401, "unauthorized", "API 키가 유효하지 않아요");
   if (authentication.kind === "inactive")
@@ -261,11 +302,14 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
     let available: boolean;
     try {
       available = await isApiStudentStateAvailable(env, { ctx });
-    } catch {
+    } catch (error) {
       throw new ApiHttpError(
         503,
         "student_state_unavailable",
         "학생 상태를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+        undefined,
+        undefined,
+        error,
       );
     }
     if (!available) throw new ApiHttpError(503, "student_state_unavailable", "학생 API가 아직 준비되지 않았어요");
@@ -274,11 +318,14 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
     let quota: ApiWriteQuotaResult;
     try {
       quota = await reserveApiWriteQuota(env, key.userId, { ctx });
-    } catch {
+    } catch (error) {
       throw new ApiHttpError(
         503,
         "write_quota_unavailable",
         "요청 한도를 확인할 수 없어요. 학생 상태는 저장하지 않았어요",
+        undefined,
+        undefined,
+        error,
       );
     }
     if (!quota.allowed) {
@@ -289,11 +336,14 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
     let available: boolean;
     try {
       available = await isApiStudentStateAvailable(env, { ctx });
-    } catch {
+    } catch (error) {
       throw new ApiHttpError(
         503,
         "student_state_unavailable",
         "학생 상태를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+        undefined,
+        undefined,
+        error,
       );
     }
     if (!available) throw new ApiHttpError(503, "student_state_unavailable", "학생 API가 아직 준비되지 않았어요");
@@ -322,22 +372,20 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
       .slice(0, limit + 1);
     const pageCandidates = matches.slice(0, limit);
     const seenStudentUids = new Set(cursor.seenStudentUids);
-    const normalized = await Promise.all(
-      pageCandidates.map(async (student) => {
-        const canonical = await findCanonicalStudent(
-          env,
-          student.uid,
-          new Map(students.map((item) => [item.uid, item])),
-        );
-        if (!canonical || seenStudentUids.has(canonical.uid)) return null;
-        return { uid: student.uid, canonical };
-      }),
-    );
+    const studentsByUid = new Map(students.map((item) => [item.uid, item]));
+    const candidateUids = pageCandidates.map((student) => student.uid);
+    const primaryUids =
+      candidateUids.length > 0 ? await lookupPrimaryStudentUids(env, candidateUids) : new Map<string, string | null>();
     const pageEntries: Array<{ uid: string; canonical: Student }> = [];
-    for (const entry of normalized) {
-      if (!entry || seenStudentUids.has(entry.canonical.uid)) continue;
-      seenStudentUids.add(entry.canonical.uid);
-      pageEntries.push(entry);
+    for (const candidate of pageCandidates) {
+      const canonicalUid = primaryUids.get(candidate.uid);
+      if (!canonicalUid) {
+        throw catalogUnavailable(new Error(`BAQL returned no primary student for ${candidate.uid}`));
+      }
+      const canonical = studentsByUid.get(canonicalUid);
+      if (!canonical || seenStudentUids.has(canonical.uid)) continue;
+      seenStudentUids.add(canonical.uid);
+      pageEntries.push({ uid: candidate.uid, canonical });
     }
     const lastPageCandidate = pageCandidates.at(-1);
     return apiJson(200, {
@@ -363,7 +411,16 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
     const studentsByUid = new Map(students.map((student) => [student.uid, student]));
     const page = pageRows.map((row) => {
       const student = studentsByUid.get(row.studentUid);
-      if (!student) throw new ApiHttpError(503, "student_catalog_unavailable", "학생 정보를 확인할 수 없어요");
+      if (!student) {
+        throw new ApiHttpError(
+          503,
+          "student_catalog_unavailable",
+          "학생 정보를 확인할 수 없어요",
+          undefined,
+          undefined,
+          new Error(`recruited student ${row.studentUid} is missing from the catalog`),
+        );
+      }
       return stateResponse(student.uid, row.state);
     });
     const lastPageRow = pageRows.at(-1);
@@ -464,12 +521,18 @@ export async function handleMolluLogApiRequest(
   try {
     return await dispatchApiRequest(request, env, ctx);
   } catch (error) {
-    if (error instanceof ApiHttpError)
+    if (error instanceof ApiHttpError) {
+      if (error.status >= 500 && error.underlying !== undefined) {
+        reportApiServerError(env, ctx, request, error.code, error.underlying);
+      }
       return apiError(error.status, error.code, error.message, error.fields, error.headers);
+    }
     if (error instanceof ApiInputError) return apiError(400, error.code, error.message, error.fields);
     if (isStaleStudentStateRequestError(error)) {
+      reportApiServerError(env, ctx, request, "student_state_unavailable", error);
       return apiError(503, "student_state_unavailable", "학생 API가 아직 준비되지 않았어요");
     }
+    reportApiServerError(env, ctx, request, "internal_error", error);
     return apiError(500, "internal_error", "요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요");
   }
 }

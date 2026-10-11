@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
 import { SectionCard, SubTitle } from "~/components/primitives";
+import { API_MAX_BOND_EXP } from "~/domain/mollulog-api";
 import {
   CodeBlock,
   type CopyStatus,
@@ -59,7 +60,13 @@ const fields: Array<{ fields: string[]; meaning: string; range: string; nullable
     detail: "1 이상은 고유무기가 있을 때만",
   },
   { fields: ["bond"], meaning: "인연 랭크", range: "1–100", nullable: true },
-  { fields: ["bondExp"], meaning: "누적 경험치", range: "0 이상", nullable: true, detail: "인연 랭크와 맞아야 해요" },
+  {
+    fields: ["bondExp"],
+    meaning: "누적 경험치",
+    range: `0–${API_MAX_BOND_EXP.toLocaleString("ko-KR")}`,
+    nullable: true,
+    detail: "인연 랭크와 맞지 않으면 비워져요",
+  },
 ];
 
 const errors = [
@@ -73,7 +80,7 @@ const errors = [
   ["413", "본문이 너무 큼", "요청 본문은 최대 1MiB예요"],
   ["429", "요청 한도 초과", "Retry-After를 확인한 뒤 기다려주세요"],
   ["500", "서버 오류", "잠시 후 다시 시도해주세요"],
-  ["503", "API 사용 준비 중", "계정이나 요청 제한 기능을 확인할 수 없어요"],
+  ["503", "API 사용 준비 중", "학생 API를 아직 사용할 수 없거나 계정·요청 제한 기능을 확인할 수 없어요"],
 ];
 
 export default function DevelopersDocs() {
