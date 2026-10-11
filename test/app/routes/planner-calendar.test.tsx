@@ -11,10 +11,14 @@ function renderCalendar(
     calendarResources = {},
     periods = [],
     hasPreviousCalendarResources = false,
+    statusMessages = [],
+    legacyConflictNotice = null,
   }: {
     calendarResources?: Record<string, PlannerDayResources>;
     periods?: PlannerPeriod[];
     hasPreviousCalendarResources?: boolean;
+    statusMessages?: string[];
+    legacyConflictNotice?: { to?: string } | null;
   } = {},
 ) {
   return renderToStaticMarkup(
@@ -31,8 +35,8 @@ function renderCalendar(
         raidScheduleFacts: [],
         pyroxeneAssumptions: null,
         forecastStatus,
-        statusMessages: [],
-        legacyConflictNotice: null,
+        statusMessages,
+        legacyConflictNotice,
         progressMessages: [],
         isSignedIn: false,
         timeZone: "Asia/Seoul",
@@ -74,7 +78,7 @@ describe("PlannerCalendar monthly header and initial selection", () => {
     expect(markup).toContain("2026년 10월");
     expect(markup).toMatch(/<header class="sticky top-0 z-30\b/);
     expect(markup).toContain('class="pointer-events-none relative z-20 bg-background/50"');
-    expect(markup).toContain('aria-label="확인 필요 0개"');
+    expect(markup).not.toContain('aria-label="확인 필요');
     expect(markup).toContain("이전 달");
     expect(markup).toContain("다음 달");
     expect(markup).toContain(">오늘</span>");
@@ -84,6 +88,29 @@ describe("PlannerCalendar monthly header and initial selection", () => {
     expect(markup).toContain("오늘");
     expect(markup).not.toContain("다음 달 이어보기");
     expect(markup).not.toContain('role="dialog"');
+  });
+
+  test("shows the notice button only when real notices are available and counts them", () => {
+    const emptyMarkup = renderCalendar();
+    expect(emptyMarkup).not.toContain('aria-label="확인 필요');
+
+    const statusOnlyMarkup = renderCalendar("ready", {
+      statusMessages: ["일정 원본을 확인할 수 없어요.", "계정 재화 계획을 확인할 수 없어요."],
+    });
+    expect(statusOnlyMarkup).toContain('aria-label="확인 필요 2개"');
+
+    const conflictOnlyMarkup = renderCalendar("ready", {
+      legacyConflictNotice: { to: "/planner/import?from=planner" },
+    });
+    expect(conflictOnlyMarkup).toContain('aria-label="확인 필요 1개"');
+
+    const combinedMarkup = renderCalendar("ready", {
+      statusMessages: ["일정 원본을 확인할 수 없어요.", "계정 재화 계획을 확인할 수 없어요."],
+      legacyConflictNotice: { to: "/planner/import?from=planner" },
+    });
+    expect(combinedMarkup).toContain('aria-label="확인 필요 3개"');
+    expect(combinedMarkup).toContain(">확인 필요</span>");
+    expect(combinedMarkup).toContain("text-amber-600");
   });
 
   test("shows the input-needed link in the fixed forecast status row", () => {

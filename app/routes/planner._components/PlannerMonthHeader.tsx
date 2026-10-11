@@ -56,20 +56,20 @@ export default function PlannerMonthHeader({
           <span className="sr-only">다음 달</span>
         </Button>
         <Button variant="default" text="오늘" size="sm" className="h-8 shrink-0 px-2" onClick={onToday} />
-        <Popover className="relative ml-auto shrink-0">
-          <PopoverButton
-            aria-label={`확인 필요 ${noticeCount}개`}
-            className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 max-[380px]:gap-0.5 max-[380px]:px-1 max-[380px]:text-[11px]"
-          >
-            <ExclamationTriangleIcon aria-hidden="true" className="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
-            <span>확인 필요</span>
-            <span aria-hidden="true" className="inline-flex size-4 items-center justify-center rounded-full bg-amber-500/15 text-[10px] tabular-nums text-amber-800 dark:text-amber-200">
-              {noticeCount}
-            </span>
-          </PopoverButton>
-          <PopoverPanel className="absolute right-0 top-full z-50 mt-2 max-h-[min(70dvh,32rem)] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-xl">
-            <h3 className="mb-2 text-sm font-semibold">확인 필요</h3>
-            {statusMessages.length > 0 || legacyConflictNotice ? (
+        {noticeCount > 0 ? (
+          <Popover className="relative ml-auto shrink-0">
+            <PopoverButton
+              aria-label={`확인 필요 ${noticeCount}개`}
+              className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 max-[380px]:gap-0.5 max-[380px]:px-1 max-[380px]:text-[11px]"
+            >
+              <ExclamationTriangleIcon aria-hidden="true" className="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+              <span>확인 필요</span>
+              <span aria-hidden="true" className="inline-flex size-4 items-center justify-center rounded-full bg-amber-500/15 text-[10px] tabular-nums text-amber-800 dark:text-amber-200">
+                {noticeCount}
+              </span>
+            </PopoverButton>
+            <PopoverPanel className="absolute right-0 top-full z-50 mt-2 max-h-[min(70dvh,32rem)] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-xl">
+              <h3 className="mb-2 text-sm font-semibold">확인 필요</h3>
               <div className="space-y-2">
                 {statusMessages.map((message) => (
                   <div key={message} role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
@@ -78,11 +78,9 @@ export default function PlannerMonthHeader({
                 ))}
                 {legacyConflictNotice ? <GuestPlannerLegacyConflictCallout to={legacyConflictNotice.to} /> : null}
               </div>
-            ) : (
-              <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">현재 확인할 내용이 없어요.</p>
-            )}
-          </PopoverPanel>
-        </Popover>
+            </PopoverPanel>
+          </Popover>
+        ) : null}
       </div>
       <div className="flex h-7 min-w-0 items-center justify-between gap-2">
         <PlannerPlanLegend />
