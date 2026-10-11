@@ -64,7 +64,7 @@ export default function PyroxeneCalculationAssumptions({
           text="계산 방식"
           icon={QuestionMarkCircleIcon}
           size="xs"
-          variant="secondary"
+          variant="default"
           className="shrink-0 whitespace-nowrap"
           onClick={() => setOpen(true)}
         />

@@ -14,6 +14,7 @@ import {
   getPlannerDateScheduleForDate,
   getPlannerEventScheduleGroupsForDate,
   getPlannerMonthEndInstant,
+  getPlannerMonthGridEndInstant,
   getPlannerPeriodsForDate,
   getPlannerPlannedEventUids,
   getPlannerRaidScheduleFacts,
@@ -332,6 +333,15 @@ describe("integrated planner calendar domain", () => {
   test("moves between months across year boundaries", () => {
     expect(shiftPlannerMonth("2026-12", 1)).toBe("2027-01");
     expect(shiftPlannerMonth("2026-01", -1)).toBe("2025-12");
+  });
+
+  test("ends the forecast at the final grid day, including the next month", () => {
+    expect(getPlannerMonthGridEndInstant("2026-10", "Asia/Seoul").toISOString()).toBe("2026-11-01T14:59:59.999Z");
+    expect(getPlannerMonthGridEndInstant("2026-02", "Asia/Seoul").toISOString()).toBe("2026-03-01T14:59:59.999Z");
+  });
+
+  test("ends the forecast on the final day when the month grid ends within that month", () => {
+    expect(getPlannerMonthGridEndInstant("2026-05", "Asia/Seoul").toISOString()).toBe("2026-05-31T14:59:59.999Z");
   });
 
   test("shows public events and recruitments on their active dates and keeps shops out of calendar targets", () => {

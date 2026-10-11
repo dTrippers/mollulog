@@ -77,7 +77,7 @@ export default function ApStockpileSteps({
           <dt className="text-muted-foreground">접속할 시각</dt>
           <dd className="flex min-w-0 flex-wrap items-center gap-2 font-medium tabular-nums">
             <span>{formatApShortDate(accessAt)}</span>
-            <Button text="변경" size="xs" variant="secondary" disabled={disabled} onClick={onChangeAccessAt} />
+            <Button text="변경" size="xs" variant="default" disabled={disabled} onClick={onChangeAccessAt} />
           </dd>
         </div>
         {accessStep ? (

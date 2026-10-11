@@ -521,7 +521,7 @@ export function PlannerRecruitmentEditor({
                 type="button"
                 text="모집 변경"
                 size="xs"
-                variant="secondary"
+                variant="default"
                 className="shrink-0"
                 onClick={() => {
                   setSelectedEventUid("");
@@ -543,7 +543,7 @@ export function PlannerRecruitmentEditor({
                   mobileGrid={5}
                   cardSize="md"
                   gap="normal"
-                  namePlacement="below"
+                  namePlacement="overlay"
                   students={selectedCandidate.students.map((student) => ({
                     uid: student.imageUid ?? student.uid,
                     selectionKey: student.uid,

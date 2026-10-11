@@ -208,7 +208,7 @@ export default function RaidRankScreen({
                 key={youtubeId}
                 href={`https://www.youtube.com/watch?v=${youtubeId}`}
                 target="_blank"
-                variant="secondary"
+                variant="default"
                 size="xs"
                 icon={PlayIcon}
                 text="영상 보기"

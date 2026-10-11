@@ -493,11 +493,11 @@ export default function PlannerQuickEdit({
             {message}
           </p>
         ) : null}
-        <div className="sticky bottom-0 z-layer-navigation flex flex-col-reverse gap-2 border-t border-border bg-background/95 py-3 backdrop-blur-sm sm:flex-row sm:justify-end">
+        <div className="sticky bottom-0 z-layer-navigation flex flex-col-reverse gap-2 border-t border-border bg-[var(--planner-detail-bg)] py-3 sm:flex-row sm:justify-end">
           <Button
             type="button"
             text="취소"
-            variant="secondary"
+            variant="default"
             size="sm"
             disabled={pending}
             onClick={handleCancel}

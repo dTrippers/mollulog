@@ -870,7 +870,7 @@ function FurnitureCard({
             {saveStateText(saveState)}
           </p>
           {saveState.kind === "error" ? (
-            <Button type="button" variant="secondary" size="xs" onClick={() => onRetry(item.uid)}>
+            <Button type="button" variant="default" size="xs" onClick={() => onRetry(item.uid)}>
               다시 시도
             </Button>
           ) : null}

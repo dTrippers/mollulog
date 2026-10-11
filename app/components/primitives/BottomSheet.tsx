@@ -9,6 +9,7 @@ type BottomSheetProps = {
   id?: string;
   title: string;
   description?: string;
+  headerLeadingAction?: React.ReactNode;
   headerAction?: React.ReactNode;
   footer?: React.ReactNode;
   fitContent?: boolean;
@@ -23,6 +24,7 @@ export default function BottomSheet({
   id,
   title,
   description,
+  headerLeadingAction,
   headerAction,
   footer,
   fitContent = false,
@@ -74,6 +76,7 @@ export default function BottomSheet({
             >
               <div className="mb-4 flex shrink-0 items-center justify-between gap-3">
                 <div className="flex min-w-0 items-center gap-3">
+                  {headerLeadingAction ? <div className="shrink-0">{headerLeadingAction}</div> : null}
                   {Icon ? (
                     <div className="flex shrink-0 items-center justify-center rounded-lg bg-muted p-2 lg:p-3">
                       <Icon className="size-5 text-muted-foreground lg:size-6" strokeWidth={2} aria-hidden="true" />
