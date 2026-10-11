@@ -13,9 +13,9 @@ jest.mock("~/models/mollulog-api", () => mockApi);
 jest.mock("~/models/item-catalog", () => mockItemCatalog);
 jest.mock("~/models/student", () => mockStudents);
 
-import { getDevelopersHistoryView } from "~/views/developers-history.server";
+import { getDataHistoryView } from "~/views/data-history.server";
 
-describe("getDevelopersHistoryView", () => {
+describe("getDataHistoryView", () => {
   it("composes history and display names with the requested cursor and filter", async () => {
     const env = {} as Env;
     const ctx = {} as ExecutionContext;
@@ -43,7 +43,7 @@ describe("getDevelopersHistoryView", () => {
     mockStudents.getAllStudents.mockResolvedValue(students);
     mockItemCatalog.getItemCatalogResources.mockResolvedValue(itemResources);
 
-    await expect(getDevelopersHistoryView(env, 5, { cursor: "previous-page", filter: "api", ctx })).resolves.toEqual({
+    await expect(getDataHistoryView(env, 5, { cursor: "previous-page", filter: "api", ctx })).resolves.toEqual({
       events,
       nextCursor: "next-page",
       filter: "api",

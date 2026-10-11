@@ -17,7 +17,6 @@ const developerScreens: PageScreenSelectorItemProps[] = [
   { text: "소개", Icon: CommandLineIcon, link: "/developers" },
   { text: "API 문서", Icon: BookOpenIcon, link: "/developers/docs" },
   { text: "API 키", Icon: KeyIcon, link: "/developers/keys" },
-  { text: "변경 기록", Icon: ClockIcon, link: "/developers/history" },
 ];
 
 export function DeveloperPage({ children }: { children: React.ReactNode }) {
@@ -28,7 +27,21 @@ export function DeveloperPage({ children }: { children: React.ReactNode }) {
   }));
 
   return (
-    <Page title="몰루로그 API" screens={screens} maxWidth="wide" contentWidth="full">
+    <Page
+      title="몰루로그 API"
+      screens={screens}
+      links={[
+        {
+          title: "데이터 변경 이력",
+          shortTitle: "변경 이력",
+          description: "API로 변경한 데이터를 확인해요.",
+          Icon: ClockIcon,
+          to: "/data-history?filter=api",
+        },
+      ]}
+      maxWidth="wide"
+      contentWidth="full"
+    >
       <div className="space-y-6">{children}</div>
     </Page>
   );

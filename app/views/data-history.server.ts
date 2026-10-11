@@ -4,7 +4,7 @@ import type { ApiAuditEvent } from "~/models/mollulog-api";
 import { getApiAuditHistory, getPersonalApiKeys } from "~/models/mollulog-api";
 import { getAllStudents } from "~/models/student";
 
-export async function getDevelopersHistoryView(
+export async function getDataHistoryView(
   env: Env,
   userId: number,
   { cursor, filter, ctx }: { cursor: string | null; filter: ApiAuditHistoryFilter; ctx?: ExecutionContext },

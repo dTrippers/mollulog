@@ -1,6 +1,6 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { ArrowPathIcon, CheckCircleIcon } from "@heroicons/react/20/solid";
-import { ArrowRightStartOnRectangleIcon, KeyIcon } from "@heroicons/react/24/outline";
+import { ArrowRightStartOnRectangleIcon, ClockIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { type ElementType, useEffect, useState } from "react";
 import { FaDiscord, FaGithub } from "react-icons/fa6";
 import { FcGoogle } from "react-icons/fc";
@@ -514,6 +514,7 @@ export default function EditProfile() {
             description={`${passkeyCount}개 등록됨`}
             Icon={KeyIcon}
           />
+          <SettingsLink to="/data-history" title="데이터 변경 이력" Icon={ClockIcon} />
           <SettingsLink to="/signout" title="로그아웃" Icon={ArrowRightStartOnRectangleIcon} />
         </div>
       </SectionCard>

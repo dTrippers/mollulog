@@ -7,10 +7,11 @@ jest.mock("~/models/mollulog-api", () => ({
   getPersonalApiKeys: jest.fn(),
   revokePersonalApiKey: jest.fn(),
 }));
-jest.mock("~/views/developers-history.server", () => ({ getDevelopersHistoryView: jest.fn() }));
+jest.mock("~/views/data-history.server", () => ({ getDataHistoryView: jest.fn() }));
 
+import { headers as historyHeaders } from "~/routes/data-history";
 import { headers as landingHeaders } from "~/routes/developers._index";
-import { headers as historyHeaders } from "~/routes/developers.history";
+import { headers as legacyHistoryHeaders } from "~/routes/developers.history";
 import { headers as keyHeaders } from "~/routes/developers.keys";
 
 const parentHeaders = new Headers({
@@ -27,6 +28,7 @@ const routes: Array<[string, HeadersFunction]> = [
   ["landing", landingHeaders],
   ["key management", keyHeaders],
   ["history", historyHeaders],
+  ["legacy history redirect", legacyHistoryHeaders],
 ];
 
 describe("developer route response headers", () => {

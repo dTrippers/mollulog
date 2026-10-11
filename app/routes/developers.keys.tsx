@@ -520,8 +520,8 @@ function KeyRow({
           </div>
         </dl>
         <footer className="flex flex-wrap items-center justify-end gap-4">
-          <Link to="/developers/history" className="whitespace-nowrap text-sm font-medium text-primary hover:underline">
-            변경 기록
+          <Link to="/data-history?filter=api" className="whitespace-nowrap text-sm font-medium text-primary hover:underline">
+            데이터 변경 이력
           </Link>
           {isActive ? (
             <Button
