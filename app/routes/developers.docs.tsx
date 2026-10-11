@@ -1,9 +1,12 @@
 import { MinusCircleIcon } from "@heroicons/react/24/outline";
+import { useState } from "react";
 import type { MetaFunction } from "react-router";
 import { Link } from "react-router";
 import { SectionCard, SubTitle } from "~/components/primitives";
 import {
   CodeBlock,
+  type CopyStatus,
+  CopyStatusMessage,
   CopyTextButton,
   DataTable,
   DeveloperPage,
@@ -27,15 +30,19 @@ const fields: Array<{ fields: string[]; meaning: string; range: string; nullable
   },
   { fields: ["level"], meaning: "학생 Lv", range: "1–90", nullable: true },
   { fields: ["skillEx"], meaning: "EX 스킬", range: "1–5", nullable: true },
-  { fields: ["skillNormal"], meaning: "기본 스킬", range: "1–10", nullable: true },
-  { fields: ["skillEnhanced"], meaning: "강화 스킬", range: "1–10", nullable: true },
-  { fields: ["skillSub"], meaning: "서브 스킬", range: "1–10", nullable: true },
-  { fields: ["equip1"], meaning: "장비1", range: "1–10", nullable: true },
-  { fields: ["equip2"], meaning: "장비2", range: "1–10", nullable: true },
-  { fields: ["equip3"], meaning: "장비3", range: "1–10", nullable: true },
-  { fields: ["equip1Level"], meaning: "장비1 레벨", range: "1–70", nullable: true },
-  { fields: ["equip2Level"], meaning: "장비2 레벨", range: "1–70", nullable: true },
-  { fields: ["equip3Level"], meaning: "장비3 레벨", range: "1–70", nullable: true },
+  {
+    fields: ["skillNormal", "skillEnhanced", "skillSub"],
+    meaning: "기본 · 강화 · 서브 스킬",
+    range: "1–10",
+    nullable: true,
+  },
+  { fields: ["equip1", "equip2", "equip3"], meaning: "장비 1 · 2 · 3 티어", range: "1–10", nullable: true },
+  {
+    fields: ["equip1Level", "equip2Level", "equip3Level"],
+    meaning: "장비 1 · 2 · 3 레벨",
+    range: "1–70",
+    nullable: true,
+  },
   { fields: ["equipSpecial"], meaning: "애용품", range: "1–2", nullable: true },
   {
     fields: ["weaponLevel"],
@@ -44,17 +51,9 @@ const fields: Array<{ fields: string[]; meaning: string; range: string; nullable
     nullable: true,
     detail: "고유무기 성급에 따라 최대값이 달라요",
   },
-  { fields: ["abilityHp"], meaning: "HP 해방", range: "0–25", nullable: true, detail: "1 이상은 고유무기가 있을 때만" },
   {
-    fields: ["abilityAtk"],
-    meaning: "공격력 해방",
-    range: "0–25",
-    nullable: true,
-    detail: "1 이상은 고유무기가 있을 때만",
-  },
-  {
-    fields: ["abilityHeal"],
-    meaning: "치유력 해방",
+    fields: ["abilityHp", "abilityAtk", "abilityHeal"],
+    meaning: "HP · 공격력 · 치유력 해방",
     range: "0–25",
     nullable: true,
     detail: "1 이상은 고유무기가 있을 때만",
@@ -78,6 +77,9 @@ const errors = [
 ];
 
 export default function DevelopersDocs() {
+  const [baseUrlCopyStatus, setBaseUrlCopyStatus] = useState<CopyStatus>("idle");
+  const [authCopyStatus, setAuthCopyStatus] = useState<CopyStatus>("idle");
+
   return (
     <DeveloperPage>
       <div className="space-y-6">
@@ -88,16 +90,30 @@ export default function DevelopersDocs() {
         <SectionCard title="연결">
           <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
             <dt className="text-muted-foreground sm:pt-2">Base URL</dt>
-            <dd className="flex min-w-0 items-center justify-between gap-2 font-mono text-sm">
-              <code className="min-w-0 break-all">{apiBaseUrl}</code>
-              <CopyTextButton value={apiBaseUrl} variant="icon" label="Base URL 복사" />
+            <dd className="min-w-0">
+              <div className="flex min-w-0 items-center justify-between gap-2 font-mono text-sm">
+                <code className="min-w-0 break-all">{apiBaseUrl}</code>
+                <CopyTextButton
+                  value={apiBaseUrl}
+                  variant="icon"
+                  label="Base URL 복사"
+                  onStatusChange={setBaseUrlCopyStatus}
+                />
+              </div>
+              <CopyStatusMessage status={baseUrlCopyStatus} />
             </dd>
             <dt className="text-muted-foreground sm:pt-2">인증</dt>
             <dd>
               <div className="flex items-start justify-between gap-2">
                 <code className="break-all">Authorization: Bearer &lt;API 키&gt;</code>
-                <CopyTextButton value="Authorization: Bearer <API 키>" variant="icon" label="인증 헤더 복사" />
+                <CopyTextButton
+                  value="Authorization: Bearer <API 키>"
+                  variant="icon"
+                  label="인증 헤더 복사"
+                  onStatusChange={setAuthCopyStatus}
+                />
               </div>
+              <CopyStatusMessage status={authCopyStatus} />
               <p className="mt-0.5 text-xs text-muted-foreground">브라우저 쿠키로는 인증되지 않아요</p>
             </dd>
             <dt className="text-muted-foreground sm:pt-2">권한</dt>
@@ -241,7 +257,7 @@ export default function DevelopersDocs() {
         </SectionCard>
 
         <SectionCard title="오류">
-          <DataTable label="API 오류 상태와 설명">
+          <table className="w-full text-left text-sm" aria-label="API 오류 상태와 설명">
             <TableHeader columns={["상태", "의미"]} />
             <tbody>
               {errors.map(([status, title, detail]) => (
@@ -249,14 +265,14 @@ export default function DevelopersDocs() {
                   <TableCell firstColumn className="w-14 whitespace-nowrap font-mono font-semibold">
                     {status}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="break-keep">
                     <span className="font-medium">{title}</span>
                     <span className="text-muted-foreground"> · {detail}</span>
                   </TableCell>
                 </tr>
               ))}
             </tbody>
-          </DataTable>
+          </table>
           <CodeBlock label="오류 응답 예시" copyable>
             {`{
   "error": {

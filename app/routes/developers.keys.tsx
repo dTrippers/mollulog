@@ -11,7 +11,13 @@ import {
   type PersonalApiKey,
   revokePersonalApiKey,
 } from "~/models/mollulog-api";
-import { CopyTextButton, DeveloperPage } from "./developers._components/DeveloperPage";
+import {
+  type CopyStatus,
+  CopyStatusMessage,
+  CopyTextButton,
+  DeveloperPage,
+  formatDate,
+} from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "API 키 | 몰루로그" }];
 
@@ -164,17 +170,6 @@ function toPersonalApiKeyView(key: PersonalApiKey): PersonalApiKeyView {
 
 function getKeyScopes(readScope: boolean, writeScope: boolean) {
   return [readScope ? "학생 읽기" : null, writeScope ? "학생 쓰기" : null].filter(Boolean).join(" · ");
-}
-
-function formatDate(value: string) {
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    timeZone: "Asia/Seoul",
-  }).formatToParts(new Date(value));
-  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
-  return `${part("year")}.${part("month")}.${part("day")}`;
 }
 
 export default function DevelopersKeys() {
@@ -338,18 +333,7 @@ export default function DevelopersKeys() {
                 title="지금만 볼 수 있는 키예요"
                 description="이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요."
               />
-              <div className="flex flex-wrap items-end gap-2">
-                <Input
-                  label="API 키"
-                  value={reveal.token}
-                  readOnly
-                  autoComplete="off"
-                  containerClassName="min-w-[14rem] flex-1"
-                  className="max-w-none font-mono text-xs"
-                  onFocus={(event) => event.currentTarget.select()}
-                />
-                <CopyTextButton value={reveal.token} label="복사하기" variant="text" accessibleContext="API 키" />
-              </div>
+              <RevealedTokenField key={reveal.token} token={reveal.token} />
               <p className="flex items-start gap-2 text-sm">
                 <KeyIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
                 <span>
@@ -471,7 +455,9 @@ function KeyRow({
   const endText = keyRecord.revokedAt ? `${date(keyRecord.revokedAt)} 폐기` : `${date(keyRecord.expiresAt)} 만료`;
 
   return (
-    <li className="flex flex-col gap-3 rounded-md p-3 md:flex-row md:items-center md:justify-between">
+    <li
+      className={`flex flex-col gap-3 rounded-md p-3 ${confirming ? "" : "md:flex-row md:items-center md:justify-between"}`}
+    >
       <div className="flex min-w-0 gap-3">
         <KeyIcon
           className={`mt-0.5 size-5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
@@ -489,14 +475,21 @@ function KeyRow({
           </p>
         </div>
       </div>
-      <div className="flex shrink-0 items-center gap-4 pl-8 md:pl-0">
-        <Link to="/developers/history" className="text-sm font-medium text-primary hover:underline">
+      <div
+        className={`flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 pl-8 ${confirming ? "" : "md:flex-nowrap md:pl-0"}`}
+      >
+        <Link
+          to="/developers/history"
+          className="shrink-0 whitespace-nowrap text-sm font-medium text-primary hover:underline"
+        >
           변경 기록
         </Link>
         {isActive ? (
           confirming ? (
             <>
-              <span className="text-sm text-muted-foreground">폐기하면 이 키를 다시 사용할 수 없어요.</span>
+              <span className="order-first basis-full break-keep text-sm text-muted-foreground">
+                폐기하면 이 키를 다시 사용할 수 없어요.
+              </span>
               <Form method="post">
                 <input type="hidden" name="intent" value="revoke" />
                 <input type="hidden" name="keyUid" value={keyRecord.uid} />
@@ -519,5 +512,33 @@ function KeyRow({
         ) : null}
       </div>
     </li>
+  );
+}
+
+function RevealedTokenField({ token }: { token: string }) {
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-end gap-2">
+        <Input
+          label="API 키"
+          value={token}
+          readOnly
+          autoComplete="off"
+          containerClassName="min-w-[14rem] flex-1"
+          className="max-w-none font-mono text-xs"
+          onFocus={(event) => event.currentTarget.select()}
+        />
+        <CopyTextButton
+          value={token}
+          label="복사하기"
+          variant="text"
+          accessibleContext="API 키"
+          onStatusChange={setCopyStatus}
+        />
+      </div>
+      <CopyStatusMessage status={copyStatus} />
+    </div>
   );
 }

@@ -34,14 +34,15 @@ export function DeveloperPage({ children }: { children: React.ReactNode }) {
   );
 }
 
+export type CopyStatus = "idle" | "copied" | "failed";
+
 type CopyTextButtonProps = {
   value: string;
   label?: string;
   accessibleContext?: string;
   variant?: "icon" | "text";
   className?: string;
-  showStatus?: boolean;
-  onStatusChange?: (status: "idle" | "copied" | "failed") => void;
+  onStatusChange: (status: CopyStatus) => void;
 };
 
 export function CopyTextButton({
@@ -50,14 +51,13 @@ export function CopyTextButton({
   accessibleContext,
   variant = "text",
   className = "",
-  showStatus = true,
   onStatusChange,
 }: CopyTextButtonProps) {
-  const [status, setStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [status, setStatus] = useState<CopyStatus>("idle");
   const resetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const updateStatus = (next: "idle" | "copied" | "failed") => {
+  const updateStatus = (next: CopyStatus) => {
     setStatus(next);
-    onStatusChange?.(next);
+    onStatusChange(next);
   };
 
   useEffect(
@@ -77,9 +77,6 @@ export function CopyTextButton({
       updateStatus("failed");
     }
   }
-
-  const liveStatus = status === "failed" ? "복사하지 못했어요. 텍스트를 직접 선택해 복사해주세요." : "복사됐어요";
-  const statusClassName = status === "failed" ? "text-xs text-muted-foreground" : "sr-only";
 
   return (
     <div className={`flex flex-col items-start gap-1 ${className}`}>
@@ -113,13 +110,31 @@ export function CopyTextButton({
           )}
         </Button>
       )}
-      {showStatus ? (
-        <span aria-live="polite" className={statusClassName}>
-          {status === "idle" ? "" : liveStatus}
-        </span>
-      ) : null}
     </div>
   );
+}
+
+export function CopyStatusMessage({ status }: { status: CopyStatus }) {
+  return status === "failed" ? (
+    <p aria-live="polite" className="mt-1 break-keep text-xs text-muted-foreground">
+      복사하지 못했어요. 텍스트를 직접 선택해 복사해주세요.
+    </p>
+  ) : (
+    <span aria-live="polite" className="sr-only">
+      {status === "copied" ? "복사됐어요" : ""}
+    </span>
+  );
+}
+
+export function formatDate(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("year")}.${part("month")}.${part("day")}`;
 }
 
 export function DataTable({ children, label }: { children: React.ReactNode; label: string }) {
@@ -207,7 +222,7 @@ export function CodeBlock({
   tone?: "muted" | "card";
   copyable?: boolean;
 }) {
-  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
+  const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
 
   return (
     <div className="min-w-0">
@@ -219,7 +234,6 @@ export function CodeBlock({
               value={children}
               variant="text"
               accessibleContext={label ?? "코드 예시"}
-              showStatus={false}
               onStatusChange={setCopyStatus}
             />
           ) : null}
@@ -237,15 +251,7 @@ export function CodeBlock({
           {children}
         </pre>
       </section>
-      {copyStatus === "failed" ? (
-        <p aria-live="polite" className="mt-1 text-xs text-muted-foreground">
-          복사하지 못했어요. 텍스트를 직접 선택해 복사해주세요.
-        </p>
-      ) : (
-        <span aria-live="polite" className="sr-only">
-          {copyStatus === "copied" ? "복사됐어요" : ""}
-        </span>
-      )}
+      <CopyStatusMessage status={copyStatus} />
     </div>
   );
 }

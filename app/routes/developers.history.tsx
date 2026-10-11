@@ -12,7 +12,7 @@ import {
 } from "~/domain/api-audit-history";
 import type { ApiAuditEvent } from "~/models/mollulog-api";
 import { getDevelopersHistoryView } from "~/views/developers-history.server";
-import { DeveloperPage } from "./developers._components/DeveloperPage";
+import { DeveloperPage, formatDate } from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "변경 기록 | 몰루로그" }];
 
@@ -225,7 +225,7 @@ function HistoryEvent({
     timeZone: "Asia/Seoul",
   });
   const time = timeFormatter.format(new Date(event.createdAt));
-  const actor = event.kind === "key" ? "키 관리" : getHistoryActor(event);
+  const actor = event.kind === "key" ? filterLabels.direct : getHistoryActor(event);
 
   return (
     <li>
@@ -260,8 +260,6 @@ function KeyEvent({
   const scopes = key
     ? [key.readScope ? "학생 읽기" : null, key.writeScope ? "학생 쓰기" : null].filter(Boolean).join(" · ")
     : null;
-  const date = (value: string) =>
-    new Intl.DateTimeFormat("ko-KR", { dateStyle: "medium", timeZone: "Asia/Seoul" }).format(new Date(value));
   if (event.action !== "issued" && event.action !== "revoked") {
     return <p className="text-sm text-muted-foreground">키 정보를 확인할 수 없어요</p>;
   }
@@ -278,7 +276,7 @@ function KeyEvent({
         </h3>
         <p className="text-sm text-muted-foreground">
           {key && scopes
-            ? `${scopes} · ${action === "발급" ? `${date(key.expiresAt)} 만료` : `${date(key.createdAt)} 발급`}`
+            ? `${scopes} · ${action === "발급" ? `${formatDate(key.expiresAt)} 만료` : `${formatDate(key.createdAt)} 발급`}`
             : "키 정보를 확인할 수 없어요"}
         </p>
       </div>
