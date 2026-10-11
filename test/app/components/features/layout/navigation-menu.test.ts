@@ -74,7 +74,7 @@ describe("global navigation catalog", () => {
     );
   });
 
-  it("exposes the public API screens in the personal group and marks nested pages active", () => {
+  it("keeps the API catalog entry active while temporarily hiding it from navigation and search", () => {
     const items = getNavigationCatalog({ ...guestOptions, pathname: "/developers/docs" });
     const api = items.find(({ to }) => to === "/developers");
 
@@ -82,12 +82,18 @@ describe("global navigation catalog", () => {
       menuId: "mollulog-api",
       name: "몰루로그 API",
       group: "personal",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: [],
       isActive: true,
     });
-    expect(getSearchableMenuItems()).toContainEqual(
-      expect.objectContaining({ id: "mollulog-api", name: "몰루로그 API", to: "/developers" }),
-    );
+    for (const options of [guestOptions, signedInOptions]) {
+      expect(getDesktopNavigation(options).groups.flatMap(({ items }) => items)).not.toContainEqual(
+        expect.objectContaining({ menuId: "mollulog-api" }),
+      );
+      expect(getMoreNavigationSections(options).flatMap(({ items }) => items)).not.toContainEqual(
+        expect.objectContaining({ menuId: "mollulog-api" }),
+      );
+      expect(getSearchableMenuItems(options)).not.toContainEqual(expect.objectContaining({ id: "mollulog-api" }));
+    }
   });
 
   it("exposes AP planner as a favoritable sibling utility", () => {
@@ -96,22 +102,18 @@ describe("global navigation catalog", () => {
     expect(planner).toMatchObject({ menuId: "ap-planner", name: "AP 플래너", favoriteId: "ap-planner" });
   });
 
-  it("applies the API menu badge saved by admin to desktop and more navigation", () => {
+  it("preserves the API menu badge saved by admin while the menu is hidden", () => {
     const { overrides, warnings } = resolveMenuBadgeOverrides([
       { menuId: "mollulog-api", labelMode: "custom", label: "베타", redDotMode: "show", startsAt: null, endsAt: null },
     ]);
     expect(warnings).toEqual([]);
     const options = { ...guestOptions, menuBadgeOverrides: overrides };
-    const desktop = getDesktopNavigation(options).groups.find(({ id }) => id === "personal");
-    const more = getMoreNavigationSections(options).find(({ id }) => id === "personal");
-    for (const group of [desktop, more]) {
-      expect(group?.items.find(({ to }) => to === "/developers")).toMatchObject({
-        menuId: "mollulog-api",
-        name: "몰루로그 API",
-        badgeLabel: "베타",
-        showRedDot: true,
-      });
-    }
+    expect(getNavigationCatalog(options).find(({ to }) => to === "/developers")).toMatchObject({
+      menuId: "mollulog-api",
+      name: "몰루로그 API",
+      badgeLabel: "베타",
+      showRedDot: true,
+    });
     expect(getNavigationCatalog(guestOptions).find(({ to }) => to === "/developers")).toMatchObject({
       badgeLabel: undefined,
       showRedDot: false,
@@ -130,14 +132,8 @@ describe("global navigation catalog", () => {
   it("uses the approved desktop group names and order", () => {
     const desktop = getDesktopNavigation(guestOptions);
 
-    expect(desktop.groups.map(({ name }) => name)).toEqual([
-      "게임 정보",
-      "플래너·계산기",
-      "커뮤니티",
-      "나의 데이터",
-      "소식·도움말",
-    ]);
-    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "personal", "news"]);
+    expect(desktop.groups.map(({ name }) => name)).toEqual(["게임 정보", "플래너·계산기", "커뮤니티", "소식·도움말"]);
+    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "news"]);
     expect(desktop.groups.flatMap(({ name }) => [name])).not.toEqual(
       expect.arrayContaining(["컨텐츠", "플래너 & 계산기", "게임 외 정보", "내 정보", "서비스"]),
     );
@@ -157,7 +153,6 @@ describe("global navigation catalog", () => {
       "/@sensei/futures",
       "/@sensei/timelines",
       "/scanner/resource",
-      "/developers",
       "/connect/import",
     ]);
   });
@@ -187,7 +182,7 @@ describe("global navigation catalog", () => {
       "/utils/raidscore",
     ]);
     expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
-    expect(itemsByGroup.personal).toEqual(["/developers"]);
+    expect(itemsByGroup.personal).toBeUndefined();
     expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
   });
 
@@ -250,7 +245,6 @@ describe("global navigation catalog", () => {
       "게임 정보",
       "플래너·계산기",
       "커뮤니티",
-      "나의 데이터",
       "소식·도움말",
       "설정",
     ]);
@@ -278,7 +272,6 @@ describe("global navigation catalog", () => {
       "관심 학생",
       "공략 작성하기",
       "게임 화면 인식기",
-      "몰루로그 API",
       "외부 데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([

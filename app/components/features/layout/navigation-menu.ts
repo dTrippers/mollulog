@@ -586,7 +586,7 @@ export function getNavigationCatalog({
     {
       menuId: "mollulog-api",
       group: "personal",
-      surfaces: ["desktop", "more", "search"],
+      surfaces: [],
       to: "/developers",
       name: "몰루로그 API",
       description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
