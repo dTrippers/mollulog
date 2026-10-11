@@ -241,14 +241,20 @@ const studentHeaderQuery = graphql(`
   }
 `);
 
-const studentVariantIdentityQuery = graphql(`
-  query StudentVariantIdentity($uid: String!) {
-    student(uid: $uid) {
+const studentPrimaryUidsQuery = graphql(`
+  query StudentPrimaryUids($uids: [String!]) {
+    students(uids: $uids) {
       uid
-      released
-      initialTier
       studentVariant { primaryStudent { uid } }
-      character { studentVariants { primaryStudent { uid } } }
+    }
+  }
+`);
+
+const studentFormUidsQuery = graphql(`
+  query StudentFormUids {
+    students {
+      uid
+      studentVariant { students { uid } }
     }
   }
 `);
@@ -400,12 +406,48 @@ export async function getStudentHeader(_env: Env, uid: string) {
   return data?.student;
 }
 
-export async function getStudentVariantIdentity(_env: Env, uid: string) {
-  const { data, error } = await runQuery(studentVariantIdentityQuery, { uid });
+/**
+ * Maps each requested UID that BAQL knows to its representative (primary) student UID, or null when BAQL
+ * reports no primary student for it. UIDs unknown to BAQL are absent from the map. Transport and GraphQL
+ * failures throw.
+ */
+export async function getStudentPrimaryUids(_env: Env, uids: string[]): Promise<Map<string, string | null>> {
+  if (uids.length === 0) return new Map();
+  const { data, error } = await runQuery(studentPrimaryUidsQuery, { uids });
   if (error) {
     throw error;
   }
-  return data?.student;
+  if (!data || !Array.isArray(data.students)) {
+    throw new Error("BAQL student identity response is missing students");
+  }
+  return new Map(data.students.map((row) => [row.uid, row.studentVariant?.primaryStudent?.uid ?? null]));
+}
+
+const studentFormUidsKey = cacheKey("source", "student-form-uids", 1, "all");
+const STUDENT_FORM_UIDS_TTL = 24 * 60 * 60;
+
+async function fetchStudentFormUidsFromBaql(): Promise<Record<string, string[]>> {
+  const { data, error } = await runQuery(studentFormUidsQuery, {});
+  if (error) {
+    throw error;
+  }
+  if (!data || !Array.isArray(data.students)) {
+    throw new Error("BAQL student form response is missing students");
+  }
+  return Object.fromEntries(
+    data.students.flatMap((row) => {
+      const otherForms = row.studentVariant.students.map(({ uid }) => uid).filter((uid) => uid !== row.uid);
+      return otherForms.length > 0 ? [[row.uid, otherForms]] : [];
+    }),
+  );
+}
+
+/**
+ * Maps each representative student UID to the UIDs of its other form-change records, which the student catalog
+ * omits. Representatives without another form are absent.
+ */
+export async function getStudentOtherFormUids(env: Env): Promise<Record<string, string[]>> {
+  return fetchLazySourceCached(env, studentFormUidsKey, fetchStudentFormUidsFromBaql, STUDENT_FORM_UIDS_TTL);
 }
 
 export async function getStudentGradeDetail(_env: Env, uid: string) {

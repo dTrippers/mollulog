@@ -4,6 +4,8 @@ import {
   CalculatorIcon as CalculatorIconOutline,
   CameraIcon as CameraIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
+  CircleStackIcon as CircleStackIconOutline,
+  CodeBracketIcon as CodeBracketIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconOutline,
   EnvelopeIcon as EnvelopeIconOutline,
@@ -17,9 +19,8 @@ import {
   QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
   TicketIcon as TicketIconOutline,
-  UserIcon as UserIconOutline,
   UserCircleIcon as UserCircleIconOutline,
-  CircleStackIcon as CircleStackIconOutline,
+  UserIcon as UserIconOutline,
 } from "@heroicons/react/24/outline";
 import {
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
@@ -27,6 +28,8 @@ import {
   CalculatorIcon as CalculatorIconSolid,
   CameraIcon as CameraIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
+  CircleStackIcon as CircleStackIconSolid,
+  CodeBracketIcon as CodeBracketIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconSolid,
   EnvelopeIcon as EnvelopeIconSolid,
@@ -39,9 +42,8 @@ import {
   QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
   TicketIcon as TicketIconSolid,
-  UserIcon as UserIconSolid,
   UserCircleIcon as UserCircleIconSolid,
-  CircleStackIcon as CircleStackIconSolid,
+  UserIcon as UserIconSolid,
 } from "@heroicons/react/24/solid";
 import type { ComponentProps, ComponentType } from "react";
 import {
@@ -212,10 +214,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "student-growth-planner":
       return pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students");
     case "resource-planner":
-      return (
-        pathname.startsWith("/utils/resources/inventory") ||
-        pathname.startsWith("/utils/resources/drafts/")
-      );
+      return pathname.startsWith("/utils/resources/inventory") || pathname.startsWith("/utils/resources/drafts/");
     case "farming-calculator":
       return normalizedPathname === "/utils/resources/farming";
     case "event-shop-calculator":
@@ -233,10 +232,13 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "my-walkthroughs":
       return Boolean(
         currentUsername &&
-          (pathname.startsWith(`/@${currentUsername}/timelines`) || pathname.startsWith(`/@${currentUsername}/parties`)),
+          (pathname.startsWith(`/@${currentUsername}/timelines`) ||
+            pathname.startsWith(`/@${currentUsername}/parties`)),
       );
     case "screen-scanner":
       return pathname === "/scanner" || pathname.startsWith("/scanner/");
+    case "mollulog-api":
+      return pathname === "/developers" || pathname.startsWith("/developers/");
     case "external-data":
       return pathname === "/connect" || pathname.startsWith("/connect/");
     case "profile":
@@ -582,6 +584,17 @@ export function getNavigationCatalog({
       isActive: itemIsActive("screen-scanner", pathname, currentUsername),
     },
     {
+      menuId: "mollulog-api",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: "/developers",
+      name: "몰루로그 API",
+      description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
+      OutlineIcon: CodeBracketIconOutline,
+      SolidIcon: CodeBracketIconSolid,
+      isActive: itemIsActive("mollulog-api", pathname, currentUsername),
+    },
+    {
       menuId: "external-data",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
@@ -717,7 +730,9 @@ export function getDesktopNavigation(options: NavigationCatalogOptions): Desktop
 }
 
 export function getNavigationFavoriteItems(options: NavigationCatalogOptions): NavigationItem[] {
-  return getNavigationCatalog(options).filter((item) => item.favoriteId && (!item.requiresSignIn || options.isSignedIn));
+  return getNavigationCatalog(options).filter(
+    (item) => item.favoriteId && (!item.requiresSignIn || options.isSignedIn),
+  );
 }
 
 export function isAccountNavigationActive(pathname: string, currentUsername: string | null): boolean {
@@ -761,8 +776,8 @@ export function getMobileNavigationItems({
   const homeItem = catalog.find((item) => item.menuId === "home");
   const futuresItem = catalog.find((item) => item.menuId === "futures");
   const moreItem = catalog.find((item) => item.to === "/more");
-  return [homeItem, futuresItem, ...selectedItems, moreItem].filter(
-    (item): item is NavigationCatalogItem => Boolean(item),
+  return [homeItem, futuresItem, ...selectedItems, moreItem].filter((item): item is NavigationCatalogItem =>
+    Boolean(item),
   );
 }
 

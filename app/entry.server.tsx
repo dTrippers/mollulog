@@ -81,7 +81,14 @@ export default async function handleRequest(
   }
 
   responseHeaders.set("Content-Type", "text/html");
-  responseHeaders.set("Cache-Control", "no-store, no-transform");
+  const isPrivateResponse = responseHeaders
+    .get("Cache-Control")
+    ?.split(",")
+    .some((directive) => directive.trim().toLowerCase() === "private");
+  responseHeaders.set(
+    "Cache-Control",
+    isPrivateResponse ? "private, no-store, no-transform" : "no-store, no-transform",
+  );
   if (isSenseiProfilePath(path)) {
     responseHeaders.set("X-Robots-Tag", "noindex");
   }

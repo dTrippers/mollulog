@@ -69,14 +69,14 @@ export default function StudentInfo({ student, className = "" }: StudentInfoProp
 
       <div className="px-3 pb-3 pt-2 md:px-4 md:pb-4 md:pt-2.5">
         {student.studentVariant.isMulticlass ? (
-          <fieldset className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1" aria-label="클래스 전환">
+          <fieldset className="mb-2 grid grid-cols-2 gap-1 rounded-md bg-muted p-1" aria-label="폼 체인지">
             {student.studentVariant.students.map((variantStudent, index) => (
               <Link
                 key={variantStudent.uid}
                 to={`/students/${variantStudent.uid}`}
-                aria-label={`${student.name} 클래스 ${index + 1}`}
+                aria-label={`${student.name} 폼 ${index + 1}`}
                 aria-current={variantStudent.uid === student.uid ? "page" : undefined}
-                title={`${student.name} 클래스 ${index + 1}`}
+                title={`${student.name} 폼 ${index + 1}`}
                 className={cn(
                   "rounded-sm px-2.5 py-1 text-center text-xs font-medium transition-colors",
                   variantStudent.uid === student.uid

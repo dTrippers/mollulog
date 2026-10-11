@@ -26,7 +26,8 @@ export type StudentStateWriteSource =
   | "student_growth_form"
   | "relationship_level"
   | "student_basic_info"
-  | "sync_draft";
+  | "sync_draft"
+  | "api";
 
 export type StudentStateWriteMode = "legacy" | "nullable";
 export type StudentStateRequestMode = StudentStateWriteMode;
@@ -45,6 +46,8 @@ export type StudentStateWriteContext = {
   mode: StudentStateWriteMode;
   requestMode: StudentStateRequestMode | null;
 };
+
+export type StudentStateApiActor = { apiKeyUid: string; apiKeyName: string };
 
 type RecruitedState = {
   uid: string;
@@ -732,6 +735,7 @@ export async function withStudentStateProjection<T>(
   operation: (transaction: StudentStateTransaction, context: StudentStateWriteContext) => Promise<T>,
   sourceRef: string | null = null,
   requestMode: StudentStateRequestMode | null = "legacy",
+  apiActor?: StudentStateApiActor,
 ): Promise<T> {
   const uniqueStudentUids = [...new Set(studentUids)].sort();
   if (uniqueStudentUids.length > 0) await acquireStudentStateLock(db, userId);
@@ -758,6 +762,8 @@ export async function withStudentStateProjection<T>(
         userId,
         studentUid,
         actorUserId: userId,
+        apiKeyUid: apiActor?.apiKeyUid ?? null,
+        apiKeyName: apiActor?.apiKeyName ?? null,
         source,
         sourceRef,
         beforeState: canonicalAuditSnapshot(prior.state, prior.target),
@@ -779,6 +785,8 @@ export async function withStudentStateProjection<T>(
       userId,
       studentUid,
       actorUserId: userId,
+      apiKeyUid: apiActor?.apiKeyUid ?? null,
+      apiKeyName: apiActor?.apiKeyName ?? null,
       source,
       sourceRef,
       beforeState: auditSnapshot(prior),

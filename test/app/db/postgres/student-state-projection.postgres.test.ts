@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "@jest/globals";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -51,14 +52,51 @@ const LOCK_OBSERVATION_TIMEOUT_MS = 8_000;
 const ASYNC_CLEANUP_TIMEOUT_MS = 10_000;
 
 function modelEnvForSchema(schema: string): Env {
-  const connection = new URL("postgresql://127.0.0.1");
+  const connection = new URL("postgresql://localhost");
+  connection.hostname = process.env.PGHOST ?? "127.0.0.1";
   if (process.env.PGPORT) connection.port = process.env.PGPORT;
   if (process.env.PGUSER) connection.username = process.env.PGUSER;
   if (process.env.PGPASSWORD) connection.password = process.env.PGPASSWORD;
   const database = process.env.PGDATABASE ?? process.env.PGUSER;
-  if (database) connection.pathname = `/${database}`;
+  if (database) connection.pathname = `/${encodeURIComponent(database)}`;
+  if (process.env.PGSSLMODE) connection.searchParams.set("sslmode", process.env.PGSSLMODE);
   connection.searchParams.set("options", `-c search_path=${schema}`);
   return { HYPERDRIVE: { connectionString: connection.toString() } } as unknown as Env;
+}
+
+async function validateSelectedLocalPostgresEnvironment(): Promise<void> {
+  const moduleUrl = pathToFileURL(path.join(process.cwd(), "scripts/local-dev-env.mjs")).href;
+  const validationScript = [
+    `import { allowedLocalDbHosts, assertLocalConnection, connectionStringFromPostgresEnvironment } from ${JSON.stringify(moduleUrl)};`,
+    "assertLocalConnection(connectionStringFromPostgresEnvironment(process.env), allowedLocalDbHosts(process.env));",
+  ].join("\n");
+
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(process.execPath, ["--input-type=module", "--eval", validationScript], {
+      cwd: process.cwd(),
+      env: { ...process.env },
+      stdio: "ignore",
+    });
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      if (error) reject(error);
+      else resolve();
+    };
+    const timeout = setTimeout(() => {
+      child.kill("SIGTERM");
+      finish(new Error("The selected PostgreSQL environment could not be validated for local tests."));
+    }, 5_000);
+    child.once("error", () =>
+      finish(new Error("The selected PostgreSQL environment could not be validated for local tests.")),
+    );
+    child.once("close", (code) => {
+      if (code !== 0) finish(new Error("The selected PostgreSQL environment is not approved for local tests."));
+      else finish();
+    });
+  });
 }
 
 function sortBy<T>(rows: readonly T[], key: (row: T) => string): T[] {
@@ -176,6 +214,7 @@ function runMigrationCli(
 ): Promise<CliResult> {
   return new Promise((resolve) => {
     const args = ["scripts/student-state-migration.mjs", action, "--schema", schema];
+    if (process.env.PGHOST !== "127.0.0.1") args.push("--confirm-db-host", process.env.PGHOST ?? "");
     if (action !== "preflight") args.push("--confirm-no-external-writers");
     const child = spawn(process.execPath, args, {
       cwd: process.cwd(),
@@ -321,9 +360,7 @@ async function waitForLockWait(observer: Client, applicationName: string, operat
 
 describePostgres("student-state projection against isolated PostgreSQL", () => {
   it("validates projection, audit atomicity, backfill parity, and activation races", async () => {
-    if (process.env.PGHOST !== "127.0.0.1") {
-      throw new Error("Set up local PostgreSQL through the mllg local wrapper before running this suite.");
-    }
+    await validateSelectedLocalPostgresEnvironment();
 
     const schema = `student_state_p1_${process.pid}_${randomBytes(3).toString("hex")}`;
     const clients: Client[] = [];
@@ -373,6 +410,7 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         "db/postgres/migrations/20260807000100_create_student_state.sql",
         "db/postgres/migrations/20260901000200_add_recruited_student_equipment_levels.sql",
         "db/postgres/migrations/20261010000100_create_student_state_projection.sql",
+        "db/postgres/migrations/20261010000200_add_personal_api_keys_and_audit.sql",
       ]) {
         await admin.query(await readFile(path.join(process.cwd(), migration), "utf8"));
       }

@@ -7,6 +7,7 @@ interface Env {
   DISCORD_NOTIFICATIONS_QUEUE?: Queue<DiscordConnectionRequestQueueMessage>;
   OCR_UPLOADS: R2Bucket;
   HOST: string;
+  API_HOST?: string;
   OCR_R2_ACCOUNT_ID?: string;
   OCR_R2_ACCESS_KEY_ID?: string;
   OCR_R2_SECRET_ACCESS_KEY?: string;
