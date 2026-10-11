@@ -178,6 +178,7 @@ describe("futures loader data source routing", () => {
         confirmed: true,
         isSpoiler: false,
         tags: [],
+        minigameType: "treasure_hunt",
         recruitments: [],
       },
     ] as never);
@@ -186,6 +187,7 @@ describe("futures loader data source routing", () => {
 
     expect(result.contents[0]).toMatchObject({
       recruitmentGroupUid: "group-a",
+      minigameType: "treasure_hunt",
       recruitmentPeriod: {
         startAt: "2030-01-11T00:00:00.000Z",
         endAt: "2030-01-21T00:00:00.000Z",

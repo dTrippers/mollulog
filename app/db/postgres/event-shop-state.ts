@@ -1,5 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
+import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
 import {
   type EventShopOwnedQuantityPatch,
   type EventShopState,
@@ -51,6 +52,7 @@ function normalizeEventShopStateForStorage(state: EventShopState): EventShopStat
     minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
     minigamePlayCount: state.minigamePlayCount ?? 0,
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
+    cardFlipStrategy: state.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},
   };
 }

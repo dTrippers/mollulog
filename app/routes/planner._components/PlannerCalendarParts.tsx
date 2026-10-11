@@ -1,6 +1,6 @@
 import { HeartIcon } from "@heroicons/react/16/solid";
-import { Fragment, type ReactNode, useState } from "react";
-import { Button } from "~/components/primitives";
+import { type ReactNode, useState } from "react";
+import { Button, HoverTooltip } from "~/components/primitives";
 import SharedPlannerEventThumbnail from "~/components/features/planner/PlannerEventThumbnail";
 import type {
   PlannerPeriod,
@@ -11,7 +11,13 @@ import type {
 import { studentImageUrl } from "~/models/assets";
 
 export function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
-  return <SharedPlannerEventThumbnail imageUrl={period?.imageUrl} fallbackImageUrl={period?.fallbackImageUrl} />;
+  return (
+    <SharedPlannerEventThumbnail
+      imageUrl={period?.imageUrl}
+      fallbackImageUrl={period?.fallbackImageUrl}
+      showSurfaceUntilLoaded
+    />
+  );
 }
 
 /**
@@ -48,18 +54,23 @@ export function PlannerPeriodRange({
 function PlannerRecruitmentAvatar({ student }: { student: PlannerPeriodStudent }) {
   const [imageFailed, setImageFailed] = useState(false);
   return (
-    <span className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-muted ring-2 ring-popover">
+    <HoverTooltip
+      className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-full bg-muted ring-2 ring-popover"
+      content={student.name}
+      focusable
+    >
       {!imageFailed ? (
         <img
           src={studentImageUrl(student.imageUid ?? student.uid)}
-          alt=""
-          aria-hidden="true"
+          alt={student.name}
           className="size-full object-cover object-top"
           loading="lazy"
           onError={() => setImageFailed(true)}
         />
-      ) : null}
-    </span>
+      ) : (
+        <span className="sr-only">{student.name}</span>
+      )}
+    </HoverTooltip>
   );
 }
 
@@ -78,10 +89,10 @@ export function PlannerRecruitmentPortraits({
   students: readonly PlannerPeriodStudent[];
   favoriteMarker?: boolean;
 }) {
-  const visibleStudents = students.slice(0, 3);
+  const visibleStudents = students.slice(0, students.length === 4 ? 4 : 3);
   const hasOverflow = students.length > visibleStudents.length;
   return (
-    <span className="inline-flex shrink-0 items-center pl-1" aria-hidden="true">
+    <span className="inline-flex shrink-0 items-center pl-1">
       {visibleStudents.map((student, index) => {
         const isLastAvatar = !hasOverflow && index === visibleStudents.length - 1;
         return (
@@ -129,16 +140,9 @@ export function PlannerRecruitmentRow({
     >
       {students.length > 0 ? <PlannerRecruitmentPortraits students={students} favoriteMarker={favoriteMarker} /> : null}
       <div className="min-w-0 flex-1">
-        {students.length > 0 || showEmptyStudentText ? (
+        {students.length === 0 && showEmptyStudentText ? (
           <p className="break-keep text-sm font-medium text-foreground">
-            {students.length > 0
-              ? students.map(({ uid, name }, index) => (
-                  <Fragment key={uid}>
-                    {index > 0 ? ", " : ""}
-                    <span className="whitespace-nowrap">{name}</span>
-                  </Fragment>
-                ))
-              : "관심 학생을 선택하지 않았어요."}
+            관심 학생을 선택하지 않았어요.
           </p>
         ) : null}
         {periodRange ? <p className="text-xs text-muted-foreground">{periodRange}</p> : null}
@@ -172,39 +176,19 @@ export function PlannerEventCardActions({
   return (
     <div className={`flex flex-wrap gap-2 ${className ?? ""}`.trim()}>
       {eventPeriod ? (
-        <Button
-          text="이벤트 상세"
-          size="xs"
-          variant="secondary"
-          className="shadow-xs dark:shadow-none"
-          to={eventPeriod.href}
-        />
+        <Button text="이벤트 상세" size="xs" to={eventPeriod.href} />
       ) : null}
       {apPlannerHref ? (
-        <Button
-          text="AP 플래너"
-          size="xs"
-          variant="secondary"
-          className="shadow-xs dark:shadow-none"
-          to={apPlannerHref}
-        />
+        <Button text="AP 플래너" size="xs" to={apPlannerHref} />
       ) : null}
       {shopCalculatorHref ? (
-        <Button
-          text="상점 계산기"
-          size="xs"
-          variant="secondary"
-          className="shadow-xs dark:shadow-none"
-          to={shopCalculatorHref}
-        />
+        <Button text="상점 계산기" size="xs" to={shopCalculatorHref} />
       ) : null}
       {recruitmentActions.map((action) => (
         <span key={action.key} className="inline-flex shrink-0" data-planner-focus-key={action.focusKey}>
           <Button
             text={action.text}
             size="xs"
-            variant="secondary"
-            className="bg-muted shadow-xs hover:bg-muted/70 dark:shadow-none"
             onClick={action.onClick}
           />
         </span>

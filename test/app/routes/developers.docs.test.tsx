@@ -9,24 +9,28 @@ import {
   API_STUDENT_STATE_FIELD_SPECS,
   resolveApiDocumentUrls,
 } from "~/domain/mollulog-api-spec";
-import DevelopersDocs from "~/routes/developers.docs";
+import DevelopersDocs, { loader } from "~/routes/developers.docs";
 
 const siteHost = "https://mollulog.net";
 const urls = resolveApiDocumentUrls("api.mollulog.net", `${siteHost}/developers/docs`);
 
 function renderDocsPage() {
+  const loaderData = loader({
+    request: new Request("http://127.0.0.1:8789/developers/docs"),
+    context: { cloudflare: { env: { HOST: "https://dev.example.ts.net" } } },
+  } as never);
   const RoutesStub = createRoutesStub([
     {
       id: "developers-docs",
       path: "/developers/docs",
-      loader: () => ({ urls, siteHost }),
+      loader: () => loaderData,
       Component: DevelopersDocs,
     },
   ]);
   return renderToStaticMarkup(
     createElement(RoutesStub, {
       initialEntries: ["/developers/docs"],
-      hydrationData: { loaderData: { "developers-docs": { urls, siteHost } } },
+      hydrationData: { loaderData: { "developers-docs": loaderData } },
     }),
   );
 }
@@ -57,14 +61,37 @@ function collectStringLeaves(value: unknown, path: string): Array<{ path: string
 }
 
 describe("developers API documentation page", () => {
+  it.each([undefined, "staging-api.example.com"])(
+    "keeps public documentation URLs on production when API_HOST is %s",
+    (apiHost) => {
+      const result = loader({
+        request: new Request("http://127.0.0.1:8789/developers/docs"),
+        context: { cloudflare: { env: { API_HOST: apiHost, HOST: "https://dev.example.ts.net" } } },
+      } as never);
+
+      expect(result).toEqual({
+        siteHost: "https://mollulog.net",
+        urls: {
+          origin: "https://api.mollulog.net",
+          baseUrl: "https://api.mollulog.net/v1",
+          llmsUrl: "https://api.mollulog.net/llms.txt",
+          llmsFullUrl: "https://api.mollulog.net/llms-full.txt",
+          openApiUrl: "https://api.mollulog.net/v1/openapi.json",
+        },
+      });
+    },
+  );
+
   it("renders the agent entry point and links from the shared guide", () => {
     const markup = normalizeMarkup(renderDocsPage());
     const text = extractText(markup);
-    const prompt = `${urls.llmsFullUrl}를 읽고 몰루로그 API 연동 코드를 작성해주세요. API 키는 MOLLULOG_API_KEY 환경 변수에서 읽어주세요.`;
 
     expect(markup).toContain("코딩 에이전트로 연동하기");
-    expect(markup).toContain("에이전트에게 보낼 요청");
-    expect(text).toContain(prompt);
+    expect(markup).toContain("프롬프트 예시");
+    expect(text).toContain("몰루로그 API를 파악해주세요.");
+    expect(text).toContain("어떤 도구에 어떤 데이터를 연결할지 저와 질답하며 정하고");
+    expect(text).toContain("연동 구현을 도와주세요.");
+    expect(text).not.toContain("CSV로 내보내는 기능");
     expect(markup).toContain('href="https://api.mollulog.net/llms-full.txt"');
     expect(markup).toContain('href="https://api.mollulog.net/llms.txt"');
     expect(markup).toContain('href="https://api.mollulog.net/v1/openapi.json"');

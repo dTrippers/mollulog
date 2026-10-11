@@ -28,6 +28,7 @@ export const NAVIGATION_MENU_IDS = [
   "favorite-students",
   "my-walkthroughs",
   "screen-scanner",
+  "mollulog-api",
   "external-data",
   "news",
   "contact",
@@ -76,10 +77,7 @@ export function isValidMenuBadgeDateRange(startsAt: string | null, endsAt: strin
   return start === null || end === null || end > start;
 }
 
-export function isMenuBadgeActive(
-  badge: Pick<StoredMenuBadge, "startsAt" | "endsAt">,
-  now: string | Date,
-): boolean {
+export function isMenuBadgeActive(badge: Pick<StoredMenuBadge, "startsAt" | "endsAt">, now: string | Date): boolean {
   const instant = now instanceof Date ? now.getTime() : Date.parse(now);
   if (!Number.isFinite(instant)) return false;
   const startsAt = badge.startsAt ? Date.parse(badge.startsAt) : Number.NEGATIVE_INFINITY;
@@ -157,13 +155,13 @@ export function applyMenuBadgeOverride(
       matchingOverride?.labelMode === "hidden"
         ? undefined
         : matchingOverride?.labelMode === "custom"
-          ? matchingOverride.label ?? undefined
+          ? (matchingOverride.label ?? undefined)
           : automatic.label,
     showRedDot:
       matchingOverride?.redDotMode === "show"
         ? true
         : matchingOverride?.redDotMode === "hidden"
           ? false
-          : automatic.showRedDot ?? false,
+          : (automatic.showRedDot ?? false),
   };
 }

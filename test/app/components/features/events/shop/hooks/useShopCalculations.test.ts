@@ -22,6 +22,7 @@ const state: ShopState = {
   minigameStartRound: 1,
   minigamePlayCount: 6,
   minigamePaymentQuantityMode: "expected",
+  cardFlipStrategy: "all-open",
   overriddenRequiredQuantities: {},
 };
 
@@ -41,8 +42,15 @@ describe("useShopCalculations input tracking", () => {
       minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Currency, resourceUid: "cell", quantity: 200 }],
     });
 
+    const changedStrategyInputs = buildShopCalculationInputSets({
+      ...inputs,
+      state: { ...state, cardFlipStrategy: "sr-reset" },
+    });
+
     expect(calculationInputsMatch(pendingInputs.calculation, provisionalInputs.calculation)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.user, provisionalInputs.user)).toBe(true);
+    expect(calculationInputsMatch(pendingInputs.calculation, changedStrategyInputs.calculation)).toBe(false);
+    expect(calculationInputsMatch(pendingInputs.user, changedStrategyInputs.user)).toBe(false);
     expect(isUserCalculationPending(false, true, pendingInputs.user, provisionalInputs.user)).toBe(false);
   });
 });

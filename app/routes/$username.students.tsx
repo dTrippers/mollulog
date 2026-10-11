@@ -471,7 +471,7 @@ export default function UserPage() {
                     title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
                     description="프로필 설정에서 공개로 바꾸면 공유 링크를 만들 수 있어요."
                   >
-                    <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
+                    <Button text="프로필 설정" variant="default" size="xs" to="/edit" />
                   </Callout>
                 ) : null
               ) : (
@@ -510,7 +510,7 @@ export default function UserPage() {
               title="프로필이 비공개라 성장 상태를 공유할 수 없어요."
               description="프로필 설정에서 공개로 바꾸면 공유 링크를 만들 수 있어요."
             >
-              <Button text="프로필 설정" variant="secondary" size="xs" to="/edit" />
+              <Button text="프로필 설정" variant="default" size="xs" to="/edit" />
             </Callout>
           ) : (
             <ShareStudentGrowthButton url={shareUrl} />

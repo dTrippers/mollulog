@@ -22,6 +22,7 @@ const shopRow = {
   minigameStartRound: 4,
   minigamePlayCount: 5,
   minigamePaymentQuantityMode: "max",
+  cardFlipStrategy: "sr-reset",
   overriddenRequiredQuantities: { "item-1": 11 },
 };
 
@@ -140,11 +141,18 @@ describe("planner state projection", () => {
           minigameStartRound: 4,
           minigamePlayCount: 5,
           minigamePaymentQuantityMode: "max",
+          cardFlipStrategy: "sr-reset",
           overriddenRequiredQuantities: { "item-1": 11 },
         },
       },
       ap: null,
     });
+  });
+
+  it("defaults legacy shop rows to all-open when no strategy was persisted", () => {
+    const { cardFlipStrategy: _strategy, ...legacyShopRow } = shopRow;
+    const document = projectPlannerStateDocument(projectionRows({ eventShops: [legacyShopRow] }));
+    expect(document.eventShops["event-shop-1"]?.cardFlipStrategy).toBe("all-open");
   });
 
   it("keeps input order for records with equal eventAt even when uid order differs", () => {

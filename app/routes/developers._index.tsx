@@ -13,6 +13,7 @@ import { data, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, SectionCard } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { ApiName } from "./developers._components/ApiName";
 import { DeveloperPage } from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "몰루로그 API" }];
@@ -156,7 +157,9 @@ function ApiConnections() {
           <div className="flex size-20 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
             <CodeBracketIcon className="size-10" aria-hidden="true" />
           </div>
-          <p className="text-base font-semibold">몰루로그 API</p>
+          <p className="text-base font-semibold">
+            <ApiName />
+          </p>
         </div>
         <ConnectionExample
           Icon={TableCellsIcon}

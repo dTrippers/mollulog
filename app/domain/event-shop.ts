@@ -20,16 +20,29 @@ export type RewardItem = {
   rarity?: number;
 };
 
+export const CARD_FLIP_STRATEGIES = ["one-open", "sr-reset", "all-open"] as const;
+
+export type CardFlipStrategy = (typeof CARD_FLIP_STRATEGIES)[number];
+
+export const DEFAULT_CARD_FLIP_STRATEGY: CardFlipStrategy = "all-open";
+
 export type CardFlipCard = {
   uid: string;
   name: string | null;
   rarity: number | null;
   imageUrl: string | null;
+  slots: { slot: number; weight: number }[];
   rewards: RewardItem[];
 };
 
 export type CardFlipData =
-  | { status: "available"; cardCost: MinigamePayment; cards: CardFlipCard[] }
+  | {
+      status: "available";
+      slotCount: number;
+      flipCosts: { flip: number; payments: MinigamePayment[] }[];
+      drawRules: { initialGroup: number; maxDrawCount: number; advanceOnRarities: number[] };
+      cards: CardFlipCard[];
+    }
   | { status: "unavailable" }
   | { status: "invalid" };
 

@@ -11,7 +11,7 @@ import PageScreenSelector, {
 } from "./PageScreenSelector";
 
 type PageProps = {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   belowTitle?: React.ReactNode;
   screens?: PageScreenSelectorProps["screens"];

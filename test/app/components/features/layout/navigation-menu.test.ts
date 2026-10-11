@@ -1,5 +1,5 @@
-import { CalendarIcon as CalendarIconOutline } from "@heroicons/react/24/outline";
 import { describe, expect, it } from "@jest/globals";
+import { NAVIGATION_ICONS } from "~/components/features/layout/navigation-icons";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
@@ -11,7 +11,7 @@ import {
   isAccountNavigationActive,
 } from "~/components/features/layout/navigation-menu";
 import { getAvailableNavigationFavorites } from "~/domain/navigation-favorites";
-import { NAVIGATION_MENU_IDS } from "~/domain/navigation-menu-badges";
+import { NAVIGATION_MENU_IDS, resolveMenuBadgeOverrides } from "~/domain/navigation-menu-badges";
 
 const guestOptions = {
   pathname: "/",
@@ -67,7 +67,7 @@ describe("global navigation catalog", () => {
       name: "통합 플래너",
       favoriteId: "integrated-planner",
       mobileNavigationId: "integrated-planner",
-      OutlineIcon: CalendarIconOutline,
+      OutlineIcon: NAVIGATION_ICONS["integrated-planner"].OutlineIcon,
     });
     expect(items.map((item) => item.to)).toEqual(
       expect.arrayContaining(["/planner", "/utils/pyroxene", "/utils/event-shop"]),
@@ -79,13 +79,14 @@ describe("global navigation catalog", () => {
     const api = items.find(({ to }) => to === "/developers");
 
     expect(api).toMatchObject({
+      menuId: "mollulog-api",
       name: "몰루로그 API",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
       isActive: true,
     });
     expect(getSearchableMenuItems()).toContainEqual(
-      expect.objectContaining({ id: "/developers", name: "몰루로그 API", to: "/developers" }),
+      expect.objectContaining({ id: "mollulog-api", name: "몰루로그 API", to: "/developers" }),
     );
   });
 
@@ -93,6 +94,28 @@ describe("global navigation catalog", () => {
     const planner = getNavigationCatalog(guestOptions).find((item) => item.to === "/utils/ap");
 
     expect(planner).toMatchObject({ menuId: "ap-planner", name: "AP 플래너", favoriteId: "ap-planner" });
+  });
+
+  it("applies the API menu badge saved by admin to desktop and more navigation", () => {
+    const { overrides, warnings } = resolveMenuBadgeOverrides([
+      { menuId: "mollulog-api", labelMode: "custom", label: "베타", redDotMode: "show", startsAt: null, endsAt: null },
+    ]);
+    expect(warnings).toEqual([]);
+    const options = { ...guestOptions, menuBadgeOverrides: overrides };
+    const desktop = getDesktopNavigation(options).groups.find(({ id }) => id === "personal");
+    const more = getMoreNavigationSections(options).find(({ id }) => id === "personal");
+    for (const group of [desktop, more]) {
+      expect(group?.items.find(({ to }) => to === "/developers")).toMatchObject({
+        menuId: "mollulog-api",
+        name: "몰루로그 API",
+        badgeLabel: "베타",
+        showRedDot: true,
+      });
+    }
+    expect(getNavigationCatalog(guestOptions).find(({ to }) => to === "/developers")).toMatchObject({
+      badgeLabel: undefined,
+      showRedDot: false,
+    });
   });
 
   it.each(["/planner", "/planner/import"])("activates the integrated planner at %s", (pathname) => {

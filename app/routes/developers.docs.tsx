@@ -29,11 +29,10 @@ import {
 
 export const meta: MetaFunction = () => [{ title: "API 문서 | 몰루로그" }];
 
-export function loader({ request, context }: LoaderFunctionArgs) {
-  const { env } = context.cloudflare;
+export function loader({ request }: LoaderFunctionArgs) {
   return {
-    urls: resolveApiDocumentUrls(env.API_HOST, request.url),
-    siteHost: env.HOST,
+    urls: resolveApiDocumentUrls("api.mollulog.net", request.url),
+    siteHost: "https://mollulog.net",
   };
 }
 

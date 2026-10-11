@@ -10,6 +10,7 @@ import type {
   ShopResource,
   Stage,
 } from "~/domain/event-shop";
+import type { CardFlipStrategyResult } from "~/domain/card-flip-strategy";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import EventInfoCard from "../EventInfoCard";
 import { CollectedTotalsSection } from "./CollectedTotalsSection";
@@ -48,6 +49,7 @@ export type EventShopPlanContext = {
   provisionalMinigameResourceUid?: string;
   minigamePaymentCosts: MinigamePayment[] | undefined;
   minigameRewards: RewardItem[] | undefined;
+  cardFlipComparison: CardFlipStrategyResult[] | null;
   stageCalculations: CalculationResult;
   isCalculating: boolean;
 };
@@ -75,6 +77,7 @@ export function ShopCalculatorScreen({
   resultTreasureHuntStatus,
   provisionalMinigameResourceUid,
   minigameRewards,
+  cardFlipComparison,
   stageCalculations,
 }: EventShopPlanContext) {
   const { showSignIn } = useSignIn();
@@ -127,6 +130,7 @@ export function ShopCalculatorScreen({
             actions={actions}
             exchange={clueSearchExchange}
             treasureHuntCalculation={treasureHuntCalculation}
+            cardFlipComparison={cardFlipComparison}
           />
         )}
         <StageSelector

@@ -12,6 +12,7 @@ import { useLocation } from "react-router";
 import Page from "~/components/features/layout/Page";
 import type { PageScreenSelectorItemProps } from "~/components/features/layout/PageScreenSelector";
 import { Button } from "~/components/primitives";
+import { ApiName } from "./ApiName";
 
 const developerScreens: PageScreenSelectorItemProps[] = [
   { text: "소개", Icon: CommandLineIcon, link: "/developers" },
@@ -28,7 +29,7 @@ export function DeveloperPage({ children }: { children: React.ReactNode }) {
 
   return (
     <Page
-      title="몰루로그 API"
+      title={<ApiName />}
       screens={screens}
       links={[
         {

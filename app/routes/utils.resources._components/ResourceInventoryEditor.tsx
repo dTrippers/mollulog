@@ -398,7 +398,7 @@ function ResourceGroup({
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-foreground">{GROWTH_RESOURCE_KIND_LABELS[kindOrder] ?? "기타"}</h2>
           {isFavorGroup ? (
-            <Button text="인연 랭크 계산기" to="/utils/relationship" size="xs" variant="secondary" />
+            <Button text="인연 랭크 계산기" to="/utils/relationship" size="xs" variant="default" />
           ) : null}
         </div>
       </div>

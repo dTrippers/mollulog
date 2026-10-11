@@ -19,6 +19,7 @@ describe("event shop state", () => {
 
     expect(defaults.enabledStages).toEqual({ "stage-8": false, "stage-9": true });
     expect(defaults.selectedBonusStudentUids).toEqual(["student-1"]);
+    expect(defaults.cardFlipStrategy).toBe("all-open");
 
     const patched = patchEventShopOwnedQuantities(defaults, { "currency-1": 650, "currency-2": 0 });
     expect(patched.existingPaymentItemQuantities).toEqual({ "currency-1": 650, "currency-2": 0 });
@@ -49,6 +50,9 @@ describe("event shop state", () => {
     const state = createDefaultEventShopState([], []);
     expect(normalizeEventShopState({ ...state, existingPaymentItemQuantities: { "currency-1": -1 } })).toBeNull();
     expect(normalizeEventShopState({ ...state, minigamePaymentQuantityMode: "unknown" })).toBeNull();
+    expect(normalizeEventShopState({ ...state, cardFlipStrategy: "unsupported" })).toBeNull();
+    expect(normalizeEventShopState({ ...state, cardFlipStrategy: undefined })?.cardFlipStrategy).toBe("all-open");
+    expect(normalizeEventShopState({ ...state, cardFlipStrategy: "sr-reset" })?.cardFlipStrategy).toBe("sr-reset");
   });
 
   it("preserves fields changed elsewhere when the detailed screen submits an older full state", () => {

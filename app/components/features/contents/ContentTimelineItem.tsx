@@ -6,6 +6,8 @@ import {
   ClockIcon,
   EyeIcon,
   EyeSlashIcon,
+  RectangleStackIcon,
+  Squares2X2Icon,
   StarIcon,
 } from "@heroicons/react/16/solid";
 import {
@@ -23,6 +25,7 @@ import { StudentCards } from "~/components/features/students";
 import { BottomSheet, Button } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { MinigameConfig } from "~/domain/event-shop";
 import { getRecruitmentPeriodNotice, type RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import type { Attack, Defense, RecruitmentTypeEnum, Terrain } from "~/graphql/graphql";
@@ -72,6 +75,7 @@ export type ContentTimelineItemProps = {
   isSpoiler?: boolean;
   spoilerVisible?: boolean;
   tags: string[];
+  minigameType?: MinigameConfig["minigameType"] | null;
   recruitmentGroupUid?: string | null;
   recruitmentPeriod?: RecruitmentPeriod | null;
   showRecruitmentPeriodNotice?: boolean;
@@ -183,6 +187,7 @@ export function ContentTimelineItem({
   isSpoiler = false,
   spoilerVisible = true,
   tags,
+  minigameType,
   recruitmentGroupUid,
   recruitmentPeriod,
   showRecruitmentPeriodNotice = true,
@@ -366,6 +371,12 @@ export function ContentTimelineItem({
                   <ContentTag Icon={StarIcon} text="100회 무료" color="yellow" />
                 )}
               {tags.includes("shop") && <ContentTag Icon={CalculatorIcon} text="이벤트 상점" color="default" />}
+              {minigameType === "treasure_hunt" && (
+                <ContentTag Icon={Squares2X2Icon} text="보물찾기" color="default" />
+              )}
+              {minigameType === "card_flip" && (
+                <ContentTag Icon={RectangleStackIcon} text="카드 뒤집기" color="default" />
+              )}
             </div>
           </div>
 

@@ -1,5 +1,6 @@
 import type {
   CardFlipCard,
+  CardFlipStrategy,
   CollectableResource,
   MinigameConfig,
   MinigamePayment,
@@ -8,46 +9,47 @@ import type {
 import { cardFlipLocale, getCardFlipRarity } from "~/locales/ko";
 import { buildResourceBreakdownLines, type ResourceBreakdownLines } from "./calculations/resource-breakdown-lines";
 import type { ItemBreakdownResult } from "./calculations/types";
-import { calculateMinigamePaymentCosts, calculateMinigameRewards } from "./utils";
+import { resourceCountLabel } from "./utils";
 
-type ItemBreakdown = ItemBreakdownResult["itemBreakdown"];
+export function formatCardFlipAmount(quantity: number): string {
+  return resourceCountLabel(Math.round(quantity));
+}
 
 export type CardFlipPlanSummary = {
   cardCount: number;
-  perCardCosts: MinigamePayment[];
-  totalCosts: MinigamePayment[];
-  averageRewards: RewardItem[];
+  strategy: CardFlipStrategy;
+  costs: MinigamePayment[];
+  rewards: RewardItem[];
   resources: { resource: CollectableResource; breakdown: ResourceBreakdownLines }[];
 };
 
 type SummarizeCardFlipPlanInput = {
   config: MinigameConfig;
   cardCount: number;
+  strategy: CardFlipStrategy;
+  costs: MinigamePayment[];
+  rewards: RewardItem[];
   collectableResources: CollectableResource[];
-  itemBreakdown: ItemBreakdown;
+  itemBreakdown: ItemBreakdownResult["itemBreakdown"];
   overriddenRequiredQuantities: Record<string, number>;
 };
 
 export function summarizeCardFlipPlan({
   config,
   cardCount,
+  strategy,
+  costs,
+  rewards,
   collectableResources,
   itemBreakdown,
   overriddenRequiredQuantities,
 }: SummarizeCardFlipPlanInput): CardFlipPlanSummary | null {
-  if (cardCount <= 0) {
+  if (cardCount <= 0 || config.minigameType !== "card_flip" || config.cardFlip?.status !== "available") {
     return null;
   }
 
-  const perCardCosts = calculateMinigamePaymentCosts(config, 1);
-  const totalCosts = calculateMinigamePaymentCosts(config, cardCount);
-  const averageRewards = calculateMinigameRewards(config, cardCount);
-  const cardFlipData = config.cardFlip?.status === "available" ? config.cardFlip : null;
-  const costResourceUids = new Set([
-    ...(cardFlipData ? [cardFlipData.cardCost.resourceUid] : []),
-    ...perCardCosts.map(({ resourceUid }) => resourceUid),
-  ]);
-  const rewardResourceUids = new Set(averageRewards.map(({ resourceUid }) => resourceUid));
+  const costResourceUids = new Set(costs.map(({ resourceUid }) => resourceUid));
+  const rewardResourceUids = new Set(rewards.map(({ resourceUid }) => resourceUid));
   const relevantResources = collectableResources.filter(
     ({ uid }) => costResourceUids.has(uid) || rewardResourceUids.has(uid),
   );
@@ -62,7 +64,7 @@ export function summarizeCardFlipPlan({
     return { resource, breakdown };
   });
 
-  return { cardCount, perCardCosts, totalCosts, averageRewards, resources };
+  return { cardCount, strategy, costs, rewards, resources };
 }
 
 export function cardFlipCardAccessibleName(card: CardFlipCard): string {

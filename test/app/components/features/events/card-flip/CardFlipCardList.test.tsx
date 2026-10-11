@@ -9,6 +9,7 @@ const card: CardFlipCard = {
   name: "축제의 추억",
   rarity: 4,
   imageUrl: "https://assets.baql.net/images/events/cards/group-a.webp",
+  slots: [{ slot: 1, weight: 1 }],
   rewards: [
     {
       resourceType: ResourceTypeEnum.Item,
@@ -87,7 +88,7 @@ describe("CardFlipCardList", () => {
     const markup = render({ status: "unavailable" });
 
     expect(markup).toContain("카드별 보상 정보가 아직 없어요");
-    expect(markup).toContain("상점 계산기의 평균 보상 계산은 그대로 사용할 수 있어요.");
+    expect(markup).toContain("상점 계산기의 카드 뒤집기 계산도 할 수 없어요");
     expect(markup).not.toContain('role="alert"');
   });
 

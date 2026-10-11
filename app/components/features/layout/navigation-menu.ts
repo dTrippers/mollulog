@@ -1,18 +1,12 @@
 import {
-  ArchiveBoxIcon as ArchiveBoxIconOutline,
   ArrowsRightLeftIcon as ArrowsRightLeftIconOutline,
-  BoltIcon as BoltIconOutline,
   BookOpenIcon as BookOpenIconOutline,
   CalculatorIcon as CalculatorIconOutline,
-  CalendarIcon as CalendarIconOutline,
   CameraIcon as CameraIconOutline,
-  ChartBarIcon as ChartBarIconOutline,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconOutline,
   CircleStackIcon as CircleStackIconOutline,
-  ClockIcon as ClockIconOutline,
   CodeBracketIcon as CodeBracketIconOutline,
   Cog6ToothIcon as Cog6ToothIconOutline,
-  CreditCardIcon as CreditCardIconOutline,
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconOutline,
   EnvelopeIcon as EnvelopeIconOutline,
   FireIcon as FireIconOutline,
@@ -24,38 +18,29 @@ import {
   MegaphoneIcon as MegaphoneIconOutline,
   QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
-  TableCellsIcon as TableCellsIconOutline,
   TicketIcon as TicketIconOutline,
   UserCircleIcon as UserCircleIconOutline,
   UserIcon as UserIconOutline,
 } from "@heroicons/react/24/outline";
 import {
-  ArchiveBoxIcon as ArchiveBoxIconSolid,
   ArrowsRightLeftIcon as ArrowsRightLeftIconSolid,
-  BoltIcon as BoltIconSolid,
   BookOpenIcon as BookOpenIconSolid,
   CalculatorIcon as CalculatorIconSolid,
-  CalendarIcon as CalendarIconSolid,
   CameraIcon as CameraIconSolid,
-  ChartBarIcon as ChartBarIconSolid,
   ChatBubbleLeftRightIcon as ChatBubbleLeftRightIconSolid,
   CircleStackIcon as CircleStackIconSolid,
-  ClockIcon as ClockIconSolid,
   CodeBracketIcon as CodeBracketIconSolid,
   Cog6ToothIcon as Cog6ToothIconSolid,
-  CreditCardIcon as CreditCardIconSolid,
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconSolid,
   EnvelopeIcon as EnvelopeIconSolid,
   FireIcon as FireIconSolid,
   HeartIcon as HeartIconSolid,
   HomeIcon as HomeIconSolid,
-  IdentificationIcon as IdentificationIconSolid,
   ListBulletIcon as ListBulletIconSolid,
   MapIcon as MapIconSolid,
   MegaphoneIcon as MegaphoneIconSolid,
   QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
-  TableCellsIcon as TableCellsIconSolid,
   TicketIcon as TicketIconSolid,
   UserCircleIcon as UserCircleIconSolid,
   UserIcon as UserIconSolid,
@@ -73,6 +58,7 @@ import {
   type ResolvedMenuBadgeOverride,
 } from "~/domain/navigation-menu-badges";
 import type { UtcIsoString } from "~/lib/date-time";
+import { NAVIGATION_ICONS } from "./navigation-icons";
 
 type IconComponent = ComponentType<ComponentProps<"svg">>;
 
@@ -251,6 +237,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       );
     case "screen-scanner":
       return pathname === "/scanner" || pathname.startsWith("/scanner/");
+    case "mollulog-api":
+      return pathname === "/developers" || pathname.startsWith("/developers/");
     case "external-data":
       return pathname === "/connect" || pathname.startsWith("/connect/");
     case "profile":
@@ -319,8 +307,8 @@ export function getNavigationCatalog({
       favoriteId: "futures",
       description: "이벤트와 모집 일정을 확인해보세요",
       mobileNavigationId: undefined,
-      OutlineIcon: CalendarIconOutline,
-      SolidIcon: CalendarIconSolid,
+      OutlineIcon: NAVIGATION_ICONS.futures.OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS.futures.SolidIcon,
       isActive: itemIsActive("futures", pathname, currentUsername),
     },
     {
@@ -360,8 +348,8 @@ export function getNavigationCatalog({
       mobileNavigationId: "students",
       favoriteId: "students",
       description: "학생 프로필과 평가를 확인해보세요",
-      OutlineIcon: IdentificationIconOutline,
-      SolidIcon: IdentificationIconSolid,
+      OutlineIcon: NAVIGATION_ICONS.students.OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS.students.SolidIcon,
       isActive: itemIsActive("students", pathname, currentUsername),
     },
     {
@@ -386,8 +374,8 @@ export function getNavigationCatalog({
       mobileNavigationId: "furniture-catalog",
       favoriteId: "furniture-catalog",
       description: "테마별 가구 구성과 보유 현황을 확인해보세요",
-      OutlineIcon: RectangleGroupIconOutline,
-      SolidIcon: RectangleGroupIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["furniture-catalog"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["furniture-catalog"].SolidIcon,
       isActive: itemIsActive("furniture-catalog", pathname, currentUsername),
     },
     {
@@ -413,8 +401,8 @@ export function getNavigationCatalog({
       mobileLabel: "통합 플래너",
       favoriteId: "integrated-planner",
       description: "모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요",
-      OutlineIcon: CalendarIconOutline,
-      SolidIcon: CalendarIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["integrated-planner"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["integrated-planner"].SolidIcon,
       isActive: itemIsActive("integrated-planner", pathname, currentUsername),
     },
     {
@@ -427,8 +415,8 @@ export function getNavigationCatalog({
       favoriteId: "pyroxene-planner",
       description: "모집 시점의 청휘석을 계산해보세요",
       badgeLabel: isSignedIn ? undefined : "로그인 없이 사용",
-      OutlineIcon: CreditCardIconOutline,
-      SolidIcon: CreditCardIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["pyroxene-planner"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["pyroxene-planner"].SolidIcon,
       isActive: itemIsActive("pyroxene-planner", pathname, currentUsername),
     },
     {
@@ -439,8 +427,8 @@ export function getNavigationCatalog({
       name: "AP 플래너",
       favoriteId: "ap-planner",
       description: "상점 목표에 필요한 AP를 준비해보세요",
-      OutlineIcon: BoltIconOutline,
-      SolidIcon: BoltIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["ap-planner"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["ap-planner"].SolidIcon,
       isActive: itemIsActive("ap-planner", pathname, currentUsername),
     },
     {
@@ -453,8 +441,8 @@ export function getNavigationCatalog({
       mobileLabel: "성장 플래너",
       favoriteId: "student-growth-planner",
       description: "성장에 필요한 재화를 정리해보세요",
-      OutlineIcon: TableCellsIconOutline,
-      SolidIcon: TableCellsIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["student-growth-planner"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["student-growth-planner"].SolidIcon,
       isActive: itemIsActive("student-growth-planner", pathname, currentUsername),
     },
     {
@@ -467,8 +455,8 @@ export function getNavigationCatalog({
       mobileLabel: "재화 플래너",
       favoriteId: "resource-planner",
       description: "각 재화의 보유·필요 수량을 관리해요",
-      OutlineIcon: ArchiveBoxIconOutline,
-      SolidIcon: ArchiveBoxIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["resource-planner"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["resource-planner"].SolidIcon,
       isActive: itemIsActive("resource-planner", pathname, currentUsername),
     },
     {
@@ -495,8 +483,8 @@ export function getNavigationCatalog({
       mobileLabel: "상점 계산기",
       favoriteId: "event-shop-calculator",
       description: "이벤트 효율과 상점을 확인해보세요",
-      OutlineIcon: BoltIconOutline,
-      SolidIcon: BoltIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["event-shop-calculator"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["event-shop-calculator"].SolidIcon,
       isActive: itemIsActive("event-shop-calculator", pathname, currentUsername),
     },
     {
@@ -509,8 +497,8 @@ export function getNavigationCatalog({
       mobileLabel: "인연 계산기",
       favoriteId: "relationship-calculator",
       description: "학생별 인연 랭크를 계산해보세요",
-      OutlineIcon: HeartIconOutline,
-      SolidIcon: HeartIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["relationship-calculator"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["relationship-calculator"].SolidIcon,
       isActive: itemIsActive("relationship-calculator", pathname, currentUsername),
     },
     {
@@ -523,8 +511,8 @@ export function getNavigationCatalog({
       mobileLabel: "점수 계산기",
       favoriteId: "raid-score-calculator",
       description: "클리어 시간 기준 점수를 계산해보세요",
-      OutlineIcon: ClockIconOutline,
-      SolidIcon: ClockIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["raid-score-calculator"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["raid-score-calculator"].SolidIcon,
       isActive: itemIsActive("raid-score-calculator", pathname, currentUsername),
     },
     {
@@ -557,8 +545,8 @@ export function getNavigationCatalog({
       to: currentUsername ? `/@${currentUsername}/pickups` : "/unauthorized",
       name: "모집 기록",
       requiresSignIn: true,
-      OutlineIcon: ChartBarIconOutline,
-      SolidIcon: ChartBarIconSolid,
+      OutlineIcon: NAVIGATION_ICONS["pickup-history"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["pickup-history"].SolidIcon,
       isActive: itemIsActive("pickup-history", pathname, currentUsername),
     },
     {
@@ -596,6 +584,7 @@ export function getNavigationCatalog({
       isActive: itemIsActive("screen-scanner", pathname, currentUsername),
     },
     {
+      menuId: "mollulog-api",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
       to: "/developers",
@@ -603,7 +592,7 @@ export function getNavigationCatalog({
       description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
       OutlineIcon: CodeBracketIconOutline,
       SolidIcon: CodeBracketIconSolid,
-      isActive: pathname.startsWith("/developers"),
+      isActive: itemIsActive("mollulog-api", pathname, currentUsername),
     },
     {
       menuId: "external-data",

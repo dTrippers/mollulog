@@ -1149,6 +1149,14 @@ export function getPlannerMonthEndInstant(monthKey: string, timeZone: string): D
   return endOfDisplayDay.toDate();
 }
 
+export function getPlannerMonthGridEndInstant(monthKey: string, timeZone: string): Date {
+  const lastGridDay = buildPlannerMonthDays(monthKey).at(-1)?.at(-1);
+  if (!lastGridDay) throw new Error("월을 확인할 수 없어요");
+  const endOfDisplayDay = dayjs.tz(`${lastGridDay.dateKey}T23:59:59.999`, normalizeTimeZone(timeZone));
+  if (!endOfDisplayDay.isValid()) throw new Error("기간을 확인할 수 없어요");
+  return endOfDisplayDay.toDate();
+}
+
 export function buildPlannerPeriods({
   contents,
   scheduleItems,

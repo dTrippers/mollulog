@@ -294,12 +294,12 @@ export default function ApTimelineEvent({
               </div>
               <div className="flex shrink-0 gap-2">
                 {planned ? (
-                  <Button text="모으기 계산 취소" size="xs" variant="secondary" disabled={disabled} onClick={removePlan} />
+                  <Button text="모으기 계산 취소" size="xs" variant="default" disabled={disabled} onClick={removePlan} />
                 ) : null}
                 <Button
                   text="상점 목표 등록"
                   size="xs"
-                  variant="secondary"
+                  variant="default"
                   to={`/events/${encodeURIComponent(event.timelineUid)}/shop`}
                 />
               </div>

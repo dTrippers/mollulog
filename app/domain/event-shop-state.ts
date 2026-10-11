@@ -1,4 +1,11 @@
-import type { BonusStudentSelectionMode, MinigamePaymentQuantityMode, Stage } from "~/domain/event-shop";
+import {
+  CARD_FLIP_STRATEGIES,
+  DEFAULT_CARD_FLIP_STRATEGY,
+  type BonusStudentSelectionMode,
+  type CardFlipStrategy,
+  type MinigamePaymentQuantityMode,
+  type Stage,
+} from "~/domain/event-shop";
 
 export type EventShopState = {
   itemQuantities: Record<string, number>;
@@ -14,6 +21,7 @@ export type EventShopState = {
   minigameStartRound: number;
   minigamePlayCount: number;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
+  cardFlipStrategy: CardFlipStrategy;
   overriddenRequiredQuantities: Record<string, number>;
 };
 
@@ -118,6 +126,7 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
   const overriddenRequiredQuantities = normalizeNumberMap(value.overriddenRequiredQuantities);
   const bonusStudentSelectionMode = value.bonusStudentSelectionMode;
   const minigamePaymentQuantityMode = value.minigamePaymentQuantityMode;
+  const cardFlipStrategy = value.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY;
 
   if (
     !itemQuantities ||
@@ -137,7 +146,8 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
     (value.minigamePlayCount as number) < 0 ||
     (minigamePaymentQuantityMode !== "expected" &&
       minigamePaymentQuantityMode !== "min" &&
-      minigamePaymentQuantityMode !== "max")
+      minigamePaymentQuantityMode !== "max") ||
+    !CARD_FLIP_STRATEGIES.includes(cardFlipStrategy as CardFlipStrategy)
   ) {
     return null;
   }
@@ -156,6 +166,7 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
     minigameStartRound: value.minigameStartRound as number,
     minigamePlayCount: value.minigamePlayCount as number,
     minigamePaymentQuantityMode,
+    cardFlipStrategy: cardFlipStrategy as CardFlipStrategy,
     overriddenRequiredQuantities,
   };
 }
@@ -183,6 +194,7 @@ export function createDefaultEventShopState(
     minigameStartRound: 1,
     minigamePlayCount: 0,
     minigamePaymentQuantityMode: "expected",
+    cardFlipStrategy: DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: {},
   };
 }

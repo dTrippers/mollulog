@@ -413,7 +413,7 @@ export default function StudentBasicInfo({
             <Button
               text="Schale DB"
               icon={ArrowTopRightOnSquareIcon}
-              variant="secondary"
+              variant="default"
               size="xs"
               href={`https://schaledb.com/student/${schaleDbId}`}
               target="_blank"

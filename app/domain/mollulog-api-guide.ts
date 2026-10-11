@@ -22,9 +22,9 @@ export const API_GUIDE_COPY = {
     errors: "오류",
     limits: "제한과 규칙",
   },
-  agentPromptLabel: "에이전트에게 보낼 요청",
+  agentPromptLabel: "프롬프트 예시",
   agentPromptTemplate:
-    "{llmsFullUrl}를 읽고 몰루로그 API 연동 코드를 작성해주세요. API 키는 MOLLULOG_API_KEY 환경 변수에서 읽어주세요.",
+    "{llmsFullUrl}를 읽고 몰루로그 API를 파악해주세요. 어떤 도구에 어떤 데이터를 연결할지 저와 질답하며 정하고, 연동 구현을 도와주세요.",
   documentLinks: [
     { key: "llmsFull", label: "전체 안내", copyLabel: "llms-full.txt 주소 복사" },
     { key: "llms", label: "목차", copyLabel: "llms.txt 주소 복사" },

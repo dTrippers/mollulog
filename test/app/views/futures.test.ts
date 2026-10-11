@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fetchRouteCached } from "~/lib/cache";
+import { getEventMinigameType } from "~/models/event-content";
 import { getRecruitmentGroupsByUidsStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
 import { getTimelineContents } from "~/models/timeline-content.server";
 import { getFutureContents } from "~/views/futures";
@@ -19,6 +20,10 @@ jest.mock("~/models/recruitment", () => ({
   normalizeRecruitmentGroupPeriod: jest.fn(),
 }));
 
+jest.mock("~/models/event-content", () => ({
+  getEventMinigameType: jest.fn(),
+}));
+
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContents: jest.fn(),
 }));
@@ -29,6 +34,7 @@ jest.mock("~/views/raid-content", () => ({
 
 const env = {} as Env;
 const mockedFetchRouteCached = fetchRouteCached as jest.MockedFunction<typeof fetchRouteCached>;
+const mockedGetEventMinigameType = getEventMinigameType as jest.MockedFunction<typeof getEventMinigameType>;
 const mockedGetRecruitmentGroupsByUidsStrict = getRecruitmentGroupsByUidsStrict as jest.MockedFunction<
   typeof getRecruitmentGroupsByUidsStrict
 >;
@@ -53,7 +59,7 @@ const timelineContent = {
   imageUrl: null,
   videos: [],
   contentType: "event",
-  runType: "first",
+  runType: "first" as const,
   occurrence: null,
   contentUid: "event-1",
   shopContentUid: null,
@@ -77,6 +83,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockedGetTimelineContents.mockResolvedValue([timelineContent] as never);
   mockedGetUpcomingRaidContents.mockResolvedValue([] as never);
+  mockedGetEventMinigameType.mockResolvedValue(null);
   mockedGetRecruitmentGroupsByUidsStrict.mockResolvedValue([recruitmentGroup] as never);
   mockedNormalizeRecruitmentGroupPeriod.mockReturnValue(recruitmentPeriod);
   mockedFetchRouteCached.mockImplementation(async (_env, _ctx, _key, fn) => fn());
@@ -91,7 +98,7 @@ describe("getFutureContents recruitment periods", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::futures::v3::all",
+      "route::futures::v4::all",
       expect.any(Function),
       false,
     );
@@ -109,6 +116,82 @@ describe("getFutureContents recruitment periods", () => {
   it("propagates strict recruitment lookup failures instead of returning an empty result", async () => {
     const error = new Error("BAQL unavailable");
     mockedGetRecruitmentGroupsByUidsStrict.mockRejectedValue(error);
+
+    await expect(getFutureContents(env)).rejects.toBe(error);
+  });
+});
+
+describe("getFutureContents minigame labels", () => {
+  it("caches menu types using each content's shop UID and run type", async () => {
+    const treasureEvent = {
+      ...timelineContent,
+      uid: "treasure",
+      shopContentUid: "treasure-source",
+      runType: "rerun" as const,
+    };
+    const cardEvent = { ...timelineContent, uid: "cards", contentUid: "card-source" };
+    mockedGetTimelineContents.mockResolvedValue([treasureEvent, cardEvent] as never);
+    mockedGetEventMinigameType.mockImplementation(async (_env, metadata) =>
+      metadata.shopContentUid === "treasure-source" ? "treasure_hunt" : "card_flip",
+    );
+
+    const result = await getFutureContents(env, true);
+
+    expect(result.map(({ uid, minigameType }) => ({ uid, minigameType }))).toEqual([
+      { uid: "treasure", minigameType: "treasure_hunt" },
+      { uid: "cards", minigameType: "card_flip" },
+    ]);
+    expect(mockedGetEventMinigameType).toHaveBeenCalledWith(env, treasureEvent, true);
+    expect(mockedGetEventMinigameType).toHaveBeenCalledWith(env, cardEvent, true);
+  });
+
+  it("serves cached minigame types without looking up individual events", async () => {
+    mockedFetchRouteCached.mockResolvedValue([
+      { ...timelineContent, minigameType: "card_flip", recruitments: [], recruitmentPeriod: null },
+    ]);
+
+    const result = await getFutureContents(env);
+
+    expect(result[0].minigameType).toBe("card_flip");
+    expect(mockedGetEventMinigameType).not.toHaveBeenCalled();
+    expect(mockedGetTimelineContents).not.toHaveBeenCalled();
+  });
+
+  it("does not look up minigames for live broadcasts or raids", async () => {
+    mockedGetTimelineContents.mockResolvedValue([
+      { ...timelineContent, uid: "broadcast", contentType: "live" },
+      { ...timelineContent, uid: "raid", contentType: "raid" },
+    ] as never);
+
+    const result = await getFutureContents(env);
+
+    expect(result.map((content) => content.minigameType)).toEqual([null, null]);
+    expect(mockedGetEventMinigameType).not.toHaveBeenCalled();
+  });
+
+  it("limits concurrent minigame lookups when rebuilding the list", async () => {
+    mockedGetTimelineContents.mockResolvedValue(
+      Array.from({ length: 9 }, (_, index) => ({ ...timelineContent, uid: `event-${index}` })) as never,
+    );
+    let active = 0;
+    let peak = 0;
+    mockedGetEventMinigameType.mockImplementation(async () => {
+      active += 1;
+      peak = Math.max(peak, active);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      active -= 1;
+      return null;
+    });
+
+    const result = await getFutureContents(env);
+
+    expect(result).toHaveLength(9);
+    expect(peak).toBe(4);
+  });
+
+  it("propagates a lookup failure so the route cache can retain its prior result", async () => {
+    const error = new Error("BAQL minigame lookup failed");
+    mockedGetEventMinigameType.mockRejectedValue(error);
 
     await expect(getFutureContents(env)).rejects.toBe(error);
   });
