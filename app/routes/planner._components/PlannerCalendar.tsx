@@ -1,4 +1,4 @@
-import { ArrowPathIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ArrowPathIcon, QuestionMarkCircleIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PyroxeneCalculationMethodContent } from "~/components/features/futures";
 import { BottomSheet, Button } from "~/components/primitives";
@@ -53,6 +53,7 @@ type PlannerCalendarProps = {
   pyroxeneAssumptions: PyroxeneCalculationAssumptionsData | null;
   forecastStatus: PlannerForecastStatus;
   statusMessages: string[];
+  legacyConflictNotice: { to?: string } | null;
   progressMessages: string[];
   isSignedIn: boolean;
   timeZone: string;
@@ -102,6 +103,7 @@ export default function PlannerCalendar({
   pyroxeneAssumptions,
   forecastStatus,
   statusMessages,
+  legacyConflictNotice,
   progressMessages,
   isSignedIn,
   timeZone,
@@ -477,7 +479,7 @@ export default function PlannerCalendar({
                           <Button
                             text="수정"
                             size="xs"
-                            variant="secondary"
+                            variant="default"
                             onClick={() => beginQuickEdit(entry.kind, entry, focusTargetKey)}
                           />
                         </span>
@@ -524,21 +526,6 @@ export default function PlannerCalendar({
               </ul>
             ) : null}
 
-            {dialogView === "summary" &&
-            forecastStatus === "ready" &&
-            pyroxeneAssumptions &&
-            (calendarResources[selectedDate]?.changes.length ?? 0) > 0 ? (
-              <div className="flex justify-end px-2" data-planner-focus-key="planner-calculation-method">
-                <Button
-                  text="계산 방식"
-                  icon={QuestionMarkCircleIcon}
-                  size="xs"
-                  variant="secondary"
-                  onClick={beginCalculationMethod}
-                />
-              </div>
-            ) : null}
-
             {dialogView === "actions" ? (
               <section aria-labelledby="planner-add-actions" className="space-y-3">
                 <h3 id="planner-add-actions" className="text-sm font-semibold">
@@ -548,7 +535,7 @@ export default function PlannerCalendar({
                   <span data-planner-focus-key="planner-action-recruitment">
                     <Button
                       text="모집"
-                      variant="secondary"
+                      variant="default"
                       fullWidth
                       onClick={() => beginRecruitmentEdit(undefined, "planner-action-recruitment")}
                     />
@@ -556,7 +543,7 @@ export default function PlannerCalendar({
                   <span data-planner-focus-key="planner-action-buy">
                     <Button
                       text="청휘석 구매"
-                      variant="secondary"
+                      variant="default"
                       fullWidth
                       onClick={() => beginQuickEdit("buy", undefined, "planner-action-buy")}
                     />
@@ -564,7 +551,7 @@ export default function PlannerCalendar({
                   <span data-planner-focus-key="planner-action-package">
                     <Button
                       text="패키지"
-                      variant="secondary"
+                      variant="default"
                       fullWidth
                       onClick={() => beginQuickEdit("package", undefined, "planner-action-package")}
                     />
@@ -572,7 +559,7 @@ export default function PlannerCalendar({
                   <span data-planner-focus-key="planner-action-other">
                     <Button
                       text="직접 재화"
-                      variant="secondary"
+                      variant="default"
                       fullWidth
                       onClick={() => beginQuickEdit("other", undefined, "planner-action-other")}
                     />
@@ -652,10 +639,38 @@ export default function PlannerCalendar({
         ? "달력의 청휘석 예상 재화를 이렇게 계산해요"
         : formatDateKey(selectedDate);
   const detailHeaderAction =
-    dialogView === "summary" ? null : <Button text="뒤로" size="sm" variant="secondary" onClick={returnToParentView} />;
+    dialogView === "summary" ? null : (
+      <button
+        type="button"
+        aria-label="뒤로"
+        title="뒤로"
+        className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:border-ring focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        onClick={returnToParentView}
+      >
+        <ArrowLeftIcon aria-hidden="true" className="size-4" />
+      </button>
+    );
+  const calculationMethodAction =
+    dialogView === "summary" &&
+    forecastStatus === "ready" &&
+    pyroxeneAssumptions &&
+    (calendarResources[selectedDate]?.changes.length ?? 0) > 0 ? (
+      <span className="inline-flex" data-planner-focus-key="planner-calculation-method">
+        <Button
+          text="계산 방식"
+          icon={QuestionMarkCircleIcon}
+          size="xs"
+          variant="default"
+          onClick={beginCalculationMethod}
+        />
+      </span>
+    ) : null;
   const detailFooter =
     dialogView === "summary" ? (
-      <div className="flex justify-end px-4 pt-3 pb-4">
+      <div
+        className={`flex items-center gap-2 px-4 pt-3 pb-4 ${calculationMethodAction ? "justify-between" : "justify-end"}`}
+      >
+        {calculationMethodAction}
         <span className="inline-flex" data-planner-focus-key="planner-add-plan">
           <Button text="＋ 계획 추가" variant="primary" size="sm" onClick={beginActionChoice} />
         </span>
@@ -679,12 +694,6 @@ export default function PlannerCalendar({
           </div>
         ) : null}
       </div>
-      {statusMessages.map((message) => (
-        <div key={message} role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
-          {message}
-        </div>
-      ))}
-
       {/* 64rem 컨테이너 쿼리는 날짜 칸 너비를 확보하고, 패널 폭은 큰 화면에서도 28rem으로 제한합니다. */}
       <div
         ref={calendarRootRef}
@@ -697,6 +706,8 @@ export default function PlannerCalendar({
             onPreviousMonth={() => changeMonth(-1)}
             onNextMonth={() => changeMonth(1)}
             onToday={selectToday}
+            statusMessages={statusMessages}
+            legacyConflictNotice={legacyConflictNotice}
           />
           <div className="space-y-0 max-sm:-mx-4">
             {monthLayout.weeks.map((week, index) => renderWeek(week, monthLayout.weekLayouts[index], index))}
@@ -711,7 +722,8 @@ export default function PlannerCalendar({
           {!sheetOpen ? (
             <>
               <header className="shrink-0 space-y-1 p-4">
-                <div className="flex min-w-0 items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  {detailHeaderAction}
                   <div className="flex min-w-0 items-center gap-2">
                     <h2
                       id="planner-date-aside-title"
@@ -726,7 +738,6 @@ export default function PlannerCalendar({
                       </span>
                     ) : null}
                   </div>
-                  {detailHeaderAction}
                 </div>
                 <p className="text-sm text-muted-foreground">{detailDescription}</p>
               </header>
@@ -742,7 +753,7 @@ export default function PlannerCalendar({
           id="planner-date-sheet"
           title={detailTitle}
           description={detailDescription}
-          headerAction={detailHeaderAction}
+          headerLeadingAction={detailHeaderAction}
           footer={detailFooter}
           onClose={closeDialog}
         >

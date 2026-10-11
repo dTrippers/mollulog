@@ -497,7 +497,7 @@ export default function PlannerQuickEdit({
           <Button
             type="button"
             text="취소"
-            variant="secondary"
+            variant="default"
             size="sm"
             disabled={pending}
             onClick={handleCancel}

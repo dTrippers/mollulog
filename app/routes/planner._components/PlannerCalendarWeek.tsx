@@ -1,6 +1,7 @@
 import { BoltIcon } from "@heroicons/react/16/solid";
 import { ExclamationTriangleIcon } from "@heroicons/react/20/solid";
 import { useRef, useState } from "react";
+import { HoverTooltip } from "~/components/primitives";
 import {
   formatPlannerPeriodPoint,
   formatPlannerPeriodRangeParts,
@@ -120,6 +121,16 @@ function stripClasses(timingStatus: PlannerCalendarStrip["timingStatus"]): strin
 }
 
 function PlannerResourceSlot({ changes, stale }: { changes: PlannerDayResources["changes"]; stale: boolean }) {
+  if (changes.length === 0) {
+    return (
+      <div
+        data-planner-resource-slot="true"
+        aria-busy={stale || undefined}
+        className="hidden overflow-visible sm:grid sm:h-[34px] sm:grid-cols-2 sm:grid-rows-2"
+      />
+    );
+  }
+
   const valueFor = (key: keyof typeof RESOURCE_PRESENTATION) => changes.find((change) => change.key === key)?.quantity;
   const renderResource = (key: keyof typeof RESOURCE_PRESENTATION, placement: string) => {
     const quantity = valueFor(key);
@@ -128,13 +139,13 @@ function PlannerResourceSlot({ changes, stale }: { changes: PlannerDayResources[
     return (
       <span
         key={key}
-        className={`flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap sm:justify-start ${placement}`}
+        className={`flex min-w-0 items-center justify-start gap-0.5 whitespace-nowrap ${placement}`}
       >
         <img
           src={resourceImageUrl(resource.imageType, resource.uid)}
           alt={resource.label}
           title={resource.label}
-          className="size-3 shrink-0 object-contain sm:size-4"
+          className="size-3.5 shrink-0 object-contain sm:size-4"
           loading="lazy"
         />
         <span className="tabular-nums text-[10px] leading-none sm:text-xs">
@@ -149,7 +160,7 @@ function PlannerResourceSlot({ changes, stale }: { changes: PlannerDayResources[
     <div
       data-planner-resource-slot="true"
       aria-busy={stale || undefined}
-      className={`grid h-[38px] grid-cols-2 grid-rows-3 overflow-visible sm:h-[34px] sm:grid-rows-2 ${stale ? "opacity-40" : ""}`}
+      className={`mt-1 flex flex-col items-start gap-y-0.5 overflow-visible px-0.5 sm:mt-0 sm:grid sm:h-[34px] sm:grid-cols-2 sm:grid-rows-2 sm:gap-y-0 sm:px-0 ${stale ? "opacity-40" : ""}`}
     >
       {renderResource("pyroxene", "col-span-2 row-start-1")}
       {renderResource("oneTimeTicket", "col-span-2 row-start-2 sm:col-span-1")}
@@ -159,30 +170,28 @@ function PlannerResourceSlot({ changes, stale }: { changes: PlannerDayResources[
 }
 
 function uniqueStudents(periods: readonly PlannerPeriod[]) {
-  const students = periods.flatMap((period) => period.students ?? []);
+  const students = periods.flatMap((period) => period.allRecruitmentStudents ?? period.students ?? []);
   return students.filter((student, index) => students.findIndex((other) => other.uid === student.uid) === index);
 }
 
-function PlannerRecruitmentAvatars({
-  students,
-  maxVisible,
-}: {
-  students: ReturnType<typeof uniqueStudents>;
-  maxVisible: number;
-}) {
+function PlannerRecruitmentAvatars({ students }: { students: ReturnType<typeof uniqueStudents> }) {
   if (students.length === 0) return null;
-  const visibleStudents = students.slice(0, maxVisible);
+  const visibleStudents = students.length <= 4 ? students : students.slice(0, 3);
   return (
     <span className="inline-flex shrink-0 items-center pl-0.5">
       {visibleStudents.map((student, index) => (
-        <img
+        <HoverTooltip
           key={student.uid}
-          src={studentImageUrl(student.imageUid ?? student.uid)}
-          alt={student.name}
-          title={student.name}
-          className={`size-5 shrink-0 rounded-full bg-muted object-contain object-top ring-1 ring-card ${index > 0 ? "-ml-1.5" : ""}`}
-          loading="lazy"
-        />
+          content={student.name}
+          className={`inline-flex shrink-0 ${index > 0 ? "-ml-1.5" : ""}`}
+        >
+          <img
+            src={studentImageUrl(student.imageUid ?? student.uid)}
+            alt={student.name}
+            className="size-5 shrink-0 rounded-full bg-muted object-contain object-top ring-1 ring-card"
+            loading="lazy"
+          />
+        </HoverTooltip>
       ))}
       {students.length > visibleStudents.length ? (
         <span className="ml-1 shrink-0 text-[10px] font-normal text-muted-foreground">
@@ -212,13 +221,14 @@ function calendarEventPlanMarkState(
   return { ...plannerPlanMarkState(period, shopPlannedEventUids), recruitment: false };
 }
 
+function recruitmentStudentsForStrip(strip: PlannerCalendarStrip) {
+  if (strip.kind === "combined") return uniqueStudents(strip.recruitmentPeriods);
+  if (strip.kind === "recruitment") return uniqueStudents([strip.period]);
+  return [];
+}
+
 function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string, planLabels: readonly string[]): string {
-  const students =
-    strip.kind === "combined"
-      ? uniqueStudents(strip.recruitmentPeriods.filter((period) => period.hasRecruitmentPlan))
-      : strip.period.hasRecruitmentPlan
-        ? uniqueStudents([strip.period])
-        : [];
+  const students = recruitmentStudentsForStrip(strip);
   const title =
     strip.kind === "combined"
       ? `${plannerRunTypeLabel(strip.period) ? `${plannerRunTypeLabel(strip.period)} · ` : ""}${strip.period.name} · 모집`
@@ -227,7 +237,7 @@ function stripAccessibleName(strip: PlannerCalendarStrip, timeZone: string, plan
         : strip.kind === "raid"
           ? `${plannerRaidTypeLabel(strip.period)} · ${strip.period.name}`
           : `${plannerRunTypeLabel(strip.period) ? `${plannerRunTypeLabel(strip.period)} · ` : ""}${strip.period.name}`;
-  const studentNames = students.length > 0 ? ` · 모집 목표: ${students.map(({ name }) => name).join(", ")}` : "";
+  const studentNames = students.length > 0 ? ` · 모집 학생: ${students.map(({ name }) => name).join(", ")}` : "";
   const timing = strip.timingStatus === "invalid" ? " · 기간을 확인할 수 없어요" : "";
   const continuation = `${strip.continuesBefore ? " · 이전 주부터 이어짐" : ""}${strip.continuesAfter ? " · 다음 주까지 이어짐" : ""}`;
   const plan = planLabels.map((label) => `${label} · `).join("");
@@ -398,7 +408,7 @@ export default function PlannerCalendarWeek({
             aria-label={`${accessibleSummary} 일정 보기`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={selectedDate === day.dateKey}
-            className={`relative z-10 flex h-auto min-h-10 min-w-0 cursor-pointer flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:min-h-16 max-sm:px-0 ${
+            className={`relative z-10 flex h-auto min-h-10 min-w-0 cursor-pointer flex-col items-stretch justify-start bg-transparent px-2 py-0 text-left text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 max-sm:min-h-11 max-sm:px-0 ${
               day.inMonth ? "" : "text-muted-foreground"
             }`}
             style={{ gridColumn: index + 1, gridRow: 1 }}
@@ -440,12 +450,7 @@ export default function PlannerCalendarWeek({
           {strips
             .filter(({ laneIndex }) => laneIndex === gridRow - 2)
             .map(({ strip }) => {
-              const students =
-                strip.kind === "combined"
-                  ? uniqueStudents(strip.recruitmentPeriods.filter((period) => period.hasRecruitmentPlan))
-                  : strip.period.hasRecruitmentPlan
-                    ? uniqueStudents([strip.period])
-                    : [];
+              const students = recruitmentStudentsForStrip(strip);
               const planMarks =
                 strip.kind === "event"
                   ? calendarEventPlanMarkState(strip.period, shopPlannedEventUids)
@@ -495,9 +500,7 @@ export default function PlannerCalendarWeek({
                       <span className={hideStripTextOnMobile ? "max-sm:hidden" : ""}>AP</span>
                     </span>
                   ) : null}
-                  {students.length > 0 && !hideStripTextOnMobile ? (
-                    <PlannerRecruitmentAvatars students={students} maxVisible={3} />
-                  ) : null}
+                  {students.length > 0 ? <PlannerRecruitmentAvatars students={students} /> : null}
                   {strip.timingStatus !== "exact" ? (
                     <ExclamationTriangleIcon
                       className="size-3.5 shrink-0 text-amber-700 dark:text-amber-300"
@@ -571,6 +574,16 @@ export default function PlannerCalendarWeek({
             })}
         </div>
       ))}
+      {week.map((day, index) =>
+        day.dateKey < todayDateKey ? (
+          <div
+            key={`past-date-dimming:${day.dateKey}`}
+            aria-hidden="true"
+            className="pointer-events-none relative z-20 bg-background/50"
+            style={{ gridColumn: index + 1, gridRow: "1 / -1" }}
+          />
+        ) : null,
+      )}
     </section>
   );
 }

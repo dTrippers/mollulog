@@ -373,7 +373,7 @@ function ExpectedTrialsPopover({
           <NumberInput size="md" defaultValue={value} onChange={onChange} />
         </div>
         <div className="flex justify-end gap-2">
-          <Button text="취소" variant="secondary" size="xs" onClick={onCancel} />
+          <Button text="취소" variant="default" size="xs" onClick={onCancel} />
           <Button text="저장" variant="primary" size="xs" onClick={onSave} />
         </div>
       </div>

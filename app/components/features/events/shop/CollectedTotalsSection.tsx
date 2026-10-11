@@ -68,7 +68,7 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
             <div />
           )}
           <div className="flex gap-2">
-            <Button text="취소" variant="secondary" size="xs" onClick={onCancel} />
+            <Button text="취소" variant="default" size="xs" onClick={onCancel} />
             <Button text="저장" variant="primary" size="xs" onClick={onSave} />
           </div>
         </div>

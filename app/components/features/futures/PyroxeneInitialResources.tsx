@@ -80,9 +80,9 @@ export default function PyroxeneInitialResources({
           ))}
           <div className="col-span-3 flex items-center justify-end gap-2 sm:col-span-1">
             {isEditing ? (
-              <Button text="취소" variant="secondary" size="xs" onClick={handleCancel} />
+              <Button text="취소" variant="default" size="xs" onClick={handleCancel} />
             ) : (
-              <Button text="수정" variant="secondary" size="xs" onClick={() => setIsEditing(true)} />
+              <Button text="수정" variant="default" size="xs" onClick={() => setIsEditing(true)} />
             )}
           </div>
         </div>

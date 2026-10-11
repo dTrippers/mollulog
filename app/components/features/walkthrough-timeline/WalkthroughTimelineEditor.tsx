@@ -1094,7 +1094,7 @@ export const WalkthroughTimelineEditor = forwardRef<WalkthroughTimelineEditorHan
                                         {step.actions.length === 1 && step.actions[0]?.kind === "free_text" ? (
                                           <Button
                                             text="설명글로 변경"
-                                            variant="secondary"
+                                            variant="default"
                                             size="xs"
                                             onClick={() =>
                                               updateParty(partyIndex, (item) => ({

@@ -1104,7 +1104,7 @@ export default function ApPlannerRoute() {
               <Button
                 text="수정"
                 size="xs"
-                variant="secondary"
+                variant="default"
                 disabled={!canEdit || isSaving}
                 onClick={openConditionsFromPanel}
               />
@@ -1159,7 +1159,7 @@ export default function ApPlannerRoute() {
               text="계산 방식"
               icon={QuestionMarkCircleIcon}
               size="xs"
-              variant="secondary"
+              variant="default"
               onClick={() => setCalculationMethodOpen(true)}
             />
           </div>

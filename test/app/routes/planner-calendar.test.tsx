@@ -32,6 +32,7 @@ function renderCalendar(
         pyroxeneAssumptions: null,
         forecastStatus,
         statusMessages: [],
+        legacyConflictNotice: null,
         progressMessages: [],
         isSignedIn: false,
         timeZone: "Asia/Seoul",

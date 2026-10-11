@@ -1,3 +1,4 @@
+import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
 import {
   ArrowPathIcon,
   ChevronLeftIcon,
@@ -7,6 +8,7 @@ import {
 } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
 import { Button } from "~/components/primitives";
+import { GuestPlannerLegacyConflictCallout } from "~/components/features/futures";
 import type { PlannerForecastStatus } from "./PlannerCalendarWeek";
 import { PlannerPlanLegend } from "./PlannerPlanMarks";
 
@@ -23,17 +25,26 @@ export default function PlannerMonthHeader({
   onPreviousMonth,
   onNextMonth,
   onToday,
+  statusMessages,
+  legacyConflictNotice,
 }: {
   month: string;
   forecastStatus: PlannerForecastStatus;
   onPreviousMonth: () => void;
   onNextMonth: () => void;
   onToday: () => void;
+  statusMessages: string[];
+  legacyConflictNotice: { to?: string } | null;
 }) {
+  const noticeCount = statusMessages.length + (legacyConflictNotice ? 1 : 0);
+
   return (
-    <header className="sticky top-0 z-20 space-y-1 bg-background/95 pb-2 backdrop-blur-sm max-sm:-mx-4 max-sm:px-4">
-      <div className="flex min-h-8 items-center gap-1.5">
-        <h2 aria-live="polite" className="min-w-[6.6em] text-lg font-semibold tabular-nums text-foreground">
+    <header className="sticky top-0 z-30 space-y-1 bg-background/95 pb-2 backdrop-blur-sm max-sm:-mx-4 max-sm:px-4">
+      <div className="flex min-h-8 items-center gap-1 max-[380px]:gap-0.5">
+        <h2
+          aria-live="polite"
+          className="min-w-[6.6em] text-lg font-semibold tabular-nums text-foreground max-[380px]:min-w-[5.5em] max-[380px]:text-base"
+        >
           {formatMonth(month)}
         </h2>
         <Button variant="default" size="sm" className="size-8 shrink-0 p-0" onClick={onPreviousMonth}>
@@ -45,6 +56,33 @@ export default function PlannerMonthHeader({
           <span className="sr-only">다음 달</span>
         </Button>
         <Button variant="default" text="오늘" size="sm" className="h-8 shrink-0 px-2" onClick={onToday} />
+        <Popover className="relative ml-auto shrink-0">
+          <PopoverButton
+            aria-label={`확인 필요 ${noticeCount}개`}
+            className="inline-flex h-8 items-center gap-1 rounded-md border border-border bg-background px-1.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30 max-[380px]:gap-0.5 max-[380px]:px-1 max-[380px]:text-[11px]"
+          >
+            <ExclamationTriangleIcon aria-hidden="true" className="size-4 shrink-0 text-amber-600 dark:text-amber-300" />
+            <span>확인 필요</span>
+            <span aria-hidden="true" className="inline-flex size-4 items-center justify-center rounded-full bg-amber-500/15 text-[10px] tabular-nums text-amber-800 dark:text-amber-200">
+              {noticeCount}
+            </span>
+          </PopoverButton>
+          <PopoverPanel className="absolute right-0 top-full z-50 mt-2 max-h-[min(70dvh,32rem)] w-[min(24rem,calc(100vw-2rem))] overflow-y-auto rounded-lg border border-border bg-popover p-3 text-popover-foreground shadow-xl">
+            <h3 className="mb-2 text-sm font-semibold">확인 필요</h3>
+            {statusMessages.length > 0 || legacyConflictNotice ? (
+              <div className="space-y-2">
+                {statusMessages.map((message) => (
+                  <div key={message} role="status" className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+                    {message}
+                  </div>
+                ))}
+                {legacyConflictNotice ? <GuestPlannerLegacyConflictCallout to={legacyConflictNotice.to} /> : null}
+              </div>
+            ) : (
+              <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">현재 확인할 내용이 없어요.</p>
+            )}
+          </PopoverPanel>
+        </Popover>
       </div>
       <div className="flex h-7 min-w-0 items-center justify-between gap-2">
         <PlannerPlanLegend />

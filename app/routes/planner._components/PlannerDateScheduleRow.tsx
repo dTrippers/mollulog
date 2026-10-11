@@ -220,7 +220,7 @@ export default function PlannerDateScheduleRow({
       {period.kind === "raid" ? (
         period.href && period.seasonIndex != null ? (
           <div className="mt-3 pl-0 min-[360px]:pl-[3rem]">
-            <Button text="레이드 정보" to={period.href} size="xs" variant="secondary" />
+            <Button text="레이드 정보" to={period.href} size="xs" />
           </div>
         ) : null
       ) : (

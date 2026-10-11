@@ -4,7 +4,6 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, Link, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import {
-  GuestPlannerLegacyConflictCallout,
   useGuestPlanner,
   usePyroxeneScheduleItems,
 } from "~/components/features/futures";
@@ -1075,35 +1074,34 @@ export default function IntegratedPlannerRoute() {
           : []
       }
     >
-      {hasGuestLegacyConflicts && (
-        <GuestPlannerLegacyConflictCallout
-          to={isSignedIn ? PLANNER_GUEST_PYROXENE_IMPORT_HREF : undefined}
-          className="mb-4 lg:-mx-4"
+      <div className="-mt-2 lg:-mt-3">
+        <PlannerCalendar
+          month={displayedMonth}
+          onMonthChange={setDisplayedMonth}
+          todayDateKey={todayDateKey}
+          periods={displayPeriods}
+          scheduleAvailability={scheduleAvailability}
+          calendarResources={calendarResources}
+          raidScheduleFacts={raidScheduleFacts}
+          pyroxeneAssumptions={pyroxeneForecastStatus === "ready" ? pyroxeneAssumptions : null}
+          forecastStatus={pyroxeneForecastStatus}
+          statusMessages={statusMessages}
+          legacyConflictNotice={
+            hasGuestLegacyConflicts ? { to: isSignedIn ? PLANNER_GUEST_PYROXENE_IMPORT_HREF : undefined } : null
+          }
+          progressMessages={progressMessages}
+          isSignedIn={isSignedIn}
+          timeZone={displayTimeZone}
+          oneOffEntries={oneOffEntries}
+          guestStorageStatus={pyroxeneGuestPlanner.status}
+          recruitmentSavedStates={recruitmentSavedStates}
+          recruitmentIsSaving={recruitmentIsSaving}
+          recruitmentSaveResult={recruitmentSaveResult}
+          onSaveRecruitment={handleSaveRecruitment}
+          shopPlans={calendarShopPlans}
+          hasPreviousCalendarResources={hasPreviousCalendarResources}
         />
-      )}
-      <PlannerCalendar
-        month={displayedMonth}
-        onMonthChange={setDisplayedMonth}
-        todayDateKey={todayDateKey}
-        periods={displayPeriods}
-        scheduleAvailability={scheduleAvailability}
-        calendarResources={calendarResources}
-        raidScheduleFacts={raidScheduleFacts}
-        pyroxeneAssumptions={pyroxeneForecastStatus === "ready" ? pyroxeneAssumptions : null}
-        forecastStatus={pyroxeneForecastStatus}
-        statusMessages={statusMessages}
-        progressMessages={progressMessages}
-        isSignedIn={isSignedIn}
-        timeZone={displayTimeZone}
-        oneOffEntries={oneOffEntries}
-        guestStorageStatus={pyroxeneGuestPlanner.status}
-        recruitmentSavedStates={recruitmentSavedStates}
-        recruitmentIsSaving={recruitmentIsSaving}
-        recruitmentSaveResult={recruitmentSaveResult}
-        onSaveRecruitment={handleSaveRecruitment}
-        shopPlans={calendarShopPlans}
-        hasPreviousCalendarResources={hasPreviousCalendarResources}
-      />
+      </div>
     </Page>
   );
 }
