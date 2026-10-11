@@ -1,5 +1,6 @@
 import * as Sentry from "@sentry/cloudflare";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
+import { createServerSentryOptions } from "~/lib/observability.server";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 import { runScheduledJobs } from "~/jobs/scheduled";
@@ -57,12 +58,4 @@ const handler: ExportedHandler<ObservabilityEnv> = {
   },
 };
 
-export default Sentry.withSentry<ObservabilityEnv>(
-  (env) => ({
-    dsn: env.SERVER_SENTRY_DSN,
-    enabled: Boolean(env.SERVER_SENTRY_DSN),
-    environment: env.STAGE ?? "local",
-    tracesSampleRate: 0,
-  }),
-  handler,
-);
+export default Sentry.withSentry<ObservabilityEnv>(createServerSentryOptions, handler);

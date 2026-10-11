@@ -4,6 +4,7 @@ import { nanoid } from "nanoid/non-secure";
 import { pgApiKeyEventsTable, pgApiKeysTable, pgSenseisTable, pgStudentStatesTable } from "~/db/postgres/schema";
 import {
   isStudentNullableSemanticsEnabledInTransaction,
+  patchCanonicalRelationship,
   patchCanonicalStudentState,
   type StudentStateApiActor,
   type StudentStateTransaction,
@@ -80,7 +81,7 @@ function toHex(value: Uint8Array): string {
 }
 
 function createRawApiKey(): string {
-  return `mllg_live_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
+  return `mllg_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
 }
 
 async function hashApiKey(token: string): Promise<string> {
@@ -130,7 +131,7 @@ export async function createPersonalApiKey(
           name,
           keyHash: await hashApiKey(token),
           keyPrefix: token.slice(0, 17),
-          readScope: input.readScope,
+          readScope: input.readScope || input.writeScope,
           writeScope: input.writeScope,
           expiresAt,
         })
@@ -207,7 +208,7 @@ export async function authenticatePersonalApiKey(
   options: ApiRepositoryOptions = {},
   now = new Date(),
 ): Promise<ApiKeyAuthentication> {
-  if (!/^mllg_live_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
+  if (!/^mllg_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
   const keyHash = await hashApiKey(token);
   return withApiDatabase(env, options, async (db) =>
     db.transaction(async (tx) => {
@@ -420,9 +421,27 @@ function toCanonicalPatch(values: ApiStudentStateValues) {
     abilityHp: values.abilityHp,
     abilityAtk: values.abilityAtk,
     abilityHeal: values.abilityHeal,
-    relationshipCurrentLevel: values.bond,
-    relationshipCurrentExp: values.bondExp,
   };
+}
+
+/**
+ * Writes the current relationship through the shared writer so the state and target rows keep a paired
+ * relationship identity, which the web relationship reader requires. Skips the write when nothing changed.
+ */
+async function patchApiRelationship(
+  tx: StudentStateTransaction,
+  userId: number,
+  studentUid: string,
+  existing: typeof pgStudentStatesTable.$inferSelect | null,
+  values: Pick<ApiStudentStateValues, "bond" | "bondExp">,
+) {
+  if (
+    values.bond === (existing?.relationshipCurrentLevel ?? null) &&
+    values.bondExp === (existing?.relationshipCurrentExp ?? null)
+  ) {
+    return;
+  }
+  await patchCanonicalRelationship(tx, userId, studentUid, { currentLevel: values.bond, currentExp: values.bondExp });
 }
 
 async function getCurrentRow(
@@ -479,6 +498,7 @@ export async function registerApiRecruitedStudent(
             deletedAt: null,
           };
           await patchCanonicalStudentState(stateTx, userId, studentUid, canonical);
+          await patchApiRelationship(stateTx, userId, studentUid, existing, merged);
           return { kind: "created", state: toApiStudentState(merged), changed: true };
         },
         apiActor.apiKeyUid,
@@ -511,7 +531,10 @@ export async function patchApiRecruitedStudent(
           const before = fromStateRow(existing);
           const merged = mergeAndValidateApiStudentState(before, patch);
           const changed = !isApiStudentStateNoop(before, merged);
-          if (changed) await patchCanonicalStudentState(stateTx, userId, studentUid, toCanonicalPatch(merged));
+          if (changed) {
+            await patchCanonicalStudentState(stateTx, userId, studentUid, toCanonicalPatch(merged));
+            await patchApiRelationship(stateTx, userId, studentUid, existing, merged);
+          }
           return { kind: "updated", state: toApiStudentState(merged), changed };
         },
         apiActor.apiKeyUid,
@@ -542,10 +565,11 @@ export async function deleteApiRecruitedStudent(
           if (!existing?.recruitedStudentUid || existing.deletedAt != null) return { kind: "not_recruited" };
           await patchCanonicalStudentState(stateTx, userId, studentUid, {
             recruitedStudentUid: null,
-            relationshipLevelUid: null,
             ...toCanonicalPatch(emptyApiStudentState),
             recruitedAt: null,
           });
+          // Goals and gift plans survive deletion, so the relationship identity stays paired while they remain.
+          await patchApiRelationship(stateTx, userId, studentUid, existing, { bond: null, bondExp: null });
           return { kind: "deleted" };
         },
         apiActor.apiKeyUid,

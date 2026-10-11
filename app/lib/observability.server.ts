@@ -81,6 +81,31 @@ function captureSentryError(error: unknown, context: LogContext) {
   });
 }
 
+const SENSITIVE_REQUEST_HEADERS = new Set(["authorization", "proxy-authorization", "cookie"]);
+
+/** Drops credentials the SDK copies from the incoming request: API keys, session cookies and parsed cookies. */
+export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
+  const request = event.request;
+  if (!request) return event;
+  if (request.headers) {
+    request.headers = Object.fromEntries(
+      Object.entries(request.headers).filter(([name]) => !SENSITIVE_REQUEST_HEADERS.has(name.toLowerCase())),
+    );
+  }
+  delete request.cookies;
+  return event;
+}
+
+export function createServerSentryOptions(env: ObservabilityEnv): Sentry.CloudflareOptions {
+  return {
+    dsn: env.SERVER_SENTRY_DSN,
+    enabled: Boolean(env.SERVER_SENTRY_DSN),
+    environment: env.STAGE ?? "local",
+    tracesSampleRate: 0,
+    beforeSend: scrubServerSentryEvent,
+  };
+}
+
 export function captureServerError(error: unknown, context: LogContext = {}) {
   captureSentryError(error, context);
 }

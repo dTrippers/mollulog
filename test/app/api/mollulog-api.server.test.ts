@@ -16,13 +16,14 @@ const mockApi = {
 const mockStudents = {
   getAllStudents: jest.fn<AsyncMock>(),
   getStudentPrimaryUids: jest.fn<AsyncMock>(),
+  getStudentOtherFormUids: jest.fn<AsyncMock>(),
 };
 const mockLogger = { error: jest.fn<AsyncMock>() };
 const mockObservability = {
   captureServerError: jest.fn<AsyncMock>(),
   getLogger: jest.fn<() => typeof mockLogger>(),
 };
-/** BAQL's view of each UID: a battle-mode variant maps to its representative, a costume to itself. */
+/** BAQL's view of each UID: another form-change record maps to its representative, a costume to itself. */
 let baqlPrimaryUids: Record<string, string> = {};
 
 jest.mock("~/models/mollulog-api", () => mockApi);
@@ -83,6 +84,7 @@ describe("MolluLog v1 API entry", () => {
     mockApi.isApiStudentStateAvailable.mockResolvedValue(true);
     mockApi.reserveApiWriteQuota.mockResolvedValue({ allowed: true, used: 1, resetsAt: new Date() });
     mockStudents.getAllStudents.mockResolvedValue([student]);
+    mockStudents.getStudentOtherFormUids.mockResolvedValue({});
     baqlPrimaryUids = { "10000": "10000", "10001": "10000", "10002": "10002" };
     mockStudents.getStudentPrimaryUids.mockImplementation(async (...args: unknown[]) => {
       const uids = args[1] as string[];
@@ -517,7 +519,28 @@ describe("MolluLog v1 API entry", () => {
     expect(await response?.json()).toEqual({ studentUid: "10000", tier: 5, weaponTier: 0 });
   });
 
-  it("deduplicates mode variants on one catalog page while retaining a separate costume", async () => {
+  it("finds the representative by another form-change UID that the catalog omits", async () => {
+    mockStudents.getStudentOtherFormUids.mockResolvedValue({ "10000": ["10001"] });
+    const response = await handleMolluLogApiRequest(
+      request("/v1/students?query=10001", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toEqual({ students: [{ studentUid: "10000", name: "Aru" }], nextCursor: null });
+  });
+
+  it("reports the catalog as unavailable when form-change UIDs cannot be loaded", async () => {
+    mockStudents.getStudentOtherFormUids.mockRejectedValueOnce(new Error("BAQL timeout"));
+    const response = await handleMolluLogApiRequest(
+      request("/v1/students?query=Aru", "GET", { token: "bearer" }),
+      createEnv(),
+    );
+
+    expect(response?.status).toBe(503);
+  });
+
+  it("deduplicates form-change records on one catalog page while retaining a separate costume", async () => {
     const mode = { ...student, uid: "10001", name: "Aru Mode" };
     const costume = { ...student, uid: "10002", name: "Aru Costume" };
     mockStudents.getAllStudents.mockResolvedValue([student, mode, costume]);
@@ -538,7 +561,7 @@ describe("MolluLog v1 API entry", () => {
     });
   });
 
-  it("resolves a battle-mode UID that the catalog omits to its representative on every student route", async () => {
+  it("resolves a form-change UID that the catalog omits to its representative on every student route", async () => {
     // The catalog holds only the representative; BAQL maps the mode UID 10001 to 10000.
     mockApi.getApiRecruitedStudent.mockResolvedValueOnce({ state: { tier: 5, weaponTier: 0, level: 80 } });
     const read = await handleMolluLogApiRequest(

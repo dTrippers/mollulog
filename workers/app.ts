@@ -6,6 +6,7 @@ import {
   validateSessionRequest,
 } from "~/auth/session-validation.server";
 import { watchIo } from "~/lib/io-watchdog";
+import { createServerSentryOptions } from "~/lib/observability.server";
 import { createRequestDiagnostics, type RequestDiagnostics } from "~/lib/request-diagnostics";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
@@ -65,12 +66,4 @@ const handler: ExportedHandler<ObservabilityEnv> = {
   },
 };
 
-export default Sentry.withSentry<ObservabilityEnv>(
-  (env) => ({
-    dsn: env.SERVER_SENTRY_DSN,
-    enabled: Boolean(env.SERVER_SENTRY_DSN),
-    environment: env.STAGE ?? "local",
-    tracesSampleRate: 0,
-  }),
-  handler,
-);
+export default Sentry.withSentry<ObservabilityEnv>(createServerSentryOptions, handler);

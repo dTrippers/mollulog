@@ -33,7 +33,7 @@ import {
   reserveApiWriteQuota,
 } from "~/models/mollulog-api";
 import type { Student } from "~/models/student";
-import { getAllStudents, getStudentPrimaryUids } from "~/models/student";
+import { getAllStudents, getStudentOtherFormUids, getStudentPrimaryUids } from "~/models/student";
 
 type StudentApiEnvironment = Pick<Env, "HYPERDRIVE" | "API_READ_RATE_LIMITER">;
 
@@ -236,7 +236,7 @@ async function lookupPrimaryStudentUids(env: Env, uids: string[]): Promise<Map<s
 }
 
 /**
- * Resolves any battle-mode UID to the representative student in the catalog. Returns null for a UID BAQL does
+ * Resolves any form-change UID to the representative student in the catalog. Returns null for a UID BAQL does
  * not know, or when the representative is missing from the catalog; a BAQL row without a representative is a 503.
  */
 async function findCanonicalStudent(env: Env, uid: string, students: Map<string, Student>): Promise<Student | null> {
@@ -377,12 +377,22 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
     const limit = parsePageSize(url);
     const cursor = decodeStudentCursor(url.searchParams.get("cursor"));
     const students = await getAllStudents(env);
+    let otherFormUids: Record<string, string[]>;
+    try {
+      otherFormUids = await getStudentOtherFormUids(env);
+    } catch (error) {
+      throw catalogUnavailable(error);
+    }
     const normalizedQuery = normalizeSearch(query);
     const matches = students
       .filter((student) =>
-        [student.uid, student.name, student.familyName ?? "", ...student.altNames].some((value) =>
-          normalizeSearch(value).includes(normalizedQuery),
-        ),
+        [
+          student.uid,
+          ...(otherFormUids[student.uid] ?? []),
+          student.name,
+          student.familyName ?? "",
+          ...student.altNames,
+        ].some((value) => normalizeSearch(value).includes(normalizedQuery)),
       )
       .sort((left, right) => left.uid.localeCompare(right.uid))
       .filter((student) => cursor.afterStudentUid == null || student.uid > cursor.afterStudentUid)

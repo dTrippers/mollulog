@@ -27,6 +27,7 @@ import {
   reserveApiWriteQuota,
   revokePersonalApiKey,
 } from "~/models/mollulog-api";
+import { getRelationshipLevel, upsertRelationshipLevel } from "~/models/relationship-level";
 
 const enabled = process.env.MOLLOG_API_POSTGRES_VALIDATION === "1";
 const describePostgres = enabled ? describe : describe.skip;
@@ -457,6 +458,30 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
       expect(
         (await admin.query("SELECT student_uid FROM student_states WHERE student_uid = 'student-rollback'")).rows,
       ).toHaveLength(0);
+
+      // API relationship writes stay readable by the web relationship reader.
+      await registerApiRecruitedStudent(env, 5, "student-bond-post", { tier: 5, weaponTier: 0, bond: 20 }, apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-post")).toEqual(
+        expect.objectContaining({ currentLevel: 20, targetLevel: null, items: {} }),
+      );
+      await registerApiRecruitedStudent(env, 5, "student-bond-patch", { tier: 5, weaponTier: 0 }, apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-patch")).toBeNull();
+      await patchApiRecruitedStudent(env, 5, "student-bond-patch", { bond: 30 }, apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-patch")).toEqual(
+        expect.objectContaining({ currentLevel: 30, targetLevel: null }),
+      );
+      await deleteApiRecruitedStudent(env, 5, "student-bond-post", apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-post")).toBeNull();
+
+      await upsertRelationshipLevel(env, 5, "student-bond-goal", 20, null, 40, { "gift-a": 2 }, "nullable");
+      await registerApiRecruitedStudent(env, 5, "student-bond-goal", { tier: 5, weaponTier: 0 }, apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-goal")).toEqual(
+        expect.objectContaining({ currentLevel: 20, targetLevel: 40, items: { "gift-a": 2 } }),
+      );
+      await deleteApiRecruitedStudent(env, 5, "student-bond-goal", apiActor);
+      expect(await getRelationshipLevel(env, 5, "student-bond-goal")).toEqual(
+        expect.objectContaining({ currentLevel: null, currentExp: null, targetLevel: 40, items: { "gift-a": 2 } }),
+      );
 
       expect(await revokePersonalApiKey(env, 5, issued.key.uid)).toBe(true);
       expect(await authenticatePersonalApiKey(env, issued.token)).toEqual({ kind: "invalid" });

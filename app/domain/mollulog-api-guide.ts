@@ -72,7 +72,7 @@ export const API_GUIDE_COPY = {
     { label: "읽기 한도", value: `분당 ${API_READ_LIMIT_PER_MINUTE}회 · 계정·지역별` },
     { label: "쓰기 한도", value: `${API_WRITE_WINDOW_MINUTES}분에 ${API_WRITE_LIMIT}회 · 모든 키 합산` },
     { label: "요청 크기", value: `본문 최대 ${API_MAX_REQUEST_SIZE_TEXT}` },
-    { label: "학생 UID", value: "학생 찾기로 얻은 UID · 다른 전투 형태의 UID는 대표 UID로 처리돼요" },
+    { label: "학생 UID", value: "학생 찾기로 얻은 UID · 폼 체인지 학생은 다른 폼의 UID도 대표 UID로 처리돼요" },
     { label: "키 유효 기간", value: `발급 후 ${formatKeyLifetime(API_KEY_LIFETIME_MONTHS)}` },
     { label: "재시도", value: "같은 요청을 다시 보내면 다시 처리돼요" },
   ],
@@ -140,7 +140,7 @@ export const API_GUIDE_FULL = {
     "학생 찾기와 모집 학생 목록 응답의 nextCursor가 null이면 다음 페이지가 없어요.",
   ],
   representativeUid:
-    "학생 찾기와 쓰기 요청에서 다른 전투 형태의 UID를 보내도 대표 UID로 정규화돼요. 응답의 studentUid를 다음 요청에 사용하세요. 별도로 모집되는 학생 형태는 서로 다른 학생으로 처리돼요.",
+    "학생 찾기와 학생 상태 요청에서 폼 체인지 학생의 다른 폼 UID를 보내도 대표 UID로 처리돼요. 응답의 studentUid를 다음 요청에 사용하세요. 수영복처럼 따로 모집하는 버전은 서로 다른 학생으로 처리돼요.",
   responseScopes: "모집 학생 조회, POST, PATCH 응답에는 대표 studentUid와 현재 상태 필드가 포함돼요.",
   deletion: "DELETE는 모집 등록, 현재 성장도, 인연·경험치를 지워요. 육성 목표, 선물 계획, 플래너는 남아요.",
   errorFields: [
