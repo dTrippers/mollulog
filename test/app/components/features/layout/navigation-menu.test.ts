@@ -1,5 +1,5 @@
-import { CalendarIcon as CalendarIconOutline } from "@heroicons/react/24/outline";
 import { describe, expect, it } from "@jest/globals";
+import { NAVIGATION_ICONS } from "~/components/features/layout/navigation-icons";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
@@ -67,7 +67,7 @@ describe("global navigation catalog", () => {
       name: "통합 플래너",
       favoriteId: "integrated-planner",
       mobileNavigationId: "integrated-planner",
-      OutlineIcon: CalendarIconOutline,
+      OutlineIcon: NAVIGATION_ICONS["integrated-planner"].OutlineIcon,
     });
     expect(items.map((item) => item.to)).toEqual(
       expect.arrayContaining(["/planner", "/utils/pyroxene", "/utils/event-shop"]),
