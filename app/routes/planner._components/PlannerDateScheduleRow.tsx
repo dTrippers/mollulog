@@ -87,6 +87,7 @@ export default function PlannerDateScheduleRow({
   shopPlannedEventUids,
   resourceChanges = [],
   showResourceChanges,
+  resourceChangesStale = false,
   highlighted,
   focusOnMount,
   onHighlightedFocusComplete,
@@ -100,6 +101,7 @@ export default function PlannerDateScheduleRow({
   shopPlannedEventUids: ReadonlySet<string>;
   resourceChanges?: PlannerDayResources["changes"];
   showResourceChanges: boolean;
+  resourceChangesStale?: boolean;
   highlighted: boolean;
   focusOnMount: boolean;
   onHighlightedFocusComplete: () => void;
@@ -206,7 +208,10 @@ export default function PlannerDateScheduleRow({
           ))}
         </div>
         {showResourceChanges && resourceChanges.length > 0 ? (
-          <div className="min-w-0 justify-self-end">
+          <div
+            className={`min-w-0 justify-self-end ${resourceChangesStale ? "opacity-40" : ""}`}
+            aria-busy={resourceChangesStale || undefined}
+          >
             <DailyResourceChanges changes={resourceChanges} />
           </div>
         ) : null}

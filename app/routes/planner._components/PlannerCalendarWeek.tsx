@@ -51,49 +51,28 @@ export function formatCompactSignedQuantity(quantity: number): string {
 export function DailyResourceChanges({
   changes,
   compact = false,
-  calendarCell = false,
 }: {
   changes: PlannerDayResources["changes"];
   compact?: boolean;
-  calendarCell?: boolean;
 }) {
   if (changes.length === 0) return null;
   return (
     <div
       className={
-        compact
-          ? calendarCell
-            ? "mt-1.5 flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-1 gap-y-0.5 py-1.5 text-xs max-sm:mt-1.5 max-sm:w-full max-sm:flex-col max-sm:items-center max-sm:justify-start max-sm:gap-x-0 max-sm:gap-y-1 max-sm:overflow-visible"
-            : "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs"
-          : "flex flex-wrap items-center gap-2"
+        compact ? "flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs" : "flex flex-wrap items-center gap-2"
       }
     >
       {changes.map(({ key, quantity }) => {
         const resource = RESOURCE_PRESENTATION[key];
         return (
-          <span
-            key={key}
-            className={`inline-flex ${
-              calendarCell ? "shrink-0 max-sm:flex-col max-sm:items-center max-sm:gap-0" : "min-w-0"
-            } items-center gap-0.5 whitespace-nowrap`}
-            title={resource.label}
-          >
+          <span key={key} className="inline-flex min-w-0 items-center gap-0.5 whitespace-nowrap" title={resource.label}>
             <img
               src={resourceImageUrl(resource.imageType, resource.uid)}
               alt={resource.label}
               className={compact ? "size-4 shrink-0 object-contain" : "size-5 shrink-0 object-contain"}
               loading="lazy"
             />
-            <span className="tabular-nums text-xs leading-none">
-              {calendarCell ? (
-                <>
-                  <span className="max-[380px]:hidden">{formatSignedQuantity(quantity)}</span>
-                  <span className="hidden max-[380px]:inline">{formatCompactSignedQuantity(quantity)}</span>
-                </>
-              ) : (
-                formatSignedQuantity(quantity)
-              )}
-            </span>
+            <span className="tabular-nums text-xs leading-none">{formatSignedQuantity(quantity)}</span>
           </span>
         );
       })}
@@ -138,6 +117,45 @@ function calendarStripKindLabel(strip: PlannerCalendarStrip): string | null {
 
 function stripClasses(timingStatus: PlannerCalendarStrip["timingStatus"]): string {
   return timingStatus === "exact" ? "" : "ring-1 ring-inset ring-amber-500/50";
+}
+
+function PlannerResourceSlot({ changes, stale }: { changes: PlannerDayResources["changes"]; stale: boolean }) {
+  const valueFor = (key: keyof typeof RESOURCE_PRESENTATION) => changes.find((change) => change.key === key)?.quantity;
+  const renderResource = (key: keyof typeof RESOURCE_PRESENTATION, placement: string) => {
+    const quantity = valueFor(key);
+    if (quantity === undefined) return null;
+    const resource = RESOURCE_PRESENTATION[key];
+    return (
+      <span
+        key={key}
+        className={`flex min-w-0 items-center justify-center gap-0.5 whitespace-nowrap sm:justify-start ${placement}`}
+      >
+        <img
+          src={resourceImageUrl(resource.imageType, resource.uid)}
+          alt={resource.label}
+          title={resource.label}
+          className="size-3 shrink-0 object-contain sm:size-4"
+          loading="lazy"
+        />
+        <span className="tabular-nums text-[10px] leading-none sm:text-xs">
+          <span className="max-[380px]:hidden">{formatSignedQuantity(quantity)}</span>
+          <span className="hidden max-[380px]:inline">{formatCompactSignedQuantity(quantity)}</span>
+        </span>
+      </span>
+    );
+  };
+
+  return (
+    <div
+      data-planner-resource-slot="true"
+      aria-busy={stale || undefined}
+      className={`grid h-[38px] grid-cols-2 grid-rows-3 overflow-visible sm:h-[34px] sm:grid-rows-2 ${stale ? "opacity-40" : ""}`}
+    >
+      {renderResource("pyroxene", "col-span-2 row-start-1")}
+      {renderResource("oneTimeTicket", "col-span-2 row-start-2 sm:col-span-1")}
+      {renderResource("tenTimeTicket", "col-span-2 row-start-3 sm:col-span-1 sm:row-start-2")}
+    </div>
+  );
 }
 
 function uniqueStudents(periods: readonly PlannerPeriod[]) {
@@ -233,6 +251,7 @@ export default function PlannerCalendarWeek({
   periods,
   calendarResources,
   forecastStatus,
+  hasPreviousCalendarResources,
   weekLayout,
   raidScheduleFacts,
   timeZone,
@@ -249,6 +268,7 @@ export default function PlannerCalendarWeek({
   periods: PlannerPeriod[];
   calendarResources: Record<string, PlannerDayResources>;
   forecastStatus: PlannerForecastStatus;
+  hasPreviousCalendarResources: boolean;
   weekLayout: PlannerWeekLayout;
   raidScheduleFacts: readonly PlannerRaidScheduleFact[];
   timeZone: string;
@@ -303,6 +323,7 @@ export default function PlannerCalendarWeek({
           }`}
           style={{ gridColumn: index + 1, gridRow: "1 / -1" }}
         >
+          {selectedDate === day.dateKey ? <span className="absolute inset-0 bg-primary/7" /> : null}
           {hoveredDateKey === day.dateKey ? <span className="absolute inset-0 bg-muted/60" /> : null}
         </div>
       ))}
@@ -324,6 +345,7 @@ export default function PlannerCalendarWeek({
       {week.map((day, index) => {
         const daySummary = calendarResources[day.dateKey];
         const isToday = day.inMonth && day.dateKey === todayDateKey;
+        const isSelected = selectedDate === day.dateKey;
         const scheduleGroups = getPlannerEventScheduleGroupsForDate(periods, day.dateKey, todayDateKey);
         const eventDescriptions = scheduleGroups.flatMap(({ group, isPlanned, recruitmentPeriods }) => {
           const raidPeriod = group.periods.find((period) => period.kind === "raid");
@@ -363,6 +385,7 @@ export default function PlannerCalendarWeek({
           ...(daySummary?.changes.map(
             ({ key, quantity }) => `${RESOURCE_PRESENTATION[key].label} ${formatSignedQuantity(quantity)}`,
           ) ?? []),
+          ...(forecastStatus === "pending" && hasPreviousCalendarResources ? ["예상 재화 계산 중"] : []),
         ].join(", ");
         return (
           <button
@@ -383,23 +406,28 @@ export default function PlannerCalendarWeek({
             onPointerLeave={() => setHoveredDateKey(null)}
             onClick={(event) => onSelectDate(day.dateKey, event.currentTarget)}
           >
-            <span className="flex w-full items-center justify-end gap-1 px-1.5 pt-1.5 text-xs leading-none tabular-nums">
+            <span className="flex w-full items-center justify-end gap-1 whitespace-nowrap px-1.5 pt-1.5 text-xs leading-none tabular-nums">
               {day.dateKey.endsWith("-01") ? (
-                <span className="font-semibold">{Number(day.dateKey.slice(5, 7))}월</span>
+                <span className="whitespace-nowrap font-semibold max-sm:text-[11px]">
+                  {Number(day.dateKey.slice(5, 7))}월
+                </span>
               ) : null}
               <span
                 className={
                   isToday
                     ? "grid size-5 place-items-center rounded-full bg-primary font-semibold text-primary-foreground ring-2 ring-primary/30"
-                    : "grid size-5 place-items-center"
+                    : isSelected
+                      ? "grid size-5 place-items-center rounded-full font-semibold text-primary ring-[1.5px] ring-primary"
+                      : "grid size-5 place-items-center"
                 }
               >
                 {Number(day.dateKey.slice(-2))}
               </span>
             </span>
-            {forecastStatus === "ready" && daySummary ? (
-              <DailyResourceChanges changes={daySummary.changes} compact calendarCell />
-            ) : null}
+            <PlannerResourceSlot
+              changes={daySummary?.changes ?? []}
+              stale={forecastStatus === "pending" && hasPreviousCalendarResources}
+            />
           </button>
         );
       })}
@@ -427,9 +455,11 @@ export default function PlannerCalendarWeek({
               const kindLabel = calendarStripKindLabel(strip);
               const visualTitle = visualStripTitle(strip);
               const hideStripTextOnMobile = strip.widthPercent < 30;
+              const hideKindLabelOnMobile = hideStripTextOnMobile && visualTitle !== null;
+              // 짧은 띠에서는 제목이 0px까지 줄지 않도록 종류 라벨이 먼저 줄어들 수 있게 둡니다.
               const kindLabelClasses = isPlanned
-                ? "shrink-0 whitespace-nowrap font-normal text-foreground/70"
-                : "shrink-0 whitespace-nowrap font-normal text-muted-foreground/80";
+                ? "min-w-0 shrink truncate font-normal text-foreground/70"
+                : "min-w-0 shrink truncate font-normal text-muted-foreground/80";
               const endsThisWeek = strip.period.endDate >= week[0].dateKey && strip.period.endDate <= week[6].dateKey;
               const compactEndLabel = strip.widthPercent >= 28;
               return (
@@ -444,7 +474,7 @@ export default function PlannerCalendarWeek({
                       : "border-border bg-transparent font-normal text-foreground hover:bg-muted/50"
                   } ${
                     strip.continuesBefore ? "rounded-l-none" : ""
-                  } ${strip.continuesAfter ? "rounded-r-none" : ""} ${stripClasses(strip.timingStatus)}`}
+                  } ${strip.continuesAfter ? "rounded-r-none" : ""} ${hideStripTextOnMobile ? "max-sm:px-[3px] max-sm:gap-0.5" : ""} ${stripClasses(strip.timingStatus)}`}
                   style={{ left: `${strip.leftPercent}%`, width: `${strip.widthPercent}%` }}
                   onClick={(event) => {
                     const dateKey = strip.period.startDate < week[0].dateKey ? week[0].dateKey : strip.period.startDate;
@@ -454,24 +484,20 @@ export default function PlannerCalendarWeek({
                   {strip.continuesBefore ? <span aria-hidden="true">←</span> : null}
                   <PlannerPlanMarks state={planMarks} />
                   {kindLabel ? (
-                    <span className={`${kindLabelClasses} ${hideStripTextOnMobile ? "max-sm:hidden" : ""}`}>
+                    <span className={`${kindLabelClasses} ${hideKindLabelOnMobile ? "max-sm:hidden" : ""}`}>
                       {kindLabel}
                     </span>
                   ) : null}
-                  {visualTitle ? (
-                    <span
-                      className={`min-w-0 flex-[0_1_auto] truncate ${hideStripTextOnMobile ? "max-sm:hidden" : ""}`}
-                    >
-                      {visualTitle}
-                    </span>
-                  ) : null}
+                  {visualTitle ? <span className="min-w-[2.5em] flex-[0_1_auto] truncate">{visualTitle}</span> : null}
                   {strip.period.isApPlanned ? (
-                    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600">
+                    <span className="inline-flex shrink-0 items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-xs font-medium text-green-600 max-sm:bg-transparent max-sm:px-0">
                       <BoltIcon aria-hidden="true" className="size-2.5" />
-                      AP
+                      <span className={hideStripTextOnMobile ? "max-sm:hidden" : ""}>AP</span>
                     </span>
                   ) : null}
-                  {students.length > 0 ? <PlannerRecruitmentAvatars students={students} maxVisible={3} /> : null}
+                  {students.length > 0 && !hideStripTextOnMobile ? (
+                    <PlannerRecruitmentAvatars students={students} maxVisible={3} />
+                  ) : null}
                   {strip.timingStatus !== "exact" ? (
                     <ExclamationTriangleIcon
                       className="size-3.5 shrink-0 text-amber-700 dark:text-amber-300"
@@ -483,7 +509,7 @@ export default function PlannerCalendarWeek({
                       →
                     </span>
                   ) : null}
-                  {endsThisWeek ? (
+                  {endsThisWeek && !hideStripTextOnMobile ? (
                     <span className="ml-auto flex shrink-0 items-center gap-1 text-[10px] font-normal opacity-75">
                       <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
                       {compactEndLabel ? <span>{formatShortDate(strip.period.endDate)}</span> : null}

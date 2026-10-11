@@ -1,5 +1,5 @@
 import { CreditCardIcon, ShoppingBagIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Link, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -27,25 +27,21 @@ import {
 } from "~/domain/guest-planner";
 import { pyroxeneTimelineItemFingerprint } from "~/domain/guest-pyroxene-planner";
 import {
-  buildPyroxeneCalculationAssumptions,
-  type PyroxeneCalculationAssumptions as PyroxeneCalculationAssumptionsData,
-} from "~/domain/pyroxene-assumptions";
-import {
   buildPlannerDisplayPeriods,
   buildPlannerPeriods,
   buildPublicPlannerPeriods,
   formatPlannerPeriodDate,
   formatPlannerPeriodEndDate,
-  getPlannerMonthEndInstant,
+  getPlannerMonthGridEndInstant,
   getPlannerPlannedEventUids,
   getPlannerRaidScheduleFacts,
   getPlannerTodayMonth,
   type PlannerScheduleContentInput,
   projectPlannerCalendarResources,
-  shiftPlannerMonth,
   summarizePyroxeneTimeline,
 } from "~/domain/integrated-planner";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import { buildPyroxeneCalculationAssumptions } from "~/domain/pyroxene-assumptions";
 import {
   defaultPyroxenePlannerOptions,
   type PyroxeneCalculationOptions,
@@ -270,8 +266,8 @@ function defaultCalculationOptions(options: PyroxenePlannerOptions): PyroxeneCal
   };
 }
 
-function monthEnd(monthKey: string, timeZone: string): Date {
-  return getPlannerMonthEndInstant(monthKey, timeZone);
+function monthGridEnd(monthKey: string, timeZone: string): Date {
+  return getPlannerMonthGridEndInstant(monthKey, timeZone);
 }
 
 function getGuestShopPlans(snapshot: GuestPlannerSnapshot | null): GuestEventShopPlan[] {
@@ -328,7 +324,6 @@ export default function IntegratedPlannerRoute() {
     response: EventShopStateLookupResponse;
     requestFailed: boolean;
   } | null>(null);
-  const [visibleMonthCount, setVisibleMonthCount] = useState(1);
   const [guestRecruitmentIsSaving, setGuestRecruitmentIsSaving] = useState(false);
   const [guestRecruitmentSaveResult, setGuestRecruitmentSaveResult] = useState<PlannerRecruitmentSaveResult | null>(
     null,
@@ -405,11 +400,9 @@ export default function IntegratedPlannerRoute() {
     () => formatPlannerPeriodDate(loaderData.now, displayTimeZone),
     [displayTimeZone, loaderData.now],
   );
-  const lastVisibleMonth = shiftPlannerMonth(initialMonth, visibleMonthCount - 1);
-  const timelineEndDate = useMemo(
-    () => monthEnd(lastVisibleMonth, displayTimeZone),
-    [displayTimeZone, lastVisibleMonth],
-  );
+  const [displayedMonth, setDisplayedMonth] = useState(initialMonth);
+  const forecastMonth = displayedMonth < initialMonth ? initialMonth : displayedMonth;
+  const timelineEndDate = useMemo(() => monthGridEnd(forecastMonth, displayTimeZone), [displayTimeZone, forecastMonth]);
 
   const accountState = loaderData.accountState;
   const isSignedIn = loaderData.signedIn;
@@ -836,8 +829,21 @@ export default function IntegratedPlannerRoute() {
     () => summarizePyroxeneTimeline(calculation.timeline, displayTimeZone),
     [calculation.timeline, displayTimeZone],
   );
-  const dailyResources = pyroxeneForecastStatus === "ready" ? timelineResources : {};
-  const calendarResources = useMemo(() => projectPlannerCalendarResources(dailyResources), [dailyResources]);
+  const readyCalendarResources = useMemo(() => projectPlannerCalendarResources(timelineResources), [timelineResources]);
+  const previousReadyCalendarResourcesRef = useRef<Record<
+    string,
+    ReturnType<typeof projectPlannerCalendarResources>[string]
+  > | null>(null);
+  useEffect(() => {
+    if (pyroxeneForecastStatus === "ready") previousReadyCalendarResourcesRef.current = readyCalendarResources;
+  }, [pyroxeneForecastStatus, readyCalendarResources]);
+  const hasPreviousCalendarResources = previousReadyCalendarResourcesRef.current !== null;
+  const calendarResources =
+    pyroxeneForecastStatus === "ready"
+      ? readyCalendarResources
+      : pyroxeneForecastStatus === "pending"
+        ? (previousReadyCalendarResourcesRef.current ?? {})
+        : {};
   const raidScheduleFacts = useMemo(() => getPlannerRaidScheduleFacts(timelineResources), [timelineResources]);
 
   const currentGuestShopComparison =
@@ -1029,14 +1035,12 @@ export default function IntegratedPlannerRoute() {
     return messages;
   }, [guestShopComparisonPending, isSignedIn, pyroxeneGuestPlanner.status]);
 
-  const handleLoadMore = useCallback(() => setVisibleMonthCount((count) => count + 1), []);
-
   return (
     <Page
       title="통합 플래너"
       description="모집·청휘석·이벤트 상점 계획을 날짜별로 확인해보세요."
       contentWidth="full"
-      maxWidth="wide"
+      maxWidth="full"
       layout="vertical"
       panels={[
         ...(isSignedIn && unresolvedGuestPyroxeneUnitCount > 0
@@ -1078,7 +1082,8 @@ export default function IntegratedPlannerRoute() {
         />
       )}
       <PlannerCalendar
-        initialMonth={initialMonth}
+        month={displayedMonth}
+        onMonthChange={setDisplayedMonth}
         todayDateKey={todayDateKey}
         periods={displayPeriods}
         scheduleAvailability={scheduleAvailability}
@@ -1097,8 +1102,7 @@ export default function IntegratedPlannerRoute() {
         recruitmentSaveResult={recruitmentSaveResult}
         onSaveRecruitment={handleSaveRecruitment}
         shopPlans={calendarShopPlans}
-        monthCount={visibleMonthCount}
-        onLoadMore={handleLoadMore}
+        hasPreviousCalendarResources={hasPreviousCalendarResources}
       />
     </Page>
   );
