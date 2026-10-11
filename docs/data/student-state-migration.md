@@ -1,121 +1,87 @@
-# Student state projection migration
+# Student state: phase 1-5 cleanup
 
-This runbook covers the additive P1 release and the 1-2 runtime read switch. P1 readers use legacy tables; 1-2 readers use the new relational projection. Participating writers continue updating both sources in one PostgreSQL transaction, and the nullable-semantics switch stays off. This document does not authorize an operational database change or deployment.
+Student current values, ownership and relationship state live in `student_states`;
+independent targets, planner membership and gift plans live in `student_targets`.
+`student_state_audits` records changes in the same transaction as the writes.
+The application no longer reads a migration flag or mirrors writes to legacy tables.
+Per-user transaction advisory locks still serialize saves and imports.
 
-## P1 local validation
+The earlier backfill, parity and activation CLI has been removed. Activation was
+completed with `users=4065 mismatches=0 activated=true`; the follow-up display-column
+checks were rerun read-only after a timeout and all three reported zero violations.
+This is the completed cutover's evidence, not a readiness check for another database.
 
-Use the workspace `mllg local` wrapper and an isolated schema named `student_state_<name>` for automated PostgreSQL fixtures. The fixture creates a unique schema, installs its own legacy and additive tables, and verifies that schema is gone before passing. Never point a test fixture at `public` or another shared application schema.
+## Archive scope
 
-Create an isolated schema and install the existing legacy fixture tables plus `20261010000100_create_student_state_projection.sql` with that schema as the session search path. Do not apply this migration to the shared `public` schema for implementation tests. Before testing, add fixtures for recruited-only, relationship-only, target-only, an empty growth registration, a target below current, gift plans, and two registration timestamps that differ only in microseconds.
+| Previous name | Preserved name |
+| --- | --- |
+| `recruited_students` | `zzz_recruited_students` |
+| `student_growth` | `zzz_student_growth` |
+| `user_relationship_levels` | `zzz_user_relationship_levels` |
+| `student_state_migration_control` | `zzz_student_state_migration_control` |
 
-Run the preflight against the isolated schema and review its counts:
+The archive migration performs only table renames. It preserves rows, legacy shadow
+current values, timestamps, columns, indexes, sequences, constraints and grants.
+It does not rename indexes or sequences separately. Canonical row UIDs and the
+membership/registration fields remain unchanged. The audit table remains active.
+Archived tables are historical records, not a backup of subsequent canonical writes.
 
-```bash
-mllg local pnpm student-state:migration preflight --schema student_state_validation
-```
+Keep previously applied SQL migration files unchanged: their checksums and history
+are still needed. Fresh local fixtures can install the canonical schema directly;
+they do not need to replay the retired migration CLI.
 
-Any non-null legacy `student_growth` current field is an operator stop condition by default. Do not clear it or infer a replacement. Preflight reports these rows, and backfill fails explicitly without partially projecting that user's rows. After reviewing their meaning and choosing to preserve the service's current values, pass `--confirm-legacy-growth-current-reviewed` to preflight, backfill, and parity. This acknowledgement permits only the reviewed shadow-current values: current growth fields are sourced exclusively from `recruited_students`, and all legacy rows, values, targets, and timestamps remain unchanged. A legacy relationship gift plan that is not an object of finite numbers (`invalid_gift_plan_rows`) still blocks migration even with the acknowledgement; live writers reject such input instead of storing it.
+## Deployment and operational order
 
-P1 live writers leave these legacy shadow-current columns untouched; the projected current values come only from `recruited_students`. Without the acknowledgement, shadow-current values block backfill and parity. With it, preflight retains the actual `unsupported_student_growth_current_rows` count and appends `legacy_growth_current_policy=preserve-reviewed`; a nonzero count alone no longer causes an error exit. Do not require the count to become zero by clearing data. Invalid gift plans must still be zero, and parity must still report `mismatches=0` before advancing to the 1-2 read switch. The acknowledgement does not bypass host/schema validation, the external-writer confirmation, or the post-activation backfill/parity prohibition.
+1. Confirm this database completed activation and display-column validation. Verify
+   the current and target save, relationship/gift-plan, import and OCR flows. Every
+   environment must complete cutover before deploying this cleanup version.
+2. Deploy the cleanup version to all Workers and other participating services.
+   This code runs both before and after the table renames. Drain the older Workers,
+   queued/in-flight work, and preview/local services using the shared database.
+   Stop direct SQL or external tools referencing the four old tables. A deployment
+   record alone does not prove all such callers have stopped.
+3. Use the approved operator's existing writer connection and TLS configuration to
+   run `db/postgres/migrations/20261011000100_archive_student_state_legacy_tables.sql`:
 
-The application-level PostgreSQL fixture creates and drops its own uniquely named isolated schema, and verifies the schema is gone before passing. Run it only when the selected local configuration resolves `PGHOST` to `127.0.0.1`:
+   ```bash
+   psql -X --no-psqlrc --set=ON_ERROR_STOP=1 \
+     --command='SET search_path TO public' \
+     --file=db/postgres/migrations/20261011000100_archive_student_state_legacy_tables.sql
+   ```
 
-```bash
-mllg local env pnpm_config_verify_deps_before_run=warn STUDENT_STATE_POSTGRES_VALIDATION=1 pnpm exec jest test/app/db/postgres/student-state-projection.postgres.test.ts --runInBand
-```
+   Select the intended database explicitly in that connection; the example sets
+   the schema to `public`. The SQL uses the session search path. It requires the activated control record, locks
+   all four tables, and renames them atomically. The lock timeout is one second;
+   the statement timeout is 15 seconds. A lock timeout, inactive/missing flag,
+   missing source, or destination-name collision aborts the transaction and leaves
+   all names unchanged. Retry only after resolving the reported cause; do not
+   reset flags or delete tables to make the migration pass.
+4. Verify that all four `zzz_` tables exist, the original names are absent, and the
+   preserved counts match the recorded pre-archive counts. Verify canonical reads,
+   partial saves, independent/null targets, gift plans, imports and audit writes
+   again. Keep the archived tables and all their data.
 
-Backfill acquires the same per-user transaction advisory lock as application writes, then reads both the latest legacy sources and existing projection rows. It sets or clears each source-backed side; if a legacy side disappeared during the P1 rolling period, it clears that side's fields and source UID while preserving the other side. If all relevant legacy sources disappeared, it clears the remaining values and tombstones the existing projection row without changing its UID or `created_at`. The write holds a shared lock on the migration-control row through commit. Backfill writes no audit rows. Parity reads groups of up to 25 users in one repeatable-read, read-only snapshot per group and checks the control record with an ordinary `SELECT`; it does not take row or advisory locks. Both commands require an explicit acknowledgement that nonparticipating writers are stopped:
+Deploy code **before** this SQL, unlike an additive schema migration: older Workers
+still query the original control table even after activation and would fail after
+the rename. After rename, do not deploy an older version or turn activation off.
+Recover with a compatible forward fix. Running production SQL and deploying are
+separate operator steps; adding this migration file does not execute them.
 
-```bash
-mllg local pnpm student-state:migration backfill --schema student_state_validation --confirm-no-external-writers
-mllg local pnpm student-state:migration parity --schema student_state_validation --confirm-no-external-writers
-```
+Forms still carry `stateFormat=nullable`. Missing/legacy formats remain rejected
+at the write boundary because old full-value forms can overwrite independent
+current/target values. This request guard does not read an archived control table.
 
-Backfill copies source registration timestamps at microsecond precision, reconciles projection-only rows left by old nonparticipating writers, preserves tombstones, and writes no user audit rows. A successful parity run reports `mismatches=0`. Re-run both commands after a live-write/backfill race and after stopping/restarting the backfill to verify resumability. Keep the fixture schema isolated and drop it only after the test evidence is collected.
+## Validation
 
-Backfill writes batches of at most 200 source keys per statement rather than sending a separate statement for each state/target row. Every batch for one user remains inside the same user transaction and advisory lock; a later batch failure rolls back all changes for that user. Source reads and control-row checks still happen under the lock. This reduces database round trips without parallelizing user transactions or changing reconciliation rules.
-
-The CLI reports committed progress after the first user, approximately every five seconds between user commits, and after the last user. `state_rows` and `target_rows` count upserted rows, including reconciled existing rows; they are not counts of newly created rows. A user transaction in progress is not included in these counters. After interrupting the CLI, run the same backfill command again with the same confirmed database/schema and flags. Completed users remain committed, the interrupted user's transaction rolls back when its connection closes, and replay preserves existing projection UIDs, creation times, and tombstone times. Do not delete partially backfilled projection data or replay schema migrations to restart.
-
-Parity fetches legacy rows, projected states, and projected targets in three queries per group instead of per user. Joins and comparison keys include both `user_id` and `student_uid`, so identical student UIDs in different accounts remain independent. The comparison still checks every field, source registration timestamps at microsecond precision, missing rows, extra active rows, and tombstones; invalid gift plans and unreviewed shadow-current values still fail explicitly. Progress is reported after the first group, approximately every five seconds between groups, and after the last group. Parity never updates source/projection/control/audit rows and may be interrupted and restarted with the same command. Each group has a consistent snapshot; the full command is not a single global snapshot, just as the previous per-user command was not.
-
-## 1-2 runtime read switch
-
-Before deploying 1-2, verify that the 1-1 operational parity run reports `mismatches=0`. Runtime reads then use `student_states` and `student_targets`; participating writers continue mirroring every change to the legacy tables and projection in one transaction. No runtime fallback to legacy reads is provided.
-
-While nullable semantics is off, the 1-2 version can be redeployed because it still mirrors writes to the legacy tables. Once nullable semantics has been activated, do not redeploy 1-1 or 1-2: their writes are rejected with a stale-state conflict and switching the control row off would make canonical-only data diverge from the legacy tables.
-
-## 1-3/1-4 canonical writes and nullable semantics
-
-The `nullable_semantics_enabled` control value is the single activation point. While it is false, the new Worker keeps the 1-2 write path and UI semantics. After activation, it writes only `student_states` and `student_targets`, allows current and target values to be independent, and rejects requests from 1-1/1-2 clients with the typed stale-state conflict. Activation is irreversible; recover from problems with a compatible forward fix.
-
-Before activation, verify all of the following against the target database: the running Worker version and in-flight requests; preview and local services that share the database; and every direct SQL, external integration, or other writer. Stop every nonparticipating writer before acknowledging the command. The acknowledgement is an operator assertion, not an automated discovery mechanism.
-
-Run the gates in order, then activate with the same explicit schema:
-
-```bash
-mllg local pnpm student-state:migration preflight --schema student_state_validation
-mllg local pnpm student-state:migration backfill --schema student_state_validation --confirm-no-external-writers
-mllg local pnpm student-state:migration parity --schema student_state_validation --confirm-no-external-writers
-mllg local pnpm student-state:migration activate --schema student_state_validation --confirm-no-external-writers
-```
-
-Application writers take the control row's shared lock and time out after 5 seconds, so `activate` never holds the row exclusively for a full-database check. It first locks the row `FOR UPDATE` only long enough to drain in-flight writers and read the highest `student_state_audits` id; every participating write that commits afterwards gets a larger audit id. It then checks parity for every user in per-user read-only snapshots without blocking writers. Finally it locks the row `FOR UPDATE` again, rechecks only the users audited after that mark, and enables the switch in the same transaction. Each exclusive lock attempt has a 2-second deadline that covers the wait for the lock (at most 1 second, its `lock_timeout`), every statement while the lock is held, and the switch update; each of those statements runs with the remaining time as its `statement_timeout`. When the deadline passes before the switch update completes, the command releases the lock, rechecks the newly audited users without it, advances the mark, and retries; after 10 rounds without fitting the deadline it exits with an explicit error and leaves the switch off. Writers that arrive during the locked recheck wait for it and then use nullable semantics.
-
-The command leaves the switch off and exits with a nonzero status if parity reports any mismatch. An already enabled switch is an explicit error. Its output includes `locked_recheck_users`, the number of users checked while writers were blocked. After a successful commit it reports the recruited, planner, and relationship display-column invariant counts; all must be zero before proceeding.
-
-Never turn the switch off after activation. Canonical-only writes no longer update the legacy tables, so disabling the switch would expose stale legacy data and allow old-version writes to overwrite the canonical state. Use forward fixes only. Do not use `backfill` or `parity` after activation; the CLI rejects those commands.
-
-The 1-5 stage may begin only after activation completed with `mismatches=0`, every display-column invariant count was zero, and all 1-1/1-2 Workers and in-flight requests have exited. Before archiving legacy tables, also verify that the application and operational tooling no longer reference them.
-
-## Operator use against a service schema
-
-The CLI requires an explicit, lowercase PostgreSQL user-schema identifier of at most 63 characters. It accepts `public` as well as isolated test schemas. Before any operation it sets the session search path to only that schema, verifies that all seven required tables are base tables there, and checks the columns used by the migration. It does not create schemas or tables. A missing, incompatible, or ambiguous target stops before backfill.
-
-`preflight` reports unsupported legacy current-growth values and does not mutate data. Before `backfill` or `parity`, an operator must verify the actual running Worker versions and in-flight requests, every direct SQL or external writer, and all preview/local services using the same database. Only after every nonparticipating writer has stopped may the operator pass `--confirm-no-external-writers`. This explicit flag does not replace the operational review. A nonzero parity result is a stop condition; do not advance the rollout.
-
-For a later separately authorized service-schema operation, use the approved environment wrapper and select the target schema explicitly, for example:
-
-```bash
-mllg local pnpm student-state:migration preflight --schema public
-mllg local pnpm student-state:migration backfill --schema public --confirm-no-external-writers
-mllg local pnpm student-state:migration parity --schema public --confirm-no-external-writers
-```
-
-For an explicitly selected remote database, keep its existing `PGHOST`, port, database, credentials, and TLS settings. Append `--confirm-db-host <verified-host>` to each command; the value must exactly match the resolved `PGHOST`. A missing `PGHOST`, an unconfirmed non-loopback host, or a mismatched confirmation stops before connecting. Existing `PGHOST=127.0.0.1` commands still work without the option. `LOCAL_DB_ALLOWED_HOSTS` is a development setting and does not replace this operator confirmation.
-
-For example, in a shell where the approved production `PG*` variables have already been resolved, replace `db.example.com` below with the independently verified target hostname:
+Use the selected official local environment and an isolated, uniquely named schema:
 
 ```bash
-mise exec -- pnpm student-state:migration preflight --schema public --confirm-db-host db.example.com
-mise exec -- pnpm student-state:migration backfill --schema public --confirm-db-host db.example.com --confirm-no-external-writers
-mise exec -- pnpm student-state:migration parity --schema public --confirm-db-host db.example.com --confirm-no-external-writers
+mllg local env STUDENT_STATE_POSTGRES_VALIDATION=1 \
+  pnpm exec jest --runInBand --runTestsByPath \
+  test/app/db/postgres/student-state.postgres.test.ts
 ```
 
-Host confirmation does not replace schema validation or the nonparticipating-writer check. These commands document the tool interface only; production operations still require an explicitly selected and authorized target. Run the host-validation tests without database access with `mise exec -- node --test scripts/student-state-migration.test.mjs`.
-
-### Preserve reviewed legacy current values
-
-If an operator has reviewed non-null legacy growth-current values and selected the existing service values as authoritative, append the acknowledgement to every stage below. Keep the selected database's existing credentials and TLS configuration; replace the hostname with the verified target. These commands do not clear or update any legacy source row:
-
-```bash
-mise exec -- pnpm student-state:migration preflight --schema public --confirm-db-host db.example.com --confirm-legacy-growth-current-reviewed
-mise exec -- pnpm student-state:migration backfill --schema public --confirm-db-host db.example.com --confirm-no-external-writers --confirm-legacy-growth-current-reviewed
-mise exec -- pnpm student-state:migration parity --schema public --confirm-db-host db.example.com --confirm-no-external-writers --confirm-legacy-growth-current-reviewed
-```
-
-For example, a reviewed preflight can succeed with `unsupported_student_growth_current_rows=264 invalid_gift_plan_rows=0 legacy_growth_current_policy=preserve-reviewed`. The count is preserved for visibility. Conflicting old growth-current values never overwrite recruited current values, including explicit nulls and lower values. A growth row without a recruited row does not recreate ownership or contribute growth-current fields; its targets and any separate relationship record are still migrated. Original rows remain available for comparison until a separately authorized legacy archive/removal operation. This preservation is not a point-in-time database backup and does not replace the rollout's database backup.
-
-Run the CLI regression against the approved local database with an isolated, uniquely named schema; it creates and drops only its own fixture schema:
-
-```bash
-mllg local env STUDENT_STATE_POSTGRES_VALIDATION=1 node --test scripts/student-state-migration.test.mjs
-```
-
-## Operator gates before a production stage transition
-
-Before each later release or backfill, verify the actual running Worker versions and in-flight requests, all direct SQL writers and external integrations, and every preview or local service connected to the same database. A repository SHA or deployment record alone does not prove that a nonparticipating writer has stopped. If any such writer remains, or parity is nonzero, stop before advancing the stage.
-
-The sequence is additive schema plus dual-write, backfill and parity, new reads with legacy mirroring, then one release that combines canonical-only writes with independent nullable semantics. Archive legacy tables only after every version and tool that references them has exited. The P1 release establishes dual-write; 1-2 delivers the read switch while legacy writes remain mirrored. This runbook documents the operator gates; it does not authorize production migrations, activation, deployment, or stage transitions.
-
-After canonical-only writes begin, do not roll back to a version that reads stale legacy tables. Recover with a compatible version that understands canonical student state.
+The fixture validates activation and rename failures, exact preservation of the
+four archived tables, canonical writes after the old names disappear, audit
+atomicity, stale requests, and isolation between accounts. It creates and removes
+only its own schema, never the shared `public` schema or production data.

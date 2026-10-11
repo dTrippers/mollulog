@@ -5,7 +5,6 @@ import { renderToStaticMarkup } from "react-dom/server";
 const mockGetActiveSensei = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockRemoveRelationshipLevel = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockUpsertRelationshipLevel = jest.fn<(...args: unknown[]) => Promise<unknown>>();
-const mockGetStudentStateWriteMode = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetRelationshipLevels = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetAllStudents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetUserResourceInventoryMap = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -14,7 +13,6 @@ const logger = { debug: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: mockGetActiveSensei }));
 jest.mock("~/models/relationship-level", () => ({
-  getStudentStateWriteMode: mockGetStudentStateWriteMode,
   getRelationshipLevels: mockGetRelationshipLevels,
   removeRelationshipLevel: mockRemoveRelationshipLevel,
   upsertRelationshipLevel: mockUpsertRelationshipLevel,
@@ -93,9 +91,8 @@ describe("utils.relationship action", () => {
     );
   });
 
-  it("submits the legacy calculator snapshot through the legacy action and model", async () => {
+  it("submits only changed fields with the canonical request format", async () => {
     const payload = buildRelationshipSavePayload(
-      "legacy",
       "student-a",
       { currentLevel: 12, currentExp: 42, targetLevel: 20, items: { "gift-a": 3 } },
       { currentLevel: 12, currentExp: 42, targetLevel: 18, items: { "gift-a": 2 } },
@@ -104,8 +101,7 @@ describe("utils.relationship action", () => {
     await expect(post(payload)).resolves.toMatchObject({ success: true });
     expect(payload).toEqual({
       studentId: "student-a",
-      currentLevel: 12,
-      currentExp: 42,
+      stateFormat: "nullable",
       targetLevel: 20,
       items: { "gift-a": 3 },
     });
@@ -113,22 +109,22 @@ describe("utils.relationship action", () => {
       env,
       1,
       "student-a",
-      12,
-      42,
+      undefined,
+      undefined,
       20,
       { "gift-a": 3 },
-      "legacy",
+      "nullable",
     );
   });
 
   it("rejects a legacy batch with an invalid target before writing any item", async () => {
     const response = await post([
       { studentId: "student-a", currentLevel: 12, currentExp: 0, targetLevel: 20, items: {} },
-      { studentId: "student-b", currentLevel: 20, currentExp: 0, targetLevel: 19, items: {} },
+      { studentId: "student-b", currentLevel: 20, currentExp: 0, targetLevel: 101, items: {} },
     ]);
 
     expect(response).toMatchObject({
-      data: { success: false, code: "INVALID_INPUT", error: "목표 인연 랭크는 현재 인연 랭크보다 낮을 수 없어요" },
+      data: { success: false, code: "INVALID_INPUT", error: "목표 인연 랭크는 1부터 100 사이만 입력할 수 있어요" },
       init: { status: 400 },
     });
     expect(mockUpsertRelationshipLevel).not.toHaveBeenCalled();
@@ -156,15 +152,11 @@ describe("utils.relationship action", () => {
     expect(logger.error).toHaveBeenCalledWith("Relationship level save failed", expect.any(Error), { userId: 1 });
   });
 
-  it.each([
-    "legacy",
-    "nullable",
-  ] as const)("preserves existing order for equal current ranks in %s mode", async (mode) => {
+  it("preserves existing order for equal current ranks", async () => {
     mockGetAllStudents.mockResolvedValue([
       { uid: "student-b", name: "B", order: 2 },
       { uid: "student-a", name: "A", order: 1 },
     ]);
-    mockGetStudentStateWriteMode.mockResolvedValue(mode);
     mockGetRelationshipLevels.mockResolvedValue([
       { studentId: "student-b", currentLevel: 10, currentExp: null, targetLevel: 20, items: {} },
       { studentId: "student-a", currentLevel: 10, currentExp: null, targetLevel: 20, items: {} },

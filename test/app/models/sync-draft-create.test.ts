@@ -1,6 +1,7 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { createAndApplySyncDraft, createSyncDraft, type SyncDraftCreateInput } from "~/models/sync-draft";
 import { FakePostgresClient } from "../../helpers/fake-postgres";
+import { studentStateRow } from "../../helpers/student-state";
 
 jest.mock("~/lib/postgres.server", () => ({
   withPostgresClient: async (env: { __pgClient: unknown }, operation: (client: unknown) => Promise<unknown>) =>
@@ -59,6 +60,7 @@ describe("first-party OCR sync draft creation", () => {
 
   it("keeps unconfirmed student state columns when applying a partial OCR draft", async () => {
     const db = new FakePostgresClient();
+    db.tables.student_states.push(studentStateRow({ userId: 7, studentUid: "10000", level: 80, weaponLevel: 20 }));
     const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "first_party_ocr",
       sourceRef: "student-video-job",
@@ -95,15 +97,14 @@ describe("first-party OCR sync draft creation", () => {
     const first = await createAndApplySyncDraft(env, 7, input);
     const retried = await createAndApplySyncDraft(env, 7, input);
 
-    const statement = db.statements.find((candidate) => candidate.includes('insert into "recruited_students"'));
-    expect(statement).toContain('"level" = coalesce(excluded.level, recruited_students.level)');
-    expect(statement).toContain('"weapon_level" = coalesce(excluded.weapon_level, recruited_students.weapon_level)');
+    expect(db.tables.student_states[0]).toMatchObject({ level: 80, weaponLevel: 0 });
     expect(first.alreadyApplied).toBe(false);
     expect(retried.alreadyApplied).toBe(true);
   });
 
-  it("keeps overwrite semantics for non-OCR student state drafts", async () => {
+  it("preserves omitted and external minimum fields for connect imports", async () => {
     const db = new FakePostgresClient();
+    db.tables.student_states.push(studentStateRow({ userId: 7, studentUid: "10000", level: 80, weaponLevel: 20 }));
     const input: SyncDraftCreateInput & { sourceRef: string } = {
       source: "connect",
       sourceRef: "connect-import",
@@ -142,9 +143,7 @@ describe("first-party OCR sync draft creation", () => {
       input,
     );
 
-    const statement = db.statements.find((candidate) => candidate.includes('insert into "recruited_students"'));
-    expect(statement).toContain('"level" = excluded.level');
-    expect(statement).not.toContain('"level" = coalesce');
+    expect(db.tables.student_states[0]).toMatchObject({ level: 80, weaponLevel: 20 });
   });
 });
 

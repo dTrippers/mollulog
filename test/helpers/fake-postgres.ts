@@ -176,12 +176,9 @@ export class FakePostgresClient {
   private readonly transactionSnapshots: Record<string, Row[]>[] = [];
   private readonly generatedIds = new Map<string, number>();
 
-  constructor(initialTables: Record<string, Row[]> = {}, primaryTable = "recruited_students") {
+  constructor(initialTables: Record<string, Row[]> = {}, primaryTable = "student_states") {
     this.primaryTable = primaryTable;
     this.tables = {
-      recruited_students: [],
-      student_growth: [],
-      user_relationship_levels: [],
       growth_resource_inventory: [],
       sync_drafts: [],
       sync_draft_entries: [],
@@ -190,7 +187,6 @@ export class FakePostgresClient {
       student_states: [],
       student_targets: [],
       student_state_audits: [],
-      student_state_migration_control: [{ key: "default", nullableSemanticsEnabled: false }],
       ...initialTables,
     };
   }
@@ -205,18 +201,6 @@ export class FakePostgresClient {
 
   get entries(): Row[] {
     return this.tables.sync_draft_entries;
-  }
-
-  get recruitedStudents(): Row[] {
-    return this.tables.recruited_students;
-  }
-
-  get relationshipLevels(): Row[] {
-    return this.tables.user_relationship_levels;
-  }
-
-  get studentGrowths(): Row[] {
-    return this.tables.student_growth;
   }
 
   async connect(): Promise<void> {}
@@ -348,7 +332,13 @@ export class FakePostgresClient {
       columns.forEach((column, index) => {
         const token = tokens[index] ?? "default";
         const placeholder = token.match(/\$(\d+)/);
-        const value = placeholder ? values[Number(placeholder[1]) - 1] : valueForToken(token, values);
+        const value = placeholder
+          ? values[Number(placeholder[1]) - 1]
+          : token === "default" && ["student_states", "student_targets"].includes(tableName)
+            ? column === "gift_plan"
+              ? {}
+              : null
+            : valueForToken(token, values);
         row[fromPgField(column)] = value;
         if (placeholder) valueOffset = Math.max(valueOffset, Number(placeholder[1]));
       });

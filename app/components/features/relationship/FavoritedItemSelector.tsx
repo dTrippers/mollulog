@@ -143,7 +143,6 @@ type FavoritedItemSelectorProps = {
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
   ownedQuantities: Record<string, number> | null;
-  writeMode: "legacy" | "nullable";
   staleWriteBlocked: boolean;
   onStaleWriteBlocked: () => void;
   onStudentItemsSaved: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
@@ -156,7 +155,6 @@ export default function FavoritedItemSelector({
   students,
   isAuthenticated,
   ownedQuantities,
-  writeMode,
   staleWriteBlocked,
   onStaleWriteBlocked,
   onStudentItemsSaved,
@@ -209,66 +207,35 @@ export default function FavoritedItemSelector({
   };
 
   return (
-    <>
-      <Suspense fallback={<LoadingSkeleton />}>
-        <Await resolve={items}>
-          {(items) => {
-            const gridCount = Object.keys(activeItem?.favoriteLevels ?? {}).length ?? 0;
-            let gridClass = "lg:grid-cols-2";
-            if (gridCount === 1) {
-              gridClass = "lg:grid-cols-1";
-            } else if (gridCount === 3) {
-              gridClass = "lg:grid-cols-3";
-            }
-            return (
-              <>
-                <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)] 2xl:items-start">
-                  <ItemSelector
-                    items={items}
-                    activeItemUid={activeItem?.itemUid ?? null}
-                    itemCounts={itemCounts}
-                    itemQuantityBreakdowns={itemQuantityBreakdowns}
-                    ownedQuantities={ownedQuantities}
-                    onSelectItem={(itemUid) => setActiveItem(items.find((item) => item.itemUid === itemUid) ?? null)}
-                  />
-                  <div className="hidden min-w-0 2xl:sticky 2xl:top-4 2xl:block">
-                    {activeItem ? (
-                      <GiftDetailCards
-                        activeItem={activeItem}
-                        gridClass={gridClass}
-                        itemCounts={itemCounts}
-                        itemQuantityBreakdowns={itemQuantityBreakdowns}
-                        ownedQuantities={ownedQuantities}
-                        writeMode={writeMode}
-                        staleWriteBlocked={staleWriteBlocked}
-                        onStaleWriteBlocked={onStaleWriteBlocked}
-                        studentItemsState={studentItemsState}
-                        initialStudentItems={initialStudentItems}
-                        students={students}
-                        isAuthenticated={isAuthenticated}
-                        onQuantityChange={handleQuantityChange}
-                        onSave={handleSave}
-                      />
-                    ) : (
-                      <GiftDetailEmptyState />
-                    )}
-                  </div>
-                </div>
-                {activeItem && showMobileSheet && (
-                  <BottomSheet
-                    Icon={GiftIcon}
-                    title="선물 정보"
-                    description="선물을 선호하는 학생을 확인하고 각 학생에게 선물할 수량을 정리해보세요"
-                    onClose={() => setActiveItem(null)}
-                  >
+    <Suspense fallback={<LoadingSkeleton />}>
+      <Await resolve={items}>
+        {(items) => {
+          const gridCount = Object.keys(activeItem?.favoriteLevels ?? {}).length ?? 0;
+          let gridClass = "lg:grid-cols-2";
+          if (gridCount === 1) {
+            gridClass = "lg:grid-cols-1";
+          } else if (gridCount === 3) {
+            gridClass = "lg:grid-cols-3";
+          }
+          return (
+            <>
+              <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_minmax(20rem,28rem)] 2xl:items-start">
+                <ItemSelector
+                  items={items}
+                  activeItemUid={activeItem?.itemUid ?? null}
+                  itemCounts={itemCounts}
+                  itemQuantityBreakdowns={itemQuantityBreakdowns}
+                  ownedQuantities={ownedQuantities}
+                  onSelectItem={(itemUid) => setActiveItem(items.find((item) => item.itemUid === itemUid) ?? null)}
+                />
+                <div className="hidden min-w-0 2xl:sticky 2xl:top-4 2xl:block">
+                  {activeItem ? (
                     <GiftDetailCards
                       activeItem={activeItem}
-                      gridClass="grid-cols-1"
-                      surface="sheet"
+                      gridClass={gridClass}
                       itemCounts={itemCounts}
                       itemQuantityBreakdowns={itemQuantityBreakdowns}
                       ownedQuantities={ownedQuantities}
-                      writeMode={writeMode}
                       staleWriteBlocked={staleWriteBlocked}
                       onStaleWriteBlocked={onStaleWriteBlocked}
                       studentItemsState={studentItemsState}
@@ -278,14 +245,41 @@ export default function FavoritedItemSelector({
                       onQuantityChange={handleQuantityChange}
                       onSave={handleSave}
                     />
-                  </BottomSheet>
-                )}
-              </>
-            );
-          }}
-        </Await>
-      </Suspense>
-    </>
+                  ) : (
+                    <GiftDetailEmptyState />
+                  )}
+                </div>
+              </div>
+              {activeItem && showMobileSheet && (
+                <BottomSheet
+                  Icon={GiftIcon}
+                  title="선물 정보"
+                  description="선물을 선호하는 학생을 확인하고 각 학생에게 선물할 수량을 정리해보세요"
+                  onClose={() => setActiveItem(null)}
+                >
+                  <GiftDetailCards
+                    activeItem={activeItem}
+                    gridClass="grid-cols-1"
+                    surface="sheet"
+                    itemCounts={itemCounts}
+                    itemQuantityBreakdowns={itemQuantityBreakdowns}
+                    ownedQuantities={ownedQuantities}
+                    staleWriteBlocked={staleWriteBlocked}
+                    onStaleWriteBlocked={onStaleWriteBlocked}
+                    studentItemsState={studentItemsState}
+                    initialStudentItems={initialStudentItems}
+                    students={students}
+                    isAuthenticated={isAuthenticated}
+                    onQuantityChange={handleQuantityChange}
+                    onSave={handleSave}
+                  />
+                </BottomSheet>
+              )}
+            </>
+          );
+        }}
+      </Await>
+    </Suspense>
   );
 }
 
@@ -380,7 +374,6 @@ type GiftDetailCardsProps = {
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
   onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
-  writeMode: "legacy" | "nullable";
   staleWriteBlocked: boolean;
   onStaleWriteBlocked: () => void;
 };
@@ -398,7 +391,6 @@ function GiftDetailCards({
   students,
   isAuthenticated,
   onSave,
-  writeMode,
   staleWriteBlocked,
   onStaleWriteBlocked,
 }: GiftDetailCardsProps) {
@@ -424,7 +416,6 @@ function GiftDetailCards({
             students={students}
             isAuthenticated={isAuthenticated}
             onSave={onSave}
-            writeMode={writeMode}
             staleWriteBlocked={staleWriteBlocked}
             onStaleWriteBlocked={onStaleWriteBlocked}
           />
@@ -466,7 +457,6 @@ type UseSaveStudentItemsParams = {
   activeItem: AllStudentsFavoriteItems;
   isAuthenticated: boolean;
   onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
-  writeMode: "legacy" | "nullable";
   staleWriteBlocked: boolean;
   onStaleWriteBlocked: () => void;
 };
@@ -479,7 +469,6 @@ function useSaveStudentItems({
   activeItem,
   isAuthenticated,
   onSave,
-  writeMode,
   staleWriteBlocked,
   onStaleWriteBlocked,
 }: UseSaveStudentItemsParams) {
@@ -567,17 +556,7 @@ function useSaveStudentItems({
       const studentData = students.find((s) => s.uid === studentUid);
       const studentItems = studentItemsMap.get(studentUid);
       if (studentData && studentItems) {
-        studentsToSave.push(
-          writeMode === "nullable"
-            ? buildGiftPlanSavePayload(studentUid, studentItems.items)
-            : {
-                studentId: studentUid,
-                currentLevel: studentData.currentLevel ?? 1,
-                currentExp: studentData.currentExp,
-                targetLevel: studentData.targetLevel ?? 50,
-                items: studentItems.items,
-              },
-        );
+        studentsToSave.push(buildGiftPlanSavePayload(studentUid, studentItems.items));
       }
     }
 
@@ -623,7 +602,6 @@ type FavoriteLevelCardProps = {
   students: StudentWithRelationship[];
   isAuthenticated: boolean;
   onSave: (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => void;
-  writeMode: "legacy" | "nullable";
   staleWriteBlocked: boolean;
   onStaleWriteBlocked: () => void;
 };
@@ -637,7 +615,6 @@ type FavoriteLevelCardEditModeProps = {
   saveSuccess: boolean;
   isSaving: boolean;
   hasChanges: boolean;
-  changedStudentCount: number;
   staleWriteBlocked: boolean;
   retryAvailable: boolean;
   onRetry: () => void;
@@ -675,7 +652,6 @@ function FavoriteLevelCardEditMode({
   saveSuccess,
   isSaving,
   hasChanges,
-  changedStudentCount,
   staleWriteBlocked,
   retryAvailable,
   onRetry,
@@ -887,7 +863,6 @@ function FavoriteLevelCard({
   students,
   isAuthenticated,
   onSave,
-  writeMode,
   staleWriteBlocked,
   onStaleWriteBlocked,
 }: FavoriteLevelCardProps) {
@@ -902,7 +877,6 @@ function FavoriteLevelCard({
       activeItem,
       isAuthenticated,
       onSave,
-      writeMode,
       staleWriteBlocked,
       onStaleWriteBlocked,
     });
@@ -934,7 +908,7 @@ function FavoriteLevelCard({
         <ResourceCard
           rarity={activeItem.itemRarity}
           itemUid={activeItem.itemUid}
-          favoriteLevel={Number.parseInt(favoriteLevel)}
+          favoriteLevel={Number.parseInt(favoriteLevel, 10)}
         />
         <div className="flex-1 min-w-0">
           <p className="truncate font-medium">{activeItem.itemName}</p>
@@ -963,7 +937,6 @@ function FavoriteLevelCard({
           saveSuccess={saveSuccess}
           isSaving={isSaving}
           hasChanges={hasChanges}
-          changedStudentCount={changedStudents.length}
           staleWriteBlocked={staleWriteBlocked}
           retryAvailable={retryAvailable}
           onRetry={handleRetry}

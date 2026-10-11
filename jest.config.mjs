@@ -9,7 +9,6 @@ const config = {
   },
   testPathIgnorePatterns: [
     "<rootDir>/scripts/local-dev.test.mjs",
-    "<rootDir>/scripts/student-state-migration.test.mjs",
   ],
 };
 

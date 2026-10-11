@@ -1,7 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import {
   applySyncDraft,
-  createAndApplySyncDraft,
   normalizeSyncDraftEntryValue,
   toSyncDraftSource,
   toSyncDraftStatus,
@@ -42,47 +41,6 @@ type SyncDraftEntryRow = {
   valueJson: string | null;
   meta: string | null;
   createdAt: string;
-  updatedAt: string;
-};
-
-type RelationshipLevelRow = {
-  uid: string;
-  userId: number;
-  studentId: string;
-  currentLevel: number;
-  currentExp: number | null;
-  targetLevel: number;
-  items: string;
-  updatedAt: string;
-};
-
-type StudentGrowthRow = {
-  uid: string;
-  userId: number;
-  studentUid: string;
-  level: number | null;
-  skillEx: number | null;
-  skillNormal: number | null;
-  skillEnhanced: number | null;
-  skillSub: number | null;
-  equip1: number | null;
-  equip2: number | null;
-  equip3: number | null;
-  equipSpecial: number | null;
-  targetLevel: number | null;
-  targetSkillEx: number | null;
-  targetSkillNormal: number | null;
-  targetSkillEnhanced: number | null;
-  targetSkillSub: number | null;
-  targetEquip1: number | null;
-  targetEquip2: number | null;
-  targetEquip3: number | null;
-  targetEquipSpecial: number | null;
-  targetTier: number | null;
-  targetWeaponLevel: number | null;
-  targetAbilityHp: number | null;
-  targetAbilityAtk: number | null;
-  targetAbilityHeal: number | null;
   updatedAt: string;
 };
 
@@ -136,53 +94,6 @@ function createEntryRow(overrides: Partial<SyncDraftEntryRow>): SyncDraftEntryRo
     }),
     meta: null,
     createdAt: "2026-06-13T00:00:00.000Z",
-    updatedAt: "2026-06-13T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
-function createRelationshipLevelRow(overrides: Partial<RelationshipLevelRow> = {}): RelationshipLevelRow {
-  return {
-    uid: "relationship-a",
-    userId: 1,
-    studentId: "20048",
-    currentLevel: 5,
-    currentExp: 123,
-    targetLevel: 80,
-    items: '{"5996":2}',
-    updatedAt: "2026-06-13T00:00:00.000Z",
-    ...overrides,
-  };
-}
-
-function createStudentGrowthRow(overrides: Partial<StudentGrowthRow> = {}): StudentGrowthRow {
-  return {
-    uid: "growth-a",
-    userId: 1,
-    studentUid: "20048",
-    level: null,
-    skillEx: null,
-    skillNormal: null,
-    skillEnhanced: null,
-    skillSub: null,
-    equip1: null,
-    equip2: null,
-    equip3: null,
-    equipSpecial: null,
-    targetLevel: null,
-    targetSkillEx: null,
-    targetSkillNormal: null,
-    targetSkillEnhanced: null,
-    targetSkillSub: null,
-    targetEquip1: null,
-    targetEquip2: null,
-    targetEquip3: null,
-    targetEquipSpecial: null,
-    targetTier: null,
-    targetWeaponLevel: null,
-    targetAbilityHp: null,
-    targetAbilityAtk: null,
-    targetAbilityHeal: null,
     updatedAt: "2026-06-13T00:00:00.000Z",
     ...overrides,
   };
@@ -244,190 +155,6 @@ describe("sync-draft", () => {
     expect(() => normalizeSyncDraftEntryValue("student_tier", "")).toThrow(
       "학생 등급은 1부터 9까지의 정수만 입력해주세요",
     );
-  });
-
-  it("applies owned student_state drafts to recruited students and student growth targets", async () => {
-    const { db, env } = createEnv();
-    db.drafts.push(createDraftRow());
-    db.entries.push(
-      createEntryRow({
-        id: 1,
-        entryKey: "20048",
-        value: 6,
-        valueJson: JSON.stringify({
-          current: {
-            level: 90,
-            tier: 6,
-            skillEx: 5,
-            skillNormal: 10,
-            skillEnhanced: 10,
-            skillSub: 10,
-            equip1: 10,
-            equip2: 9,
-            equip3: 8,
-            equipSpecial: 2,
-            bond: null,
-          },
-          target: {
-            targetLevel: 90,
-            targetTier: 8,
-            targetSkillEx: 5,
-            targetSkillNormal: 10,
-            targetSkillEnhanced: 10,
-            targetSkillSub: 10,
-            targetEquip1: 10,
-            targetEquip2: 10,
-            targetEquip3: 10,
-            targetEquipSpecial: 2,
-          },
-        }),
-      }),
-    );
-    db.studentGrowths.push(createStudentGrowthRow({ level: 70, skillEx: 3, targetLevel: 80, targetTier: 5 }));
-
-    await applySyncDraft(env, 1, "draft-a");
-
-    expect(db.drafts[0]).toMatchObject({ status: "applied" });
-    expect(db.recruitedStudents).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          studentUid: "20048",
-          tier: 6,
-          level: 90,
-          skillEx: 5,
-          equipSpecial: 2,
-        }),
-      ]),
-    );
-    expect(db.studentGrowths).toEqual([
-      expect.objectContaining({
-        studentUid: "20048",
-        level: 70,
-        skillEx: 3,
-        targetLevel: 90,
-        targetTier: 8,
-        targetSkillEx: 5,
-        targetEquipSpecial: 2,
-      }),
-    ]);
-    expect(db.tables.student_states).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          studentUid: "20048",
-          tier: 6,
-          level: 90,
-          skillEx: 5,
-        }),
-      ]),
-    );
-  });
-
-  it("applies unowned student_state drafts to growth and relationship targets", async () => {
-    const { db, env } = createEnv();
-    db.drafts.push(createDraftRow());
-    db.entries.push(
-      createEntryRow({
-        value: 7,
-        valueJson: JSON.stringify({
-          current: null,
-          target: {
-            targetBond: 20,
-            targetLevel: 90,
-            targetTier: 7,
-            targetSkillEx: 5,
-            targetSkillNormal: 10,
-            targetSkillEnhanced: 10,
-            targetSkillSub: 10,
-            targetEquip1: 10,
-            targetEquip2: 10,
-            targetEquip3: 10,
-            targetEquipSpecial: 2,
-          },
-        }),
-      }),
-    );
-
-    await applySyncDraft(env, 1, "draft-a");
-
-    expect(db.drafts[0]).toMatchObject({ status: "applied" });
-    expect(db.recruitedStudents).toEqual([]);
-    expect(db.relationshipLevels).toEqual([
-      expect.objectContaining({
-        studentId: "20048",
-        currentLevel: 1,
-        currentExp: null,
-        targetLevel: 20,
-      }),
-    ]);
-    expect(db.studentGrowths).toEqual([
-      expect.objectContaining({
-        studentUid: "20048",
-        targetLevel: 90,
-        targetTier: 7,
-        targetSkillNormal: 10,
-        targetEquipSpecial: 2,
-      }),
-    ]);
-  });
-
-  it("applies empty student_state drafts without recruiting students", async () => {
-    const { db, env } = createEnv();
-    db.drafts.push(createDraftRow());
-    db.entries.push(
-      createEntryRow({
-        value: 1,
-        valueJson: JSON.stringify({
-          current: null,
-          target: null,
-        }),
-      }),
-    );
-
-    await applySyncDraft(env, 1, "draft-a");
-
-    expect(db.drafts[0]).toMatchObject({ status: "applied" });
-    expect(db.recruitedStudents).toEqual([]);
-    expect(db.relationshipLevels).toEqual([]);
-    expect(db.studentGrowths).toEqual([]);
-  });
-
-  it("applies owned student_state bond while preserving relationship targets", async () => {
-    const { db, env } = createEnv();
-    db.drafts.push(createDraftRow());
-    db.entries.push(
-      createEntryRow({
-        value: 6,
-        valueJson: JSON.stringify({
-          current: {
-            level: 1,
-            tier: 6,
-            skillEx: 1,
-            skillNormal: 2,
-            skillEnhanced: 3,
-            skillSub: 4,
-            equip1: 1,
-            equip2: 2,
-            equip3: 3,
-            equipSpecial: null,
-            bond: 10,
-          },
-          target: null,
-        }),
-      }),
-    );
-    db.relationshipLevels.push(createRelationshipLevelRow({ studentId: "20048", currentLevel: 5, targetLevel: 80 }));
-
-    await applySyncDraft(env, 1, "draft-a");
-
-    expect(db.relationshipLevels).toEqual([
-      expect.objectContaining({
-        studentId: "20048",
-        currentLevel: 10,
-        currentExp: null,
-        targetLevel: 80,
-        items: '{"5996":2}',
-      }),
-    ]);
   });
 
   it("updates more than 500 draft entries with bounded VALUES statements", async () => {
@@ -498,56 +225,37 @@ describe("sync-draft", () => {
     const valueParameters = valueStatementIndexes.flatMap((index) => db.parameters[index]);
     expect(valueParameters).toEqual(expect.arrayContaining([null, jsonValue]));
   });
+});
 
-  it("applies more than 500 student-state entries with bounded bulk statements", async () => {
+describe("canonical student-state imports", () => {
+  it("updates canonical current and targets with no dependency on archived tables", async () => {
     const { db, env } = createEnv();
-    const input = {
-      source: "connect" as const,
-      sourceRef: "bulk-student-state",
-      type: "student_state" as const,
-      entries: Array.from({ length: 1001 }, (_, index) => ({
-        entryKey: `student-${index}`,
+    db.drafts.push(createDraftRow());
+    db.entries.push(
+      createEntryRow({
+        id: 1,
+        entryKey: "20048",
         value: 7,
         valueJson: JSON.stringify({
-          current: { tier: 7, bond: (index % 100) + 1 },
-          target: { targetTier: 8, targetBond: (index % 100) + 1 },
+          current: { tier: 7, level: 85, bond: 20 },
+          target: { targetTier: 7, targetLevel: 60, targetBond: 10 },
         }),
-      })),
-    };
-
-    await createAndApplySyncDraft(env, 1, input);
-
-    const recruitedStatements = db.statements.filter((statement) =>
-      statement.toLowerCase().includes('insert into "recruited_students"'),
+      }),
     );
-    const growthStatements = db.statements.filter((statement) =>
-      statement.toLowerCase().includes('insert into "student_growth"'),
-    );
-    const relationshipStatements = db.statements.filter((statement) =>
-      statement.toLowerCase().includes('insert into "user_relationship_levels"'),
-    );
-    const relationshipReads = db.statements.filter(
-      (statement) =>
-        statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"'),
-    );
-    const relationshipReadIndexes = db.statements.flatMap((statement, index) =>
-      statement.toLowerCase().includes("select") && statement.toLowerCase().includes('"user_relationship_levels"')
-        ? [index]
-        : [],
-    );
-    const projectionRelationshipReads = relationshipReadIndexes.filter((index) =>
-      /\bto_char\(/i.test(db.statements[index]),
-    );
-    const relationshipReadChunkSizes = relationshipReadIndexes.map((index) =>
-      Math.max(0, (db.parameters[index]?.length ?? 1) - 1),
-    );
-    const batchCount = Math.ceil(input.entries.length / 500);
-    expect(recruitedStatements).toHaveLength(3);
-    expect(growthStatements).toHaveLength(3);
-    expect(relationshipStatements).toHaveLength(6);
-    expect(relationshipReads.length).toBeGreaterThanOrEqual(batchCount * 2);
-    expect(relationshipReads.length).toBeLessThanOrEqual(batchCount * 3);
-    expect(projectionRelationshipReads).toHaveLength(batchCount * 2);
-    expect(relationshipReadChunkSizes.every((size) => size <= 500)).toBe(true);
+    await applySyncDraft(env, 1, "draft-a", { studentStateRequestMode: "nullable" });
+    expect(db.tables.student_states).toEqual([
+      expect.objectContaining({ studentUid: "20048", tier: 7, level: 85, relationshipCurrentLevel: 20 }),
+    ]);
+    expect(db.tables.student_targets).toEqual([
+      expect.objectContaining({ studentUid: "20048", targetLevel: 60, relationshipTargetLevel: 10 }),
+    ]);
+    expect(db.tables.student_state_audits).toHaveLength(1);
+    expect(
+      db.statements.some((s) =>
+        /\b(?:from|into|update) "(?:recruited_students|student_growth|user_relationship_levels|student_state_migration_control)"/.test(
+          s,
+        ),
+      ),
+    ).toBe(false);
   });
 });

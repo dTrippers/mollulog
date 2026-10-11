@@ -1,12 +1,12 @@
-import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgRecruitedStudentsTable, pgStudentStatesTable } from "~/db/postgres/schema";
+import { pgStudentStatesTable } from "~/db/postgres/schema";
 import {
   patchCanonicalStudentState,
   type StudentStateTransaction,
-  withStudentStateProjection,
-} from "~/db/postgres/student-state-projection";
+  withStudentStateWrite,
+} from "~/db/postgres/student-state";
 import {
   ABILITY_RELEASE_MAX_LEVEL,
   assertAbilityReleaseAvailable,
@@ -21,8 +21,6 @@ const PG_IN_QUERY_CHUNK_SIZE = 500;
 export const MAX_RECRUITED_STUDENT_BATCH_SIZE = 500;
 type RecruitedStudentsDb = NodePgDatabase;
 export type RecruitedStudentsTransaction = StudentStateTransaction;
-
-export const recruitedStudentsTable = pgRecruitedStudentsTable;
 
 export type RecruitedStudentCurrentState = {
   level: number | null;
@@ -202,53 +200,17 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
   }
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(
+      await withStudentStateWrite(
         tx,
         senseiId,
         [studentUid],
         "recruited_student",
-        async (lockedTx, context) => {
-          if (context.mode === "nullable") {
-            const [existing] = await lockedTx
-              .select()
-              .from(pgStudentStatesTable)
-              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-              .limit(1);
-            if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
-              throw new RecruitedStudentValidationError("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
-            }
-            try {
-              assertAbilityReleaseAvailable(
-                [existing?.abilityHp, existing?.abilityAtk, existing?.abilityHeal],
-                tier,
-                "능력 해방",
-              );
-            } catch (error) {
-              if (error instanceof Error) throw new RecruitedStudentValidationError(error.message);
-              throw error;
-            }
-            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
-              recruitedStudentUid: existing?.recruitedStudentUid ?? nanoid(8),
-              recruitedAt: existing?.recruitedAt ?? new Date().toISOString(),
-              tier,
-            });
-            return;
-          }
+        async (lockedTx) => {
           const [existing] = await lockedTx
-            .select({
-              weaponLevel: pgRecruitedStudentsTable.weaponLevel,
-              abilityHp: pgRecruitedStudentsTable.abilityHp,
-              abilityAtk: pgRecruitedStudentsTable.abilityAtk,
-              abilityHeal: pgRecruitedStudentsTable.abilityHeal,
-            })
-            .from(pgRecruitedStudentsTable)
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            )
-            .limit(1)
-            .for("update");
-          // A missing business-key row cannot be row-locked; the unique index and
-          // conflict target serialize a concurrent insert at the write boundary.
+            .select()
+            .from(pgStudentStatesTable)
+            .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+            .limit(1);
           if (existing?.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
             throw new RecruitedStudentValidationError("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
           }
@@ -259,18 +221,15 @@ export async function upsertRecruitedStudent(env: Env, senseiId: number, student
               "능력 해방",
             );
           } catch (error) {
-            if (error instanceof Error) {
-              throw new RecruitedStudentValidationError(error.message);
-            }
+            if (error instanceof Error) throw new RecruitedStudentValidationError(error.message);
             throw error;
           }
-          await lockedTx
-            .insert(pgRecruitedStudentsTable)
-            .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
-            .onConflictDoUpdate({
-              target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-              set: { tier, updatedAt: new Date() },
-            });
+          await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
+            recruitedStudentUid: existing?.recruitedStudentUid ?? nanoid(8),
+            recruitedAt: existing?.recruitedAt ?? new Date().toISOString(),
+            tier,
+          });
+          return;
         },
         null,
         null,
@@ -318,36 +277,26 @@ export async function addRecruitedStudents(env: Env, senseiId: number, items: re
 
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(
+      await withStudentStateWrite(
         tx,
         senseiId,
         normalizedItems.map(({ studentUid }) => studentUid),
         "recruited_student_batch",
-        async (lockedTx, context) => {
-          if (context.mode === "nullable") {
-            for (const { studentUid, tier } of normalizedItems) {
-              const [existing] = await lockedTx
-                .select({ recruitedStudentUid: pgStudentStatesTable.recruitedStudentUid })
-                .from(pgStudentStatesTable)
-                .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-                .limit(1);
-              if (existing?.recruitedStudentUid != null) continue;
-              await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
-                recruitedStudentUid: nanoid(8),
-                recruitedAt: new Date().toISOString(),
-                tier,
-              });
-            }
-            return;
-          }
-          await lockedTx
-            .insert(pgRecruitedStudentsTable)
-            .values(
-              normalizedItems.map(({ studentUid, tier }) => ({ uid: nanoid(8), userId: senseiId, studentUid, tier })),
-            )
-            .onConflictDoNothing({
-              target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
+        async (lockedTx) => {
+          for (const { studentUid, tier } of normalizedItems) {
+            const [existing] = await lockedTx
+              .select({ recruitedStudentUid: pgStudentStatesTable.recruitedStudentUid })
+              .from(pgStudentStatesTable)
+              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+              .limit(1);
+            if (existing?.recruitedStudentUid != null) continue;
+            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
+              recruitedStudentUid: nanoid(8),
+              recruitedAt: new Date().toISOString(),
+              tier,
             });
+          }
+          return;
         },
         null,
         null,
@@ -376,36 +325,24 @@ export async function upsertRecruitedStudentFromRecruitmentResultInTransaction(
   if (tier < 1 || tier > 9) {
     throw new Error(`Invalid tier: ${tier}`);
   }
-  await withStudentStateProjection(
+  await withStudentStateWrite(
     db,
     senseiId,
     [studentUid],
     "recruitment_result",
-    async (lockedTx, context) => {
-      if (context.mode === "nullable") {
-        const [existing] = await lockedTx
-          .select()
-          .from(pgStudentStatesTable)
-          .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-          .limit(1);
-        const currentTier = existing?.tier ?? 0;
-        await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
-          recruitedStudentUid: existing?.recruitedStudentUid ?? nanoid(8),
-          recruitedAt: existing?.recruitedAt ?? new Date().toISOString(),
-          tier: Math.max(currentTier, tier),
-        });
-        return;
-      }
-      await lockedTx
-        .insert(pgRecruitedStudentsTable)
-        .values({ uid: nanoid(8), userId: senseiId, studentUid, tier })
-        .onConflictDoUpdate({
-          target: [pgRecruitedStudentsTable.userId, pgRecruitedStudentsTable.studentUid],
-          set: {
-            tier: sql`greatest(${pgRecruitedStudentsTable.tier}, ${tier})`,
-            updatedAt: new Date(),
-          },
-        });
+    async (lockedTx) => {
+      const [existing] = await lockedTx
+        .select()
+        .from(pgStudentStatesTable)
+        .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+        .limit(1);
+      const currentTier = existing?.tier ?? 0;
+      await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
+        recruitedStudentUid: existing?.recruitedStudentUid ?? nanoid(8),
+        recruitedAt: existing?.recruitedAt ?? new Date().toISOString(),
+        tier: Math.max(currentTier, tier),
+      });
+      return;
     },
     null,
     null,
@@ -421,53 +358,31 @@ export async function updateRecruitedStudentCurrentState(
   validateRecruitedStudentCurrentStateInput(input);
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(
+      await withStudentStateWrite(
         tx,
         senseiId,
         [studentUid],
         "recruited_student",
-        async (lockedTx, context) => {
-          if (context.mode === "nullable") {
-            const [existing] = await lockedTx
-              .select()
-              .from(pgStudentStatesTable)
-              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-              .limit(1);
-            if (existing?.recruitedStudentUid == null) return;
-            const nextTier = existing.tier;
-            const nextWeaponLevel = Object.hasOwn(input, "weaponLevel")
-              ? (input.weaponLevel ?? null)
-              : existing.weaponLevel;
-            const nextAbility = [
-              Object.hasOwn(input, "abilityHp") ? (input.abilityHp ?? null) : existing.abilityHp,
-              Object.hasOwn(input, "abilityAtk") ? (input.abilityAtk ?? null) : existing.abilityAtk,
-              Object.hasOwn(input, "abilityHeal") ? (input.abilityHeal ?? null) : existing.abilityHeal,
-            ];
-            assertWeaponLevelRange(nextWeaponLevel, nextTier, "고유무기 레벨");
-            assertAbilityReleaseAvailable(nextAbility, nextTier, "능력 해방");
-            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, input);
-            return;
-          }
+        async (lockedTx) => {
           const [existing] = await lockedTx
-            .select({ tier: pgRecruitedStudentsTable.tier })
-            .from(pgRecruitedStudentsTable)
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            )
-            .limit(1)
-            .for("update");
-          assertWeaponLevelRange(input.weaponLevel, existing?.tier ?? null, "고유무기 레벨");
-          assertAbilityReleaseAvailable(
-            [input.abilityHp, input.abilityAtk, input.abilityHeal],
-            existing?.tier ?? null,
-            "능력 해방",
-          );
-          await lockedTx
-            .update(pgRecruitedStudentsTable)
-            .set({ ...input, updatedAt: new Date() })
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            );
+            .select()
+            .from(pgStudentStatesTable)
+            .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+            .limit(1);
+          if (existing?.recruitedStudentUid == null) return;
+          const nextTier = existing.tier;
+          const nextWeaponLevel = Object.hasOwn(input, "weaponLevel")
+            ? (input.weaponLevel ?? null)
+            : existing.weaponLevel;
+          const nextAbility = [
+            Object.hasOwn(input, "abilityHp") ? (input.abilityHp ?? null) : existing.abilityHp,
+            Object.hasOwn(input, "abilityAtk") ? (input.abilityAtk ?? null) : existing.abilityAtk,
+            Object.hasOwn(input, "abilityHeal") ? (input.abilityHeal ?? null) : existing.abilityHeal,
+          ];
+          assertWeaponLevelRange(nextWeaponLevel, nextTier, "고유무기 레벨");
+          assertAbilityReleaseAvailable(nextAbility, nextTier, "능력 해방");
+          await patchCanonicalStudentState(lockedTx, senseiId, studentUid, input);
+          return;
         },
         null,
         null,
@@ -482,50 +397,19 @@ export async function updateRecruitedStudentTier(env: Env, senseiId: number, stu
   }
   await withDb(env, async (db) => {
     await db.transaction(async (tx) => {
-      await withStudentStateProjection(
+      await withStudentStateWrite(
         tx,
         senseiId,
         [studentUid],
         "recruited_student",
-        async (lockedTx, context) => {
-          if (context.mode === "nullable") {
-            const [existing] = await lockedTx
-              .select()
-              .from(pgStudentStatesTable)
-              .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
-              .limit(1);
-            if (existing?.recruitedStudentUid == null)
-              throw new RecruitedStudentValidationError("모집하지 않은 학생이에요");
-            if (existing.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
-              throw new RecruitedStudentValidationError("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
-            }
-            try {
-              assertAbilityReleaseAvailable(
-                [existing.abilityHp, existing.abilityAtk, existing.abilityHeal],
-                tier,
-                "능력 해방",
-              );
-            } catch (error) {
-              if (error instanceof Error) throw new RecruitedStudentValidationError(error.message);
-              throw error;
-            }
-            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, { tier });
-            return;
-          }
+        async (lockedTx) => {
           const [existing] = await lockedTx
-            .select({
-              weaponLevel: pgRecruitedStudentsTable.weaponLevel,
-              abilityHp: pgRecruitedStudentsTable.abilityHp,
-              abilityAtk: pgRecruitedStudentsTable.abilityAtk,
-              abilityHeal: pgRecruitedStudentsTable.abilityHeal,
-            })
-            .from(pgRecruitedStudentsTable)
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            )
-            .limit(1)
-            .for("update");
-          if (!existing) throw new RecruitedStudentValidationError("모집하지 않은 학생이에요");
+            .select()
+            .from(pgStudentStatesTable)
+            .where(and(eq(pgStudentStatesTable.userId, senseiId), eq(pgStudentStatesTable.studentUid, studentUid)))
+            .limit(1);
+          if (existing?.recruitedStudentUid == null)
+            throw new RecruitedStudentValidationError("모집하지 않은 학생이에요");
           if (existing.weaponLevel != null && existing.weaponLevel > getWeaponLevelMaxByTier(tier)) {
             throw new RecruitedStudentValidationError("고유무기 레벨이 변경하려는 성급의 상한을 초과해요");
           }
@@ -539,12 +423,8 @@ export async function updateRecruitedStudentTier(env: Env, senseiId: number, stu
             if (error instanceof Error) throw new RecruitedStudentValidationError(error.message);
             throw error;
           }
-          await lockedTx
-            .update(pgRecruitedStudentsTable)
-            .set({ tier, updatedAt: new Date() })
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            );
+          await patchCanonicalStudentState(lockedTx, senseiId, studentUid, { tier });
+          return;
         },
         null,
         null,
@@ -556,41 +436,34 @@ export async function updateRecruitedStudentTier(env: Env, senseiId: number, stu
 export async function removeRecruitedStudent(env: Env, senseiId: number, studentUid: string) {
   await withDb(env, (db) =>
     db.transaction(async (tx) => {
-      await withStudentStateProjection(
+      await withStudentStateWrite(
         tx,
         senseiId,
         [studentUid],
         "recruited_student",
-        async (lockedTx, context) => {
-          if (context.mode === "nullable") {
-            await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
-              recruitedStudentUid: null,
-              recruitedAt: null,
-              tier: null,
-              level: null,
-              skillEx: null,
-              skillNormal: null,
-              skillEnhanced: null,
-              skillSub: null,
-              equip1: null,
-              equip2: null,
-              equip3: null,
-              equipSpecial: null,
-              equip1Level: null,
-              equip2Level: null,
-              equip3Level: null,
-              weaponLevel: null,
-              abilityHp: null,
-              abilityAtk: null,
-              abilityHeal: null,
-            });
-            return;
-          }
-          await lockedTx
-            .delete(pgRecruitedStudentsTable)
-            .where(
-              and(eq(pgRecruitedStudentsTable.userId, senseiId), eq(pgRecruitedStudentsTable.studentUid, studentUid)),
-            );
+        async (lockedTx) => {
+          await patchCanonicalStudentState(lockedTx, senseiId, studentUid, {
+            recruitedStudentUid: null,
+            recruitedAt: null,
+            tier: null,
+            level: null,
+            skillEx: null,
+            skillNormal: null,
+            skillEnhanced: null,
+            skillSub: null,
+            equip1: null,
+            equip2: null,
+            equip3: null,
+            equipSpecial: null,
+            equip1Level: null,
+            equip2Level: null,
+            equip3Level: null,
+            weaponLevel: null,
+            abilityHp: null,
+            abilityAtk: null,
+            abilityHeal: null,
+          });
+          return;
         },
         null,
         null,

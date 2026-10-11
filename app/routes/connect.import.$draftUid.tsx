@@ -1,4 +1,3 @@
-import { useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -22,7 +21,7 @@ import { routeError } from "~/lib/http-errors";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getRelationshipLevels, getStudentStateWriteMode } from "~/models/relationship-level";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getStudentGrowths } from "~/models/student-growth";
 import {
@@ -66,15 +65,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   }
 
   const entryKeys = draft.entries.map((entry) => entry.entryKey);
-  const [metadataByKey, currentValues, writeMode] = await Promise.all([
+  const [metadataByKey, currentValues] = await Promise.all([
     loadDraftMetadata(env, draft),
     loadCurrentValues(env, currentUser.id, draft.type, entryKeys),
-    draft.type === "student_state" ? getStudentStateWriteMode(env) : Promise.resolve("legacy" as const),
   ]);
   const proposedStudentStateValues =
     draft.type === "student_state" ? parseStudentStateDraftValues(draft.entries) : undefined;
 
-  return { draft, metadataByKey, currentValues, proposedStudentStateValues, writeMode };
+  return { draft, metadataByKey, currentValues, proposedStudentStateValues };
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
@@ -114,7 +112,6 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         draft.type === "student_state" ? toStudentStateApplyMetadata(await loadDraftMetadata(env, draft)) : undefined;
       await applySyncDraft(env, currentUser.id, draftUid, {
         entryUpdates: parsedForm.entries,
-        mergeReviewedStudentState: draft.type === "student_state",
         studentStateMetadataByKey: metadataByKey,
         studentStateRequestMode: draft.type === "student_state" ? parseStudentStateRequestMode(formData) : null,
       });
@@ -151,13 +148,8 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 };
 
 export default function ConnectDraftDetailPage() {
-  const { draft, metadataByKey, currentValues, proposedStudentStateValues, writeMode } = useLoaderData<typeof loader>();
+  const { draft, metadataByKey, currentValues, proposedStudentStateValues } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
-  const pinnedReviewMode = useRef<{ draftUid: string; mode: "legacy" | "nullable" } | null>(null);
-  if (pinnedReviewMode.current?.draftUid !== draft.uid) {
-    pinnedReviewMode.current = { draftUid: draft.uid, mode: writeMode };
-  }
-  const reviewMode = pinnedReviewMode.current.mode;
 
   const review =
     draft.type === "student_state" ? (
@@ -166,7 +158,6 @@ export default function ConnectDraftDetailPage() {
         metadataByKey={metadataByKey}
         currentValues={currentValues as StudentStateCurrentValues}
         proposedValues={proposedStudentStateValues as StudentStateProposedValues}
-        writeMode={reviewMode}
         actionData={actionData}
       />
     ) : (

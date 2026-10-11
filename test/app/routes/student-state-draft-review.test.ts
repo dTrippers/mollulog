@@ -62,7 +62,7 @@ describe("student-state draft review modes", () => {
       { current: { ...existing.current, level: null }, target: null },
       { current: ["tier", "level"], target: [] },
     );
-    const changes = getStudentStateDraftReviewChanges(value, existing, { initialTier: 3, hasGear: true }, "nullable");
+    const changes = getStudentStateDraftReviewChanges(value, existing, { initialTier: 3, hasGear: true });
 
     expect(changes.currentIsUpdate).toBe(true);
     expect(changes.submittedCurrent?.level).toBeNull();

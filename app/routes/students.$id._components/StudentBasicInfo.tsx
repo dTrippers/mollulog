@@ -44,7 +44,6 @@ type StudentBasicInfoProps = {
   recruited: boolean;
   savedState: StudentCalculatorState;
   relatedRelationshipLevels: Record<string, number | null>;
-  nullableSemantics: boolean;
   knowledgeEntries: PublicKnowledgeEntry[];
   knowledgeLookupStatus: "available" | "failed";
   aiSummary?: React.ReactNode;
@@ -119,7 +118,6 @@ export default function StudentBasicInfo({
   recruited,
   savedState,
   relatedRelationshipLevels,
-  nullableSemantics,
   knowledgeEntries,
   knowledgeLookupStatus,
   aiSummary,
@@ -271,7 +269,7 @@ export default function StudentBasicInfo({
 
   const handleSave = () => {
     if (staleWriteBlockedRef.current) return;
-    if (nullableSemantics) {
+    {
       const payload: StudentBasicInfoSavePayload = { stateFormat: "nullable" };
       if (!recruited || state.tier !== savedState.tier) payload.tier = resolved.tier;
       for (const field of nullableCurrentStateFields) {
@@ -284,26 +282,6 @@ export default function StudentBasicInfo({
       submitSave(payload);
       return;
     }
-    submitSave({
-      tier: resolved.tier,
-      bond: state.bond,
-      level: state.level,
-      skillEx: state.skillEx,
-      skillNormal: state.skillNormal,
-      skillEnhanced: state.skillEnhanced,
-      skillSub: state.skillSub,
-      equip1: state.equip1,
-      equip2: state.equip2,
-      equip3: state.equip3,
-      equip1Level: resolved.equip1Level,
-      equip2Level: resolved.equip2Level,
-      equip3Level: resolved.equip3Level,
-      equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
-      weaponLevel: state.weaponLevel,
-      abilityHp: state.abilityHp,
-      abilityAtk: state.abilityAtk,
-      abilityHeal: state.abilityHeal,
-    });
   };
 
   const handleRetry = () => {
