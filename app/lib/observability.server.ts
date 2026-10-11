@@ -96,13 +96,19 @@ export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
   return event;
 }
 
+/**
+ * Tracing stays disabled by leaving `tracesSampleRate` unset: any rate, even 0, lets a caller's sampled
+ * `sentry-trace` header start a transaction. The request body is never read, so the SDK cannot consume a body
+ * before the handler enforces its size limit, authentication and rate limits.
+ */
 export function createServerSentryOptions(env: ObservabilityEnv): Sentry.CloudflareOptions {
   return {
     dsn: env.SERVER_SENTRY_DSN,
     enabled: Boolean(env.SERVER_SENTRY_DSN),
     environment: env.STAGE ?? "local",
-    tracesSampleRate: 0,
+    integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
     beforeSend: scrubServerSentryEvent,
+    beforeSendTransaction: scrubServerSentryEvent,
   };
 }
 
