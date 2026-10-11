@@ -3,6 +3,7 @@ import {
   API_MAX_BOND_EXP,
   ApiInputError,
   type ApiStudentStateValues,
+  apiStudentStateFields,
   getApiTierFields,
   getInternalTier,
   isApiStudentStateNoop,
@@ -11,6 +12,7 @@ import {
   parseApiStudentStateRegistration,
   toApiStudentState,
 } from "~/domain/mollulog-api";
+import { API_PUBLIC_ERRORS, API_STUDENT_STATE_FIELD_SPECS } from "~/domain/mollulog-api-spec";
 import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
 
 const emptyState: ApiStudentStateValues = {
@@ -36,6 +38,38 @@ const emptyState: ApiStudentStateValues = {
 };
 
 describe("mollulog-api domain", () => {
+  it("keeps its public field keys in sync with the single field spec", () => {
+    expect(apiStudentStateFields).toEqual(Object.keys(API_STUDENT_STATE_FIELD_SPECS));
+  });
+
+  it.each(apiStudentStateFields)("validates %s at the spec boundaries", (field) => {
+    const { min, max } = API_STUDENT_STATE_FIELD_SPECS[field];
+    expect(parseApiStudentStatePatch({ [field]: min })).toEqual({ [field]: min });
+    expect(parseApiStudentStatePatch({ [field]: max })).toEqual({ [field]: max });
+
+    for (const value of [min - 1, max + 1]) {
+      let error: unknown;
+      try {
+        parseApiStudentStatePatch({ [field]: value });
+      } catch (caught) {
+        error = caught;
+      }
+      expect(error).toBeInstanceOf(ApiInputError);
+      const code = (error as ApiInputError).code;
+      expect(code).toBe("invalid_request");
+      expect(API_PUBLIC_ERRORS[code].status).toBe(400);
+    }
+  });
+
+  it("uses invalid_request as the public validation code", () => {
+    try {
+      parseApiStudentStatePatch({ level: 91 });
+    } catch (error) {
+      expect(error).toBeInstanceOf(ApiInputError);
+      expect((error as ApiInputError).code).toBe("invalid_request");
+    }
+  });
+
   it("requires both public tier fields on registration and maps them to canonical combined tier", () => {
     const parsed = parseApiStudentStateRegistration({ studentUid: " 20048 ", tier: 5, weaponTier: 3 });
 

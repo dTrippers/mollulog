@@ -49,11 +49,13 @@ const student = {
   released: true,
 };
 
-function createEnv(readLimit = true): Env {
+function createEnv(readLimit = true, apiHost?: string): Env {
   const limiter: TestRateLimiter = {
     limit: jest.fn<() => Promise<{ success: boolean }>>().mockResolvedValue({ success: true }),
   };
   return {
+    HOST: "https://mollulog.net",
+    API_HOST: apiHost,
     HYPERDRIVE: { connectionString: "postgres://test" },
     API_READ_RATE_LIMITER: readLimit ? (limiter as unknown as RateLimit) : undefined,
   } as unknown as Env;
@@ -94,6 +96,59 @@ describe("MolluLog v1 API entry", () => {
     expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
   });
 
+  it("serves public documents without a bearer key or student-state availability", async () => {
+    mockApi.isApiStudentStateAvailable.mockResolvedValue(false);
+    const openApi = await handleMolluLogApiRequest(request("/v1/openapi.json"), createEnv());
+    const llms = await handleMolluLogApiRequest(request("/llms.txt"), createEnv());
+
+    expect(openApi?.status).toBe(200);
+    expect(openApi?.headers.get("Cache-Control")).toBe("public, max-age=300");
+    expect(openApi?.headers.get("Vary")).toBeNull();
+    expect(openApi?.headers.get("Content-Type")).toContain("application/json; charset=utf-8");
+    expect(llms?.status).toBe(200);
+    expect(llms?.headers.get("Cache-Control")).toBe("public, max-age=300");
+    expect(llms?.headers.get("Vary")).toBeNull();
+    expect(llms?.headers.get("Content-Type")).toContain("text/markdown; charset=utf-8");
+    expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
+    expect(mockApi.isApiStudentStateAvailable).not.toHaveBeenCalled();
+  });
+
+  it("serves discovery and rejects non-API paths on the production API host", async () => {
+    const env = createEnv(true, "api.mollulog.net");
+    const discovery = await handleMolluLogApiRequest(request("/"), env);
+    const unknown = await handleMolluLogApiRequest(request("/developers/docs"), env);
+
+    expect(discovery?.status).toBe(200);
+    expect(await discovery?.json()).toMatchObject({
+      name: "MolluLog API",
+      documents: {
+        llms: "https://api.mollulog.net/llms.txt",
+        llmsFull: "https://api.mollulog.net/llms-full.txt",
+        openApi: "https://api.mollulog.net/v1/openapi.json",
+      },
+    });
+    expect(unknown?.status).toBe(404);
+    expect(await unknown?.json()).toMatchObject({
+      error: { code: "not_found", docs: "https://mollulog.net/developers/docs#error-not_found" },
+    });
+    expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
+  });
+
+  it("directs production web-host API requests to the canonical API host", async () => {
+    const env = createEnv(true, "api.mollulog.net");
+    const response = await handleMolluLogApiRequest(new Request("https://mollulog.net/v1/students?query=Aru"), env);
+
+    expect(response?.status).toBe(404);
+    expect(await response?.json()).toEqual({
+      error: {
+        code: "not_found",
+        message: "몰루로그 API는 https://api.mollulog.net/v1 주소로 요청해주세요",
+        docs: "https://mollulog.net/developers/docs#error-not_found",
+      },
+    });
+    expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
+  });
+
   it("does not accept a web session cookie as API authentication", async () => {
     const response = await handleMolluLogApiRequest(request("/v1/me/students"), createEnv());
 
@@ -101,7 +156,11 @@ describe("MolluLog v1 API entry", () => {
     expect(response?.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response?.headers.get("Content-Type")).toContain("application/json");
     expect(await response?.json()).toEqual({
-      error: { code: "unauthorized", message: "Authorization: Bearer 키가 필요해요" },
+      error: {
+        code: "unauthorized",
+        message: "Authorization: Bearer 키가 필요해요",
+        docs: "https://mollulog.net/developers/docs#error-unauthorized",
+      },
     });
     expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
   });
@@ -138,6 +197,7 @@ describe("MolluLog v1 API entry", () => {
       createEnv(false),
     );
     expect(missing?.status).toBe(503);
+    expect(mockObservability.captureServerError).not.toHaveBeenCalled();
 
     const deniedEnv = createEnv();
     const limit = deniedEnv.API_READ_RATE_LIMITER as unknown as TestRateLimiter;
@@ -158,6 +218,7 @@ describe("MolluLog v1 API entry", () => {
     );
 
     expect(response?.status).toBe(503);
+    expect(mockObservability.captureServerError).not.toHaveBeenCalled();
     expect(mockApi.getApiRecruitedStudents).not.toHaveBeenCalled();
   });
 
@@ -285,7 +346,9 @@ describe("MolluLog v1 API entry", () => {
     );
 
     expect(response?.status).toBe(403);
-    expect(await response?.json()).toMatchObject({ error: { code: "insufficient_scope" } });
+    expect(await response?.json()).toMatchObject({
+      error: { code: "forbidden", docs: "https://mollulog.net/developers/docs#error-forbidden" },
+    });
     expect(mockApi.reserveApiWriteQuota).not.toHaveBeenCalled();
     expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
   });
@@ -300,8 +363,9 @@ describe("MolluLog v1 API entry", () => {
     expect(unavailable?.status).toBe(503);
     expect(await unavailable?.json()).toEqual({
       error: {
-        code: "write_quota_unavailable",
+        code: "unavailable",
         message: "요청 한도를 확인할 수 없어요. 학생 상태는 저장하지 않았어요",
+        docs: "https://mollulog.net/developers/docs#error-unavailable",
       },
     });
     expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
@@ -319,7 +383,9 @@ describe("MolluLog v1 API entry", () => {
     expect(limited?.status).toBe(429);
     expect(limited?.headers.get("Retry-After")).toBe("17");
     expect(limited?.headers.get("Cache-Control")).toBe("private, no-store");
-    expect(await limited?.json()).toMatchObject({ error: { code: "write_limit_exceeded" } });
+    expect(await limited?.json()).toMatchObject({
+      error: { code: "rate_limited", docs: "https://mollulog.net/developers/docs#error-rate_limited" },
+    });
     expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
     expect(mockApi.reserveApiWriteQuota).toHaveBeenCalledTimes(2);
   });
@@ -349,7 +415,11 @@ describe("MolluLog v1 API entry", () => {
     expect(failedWrite?.headers.get("Content-Type")).toContain("application/json");
     expect(failedWrite?.headers.get("Cache-Control")).toBe("private, no-store");
     expect(await failedWrite?.json()).toEqual({
-      error: { code: "internal_error", message: "요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요" },
+      error: {
+        code: "internal_error",
+        message: "요청을 처리하지 못했어요. 잠시 후 다시 시도해주세요",
+        docs: "https://mollulog.net/developers/docs#error-internal_error",
+      },
     });
     expect(mockApi.reserveApiWriteQuota).toHaveBeenCalledTimes(3);
   });
@@ -361,8 +431,10 @@ describe("MolluLog v1 API entry", () => {
     });
     declaredSizeRequest.headers.set("Content-Length", String(1024 * 1024 + 1));
     const declaredSize = await handleMolluLogApiRequest(declaredSizeRequest, createEnv());
-    expect(declaredSize?.status).toBe(413);
-    expect(await declaredSize?.json()).toMatchObject({ error: { code: "payload_too_large" } });
+    expect(declaredSize?.status).toBe(400);
+    expect(await declaredSize?.json()).toMatchObject({
+      error: { code: "invalid_request", docs: "https://mollulog.net/developers/docs#error-invalid_request" },
+    });
 
     const headers = new Headers({
       Authorization: "Bearer bearer",
@@ -381,8 +453,10 @@ describe("MolluLog v1 API entry", () => {
       duplex: "half",
     } as RequestInit & { duplex: "half" });
     const streamedSize = await handleMolluLogApiRequest(streamedRequest, createEnv());
-    expect(streamedSize?.status).toBe(413);
-    expect(await streamedSize?.json()).toMatchObject({ error: { code: "payload_too_large" } });
+    expect(streamedSize?.status).toBe(400);
+    expect(await streamedSize?.json()).toMatchObject({
+      error: { code: "invalid_request", docs: "https://mollulog.net/developers/docs#error-invalid_request" },
+    });
     expect(mockApi.reserveApiWriteQuota).toHaveBeenCalledTimes(2);
     expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
   });
@@ -393,11 +467,30 @@ describe("MolluLog v1 API entry", () => {
       createEnv(),
     );
 
-    expect(response?.status).toBe(405);
+    expect(response?.status).toBe(400);
     expect(response?.headers.get("Content-Type")).toContain("application/json");
     expect(response?.headers.get("Cache-Control")).toBe("private, no-store");
     expect(response?.headers.get("Vary")).toBe("Authorization");
-    expect(await response?.json()).toMatchObject({ error: { code: "method_not_allowed" } });
+    expect(await response?.json()).toMatchObject({
+      error: { code: "invalid_request", docs: "https://mollulog.net/developers/docs#error-invalid_request" },
+    });
+  });
+
+  it("maps unsupported content types to invalid_request", async () => {
+    const response = await handleMolluLogApiRequest(
+      request("/v1/me/students", "POST", {
+        token: "bearer",
+        body: "{}",
+        contentType: "text/plain",
+      }),
+      createEnv(),
+    );
+
+    expect(response?.status).toBe(400);
+    expect(await response?.json()).toMatchObject({
+      error: { code: "invalid_request", docs: "https://mollulog.net/developers/docs#error-invalid_request" },
+    });
+    expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
   });
 
   it("normalizes a submitted variant UID to its own primary student UID", async () => {
@@ -494,7 +587,9 @@ describe("MolluLog v1 API entry", () => {
       createEnv(),
     );
     expect(read?.status).toBe(404);
-    expect(await read?.json()).toMatchObject({ error: { code: "student_not_found" } });
+    expect(await read?.json()).toMatchObject({
+      error: { code: "not_found", docs: "https://mollulog.net/developers/docs#error-not_found" },
+    });
 
     const registered = await handleMolluLogApiRequest(
       request("/v1/me/students", "POST", {
@@ -504,13 +599,15 @@ describe("MolluLog v1 API entry", () => {
       createEnv(),
     );
     expect(registered?.status).toBe(404);
-    expect(await registered?.json()).toMatchObject({ error: { code: "student_not_found" } });
+    expect(await registered?.json()).toMatchObject({
+      error: { code: "not_found", docs: "https://mollulog.net/developers/docs#error-not_found" },
+    });
 
     expect(mockApi.getApiRecruitedStudent).not.toHaveBeenCalled();
     expect(mockApi.registerApiRecruitedStudent).not.toHaveBeenCalled();
   });
 
-  it("maps a BAQL lookup failure or an unresolved candidate to 503 student_catalog_unavailable, never 404", async () => {
+  it("maps a BAQL lookup failure or an unresolved candidate to 503 unavailable, never 404", async () => {
     mockStudents.getStudentPrimaryUids.mockRejectedValueOnce(new Error("BAQL transport detail"));
     const failed = await handleMolluLogApiRequest(
       request("/v1/me/students/10001", "GET", { token: "bearer" }),
@@ -519,8 +616,9 @@ describe("MolluLog v1 API entry", () => {
     expect(failed?.status).toBe(503);
     expect(await failed?.json()).toEqual({
       error: {
-        code: "student_catalog_unavailable",
+        code: "unavailable",
         message: "학생 정보를 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+        docs: "https://mollulog.net/developers/docs#error-unavailable",
       },
     });
 
@@ -530,7 +628,7 @@ describe("MolluLog v1 API entry", () => {
       createEnv(),
     );
     expect(searchFailed?.status).toBe(503);
-    expect(await searchFailed?.json()).toMatchObject({ error: { code: "student_catalog_unavailable" } });
+    expect(await searchFailed?.json()).toMatchObject({ error: { code: "unavailable" } });
 
     mockStudents.getAllStudents.mockResolvedValueOnce([student, { ...student, uid: "10002", name: "Aru Costume" }]);
     mockStudents.getStudentPrimaryUids.mockResolvedValueOnce(new Map([["10000", "10000"]]));
@@ -539,7 +637,7 @@ describe("MolluLog v1 API entry", () => {
       createEnv(),
     );
     expect(missingCandidate?.status).toBe(503);
-    expect(await missingCandidate?.json()).toMatchObject({ error: { code: "student_catalog_unavailable" } });
+    expect(await missingCandidate?.json()).toMatchObject({ error: { code: "unavailable" } });
   });
 
   it("logs 5xx causes with method, path and code, never the bearer token or the Authorization header", async () => {
@@ -549,8 +647,9 @@ describe("MolluLog v1 API entry", () => {
     expect(unavailable?.status).toBe(503);
     expect(await unavailable?.json()).toEqual({
       error: {
-        code: "authentication_unavailable",
+        code: "unavailable",
         message: "인증을 확인할 수 없어요. 잠시 후 다시 시도해주세요",
+        docs: "https://mollulog.net/developers/docs#error-unavailable",
       },
     });
     expect(mockObservability.captureServerError).toHaveBeenLastCalledWith(expect.any(Error), {

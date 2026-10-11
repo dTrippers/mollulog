@@ -1,40 +1,19 @@
-import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
 import {
-  ABILITY_RELEASE_MAX_LEVEL,
-  assertAbilityReleaseAvailable,
-  assertWeaponLevelRange,
-  WEAPON_LEVEL_MAX_LEVEL,
-} from "~/domain/student-growth-state";
+  API_MAX_BOND_EXP,
+  API_MAX_REQUEST_BYTES,
+  API_STUDENT_PAGE_SIZE,
+  API_STUDENT_PAGE_SIZE_MAX,
+  API_STUDENT_STATE_FIELD_SPECS,
+  type ApiStudentStateField,
+} from "~/domain/mollulog-api-spec";
+import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
+import { assertAbilityReleaseAvailable, assertWeaponLevelRange } from "~/domain/student-growth-state";
 
-export const API_STUDENT_PAGE_SIZE = 50;
-export const API_STUDENT_PAGE_SIZE_MAX = 100;
-export const API_MAX_REQUEST_BYTES = 1024 * 1024;
-export const API_MAX_BOND_EXP = getAccumulatedRelationshipExpForLevel(100);
+export type { ApiStudentStateField };
+export { API_MAX_BOND_EXP, API_MAX_REQUEST_BYTES, API_STUDENT_PAGE_SIZE, API_STUDENT_PAGE_SIZE_MAX };
 
-export const apiStudentStateFields = [
-  "tier",
-  "weaponTier",
-  "level",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equip1Level",
-  "equip2Level",
-  "equip3Level",
-  "equipSpecial",
-  "weaponLevel",
-  "abilityHp",
-  "abilityAtk",
-  "abilityHeal",
-  "bond",
-  "bondExp",
-] as const;
+export const apiStudentStateFields = Object.keys(API_STUDENT_STATE_FIELD_SPECS) as ApiStudentStateField[];
 
-export type ApiStudentStateField = (typeof apiStudentStateFields)[number];
 export type ApiNullableStudentStateField = Exclude<ApiStudentStateField, "tier" | "weaponTier">;
 
 export type ApiStudentState = {
@@ -69,7 +48,7 @@ export type ApiStudentStateValues = Omit<ApiStudentState, "tier" | "weaponTier">
 export type ApiFieldError = { field: string; message: string };
 
 export class ApiInputError extends Error {
-  readonly code = "invalid_input";
+  readonly code = "invalid_request";
   readonly fields: ApiFieldError[];
 
   constructor(message: string, fields: ApiFieldError[] = []) {
@@ -78,27 +57,6 @@ export class ApiInputError extends Error {
     this.fields = fields;
   }
 }
-
-const nullableFieldRanges: Partial<Record<ApiNullableStudentStateField, { min: number; max: number }>> = {
-  level: { min: 1, max: 90 },
-  skillEx: { min: 1, max: 5 },
-  skillNormal: { min: 1, max: 10 },
-  skillEnhanced: { min: 1, max: 10 },
-  skillSub: { min: 1, max: 10 },
-  equip1: { min: 1, max: 10 },
-  equip2: { min: 1, max: 10 },
-  equip3: { min: 1, max: 10 },
-  equip1Level: { min: 1, max: 70 },
-  equip2Level: { min: 1, max: 70 },
-  equip3Level: { min: 1, max: 70 },
-  equipSpecial: { min: 1, max: 2 },
-  weaponLevel: { min: 0, max: WEAPON_LEVEL_MAX_LEVEL },
-  abilityHp: { min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  abilityAtk: { min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  abilityHeal: { min: 0, max: ABILITY_RELEASE_MAX_LEVEL },
-  bond: { min: 1, max: 100 },
-  bondExp: { min: 0, max: API_MAX_BOND_EXP },
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -120,10 +78,12 @@ function parseTierFields(
 ): Pick<ApiStudentStatePatch, "tier" | "weaponTier"> {
   const hasTier = Object.hasOwn(input, "tier");
   const hasWeaponTier = Object.hasOwn(input, "weaponTier");
-  if (required && (!hasTier || !hasWeaponTier)) {
-    const missing = [!hasTier ? "tier" : null, !hasWeaponTier ? "weaponTier" : null].filter(
-      (field): field is string => field != null,
-    );
+  const missing = required
+    ? apiStudentStateFields.filter(
+        (field) => API_STUDENT_STATE_FIELD_SPECS[field].requiredForRegistration && !Object.hasOwn(input, field),
+      )
+    : [];
+  if (missing.length > 0) {
     throw new ApiInputError(
       "학생 성급과 고유무기 성급을 보내주세요",
       missing.map((field) => ({
@@ -136,18 +96,20 @@ function parseTierFields(
   const parsed: Pick<ApiStudentStatePatch, "tier" | "weaponTier"> = {};
   if (hasTier) {
     const tier = parseInteger(input.tier, "tier", false) as number;
-    if (tier < 1 || tier > 5) {
-      throw new ApiInputError("학생 성급은 1부터 5 사이여야 해요", [
-        { field: "tier", message: "1부터 5 사이의 정수를 보내주세요" },
+    const { min, max } = API_STUDENT_STATE_FIELD_SPECS.tier;
+    if (tier < min || tier > max) {
+      throw new ApiInputError(`학생 성급은 ${min}부터 ${max} 사이여야 해요`, [
+        { field: "tier", message: `${min}부터 ${max} 사이의 정수를 보내주세요` },
       ]);
     }
     parsed.tier = tier;
   }
   if (hasWeaponTier) {
     const weaponTier = parseInteger(input.weaponTier, "weaponTier", false) as number;
-    if (weaponTier < 0 || weaponTier > 4) {
-      throw new ApiInputError("고유무기 성급은 0부터 4 사이여야 해요", [
-        { field: "weaponTier", message: "0부터 4 사이의 정수를 보내주세요" },
+    const { min, max } = API_STUDENT_STATE_FIELD_SPECS.weaponTier;
+    if (weaponTier < min || weaponTier > max) {
+      throw new ApiInputError(`고유무기 성급은 ${min}부터 ${max} 사이여야 해요`, [
+        { field: "weaponTier", message: `${min}부터 ${max} 사이의 정수를 보내주세요` },
       ]);
     }
     parsed.weaponTier = weaponTier;
@@ -173,9 +135,9 @@ function parseNullableFields(input: Record<string, unknown>): Partial<ApiStudent
   const result: Partial<ApiStudentStatePatch> = {};
   for (const field of apiStudentStateFields) {
     if (field === "tier" || field === "weaponTier" || !Object.hasOwn(input, field)) continue;
-    const parsed = parseInteger(input[field], field, true);
-    const range = nullableFieldRanges[field];
-    if (parsed !== null && range && (parsed < range.min || parsed > range.max)) {
+    const range = API_STUDENT_STATE_FIELD_SPECS[field];
+    const parsed = parseInteger(input[field], field, range.nullable);
+    if (parsed !== null && (parsed < range.min || parsed > range.max)) {
       throw new ApiInputError(`${field} 값이 허용 범위를 벗어났어요`, [
         { field, message: `${range.min}부터 ${range.max} 사이의 정수를 보내주세요` },
       ]);
@@ -208,29 +170,48 @@ export function parseApiStudentStatePatch(input: unknown): ApiStudentStatePatch 
 }
 
 export function getInternalTier(tier: number, weaponTier: number): number {
-  if (!Number.isInteger(tier) || tier < 1 || tier > 5) {
-    throw new ApiInputError("학생 성급은 1부터 5 사이여야 해요", [
-      { field: "tier", message: "1부터 5 사이의 정수를 보내주세요" },
+  const tierRange = API_STUDENT_STATE_FIELD_SPECS.tier;
+  const weaponTierRange = API_STUDENT_STATE_FIELD_SPECS.weaponTier;
+  if (!Number.isInteger(tier) || tier < tierRange.min || tier > tierRange.max) {
+    throw new ApiInputError(`학생 성급은 ${tierRange.min}부터 ${tierRange.max} 사이여야 해요`, [
+      { field: "tier", message: `${tierRange.min}부터 ${tierRange.max} 사이의 정수를 보내주세요` },
     ]);
   }
-  if (!Number.isInteger(weaponTier) || weaponTier < 0 || weaponTier > 4) {
-    throw new ApiInputError("고유무기 성급은 0부터 4 사이여야 해요", [
-      { field: "weaponTier", message: "0부터 4 사이의 정수를 보내주세요" },
+  if (!Number.isInteger(weaponTier) || weaponTier < weaponTierRange.min || weaponTier > weaponTierRange.max) {
+    throw new ApiInputError(`고유무기 성급은 ${weaponTierRange.min}부터 ${weaponTierRange.max} 사이여야 해요`, [
+      {
+        field: "weaponTier",
+        message: `${weaponTierRange.min}부터 ${weaponTierRange.max} 사이의 정수를 보내주세요`,
+      },
     ]);
   }
-  if (weaponTier > 0 && tier !== 5) {
-    throw new ApiInputError("고유무기는 학생 성급 5에서 사용할 수 있어요", [
-      { field: "weaponTier", message: "고유무기 성급이 0보다 크면 학생 성급은 5여야 해요" },
+  if (weaponTier > weaponTierRange.min && tier !== tierRange.max) {
+    throw new ApiInputError(`고유무기는 학생 성급 ${tierRange.max}에서 사용할 수 있어요`, [
+      {
+        field: "weaponTier",
+        message: `고유무기 성급이 ${weaponTierRange.min}보다 크면 학생 성급은 ${tierRange.max}여야 해요`,
+      },
     ]);
   }
   return tier + weaponTier;
 }
 
 export function getApiTierFields(internalTier: number | null): Pick<ApiStudentState, "tier" | "weaponTier"> {
-  if (internalTier == null || !Number.isInteger(internalTier) || internalTier < 1 || internalTier > 9) {
+  const tierRange = API_STUDENT_STATE_FIELD_SPECS.tier;
+  const weaponTierRange = API_STUDENT_STATE_FIELD_SPECS.weaponTier;
+  const minimumInternalTier = tierRange.min + weaponTierRange.min;
+  const maximumInternalTier = tierRange.max + weaponTierRange.max;
+  if (
+    internalTier == null ||
+    !Number.isInteger(internalTier) ||
+    internalTier < minimumInternalTier ||
+    internalTier > maximumInternalTier
+  ) {
     throw new Error("Canonical student state has an invalid tier.");
   }
-  return internalTier <= 5 ? { tier: internalTier, weaponTier: 0 } : { tier: 5, weaponTier: internalTier - 5 };
+  return internalTier <= tierRange.max
+    ? { tier: internalTier, weaponTier: weaponTierRange.min }
+    : { tier: tierRange.max, weaponTier: internalTier - tierRange.max };
 }
 
 function bondExperienceMatchesLevel(bond: number | null, bondExp: number | null): boolean {

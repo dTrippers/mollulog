@@ -23,11 +23,14 @@ import {
   mergeAndValidateApiStudentState,
   toApiStudentState,
 } from "~/domain/mollulog-api";
+import * as mollulogApiSpec from "~/domain/mollulog-api-spec";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
 
-export const API_KEY_LIFETIME_MONTHS = 12;
-export const API_WRITE_LIMIT = 500;
-export const API_WRITE_WINDOW_MS = 10 * 60 * 1000;
+export {
+  API_KEY_LIFETIME_MONTHS,
+  API_WRITE_LIMIT,
+  API_WRITE_WINDOW_MS,
+} from "~/domain/mollulog-api-spec";
 
 export type ApiRepositoryOptions = { ctx?: ExecutionContext; createClient?: PostgresClientFactory };
 type ApiDatabase = NodePgDatabase;
@@ -77,7 +80,7 @@ function toHex(value: Uint8Array): string {
 }
 
 function createRawApiKey(): string {
-  return `mllg_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
+  return `mllg_live_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
 }
 
 async function hashApiKey(token: string): Promise<string> {
@@ -116,7 +119,7 @@ export async function createPersonalApiKey(
   const token = createRawApiKey();
   const now = new Date();
   const uid = nanoid(12);
-  const expiresAt = addCalendarMonths(now, API_KEY_LIFETIME_MONTHS);
+  const expiresAt = addCalendarMonths(now, mollulogApiSpec.API_KEY_LIFETIME_MONTHS);
   const [inserted] = await withApiDatabase(env, options, async (db) =>
     db.transaction(async (tx) => {
       const [key] = await tx
@@ -127,7 +130,7 @@ export async function createPersonalApiKey(
           name,
           keyHash: await hashApiKey(token),
           keyPrefix: token.slice(0, 17),
-          readScope: input.readScope || input.writeScope,
+          readScope: input.readScope,
           writeScope: input.writeScope,
           expiresAt,
         })
@@ -204,7 +207,7 @@ export async function authenticatePersonalApiKey(
   options: ApiRepositoryOptions = {},
   now = new Date(),
 ): Promise<ApiKeyAuthentication> {
-  if (!/^mllg_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
+  if (!/^mllg_live_[a-f0-9]{64}$/.test(token)) return { kind: "invalid" };
   const keyHash = await hashApiKey(token);
   return withApiDatabase(env, options, async (db) =>
     db.transaction(async (tx) => {
@@ -262,7 +265,7 @@ export async function reserveApiWriteQuota(
             OR api_write_quotas.request_count < $3
          RETURNING window_started_at, request_count,
                    window_started_at + ($4::bigint * interval '1 millisecond') AS resets_at`,
-        [userId, now, API_WRITE_LIMIT, API_WRITE_WINDOW_MS],
+        [userId, now, mollulogApiSpec.API_WRITE_LIMIT, mollulogApiSpec.API_WRITE_WINDOW_MS],
       );
       if (reserved.rows[0]) {
         const row = reserved.rows[0];
@@ -272,7 +275,7 @@ export async function reserveApiWriteQuota(
         `SELECT window_started_at, request_count,
                 window_started_at + ($2::bigint * interval '1 millisecond') AS resets_at
            FROM api_write_quotas WHERE user_id = $1`,
-        [userId, API_WRITE_WINDOW_MS],
+        [userId, mollulogApiSpec.API_WRITE_WINDOW_MS],
       );
       const row = current.rows[0];
       if (!row) throw new Error("API write quota reservation disappeared.");
