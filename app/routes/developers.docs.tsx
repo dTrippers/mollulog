@@ -41,7 +41,7 @@ export default function DevelopersDocs() {
   const [baseUrlCopyStatus, setBaseUrlCopyStatus] = useState<CopyStatus>("idle");
   const [authCopyStatus, setAuthCopyStatus] = useState<CopyStatus>("idle");
 
-  const prompt = API_GUIDE_COPY.agentPromptTemplate.replace("{llmsFullUrl}", urls.llmsFullUrl);
+  const prompt = API_GUIDE_COPY.agentPromptTemplate.replace("{llmsUrl}", urls.llmsUrl);
   const documentUrls = {
     llmsFull: urls.llmsFullUrl,
     llms: urls.llmsUrl,

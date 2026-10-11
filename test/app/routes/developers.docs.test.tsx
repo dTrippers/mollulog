@@ -88,9 +88,9 @@ describe("developers API documentation page", () => {
 
     expect(markup).toContain("코딩 에이전트로 연동하기");
     expect(markup).toContain("프롬프트 예시");
-    expect(text).toContain("몰루로그 API를 파악해주세요.");
-    expect(text).toContain("어떤 도구에 어떤 데이터를 연결할지 저와 질답하며 정하고");
-    expect(text).toContain("연동 구현을 도와주세요.");
+    expect(text).toContain(
+      "https://api.mollulog.net/llms.txt 를 읽고, 블루 아카이브 데이터 관리 서비스인 몰루로그 API에 대해 파악해주세요. 개발중인 도구와 어떻게 연동할 수 있을지 검토 후 제안해주세요.",
+    );
     expect(text).not.toContain("CSV로 내보내는 기능");
     expect(markup).toContain('href="https://api.mollulog.net/llms-full.txt"');
     expect(markup).toContain('href="https://api.mollulog.net/llms.txt"');

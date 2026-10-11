@@ -24,7 +24,7 @@ export const API_GUIDE_COPY = {
   },
   agentPromptLabel: "프롬프트 예시",
   agentPromptTemplate:
-    "{llmsFullUrl}를 읽고 몰루로그 API를 파악해주세요. 어떤 도구에 어떤 데이터를 연결할지 저와 질답하며 정하고, 연동 구현을 도와주세요.",
+    "{llmsUrl} 를 읽고, 블루 아카이브 데이터 관리 서비스인 몰루로그 API에 대해 파악해주세요. 개발중인 도구와 어떻게 연동할 수 있을지 검토 후 제안해주세요.",
   documentLinks: [
     { key: "llmsFull", label: "전체 안내", copyLabel: "llms-full.txt 주소 복사" },
     { key: "llms", label: "목차", copyLabel: "llms.txt 주소 복사" },
