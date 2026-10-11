@@ -596,6 +596,16 @@ export function getNavigationCatalog({
       isActive: itemIsActive("screen-scanner", pathname, currentUsername),
     },
     {
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: "/developers",
+      name: "몰루로그 API",
+      description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
+      OutlineIcon: CodeBracketIconOutline,
+      SolidIcon: CodeBracketIconSolid,
+      isActive: pathname.startsWith("/developers"),
+    },
+    {
       menuId: "external-data",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
@@ -620,16 +630,6 @@ export function getNavigationCatalog({
       OutlineIcon: QueueListIconOutline,
       SolidIcon: QueueListIconSolid,
       isActive: itemIsActive("community-timelines", pathname, currentUsername),
-    },
-    {
-      group: "news",
-      surfaces: ["desktop", "more", "search"],
-      to: "/developers",
-      name: "몰루로그 API",
-      description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
-      OutlineIcon: CodeBracketIconOutline,
-      SolidIcon: CodeBracketIconSolid,
-      isActive: pathname.startsWith("/developers"),
     },
     {
       menuId: "news",

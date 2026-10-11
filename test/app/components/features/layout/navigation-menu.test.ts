@@ -74,13 +74,13 @@ describe("global navigation catalog", () => {
     );
   });
 
-  it("exposes the public API screens in the help group and marks nested pages active", () => {
+  it("exposes the public API screens in the personal group and marks nested pages active", () => {
     const items = getNavigationCatalog({ ...guestOptions, pathname: "/developers/docs" });
     const api = items.find(({ to }) => to === "/developers");
 
     expect(api).toMatchObject({
       name: "몰루로그 API",
-      group: "news",
+      group: "personal",
       surfaces: ["desktop", "more", "search"],
       isActive: true,
     });
@@ -107,8 +107,14 @@ describe("global navigation catalog", () => {
   it("uses the approved desktop group names and order", () => {
     const desktop = getDesktopNavigation(guestOptions);
 
-    expect(desktop.groups.map(({ name }) => name)).toEqual(["게임 정보", "플래너·계산기", "커뮤니티", "소식·도움말"]);
-    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "news"]);
+    expect(desktop.groups.map(({ name }) => name)).toEqual([
+      "게임 정보",
+      "플래너·계산기",
+      "커뮤니티",
+      "나의 데이터",
+      "소식·도움말",
+    ]);
+    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "personal", "news"]);
     expect(desktop.groups.flatMap(({ name }) => [name])).not.toEqual(
       expect.arrayContaining(["컨텐츠", "플래너 & 계산기", "게임 외 정보", "내 정보", "서비스"]),
     );
@@ -128,6 +134,7 @@ describe("global navigation catalog", () => {
       "/@sensei/futures",
       "/@sensei/timelines",
       "/scanner/resource",
+      "/developers",
       "/connect/import",
     ]);
   });
@@ -157,7 +164,8 @@ describe("global navigation catalog", () => {
       "/utils/raidscore",
     ]);
     expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
-    expect(itemsByGroup.news).toEqual(["/developers", "/news", "/contact"]);
+    expect(itemsByGroup.personal).toEqual(["/developers"]);
+    expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
   });
 
   it("keeps the mobile bottom navigation at home, futures, two saved choices, and more", () => {
@@ -219,6 +227,7 @@ describe("global navigation catalog", () => {
       "게임 정보",
       "플래너·계산기",
       "커뮤니티",
+      "나의 데이터",
       "소식·도움말",
       "설정",
     ]);
@@ -246,6 +255,7 @@ describe("global navigation catalog", () => {
       "관심 학생",
       "공략 작성하기",
       "게임 화면 인식기",
+      "몰루로그 API",
       "외부 데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([
