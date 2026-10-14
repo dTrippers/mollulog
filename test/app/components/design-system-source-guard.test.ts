@@ -78,13 +78,17 @@ const migratedRouteFiles: string[] = [];
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];
 
 const colorPrefixes =
-  "ring-offset|bg|text|border|ring|outline|fill|stroke|from|via|to|divide|placeholder|caret|accent|decoration|shadow";
+  "ring-offset|border-[trblxyse]|bg|text|border|ring|outline|fill|stroke|from|via|to|divide|placeholder|caret|accent|decoration|shadow";
 const utilityValue = new RegExp(`(?<![\\w-])(?:${colorPrefixes})-(\\[[^\\]]*\\]|\\w[\\w./%-]*)`, "g");
 const hues =
   "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
 const semanticColors =
   "background|foreground|(?:card|popover|primary|secondary|muted|accent)(?:-foreground)?|destructive|border|input|ring|sidebar(?:-[a-z]+)*|chart-\\d|floating(?:-[a-z]+)*";
 const forbiddenColorValue = new RegExp(`^(?:white|black|(?:${hues})(?:-\\d{2,3})?|${semanticColors})(?:\\/[\\d.]+)?$`);
+// CSS named colors. A bracket value that is one of these (for example `bg-[red]`) is a color; other keywords such as `thin` are not.
+const cssColorKeywords =
+  "aliceblue|antiquewhite|aqua|aquamarine|azure|beige|bisque|black|blanchedalmond|blue|blueviolet|brown|burlywood|cadetblue|chartreuse|chocolate|coral|cornflowerblue|cornsilk|crimson|cyan|darkblue|darkcyan|darkgoldenrod|darkgray|darkgreen|darkgrey|darkkhaki|darkmagenta|darkolivegreen|darkorange|darkorchid|darkred|darksalmon|darkseagreen|darkslateblue|darkslategray|darkslategrey|darkturquoise|darkviolet|deeppink|deepskyblue|dimgray|dimgrey|dodgerblue|firebrick|floralwhite|forestgreen|fuchsia|gainsboro|ghostwhite|gold|goldenrod|gray|green|greenyellow|grey|honeydew|hotpink|indianred|indigo|ivory|khaki|lavender|lavenderblush|lawngreen|lemonchiffon|lightblue|lightcoral|lightcyan|lightgoldenrodyellow|lightgray|lightgreen|lightgrey|lightpink|lightsalmon|lightseagreen|lightskyblue|lightslategray|lightslategrey|lightsteelblue|lightyellow|lime|limegreen|linen|magenta|maroon|mediumaquamarine|mediumblue|mediumorchid|mediumpurple|mediumseagreen|mediumslateblue|mediumspringgreen|mediumturquoise|mediumvioletred|midnightblue|mintcream|mistyrose|moccasin|navajowhite|navy|oldlace|olive|olivedrab|orange|orangered|orchid|palegoldenrod|palegreen|paleturquoise|palevioletred|papayawhip|peachpuff|peru|pink|plum|powderblue|purple|rebeccapurple|red|rosybrown|royalblue|saddlebrown|salmon|sandybrown|seagreen|seashell|sienna|silver|skyblue|slateblue|slategray|slategrey|snow|springgreen|steelblue|tan|teal|thistle|tomato|turquoise|violet|wheat|white|whitesmoke|yellow|yellowgreen";
+const namedColorValue = new RegExp(`^\\[(?:${cssColorKeywords})\\]$`, "i");
 const colorLiteral = /#[0-9a-fA-F]{3,8}\b|\b(?:oklch|oklab|rgba?|hsla?|color-mix)\(/;
 const literalDuration = /\b\d+(?:\.\d+)?(?:ms|s)\b/;
 const cubicBezier = /cubic-bezier\(/;
@@ -92,8 +96,9 @@ const utilityDuration = /(?<![\w-])duration-(?:\d|\[)/;
 const utilityEase = /(?<![\w-])ease-(?:linear|in|out|in-out|\[)/;
 const importSpecifier = /(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)["']([^"']+)["']/g;
 // 1.x color variables (semantic names, `--color-<hue>-<shade>`, white, black) referenced through var().
+// Also matches the Tailwind 4 shorthand `prefix-(--name)` and `prefix-(color:--name)`.
 const colorVariable = new RegExp(
-  `var\\(\\s*--(?:color-)?(?:${semanticColors}|white|black|(?:${hues})(?:-\\d{2,3})?)\\s*[,)]`,
+  `(?:var\\(|(?<![\\w-])(?:${colorPrefixes})-\\()\\s*(?:color:)?--(?:color-)?(?:${semanticColors}|white|black|(?:${hues})(?:-\\d{2,3})?)\\s*[,)]`,
 );
 
 function v2SourceFiles(): string[] {
@@ -113,12 +118,13 @@ function isForbiddenImport(file: string, specifier: string): boolean {
   return /^components\/(?:primitives|features)(?:\/|$)/.test(target.split(sep).join("/"));
 }
 
-function hasForbiddenImport(file: string, line: string): boolean {
-  return [...line.matchAll(importSpecifier)].some(([, specifier]) => isForbiddenImport(file, specifier));
-}
-
 function isForbiddenColor(value: string): boolean {
-  return value.startsWith("[") ? colorLiteral.test(value) : forbiddenColorValue.test(value);
+  if (!value.startsWith("[")) {
+    return forbiddenColorValue.test(value);
+  }
+  // A `color:` type hint is allowed only when it points at a v2 variable.
+  const typeHint = value.startsWith("[color:") && !/^\[color:(?:var\()?--(?:color-)?v2-/.test(value);
+  return typeHint || colorLiteral.test(value) || namedColorValue.test(value);
 }
 
 function hasStyleViolation(line: string): boolean {
@@ -131,12 +137,23 @@ function hasStyleViolation(line: string): boolean {
   return [...line.matchAll(utilityValue)].some(([, value]) => isForbiddenColor(value));
 }
 
+function lineOf(source: string, offset: number): number {
+  return source.slice(0, offset).split("\n").length;
+}
+
 function findSourceViolations(file: string, source: string, exceptions = v2GuardExceptions): string[] {
-  return source.split("\n").flatMap((line, index) => {
-    const violates = hasForbiddenImport(file, line) || hasStyleViolation(line);
-    const excepted = exceptions.some((item) => item.file === file && item.pattern.test(line));
-    return violates && !excepted ? [`app/${file}:${index + 1}`] : [];
+  const lines = source.split("\n");
+  // Imports are matched over the whole source. The reported line is the one holding the module path.
+  const importLines = [...source.matchAll(importSpecifier)].flatMap((match) => {
+    const specifier = match[1];
+    const offset = (match.index ?? 0) + match[0].length - 1 - specifier.length;
+    return isForbiddenImport(file, specifier) ? [lineOf(source, offset)] : [];
   });
+  const styleLines = lines.flatMap((line, index) => (hasStyleViolation(line) ? [index + 1] : []));
+  return [...new Set([...importLines, ...styleLines])]
+    .sort((a, b) => a - b)
+    .filter((line) => !exceptions.some((item) => item.file === file && item.pattern.test(lines[line - 1])))
+    .map((line) => `app/${file}:${line}`);
 }
 
 function findGuardViolations(): string[] {
@@ -149,6 +166,11 @@ const importViolationFixtures: [string, string][] = [
   ["components/v2/features/Fixture.tsx", `const Card = lazy(() => import("~/components/features/students/Card"));`],
   ["routes/fixture.tsx", `export { Page } from "~/components/features/layout/Page";`],
   ["routes/fixture.tsx", `import "../components/primitives/SectionCard";`],
+  [
+    "components/v2/features/Fixture.tsx",
+    `const Card = lazy(() => import(\n  "~/components/features/students/StudentCard"\n));`,
+  ],
+  ["components/v2/features/Fixture.tsx", `import { Button } from\n  "~/components/primitives/Button";`],
 ];
 
 const styleViolationFixtures: [string, string][] = [
@@ -175,6 +197,12 @@ const styleViolationFixtures: [string, string][] = [
   ["components/v2/features/Fixture.tsx", `<p className="text-[var(--color-neutral-500)]" />`],
   ["components/v2/features/Fixture.css", `  color: var(--muted-foreground);`],
   ["components/v2/features/Fixture.css", `  background: var(--color-red-500);`],
+  ["components/v2/features/Fixture.tsx", `<div className="border-t-red-500" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="border-x-border" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-[red]" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-[color:rebeccapurple]" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-(--card)" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-(color:--muted)" />`],
 ];
 
 const allowedFixtures: [string, string][] = [
@@ -192,6 +220,11 @@ const allowedFixtures: [string, string][] = [
   ["components/v2/layout/Fixture.tsx", `import { formatDate } from "~/lib/date";`],
   ["components/v2/features/Fixture.tsx", `<div className="bg-[var(--v2-canvas)]" />`],
   ["components/v2/features/Fixture.css", `  padding-bottom: var(--mobile-nav-height);`],
+  ["components/v2/features/Fixture.tsx", `<div className="border-t-v2-inset" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-(--v2-surface)" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-[13px] border-[1.5px]" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-[url(/a.png)]" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="border-[thin] bg-[transparent]" />`],
 ];
 
 describe("design system 2.0 source guard", () => {
@@ -215,5 +248,12 @@ describe("design system 2.0 source guard", () => {
     const source = `<div className="bg-card" />`;
     expect(findSourceViolations("components/v2/features/Fixture.tsx", source, exceptions)).toEqual([]);
     expect(findSourceViolations("routes/fixture.tsx", source, exceptions)).toHaveLength(1);
+  });
+
+  it("reports the line that holds the module path of a multi-line import", () => {
+    const source = `import { Button } from\n  "~/components/primitives/Button";`;
+    expect(findSourceViolations("components/v2/features/Fixture.tsx", source)).toEqual([
+      "app/components/v2/features/Fixture.tsx:2",
+    ]);
   });
 });

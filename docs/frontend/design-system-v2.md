@@ -114,7 +114,7 @@ On those files, the guard rejects:
 - Tailwind color utilities that are not `v2-` tokens: palette hues such as `red-500`, `white`, `black`, 1.x semantic colors such as `bg-card` and `text-muted-foreground`, and arbitrary color values;
 - `duration-<number>` and arbitrary durations, `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`, and arbitrary easings;
 - literal colors in CSS or inline styles (`#hex`, `oklch(`, `rgb(`, `hsl(`), literal millisecond or second durations, and `cubic-bezier(`.
-- 1.x color variables, including through `var()` (for example `bg-[var(--card)]` or `color: var(--muted-foreground)`). Only `v2-` tokens and non-color variables are allowed.
+- 1.x color variables, including through `var()` or the `prefix-(--name)` shorthand (for example `bg-[var(--card)]`, `bg-(--card)`, or `color: var(--muted-foreground)`). Only `v2-` tokens and non-color variables are allowed.
 
 `transparent`, `current`, and `inherit` are allowed.
 
