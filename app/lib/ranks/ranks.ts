@@ -2,7 +2,7 @@ import type { Defense } from "~/graphql/graphql";
 import type { RaidType } from "~/models/content.d";
 import { createProtobufRootCache, fetchProtobuf, RANK_API_BASE_URL } from "./base";
 
-const PROTO_SCHEMA = `
+export const RANKS_PROTO_SCHEMA = `
 syntax = "proto3";
 
 package ranks;
@@ -41,6 +41,7 @@ message Student {
   int32 tier = 3;
   int32 weapon_tier = 4;
   bool is_assist = 5;
+  optional int32 starting_skill_order = 6;
 }
 `;
 
@@ -50,6 +51,7 @@ type ServerStudent = {
   tier: number;
   weaponTier?: number;
   isAssist?: boolean;
+  startingSkillOrder?: number;
 };
 
 type ServerStudentSlot = {
@@ -91,6 +93,7 @@ export type ParsedRaidRankDocument = {
       tier: number | null;
       level: number | null;
       isAssist: boolean | null;
+      startingSkillOrder?: number | null;
       studentUid: string | null;
     }[];
   }[];
@@ -104,6 +107,7 @@ export type RawPartySlotStudent =
       tier?: number | null;
       weaponTier?: number | null;
       isAssist?: boolean | null;
+      startingSkillOrder?: number | null;
     }
   | null
   | undefined;
@@ -117,13 +121,19 @@ export function convertRawPartySlot(
   }
 
   const totalTier = convertToTotalTier(Number(slot.tier || 0), slot.weaponTier ?? 0);
+  const startingSkillOrder = getStartingSkillOrder(slot.startingSkillOrder ?? undefined);
   return {
     slotIndex,
     tier: totalTier > 0 ? totalTier : null,
     level: slot.level ? Number(slot.level) : null,
     isAssist: slot.isAssist ?? false,
+    ...(startingSkillOrder === null ? {} : { startingSkillOrder }),
     studentUid: slot.uid,
   };
+}
+
+function getStartingSkillOrder(value: number | undefined): number | null {
+  return value != null && value >= 1 && value <= 5 ? value : null;
 }
 
 export function convertTier(totalTier: number): { tier: number; weaponTier?: number } {
@@ -158,12 +168,14 @@ function convertServerRankToParsed(
 
       const student = studentSlot.student;
       const totalTier = convertToTotalTier(Number(student.tier || 0), student.weaponTier ?? 0);
+      const startingSkillOrder = getStartingSkillOrder(student.startingSkillOrder);
 
       return {
         slotIndex,
         tier: totalTier > 0 ? totalTier : null,
         level: student.level ? Number(student.level) : null,
         isAssist: student.isAssist ?? false,
+        ...(startingSkillOrder === null ? {} : { startingSkillOrder }),
         studentUid: student.uid || null,
       };
     });
@@ -200,7 +212,8 @@ export async function fetchRanks(params: {
   score?: { gte?: number; lt?: number };
   exactParties?: string[][];
   includeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
-  excludeStudents: { uid: string; tiers: Array<[number] | [number, number]> }[];
+  excludeStudents: { uid: string; tiers: Array<[number] | [number, number]>; borrowable?: true }[];
+  maxBorrowedSlots?: 0 | 1;
   perPage: number;
   page: number;
 }): Promise<{ totalCount: number; ranks: ParsedRaidRankDocument[] }> {
@@ -223,12 +236,17 @@ export async function fetchRanks(params: {
     exactParties?: string[][];
     includeStudents: typeof includeStudents;
     excludeStudents: typeof excludeStudents;
+    maxBorrowedSlots?: 0 | 1;
   } = {
     perPage,
     page,
     includeStudents,
     excludeStudents,
   };
+
+  if (params.maxBorrowedSlots !== undefined) {
+    body.maxBorrowedSlots = params.maxBorrowedSlots;
+  }
 
   if (exactParties && exactParties.length > 0) {
     body.exactParties = exactParties;
@@ -251,7 +269,7 @@ export async function fetchRanks(params: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify(body),
-    schema: PROTO_SCHEMA,
+    schema: RANKS_PROTO_SCHEMA,
     messageType: "ranks.RankResponse",
     getRoot: getProtobufRoot,
   });
