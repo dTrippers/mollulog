@@ -271,7 +271,9 @@ function PartyStudentCard({
           title={`개시 스킬 ${slot.startingSkillOrder}번`}
           className={cn(
             "pointer-events-none absolute top-0 -left-[3px] z-20 inline-flex size-3.5 items-center justify-center rounded text-xs leading-none font-bold tabular-nums ring-[1.5px] ring-card shadow-sm",
-            slot.startingSkillOrder <= 3 ? "bg-amber-400 text-neutral-900" : "bg-blue-600 text-white",
+            slot.startingSkillOrder <= 3
+              ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+              : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200",
           )}
         >
           {slot.startingSkillOrder}

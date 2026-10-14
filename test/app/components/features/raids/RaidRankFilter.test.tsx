@@ -41,7 +41,7 @@ describe("RaidRankFilter assist switch", () => {
       signedIn: true,
     });
     expect(visibleMarkup).toContain("조력자 1명 허용");
-    expect(visibleMarkup).toContain("전체 편성 중 미모집 1명");
+    expect(visibleMarkup).not.toContain("전체 편성 중 미모집 1명");
     expect(visibleMarkup).toMatch(/<label[^>]*>조력자 1명 허용<\/label>/);
     expect(visibleMarkup).toContain('aria-checked="true"');
   });

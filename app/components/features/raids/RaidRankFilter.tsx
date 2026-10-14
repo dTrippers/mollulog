@@ -132,7 +132,6 @@ export default function RaidRankFilter({
         {signedIn && state.filterNotOwned ? (
           <PanelSwitchRow
             title="조력자 1명 허용"
-            description="전체 편성 중 미모집 1명"
             checked={state.allowBorrowedStudent}
             className="pt-0"
             onChange={(activated) => setState((prev) => ({ ...prev, allowBorrowedStudent: activated }))}

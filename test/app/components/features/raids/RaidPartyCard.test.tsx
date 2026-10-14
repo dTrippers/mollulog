@@ -39,7 +39,7 @@ function makeRow(orders: Array<number | null>) {
 }
 
 describe("rank party card student overlays", () => {
-  it("shows skill order tags with the specified colors and card outline", () => {
+  it("shows skill order tags with subdued colors and card outline", () => {
     const markup = renderCard({
       rows: [makeRow([1, 2, 3, 4, 5, null])],
       showStartingSkillOrder: true,
@@ -53,11 +53,11 @@ describe("rank party card student overlays", () => {
     expect(tags[0]).toContain("rounded");
     expect(tags[0]).toContain("ring-[1.5px] ring-card shadow-sm");
     for (const tag of tags.slice(0, 3)) {
-      expect(tag).toContain("bg-amber-400 text-neutral-900");
+      expect(tag).toContain("bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200");
       expect(tag).toContain("ring-[1.5px] ring-card");
     }
     for (const tag of tags.slice(3)) {
-      expect(tag).toContain("bg-blue-600 text-white");
+      expect(tag).toContain("bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200");
       expect(tag).toContain("ring-[1.5px] ring-card");
     }
     expect(markup).not.toContain("개시 스킬 6번");
