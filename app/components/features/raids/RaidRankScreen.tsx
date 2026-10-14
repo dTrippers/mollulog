@@ -61,12 +61,16 @@ export function buildRaidRankApiFilter({
   if (signedIn && filterState.filterNotOwned) {
     const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
     const existingExcludeUids = new Set(excludeStudents.map((student) => student.uid));
+    const allTierExcludeUids = new Set(
+      excludeStudents.filter((student) => student.tiers.length === 0).map((student) => student.uid),
+    );
     for (const uid of unownedStudentUids) {
-      if (!existingExcludeUids.has(uid)) {
+      if (borrowMode && !allTierExcludeUids.has(uid)) {
+        excludeStudents.push({ uid, tiers: [], borrowable: true });
+      } else if (!borrowMode && !existingExcludeUids.has(uid)) {
         excludeStudents.push({
           uid,
           tiers: [],
-          ...(borrowMode ? { borrowable: true as const } : {}),
         });
       }
     }

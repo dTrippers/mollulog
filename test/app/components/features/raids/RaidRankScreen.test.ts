@@ -38,7 +38,7 @@ describe("rank API filter conversion", () => {
     expect(apiFilter.showUnrecruitedStudents).toBe(true);
   });
 
-  it("adds other unowned students as borrowable while preserving manual excludes", () => {
+  it("adds borrowable coverage for unowned students with tier-specific manual exclusions", () => {
     const apiFilter = buildRaidRankApiFilter({
       filterState: {
         ...baseState,
@@ -54,19 +54,44 @@ describe("rank API filter conversion", () => {
     expect(apiFilter.excludeStudents).toEqual([
       { uid: "manual", tiers: [[5, 4]] },
       { uid: "unowned", tiers: [], borrowable: true },
+      { uid: "manual", tiers: [], borrowable: true },
     ]);
+    expect(apiFilter.maxBorrowedSlots).toBe(1);
+  });
+
+  it("does not add borrowable coverage for an all-tier manual exclusion", () => {
+    const apiFilter = buildRaidRankApiFilter({
+      filterState: {
+        ...baseState,
+        filterNotOwned: true,
+        allowBorrowedStudent: true,
+        excludeStudents: [{ uid: "manual", tiers: [] }],
+      },
+      allStudents: { owned: allStudents.owned, manual: allStudents.unowned },
+      recruitedStudentTiers: { owned: 5 },
+      signedIn: true,
+    });
+
+    expect(apiFilter.excludeStudents).toEqual([{ uid: "manual", tiers: [] }]);
     expect(apiFilter.maxBorrowedSlots).toBe(1);
   });
 
   it("keeps the request shape unchanged when assist mode is off", () => {
     const apiFilter = buildRaidRankApiFilter({
-      filterState: { ...baseState, filterNotOwned: true },
-      allStudents,
+      filterState: {
+        ...baseState,
+        filterNotOwned: true,
+        excludeStudents: [{ uid: "manual", tiers: [9] }],
+      },
+      allStudents: { ...allStudents, manual: allStudents.unowned },
       recruitedStudentTiers: { owned: 5 },
       signedIn: true,
     });
 
-    expect(apiFilter.excludeStudents).toEqual([{ uid: "unowned", tiers: [] }]);
+    expect(apiFilter.excludeStudents).toEqual([
+      { uid: "manual", tiers: [[5, 4]] },
+      { uid: "unowned", tiers: [] },
+    ]);
     expect(apiFilter).not.toHaveProperty("maxBorrowedSlots");
     expect(apiFilter.showUnrecruitedStudents).toBe(false);
   });
