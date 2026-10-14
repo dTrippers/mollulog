@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync } from "node:fs";
-import { join, relative } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "@jest/globals";
 
 const appRoot = join(process.cwd(), "app");
@@ -68,5 +68,152 @@ describe("design system source guard", () => {
 
   it("does not reintroduce removed color and list button variants", () => {
     expect(findViolations(/(?:tint-blue|tint-red|variant=["']list["']|size=["']list["'])/)).toEqual([]);
+  });
+});
+
+const v2Root = "components/v2";
+// Migrated route files (relative to app/) join the 2.0 guard here. The list starts empty.
+const migratedRouteFiles: string[] = [];
+// Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
+const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];
+
+const colorPrefixes =
+  "ring-offset|bg|text|border|ring|outline|fill|stroke|from|via|to|divide|placeholder|caret|accent|decoration|shadow";
+const utilityValue = new RegExp(`(?<![\\w-])(?:${colorPrefixes})-(\\[[^\\]]*\\]|\\w[\\w./%-]*)`, "g");
+const hues =
+  "slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose";
+const semanticColors =
+  "background|foreground|(?:card|popover|primary|secondary|muted|accent)(?:-foreground)?|destructive|border|input|ring|sidebar(?:-[a-z]+)*|chart-\\d|floating(?:-[a-z]+)*";
+const forbiddenColorValue = new RegExp(`^(?:white|black|(?:${hues})(?:-\\d{2,3})?|${semanticColors})(?:\\/[\\d.]+)?$`);
+const colorLiteral = /#[0-9a-fA-F]{3,8}\b|\b(?:oklch|oklab|rgba?|hsla?|color-mix)\(/;
+const literalDuration = /\b\d+(?:\.\d+)?(?:ms|s)\b/;
+const cubicBezier = /cubic-bezier\(/;
+const utilityDuration = /(?<![\w-])duration-(?:\d|\[)/;
+const utilityEase = /(?<![\w-])ease-(?:linear|in|out|in-out|\[)/;
+const importSpecifier = /(?:\bfrom\s+|\bimport\s*\(\s*|\bimport\s+|\brequire\s*\(\s*)["']([^"']+)["']/g;
+// 1.x color variables (semantic names, `--color-<hue>-<shade>`, white, black) referenced through var().
+const colorVariable = new RegExp(
+  `var\\(\\s*--(?:color-)?(?:${semanticColors}|white|black|(?:${hues})(?:-\\d{2,3})?)\\s*[,)]`,
+);
+
+function v2SourceFiles(): string[] {
+  return sourceFiles(join(appRoot, v2Root)).map((path) => relative(appRoot, path).split(sep).join("/"));
+}
+
+function guardedFiles(): string[] {
+  return [...v2SourceFiles(), ...migratedRouteFiles];
+}
+
+function isForbiddenImport(file: string, specifier: string): boolean {
+  const target = specifier.startsWith("~/")
+    ? specifier.slice(2)
+    : specifier.startsWith(".")
+      ? relative(appRoot, resolve(appRoot, dirname(file), specifier))
+      : "";
+  return /^components\/(?:primitives|features)(?:\/|$)/.test(target.split(sep).join("/"));
+}
+
+function hasForbiddenImport(file: string, line: string): boolean {
+  return [...line.matchAll(importSpecifier)].some(([, specifier]) => isForbiddenImport(file, specifier));
+}
+
+function isForbiddenColor(value: string): boolean {
+  return value.startsWith("[") ? colorLiteral.test(value) : forbiddenColorValue.test(value);
+}
+
+function hasStyleViolation(line: string): boolean {
+  if (colorLiteral.test(line) || literalDuration.test(line) || cubicBezier.test(line)) {
+    return true;
+  }
+  if (colorVariable.test(line) || utilityDuration.test(line) || utilityEase.test(line)) {
+    return true;
+  }
+  return [...line.matchAll(utilityValue)].some(([, value]) => isForbiddenColor(value));
+}
+
+function findSourceViolations(file: string, source: string, exceptions = v2GuardExceptions): string[] {
+  return source.split("\n").flatMap((line, index) => {
+    const violates = hasForbiddenImport(file, line) || hasStyleViolation(line);
+    const excepted = exceptions.some((item) => item.file === file && item.pattern.test(line));
+    return violates && !excepted ? [`app/${file}:${index + 1}`] : [];
+  });
+}
+
+function findGuardViolations(): string[] {
+  return guardedFiles().flatMap((file) => findSourceViolations(file, readFileSync(join(appRoot, file), "utf8")));
+}
+
+const importViolationFixtures: [string, string][] = [
+  ["components/v2/features/Fixture.tsx", `import { Button } from "~/components/primitives/Button";`],
+  ["components/v2/layout/Fixture.tsx", `import { Panel } from "../../primitives/Panel";`],
+  ["components/v2/features/Fixture.tsx", `const Card = lazy(() => import("~/components/features/students/Card"));`],
+  ["routes/fixture.tsx", `export { Page } from "~/components/features/layout/Page";`],
+  ["routes/fixture.tsx", `import "../components/primitives/SectionCard";`],
+];
+
+const styleViolationFixtures: [string, string][] = [
+  ["components/v2/features/Fixture.tsx", `<div className="bg-neutral-100" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-red-500" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-white" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-card text-muted-foreground" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="border-border" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-[#fff]" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-[oklch(0.5_0_0)]" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="shadow-black/10" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="ring-primary" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="duration-200" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="duration-[200ms]" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="ease-in" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="ease-[cubic-bezier(0,0,0,1)]" />`],
+  ["components/v2/features/Fixture.tsx", `<div style={{ color: "#fff" }} />`],
+  ["components/v2/features/Fixture.css", `  color: #fff;`],
+  ["components/v2/features/Fixture.css", `  background: oklch(0.5 0 0);`],
+  ["components/v2/features/Fixture.css", `  transition: opacity 200ms ease;`],
+  ["components/v2/features/Fixture.css", `  transition-timing-function: cubic-bezier(0.2, 0, 0, 1);`],
+  ["routes/fixture.tsx", `<div className="bg-neutral-50" />`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-[var(--card)]" />`],
+  ["components/v2/features/Fixture.tsx", `<p className="text-[var(--color-neutral-500)]" />`],
+  ["components/v2/features/Fixture.css", `  color: var(--muted-foreground);`],
+  ["components/v2/features/Fixture.css", `  background: var(--color-red-500);`],
+];
+
+const allowedFixtures: [string, string][] = [
+  [
+    "components/v2/features/Fixture.tsx",
+    `<div className="bg-v2-canvas text-v2-fg-tertiary ring-v2-focus outline-v2-focus" />`,
+  ],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-transparent text-current border-inherit" />`],
+  ["components/v2/layout/Fixture.tsx", `<div className="py-v2-row-y gap-v2-block-gap min-h-v2-row-min" />`],
+  ["components/v2/layout/Fixture.tsx", `<div className="duration-v2-base ease-v2-enter shadow-lg border-2 text-sm" />`],
+  ["components/v2/features/Fixture.css", `  outline: 2px solid var(--v2-focus);`],
+  ["components/v2/features/Fixture.css", `  transition-duration: var(--transition-duration-v2-base);`],
+  ["components/v2/features/Fixture.tsx", `import { Stack } from "~/components/v2/layout/Stack";`],
+  ["components/v2/features/Fixture.tsx", `import { Row } from "./Row";`],
+  ["components/v2/layout/Fixture.tsx", `import { formatDate } from "~/lib/date";`],
+  ["components/v2/features/Fixture.tsx", `<div className="bg-[var(--v2-canvas)]" />`],
+  ["components/v2/features/Fixture.css", `  padding-bottom: var(--mobile-nav-height);`],
+];
+
+describe("design system 2.0 source guard", () => {
+  it("keeps 2.0 files off 1.x components and non-v2 colors, durations, and easings", () => {
+    expect(findGuardViolations()).toEqual([]);
+  });
+
+  it("flags 1.x imports and non-v2 styling in 2.0 and migrated-route sources", () => {
+    const missed = [...importViolationFixtures, ...styleViolationFixtures]
+      .filter(([file, source]) => findSourceViolations(file, source).length === 0)
+      .map(([file, source]) => `${file}: ${source}`);
+    expect(missed).toEqual([]);
+  });
+
+  it("accepts v2 tokens, v2 imports, and allowed literals", () => {
+    expect(allowedFixtures.flatMap(([file, source]) => findSourceViolations(file, source))).toEqual([]);
+  });
+
+  it("applies an exception only to its listed file and pattern", () => {
+    const exceptions = [{ file: "components/v2/features/Fixture.tsx", pattern: /bg-card/, reason: "fixture" }];
+    const source = `<div className="bg-card" />`;
+    expect(findSourceViolations("components/v2/features/Fixture.tsx", source, exceptions)).toEqual([]);
+    expect(findSourceViolations("routes/fixture.tsx", source, exceptions)).toHaveLength(1);
   });
 });

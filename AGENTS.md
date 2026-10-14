@@ -15,6 +15,7 @@ activities, and plan events.
   [components](docs/frontend/components.md), [patterns](docs/frontend/patterns.md),
   and [UI quality](docs/frontend/ui-quality.md) guidance. For route restructuring,
   also read [routing](docs/frontend/routing.md).
+- Screens migrated to 2.0 also read [design system 2.0](docs/frontend/design-system-v2.md).
 - Review and scope-proportional checks: [code review](docs/contributing/code-review.md)
   and [verification](docs/contributing/verification.md).
 

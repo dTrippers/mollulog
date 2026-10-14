@@ -2,6 +2,8 @@
 
 MolluLog's UI prioritizes keeping the established visual language consistent over inventing new patterns.
 
+Screens migrated to 2.0 follow [design system 2.0](./design-system-v2.md) instead of this document.
+
 ## Direction
 
 - New low-level UI uses `primitives` and the proven `features/forms` combinations as the base layer.
