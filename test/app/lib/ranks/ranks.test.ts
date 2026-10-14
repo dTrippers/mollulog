@@ -43,6 +43,13 @@ describe("raid rank party conversion", () => {
     });
   });
 
+  it("keeps a valid starting skill order on a raw party slot", () => {
+    expect(convertRawPartySlot({ uid: "10085", tier: 5, startingSkillOrder: 4 }, 0)).toMatchObject({
+      startingSkillOrder: 4,
+      studentUid: "10085",
+    });
+  });
+
   it("converts stored equipment and weapon tiers to the combined tier", () => {
     expect(convertToTotalTier(5, 3)).toBe(8);
   });
@@ -76,6 +83,33 @@ describe("raid rank party conversion", () => {
             ["A", "B", "C", "D", "E", "F"],
             ["G", "H", "I", "J", "K", "L"],
           ],
+        }),
+      }),
+    );
+  });
+
+  it("sends borrowable exclusions and the maximum borrowed slot count", async () => {
+    mockedFetchProtobuf.mockResolvedValue({ totalCount: 0, ranks: [] });
+
+    await fetchRanks({
+      raidType: "total_assault",
+      season: 84,
+      defenseType: Defense.Special,
+      includeStudents: [],
+      excludeStudents: [{ uid: "10085", tiers: [], borrowable: true }],
+      maxBorrowedSlots: 1,
+      perPage: 10,
+      page: 1,
+    });
+
+    expect(mockedFetchProtobuf).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: JSON.stringify({
+          perPage: 10,
+          page: 1,
+          includeStudents: [],
+          excludeStudents: [{ uid: "10085", tiers: [], borrowable: true }],
+          maxBorrowedSlots: 1,
         }),
       }),
     );

@@ -13,6 +13,7 @@ import RaidRankFilterStudentSearch from "./RaidRankFilterStudentSearch";
 
 export type RaidRankFilterState = {
   filterNotOwned: boolean;
+  allowBorrowedStudent: boolean;
   exactParties: string[][];
   includeStudents: { uid: string; tiers: number[] }[];
   excludeStudents: { uid: string; tiers: number[] }[];
@@ -49,6 +50,10 @@ export function mergeFilteredStudents(
     results.push(toMerge);
   }
   return results;
+}
+
+export function updateFilterNotOwned(state: RaidRankFilterState, filterNotOwned: boolean): RaidRankFilterState {
+  return { ...state, filterNotOwned };
 }
 
 export default function RaidRankFilter({
@@ -113,7 +118,7 @@ export default function RaidRankFilter({
             checked={state.filterNotOwned}
             disabled={!signedIn}
             className="border-t-0 pt-0"
-            onChange={(activated) => setState((prev) => ({ ...prev, filterNotOwned: activated }))}
+            onChange={(activated) => setState((prev) => updateFilterNotOwned(prev, activated))}
           />
           {!signedIn ? (
             <button
@@ -124,6 +129,14 @@ export default function RaidRankFilter({
             />
           ) : null}
         </div>
+        {signedIn && state.filterNotOwned ? (
+          <PanelSwitchRow
+            title="조력자 1명 허용"
+            checked={state.allowBorrowedStudent}
+            className="pt-0"
+            onChange={(activated) => setState((prev) => ({ ...prev, allowBorrowedStudent: activated }))}
+          />
+        ) : null}
         <RaidRankFilterStudentSearch
           searchableStudents={filterableStudents}
           selectedStudents={state.excludeStudents}

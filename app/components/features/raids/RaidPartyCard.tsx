@@ -21,6 +21,7 @@ export type RaidPartySlot = {
   role?: Role;
   tier?: number | null;
   level?: number | null;
+  startingSkillOrder?: number | null;
   isAssist?: boolean | null;
   grayscale?: boolean;
   unrecruited?: boolean;
@@ -52,6 +53,8 @@ type RaidPartyCardProps = {
   summaryClassName?: string;
   slotCount?: 6 | 10;
   tierPlacement?: "overlay" | "below";
+  showStartingSkillOrder?: boolean;
+  compactLevel?: boolean;
   getStudentActions?: (slot: RaidPartySlot, rowIndex: number, slotIndex: number) => RaidPartyStudentAction[];
 };
 
@@ -71,6 +74,8 @@ export default function RaidPartyCard({
   summaryClassName,
   slotCount = PARTY_SLOT_COUNT,
   tierPlacement = "overlay",
+  showStartingSkillOrder = false,
+  compactLevel = false,
   getStudentActions,
 }: RaidPartyCardProps) {
   const [expanded, setExpanded] = useState(false);
@@ -108,6 +113,8 @@ export default function RaidPartyCard({
                   centerRowLabel={centerRowLabels}
                   slotCount={slotCount}
                   tierPlacement={tierPlacement}
+                  showStartingSkillOrder={showStartingSkillOrder}
+                  compactLevel={compactLevel}
                   getStudentActions={getStudentActions}
                 />
               ))}
@@ -155,6 +162,8 @@ function PartyRow({
   centerRowLabel,
   slotCount,
   tierPlacement,
+  showStartingSkillOrder,
+  compactLevel,
   getStudentActions,
 }: {
   row: RaidPartyRow;
@@ -163,6 +172,8 @@ function PartyRow({
   centerRowLabel: boolean;
   slotCount: 6 | 10;
   tierPlacement: "overlay" | "below";
+  showStartingSkillOrder: boolean;
+  compactLevel: boolean;
   getStudentActions?: RaidPartyCardProps["getStudentActions"];
 }) {
   const slots = getFixedPartySlots(row.slots, slotCount);
@@ -193,6 +204,8 @@ function PartyRow({
             popupId={`${popupIdPrefix}-${rowIndex}-${slotIndex}-${slot.uid ?? "empty"}`}
             actions={getStudentActions?.(slot, rowIndex, slotIndex) ?? []}
             tierPlacement={tierPlacement}
+            showStartingSkillOrder={showStartingSkillOrder}
+            compactLevel={compactLevel}
           />
         ))}
       </div>
@@ -212,11 +225,15 @@ function PartyStudentCard({
   popupId,
   actions,
   tierPlacement,
+  showStartingSkillOrder,
+  compactLevel,
 }: {
   slot: RaidPartySlot;
   popupId: string;
   actions: RaidPartyStudentAction[];
   tierPlacement: "overlay" | "below";
+  showStartingSkillOrder: boolean;
+  compactLevel: boolean;
 }) {
   const tierBelowImage = tierPlacement === "below";
 
@@ -240,19 +257,54 @@ function PartyStudentCard({
         defenseType={slot.defenseType}
         role={slot.role}
         tier={tierBelowImage ? undefined : slot.tier}
-        level={slot.level}
+        level={compactLevel ? undefined : slot.level}
         isAssist={slot.isAssist ?? undefined}
         grayscale={slot.grayscale}
         popups={slot.name && actions.length > 0 ? actions : undefined}
         popupId={slot.name && actions.length > 0 ? popupId : undefined}
       />
       {tierBelowImage ? <PartyStudentTier tier={slot.tier} /> : null}
-      {slot.badge ??
+      {showStartingSkillOrder && slot.startingSkillOrder != null ? (
+        <span
+          role="img"
+          aria-label={`개시 스킬 ${slot.startingSkillOrder}번`}
+          title={`개시 스킬 ${slot.startingSkillOrder}번`}
+          className={cn(
+            "pointer-events-none absolute top-0 -left-[3px] z-20 inline-flex size-3.5 items-center justify-center rounded text-xs leading-none font-bold tabular-nums ring-[1.5px] ring-card shadow-sm",
+            slot.startingSkillOrder <= 3
+              ? "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200"
+              : "bg-blue-100 text-blue-900 dark:bg-blue-950 dark:text-blue-200",
+          )}
+        >
+          {slot.startingSkillOrder}
+        </span>
+      ) : null}
+      {compactLevel ? (
+        <div className="pointer-events-none absolute top-1.5 right-0.5 z-10 flex origin-top-right scale-75 flex-col items-end gap-0.5 text-xs font-bold">
+          {slot.level != null ? (
+            <span
+              role="img"
+              aria-label={`레벨 ${slot.level}`}
+              className="whitespace-nowrap rounded-lg bg-neutral-900/90 px-1 leading-4 text-neutral-100"
+            >
+              Lv.{slot.level}
+            </span>
+          ) : null}
+          {slot.badge ??
+            (slot.unrecruited ? (
+              <span className="whitespace-nowrap rounded px-1 py-0.5 text-xs leading-none font-bold bg-neutral-900/80 text-white shadow-sm dark:text-neutral-900 dark:bg-neutral-50/90">
+                미모집
+              </span>
+            ) : null)}
+        </div>
+      ) : (
+        (slot.badge ??
         (slot.unrecruited ? (
           <span className="pointer-events-none absolute top-1 right-0 origin-top-right scale-75 rounded-sm bg-neutral-900/80 px-1 py-0.5 text-xs font-bold leading-none text-white shadow-sm dark:bg-neutral-50/90 dark:text-neutral-900">
             미모집
           </span>
-        ) : null)}
+        ) : null))
+      )}
     </div>
   );
 }

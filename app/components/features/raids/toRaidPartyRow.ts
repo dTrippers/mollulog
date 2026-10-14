@@ -54,7 +54,7 @@ export function toRaidPartyRow({
   return {
     key: `party-${party.partyIndex}`,
     label: `${party.partyIndex + 1}편성`,
-    slots: party.slots.map(({ studentUid, tier, level, isAssist }) => {
+    slots: party.slots.map(({ studentUid, tier, level, isAssist, startingSkillOrder }) => {
       if (!studentUid) {
         return { uid: null };
       }
@@ -77,6 +77,7 @@ export function toRaidPartyRow({
         role: student.role,
         tier,
         level: showLevel && level && level < maxLevel ? level : undefined,
+        startingSkillOrder,
         isAssist,
         grayscale: isUnrecruited,
         unrecruited: isUnrecruited,

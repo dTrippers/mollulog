@@ -25,9 +25,66 @@ type RaidRankScreenProps = {
 
   allStudents: RaidPartyStudentMap;
   recruitedStudentTiers: Record<string, number>;
+  signedIn: boolean;
 };
 
 const ITEMS_PER_PAGE = 10;
+
+type RaidRankApiStudentFilter = {
+  uid: string;
+  tiers: Array<[number] | [number, number]>;
+  borrowable?: true;
+};
+
+export function buildRaidRankApiFilter({
+  filterState,
+  allStudents,
+  recruitedStudentTiers,
+  signedIn,
+}: {
+  filterState: RaidRankFilterState;
+  allStudents: RaidPartyStudentMap;
+  recruitedStudentTiers: Record<string, number>;
+  signedIn: boolean;
+}) {
+  const borrowMode = signedIn && filterState.filterNotOwned && filterState.allowBorrowedStudent;
+  const toApiStudentFilter = (student: { uid: string; tiers: number[] }): RaidRankApiStudentFilter => ({
+    uid: student.uid,
+    tiers: student.tiers.map((totalTier) => {
+      const { tier, weaponTier } = convertTier(totalTier);
+      return weaponTier !== undefined && weaponTier > 0 ? [tier, weaponTier] : [tier];
+    }),
+  });
+  const includeStudents = filterState.includeStudents.map(toApiStudentFilter);
+  const excludeStudents = filterState.excludeStudents.map(toApiStudentFilter);
+
+  if (signedIn && filterState.filterNotOwned) {
+    const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
+    const existingExcludeUids = new Set(excludeStudents.map((student) => student.uid));
+    const allTierExcludeUids = new Set(
+      excludeStudents.filter((student) => student.tiers.length === 0).map((student) => student.uid),
+    );
+    for (const uid of unownedStudentUids) {
+      if (borrowMode && !allTierExcludeUids.has(uid)) {
+        excludeStudents.push({ uid, tiers: [], borrowable: true });
+      } else if (!borrowMode && !existingExcludeUids.has(uid)) {
+        excludeStudents.push({
+          uid,
+          tiers: [],
+        });
+      }
+    }
+  }
+
+  return {
+    exactParties: filterState.exactParties,
+    includeStudents,
+    excludeStudents,
+    score: getRaidDifficultyScoreRange(filterState.difficulty),
+    ...(borrowMode ? { maxBorrowedSlots: 1 as const } : {}),
+    showUnrecruitedStudents: borrowMode,
+  };
+}
 
 export default function RaidRankScreen({
   currentRaid,
@@ -36,6 +93,7 @@ export default function RaidRankScreen({
   onExcludeStudent,
   allStudents,
   recruitedStudentTiers,
+  signedIn,
 }: RaidRankScreenProps) {
   const [ranks, setRanks] = useState<ParsedRaidRankDocument[]>([]);
   const [totalCount, setTotalCount] = useState(0);
@@ -44,69 +102,10 @@ export default function RaidRankScreen({
   const [error, setError] = useState<string | null>(null);
   const previousResetKeyRef = useRef<string | null>(null);
 
-  const apiFilter = useMemo(() => {
-    // Convert includeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
-    // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
-    const includeStudents = filterState.includeStudents.map((s) => {
-      if (s.tiers.length === 0) {
-        return { uid: s.uid, tiers: [] };
-      }
-      // 기존 total tier를 [tier, weaponTier?] 형식으로 변환
-      const tiers: Array<[number] | [number, number]> = s.tiers.map((totalTier) => {
-        const { tier, weaponTier } = convertTier(totalTier);
-        if (weaponTier !== undefined && weaponTier > 0) {
-          return [tier, weaponTier];
-        }
-        return [tier];
-      });
-      return { uid: s.uid, tiers };
-    });
-
-    // Convert excludeStudents: tiers 배열을 [tier, weaponTier?] 형식으로 변환
-    // tiers가 빈 배열이면 tiers: [] (모든 tier 의미)
-    const excludeStudents = filterState.excludeStudents.map((s) => {
-      if (s.tiers.length === 0) {
-        return { uid: s.uid, tiers: [] };
-      }
-      // 기존 total tier를 [tier, weaponTier?] 형식으로 변환
-      const tiers: Array<[number] | [number, number]> = s.tiers.map((totalTier) => {
-        const { tier, weaponTier } = convertTier(totalTier);
-        if (weaponTier !== undefined && weaponTier > 0) {
-          return [tier, weaponTier];
-        }
-        return [tier];
-      });
-      return { uid: s.uid, tiers };
-    });
-
-    // If filterNotOwned is enabled, add all unowned students to excludeStudents
-    if (filterState.filterNotOwned) {
-      const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
-
-      // Add unowned students to excludeStudents (avoid duplicates)
-      const existingExcludeUids = new Set(excludeStudents.map((s) => s.uid));
-      for (const uid of unownedStudentUids) {
-        if (!existingExcludeUids.has(uid)) {
-          excludeStudents.push({ uid, tiers: [] }); // tiers: [] means all tiers
-        }
-      }
-    }
-
-    return {
-      exactParties: filterState.exactParties,
-      includeStudents,
-      excludeStudents,
-      score: getRaidDifficultyScoreRange(filterState.difficulty),
-    };
-  }, [
-    allStudents,
-    filterState.difficulty,
-    filterState.exactParties,
-    filterState.excludeStudents,
-    filterState.filterNotOwned,
-    filterState.includeStudents,
-    recruitedStudentTiers,
-  ]);
+  const apiFilter = useMemo(
+    () => buildRaidRankApiFilter({ filterState, allStudents, recruitedStudentTiers, signedIn }),
+    [allStudents, filterState, recruitedStudentTiers, signedIn],
+  );
 
   const resetKey = JSON.stringify({
     raidType: currentRaid.raidType,
@@ -132,7 +131,7 @@ export default function RaidRankScreen({
 
     const loadRanks = async () => {
       try {
-        const { exactParties, includeStudents, excludeStudents } = apiFilter;
+        const { exactParties, includeStudents, excludeStudents, maxBorrowedSlots } = apiFilter;
 
         const result = await fetchRanks({
           raidType: currentRaid.raidType,
@@ -142,6 +141,7 @@ export default function RaidRankScreen({
           exactParties,
           includeStudents,
           excludeStudents,
+          maxBorrowedSlots,
           perPage: ITEMS_PER_PAGE,
           page: currentPage,
         });
@@ -193,7 +193,15 @@ export default function RaidRankScreen({
           bossUid: currentRaid.boss,
           score,
         });
-        const rows = parties.map((party) => toRaidPartyRow({ party, allStudents, maxLevel }));
+        const rows = parties.map((party) =>
+          toRaidPartyRow({
+            party,
+            allStudents,
+            maxLevel,
+            recruitedStudentTiers,
+            showUnrecruitedStudents: apiFilter.showUnrecruitedStudents,
+          }),
+        );
         return (
           <RaidPartyCard
             key={`rank-${rank}-${score}`}
@@ -215,6 +223,8 @@ export default function RaidRankScreen({
               />
             ))}
             popupIdPrefix={`rank-${rank}-${score}`}
+            showStartingSkillOrder
+            compactLevel
             getStudentActions={(slot) => getRankStudentActions(slot, onIncludeStudent, onExcludeStudent)}
           />
         );
