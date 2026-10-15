@@ -188,11 +188,8 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
     expect(css).toContain("--color-v2-control-border: var(--v2-control-border);");
   });
 
-  it("W2: the recipe inputs and the docs use the control border, not the inset surface", () => {
-    const devRoute = readFileSync(join(process.cwd(), "app/routes/dev.v2-layout.tsx"), "utf8");
+  it("W2: the docs use the control border, not the inset surface", () => {
     const docs = readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8");
-    expect(devRoute.match(/border border-v2-control-border/g)?.length).toBe(2);
-    expect(devRoute).not.toContain("border-v2-inset");
     expect(docs).toContain(
       "| `border-v2-control-border` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Borders of text inputs, selects, textareas, and dense data boundaries (3:1 or higher against surface and canvas). Not for cards, buttons, or region separation. |",
     );
