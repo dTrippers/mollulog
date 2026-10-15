@@ -73,7 +73,7 @@ export function MobileActionBar({ links = [], panels = [] }: MobileActionBarProp
             key={panel.panelId}
             type="button"
             aria-haspopup="dialog"
-            aria-expanded={sheetPanelId === panel.panelId}
+            aria-expanded={!panel.disabled && sheetPanelId === panel.panelId}
             disabled={panel.disabled}
             onClick={() => openSheet(panel.panelId)}
             className={itemClassName}

@@ -165,7 +165,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 ### Behavior parts
 
 - **ScreenTabs:** link mode (`link`, `linkState`) sets `aria-current="page"`. onClick mode (`onClick`) sets `aria-pressed`. A `disabled` tab does not navigate and shows `disabledReason` as `title` and visually hidden text. `hiddenStacked` hides a tab on stacked layouts. `label` shows a count.
-- **PanelSheet:** on side-by-side the panel is in the Aside (collapsible, `defaultExpanded`). On stacked it opens a sheet when open. Program requests use `panelRequest={{ panelId, requestId }}`, with a new `requestId` per request. Close with `panelCloseRequest`, a number to increment, and `onPanelCloseRequestHandled`. A desktop request expands the panel, scrolls it fully into view, and highlights it without moving focus. A stacked request opens the sheet. A location change or a switch to side-by-side closes an open sheet.
+- **PanelSheet:** on side-by-side the panel is in the Aside (collapsible, `defaultExpanded`). On stacked it opens a sheet when open. Program requests use `panelRequest={{ panelId, requestId }}`, with a new `requestId` per request. Close with `panelCloseRequest`, a number to increment, and `onPanelCloseRequestHandled`. A desktop request expands the panel, scrolls it fully into view, and highlights it without moving focus. A stacked request opens the sheet. A location change or a switch to side-by-side closes an open sheet. A disabled panel never opens a sheet, and its `MobileActionBar` trigger is disabled.
 - **AsideLinks and MobileActionBar links:** `to` starting with `http` opens in a new window (`target="_blank"`, `rel="noopener noreferrer"`). `onClick` without `to` renders a button. `transition` (`forward`, `reverse`, `crossfade`) sets the screen transition for route navigation. `preventScrollReset` is passed to the router link.
 - **PanelAction:** a text action in a panel header, beside the title. It does not change the header row height, so showing or hiding it never moves the panel. When an action hides itself after use (for example 초기화 once the filters are reset), move focus to the panel heading or the first control so keyboard focus is not lost.
 - **MobileActionBar panels:** each `panelId` must match a `PanelSheet` in the same page's `PageAside`. The bar opens that panel's sheet.
@@ -190,9 +190,9 @@ Route transitions and state transitions go through the helper in `screen-transit
 
 The helper sets `data-v2-transition` (`forward`, `reverse`, `crossfade`) on `<html>` during the transition:
 
-- `getV2LinkTransitionProps(kind, onClick?)` spreads onto a React Router `Link`. Route navigation uses React Router's `viewTransition`. The attribute clears after a bounded delay.
-- `runV2StateTransition(kind, update)` wraps an onClick state update (`crossfade`), applied synchronously inside the transition.
-- `runV2ReverseTransition(action)` wraps a back action such as `navigate(-1)`. The transition waits for the action.
+- `getV2LinkTransitionProps(kind, onClick?)` spreads onto a React Router `Link`. Route navigation uses React Router's `viewTransition`. The attribute clears 400ms after the navigation commits, or 30s after arming if it never commits. Arming a newer transition cancels the older one's timers, so a stale timer never clears a newer kind.
+- `runV2BackNavigation(navigateBack)` wraps the header back action (`PageHeader` `back.onClick`, for example `() => navigate(-1)`). It arms `reverse` and runs the router navigation. React Router owns that view transition, so the helper never calls `startViewTransition`. A browser POP that the back action did not start carries no kind.
+- `runV2StateTransition(kind, update)` wraps an onClick state update (`crossfade`), applied synchronously inside the transition. It is the only direct `startViewTransition` call in the layout.
 
 Without View Transition support or when the document is hidden, each helper updates at once.
 

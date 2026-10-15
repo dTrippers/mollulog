@@ -95,8 +95,9 @@ export function PanelSheet({
   // The collapsible toggle sets the header height with its min-height row. Otherwise the title line does, so the row
   // aligns to its top and the action stays on the title line.
   const togglesBody = collapsible && !disabled;
-  const sheetShowsBody = stacked && sheetPanelId === panelId;
-  const showsBody = phase !== "collapsed" && !sheetShowsBody;
+  // A disabled panel never opens its sheet. A request still sets sheetPanelId, so every reader checks disabled.
+  const sheetOpen = stacked && sheetPanelId === panelId && !disabled;
+  const showsBody = phase !== "collapsed" && !sheetOpen;
 
   return (
     <>
@@ -153,7 +154,7 @@ export function PanelSheet({
         />
       </section>
       <Sheet
-        open={stacked && sheetPanelId === panelId}
+        open={sheetOpen}
         title={title}
         description={description}
         headerAction={headerAction}

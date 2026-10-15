@@ -1,6 +1,6 @@
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router";
-import { settleV2LinkTransition } from "./screen-transition";
+import { useLocation, useNavigationType } from "react-router";
+import { commitV2Navigation, handleV2PopState, settleV2LinkTransition } from "./screen-transition";
 
 export type V2PageWidth = "reading" | "wide" | "full";
 
@@ -62,12 +62,18 @@ export function V2Page({ width, panelRequest, panelCloseRequest, onPanelCloseReq
   const lastPanelRequestIdRef = useRef<number | null>(null);
   const lastPanelCloseRequestRef = useRef<number | null>(null);
   const location = useLocation();
+  const navigationType = useNavigationType();
   const locationSignature = `${location.pathname}${location.search}${location.hash}`;
-  // A pending link transition clears once its navigation commits. Runs on every commit, and does nothing when none is pending.
+  // A commit settles a pending link or back kind. A POP that the v2 back action did not start drops a pending link kind.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new location key is the trigger
   useEffect(() => {
-    settleV2LinkTransition();
+    commitV2Navigation(navigationType);
   }, [location.key]);
+  // A browser popstate fires before React Router starts its POP transition, so a pending link kind goes there first.
+  useEffect(() => {
+    window.addEventListener("popstate", handleV2PopState);
+    return () => window.removeEventListener("popstate", handleV2PopState);
+  }, []);
   // Leaving the page for a route that does not render V2Page settles a pending link transition too. This runs after that navigation commits.
   useEffect(() => () => settleV2LinkTransition(), []);
   const previousLocationSignatureRef = useRef(locationSignature);

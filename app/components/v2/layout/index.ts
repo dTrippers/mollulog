@@ -16,7 +16,7 @@ export { type ScreenTabItem, ScreenTabs, type ScreenTabsProps } from "./ScreenTa
 export {
   canUseV2ViewTransition,
   getV2LinkTransitionProps,
-  runV2ReverseTransition,
+  runV2BackNavigation,
   runV2StateTransition,
   type V2TransitionKind,
   v2TransitionAttribute,

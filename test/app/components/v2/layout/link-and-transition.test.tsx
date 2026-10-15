@@ -3,8 +3,8 @@
  */
 import "./layout-test-polyfills";
 import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { createMemoryRouter, Link, MemoryRouter, RouterProvider, useLocation, useNavigate } from "react-router";
 import {
   AsideLinks,
   MobileActionBar,
@@ -12,12 +12,13 @@ import {
   PageHeader,
   PageMain,
   V2Page,
-  runV2ReverseTransition,
+  runV2BackNavigation,
   runV2StateTransition,
 } from "~/components/v2/layout";
 import {
   canUseV2ViewTransition,
   getV2LinkTransitionProps,
+  handleV2PopState,
   settleV2LinkTransition,
 } from "~/components/v2/layout/screen-transition";
 import { installLayoutTestEnv } from "./layout-test-env";
@@ -33,6 +34,53 @@ function LocationProbe() {
 
 function setStartViewTransition(value: unknown) {
   Object.defineProperty(document, "startViewTransition", { configurable: true, value });
+}
+
+// Calls the transition callback at once and records the kind attribute each time a view transition starts.
+function recordViewTransitions() {
+  const starts: (string | null)[] = [];
+  const startViewTransition = jest.fn((callback: () => unknown) => {
+    starts.push(document.documentElement.getAttribute("data-v2-transition"));
+    callback();
+    return {
+      finished: Promise.resolve(),
+      ready: Promise.resolve(),
+      updateCallbackDone: Promise.resolve(),
+      skipTransition: () => {},
+    } as unknown as ViewTransition;
+  });
+  setStartViewTransition(startViewTransition);
+  return { startViewTransition, starts };
+}
+
+function ListPage({ to }: { to: string }) {
+  return (
+    <V2Page width="wide">
+      <PageHeader title="미래시" />
+      <PageMain>
+        <Link to={to} {...getV2LinkTransitionProps("forward")}>
+          이벤트 상세
+        </Link>
+      </PageMain>
+    </V2Page>
+  );
+}
+
+function DetailPage() {
+  const navigate = useNavigate();
+  return (
+    <V2Page width="wide">
+      <PageHeader title="이벤트 상세" back={{ title: "미래시", onClick: () => navigate(-1) }} />
+      <PageMain>상세 본문</PageMain>
+    </V2Page>
+  );
+}
+
+function routesFor(list: string) {
+  return [
+    { path: list, element: <ListPage to={`${list}/events/1`} /> },
+    { path: `${list}/events/1`, element: <DetailPage /> },
+  ];
 }
 
 describe("AsideLinks", () => {
@@ -68,7 +116,7 @@ describe("AsideLinks", () => {
   });
 
   it("renders an onClick item as a button that calls onClick", () => {
-    const onClick = jest.fn();
+    const onClick = jest.fn<() => void>();
     render(
       <MemoryRouter>
         <AsideLinks items={[{ key: "c", title: "계산기 열기", description: "천장까지 필요한 청휘석", Icon, onClick }]} />
@@ -154,7 +202,7 @@ describe("screen transition helper", () => {
   });
 
   it("applies a state update immediately when the API is missing", () => {
-    const update = jest.fn();
+    const update = jest.fn<() => void>();
 
     runV2StateTransition("crossfade", update);
 
@@ -162,26 +210,23 @@ describe("screen transition helper", () => {
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
 
-  it("runs a reverse action after the view transition callback and clears the attribute", async () => {
-    let resolveFinished: () => void = () => {};
-    const finished = new Promise<void>((resolve) => {
-      resolveFinished = resolve;
-    });
-    setStartViewTransition((callback: () => unknown) => {
+  it("the v2 back action arms reverse and never starts a view transition itself", () => {
+    jest.useFakeTimers();
+    const startViewTransition = jest.fn((callback: () => unknown) => {
       callback();
-      return { finished } as unknown as ViewTransition;
+      return { finished: Promise.resolve() } as unknown as ViewTransition;
     });
-    const action = jest.fn(async () => {});
+    setStartViewTransition(startViewTransition);
+    const navigateBack = jest.fn<() => void>();
 
-    const pending = runV2ReverseTransition(action);
+    runV2BackNavigation(navigateBack);
+
+    expect(navigateBack).toHaveBeenCalledTimes(1);
+    expect(startViewTransition).not.toHaveBeenCalled();
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
-    expect(action).toHaveBeenCalledTimes(1);
-
-    await act(async () => {
-      resolveFinished();
-      await pending;
+    act(() => {
+      jest.runOnlyPendingTimers();
     });
-    expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
 
   function setImmediateViewTransition() {
@@ -241,13 +286,13 @@ describe("screen transition helper", () => {
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
 
-  it("clears by the safety fallback when the navigation never commits", () => {
+  it("clears by the pending fallback when the navigation never commits", () => {
     jest.useFakeTimers();
     setImmediateViewTransition();
 
     getV2LinkTransitionProps("forward").onClick?.({} as never);
     act(() => {
-      jest.advanceTimersByTime(9999);
+      jest.advanceTimersByTime(29_999);
     });
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("forward");
 
@@ -257,33 +302,23 @@ describe("screen transition helper", () => {
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
 
-  it("settles a pending link transition a settle delay after V2Page unmounts, not at the fallback", () => {
+  it("keeps the kind of a pending navigation past ten seconds, until the pending fallback", () => {
     jest.useFakeTimers();
     setImmediateViewTransition();
-    const { unmount } = render(
-      <MemoryRouter initialEntries={["/futures"]}>
-        <V2Page width="wide">
-          <PageMain>본문</PageMain>
-        </V2Page>
-      </MemoryRouter>,
-    );
 
     getV2LinkTransitionProps("forward").onClick?.({} as never);
+    act(() => {
+      jest.advanceTimersByTime(10_001);
+    });
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("forward");
 
-    unmount();
     act(() => {
-      jest.advanceTimersByTime(399);
+      jest.advanceTimersByTime(19_998);
     });
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("forward");
 
     act(() => {
       jest.advanceTimersByTime(1);
-    });
-    expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
-
-    act(() => {
-      jest.advanceTimersByTime(10_000);
     });
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
@@ -294,20 +329,149 @@ describe("screen transition helper", () => {
 
     getV2LinkTransitionProps("forward").onClick?.({} as never);
     act(() => {
-      jest.advanceTimersByTime(9000);
+      jest.advanceTimersByTime(25_000);
     });
     getV2LinkTransitionProps("reverse").onClick?.({} as never);
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
 
-    // The first click's fallback would have fired 1000ms from here. The newer click restarts it.
+    // The first click's fallback would have fired five seconds from here. The newer click restarts the fallback.
     act(() => {
-      jest.advanceTimersByTime(9999);
+      jest.advanceTimersByTime(29_999);
     });
     expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
 
     act(() => {
       jest.advanceTimersByTime(1);
     });
+    expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
+  });
+
+  it("a stale settle timer cannot clear a newer kind", () => {
+    jest.useFakeTimers();
+    setImmediateViewTransition();
+
+    getV2LinkTransitionProps("forward").onClick?.({} as never);
+    settleV2LinkTransition();
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+    // The forward kind's settle timer would fire 200 ms from here, while the newer kind is still pending its commit.
+    getV2LinkTransitionProps("reverse").onClick?.({} as never);
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
+
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+  });
+
+  it("a state update inside an earlier settle window keeps its own kind until it finishes", async () => {
+    jest.useFakeTimers();
+    let finish: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    setStartViewTransition((callback: () => unknown) => {
+      callback();
+      return { finished } as unknown as ViewTransition;
+    });
+
+    getV2LinkTransitionProps("forward").onClick?.({} as never);
+    settleV2LinkTransition();
+    act(() => {
+      jest.advanceTimersByTime(200);
+    });
+    runV2StateTransition("crossfade", () => {});
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+    expect(document.documentElement.getAttribute("data-v2-transition")).toBe("crossfade");
+
+    await act(async () => {
+      finish();
+    });
+    expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
+  });
+
+  it("a state transition that finishes after a newer kind is armed cannot clear that kind", async () => {
+    jest.useFakeTimers();
+    let finish: () => void = () => {};
+    const finished = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    setStartViewTransition((callback: () => unknown) => {
+      callback();
+      return { finished } as unknown as ViewTransition;
+    });
+
+    runV2StateTransition("crossfade", () => {});
+    getV2LinkTransitionProps("reverse").onClick?.({} as never);
+    await act(async () => {
+      finish();
+    });
+
+    expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+  });
+
+  it("a browser popstate drops a pending link kind, unless the back action started the POP", () => {
+    jest.useFakeTimers();
+    setImmediateViewTransition();
+
+    getV2LinkTransitionProps("forward").onClick?.({} as never);
+    handleV2PopState();
+    expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
+
+    getV2LinkTransitionProps("forward").onClick?.({} as never);
+    runV2BackNavigation(() => handleV2PopState());
+    expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
+
+    act(() => {
+      jest.runOnlyPendingTimers();
+    });
+  });
+
+  it("link forward then v2 back starts one view transition, owned by React Router, and keeps reverse until settle", async () => {
+    const { startViewTransition, starts } = recordViewTransitions();
+    const router = createMemoryRouter(routesFor("/list-back"), { initialEntries: ["/list-back"] });
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole("link", { name: "이벤트 상세" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/list-back/events/1"));
+    expect(startViewTransition).toHaveBeenCalledTimes(1);
+    expect(starts).toEqual(["forward"]);
+
+    fireEvent.click(screen.getByRole("button", { name: "미래시" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/list-back"));
+
+    // One call for the back navigation, made by React Router. The v2 back action never calls startViewTransition itself.
+    expect(startViewTransition).toHaveBeenCalledTimes(2);
+    expect(starts[1]).toBe("reverse");
+    expect(document.documentElement.getAttribute("data-v2-transition")).toBe("reverse");
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false));
+  });
+
+  it("a plain browser back after a link forward carries no v2 kind", async () => {
+    const { startViewTransition, starts } = recordViewTransitions();
+    const router = createMemoryRouter(routesFor("/list-plain"), { initialEntries: ["/list-plain"] });
+    render(<RouterProvider router={router} />);
+
+    fireEvent.click(screen.getByRole("link", { name: "이벤트 상세" }));
+    await waitFor(() => expect(router.state.location.pathname).toBe("/list-plain/events/1"));
+    await waitFor(() => expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false));
+
+    act(() => {
+      void router.navigate(-1);
+    });
+    await waitFor(() => expect(router.state.location.pathname).toBe("/list-plain"));
+
+    // The POP is transitioned by React Router, with no v2 kind set when it starts or after it commits.
+    expect(startViewTransition).toHaveBeenCalledTimes(2);
+    expect(starts[1]).toBeNull();
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
   });
 });

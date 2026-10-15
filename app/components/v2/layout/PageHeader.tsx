@@ -2,9 +2,10 @@ import { ArrowLeftIcon } from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { cn } from "~/lib/utils";
-import { getV2LinkTransitionProps, runV2ReverseTransition } from "./screen-transition";
+import { getV2LinkTransitionProps, runV2BackNavigation } from "./screen-transition";
 import { v2FocusRing } from "./styles";
 
+// `onClick` runs a router navigation such as `navigate(-1)`. It must not start a view transition itself.
 export type PageHeaderBack = { title: string } & ({ to: string } | { onClick: () => void | Promise<void> });
 
 export type PageHeaderProps = {
@@ -29,7 +30,7 @@ export function PageHeader({ title, description, back, meta }: PageHeaderProps) 
             <span>{back.title}</span>
           </Link>
         ) : (
-          <button type="button" className={backClassName} onClick={() => void runV2ReverseTransition(back.onClick)}>
+          <button type="button" className={backClassName} onClick={() => runV2BackNavigation(back.onClick)}>
             <ArrowLeftIcon className="size-4" aria-hidden="true" />
             <span>{back.title}</span>
           </button>

@@ -194,7 +194,7 @@ describe("PanelSheet", () => {
 
   it("closes the sheet on a program close request and reports completion once", async () => {
     setLayoutWidth(390);
-    const onCloseHandled = jest.fn();
+    const onCloseHandled = jest.fn<() => void>();
     const { rerender } = renderHarness(
       <Harness request={{ panelId: "filter", requestId: 1 }} onCloseHandled={onCloseHandled} />,
     );
@@ -296,6 +296,50 @@ describe("PanelSheet", () => {
     renderHarness(<DisabledHarness />);
 
     expect(screen.queryByText("꺼진 본문")).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("does not expand or highlight a disabled panel on a desktop request", () => {
+    renderHarness(
+      <V2Page width="wide" panelRequest={{ panelId: "off", requestId: 1 }}>
+        <PageHeader title="미래시" />
+        <PageMain>본문</PageMain>
+        <PageAside>
+          <PanelSheet panelId="off" title="꺼진 패널" Icon={Icon} collapsible disabled>
+            <span>꺼진 본문</span>
+          </PanelSheet>
+        </PageAside>
+      </V2Page>,
+    );
+
+    expect(screen.queryByText("꺼진 본문")).toBeNull();
+    expect(document.querySelector('[data-v2-panel="off"] .v2-panel-highlight')).toBeNull();
+    expect(screen.queryByRole("dialog")).toBeNull();
+  });
+
+  it("never opens the stacked sheet for a disabled panel's program request, and its action bar trigger is disabled", () => {
+    setLayoutWidth(390);
+    renderHarness(
+      <V2Page width="wide" panelRequest={{ panelId: "off", requestId: 1 }}>
+        <PageHeader title="미래시" />
+        <PageMain>본문</PageMain>
+        <MobileActionBar panels={[{ panelId: "off", title: "꺼진 패널", Icon, disabled: true }]} />
+        <PageAside>
+          <PanelSheet panelId="off" title="꺼진 패널" Icon={Icon} collapsible disabled>
+            <span>꺼진 본문</span>
+          </PanelSheet>
+        </PageAside>
+      </V2Page>,
+    );
+
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.queryByText("꺼진 본문")).toBeNull();
+    const trigger = screen.getByRole("button", { name: "꺼진 패널" });
+    expect(trigger.hasAttribute("disabled")).toBe(true);
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+
+    fireEvent.click(trigger);
+
     expect(screen.queryByRole("dialog")).toBeNull();
   });
 });
