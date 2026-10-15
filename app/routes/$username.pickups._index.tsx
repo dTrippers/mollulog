@@ -3,7 +3,11 @@ import { data, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { AddContentButton } from "~/components/features/editor";
 import { SubTitle } from "~/components/primitives";
-import { getRecruitmentResultCountStats, resolveRecruitmentResultStudents } from "~/domain/recruitment-result";
+import {
+  getRecruitmentResultCountStats,
+  isRecordedRecruitmentResult,
+  resolveRecruitmentResultStudents,
+} from "~/domain/recruitment-result";
 import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
@@ -88,10 +92,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let missingTrialCount = 0;
 
   const aggregatedHistories = recruitmentResults
-    .filter(
-      (result) =>
-        result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0,
-    )
+    .filter(isRecordedRecruitmentResult)
     .map((result) => {
       const group = groupMap.get(result.recruitmentGroupUid);
       const timelineContents = [...(timelineContentsByGroupUid.get(result.recruitmentGroupUid) ?? [])].sort((a, b) =>

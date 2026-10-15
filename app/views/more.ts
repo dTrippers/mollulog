@@ -1,12 +1,12 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
+import { isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import { getPickupHistories } from "~/models/pickup-history.server";
 import { getPyroxeneUserState, type PyroxeneEventData } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getRecruitmentResults, getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
 import { getNavigationBarContents } from "~/views/navigation";
@@ -71,7 +71,7 @@ function getMorePersonalSummary(env: Env, senseiId: number, ctx?: ExecutionConte
 
   return Promise.all([
     getRecruitedStudents(env, senseiId),
-    getPickupHistories(env, senseiId),
+    getRecruitmentResults(env, senseiId),
     getPyroxeneUserState(env, senseiId, { ctx }),
     pyroxeneContentsPromise,
     getUserFavoritedStudents(env, senseiId, undefined, { ctx }),
@@ -85,7 +85,7 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
   const now = nowUtcIso();
   const [
     recruitedStudents,
-    pickupHistories,
+    allRecruitmentResults,
     pyroxeneState,
     pyroxeneContents,
     favoritedStudents,
@@ -158,7 +158,7 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
     username: sensei.username,
     profileStudentId: sensei.profileStudentId,
     recruitedStudentCount: recruitedStudents.length,
-    pickupHistoryCount: pickupHistories.length,
+    pickupHistoryCount: allRecruitmentResults.filter(isRecordedRecruitmentResult).length,
     availableCouponCount,
     pyroxene: latestPyroxeneResources
       ? {
