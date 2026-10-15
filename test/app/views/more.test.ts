@@ -4,7 +4,7 @@ const mockGetNavigationBarContents = jest.fn<(...args: unknown[]) => Promise<unk
 const mockGetPyroxenePlannerContents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetRecruitmentResultsByRecruitmentGroupUids = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetRecruitedStudents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
-const mockGetPickupHistories = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const mockGetRecruitmentResults = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetPyroxeneUserState = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetUserFavoritedStudents = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockGetRelationshipLevels = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -13,10 +13,10 @@ const mockCountUnregisteredActiveCoupons = jest.fn<(...args: unknown[]) => Promi
 jest.mock("~/views/navigation", () => ({ getNavigationBarContents: mockGetNavigationBarContents }));
 jest.mock("~/views/pyroxene", () => ({ getPyroxenePlannerContents: mockGetPyroxenePlannerContents }));
 jest.mock("~/models/recruitment-result.server", () => ({
+  getRecruitmentResults: mockGetRecruitmentResults,
   getRecruitmentResultsByRecruitmentGroupUids: mockGetRecruitmentResultsByRecruitmentGroupUids,
 }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: mockGetRecruitedStudents }));
-jest.mock("~/models/pickup-history.server", () => ({ getPickupHistories: mockGetPickupHistories }));
 jest.mock("~/models/pyroxene-planner", () => ({ getPyroxeneUserState: mockGetPyroxeneUserState }));
 jest.mock("~/models/favorite-students", () => ({ getUserFavoritedStudents: mockGetUserFavoritedStudents }));
 jest.mock("~/models/relationship-level", () => ({ getRelationshipLevels: mockGetRelationshipLevels }));
@@ -36,7 +36,7 @@ describe("More view relationship summary", () => {
     mockGetPyroxenePlannerContents.mockResolvedValue([]);
     mockGetRecruitmentResultsByRecruitmentGroupUids.mockResolvedValue([]);
     mockGetRecruitedStudents.mockResolvedValue([]);
-    mockGetPickupHistories.mockResolvedValue([]);
+    mockGetRecruitmentResults.mockResolvedValue([]);
     mockGetPyroxeneUserState.mockResolvedValue({
       latestResources: null,
       options: {},
@@ -75,5 +75,27 @@ describe("More view relationship summary", () => {
         { uid: "student-2", currentLevel: 10 },
       ],
     });
+  });
+
+  it("counts recorded recruitment results as pickup history", async () => {
+    mockGetRelationshipLevels.mockResolvedValue([]);
+    mockGetRecruitmentResults.mockResolvedValue([
+      { completedAt: "2026-10-01T00:00:00Z", recruitedStudents: [], exchangedStudents: [] },
+      { completedAt: null, recruitedStudents: [{ studentUid: "student-0" }], exchangedStudents: [] },
+      { completedAt: null, recruitedStudents: [], exchangedStudents: [{ studentUid: "student-1" }] },
+      { completedAt: null, recruitedStudents: [], exchangedStudents: [] },
+    ]);
+
+    const result = await getMoreViewData(
+      {} as Env,
+      {} as ExecutionContext,
+      {
+        id: 1,
+        username: "sensei",
+        profileStudentId: null,
+      } as never,
+    );
+
+    expect(result.currentUser?.pickupHistoryCount).toBe(3);
   });
 });

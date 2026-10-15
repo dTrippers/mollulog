@@ -108,6 +108,13 @@ export function resolveRecruitmentResultStudents(
     .map((student) => resolveRecruitmentResultStudent(student, lookup, onMissingStudent));
 }
 
+// A result is shown as a recruitment record once it is completed or has any recorded student.
+export function isRecordedRecruitmentResult(
+  result: Pick<RecruitmentResult, "completedAt" | "recruitedStudents" | "exchangedStudents">,
+): boolean {
+  return result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0;
+}
+
 export function getRecruitmentResultCountStats(
   result: Pick<RecruitmentResult, "recruitedStudents" | "tier3Count" | "trial">,
   lookup: StudentLookup,

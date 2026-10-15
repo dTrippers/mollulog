@@ -16,7 +16,7 @@ import { Page } from "~/components/features/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { raidTypeToParam } from "~/domain/raid";
 import { getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { applyRecruitmentResultStudentCompletion } from "~/domain/recruitment-result";
+import { applyRecruitmentResultStudentCompletion, isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { captureServerError, getLogger } from "~/lib/observability.server";
@@ -677,17 +677,12 @@ export default function FutureContents() {
 
   const recruitmentResultEditLinks = useMemo<RecruitmentResultEditLinkState[]>(
     () =>
-      recruitmentResults
-        .filter(
-          (result) =>
-            result.completedAt !== null || result.recruitedStudents.length > 0 || result.exchangedStudents.length > 0,
-        )
-        .map((result) => ({
-          recruitmentGroupUid: result.recruitmentGroupUid,
-          link: result.uid.startsWith("optimistic-")
-            ? `/my?path=pickups/edit/new?eventId=${encodeURIComponent(result.recruitmentGroupUid)}`
-            : `/my?path=pickups/edit/${result.uid}`,
-        })),
+      recruitmentResults.filter(isRecordedRecruitmentResult).map((result) => ({
+        recruitmentGroupUid: result.recruitmentGroupUid,
+        link: result.uid.startsWith("optimistic-")
+          ? `/my?path=pickups/edit/new?eventId=${encodeURIComponent(result.recruitmentGroupUid)}`
+          : `/my?path=pickups/edit/${result.uid}`,
+      })),
     [recruitmentResults],
   );
 
