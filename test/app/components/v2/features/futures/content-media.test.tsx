@@ -37,14 +37,16 @@ describe("ContentMedia logo fallback", () => {
     expect(screen.getByRole("img", { name: typeLabel })).toBeTruthy();
   });
 
-  it("keeps the neutral fill while the logo loads and drops it once the logo loads", () => {
+  it("hides the logo over the neutral fill until it loads, then drops the fill", () => {
     const { container } = renderLogo();
     const image = container.querySelector("img") as HTMLImageElement;
     expect(image.parentElement?.classList.contains("bg-v2-inset")).toBe(true);
+    expect(image.classList.contains("opacity-0")).toBe(true);
 
     fireEvent.load(image);
 
     expect(image.parentElement?.classList.contains("bg-v2-inset")).toBe(false);
+    expect(image.classList.contains("opacity-0")).toBe(false);
   });
 
   it("keeps the neutral fill behind the type icon", () => {

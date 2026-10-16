@@ -45,7 +45,8 @@ export function getContentTypeIcon(contentType: EventType | RaidType) {
 // Square media. A logo falls back from kr to jp, then to the type icon. A boss image crops to a fixed focus. A hidden
 // spoiler shows an empty neutral placeholder, never a blurred image. Every failure, including one that happened before
 // hydration, resolves to the next source, so a broken image is never left on the page. The neutral box fill shows only
-// while an image loads or when there is no image, so a transparent logo never sits on a filled square.
+// while an image loads or when there is no image, so a transparent logo never sits on a filled square. The image stays
+// invisible until it loads, so a failing source never flashes the browser's broken-image mark before the fallback.
 export function ContentMedia({
   source,
   contentType,
@@ -101,7 +102,11 @@ export function ContentMedia({
         decoding="async"
         onError={image.onError}
         onLoad={image.onLoad}
-        className={cn("size-full object-cover", source.kind === "boss" && "object-[50%_30%]")}
+        className={cn(
+          "size-full object-cover",
+          source.kind === "boss" && "object-[50%_30%]",
+          !image.loaded && "opacity-0",
+        )}
       />
     </span>
   );
