@@ -55,7 +55,7 @@ describe("design system source guard", () => {
     expect(themeBlock(":root")).toContain("--sidebar: oklch(1 0 0);");
     expect(themeBlock(".dark")).toContain("--background: oklch(0.269 0 0);");
     expect(themeBlock(".dark")).toContain("--card: oklch(0.235 0 0);");
-    expect(themeBlock(".dark")).toContain("--sidebar: oklch(0.235 0 0);");
+    expect(themeBlock(".dark")).toContain("--sidebar: oklch(0.215 0 0);");
   });
 
   it("keeps surface radii at rounded-lg or smaller", () => {

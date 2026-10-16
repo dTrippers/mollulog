@@ -250,7 +250,7 @@ export function HomeFeedBlock({
             <HomeEmpty className="p-0">최근 피드가 없어요</HomeEmpty>
           </div>
         ) : (
-          <ul className="flex flex-col divide-y divide-v2-control-border">
+          <ul className="flex flex-col divide-y divide-v2-divider">
             {feed.posts.map((post) => (
               <FeedItem key={post.uid} post={post} timeZone={timeZone} />
             ))}
@@ -292,7 +292,7 @@ export function HomeYoutubeBlock({
             <HomeEmpty className="p-0">최근 영상이 없어요</HomeEmpty>
           </div>
         ) : (
-          <ul className="flex flex-col divide-y divide-v2-control-border">
+          <ul className="flex flex-col divide-y divide-v2-divider">
             {videos.map((video) => (
               <li key={`${video.channelKey}-${video.id}`}>
                 <a

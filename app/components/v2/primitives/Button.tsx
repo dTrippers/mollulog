@@ -8,7 +8,7 @@ export type V2ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variantClassName = {
   primary: "bg-v2-fg text-v2-canvas hover:opacity-90",
-  secondary: "bg-v2-inset text-v2-fg hover:bg-v2-hover",
+  secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
   text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover",
   // Danger clears an applied filter state, with a verb label, as PanelAction does.
   danger: "bg-v2-danger-subtle text-v2-danger hover:opacity-90",

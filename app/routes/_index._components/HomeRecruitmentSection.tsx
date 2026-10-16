@@ -124,7 +124,7 @@ export function HomeRecruitmentSection({
         <HomeEmpty>모집 중인 학생이 없어요</HomeEmpty>
       ) : (
         // Every group sits on one surface, with a divider between groups.
-        <div className="divide-y divide-v2-control-border overflow-hidden rounded-lg bg-v2-surface">
+        <div className="divide-y divide-v2-divider overflow-hidden rounded-lg bg-v2-surface">
           {groups.data.map((group) => {
             const students = group.recruitments.filter(
               (recruitment): recruitment is IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> } =>

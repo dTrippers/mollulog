@@ -525,7 +525,7 @@ export default function NavigationBar({
     <>
       <aside
         data-desktop-navigation-mode={navigationMode}
-        className="mllg-navigation-shell hidden h-screen shrink-0 flex-col overflow-visible bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex transition-[width] duration-200 motion-reduce:transition-none"
+        className="mllg-navigation-shell hidden h-screen shrink-0 flex-col overflow-visible bg-sidebar shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex transition-[width] duration-200 motion-reduce:transition-none"
       >
         <div data-navigation-variant="expanded" className="mllg-navigation-expanded flex h-full min-h-0 min-w-0 flex-col">
           <Link

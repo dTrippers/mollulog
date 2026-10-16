@@ -91,7 +91,7 @@ export function HomeNewsBlock({
     return <HomeEmpty>등록된 소식이 없어요</HomeEmpty>;
   }
   return (
-    <ul className="divide-y divide-v2-control-border rounded-lg bg-v2-surface px-v2-block-p">
+    <ul className="divide-y divide-v2-divider rounded-lg bg-v2-surface px-v2-block-p">
       {news.data.map((post) => (
         <li key={post.uid} className="flex items-center justify-between gap-3 py-3">
           <span className="min-w-0 truncate text-sm text-v2-fg">{post.title}</span>

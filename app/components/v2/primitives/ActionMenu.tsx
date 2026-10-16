@@ -123,7 +123,7 @@ export function ActionMenu({
           role="menu"
           aria-label={label}
           onKeyDown={handleMenuKeyDown}
-          className="absolute top-full right-0 z-20 mt-1 min-w-36 rounded-lg bg-v2-surface p-1 shadow-lg ring-1 ring-v2-inset"
+          className="absolute top-full right-0 z-20 mt-1 min-w-36 rounded-lg bg-v2-surface p-1 shadow-lg ring-1 ring-v2-control-border"
         >
           {items.map((item) => {
             const Icon = item.icon;
@@ -139,8 +139,10 @@ export function ActionMenu({
                     item.onSelect();
                   }}
                   className={cn(
-                    "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm text-v2-fg hover:bg-v2-hover focus:bg-v2-hover focus:outline-none",
-                    item.danger && "text-v2-danger",
+                    "flex min-h-11 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm text-v2-fg focus:outline-none",
+                    item.danger
+                      ? "text-v2-danger hover:bg-v2-danger-subtle focus:bg-v2-danger-subtle"
+                      : "hover:bg-v2-hover focus:bg-v2-hover",
                     v2FocusRing,
                   )}
                 >

@@ -68,7 +68,7 @@ function EntryPoints({ points, className }: { points: HomeEntryPoint[]; classNam
           <li key={point.key} className="flex min-w-0 flex-auto">
             <Link
               to={point.href}
-              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm"
+              className="inline-flex h-8 w-full cursor-pointer md:h-auto md:min-h-v2-row-min items-center justify-center gap-1 rounded-md bg-v2-inset px-1.5 text-[0.8125rem] font-medium whitespace-nowrap text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-filled-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:flex-none md:w-auto md:gap-1.5 md:px-3 md:text-sm"
             >
               <Icon aria-hidden="true" className="size-3.5 shrink-0 md:size-4" />
               <span>{point.label}</span>

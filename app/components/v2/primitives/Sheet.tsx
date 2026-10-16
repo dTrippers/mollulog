@@ -1,11 +1,12 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Transition, TransitionChild } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/solid";
-import { type ReactNode, useRef } from "react";
+import { type ElementType, type ReactNode, useRef } from "react";
 import { v2FocusRing } from "../layout/styles";
 
 export type SheetProps = {
   open: boolean;
   title: string;
+  Icon?: ElementType;
   description?: ReactNode;
   headerAction?: ReactNode;
   onClose: () => void;
@@ -20,6 +21,7 @@ export type SheetProps = {
 export function Sheet({
   open,
   title,
+  Icon,
   description,
   headerAction,
   onClose,
@@ -53,19 +55,22 @@ export function Sheet({
             leaveFrom="motion-safe:translate-y-0 motion-reduce:opacity-100"
             leaveTo="motion-safe:translate-y-full motion-reduce:opacity-0"
           >
-            <DialogPanel className="flex max-h-[85dvh] w-full max-w-3xl flex-col rounded-t-lg bg-v2-surface">
-              <div className="flex shrink-0 items-center justify-between gap-3 pt-3 pb-2 pr-2 pl-v2-block-p">
-                <div className="min-w-0">
-                  <DialogTitle
-                    as="h2"
-                    ref={titleRef}
-                    data-panel-title={panelId}
-                    tabIndex={-1}
-                    className="text-base font-semibold text-v2-fg focus:outline-none"
-                  >
-                    {title}
-                  </DialogTitle>
-                  {description ? <div className="mt-0.5 text-xs text-v2-fg-tertiary">{description}</div> : null}
+            <DialogPanel className="flex min-h-[min(24rem,85dvh)] max-h-[85dvh] w-full max-w-3xl flex-col rounded-t-lg bg-v2-surface">
+              <div className="flex shrink-0 items-center justify-between gap-3 pt-4 pb-3 pr-2 pl-v2-block-p">
+                <div className={Icon ? "flex min-w-0 items-center gap-3 pl-1" : "min-w-0"}>
+                  {Icon ? <Icon className="size-5 shrink-0 text-v2-fg-secondary" aria-hidden="true" /> : null}
+                  <div className="min-w-0">
+                    <DialogTitle
+                      as="h2"
+                      ref={titleRef}
+                      data-panel-title={panelId}
+                      tabIndex={-1}
+                      className="text-base font-semibold text-v2-fg focus:outline-none"
+                    >
+                      {title}
+                    </DialogTitle>
+                    {description ? <div className="mt-0.5 text-xs text-v2-fg-tertiary">{description}</div> : null}
+                  </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
@@ -79,13 +84,11 @@ export function Sheet({
                   </button>
                 </div>
               </div>
-              <div className="min-h-0 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
+              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
                 {children}
               </div>
               {footer ? (
-                <div className="shrink-0 border-t border-v2-inset px-v2-block-p pt-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
-                  {footer}
-                </div>
+                <div className="shrink-0 px-v2-block-p pt-3 pb-[max(env(safe-area-inset-bottom),1rem)]">{footer}</div>
               ) : null}
             </DialogPanel>
           </TransitionChild>

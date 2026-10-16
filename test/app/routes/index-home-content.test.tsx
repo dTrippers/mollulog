@@ -371,7 +371,7 @@ describe("home bottom and aside", () => {
     expect(markup.indexOf("공식 유튜브 최근 영상")).toBeLessThan(
       markup.indexOf("overflow-hidden rounded-lg bg-v2-surface"),
     );
-    expect(markup).toContain("divide-y divide-v2-control-border");
+    expect(markup).toContain("divide-y divide-v2-divider");
     expect(markup.match(/<li>/g)?.length).toBe(2);
     expect(markup).toContain("px-v2-block-p py-3");
   });

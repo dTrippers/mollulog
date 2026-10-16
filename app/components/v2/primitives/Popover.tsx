@@ -139,7 +139,7 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
           data-placement={placement}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
-            "fixed z-30 w-72 rounded-lg bg-v2-surface p-v2-block-p shadow-lg ring-1 ring-v2-inset",
+            "fixed z-30 w-72 rounded-lg bg-v2-elevated p-v2-block-p shadow-lg ring-1 ring-v2-control-border",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,
           )}

@@ -1,4 +1,5 @@
-import { Bars3BottomLeftIcon, CalendarDaysIcon, FunnelIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import { Bars3BottomLeftIcon, CalendarDaysIcon, TableCellsIcon } from "@heroicons/react/24/outline";
+import { FunnelIcon } from "@heroicons/react/24/solid";
 import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ClientLoaderFunctionArgs,
@@ -49,7 +50,6 @@ import {
   getFilterSummary,
   getFutureContentLink,
   getFutureFavoriteKeyForStudentAnalysis,
-  getFutureHeaderMeta,
   getFuturePendingStudentFavoriteKey,
   isContentFilterActive,
   isFutureContentLinkable,
@@ -534,7 +534,6 @@ function FutureSkeletonPage({ viewState }: { viewState: FutureViewState }) {
       <PageHeader
         title="미래시"
         description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
-        meta={<Skeleton className="h-4 w-28" />}
       />
       <PageToolbar>
         <ScreenTabs items={buildFutureTabs(viewState.view, viewState.setView)} />
@@ -1206,7 +1205,6 @@ function FutureContentsScreen({
   });
 
   const groups = groupFutureContents(viewContents, timeZone, now);
-  const headerMeta = getFutureHeaderMeta({ contents, now, timeZone });
   const filterActive = isContentFilterActive(filter);
   const summary = getFilterSummary({
     total: contentsStatus === "available" ? contents.length : null,
@@ -1256,13 +1254,7 @@ function FutureContentsScreen({
       onPanelCloseRequestHandled={showSignIn}
       onStackedChange={viewState.onStackedChange}
     >
-      <PageHeader
-        title="미래시"
-        description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요"
-        meta={
-          headerMeta && headerMeta.daysLeft >= 0 ? `${headerMeta.endLabel}까지 · D-${headerMeta.daysLeft}` : undefined
-        }
-      />
+      <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정으로 추후 변경될 수 있어요" />
       <PageToolbar>
         <ScreenTabs items={tabs} />
       </PageToolbar>

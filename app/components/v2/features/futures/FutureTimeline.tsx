@@ -184,7 +184,7 @@ function TimelineItem({
       {connectsNext ? (
         <span
           aria-hidden="true"
-          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-control-border md:left-[1.375rem]"
+          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem]"
         />
       ) : null}
       <div className="relative z-10">

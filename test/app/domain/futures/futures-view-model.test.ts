@@ -11,7 +11,6 @@ import {
   getFilterSummary,
   getFutureContentLink,
   getFutureFavoriteKeyForStudentAnalysis,
-  getFutureHeaderMeta,
   getFuturePendingStudentFavoriteKey,
   getFutureSpecialCases,
   getRemainingTime,
@@ -282,24 +281,6 @@ describe("dates and remaining time", () => {
       hours: 7,
       soon: true,
     });
-  });
-
-  it("omits the header meta when every content is endless", () => {
-    expect(getFutureHeaderMeta({ contents: [{ endAt: null, endless: true }], now, timeZone })).toBeNull();
-  });
-
-  it("uses the latest concrete end for the header meta", () => {
-    expect(
-      getFutureHeaderMeta({
-        contents: [
-          { endAt: "2026-10-27T00:00:00.000Z", endless: false },
-          { endAt: "2027-01-26T00:00:00.000Z", endless: false },
-          { endAt: null, endless: true },
-        ],
-        now,
-        timeZone,
-      }),
-    ).toEqual({ endLabel: "01/26", daysLeft: 103 });
   });
 });
 

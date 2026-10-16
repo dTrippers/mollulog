@@ -228,34 +228,6 @@ export function isOngoingFutureContent(since: UtcIsoString, until: UtcIsoString 
   return isInstantBefore(since, now) && (until === null || isInstantAfter(until, now));
 }
 
-// The header meta uses the latest end among contents that have a concrete end. Endless-only lists have no meta.
-export function getFutureHeaderMeta({
-  contents,
-  now,
-  timeZone,
-}: {
-  contents: { endAt: UtcIsoString | null; endless: boolean }[];
-  now: UtcIsoString;
-  timeZone: string;
-}): { endLabel: string; daysLeft: number } | null {
-  let latest: UtcIsoString | null = null;
-  for (const content of contents) {
-    if (content.endless || content.endAt === null) {
-      continue;
-    }
-    if (latest === null || getInstantTime(content.endAt) > getInstantTime(latest)) {
-      latest = content.endAt;
-    }
-  }
-  if (latest === null) {
-    return null;
-  }
-  return {
-    endLabel: formatInstant(latest, { timeZone, format: "MM/DD" }),
-    daysLeft: dayDifference(now, latest, timeZone),
-  };
-}
-
 export type FutureSpecialCase =
   | { kind: "perk-free-100" }
   | { kind: "caution-ended" }

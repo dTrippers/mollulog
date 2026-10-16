@@ -90,7 +90,7 @@ function BirthdaySkeleton() {
 // Three news rows: a title on the left and the date on the right, on one surface with dividers.
 function NewsSkeleton() {
   return (
-    <div className="divide-y divide-v2-control-border rounded-lg bg-v2-surface px-v2-block-p">
+    <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface px-v2-block-p">
       {[0, 1, 2].map((index) => (
         <div key={index} className="flex items-center justify-between gap-3 py-3">
           <Skeleton className="h-3.5 w-3/4 rounded-sm" />
@@ -146,7 +146,7 @@ export function HomeBottomSkeleton() {
 // The feed card's rows: an avatar with the author name on the first row, then the title.
 function FeedRowsSkeleton() {
   return (
-    <ul className="divide-y divide-v2-control-border">
+    <ul className="divide-y divide-v2-divider">
       {[0, 1, 2].map((index) => (
         <li key={index} className="flex flex-col gap-1 px-v2-block-p py-3">
           <div className="flex min-w-0 items-center gap-2">
@@ -163,7 +163,7 @@ function FeedRowsSkeleton() {
 // The video card's rows: a thumbnail, then two text lines.
 function VideoRowsSkeleton() {
   return (
-    <ul className="divide-y divide-v2-control-border">
+    <ul className="divide-y divide-v2-divider">
       {[0, 1, 2].map((index) => (
         <li key={index} className="flex gap-3 px-v2-block-p py-3">
           <Skeleton className="aspect-video w-28 shrink-0 rounded-md" />

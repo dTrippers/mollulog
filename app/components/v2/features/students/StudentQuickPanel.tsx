@@ -81,7 +81,7 @@ export function StudentQuickPanelBody({
           />
           <span className="min-w-0 flex-1">{favoriteLabel}</span>
           {entry.favoritedCount === null ? null : (
-            <span className="shrink-0 text-xs text-v2-fg-tertiary tabular-nums">
+            <span className="shrink-0 text-xs text-v2-fg-secondary tabular-nums">
               {formatThousands(entry.favoritedCount)}명 등록
             </span>
           )}
