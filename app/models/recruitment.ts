@@ -78,6 +78,11 @@ async function fetchAllHistoricalRecruitmentGroups(env: Env, forceRefresh = fals
   );
 }
 
+// Unlike getAllRecruitmentGroups, a read failure rejects. The home reads it as its own source and shows the failure.
+export function getRecruitmentGroupsOrThrow(env: Env, forceRefresh = false): Promise<RecruitmentGroup[]> {
+  return fetchAllRecruitmentGroups(env, forceRefresh);
+}
+
 export async function getAllRecruitmentGroups(env: Env, forceRefresh = false): Promise<RecruitmentGroup[]> {
   try {
     return await fetchAllRecruitmentGroups(env, forceRefresh);

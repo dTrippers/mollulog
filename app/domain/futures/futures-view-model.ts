@@ -37,14 +37,15 @@ export type FavoriteLabelState = {
 };
 
 // Completed shows the check only, even when the student is also a favorite. Personal state is read only when the
-// viewer is signed in, so guests get the public count alone.
+// viewer is signed in, so guests get the public count alone. An unknown count (null, when the count source failed) shows
+// no count: the viewer's own state still shows, and the label never reads a count of its own.
 export function getFavoriteLabelState({
   count,
   favorited,
   completed,
   signedIn,
 }: {
-  count: number;
+  count: number | null;
   favorited: boolean;
   completed: boolean;
   signedIn: boolean;
@@ -53,6 +54,14 @@ export function getFavoriteLabelState({
   const personalFavorited = signedIn && favorited;
   const icon = personalCompleted ? "completed" : personalFavorited ? "favorited" : "unfavorited";
   const stateText = personalCompleted ? ", 모집 완료" : personalFavorited ? ", 내 관심 등록" : "";
+  if (count === null) {
+    return {
+      visible: personalCompleted || personalFavorited,
+      icon,
+      countText: null,
+      accessibleName: `관심 학생${stateText}`,
+    };
+  }
   return {
     visible: personalCompleted || count > 0,
     icon,

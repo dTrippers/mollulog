@@ -249,7 +249,7 @@ function RecruitmentCardList({ recruitments, signedIn }: { recruitments: Recruit
   );
 }
 
-export function RecruitmentCard({
+function RecruitmentCard({
   recruitment,
   signedIn,
   favoriteAction,

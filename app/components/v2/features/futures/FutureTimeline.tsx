@@ -345,7 +345,12 @@ function SpecialCaseChip({ specialCase }: { specialCase: FutureSpecialCase }) {
   return null;
 }
 
-function RaidSummary({ raid }: { raid: NonNullable<FutureViewContent["raid"]> }) {
+// Terrain, attack, and defense of a raid. The home raid tiles and the timeline share it.
+export function RaidSummary({
+  raid,
+}: {
+  raid: Pick<NonNullable<FutureViewContent["raid"]>, "terrain" | "attackType" | "defenseTypes">;
+}) {
   return (
     <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-v2-fg-secondary">
       <span>{terrainLocale[raid.terrain]}</span>

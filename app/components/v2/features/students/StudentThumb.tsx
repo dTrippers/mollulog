@@ -20,6 +20,8 @@ export type StudentThumbProps = {
   // Shows the quick panel as the popover anchor.
   expanded?: boolean;
   compact?: boolean;
+  // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default keeps the 60px thumbnail.
+  large?: boolean;
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
@@ -35,6 +37,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     onOpen,
     expanded = false,
     compact = false,
+    large = false,
   },
   ref,
 ) {
@@ -45,7 +48,12 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   const detailName = `${name}${variant ? `(${variant})` : ""} 상세`;
   const accessibleName = favorite.visible ? `${detailName}, ${favorite.accessibleName}` : detailName;
   return (
-    <div className={cn("flex min-w-0 flex-col items-center", compact ? "w-[3.25rem]" : "w-[3.75rem]")}>
+    <div
+      className={cn(
+        "flex min-w-0 flex-col items-center",
+        large ? "w-[4.375rem] md:w-[5.5rem]" : compact ? "w-[3.25rem]" : "w-[3.75rem]",
+      )}
+    >
       <button
         ref={ref}
         type="button"
@@ -74,7 +82,14 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         </span>
         <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
       </button>
-      <span className="mt-1 block w-full truncate text-center text-xs leading-4 text-v2-fg">{name}</span>
+      <span
+        className={cn(
+          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
+          large ? "mt-0.5 md:mt-1" : "mt-1",
+        )}
+      >
+        {name}
+      </span>
       {variant ? (
         <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
           {variant}

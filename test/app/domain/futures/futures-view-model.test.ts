@@ -77,6 +77,25 @@ describe("getFavoriteLabelState", () => {
     expect(state.visible).toBe(true);
     expect(state.countText).toBeNull();
   });
+
+  it("shows no count for an unknown count, and keeps the viewer's own favorite state", () => {
+    const favorited = getFavoriteLabelState({ count: null, favorited: true, completed: false, signedIn: true });
+    expect(favorited.visible).toBe(true);
+    expect(favorited.icon).toBe("favorited");
+    expect(favorited.countText).toBeNull();
+    expect(favorited.accessibleName).toBe("관심 학생, 내 관심 등록");
+  });
+
+  it("hides an unknown count from a viewer who has no state for the student", () => {
+    const quiet = getFavoriteLabelState({ count: null, favorited: false, completed: false, signedIn: true });
+    expect(quiet.visible).toBe(false);
+    expect(quiet.countText).toBeNull();
+    expect(quiet.accessibleName).toBe("관심 학생");
+
+    const guest = getFavoriteLabelState({ count: null, favorited: true, completed: true, signedIn: false });
+    expect(guest.visible).toBe(false);
+    expect(guest.icon).toBe("unfavorited");
+  });
 });
 
 describe("selectFutureMediaSource", () => {

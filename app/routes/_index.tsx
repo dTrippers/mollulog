@@ -1,11 +1,11 @@
 import { Suspense } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Await, Link, useLoaderData } from "react-router";
+import { Await, useLoaderData, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { EventHeader, RecruitmentCard } from "~/components/features/events";
-import { RaidCard } from "~/components/features/raids";
-import { Callout, HorizontalScroll, SubTitle, Title } from "~/components/primitives";
-import { raidTypeToParam } from "~/domain/raid";
+import { getPreference } from "~/auth/preference.server";
+import { V2Page } from "~/components/v2/layout/V2Page";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { DEFAULT_TIME_ZONE, normalizeTimeZone, nowUtcIso } from "~/lib/date-time";
 import { getLogger } from "~/lib/observability.server";
 import {
   canonicalLink,
@@ -17,11 +17,22 @@ import {
 } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
-import type { TimelineContent } from "~/models/timeline-content";
-import { getHomeYoutubeSections } from "~/models/youtube";
+import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getHomeYoutubeChannelLinks, getHomeYoutubeSections } from "~/models/youtube";
+import { settleViewerPair, settleViewerState } from "~/routes/futures._components/viewer-state";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
-import { getIndexContents, type IndexRecruitment } from "~/views/home";
-import HomeRightRail, { HomeRightRailSkeleton } from "./_index._components/HomeRightRail";
+import { getHomeBirthdaySource, getHomeFavoritedCounts, getIndexContents, type HomeIndexContents } from "~/views/home";
+import {
+  HomeChannelLinks,
+  HomeFeedBlock,
+  type HomeFeedState,
+  HomeYoutubeBlock,
+  type HomeYoutubeState,
+} from "./_index._components/HomeAside";
+import { HomeAccountLeftNotice, HomeHeader } from "./_index._components/HomeHeader";
+import { HomeMain } from "./_index._components/HomeMain";
+import { HomeAsideSkeleton, HomeMainSkeleton } from "./_index._components/HomeSkeleton";
+import { type HomeViewerData, useHomeViewerState } from "./_index._components/home-viewer-state";
 
 export const meta: MetaFunction = ({ location }) => {
   return [
@@ -41,6 +52,18 @@ export const meta: MetaFunction = ({ location }) => {
   ];
 };
 
+// Every public source failed. Each section then shows its own failure, so the page keeps its structure.
+function unavailableHomeContents(): HomeIndexContents {
+  const failed = { status: "error" as const };
+  return {
+    events: failed,
+    recruitmentGroups: failed,
+    raids: failed,
+    overview: { campaigns: failed, jointFiringDrills: failed, mainStoryContent: failed },
+    news: failed,
+  };
+}
+
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
   const ctx: ExecutionContext = context.cloudflare.ctx;
@@ -50,240 +73,160 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return ctx.tracing.enterSpan("_index.loader", async (span) => {
     const currentUser = await ctx.tracing.enterSpan("auth", () => getActiveSensei(env, request));
     const currentUserId = currentUser?.id;
-    const publicReadEnv = env;
+    const signedIn = currentUser !== null;
+    const preference = await getPreference(env, request);
+    const timeZone = normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE);
+    const now = nowUtcIso();
 
-    const indexContentsPromise = ctx.tracing.enterSpan("index_contents", () =>
-      getIndexContents(publicReadEnv, false, ctx),
-    );
-    const recentCommunityPagePromise = ctx.tracing.enterSpan("community", () =>
-      getCommunityFeedPage(env, {
-        currentUserId,
-        postTypes: ["student_review", "event_opinion", "walkthrough_timeline"],
-        pageSize: 4,
-        includeEngagement: false,
-        ctx,
-      }),
-    );
-    const recentCommunityFeedPromise = recentCommunityPagePromise.then((recentCommunityPage) =>
-      ctx.tracing.enterSpan("enrich", () =>
-        enrichCommunityFeedPosts(publicReadEnv, recentCommunityPage.items, { ctx, includeEngagement: false }),
-      ),
-    );
-    const recentCommunityRailPromise = recentCommunityFeedPromise
-      .then((recentCommunityFeed) => ({
-        recentCommunityPosts: recentCommunityFeed.posts,
-        studentsByUid: recentCommunityFeed.studentsByUid,
-      }))
-      .catch((error) => {
-        logger.error("Failed to load home community rail", error);
-        return {
-          recentCommunityPosts: [],
-          studentsByUid: {},
-        };
+    // Public sources stream in. A rejected load becomes the explicit failure state of every section.
+    const contents = getIndexContents(env, false, ctx).catch((error: unknown) => {
+      logger.error("Failed to load home contents", error);
+      return unavailableHomeContents();
+    });
+    // The favorited counts are public, and they change between requests. They are read per request, beside the cached snapshot.
+    const favoritedCounts = contents.then((loaded) => getHomeFavoritedCounts(env, loaded.recruitmentGroups, ctx));
+
+    // Personal state, the feed, YouTube, and birthdays are deferred and fail on their own.
+    const reportViewerFailure = (error: unknown, operation: string) => {
+      logger.error("Failed to load home viewer state", error, { operation, signedIn });
+    };
+    const viewer = contents.then((loaded): Promise<HomeViewerData> => {
+      if (!currentUserId) {
+        return Promise.resolve({
+          favorites: { status: "available", value: [] },
+          results: { status: "available", value: [] },
+        });
+      }
+      const groupUids =
+        loaded.recruitmentGroups.status === "success"
+          ? loaded.recruitmentGroups.data.map((group) => group.groupUid)
+          : [];
+      return settleViewerPair(
+        settleViewerState(
+          ctx.tracing.enterSpan("favorited_students", () =>
+            getUserFavoritedStudents(env, currentUserId, undefined, { ctx }),
+          ),
+          "favorited_students",
+          reportViewerFailure,
+        ),
+        settleViewerState(
+          getRecruitmentResultsByRecruitmentGroupUids(env, currentUserId, groupUids),
+          "recruitment_results",
+          reportViewerFailure,
+        ),
+      );
+    });
+
+    const feed = ctx.tracing
+      .enterSpan("community", () =>
+        getCommunityFeedPage(env, {
+          currentUserId,
+          postTypes: ["student_review", "event_opinion", "walkthrough_timeline"],
+          pageSize: 4,
+          includeEngagement: false,
+          ctx,
+        }),
+      )
+      .then((page) => enrichCommunityFeedPosts(env, page.items, { ctx, includeEngagement: false }))
+      .then((enriched): HomeFeedState => ({ status: "success", posts: enriched.posts }))
+      .catch((error: unknown): HomeFeedState => {
+        logger.error("Failed to load home feed", error);
+        return { status: "error" };
       });
-    const youtubeSectionsPromise = ctx.tracing.enterSpan("youtube", () =>
-      getHomeYoutubeSections(env, ctx).catch((error) => {
+
+    const youtube = ctx.tracing
+      .enterSpan("youtube", () => getHomeYoutubeSections(env, ctx))
+      .then((sections): HomeYoutubeState => ({ status: "success", sections }))
+      .catch((error: unknown): HomeYoutubeState => {
         logger.error("Failed to load home youtube sections", error);
-        return [];
-      }),
-    );
-    const favoritedStudentsPromise = currentUserId
-      ? ctx.tracing.enterSpan("favorites", () => getUserFavoritedStudents(env, currentUserId, undefined, { ctx }))
-      : Promise.resolve([]);
-    const rightRailPromise = ctx.tracing.enterSpan("index_right_rail", () =>
-      Promise.all([recentCommunityRailPromise, youtubeSectionsPromise]).then(([communityRail, youtubeSections]) => ({
-        ...communityRail,
-        youtubeSections,
-      })),
-    );
+        return { status: "error" };
+      });
 
-    const [{ mainEvent, currentRaids, currentRecruitments, favoritedCounts }, favoritedStudents] = await Promise.all([
-      indexContentsPromise,
-      favoritedStudentsPromise,
-    ]);
-    const favoritedStudentUids = currentUserId
-      ? favoritedStudents
-          .filter((favorited) =>
-            currentRecruitments.some((recruitment) => recruitment.eventUid === favorited.contentId),
-          )
-          .map((favorited) => favorited.studentId)
-      : [];
+    const birthdays = getHomeBirthdaySource(env, { now, timeZone, ctx });
+    const youtubeChannels = getHomeYoutubeChannelLinks();
 
-    // ========== Raids ==========
-    const currentTotalAssualt = currentRaids.find(
-      (raid) => raid.raidType === "total_assault" || raid.raidType === "elimination",
-    );
-    const currentUnlimit = currentRaids.find((raid) => raid.raidType === "unlimit");
-
-    span.setAttribute("signedIn", currentUser !== null);
+    span.setAttribute("signedIn", signedIn);
 
     return {
-      mainEvent,
-      currentRecruitments,
-      favoritedCounts,
-      favoritedStudentUids,
-      currentTotalAssualt,
-      currentUnlimit,
-      rightRail: rightRailPromise,
-      signedIn: currentUser !== null,
       accountLeft,
+      signedIn,
+      now,
+      contents,
+      viewer,
+      favoritedCounts,
+      birthdays,
+      feed,
+      youtube,
+      youtubeChannels,
     };
   });
 };
 
 export default function Index() {
-  const {
-    mainEvent,
-    currentRecruitments,
-    favoritedCounts,
-    favoritedStudentUids,
-    currentTotalAssualt,
-    currentUnlimit,
-    rightRail,
-    signedIn,
-    accountLeft,
-  } = useLoaderData<typeof loader>();
+  const { accountLeft, signedIn, now, contents, viewer, favoritedCounts, birthdays, feed, youtube, youtubeChannels } =
+    useLoaderData<typeof loader>();
+  // The display timezone of the root context, as /futures reads it. The birthday window is counted on the server.
+  const timeZone = useDisplayTimeZone();
+  const revalidator = useRevalidator();
+  const viewerState = useHomeViewerState({ signedIn, viewer, favoritedCounts });
+  const retry = () => revalidator.revalidate();
 
   return (
-    <div className="w-full">
-      {accountLeft ? (
-        <Callout
-          tone="success"
-          title="탈퇴가 완료됐어요"
-          description="그동안 이용해주셔서 감사드려요. 언제든지 다시 찾아와주세요!"
-          className="mb-6"
-        />
-      ) : null}
-      <Title text="진행중인 컨텐츠" />
-
-      <div className="mt-4 flex flex-col gap-8 lg:mt-6 lg:flex-row lg:items-start lg:gap-6 xl:gap-8">
-        <div className="min-w-0 lg:flex-1">
-          <MainEvent event={mainEvent} />
-
-          {currentRecruitments.length > 0 && (
-            <CurrentRecruitments
-              recruitments={currentRecruitments}
-              favoritedStudentUids={favoritedStudentUids}
-              favoritedCounts={favoritedCounts}
-              signedIn={signedIn}
-            />
-          )}
-
-          <div className="my-6 grid grid-cols-1 gap-2 md:grid-cols-2">
-            {currentTotalAssualt && (
-              <Link
-                to={`/raids/${raidTypeToParam(currentTotalAssualt.raidType)}/${currentTotalAssualt.seasonIndex}`}
-                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+    <V2Page width="full">
+      <main className="flex w-full min-w-0 flex-col gap-2.5 pt-2 md:gap-6 md:pt-4">
+        <HomeHeader now={now} timeZone={timeZone} />
+        {accountLeft ? <HomeAccountLeftNotice /> : null}
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
+          <div className="min-w-0 flex-1">
+            <Suspense fallback={<HomeMainSkeleton />}>
+              {/* A public load that never settles fails on its own: every main section then shows its failure state. */}
+              <Await
+                resolve={contents}
+                errorElement={
+                  <HomeMain
+                    contents={unavailableHomeContents()}
+                    birthdays={birthdays}
+                    viewer={viewerState}
+                    now={now}
+                    timeZone={timeZone}
+                    onRetry={retry}
+                  />
+                }
               >
-                <RaidCard raid={currentTotalAssualt} timeLocaleType="relative" />
-              </Link>
-            )}
-            {currentUnlimit && (
-              <Link
-                to={`/raids/${raidTypeToParam(currentUnlimit.raidType)}/${currentUnlimit.seasonIndex}`}
-                className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-              >
-                <RaidCard raid={currentUnlimit} timeLocaleType="relative" />
-              </Link>
-            )}
+                {(loaded) => (
+                  <HomeMain
+                    contents={loaded}
+                    birthdays={birthdays}
+                    viewer={viewerState}
+                    now={now}
+                    timeZone={timeZone}
+                    onRetry={retry}
+                  />
+                )}
+              </Await>
+            </Suspense>
           </div>
+          <aside className="flex w-full min-w-0 flex-col gap-4 lg:sticky lg:top-24 lg:w-72 lg:flex-none">
+            <Suspense fallback={<HomeAsideSkeleton title="최근 피드" variant="feed" />}>
+              <Await
+                resolve={feed}
+                errorElement={<HomeFeedBlock feed={{ status: "error" }} timeZone={timeZone} onRetry={retry} />}
+              >
+                {(state) => <HomeFeedBlock feed={state} timeZone={timeZone} onRetry={retry} />}
+              </Await>
+            </Suspense>
+            <Suspense fallback={<HomeAsideSkeleton title="공식 유튜브 최근 영상" variant="video" />}>
+              <Await
+                resolve={youtube}
+                errorElement={<HomeYoutubeBlock youtube={{ status: "error" }} timeZone={timeZone} onRetry={retry} />}
+              >
+                {(state) => <HomeYoutubeBlock youtube={state} timeZone={timeZone} onRetry={retry} />}
+              </Await>
+            </Suspense>
+            <HomeChannelLinks channels={youtubeChannels} />
+          </aside>
         </div>
-        <div className="min-w-0 lg:w-full lg:max-w-72 xl:max-w-xs lg:flex-none">
-          <Suspense fallback={<HomeRightRailSkeleton />}>
-            <Await resolve={rightRail}>
-              {({ recentCommunityPosts, studentsByUid, youtubeSections }) => (
-                <HomeRightRail
-                  recentCommunityPosts={recentCommunityPosts}
-                  signedIn={signedIn}
-                  studentsByUid={studentsByUid}
-                  youtubeSections={youtubeSections}
-                />
-              )}
-            </Await>
-          </Suspense>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MainEvent({ event }: { event: TimelineContent | null }) {
-  if (!event) {
-    return (
-      <div className="rounded-lg bg-card p-8 text-center shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
-        <p className="text-muted-foreground">현재 진행중인 이벤트가 없어요</p>
-      </div>
-    );
-  }
-
-  return (
-    <Link
-      to={`/events/${event.uid}`}
-      className="block rounded-lg shadow-md shadow-black/5 transition-shadow hover:shadow-lg hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30"
-    >
-      <EventHeader
-        name={event.name}
-        type={event.contentType}
-        runType={event.runType}
-        since={event.startAt}
-        until={event.endAt}
-        endless={event.endless}
-        imageUrl={event.imageUrl}
-      />
-    </Link>
-  );
-}
-
-type CurrentRecruitmentsProps = {
-  recruitments: { eventUid: string; recruitment: IndexRecruitment }[];
-  favoritedStudentUids: string[];
-  favoritedCounts: { studentId: string; contentId: string; count: number }[];
-  signedIn: boolean;
-};
-
-function CurrentRecruitments({
-  recruitments,
-  favoritedStudentUids,
-  favoritedCounts,
-  signedIn,
-}: CurrentRecruitmentsProps) {
-  const recruitmentCards = recruitments.map(({ eventUid, recruitment }) => {
-    const favorited = favoritedStudentUids.includes(recruitment.favoriteKey);
-    const favoritedCount =
-      favoritedCounts.find(
-        (favorited) => favorited.studentId === recruitment.favoriteKey && favorited.contentId === eventUid,
-      )?.count ?? 0;
-
-    return (
-      <RecruitmentCard
-        key={`${eventUid}-${recruitment.favoriteKey}`}
-        recruitment={{
-          ...recruitment,
-          favorited,
-          favoritedCount,
-        }}
-        signedIn={signedIn}
-        favoriteAction="/api/contents"
-        favoriteContentUid={eventUid}
-        className="w-full md:w-28"
-      />
-    );
-  });
-
-  return (
-    <div className="my-8">
-      <SubTitle text="모집중인 학생" />
-      <div className="md:hidden">
-        <HorizontalScroll
-          itemWidth={{ mobile: "w-24", desktop: "md:w-24" }}
-          gap="gap-2"
-          className="-mx-4 px-4"
-          fadeEdges
-        >
-          {recruitmentCards}
-        </HorizontalScroll>
-      </div>
-      <div className="hidden md:flex md:flex-wrap md:gap-3">{recruitmentCards}</div>
-    </div>
+      </main>
+    </V2Page>
   );
 }
