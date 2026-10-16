@@ -16,31 +16,33 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 
 | Token / utility | Light | Dark | Use |
 |---|---|---|---|
-| `bg-v2-canvas` | `oklch(0.97 0 0)` | `oklch(0.17 0 0)` | Page background |
-| `bg-v2-surface` | `oklch(1 0 0)` | `oklch(0.205 0 0)` | Content blocks |
-| `bg-v2-inset` | `oklch(0.955 0 0)` | `oklch(0.25 0 0)` | Secondary areas, attribute badge background, image placeholder |
+| `bg-v2-canvas` | `oklch(0.97 0 0)` | `oklch(0.235 0 0)` | Page background |
+| `bg-v2-surface` | `oklch(1 0 0)` | `oklch(0.27 0 0)` | Content blocks |
+| `bg-v2-inset` | `oklch(0.955 0 0)` | `oklch(0.33 0 0)` | Secondary areas, attribute badge background, image placeholder |
+| `divide-v2-divider`, `bg-v2-divider` | `oklch(0.92 0 0)` | `oklch(0.40 0 0)` | List dividers and timeline lines |
 | `bg-v2-scrim` | `oklch(0 0 0 / 70%)` | `oklch(0 0 0 / 70%)` | Label chip on an image |
-| `text-v2-fg` | `oklch(0.205 0 0)` | `oklch(0.96 0 0)` | Primary text |
-| `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.78 0 0)` | Secondary text, figures |
-| `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.64 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
+| `text-v2-fg` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Primary text |
+| `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
+| `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
-| `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.45 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |
-| `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.27 0 0)` | Floating action bar. Brighter than surface in dark mode |
+| `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.56 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |
+| `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Floating action bar and popovers. Brighter than surface in dark mode |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
-| `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 6%)` | Row hover overlay |
-| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.30 0 0)` | A subtle control boundary for text inputs, selects, and textareas. Not for cards, buttons, or region separation. |
-| `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
-| `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.623 0.214 259.815)` | Focus ring, 2px with 2px offset (3:1 or higher) |
+| `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
+| `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |
+| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Control boundary for text inputs, selects, and textareas; popover ring. Not for cards, buttons, or region separation. |
+| `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.56 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
+| `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.707 0.165 254.624)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
-| `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.266 0.065 152.934)` | Success pill background |
+| `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
 | `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. 4.5:1 or higher on subtle, surface, and canvas |
-| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.258 0.092 26.042)` | Status: background of a danger `PanelAction` |
+| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction` |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
 | `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
 | `text-v2-perk` | `oklch(0.52 0.105 223.128)` | `oklch(0.865 0.127 207.078)` | Benefit, such as a free-recruit special case. Pair with a star icon and text, semibold |
-| `bg-v2-selected`, `text-v2-on-selected` | `oklch(0.205 0 0)` / `oklch(1 0 0)` | `oklch(0.96 0 0)` / `oklch(0.205 0 0)` | Selected filter chip (interaction state, not a status color). Filled dark in light mode, filled light in dark mode |
+| `bg-v2-selected`, `text-v2-on-selected` | `oklch(0.205 0 0)` / `oklch(1 0 0)` | `oklch(0.985 0 0)` / `oklch(0.205 0 0)` | Selected filter chip (interaction state, not a status color). Filled dark in light mode, filled light in dark mode |
 | `text-v2-new` | `oklch(0.905 0.182 98.111)` | `oklch(0.905 0.182 98.111)` | "New" label on a scrim (domain) |
 | `bg-v2-attr-red` | `oklch(0.637 0.237 25.331)` | `oklch(0.704 0.191 22.216)` | 폭발 (`explosive`), 경장갑 (`light`), 스트라이커 (`striker`) |
 | `bg-v2-attr-yellow` | `oklch(0.795 0.184 86.047)` | `oklch(0.852 0.199 91.936)` | 관통 (`piercing`), 중장갑 (`heavy`) |
@@ -51,7 +53,8 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 
 Surface hierarchy:
 
-- Dark: canvas is the darkest, then surface, then inset. Each step is brighter.
+- Dark v2 surfaces: canvas is the darkest, then surface, then inset. Each step is brighter.
+- The shared desktop NavigationBar uses `bg-sidebar`; its dark surface (0.215) is slightly darker than the v2 canvas (0.235).
 - Light: surface is the brightest. Canvas (0.97) and inset (0.955) are both light grays, with inset slightly darker than canvas. Light does not simply invert dark.
 - Text tiers `fg`, `fg-secondary`, and `fg-tertiary` stay at 4.5:1 or higher on surface, canvas, inset, and hover backgrounds.
 

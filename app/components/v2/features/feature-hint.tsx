@@ -39,7 +39,7 @@ export function FeatureHint({
           type="button"
           onClick={onAction}
           className={cn(
-            "relative inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-hover pointer-coarse:h-7 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 before:content-['']",
+            "relative inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover pointer-coarse:h-7 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 before:content-['']",
             v2FocusRing,
           )}
         >

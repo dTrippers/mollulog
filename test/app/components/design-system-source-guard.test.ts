@@ -55,7 +55,7 @@ describe("design system source guard", () => {
     expect(themeBlock(":root")).toContain("--sidebar: oklch(1 0 0);");
     expect(themeBlock(".dark")).toContain("--background: oklch(0.269 0 0);");
     expect(themeBlock(".dark")).toContain("--card: oklch(0.235 0 0);");
-    expect(themeBlock(".dark")).toContain("--sidebar: oklch(0.235 0 0);");
+    expect(themeBlock(".dark")).toContain("--sidebar: oklch(0.215 0 0);");
   });
 
   it("keeps surface radii at rounded-lg or smaller", () => {
@@ -80,6 +80,19 @@ const migratedRouteFiles: string[] = [
   "routes/futures._components/use-futures-navigation.ts",
   "routes/futures._components/recruitment-opinion-tutorial.ts",
   "routes/futures._components/viewer-state.ts",
+  "routes/_index.tsx",
+  "routes/_index._components/home-format.ts",
+  "routes/_index._components/home-viewer-state.ts",
+  "routes/_index._components/HomePrimitives.tsx",
+  "routes/_index._components/HomeEventSection.tsx",
+  "routes/_index._components/HomeRecruitmentSection.tsx",
+  "routes/_index._components/HomeRaidSection.tsx",
+  "routes/_index._components/HomeContentSection.tsx",
+  "routes/_index._components/HomeBottomSection.tsx",
+  "routes/_index._components/HomeAside.tsx",
+  "routes/_index._components/HomeSkeleton.tsx",
+  "routes/_index._components/HomeHeader.tsx",
+  "routes/_index._components/HomeMain.tsx",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];

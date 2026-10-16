@@ -16,11 +16,14 @@ export function StudentSlot({
   signedIn,
   open,
   onOpenChange,
+  large = false,
 }: {
   entry: FutureStudentEntry;
   signedIn: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // The home's larger portrait. The default keeps the 1.x-sized thumbnail used by /futures.
+  large?: boolean;
 }) {
   const { stacked } = useV2Page();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,6 +79,7 @@ export function StudentSlot({
         favorite={favorite}
         personalStatePending={entry.viewerPending}
         expanded={panelOpen}
+        large={large}
         onOpen={() => onOpenChange(true)}
       />
       <Popover

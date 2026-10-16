@@ -1,4 +1,5 @@
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/react/24/solid";
 import { type ReactNode, type RefObject, useState } from "react";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { NestedComment } from "~/models/content";
@@ -107,6 +108,7 @@ export function OpinionSheet({
     <Sheet
       open={open}
       title={title}
+      Icon={ChatBubbleOvalLeftEllipsisIcon}
       description={`${contentName} · 의견 ${commentCount}`}
       onClose={onClose}
       onExited={onExited}

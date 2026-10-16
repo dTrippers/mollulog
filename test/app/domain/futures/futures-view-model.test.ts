@@ -11,7 +11,6 @@ import {
   getFilterSummary,
   getFutureContentLink,
   getFutureFavoriteKeyForStudentAnalysis,
-  getFutureHeaderMeta,
   getFuturePendingStudentFavoriteKey,
   getFutureSpecialCases,
   getRemainingTime,
@@ -76,6 +75,25 @@ describe("getFavoriteLabelState", () => {
     const state = getFavoriteLabelState({ count: 0, favorited: false, completed: true, signedIn: true });
     expect(state.visible).toBe(true);
     expect(state.countText).toBeNull();
+  });
+
+  it("shows no count for an unknown count, and keeps the viewer's own favorite state", () => {
+    const favorited = getFavoriteLabelState({ count: null, favorited: true, completed: false, signedIn: true });
+    expect(favorited.visible).toBe(true);
+    expect(favorited.icon).toBe("favorited");
+    expect(favorited.countText).toBeNull();
+    expect(favorited.accessibleName).toBe("관심 학생, 내 관심 등록");
+  });
+
+  it("hides an unknown count from a viewer who has no state for the student", () => {
+    const quiet = getFavoriteLabelState({ count: null, favorited: false, completed: false, signedIn: true });
+    expect(quiet.visible).toBe(false);
+    expect(quiet.countText).toBeNull();
+    expect(quiet.accessibleName).toBe("관심 학생");
+
+    const guest = getFavoriteLabelState({ count: null, favorited: true, completed: true, signedIn: false });
+    expect(guest.visible).toBe(false);
+    expect(guest.icon).toBe("unfavorited");
   });
 });
 
@@ -263,24 +281,6 @@ describe("dates and remaining time", () => {
       hours: 7,
       soon: true,
     });
-  });
-
-  it("omits the header meta when every content is endless", () => {
-    expect(getFutureHeaderMeta({ contents: [{ endAt: null, endless: true }], now, timeZone })).toBeNull();
-  });
-
-  it("uses the latest concrete end for the header meta", () => {
-    expect(
-      getFutureHeaderMeta({
-        contents: [
-          { endAt: "2026-10-27T00:00:00.000Z", endless: false },
-          { endAt: "2027-01-26T00:00:00.000Z", endless: false },
-          { endAt: null, endless: true },
-        ],
-        now,
-        timeZone,
-      }),
-    ).toEqual({ endLabel: "01/26", daysLeft: 103 });
   });
 });
 

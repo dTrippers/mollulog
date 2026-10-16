@@ -17,7 +17,7 @@ export function ToggleChip({ pressed, onPressedChange, children }: ToggleChipPro
       onClick={() => onPressedChange(!pressed)}
       className={cn(
         "inline-flex min-h-7 cursor-pointer items-center rounded-full px-2.5 text-xs font-normal whitespace-nowrap",
-        pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-hover",
+        pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover",
         v2FocusRing,
       )}
     >

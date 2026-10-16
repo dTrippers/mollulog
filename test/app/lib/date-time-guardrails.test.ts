@@ -17,7 +17,6 @@ const migratedViewFiles = [
   "app/components/features/events/EventSelector.tsx",
   "app/components/features/events/Recruitments.tsx",
   "app/components/features/forms/ContentSelectForm.tsx",
-  "app/components/features/raids/RaidCard.tsx",
   "app/components/features/raids/RaidSelector.tsx",
   "app/components/features/raids/RaidStatisticsSlotCount.tsx",
   "app/components/features/raids/RaidVideosScreen.tsx",

@@ -80,9 +80,11 @@ export function StudentQuickPanelBody({
             aria-hidden="true"
           />
           <span className="min-w-0 flex-1">{favoriteLabel}</span>
-          <span className="shrink-0 text-xs text-v2-fg-tertiary tabular-nums">
-            {formatThousands(entry.favoritedCount)}명 등록
-          </span>
+          {entry.favoritedCount === null ? null : (
+            <span className="shrink-0 text-xs text-v2-fg-secondary tabular-nums">
+              {formatThousands(entry.favoritedCount)}명 등록
+            </span>
+          )}
         </button>
         {entry.canComplete && entry.studentUid ? (
           <button

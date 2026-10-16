@@ -79,8 +79,8 @@ export function PanelSheet({
   };
 
   const heading = (
-    <>
-      <Icon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+    <span className="flex min-w-0 flex-1 items-center gap-3 pl-1">
+      <Icon className="size-5 shrink-0 text-v2-fg-secondary" aria-hidden="true" />
       <span className="min-w-0 flex-1">
         {/* Focus target for actions that hide themselves, such as the filter reset. */}
         <span
@@ -96,7 +96,7 @@ export function PanelSheet({
         </span>
         {description ? <span className="block truncate text-xs text-v2-fg-tertiary">{description}</span> : null}
       </span>
-    </>
+    </span>
   );
 
   // The collapsible toggle sets the header height with its min-height row. Otherwise the title line does, so the row
@@ -136,7 +136,7 @@ export function PanelSheet({
               />
             </button>
           ) : (
-            <div className="flex min-w-0 flex-1 items-center gap-2">{heading}</div>
+            <div className="flex min-w-0 flex-1 items-start gap-2">{heading}</div>
           )}
           {/* The action is taller than one title line, so the box is one line high and the action overflows it evenly.
               The header row height never changes when the action appears or disappears. */}
@@ -166,6 +166,7 @@ export function PanelSheet({
       <Sheet
         open={sheetOpen}
         title={title}
+        Icon={Icon}
         panelId={panelId}
         description={description}
         headerAction={headerAction}

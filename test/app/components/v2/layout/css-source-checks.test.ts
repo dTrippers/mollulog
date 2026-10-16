@@ -188,16 +188,16 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
   it("W2: the control border token is defined for light and dark and exposed to utilities", () => {
     const lightStart = css.indexOf("--v2-inset: oklch(0.955 0 0);");
     expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-control-border: oklch(0.92 0 0);");
-    const darkStart = css.indexOf("--v2-inset: oklch(0.25 0 0);");
-    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.30 0 0);");
+    const darkStart = css.indexOf("--v2-inset: oklch(0.33 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.55 0 0);");
     expect(css).toContain("--color-v2-control-border: var(--v2-control-border);");
   });
 
   it("W3: the switch off-track has its own token, so the input border can stay light", () => {
     const lightStart = css.indexOf("--v2-inset: oklch(0.955 0 0);");
     expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-switch-off: oklch(0.64 0 0);");
-    const darkStart = css.indexOf("--v2-inset: oklch(0.25 0 0);");
-    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-switch-off: oklch(0.52 0 0);");
+    const darkStart = css.indexOf("--v2-inset: oklch(0.33 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-switch-off: oklch(0.56 0 0);");
     expect(css).toContain("--color-v2-switch-off: var(--v2-switch-off);");
     const switchSource = readFileSync(join(process.cwd(), "app/components/v2/primitives/Switch.tsx"), "utf8");
     expect(switchSource).toContain('"bg-v2-switch-off"');
@@ -219,7 +219,7 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
   it("W2: the docs use the control border, not the inset surface", () => {
     const docs = readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8");
     expect(docs).toContain(
-      "| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.30 0 0)` | A subtle control boundary for text inputs, selects, and textareas. Not for cards, buttons, or region separation. |",
+      "| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Control boundary for text inputs, selects, and textareas; popover ring. Not for cards, buttons, or region separation. |",
     );
     expect(docs).toContain("- Radius tokens. Keep the 1.x base radius");
     expect(docs).not.toContain("Border and radius tokens");
@@ -239,10 +239,10 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(lightBlock).toContain("--v2-danger: oklch(0.505 0.213 27.518);");
     expect(lightBlock).toContain("--v2-danger-subtle: oklch(0.971 0.013 17.38);");
 
-    const darkStart = css.indexOf("--v2-success-subtle: oklch(0.266 0.065 152.934);");
+    const darkStart = css.indexOf("--v2-success-subtle: oklch(0.31 0.065 152.934);");
     const darkBlock = css.slice(darkStart, css.indexOf("}", darkStart));
     expect(darkBlock).toContain("--v2-danger: oklch(0.704 0.191 22.216);");
-    expect(darkBlock).toContain("--v2-danger-subtle: oklch(0.258 0.092 26.042);");
+    expect(darkBlock).toContain("--v2-danger-subtle: oklch(0.31 0.092 26.042);");
 
     expect(css).toContain("--color-v2-danger: var(--v2-danger);");
     expect(css).toContain("--color-v2-danger-subtle: var(--v2-danger-subtle);");
@@ -264,7 +264,7 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
   it("C15: the docs list the danger tokens, state the status rule, and drop danger from Not added yet", () => {
     const docs = readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8");
     expect(docs).toContain("| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` |");
-    expect(docs).toContain("| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.258 0.092 26.042)` |");
+    expect(docs).toContain("| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` |");
     expect(docs).toContain("- `danger` is status.");
     expect(docs).toContain("Always pair it with a verb label");
     expect(docs).toContain("Show the action only when there is something to clear.");
@@ -307,9 +307,9 @@ describe("corr-2 component values", () => {
   });
 
   it("T5: sheet header, body padding, and close icon use the designer values", () => {
-    expect(sheetSource).toContain("flex shrink-0 items-center justify-between gap-3 pt-3 pb-2 pr-2 pl-v2-block-p");
+    expect(sheetSource).toContain("flex shrink-0 items-center justify-between gap-3 pt-4 pb-3 pr-2 pl-v2-block-p");
     expect(sheetSource).toContain(
-      "min-h-0 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
+      "min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
     );
     expect(sheetSource).toContain('<XMarkIcon className="size-5" aria-hidden="true" />');
     expect(sheetSource).toContain("flex size-11 cursor-pointer items-center justify-center rounded-md");

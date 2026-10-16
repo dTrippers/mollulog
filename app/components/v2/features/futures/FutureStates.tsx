@@ -45,7 +45,7 @@ function SkeletonItem({ withStudents, connectsNext }: { withStudents: boolean; c
       {connectsNext ? (
         <span
           aria-hidden="true"
-          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-control-border md:left-[1.375rem]"
+          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem]"
         />
       ) : null}
       <Skeleton className="relative z-10 size-10 md:size-11" />

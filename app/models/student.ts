@@ -250,6 +250,15 @@ const studentPrimaryUidsQuery = graphql(`
   }
 `);
 
+const homeStudentCharactersQuery = graphql(`
+  query HomeStudentCharacters($uids: [String!]) {
+    students(uids: $uids) {
+      uid
+      character { uid }
+    }
+  }
+`);
+
 const studentFormUidsQuery = graphql(`
   query StudentFormUids {
     students {
@@ -421,6 +430,22 @@ export async function getStudentPrimaryUids(_env: Env, uids: string[]): Promise<
     throw new Error("BAQL student identity response is missing students");
   }
   return new Map(data.students.map((row) => [row.uid, row.studentVariant?.primaryStudent?.uid ?? null]));
+}
+
+/**
+ * Maps each requested UID that BAQL knows to its character UID, which is shared by every skin of one character and
+ * equals the base student's UID. UIDs unknown to BAQL are absent from the map. Transport and GraphQL failures throw.
+ */
+export async function getStudentCharacterUids(_env: Env, uids: string[]): Promise<Map<string, string>> {
+  if (uids.length === 0) return new Map();
+  const { data, error } = await runQuery(homeStudentCharactersQuery, { uids });
+  if (error) {
+    throw error;
+  }
+  if (!data || !Array.isArray(data.students)) {
+    throw new Error("BAQL student character response is missing students");
+  }
+  return new Map(data.students.map((row) => [row.uid, row.character.uid]));
 }
 
 const studentFormUidsKey = cacheKey("source", "student-form-uids", 1, "all");

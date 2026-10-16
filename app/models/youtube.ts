@@ -20,6 +20,15 @@ const YOUTUBE_CHANNELS = [
   },
 ] as const;
 
+// The official channel links of the home, Korean first. They come from the static channel configuration, so they show
+// whether or not the videos loaded.
+export function getHomeYoutubeChannelLinks(): { key: YoutubeChannelKey; url: string }[] {
+  return (["kr", "jp"] as const).flatMap((key) => {
+    const channel = YOUTUBE_CHANNELS.find((candidate) => candidate.key === key);
+    return channel ? [{ key, url: channel.url }] : [];
+  });
+}
+
 const xmlParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "",

@@ -6,4 +6,4 @@ export { default as EventItemBonus } from "./EventItemBonus";
 export { default as EventList } from "./EventList";
 export { default as EventRecruitment } from "./EventRecruitment";
 export { default as EventSelector, PanelEventSelector } from "./EventSelector";
-export { default as Recruitments, RecruitmentCard } from "./Recruitments";
+export { default as Recruitments } from "./Recruitments";

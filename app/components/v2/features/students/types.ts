@@ -18,7 +18,9 @@ export type FutureStudentEntry = {
   rerun: boolean;
   since: UtcIsoString;
   until: UtcIsoString | null;
-  favoritedCount: number;
+  // Null when the public count is unknown (the count source failed). The label then shows no count, and the quick panel
+  // hides its count line. The viewer's own state still shows.
+  favoritedCount: number | null;
   favorited: boolean;
   completed: boolean;
   canComplete: boolean;

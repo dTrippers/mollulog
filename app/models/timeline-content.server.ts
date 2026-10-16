@@ -2,6 +2,7 @@ import {
   getPostgresAllTimelineContentsMeta,
   getPostgresContentUidsByRecruitmentGroup,
   getPostgresFutureRaidContents,
+  getPostgresHomeMainStoryContent,
   getPostgresTimelineContent,
   getPostgresTimelineContentDatesByContentUids,
   getPostgresTimelineContents,
@@ -46,6 +47,10 @@ export function getFutureRaidContents(
   options: TimelineContentReadOptions = {},
 ) {
   return getPostgresFutureRaidContents(env, contentTypes, nowUtcIso(), { ctx: options.ctx });
+}
+
+export function getHomeMainStoryContent(env: Env, now = nowUtcIso(), options: TimelineContentReadOptions = {}) {
+  return getPostgresHomeMainStoryContent(env, now, { ctx: options.ctx });
 }
 
 export function getTimelineContentsByContentTypes(

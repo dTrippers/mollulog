@@ -37,14 +37,15 @@ export type FavoriteLabelState = {
 };
 
 // Completed shows the check only, even when the student is also a favorite. Personal state is read only when the
-// viewer is signed in, so guests get the public count alone.
+// viewer is signed in, so guests get the public count alone. An unknown count (null, when the count source failed) shows
+// no count: the viewer's own state still shows, and the label never reads a count of its own.
 export function getFavoriteLabelState({
   count,
   favorited,
   completed,
   signedIn,
 }: {
-  count: number;
+  count: number | null;
   favorited: boolean;
   completed: boolean;
   signedIn: boolean;
@@ -53,6 +54,14 @@ export function getFavoriteLabelState({
   const personalFavorited = signedIn && favorited;
   const icon = personalCompleted ? "completed" : personalFavorited ? "favorited" : "unfavorited";
   const stateText = personalCompleted ? ", 모집 완료" : personalFavorited ? ", 내 관심 등록" : "";
+  if (count === null) {
+    return {
+      visible: personalCompleted || personalFavorited,
+      icon,
+      countText: null,
+      accessibleName: `관심 학생${stateText}`,
+    };
+  }
   return {
     visible: personalCompleted || count > 0,
     icon,
@@ -217,34 +226,6 @@ export function getRemainingTime(until: UtcIsoString, now: UtcIsoString, timeZon
 
 export function isOngoingFutureContent(since: UtcIsoString, until: UtcIsoString | null, now: UtcIsoString): boolean {
   return isInstantBefore(since, now) && (until === null || isInstantAfter(until, now));
-}
-
-// The header meta uses the latest end among contents that have a concrete end. Endless-only lists have no meta.
-export function getFutureHeaderMeta({
-  contents,
-  now,
-  timeZone,
-}: {
-  contents: { endAt: UtcIsoString | null; endless: boolean }[];
-  now: UtcIsoString;
-  timeZone: string;
-}): { endLabel: string; daysLeft: number } | null {
-  let latest: UtcIsoString | null = null;
-  for (const content of contents) {
-    if (content.endless || content.endAt === null) {
-      continue;
-    }
-    if (latest === null || getInstantTime(content.endAt) > getInstantTime(latest)) {
-      latest = content.endAt;
-    }
-  }
-  if (latest === null) {
-    return null;
-  }
-  return {
-    endLabel: formatInstant(latest, { timeZone, format: "MM/DD" }),
-    daysLeft: dayDifference(now, latest, timeZone),
-  };
 }
 
 export type FutureSpecialCase =

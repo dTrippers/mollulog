@@ -89,3 +89,49 @@ describe("StudentSlot guest actions", () => {
     await waitFor(() => expect(document.activeElement).not.toBe(thumbnail));
   });
 });
+
+describe("StudentSlot with an unknown favorited count", () => {
+  function renderMemberSlot(entry: FutureStudentEntry, open: boolean) {
+    return (
+      <MemoryRouter>
+        <V2Page width="wide">
+          <StudentSlot entry={entry} signedIn open={open} onOpenChange={() => {}} />
+        </V2Page>
+      </MemoryRouter>
+    );
+  }
+
+  beforeEach(() => {
+    installLayoutTestEnv();
+  });
+
+  it("keeps the viewer's favorite icon on the thumbnail but shows no count", () => {
+    setLayoutWidth(1024);
+    const entry = { ...makeEntry(() => {}), favoritedCount: null, favorited: true } as FutureStudentEntry;
+    const { container } = render(renderMemberSlot(entry, false));
+
+    const label = container.querySelector('[role="img"]');
+    expect(label?.getAttribute("aria-label")).toBe("관심 학생, 내 관심 등록");
+    expect(label?.textContent?.trim()).toBe("");
+  });
+
+  it("hides the quick panel's count line and keeps the favorite toggle working", () => {
+    setLayoutWidth(1024);
+    const onToggleFavorite = jest.fn();
+    const entry = { ...makeEntry(onToggleFavorite), favoritedCount: null, favorited: true } as FutureStudentEntry;
+    render(renderMemberSlot(entry, true));
+
+    const panel = screen.getByRole("dialog", { name: "키사키 빠른 보기" });
+    expect(panel.textContent).not.toMatch(/명 등록/);
+    fireEvent.click(within(panel).getByRole("button", { name: /관심 학생에서 해제/ }));
+    expect(onToggleFavorite).toHaveBeenCalledWith(false);
+  });
+
+  it("shows the known count as before in the same panel", () => {
+    setLayoutWidth(1024);
+    render(renderMemberSlot(makeEntry(() => {}), true));
+
+    const panel = screen.getByRole("dialog", { name: "키사키 빠른 보기" });
+    expect(panel.textContent).toContain("1,284명 등록");
+  });
+});

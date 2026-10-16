@@ -412,7 +412,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.235 0 0);
+  --sidebar: oklch(0.215 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.623 0.214 259.815);
   --sidebar-primary-foreground: oklch(0.985 0 0);
@@ -430,7 +430,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-canvas: var(--v2-canvas);
   --color-v2-surface: var(--v2-surface);
   --color-v2-inset: var(--v2-inset);
+  --color-v2-divider: var(--v2-divider);
   --color-v2-control-border: var(--v2-control-border);
+  --color-v2-filled-hover: var(--v2-filled-hover);
   --color-v2-switch-off: var(--v2-switch-off);
   --color-v2-scrim: var(--v2-scrim);
   --color-v2-fg: var(--v2-fg);
@@ -445,6 +447,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-danger-subtle: var(--v2-danger-subtle);
   --color-v2-live: var(--v2-live);
   --color-v2-favorite: var(--v2-favorite);
+  --color-v2-completed-badge: var(--v2-completed-badge);
+  --color-v2-favorite-badge: var(--v2-favorite-badge);
   --color-v2-new: var(--v2-new);
   --color-v2-warning: var(--v2-warning);
   --color-v2-perk: var(--v2-perk);
@@ -470,7 +474,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-canvas: oklch(0.97 0 0);
   --v2-surface: oklch(1 0 0);
   --v2-inset: oklch(0.955 0 0);
+  --v2-divider: oklch(0.92 0 0);
   --v2-control-border: oklch(0.92 0 0);
+  --v2-filled-hover: oklch(0.94 0 0);
   --v2-switch-off: oklch(0.64 0 0);
   --v2-scrim: oklch(0 0 0 / 70%);
   --v2-fg: oklch(0.205 0 0);
@@ -485,6 +491,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-danger-subtle: oklch(0.971 0.013 17.38);
   --v2-live: oklch(0.505 0.213 27.518);
   --v2-favorite: oklch(0.577 0.245 27.325);
+  /* These badges sit on images and keep white text legible in both themes. */
+  --v2-completed-badge: rgb(22 96 50 / 80%);
+  --v2-favorite-badge: rgb(173 28 28 / 80%);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.55 0.163 48.998);
   --v2-perk: oklch(0.52 0.105 223.128);
@@ -507,28 +516,30 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 */
 
 .dark {
-  --v2-canvas: oklch(0.17 0 0);
-  --v2-surface: oklch(0.205 0 0);
-  --v2-inset: oklch(0.25 0 0);
-  --v2-control-border: oklch(0.30 0 0);
-  --v2-switch-off: oklch(0.52 0 0);
+  --v2-canvas: oklch(0.235 0 0);
+  --v2-surface: oklch(0.27 0 0);
+  --v2-inset: oklch(0.33 0 0);
+  --v2-divider: oklch(0.40 0 0);
+  --v2-control-border: oklch(0.55 0 0);
+  --v2-filled-hover: oklch(0.37 0 0);
+  --v2-switch-off: oklch(0.56 0 0);
   --v2-scrim: oklch(0 0 0 / 70%);
-  --v2-fg: oklch(0.96 0 0);
-  --v2-fg-secondary: oklch(0.78 0 0);
-  --v2-fg-tertiary: oklch(0.64 0 0);
+  --v2-fg: oklch(0.985 0 0);
+  --v2-fg-secondary: oklch(0.85 0 0);
+  --v2-fg-tertiary: oklch(0.78 0 0);
   --v2-on-media: oklch(1 0 0);
-  --v2-hover: oklch(1 0 0 / 6%);
-  --v2-focus: oklch(0.623 0.214 259.815);
+  --v2-hover: oklch(1 0 0 / 7%);
+  --v2-focus: oklch(0.707 0.165 254.624);
   --v2-success: oklch(0.792 0.209 151.711);
-  --v2-success-subtle: oklch(0.266 0.065 152.934);
+  --v2-success-subtle: oklch(0.31 0.065 152.934);
   --v2-danger: oklch(0.704 0.191 22.216);
-  --v2-danger-subtle: oklch(0.258 0.092 26.042);
+  --v2-danger-subtle: oklch(0.31 0.092 26.042);
   --v2-live: oklch(0.704 0.191 22.216);
   --v2-favorite: oklch(0.704 0.191 22.216);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.828 0.189 84.429);
   --v2-perk: oklch(0.865 0.127 207.078);
-  --v2-selected: oklch(0.96 0 0);
+  --v2-selected: oklch(0.985 0 0);
   --v2-on-selected: oklch(0.205 0 0);
   --v2-attr-red: oklch(0.704 0.191 22.216);
   --v2-attr-yellow: oklch(0.852 0.199 91.936);
@@ -536,8 +547,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-attr-purple: oklch(0.714 0.203 305.504);
   --v2-attr-green: oklch(0.792 0.209 151.711);
   --v2-attr-grey: oklch(0.708 0 0);
-  --v2-fg-disabled: oklch(0.45 0 0);
-  --v2-elevated: oklch(0.27 0 0);
+  --v2-fg-disabled: oklch(0.56 0 0);
+  --v2-elevated: oklch(0.36 0 0);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: oklch(0.707 0.165 254.624 / 16%);
 }
