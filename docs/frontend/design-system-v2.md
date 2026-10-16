@@ -1,0 +1,293 @@
+# Design system 2.0
+
+Design system 2.0 (v2) is the shared visual language for screens migrated from the 1.x UI. It covers color, density, and motion tokens, the `app/components/v2/` layout, and the guard that keeps 2.0 code on its own rules.
+
+The 2.0 foundation adds tokens and rules only. It does not change any 1.x token, 1.x component, or existing screen. Components and screens that use 2.0 come in later steps.
+
+## Naming
+
+- Every 2.0 token uses the `v2-` prefix: `--v2-*` raw variables, `--color-v2-*` theme entries, `--spacing-v2-*`, `--transition-duration-v2-*`, and `--ease-v2-*`.
+- Utilities keep the prefix: `bg-v2-canvas`, `text-v2-fg-tertiary`, `ring-v2-focus`, `py-v2-row-y`, `gap-v2-block-gap`, `min-h-v2-row-min`, `duration-v2-base`, `ease-v2-enter`.
+- The cleanup step (MLLG-121) removes the prefix and renames the tokens. Until then, do not drop the prefix or reuse these names for 1.x values.
+
+## Color tokens
+
+Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `:root` (light) and `.dark` (dark), and `@theme inline` exposes them as `--color-v2-*`. The 1.x pattern is the same.
+
+| Token / utility | Light | Dark | Use |
+|---|---|---|---|
+| `bg-v2-canvas` | `oklch(0.97 0 0)` | `oklch(0.17 0 0)` | Page background |
+| `bg-v2-surface` | `oklch(1 0 0)` | `oklch(0.205 0 0)` | Content blocks |
+| `bg-v2-inset` | `oklch(0.955 0 0)` | `oklch(0.25 0 0)` | Secondary areas, attribute badge background, image placeholder |
+| `bg-v2-scrim` | `oklch(0 0 0 / 70%)` | `oklch(0 0 0 / 70%)` | Label chip on an image |
+| `text-v2-fg` | `oklch(0.205 0 0)` | `oklch(0.96 0 0)` | Primary text |
+| `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.78 0 0)` | Secondary text, figures |
+| `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.64 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
+| `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
+| `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.45 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |
+| `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.27 0 0)` | Floating action bar. Brighter than surface in dark mode |
+| `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
+| `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
+| `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 6%)` | Row hover overlay |
+| `border-v2-control-border` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Borders of text inputs, selects, textareas, and dense data boundaries (3:1 or higher against surface and canvas). Not for cards, buttons, or region separation. |
+| `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.623 0.214 259.815)` | Focus ring, 2px with 2px offset (3:1 or higher) |
+| `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
+| `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.266 0.065 152.934)` | Success pill background |
+| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. 4.5:1 or higher on subtle, surface, and canvas |
+| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.258 0.092 26.042)` | Status: background of a danger `PanelAction` |
+| `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
+| `text-v2-favorite` | `oklch(0.645 0.246 16.439)` | `oklch(0.81 0.117 11.638)` | Favorite heart (domain) |
+| `text-v2-new` | `oklch(0.905 0.182 98.111)` | `oklch(0.905 0.182 98.111)` | "New" label on a scrim (domain) |
+| `bg-v2-attr-red` | `oklch(0.637 0.237 25.331)` | `oklch(0.704 0.191 22.216)` | 폭발 (`explosive`), 경장갑 (`light`), 스트라이커 (`striker`) |
+| `bg-v2-attr-yellow` | `oklch(0.795 0.184 86.047)` | `oklch(0.852 0.199 91.936)` | 관통 (`piercing`), 중장갑 (`heavy`) |
+| `bg-v2-attr-blue` | `oklch(0.623 0.214 259.815)` | `oklch(0.707 0.165 254.624)` | 신비 (`mystic`), 특수장갑 (`special`), 스페셜 (`special`) |
+| `bg-v2-attr-purple` | `oklch(0.627 0.265 303.9)` | `oklch(0.714 0.203 305.504)` | 진동 (`sonic`), 탄력장갑 (`elastic`) |
+| `bg-v2-attr-green` | `oklch(0.627 0.194 149.214)` | `oklch(0.792 0.209 151.711)` | 분해 (`chemical`), 복합장갑 (`composite`) |
+| `bg-v2-attr-grey` | `oklch(0.556 0 0)` | `oklch(0.708 0 0)` | 일반 (`normal`) |
+
+Surface hierarchy:
+
+- Dark: canvas is the darkest, then surface, then inset. Each step is brighter.
+- Light: surface is the brightest. Canvas (0.97) and inset (0.955) are both light grays, with inset slightly darker than canvas. Light does not simply invert dark.
+- Text tiers `fg`, `fg-secondary`, and `fg-tertiary` stay at 4.5:1 or higher on surface, canvas, inset, and hover backgrounds.
+
+## Density tokens
+
+Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets the media overrides reach utilities through `var()`. Do not move them into `@theme inline`.
+
+| Token / utility | Desktop | 767px or narrower | `pointer: coarse` | Use |
+|---|---|---|---|---|
+| `py-v2-row-y` / `--spacing-v2-row-y` | 0.375rem | same | same | Row vertical padding |
+| `px-v2-row-x` / `--spacing-v2-row-x` | 0.5rem | same | same | Row horizontal padding |
+| `gap-v2-media-gap` / `--spacing-v2-media-gap` | 0.75rem | same | same | Thumbnail to text |
+| `gap-v2-list-gap` / `--spacing-v2-list-gap` | 0.125rem | same | same | Between items |
+| `gap-v2-group-gap` / `--spacing-v2-group-gap` | 1rem | same | same | Between groups inside a block |
+| `p-v2-block-p` / `--spacing-v2-block-p` | 1.25rem | 1rem | same | Block padding |
+| `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
+| `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
+| `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | 2.75rem | 2.75rem | Minimum row height |
+
+## Numeric and date formats
+
+- Use Tailwind's `tabular-nums` for every number, date, time, count, and remaining duration. Do not add a numeric-only utility.
+- Dates and periods: `MM/DD ~ MM/DD`. Period with time: `MM/DD HH:mm ~ MM/DD HH:mm`.
+- Remaining time: `N일 남음` for a running period, `N일 후 시작` for a future one.
+- Counts: thousands separator, for example `1,234`.
+- Comparison tables: right-align the date and figure columns so rows compare by digit position.
+
+## Status and domain
+
+- `success` is status. It means confirmed or completed.
+- `danger` is status. Use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
+- `neutral` `PanelAction` is for helper actions that do not clear state, such as "모두 보기". Do not use `danger` for them.
+- `live`, `favorite`, `new`, and `attr-*` are domain colors. They describe content, not state.
+- Do not use color alone to convey meaning. Pair color with a text label or a distinct icon shape; an icon-only element (for example the favorite heart or the completed check) needs an accessible name.
+- `attr-*` and `live` always carry a text label.
+- Among recruitment labels, only `new` (신규) is colored. Other labels such as 한정 복각, 복각, and 배포 stay as `text-v2-on-media` text on the scrim.
+- In dark mode, `live` and `attr-red` share the same value. Always show them with their labels.
+- The light `attr-yellow` stripe has low contrast (about 1.68:1). The text label carries the meaning, so the stripe stays.
+
+## Motion
+
+- Duration and easing tokens are defined in a plain `@theme` block:
+  - `duration-v2-fast` (120ms): press, hover, toggle.
+  - `duration-v2-base` (200ms): popover, expand and collapse.
+  - `duration-v2-slow` (300ms): screen transition, sheet.
+  - `ease-v2-enter` `cubic-bezier(0, 0, 0, 1)`: entering (decelerate).
+  - `ease-v2-exit` `cubic-bezier(0.3, 0, 1, 1)`: leaving (accelerate).
+  - `ease-v2-standard` `cubic-bezier(0.2, 0, 0, 1)`: movement within the screen.
+- Exit is one step shorter than enter. For example, a popover enters with `base` and `enter`, and exits with `fast` and `exit`.
+- Animate only `transform` and `opacity`.
+- Put `transform` animation inside `motion-safe:`.
+- Under `prefers-reduced-motion: reduce`, the v2 base and slow durations become 120ms, and only fades remain. The 1.x `mllg-*` keyframes and view transitions are unchanged and are not overridden.
+- Motion belongs to the 2.0 components, not to pages.
+
+## Directory rules
+
+- `app/components/v2/primitives/`: shared low-level pieces.
+- `app/components/v2/layout/`: shared layout pieces.
+- `app/components/v2/features/<domain>/`: domain UI reused across screens.
+- 2.0 files must not import 1.x components (`~/components/primitives`, `~/components/features`, or the same locations through relative paths).
+- Do not modify 1.x components to make them work with 2.0.
+
+## Guard
+
+`test/app/components/design-system-source-guard.test.ts` enforces these rules on:
+
+- every `.ts`, `.tsx`, and `.css` file under `app/components/v2/`;
+- every file listed in `migratedRouteFiles` in that test (migrated route files, relative to `app/`).
+
+On those files, the guard rejects:
+
+- imports of 1.x components, resolved by path, including relative paths that reach the same directories;
+- Tailwind color utilities that are not `v2-` tokens: palette hues such as `red-500`, `white`, `black`, 1.x semantic colors such as `bg-card` and `text-muted-foreground`, and arbitrary color values;
+- `duration-<number>` and arbitrary durations, `ease-linear`, `ease-in`, `ease-out`, `ease-in-out`, and arbitrary easings;
+- literal colors in CSS or inline styles (`#hex`, `oklch(`, `rgb(`, `hsl(`), literal millisecond or second durations, and `cubic-bezier(`.
+- 1.x color variables, including through `var()` or the `prefix-(--name)` shorthand (for example `bg-[var(--card)]`, `bg-(--card)`, or `color: var(--muted-foreground)`). Only `v2-` tokens and non-color variables are allowed.
+
+`transparent`, `current`, and `inherit` are allowed.
+
+Exceptions go in `v2GuardExceptions` with a file, a pattern, and a reason. The list starts empty. Add an entry only when a violation is intentional and cannot be expressed with a token.
+
+To bring a migrated route under the guard, add its path (relative to `app/`) to `migratedRouteFiles`. The same rules then apply to it.
+
+## Layout
+
+Layout parts live in `app/components/v2/layout/`. A screen composes the regions it needs. Header, Toolbar, Main, and Aside are the regions. `V2Page` is the root.
+
+```tsx
+<V2Page width="reading" panelRequest={panelRequest} panelCloseRequest={panelCloseRequest} onPanelCloseRequestHandled={() => setPanelCloseRequest(null)}>
+  <PageHeader back={{ title: "미래시", to: "/futures" }} title="하안 바다의 기억 (복각)" meta={<span>진행 중 · 10/08 ~ 10/22</span>} />
+  <PageToolbar>
+    <ScreenTabs items={tabs} />
+  </PageToolbar>
+  <PageMain>{/* the screen's content, including its loading, empty, and failure states */}</PageMain>
+  <PageAside>{/* omit this element for a screen with no Aside */}</PageAside>
+  <MobileActionBar links={links} panels={panels} />
+</V2Page>
+```
+
+- DOM order is Header, Toolbar, Main, Aside. On side-by-side the Aside sits left of Main, placed by grid areas.
+- Omit `PageAside` and there is no Aside column and no reserved space.
+- Side-by-side starts at 48rem of the `@container/page-available` content box (root.tsx). The Aside is 16rem below 64rem and 18rem from 64rem. `V2Page` measures its own width with ResizeObserver to know the mode for JavaScript behavior, such as where a panel body mounts.
+- Header holds the back link, title, description (max-prose), and meta. It sits above Main and spans the full width, so the title x matches across recipes with and without an Aside.
+- Toolbar is sticky on stacked layouts. Use `stickyOnDesktop` only for data tables.
+- `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries.
+
+### Width rules
+
+| `width` | Main | Root `data-page-max-width` |
+|---|---|---|
+| `reading` | At most 48rem (`max-w-3xl`), left aligned | `default` |
+| `wide` | Fills the available width | `wide` (root caps the page at `max-w-screen-2xl`) |
+| `full` | Fills the available width | `full` (passed through, no cap) |
+
+### Behavior parts
+
+- **ScreenTabs:** link mode (`link`, `linkState`) sets `aria-current="page"`. onClick mode (`onClick`) sets `aria-pressed`. A `disabled` tab does not navigate and shows `disabledReason` as `title` and visually hidden text. `hiddenStacked` hides a tab on stacked layouts. `label` shows a count.
+- **PanelSheet:** on side-by-side the panel is in the Aside (collapsible, `defaultExpanded`). On stacked it opens a sheet when open. Program requests use `panelRequest={{ panelId, requestId }}`, with a new `requestId` per request. Close with `panelCloseRequest`, a number to increment, and `onPanelCloseRequestHandled`. A desktop request expands the panel, scrolls it fully into view, and highlights it without moving focus. A stacked request opens the sheet. A location change or a switch to side-by-side closes an open sheet. A disabled panel never opens a sheet, and its `MobileActionBar` trigger is disabled.
+- **AsideLinks and MobileActionBar links:** `to` starting with `http` opens in a new window (`target="_blank"`, `rel="noopener noreferrer"`). `onClick` without `to` renders a button. `transition` (`forward`, `reverse`, `crossfade`) sets the screen transition for route navigation. `preventScrollReset` is passed to the router link.
+- **PanelAction:** a text action in a panel header, beside the title. It does not change the header row height, so showing or hiding it never moves the panel. When an action hides itself after use (for example 초기화 once the filters are reset), move focus to the panel heading or the first control so keyboard focus is not lost.
+- **MobileActionBar panels:** each `panelId` must match a `PanelSheet` in the same page's `PageAside`. The bar opens that panel's sheet.
+
+## Transitions
+
+Route transitions and state transitions go through the helper in `screen-transition.ts`. Screens do not write transition code.
+
+| Kind | Used by | Motion |
+|---|---|---|
+| `forward` | Entering a detail | New Main slides in from `translateX(3rem)` and fades in (`slow`, `enter`). The previous Main slides out to `translateX(-3rem)` and fades out (`base`, `exit`). |
+| `reverse` | Going back | The mirror of forward. |
+| `crossfade` | Same-tier tabs (link or onClick) | Main fades (`base`, `enter` in; `fast`, `exit` out). Header and Toolbar stay still. The tab indicator moves (`base`, `standard`). |
+
+- For link tabs, the tab bar moves between routes only when `ScreenTabs` stays mounted across them. Put the tabs in a shared parent layout route. Otherwise the new route renders the bar in place, without the move.
+- Browser back (POP) gets no 2.0 transition.
+- The Sheet slides up (`slow`, `enter`) with a backdrop fade. It closes with `base`, `exit`.
+- A panel body fades in and slides `translateY(-0.25rem)` (`base`, `enter`). Collapsing fades out (`fast`, `exit`). The chevron rotates. Height is not animated, so the blocks below move at once when a panel collapses.
+- A panel highlight fades an overlay in and out over `slow` times 4.
+- `prefers-reduced-motion: reduce` removes all translation and keeps the fades.
+- Only `transform` and `opacity` animate. Animations use the v2 `duration-v2-*` and `ease-v2-*` tokens.
+
+The helper sets `data-v2-transition` (`forward`, `reverse`, `crossfade`) on `<html>` during the transition:
+
+- `getV2LinkTransitionProps(kind, onClick?)` spreads onto a React Router `Link`. Route navigation uses React Router's `viewTransition`. The attribute clears 400ms after the navigation commits, or 30s after arming if it never commits. Arming a newer transition cancels the older one's timers, so a stale timer never clears a newer kind.
+- `runV2BackNavigation(navigateBack)` wraps the header back action (`PageHeader` `back.onClick`, for example `() => navigate(-1)`). It arms `reverse` and runs the router navigation. React Router owns that view transition, so the helper never calls `startViewTransition`. A browser POP that the back action did not start carries no kind.
+- `runV2StateTransition(kind, update)` wraps an onClick state update (`crossfade`), applied synchronously inside the transition. It is the only direct `startViewTransition` call in the layout.
+
+Without View Transition support or when the document is hidden, each helper updates at once.
+
+## Recipes
+
+Each recipe shows the parts that matter. Omit `PageAside` for a recipe with no Aside. The screen renders its own loading, empty, and failure states in Main (guideline 7).
+
+### Hub and dashboard (wide, Aside on the left)
+
+```tsx
+<V2Page width="wide" panelRequest={panelRequest} panelCloseRequest={panelCloseRequest} onPanelCloseRequestHandled={() => setPanelCloseRequest(null)}>
+  <PageHeader title="미래시" description="일본 서버를 바탕으로 추정된 일정" />
+  <PageToolbar>
+    <ScreenTabs
+      items={[
+        { key: "timeline", text: "타임라인", label: "24", Icon: CalendarDaysIcon, active: true, link: "/futures" },
+        { key: "list", text: "목록", label: "24", Icon: ListBulletIcon, link: "/futures/list" },
+        { key: "table", text: "일정표", Icon: TableCellsIcon, link: "/futures/table", hiddenStacked: true },
+        { key: "past", text: "지난 일정", Icon: ClockIcon, disabled: true, disabledReason: "지난 일정은 준비 중입니다" },
+      ]}
+    />
+  </PageToolbar>
+  <PageMain>{/* items link to the detail with transition="forward" */}</PageMain>
+  <PageAside>
+    <PanelSheet panelId="filter" title="컨텐츠 필터" Icon={FunnelIcon} headerAction={filtersChanged ? <PanelAction variant="danger" onClick={clearFilters}>초기화</PanelAction> : null}>
+      {/* filter controls */}
+    </PanelSheet>
+    <PanelSheet panelId="display" title="표시 설정" Icon={Cog6ToothIcon} collapsible>
+      {/* display controls */}
+    </PanelSheet>
+    <AsideLinks items={[{ key: "calc", title: "픽업 확률 계산기", description: "천장까지 필요한 청휘석", Icon: CalculatorIcon, to: "/tools/calc" }]} />
+  </PageAside>
+  <MobileActionBar
+    links={[{ key: "calc", title: "픽업 확률 계산기", shortTitle: "계산기", Icon: CalculatorIcon, to: "/tools/calc" }]}
+    panels={[{ panelId: "filter", title: "컨텐츠 필터", shortTitle: "필터", Icon: FunnelIcon }]}
+  />
+</V2Page>
+```
+
+### Detail (reading, Aside on the left)
+
+```tsx
+<V2Page width="reading">
+  <PageHeader back={{ title: "미래시", to: "/futures" }} title="하안 바다의 기억 (복각)" meta={<span>진행 중 · 이벤트</span>} />
+  <PageToolbar>
+    <ScreenTabs
+      items={[
+        { key: "overview", text: "개요", Icon: ClockIcon, active: true, link: "/events/1" },
+        { key: "calc", text: "상성 계산기", Icon: CalculatorIcon, link: "/events/1?tab=calc" },
+        { key: "flip", text: "카드 뒤집기", Icon: TableCellsIcon, disabled: true, disabledReason: "준비 중입니다" },
+      ]}
+    />
+  </PageToolbar>
+  <PageMain>{/* detail sections */}</PageMain>
+  <PageAside>
+    <AsideLinks items={[{ key: "notice", title: "이벤트 공지", description: "공지 원문 보기", Icon: BellIcon, to: "https://example.com/event" }]} />
+  </PageAside>
+</V2Page>
+```
+
+### Form (reading, no Aside)
+
+```tsx
+<V2Page width="reading">
+  <PageHeader back={{ title: "뒤로", onClick: () => navigate(-1) }} title="계산기" description="입력 값을 바탕으로 계산합니다" />
+  <PageMain>
+    <form className="flex flex-col gap-v2-block-gap rounded-lg bg-v2-surface p-v2-block-p">{/* fields */}</form>
+  </PageMain>
+</V2Page>
+```
+
+### Data table (wide, sticky toolbar on desktop)
+
+```tsx
+<V2Page width="wide">
+  <PageHeader title="역대 추이" description="시즌별 통계" />
+  <PageToolbar stickyOnDesktop>
+    <ScreenTabs items={[{ key: "table", text: "표", Icon: TableCellsIcon, active: true, onClick: () => {} }]} />
+  </PageToolbar>
+  <PageMain>
+    <table className="w-full rounded-lg bg-v2-surface text-sm">{/* numeric columns right-aligned with tabular-nums */}</table>
+  </PageMain>
+</V2Page>
+```
+
+## Not added yet
+
+These tokens are not part of 2.0 yet. Add one only when a screen actually uses it:
+
+- Text: inverse text.
+- Interaction: primary action and selected states.
+- Status: info, warning, and neutral.
+- Domain: limited and fes recruitment colors, a role-only palette, star-grade colors, and any other domain color.
+- Reading density, a data visualization palette, KPI size, and control height.
+- Numeric: a numeric-only utility. `tabular-nums` covers it.
+- Radius tokens. Keep the 1.x base radius (`rounded-md` to `rounded-lg`).
+
+Do not add a token just because it would be useful later. Add it when a screen needs it.

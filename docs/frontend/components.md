@@ -4,6 +4,7 @@ This document is the basis for deciding where new UI code lives. Instead of keep
 
 Use [frontend patterns](./patterns.md) for verified composition references and
 [UI quality](./ui-quality.md) for task briefs and render/interaction evidence.
+Screens migrated to 2.0 follow [design system 2.0](./design-system-v2.md) for their layers, import rules, and tokens.
 
 ## Source of truth
 

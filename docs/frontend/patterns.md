@@ -17,6 +17,7 @@ Legacy screens are not blanket approval for a new design.
 See [components](./components.md) for layer ownership, [design](./design.md)
 for visual rules, and [UI quality](./ui-quality.md) for the task brief and
 evidence expected for a visible change.
+Screens migrated to 2.0 follow [design system 2.0](./design-system-v2.md) instead of the 1.x compositions below.
 
 ## Page Panel composition
 
