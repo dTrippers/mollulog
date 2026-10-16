@@ -238,10 +238,12 @@ describe("recruitment historical lookups", () => {
       normalizeRecruitmentGroupPeriod({
         startAt: "2026-03-10T11:00:00+09:00" as never,
         endAt: "2026-03-24T11:00:00+09:00" as never,
+        recruitmentType: "usual" as never,
       }),
     ).toEqual({
       startAt: "2026-03-10T02:00:00.000Z",
       endAt: "2026-03-24T02:00:00.000Z",
+      recruitmentType: "usual",
     });
   });
 

@@ -6,6 +6,7 @@ import { Link } from "react-router";
 import { StudentCards } from "~/components/features/students";
 import { Field } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
 import { cn } from "~/lib/utils";
@@ -20,6 +21,7 @@ export type SelectableEvent = ShopAvailableEvent & {
       name?: string | null;
     } | null;
     pickup: boolean;
+    recruitmentType?: RecruitmentTypeEnum;
   }[];
 };
 
@@ -294,6 +296,9 @@ function EventSelectorItem({
         ?.filter(({ pickup, student }) => pickup && student)
         .map(({ student }) => ({ uid: student?.uid ?? null, name: student?.name, hideName: true }));
   const eventName = getSelectableEventName(event, revealedSpoilerContentUids);
+  const openEndedRecruitment = event.recruitments?.some(
+    ({ recruitmentType }) => recruitmentType === "premium_dash" || recruitmentType === "archive",
+  );
 
   return (
     <div className="px-3 py-3">
@@ -307,8 +312,14 @@ function EventSelectorItem({
           )}
         </div>
         <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
-          {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
-          {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM.DD" }) : "미정"}
+          {openEndedRecruitment && !event.until ? (
+            `${formatInstant(event.since, { timeZone: "Asia/Seoul", format: "YYYY.MM.DD" })} 이후`
+          ) : (
+            <>
+              {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
+              {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM.DD" }) : "미정"}
+            </>
+          )}
         </p>
         {pickupStudents && pickupStudents.length > 0 && (
           <div className="mt-1.5 w-full">

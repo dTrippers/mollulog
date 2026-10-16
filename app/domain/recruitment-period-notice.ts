@@ -1,8 +1,10 @@
-import { getInstantTime, type UtcIsoString } from "~/lib/date-time";
+import type { RecruitmentTypeEnum } from "~/graphql/graphql";
+import { formatInstant, getInstantTime, type UtcIsoString } from "~/lib/date-time";
 
 export type RecruitmentPeriod = {
   startAt: UtcIsoString;
   endAt: UtcIsoString | null;
+  recruitmentType?: RecruitmentTypeEnum;
 };
 
 export type RecruitmentPeriodNoticeContent = {
@@ -15,6 +17,11 @@ export type RecruitmentPeriodNoticeContent = {
 
 // "ended": the recruitment period has closed. "differs": the recruitment period is not the content period.
 export type RecruitmentPeriodNoticeKind = "ended" | "differs";
+
+function formatPremiumDashPeriod(startAt: UtcIsoString): string {
+  const date = formatInstant(startAt, { timeZone: "Asia/Seoul", format: "YYYY년 M월 D일 HH:mm" });
+  return `${date} 또는 블루 아카이브 최초 가입일 중 늦은 때부터 28일간`;
+}
 
 /**
  * Returns the kind of period notice for a timeline content, or null when the
@@ -62,6 +69,14 @@ export function getRecruitmentPeriodNotice(
   recruitmentPeriod: RecruitmentPeriod | null | undefined,
   now: UtcIsoString,
 ): string | null {
+  if (!content.recruitmentGroupUid || !recruitmentPeriod) {
+    return null;
+  }
+
+  if (recruitmentPeriod.recruitmentType === "premium_dash") {
+    return `프리미엄 모집은 ${formatPremiumDashPeriod(content.startAt)} 진행돼요.`;
+  }
+
   const kind = getRecruitmentPeriodNoticeKind(content, recruitmentPeriod, now);
   if (kind === null) {
     return null;
