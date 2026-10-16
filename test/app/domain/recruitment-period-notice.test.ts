@@ -4,6 +4,7 @@ import {
   type RecruitmentPeriod,
   type RecruitmentPeriodNoticeContent,
 } from "~/domain/recruitment-period-notice";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 const now = "2026-09-07T00:00:00.000Z";
 
@@ -27,6 +28,16 @@ function period(overrides: Partial<RecruitmentPeriod> = {}): RecruitmentPeriod {
 }
 
 describe("getRecruitmentPeriodNotice", () => {
+  it("shows the fixed PremiumDash rule for endless content using the content start time in Korea", () => {
+    expect(
+      getRecruitmentPeriodNotice(
+        content({ startAt: "2026-10-13T02:00:00.000Z", endAt: null, endless: true }),
+        period({ startAt: "2026-10-12T02:00:00.000Z", endAt: null, recruitmentType: RecruitmentTypeEnum.PremiumDash }),
+        now,
+      ),
+    ).toBe("프리미엄 모집은 2026년 10월 13일 11:00 또는 블루 아카이브 최초 가입일 중 늦은 때부터 28일간 진행돼요.");
+  });
+
   it("compares exact instants rather than timestamp formatting", () => {
     expect(
       getRecruitmentPeriodNotice(

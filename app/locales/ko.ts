@@ -168,6 +168,8 @@ export function recruitmentLabelLocale({
     return rerun ? "한정 복각" : "한정 신규";
   } else if (type === "fes") {
     return rerun ? "페스 복각" : "페스 신규";
+  } else if (type === "premium_dash") {
+    return "프리미엄";
   } else if (type === "given") {
     return "배포";
   }

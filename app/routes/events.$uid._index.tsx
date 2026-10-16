@@ -206,9 +206,12 @@ export default function EventIndex() {
     eventContent.recruitmentPeriod,
     nowUtcIso(),
   );
-  const recruitmentPeriodDescription = eventContent.recruitmentPeriod?.endAt
-    ? `모집은 ${formatInstant(eventContent.recruitmentPeriod.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~ ${formatInstant(eventContent.recruitmentPeriod.endAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} 동안 진행돼요`
-    : null;
+  const isPremiumDash = eventContent.recruitmentPeriod?.recruitmentType === "premium_dash";
+  const recruitmentPeriodDescription = isPremiumDash
+    ? recruitmentPeriodNotice
+    : eventContent.recruitmentPeriod?.endAt
+      ? `모집은 ${formatInstant(eventContent.recruitmentPeriod.startAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} ~ ${formatInstant(eventContent.recruitmentPeriod.endAt, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })} 동안 진행돼요`
+      : null;
 
   return (
     <div className="w-full">
@@ -227,9 +230,9 @@ export default function EventIndex() {
 
       {recruitmentPeriodNotice && (
         <Callout
-          tone="warning"
+          tone={isPremiumDash ? "info" : "warning"}
           Icon={ClockIcon}
-          title="이벤트 기간과 모집 개최 기간이 달라요"
+          title={isPremiumDash ? "프리미엄 모집 기간" : "이벤트 기간과 모집 개최 기간이 달라요"}
           description={recruitmentPeriodDescription}
           className="my-4 md:my-6"
         />

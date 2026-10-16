@@ -172,10 +172,13 @@ export async function getRecruitmentGroupsByUidsStrict(
   });
 }
 
-export function normalizeRecruitmentGroupPeriod(group: Pick<RecruitmentGroup, "startAt" | "endAt">): RecruitmentPeriod {
+export function normalizeRecruitmentGroupPeriod(
+  group: Pick<RecruitmentGroup, "startAt" | "endAt" | "recruitmentType">,
+): RecruitmentPeriod {
   return {
     startAt: toUtcIso(group.startAt),
     endAt: group.endAt ? toUtcIso(group.endAt) : null,
+    recruitmentType: group.recruitmentType,
   };
 }
 

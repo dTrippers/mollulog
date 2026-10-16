@@ -8,6 +8,7 @@ import { ContentTimelineItem, type ContentTimelineItemProps } from "~/components
 import { StudentCardPopupProvider } from "~/contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "~/contexts/TimeZoneProvider";
 import type { RecruitmentPeriod } from "~/domain/recruitment-period-notice";
+import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 const recruitmentPeriod: RecruitmentPeriod = {
   startAt: "2030-01-11T00:00:00.000Z",
@@ -72,6 +73,22 @@ function compactContent(overrides: Record<string, unknown> = {}) {
 }
 
 describe("recruitment period notices in timeline views", () => {
+  it("shows the PremiumDash 28-day rule for endless content", () => {
+    const markup = renderItem({
+      since: "2026-10-13T02:00:00.000Z",
+      until: null,
+      endless: true,
+      recruitmentPeriod: {
+        startAt: "2026-10-13T02:00:00.000Z",
+        endAt: null,
+        recruitmentType: RecruitmentTypeEnum.PremiumDash,
+      },
+    });
+
+    expect(markup).toContain("2026년 10월 13일 11:00");
+    expect(markup).toContain("블루 아카이브 최초 가입일 중 늦은 때부터 28일간 진행돼요");
+  });
+
   it("renders the period warning with a detail button before existing feature banners and without a dismiss action", () => {
     const markup = renderItem({ showStudentAnalysisFeatureBanner: true });
 
