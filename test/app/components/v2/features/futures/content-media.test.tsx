@@ -36,4 +36,22 @@ describe("ContentMedia logo fallback", () => {
     expect(container.querySelector("img")).toBeNull();
     expect(screen.getByRole("img", { name: typeLabel })).toBeTruthy();
   });
+
+  it("keeps the neutral fill while the logo loads and drops it once the logo loads", () => {
+    const { container } = renderLogo();
+    const image = container.querySelector("img") as HTMLImageElement;
+    expect(image.parentElement?.classList.contains("bg-v2-inset")).toBe(true);
+
+    fireEvent.load(image);
+
+    expect(image.parentElement?.classList.contains("bg-v2-inset")).toBe(false);
+  });
+
+  it("keeps the neutral fill behind the type icon", () => {
+    const { container } = renderLogo();
+    fireEvent.error(container.querySelector("img") as HTMLImageElement);
+    fireEvent.error(container.querySelector("img") as HTMLImageElement);
+
+    expect(screen.getByRole("img", { name: typeLabel }).classList.contains("bg-v2-inset")).toBe(true);
+  });
 });
