@@ -16,7 +16,7 @@ export type PageHeaderProps = {
 };
 
 const backClassName = cn(
-  "mb-2 inline-flex min-h-v2-row-min items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg",
+  "mb-2 inline-flex min-h-v2-row-min cursor-pointer items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg",
   v2FocusRing,
 );
 

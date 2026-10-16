@@ -2,7 +2,7 @@ import {
   type ContentFilterState,
   defaultContentFilterState,
   normalizeContentFilterState,
-} from "~/components/features/futures/content-filter-state";
+} from "~/domain/futures/content-filter-state";
 
 export type FutureContentView = "timeline" | "table" | "compact";
 export type MobileFutureContentView = Exclude<FutureContentView, "table">;
@@ -268,6 +268,18 @@ export function isVerifiedFutureDetailReturn(
       visitState &&
       visitState.entryKey === navigationState.entryKey,
   );
+}
+
+// The feed counts as at the top when its first item has not scrolled out of view, or when no item is laid out at all (the
+// filter-empty state). A filter change there keeps the top of the feed instead of anchoring to an item.
+export function isFeedAtTop({
+  firstItemTop,
+  containerTop,
+}: {
+  firstItemTop: number | null;
+  containerTop: number;
+}): boolean {
+  return firstItemTop === null || firstItemTop >= containerTop - 1;
 }
 
 export function getBrowserStorage(type: "localStorage" | "sessionStorage"): StorageLike | null {

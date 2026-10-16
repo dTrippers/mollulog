@@ -10,7 +10,8 @@ type PanelPhase = "collapsed" | "open" | "closing";
 export type PanelSheetProps = {
   panelId: string;
   title: string;
-  description?: string;
+  // A node lets a loading value show a skeleton in place of text.
+  description?: ReactNode;
   Icon: ElementType;
   headerAction?: ReactNode;
   collapsible?: boolean;
@@ -81,9 +82,15 @@ export function PanelSheet({
     <>
       <Icon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
       <span className="min-w-0 flex-1">
+        {/* Focus target for actions that hide themselves, such as the filter reset. */}
         <span
           id={titleId}
-          className={cn("block text-sm font-semibold", disabled ? "text-v2-fg-disabled" : "text-v2-fg")}
+          data-panel-title={panelId}
+          tabIndex={-1}
+          className={cn(
+            "block text-sm font-semibold focus:outline-none",
+            disabled ? "text-v2-fg-disabled" : "text-v2-fg",
+          )}
         >
           {title}
         </span>
@@ -105,7 +112,7 @@ export function PanelSheet({
         ref={sectionRef}
         aria-labelledby={titleId}
         data-v2-panel={panelId}
-        className="relative rounded-lg bg-v2-surface px-v2-block-p py-4"
+        className="relative rounded-lg bg-v2-surface p-v2-block-p"
       >
         <div className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}>
           {togglesBody ? (
@@ -115,7 +122,7 @@ export function PanelSheet({
               aria-controls={bodyId}
               onClick={toggle}
               className={cn(
-                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover",
                 v2FocusRing,
               )}
             >
@@ -139,7 +146,10 @@ export function PanelSheet({
           <div
             id={bodyId}
             onAnimationEnd={handleBodyAnimationEnd}
-            className={cn("mt-3 text-sm", animated && (phase === "open" ? "v2-panel-enter" : "v2-panel-exit"))}
+            className={cn(
+              "mt-v2-group-gap text-sm",
+              animated && (phase === "open" ? "v2-panel-enter" : "v2-panel-exit"),
+            )}
           >
             {children}
           </div>
@@ -156,6 +166,7 @@ export function PanelSheet({
       <Sheet
         open={sheetOpen}
         title={title}
+        panelId={panelId}
         description={description}
         headerAction={headerAction}
         onClose={closeSheet}

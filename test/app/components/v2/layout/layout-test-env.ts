@@ -61,7 +61,13 @@ export function installLayoutTestEnv() {
   Element.prototype.scrollIntoView = jest.fn() as unknown as Element["scrollIntoView"];
   // jsdom reports an all-zero rect for every element. Headless UI treats that as a removed element and closes the
   // dialog, so give elements a real size. Tests that need a specific position stub it themselves.
-  Element.prototype.getBoundingClientRect = () => layoutRect();
+  // The V2Page root reports the layout width, as the ResizeObserver stub does, so the first measurement matches later ones.
+  Element.prototype.getBoundingClientRect = function getBoundingClientRect() {
+    if (this.hasAttribute("data-v2-layout")) {
+      return { ...layoutRect(), width: currentLayoutWidth, right: currentLayoutWidth } as DOMRect;
+    }
+    return layoutRect();
+  };
   // Headless UI polyfills getAnimations with a warning. A stub with no running animations makes transitions finish at once.
   Element.prototype.getAnimations = () => [];
   resizeObservers.clear();

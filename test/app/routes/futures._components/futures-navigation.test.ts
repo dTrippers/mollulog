@@ -9,6 +9,7 @@ import {
   getFutureHistoryReturnDelta,
   getFutureVisitStateForSurface,
   getMobileFallbackView,
+  isFeedAtTop,
   isVerifiedFutureDetailReturn,
   readFutureDetailNavigationState,
   readFutureVisitState,
@@ -18,7 +19,6 @@ import {
   saveFutureVisitState,
   setNavigationDirection,
 } from "~/routes/futures._components/futures-navigation";
-import { subscribeToMediaQueryChanges } from "~/routes/futures._components/use-futures-view-state";
 
 afterEach(() => {
   clearNavigationDirection();
@@ -207,24 +207,19 @@ describe("futures navigation state", () => {
     expect(getFutureHistoryReturnDelta(8, 7)).toBeNull();
     expect(getFutureHistoryReturnDelta(undefined, 7)).toBeNull();
   });
+});
 
-  it("supports legacy media-query listeners without throwing during hydration", () => {
-    let addedListener: ((event: MediaQueryListEvent) => void) | undefined;
-    let removedListener: ((event: MediaQueryListEvent) => void) | undefined;
-    const media = {
-      addListener: (listener: (event: MediaQueryListEvent) => void) => {
-        addedListener = listener;
-      },
-      removeListener: (listener: (event: MediaQueryListEvent) => void) => {
-        removedListener = listener;
-      },
-    } as unknown as MediaQueryList;
-    const listener = () => undefined;
+describe("isFeedAtTop", () => {
+  it("is at the top when no item is laid out, as in the filter-empty state", () => {
+    expect(isFeedAtTop({ firstItemTop: null, containerTop: 0 })).toBe(true);
+  });
 
-    const unsubscribe = subscribeToMediaQueryChanges(media, listener);
+  it("is at the top while the first item has not scrolled out of view", () => {
+    expect(isFeedAtTop({ firstItemTop: 215, containerTop: 0 })).toBe(true);
+    expect(isFeedAtTop({ firstItemTop: 0, containerTop: 0 })).toBe(true);
+  });
 
-    expect(addedListener).toBe(listener);
-    unsubscribe();
-    expect(removedListener).toBe(listener);
+  it("is scrolled once the first item sits above the top of the container", () => {
+    expect(isFeedAtTop({ firstItemTop: -40, containerTop: 0 })).toBe(false);
   });
 });

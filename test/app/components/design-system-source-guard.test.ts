@@ -73,7 +73,14 @@ describe("design system source guard", () => {
 
 const v2Root = "components/v2";
 // Migrated route files (relative to app/) join the 2.0 guard here. The list starts empty.
-const migratedRouteFiles: string[] = [];
+const migratedRouteFiles: string[] = [
+  "routes/futures.tsx",
+  "routes/futures._components/futures-navigation.ts",
+  "routes/futures._components/futures-view-state.ts",
+  "routes/futures._components/use-futures-navigation.ts",
+  "routes/futures._components/recruitment-opinion-tutorial.ts",
+  "routes/futures._components/viewer-state.ts",
+];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];
 

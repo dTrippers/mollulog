@@ -132,24 +132,29 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only the sheet and the chevron use translate, scale, or rotate utilities, each with a matching transition", () => {
+  it("V2: only the sheet, the popover, and the chevron use translate, scale, or rotate utilities, each with a matching transition", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
     );
     const motionUtility = /\b(?:translate|scale|rotate)-/;
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
-    expect(usingFiles.sort()).toEqual(["layout/PanelSheet.tsx", "primitives/Sheet.tsx"]);
+    expect(usingFiles.sort()).toEqual(["layout/PanelSheet.tsx", "primitives/Popover.tsx", "primitives/Sheet.tsx"]);
     // Tailwind v4 transition-transform lists translate, scale, and rotate, so the chevron's rotate animates.
     expect(panelSource).toContain(
       '"size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform duration-v2-base ease-v2-standard"',
     );
     expect(panelSource).toContain('phase === "open" && "rotate-180"');
+    // The popover's scale and slide run only under motion-safe, so reduced motion gets the opacity fade alone.
+    const popoverSource = readFileSync(join(componentRoot, "primitives/Popover.tsx"), "utf8");
+    const popoverMotionClasses = popoverSource.match(/\S*(?:translate|scale|rotate)-\S+/g) ?? [];
+    expect(popoverMotionClasses.length).toBeGreaterThan(0);
+    expect(popoverMotionClasses.every((className) => className.includes("motion-safe:"))).toBe(true);
+    expect(popoverSource).toContain("duration-v2-base ease-v2-enter");
   });
 
-  it("V3: the panel section uses px and py spacing, and only the collapsible header keeps the row minimum", () => {
-    expect(panelSource).toContain('className="relative rounded-lg bg-v2-surface px-v2-block-p py-4"');
-    expect(panelSource).not.toMatch(/\sp-v2-block-p/);
+  it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {
+    expect(panelSource).toContain('className="relative rounded-lg bg-v2-surface p-v2-block-p"');
     expect(panelSource).toContain('className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}');
     expect(panelSource.split("min-h-v2-row-min").length - 1).toBe(1);
   });
@@ -182,16 +187,39 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
 
   it("W2: the control border token is defined for light and dark and exposed to utilities", () => {
     const lightStart = css.indexOf("--v2-inset: oklch(0.955 0 0);");
-    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-control-border: oklch(0.64 0 0);");
+    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-control-border: oklch(0.92 0 0);");
     const darkStart = css.indexOf("--v2-inset: oklch(0.25 0 0);");
-    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.52 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.30 0 0);");
     expect(css).toContain("--color-v2-control-border: var(--v2-control-border);");
+  });
+
+  it("W3: the switch off-track has its own token, so the input border can stay light", () => {
+    const lightStart = css.indexOf("--v2-inset: oklch(0.955 0 0);");
+    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-switch-off: oklch(0.64 0 0);");
+    const darkStart = css.indexOf("--v2-inset: oklch(0.25 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-switch-off: oklch(0.52 0 0);");
+    expect(css).toContain("--color-v2-switch-off: var(--v2-switch-off);");
+    const switchSource = readFileSync(join(process.cwd(), "app/components/v2/primitives/Switch.tsx"), "utf8");
+    expect(switchSource).toContain('"bg-v2-switch-off"');
+    expect(switchSource).not.toContain("bg-v2-control-border");
+  });
+
+  it("W3: the timeline hint and the sheet tutorial share one one-line hint with no box and no Button primitive", () => {
+    const hint = readFileSync(join(process.cwd(), "app/components/v2/features/feature-hint.tsx"), "utf8");
+    expect(hint).toContain("pointer-coarse:min-h-11");
+    expect(hint).toContain("pointer-coarse:before:-inset-y-2");
+    for (const file of ["features/futures/FeatureBanner.tsx", "features/comments/OpinionTutorial.tsx"]) {
+      const source = readFileSync(join(process.cwd(), "app/components/v2", file), "utf8");
+      expect(source).toContain("feature-hint");
+      expect(source).not.toContain("primitives/Button");
+      expect(source).not.toContain("rounded-md bg-v2-inset py-1");
+    }
   });
 
   it("W2: the docs use the control border, not the inset surface", () => {
     const docs = readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8");
     expect(docs).toContain(
-      "| `border-v2-control-border` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Borders of text inputs, selects, textareas, and dense data boundaries (3:1 or higher against surface and canvas). Not for cards, buttons, or region separation. |",
+      "| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.30 0 0)` | A subtle control boundary for text inputs, selects, and textareas. Not for cards, buttons, or region separation. |",
     );
     expect(docs).toContain("- Radius tokens. Keep the 1.x base radius");
     expect(docs).not.toContain("Border and radius tokens");
@@ -240,7 +268,7 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(docs).toContain("- `danger` is status.");
     expect(docs).toContain("Always pair it with a verb label");
     expect(docs).toContain("Show the action only when there is something to clear.");
-    expect(docs).toContain("- Status: info, warning, and neutral.");
+    expect(docs).toContain("- Status: info and neutral.");
     expect(docs).toContain('<PanelAction variant="danger" onClick={clearFilters}>초기화</PanelAction>');
   });
 });
@@ -279,19 +307,19 @@ describe("corr-2 component values", () => {
   });
 
   it("T5: sheet header, body padding, and close icon use the designer values", () => {
-    expect(sheetSource).toContain("flex shrink-0 items-center justify-between gap-3 pt-2 pr-2 pl-v2-block-p");
+    expect(sheetSource).toContain("flex shrink-0 items-center justify-between gap-3 pt-3 pb-2 pr-2 pl-v2-block-p");
     expect(sheetSource).toContain(
       "min-h-0 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
     );
     expect(sheetSource).toContain('<XMarkIcon className="size-5" aria-hidden="true" />');
-    expect(sheetSource).toContain("flex size-11 items-center justify-center rounded-md");
+    expect(sheetSource).toContain("flex size-11 cursor-pointer items-center justify-center rounded-md");
     expect(sheetSource).toContain("max-h-[85dvh]");
     expect(sheetSource).toContain("rounded-t-lg bg-v2-surface");
   });
 
   it("T6: the collapsible header button bleeds into the panel padding by the row inset", () => {
     expect(panelSource).toContain(
-      "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 items-center gap-2 rounded-md px-v2-row-x",
+      "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x",
     );
   });
 });

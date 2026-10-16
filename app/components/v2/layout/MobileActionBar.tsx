@@ -32,7 +32,7 @@ export type MobileActionBarProps = {
 };
 
 const itemClassName = cn(
-  "flex min-h-12 min-w-16 flex-col items-center justify-center gap-0.5 rounded-md px-3 py-1.5 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover disabled:text-v2-fg-disabled",
+  "flex min-h-12 min-w-16 cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md px-3 py-1.5 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
   v2FocusRing,
 );
 

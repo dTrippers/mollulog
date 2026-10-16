@@ -15,7 +15,14 @@ describe("cn with 2.0 token classes", () => {
   it("keeps spacing and size tokens that do not conflict", () => {
     expect(cn("px-v2-row-x py-v2-row-y")).toBe("px-v2-row-x py-v2-row-y");
     expect(cn("gap-v2-block-gap gap-x-v2-column-gap")).toBe("gap-v2-block-gap gap-x-v2-column-gap");
-    expect(cn("min-h-v2-row-min min-h-12")).toBe("min-h-v2-row-min min-h-12");
+  });
+
+  // Button's base class carries min-h-v2-row-min. A later min-height override must replace it, not ship beside it.
+  it("lets a later min-height or height override replace a v2 spacing token", () => {
+    expect(cn("min-h-v2-row-min", "min-h-0")).toBe("min-h-0");
+    expect(cn("min-h-v2-row-min", "min-h-12")).toBe("min-h-12");
+    expect(cn("min-h-v2-row-min", "min-h-0 h-8 pointer-coarse:h-11")).toBe("min-h-0 h-8 pointer-coarse:h-11");
+    expect(cn("h-v2-row-min", "h-8")).toBe("h-8");
   });
 
   it("merges only a true same-group conflict and keeps the later class", () => {

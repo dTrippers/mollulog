@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ContentFilterState } from "~/components/features/futures/content-filter-state";
+import type { ContentFilterState } from "~/domain/futures/content-filter-state";
 import {
   type FutureContentSurface,
   type FutureContentView,
@@ -9,6 +9,7 @@ import {
   getFutureAnchorNeighborUids,
   getFutureDetailReturnDelta,
   getFutureVisitStateForSurface,
+  isFeedAtTop,
   isVerifiedFutureDetailReturn,
   navigateBackWithViewTransition,
   readFutureDetailNavigationState,
@@ -67,7 +68,9 @@ export function useFuturesNavigation({
   visitState,
   contentSignature,
 }: FuturesNavigationOptions) {
-  const pendingAnchorRef = useRef<FuturesScrollAnchor | null>(null);
+  // "top" marks a change made at the top of the feed or in the filter-empty state: there is no item to anchor to, so the
+  // next render scrolls to the top instead of restoring an anchor.
+  const pendingAnchorRef = useRef<FuturesScrollAnchor | "top" | null>(null);
   const restoredVisitSignatureRef = useRef<string | null>(null);
 
   const captureCurrentAnchor = useCallback((): FuturesScrollAnchor => {
@@ -80,8 +83,19 @@ export function useFuturesNavigation({
   }, []);
 
   const preserveCurrentPosition = useCallback(() => {
-    pendingAnchorRef.current = captureCurrentAnchor();
-  }, [captureCurrentAnchor]);
+    const container = getScrollContainer();
+    if (!container) {
+      pendingAnchorRef.current = "top";
+      return;
+    }
+
+    const [firstItem] = getScrollItems(container);
+    const atTop = isFeedAtTop({
+      firstItemTop: firstItem ? firstItem.getBoundingClientRect().top : null,
+      containerTop: container.getBoundingClientRect().top,
+    });
+    pendingAnchorRef.current = atTop ? "top" : readScrollAnchor(container);
+  }, []);
 
   const saveBeforeContentNavigation = useCallback(() => {
     const anchor = captureCurrentAnchor();
@@ -99,7 +113,8 @@ export function useFuturesNavigation({
 
   useIsomorphicLayoutEffect(() => {
     const restorableVisitState = getFutureVisitStateForSurface(visitState, surface);
-    const anchor = pendingAnchorRef.current ?? restorableVisitState;
+    const pending = pendingAnchorRef.current;
+    const anchor = pending ?? restorableVisitState;
     if (!anchor) {
       return;
     }
@@ -107,12 +122,21 @@ export function useFuturesNavigation({
     const visitSignature = restorableVisitState
       ? `${restorableVisitState.entryKey}:${restorableVisitState.surface}:${restorableVisitState.contentUid ?? ""}:${restorableVisitState.neighborContentUids.join(",")}:${restorableVisitState.relativeOffset}`
       : null;
-    if (!pendingAnchorRef.current && visitSignature && restoredVisitSignatureRef.current === visitSignature) {
+    if (!pending && visitSignature && restoredVisitSignatureRef.current === visitSignature) {
       return;
     }
 
     const container = getScrollContainer();
     if (!container) {
+      return;
+    }
+
+    if (anchor === "top") {
+      container.scrollTop = 0;
+      pendingAnchorRef.current = null;
+      if (visitSignature) {
+        restoredVisitSignatureRef.current = visitSignature;
+      }
       return;
     }
 

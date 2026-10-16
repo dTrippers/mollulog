@@ -20,7 +20,7 @@ export type LinkTargetProps = {
 export function LinkTarget({ to, onClick, preventScrollReset, transition, className, children }: LinkTargetProps) {
   if (!to) {
     return (
-      <button type="button" onClick={onClick} className={cn(className)}>
+      <button type="button" onClick={onClick} className={cn("cursor-pointer", className)}>
         {children}
       </button>
     );
