@@ -4,7 +4,7 @@ import { captureServerError, getLogger } from "~/lib/observability.server";
 import { getContentsCommentSummaries } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
-import { loader } from "~/routes/futures";
+import { clientLoader, loader } from "~/routes/futures";
 import { getFutureContents } from "~/views/futures";
 
 jest.mock("~/auth/authenticator.server", () => ({
@@ -83,16 +83,66 @@ describe("futures loader data source routing", () => {
     mockedGetRecruitmentResults.mockResolvedValue([]);
   });
 
-  it("routes anonymous public aggregates through the PostgreSQL environment", async () => {
-    mockedGetActiveSensei.mockResolvedValue(null);
+  // The loader defers viewer state and comment summaries. These tests read them once they settle, as the page does.
+  async function settleLoaderData(result: Awaited<ReturnType<typeof loader>>) {
+    const [viewer, commentSummaries] = await Promise.all([result.viewer, result.commentSummaries]);
+    return { ...result, favoritedStudents: viewer.favorites, recruitmentResults: viewer.results, commentSummaries };
+  }
+
+  it("hands the server result over un-awaited, so client navigation commits before it settles", () => {
+    const serverResult = new Promise<never>(() => {});
+    const serverLoader = jest.fn(() => serverResult);
+
+    const result = clientLoader({ serverLoader } as never);
+
+    expect(serverLoader).toHaveBeenCalledTimes(1);
+    expect(result).not.toBeInstanceOf(Promise);
+    expect(Object.keys(result)).toEqual(["pending"]);
+    expect(result.pending).toBeInstanceOf(Promise);
+  });
+
+  it("hands a rejected server result over as the page's failed state, not a throw to the root boundary", async () => {
+    const serverLoader = jest.fn(() => Promise.reject(new Error("network down")));
+
+    const result = clientLoader({ serverLoader } as never);
+
+    await expect(result.pending).resolves.toMatchObject({ contentsStatus: "unavailable", contents: [] });
+  });
+
+  it("turns an auth failure into the page's failed state, with the header kept and the error reported", async () => {
+    const error = new Error("auth timeout");
+    mockedGetActiveSensei.mockRejectedValue(error);
 
     const result = await loader(createLoaderArgs());
 
+    expect(result).toMatchObject({ contentsStatus: "unavailable" });
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(error, { route: "futures.loader", operation: "auth" });
+  });
+
+  it("turns a favorite-count failure into the page's failed state, with an empty count list", async () => {
+    const error = new Error("favorites timeout");
+    mockedGetActiveSensei.mockResolvedValue(null);
+    mockedGetFavoritedCounts.mockRejectedValue(error);
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result).toMatchObject({ contentsStatus: "unavailable", favoritedCounts: [] });
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(error, {
+      route: "futures.loader",
+      operation: "favorited_counts",
+    });
+  });
+
+  it("routes anonymous public aggregates through the PostgreSQL environment", async () => {
+    mockedGetActiveSensei.mockResolvedValue(null);
+
+    const result = await settleLoaderData(await loader(createLoaderArgs()));
+
     expect(result).toMatchObject({
       signedIn: false,
-      favoritedStudents: null,
+      favoritedStudents: { status: "available", value: null },
       favoritedCounts: [],
-      recruitmentResults: [],
+      recruitmentResults: { status: "available", value: [] },
       commentSummaries: { status: "available", summaries: {} },
     });
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
@@ -109,13 +159,13 @@ describe("futures loader data source routing", () => {
   it("keeps signed-in comment and personalized reads on primary", async () => {
     mockedGetActiveSensei.mockResolvedValue({ id: 42, uid: "sensei-42", username: "sensei" } as never);
 
-    const result = await loader(createLoaderArgs());
+    const result = await settleLoaderData(await loader(createLoaderArgs()));
 
     expect(result).toMatchObject({
       signedIn: true,
-      favoritedStudents: [],
+      favoritedStudents: { status: "available", value: [] },
       favoritedCounts: [],
-      recruitmentResults: [],
+      recruitmentResults: { status: "available", value: [] },
     });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, undefined, {
       hideRecruitmentOpinions: false,
@@ -133,13 +183,13 @@ describe("futures loader data source routing", () => {
     mockedGetActiveSensei.mockResolvedValue(null);
     mockedGetContentsCommentSummaries.mockRejectedValue(error);
 
-    const result = await loader(createLoaderArgs());
+    const result = await settleLoaderData(await loader(createLoaderArgs()));
 
     expect(result).toMatchObject({
       signedIn: false,
-      favoritedStudents: null,
+      favoritedStudents: { status: "available", value: null },
       favoritedCounts: [],
-      recruitmentResults: [],
+      recruitmentResults: { status: "available", value: [] },
       commentSummaries: { status: "unavailable" },
     });
     expect(logger.error).toHaveBeenCalledWith("Failed to load futures comment summaries", error, {
@@ -154,7 +204,6 @@ describe("futures loader data source routing", () => {
       signedIn: false,
       contentCount: 0,
     });
-    expect(span.setAttribute).toHaveBeenCalledWith("commentSummariesAvailable", false);
   });
 
   it("passes the normalized recruitment period through the loader without caching a notice", async () => {

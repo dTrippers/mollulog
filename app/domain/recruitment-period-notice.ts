@@ -13,16 +13,20 @@ export type RecruitmentPeriodNoticeContent = {
   endless: boolean;
 };
 
+// "ended": the recruitment period has closed. "differs": the recruitment period is not the content period.
+export type RecruitmentPeriodNoticeKind = "ended" | "differs";
+
 /**
- * Returns the static period notice for a timeline content, or null when the
- * content should not show one. `now` stays outside route-cache payloads so the
- * ended/current wording is evaluated for each request or render.
+ * Returns the kind of period notice for a timeline content, or null when the
+ * content should not show one. Callers branch on this kind, not on the text.
+ * `now` stays outside route-cache payloads so the ended/current wording is
+ * evaluated for each request or render.
  */
-export function getRecruitmentPeriodNotice(
+export function getRecruitmentPeriodNoticeKind(
   content: RecruitmentPeriodNoticeContent,
   recruitmentPeriod: RecruitmentPeriod | null | undefined,
   now: UtcIsoString,
-): string | null {
+): RecruitmentPeriodNoticeKind | null {
   if (
     !content.recruitmentGroupUid ||
     !recruitmentPeriod ||
@@ -43,9 +47,28 @@ export function getRecruitmentPeriodNotice(
   }
 
   if (getInstantTime(now) >= getInstantTime(recruitmentPeriod.endAt)) {
-    return "학생 모집은 종료되었어요";
+    return "ended";
   }
 
+  return "differs";
+}
+
+/**
+ * Returns the static period notice text for a timeline content, or null when the
+ * content should not show one.
+ */
+export function getRecruitmentPeriodNotice(
+  content: RecruitmentPeriodNoticeContent,
+  recruitmentPeriod: RecruitmentPeriod | null | undefined,
+  now: UtcIsoString,
+): string | null {
+  const kind = getRecruitmentPeriodNoticeKind(content, recruitmentPeriod, now);
+  if (kind === null) {
+    return null;
+  }
+  if (kind === "ended") {
+    return "학생 모집은 종료되었어요";
+  }
   return content.contentType === "event"
     ? "이벤트 기간과 모집 개최 기간이 달라요"
     : "컨텐츠 기간과 모집 개최 기간이 달라요";

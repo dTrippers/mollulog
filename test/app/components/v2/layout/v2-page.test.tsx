@@ -137,4 +137,31 @@ describe("V2Page layout parts", () => {
     setLayoutWidth(1024);
     expect(root.getAttribute("data-stacked")).toBe("false");
   });
+
+  it("measures the first layout before any ResizeObserver callback, and reports it in the same commit", () => {
+    // A browser delivers the ResizeObserver callback after the first paint. This observer stays silent, so only the
+    // pre-paint measurement can set the layout.
+    const original = globalThis.ResizeObserver;
+    globalThis.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+    const onStackedChange = jest.fn();
+    try {
+      setLayoutWidth(1024);
+      const { container } = render(
+        <MemoryRouter>
+          <V2Page width="wide" onStackedChange={onStackedChange}>
+            <p>본문</p>
+          </V2Page>
+        </MemoryRouter>,
+      );
+
+      expect(layoutRoot(container).getAttribute("data-stacked")).toBe("false");
+      expect(onStackedChange).toHaveBeenLastCalledWith(false);
+    } finally {
+      globalThis.ResizeObserver = original;
+    }
+  });
 });

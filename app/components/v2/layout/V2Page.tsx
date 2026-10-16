@@ -1,4 +1,14 @@
-import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigationType } from "react-router";
 import { commitV2Navigation, handleV2PopState, settleV2LinkTransition } from "./screen-transition";
 
@@ -34,6 +44,9 @@ function getSideBySideBreakpointPx(): number {
   return sideBySideRem * (Number.isFinite(rootFontSize) ? rootFontSize : 16);
 }
 
+// Layout effects run before the browser paints. Server render has no layout, so it uses useEffect.
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
+
 function getPageMaxWidth(width: V2PageWidth): "default" | "wide" | "full" {
   if (width === "reading") {
     return "default";
@@ -46,10 +59,20 @@ export type V2PageProps = {
   panelRequest?: V2PanelRequest | null;
   panelCloseRequest?: number | null;
   onPanelCloseRequestHandled?: () => void;
+  // Reports the measured layout, so a route can choose its view by the same signal as the tabs and the panels. Pass a
+  // stable callback. It also receives the stacked value before the first measurement.
+  onStackedChange?: (stacked: boolean) => void;
   children: ReactNode;
 };
 
-export function V2Page({ width, panelRequest, panelCloseRequest, onPanelCloseRequestHandled, children }: V2PageProps) {
+export function V2Page({
+  width,
+  panelRequest,
+  panelCloseRequest,
+  onPanelCloseRequestHandled,
+  onStackedChange,
+  children,
+}: V2PageProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   // Mobile-first until the first measurement, so no desktop-only body mounts into a hidden aside.
   const [stacked, setStacked] = useState(true);
@@ -78,15 +101,19 @@ export function V2Page({ width, panelRequest, panelCloseRequest, onPanelCloseReq
   useEffect(() => () => settleV2LinkTransition(), []);
   const previousLocationSignatureRef = useRef(locationSignature);
 
-  useEffect(() => {
+  // Measures before the first paint, so the first frame and the route's view use the same layout. The root has no padding
+  // or border, so its border-box width is the content width that ResizeObserver reports for later resizes.
+  useIsomorphicLayoutEffect(() => {
     const element = rootRef.current;
     if (!element || typeof ResizeObserver === "undefined") {
       return;
     }
-    const observer = new ResizeObserver(([entry]) => {
-      setStacked(entry.contentRect.width < getSideBySideBreakpointPx());
+    const applyWidth = (width: number) => {
+      setStacked(width < getSideBySideBreakpointPx());
       setMeasured(true);
-    });
+    };
+    applyWidth(element.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => applyWidth(entry.contentRect.width));
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
@@ -136,6 +163,11 @@ export function V2Page({ width, panelRequest, panelCloseRequest, onPanelCloseReq
       closeSheetWithoutFocusReturn();
     }
   }, [stacked, closeSheetWithoutFocusReturn]);
+
+  // A layout effect, so the route's view commits in the same frame as the stacked layout.
+  useIsomorphicLayoutEffect(() => {
+    onStackedChange?.(stacked);
+  }, [stacked, onStackedChange]);
 
   useEffect(() => {
     if (!measured || !panelRequest || panelRequest.requestId === lastPanelRequestIdRef.current) {

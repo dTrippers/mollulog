@@ -124,10 +124,10 @@ export function ScreenTabs({ items }: ScreenTabsProps) {
 function TabItem({ item }: { item: ScreenTabItem }) {
   const { Icon } = item;
   const className = cn(
-    "relative flex min-h-v2-row-min shrink-0 items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover",
+    "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover",
     item.active ? "v2-tab-active font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
     item.hiddenStacked && "v2-hidden-stacked",
-    item.disabled && "text-v2-fg-disabled hover:bg-transparent",
+    item.disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-transparent",
     v2FocusRing,
   );
   const content = (

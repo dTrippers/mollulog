@@ -29,14 +29,18 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 6%)` | Row hover overlay |
-| `border-v2-control-border` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Borders of text inputs, selects, textareas, and dense data boundaries (3:1 or higher against surface and canvas). Not for cards, buttons, or region separation. |
+| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.30 0 0)` | A subtle control boundary for text inputs, selects, and textareas. Not for cards, buttons, or region separation. |
+| `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.52 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
 | `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.623 0.214 259.815)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.266 0.065 152.934)` | Success pill background |
 | `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. 4.5:1 or higher on subtle, surface, and canvas |
 | `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.258 0.092 26.042)` | Status: background of a danger `PanelAction` |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
-| `text-v2-favorite` | `oklch(0.645 0.246 16.439)` | `oklch(0.81 0.117 11.638)` | Favorite heart (domain) |
+| `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
+| `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
+| `text-v2-perk` | `oklch(0.52 0.105 223.128)` | `oklch(0.865 0.127 207.078)` | Benefit, such as a free-recruit special case. Pair with a star icon and text, semibold |
+| `bg-v2-selected`, `text-v2-on-selected` | `oklch(0.205 0 0)` / `oklch(1 0 0)` | `oklch(0.96 0 0)` / `oklch(0.205 0 0)` | Selected filter chip (interaction state, not a status color). Filled dark in light mode, filled light in dark mode |
 | `text-v2-new` | `oklch(0.905 0.182 98.111)` | `oklch(0.905 0.182 98.111)` | "New" label on a scrim (domain) |
 | `bg-v2-attr-red` | `oklch(0.637 0.237 25.331)` | `oklch(0.704 0.191 22.216)` | 폭발 (`explosive`), 경장갑 (`light`), 스트라이커 (`striker`) |
 | `bg-v2-attr-yellow` | `oklch(0.795 0.184 86.047)` | `oklch(0.852 0.199 91.936)` | 관통 (`piercing`), 중장갑 (`heavy`) |
@@ -283,8 +287,8 @@ Each recipe shows the parts that matter. Omit `PageAside` for a recipe with no A
 These tokens are not part of 2.0 yet. Add one only when a screen actually uses it:
 
 - Text: inverse text.
-- Interaction: primary action and selected states.
-- Status: info, warning, and neutral.
+- Interaction: primary action state.
+- Status: info and neutral.
 - Domain: limited and fes recruitment colors, a role-only palette, star-grade colors, and any other domain color.
 - Reading density, a data visualization palette, KPI size, and control height.
 - Numeric: a numeric-only utility. `tabular-nums` covers it.

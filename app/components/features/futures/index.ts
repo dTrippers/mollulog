@@ -1,4 +1,3 @@
-export { default as ContentFilterPanel } from "./ContentFilterPanel";
 export { default as GuestPlannerLegacyConflictCallout } from "./GuestPlannerLegacyConflictCallout";
 export { default as PyroxeneCalculationAssumptions } from "./PyroxeneCalculationAssumptions";
 export {

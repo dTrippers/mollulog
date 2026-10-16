@@ -6,14 +6,28 @@ import { v2FocusRing } from "../layout/styles";
 export type SheetProps = {
   open: boolean;
   title: string;
-  description?: string;
+  description?: ReactNode;
   headerAction?: ReactNode;
   onClose: () => void;
   onExited?: () => void;
+  // Fixed under the scrolling body, such as a composer. It does not scroll with the body.
+  footer?: ReactNode;
+  // Set by a panel sheet, so a focus request for the panel title finds the title on stacked.
+  panelId?: string;
   children: ReactNode;
 };
 
-export function Sheet({ open, title, description, headerAction, onClose, onExited, children }: SheetProps) {
+export function Sheet({
+  open,
+  title,
+  description,
+  headerAction,
+  onClose,
+  onExited,
+  footer,
+  panelId,
+  children,
+}: SheetProps) {
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   return (
@@ -40,17 +54,18 @@ export function Sheet({ open, title, description, headerAction, onClose, onExite
             leaveTo="motion-safe:translate-y-full motion-reduce:opacity-0"
           >
             <DialogPanel className="flex max-h-[85dvh] w-full max-w-3xl flex-col rounded-t-lg bg-v2-surface">
-              <div className="flex shrink-0 items-center justify-between gap-3 pt-2 pr-2 pl-v2-block-p">
+              <div className="flex shrink-0 items-center justify-between gap-3 pt-3 pb-2 pr-2 pl-v2-block-p">
                 <div className="min-w-0">
                   <DialogTitle
                     as="h2"
                     ref={titleRef}
+                    data-panel-title={panelId}
                     tabIndex={-1}
                     className="text-base font-semibold text-v2-fg focus:outline-none"
                   >
                     {title}
                   </DialogTitle>
-                  {description ? <p className="mt-0.5 text-xs text-v2-fg-tertiary">{description}</p> : null}
+                  {description ? <div className="mt-0.5 text-xs text-v2-fg-tertiary">{description}</div> : null}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
@@ -58,7 +73,7 @@ export function Sheet({ open, title, description, headerAction, onClose, onExite
                     type="button"
                     onClick={onClose}
                     aria-label="닫기"
-                    className={`flex size-11 items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover ${v2FocusRing}`}
+                    className={`flex size-11 cursor-pointer items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover ${v2FocusRing}`}
                   >
                     <XMarkIcon className="size-5" aria-hidden="true" />
                   </button>
@@ -67,6 +82,11 @@ export function Sheet({ open, title, description, headerAction, onClose, onExite
               <div className="min-h-0 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
                 {children}
               </div>
+              {footer ? (
+                <div className="shrink-0 border-t border-v2-inset px-v2-block-p pt-3 pb-[max(env(safe-area-inset-bottom),1rem)]">
+                  {footer}
+                </div>
+              ) : null}
             </DialogPanel>
           </TransitionChild>
         </div>
