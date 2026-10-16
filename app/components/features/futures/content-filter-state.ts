@@ -16,6 +16,7 @@ const legacyTypeMap: Partial<Record<string, EventType | RaidType>> = {
 
 const allowedFilterTypes = new Set<EventType | RaidType>([
   "live",
+  "offline_event",
   "event",
   "immortal_event",
   "fes",
@@ -43,7 +44,10 @@ export function normalizeContentFilterState(value: unknown): ContentFilterState 
         new Set(
           maybeTypes
             .filter((type): type is string => typeof type === "string")
-            .map((type) => legacyTypeMap[type] ?? type)
+            .flatMap((type) => {
+              const normalizedType = legacyTypeMap[type] ?? type;
+              return normalizedType === "live" ? ["live", "offline_event"] : [normalizedType];
+            })
             .filter((type): type is EventType | RaidType => allowedFilterTypes.has(type as EventType | RaidType)),
         ),
       )

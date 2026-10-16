@@ -19,6 +19,7 @@ export { DiscordNotificationValidationError };
 type DiscordNotificationSettingsKey =
   | "eventStartEnabled"
   | "eventEndEnabled"
+  | "offlineEventEnabled"
   | "rewardExchangeEndEnabled"
   | "recruitmentStartEnabled"
   | "shopResetEnabled"
@@ -31,6 +32,8 @@ const PREFERENCE_KEYS: ReadonlyArray<{
 }> = [
   { type: "event-start", key: "eventStartEnabled" },
   { type: "event-end", key: "eventEndEnabled" },
+  { type: "offline-event-start", key: "offlineEventEnabled" },
+  { type: "offline-event-end", key: "offlineEventEnabled" },
   { type: "reward-exchange-end", key: "rewardExchangeEndEnabled" },
   { type: "recruitment-start", key: "recruitmentStartEnabled" },
   { type: "shop-reset", key: "shopResetEnabled" },
@@ -136,6 +139,8 @@ function mapPreferences(rows: readonly QueryRow[], now: Date): MappedPreferences
   const settings = {
     eventStartEnabled: byType.get("event-start")?.enabled ?? false,
     eventEndEnabled: byType.get("event-end")?.enabled ?? false,
+    offlineEventEnabled:
+      byType.get("offline-event-start")?.enabled === true && byType.get("offline-event-end")?.enabled === true,
     rewardExchangeEndEnabled: byType.get("reward-exchange-end")?.enabled ?? false,
     recruitmentStartEnabled: byType.get("recruitment-start")?.enabled ?? false,
     shopResetEnabled: byType.get("shop-reset")?.enabled ?? false,
@@ -156,6 +161,7 @@ export function parseDiscordNotificationSettingsForm(formData: FormData): Discor
   const input: DiscordNotificationSettingsInput = {
     eventStartEnabled: booleanValue("eventStartEnabled"),
     eventEndEnabled: booleanValue("eventEndEnabled"),
+    offlineEventEnabled: booleanValue("offlineEventEnabled"),
     rewardExchangeEndEnabled: booleanValue("rewardExchangeEndEnabled"),
     recruitmentStartEnabled: booleanValue("recruitmentStartEnabled"),
     shopResetEnabled: booleanValue("shopResetEnabled"),

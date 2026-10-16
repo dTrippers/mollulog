@@ -25,11 +25,12 @@ describe("Discord notification timing and copy", () => {
     ).toBe("작성한 이벤트 의견에 새 답글이 등록되었습니다.");
   });
 
-  it("maps all seven settings to their notification triggers", () => {
+  it("maps the schedule settings to their notification triggers", () => {
     expect(
       getEnabledTriggers({
         eventStartEnabled: true,
         eventEndEnabled: false,
+        offlineEventEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
@@ -38,6 +39,32 @@ describe("Discord notification timing and copy", () => {
         leadHours: 24,
       }),
     ).toEqual(["event-start", "feedback-reply", "event-opinion-reply"]);
+  });
+
+  it("uses one offline-event preference for start and optional end notifications", () => {
+    expect(
+      getEnabledTriggers({
+        eventStartEnabled: false,
+        eventEndEnabled: false,
+        offlineEventEnabled: true,
+        rewardExchangeEndEnabled: false,
+        recruitmentStartEnabled: false,
+        shopResetEnabled: false,
+        feedbackReplyEnabled: false,
+        eventOpinionReplyEnabled: false,
+        leadHours: 24,
+      }),
+    ).toEqual(["offline-event-start", "offline-event-end"]);
+  });
+
+  it("formats offline-event start and end messages with the shared source time", () => {
+    const sourceAnchor = "2026-09-01T02:00:00.000Z";
+    expect(formatDiscordNotificationMessage({ trigger: "offline-event-start", sourceAnchor, contentName: "XXX" })).toBe(
+      '9/1(화) 11:00, "XXX" 행사 일정이 시작됩니다.',
+    );
+    expect(formatDiscordNotificationMessage({ trigger: "offline-event-end", sourceAnchor, contentName: "XXX" })).toBe(
+      '9/1(화) 11:00, "XXX" 행사 일정이 종료됩니다.',
+    );
   });
 
   it("formats KST across a day boundary with the exact event copy", () => {

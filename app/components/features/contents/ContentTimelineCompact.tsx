@@ -1,15 +1,17 @@
-import { CheckCircleIcon, ClockIcon, HeartIcon as EmptyHeartIcon } from "@heroicons/react/24/outline";
+import { CheckCircleIcon, ClockIcon, HeartIcon as EmptyHeartIcon, LinkIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as FilledHeartIcon } from "@heroicons/react/24/solid";
 import { useMemo } from "react";
 import { useNavigate } from "react-router";
 import { StudentCard } from "~/components/features/students";
+import { Button } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, formatInstantDateKey, nowUtcIso, parseUtcTimestamp } from "~/lib/date-time";
-import { contentTypeLocale } from "~/locales/ko";
+import { contentTypeLocale, timelineContentTypeLocale } from "~/locales/ko";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { ContentTimelineProps } from "./ContentTimeline";
 import { getRecruitmentStudentCards, isContentHeaderLinked } from "./ContentTimelineItem";
+import { formatOfflineEventSchedule } from "./content-timeline-format";
 import { groupContents } from "./content-timeline-grouping";
 import { TimelineDateMarker } from "./TimelineDateMarker";
 
@@ -167,6 +169,7 @@ function CompactContentItem({
   navigationState?: unknown;
 }) {
   const navigate = useNavigate();
+  const displayTimeZone = useDisplayTimeZone();
   const hiddenSpoiler = content.isSpoiler && !spoilerVisible;
   const linked = isContentHeaderLinked({
     contentType: content.contentType,
@@ -176,6 +179,14 @@ function CompactContentItem({
   });
   const title = hiddenSpoiler ? "???" : content.name.split("\n").join(" ");
   const label = getContentTypeLabel(content);
+  const scheduleLabel =
+    content.contentType === "offline_event"
+      ? formatOfflineEventSchedule(content.since, content.until, displayTimeZone)
+      : null;
+  const lineContentClassName =
+    content.contentType === "offline_event"
+      ? "flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5"
+      : "flex min-w-0 items-baseline gap-2";
   const recruitmentPeriodNotice = getRecruitmentPeriodNotice(
     {
       recruitmentGroupUid: content.recruitmentGroupUid,
@@ -188,8 +199,11 @@ function CompactContentItem({
     nowUtcIso(),
   );
   const lineContent = (
-    <span className="flex min-w-0 items-baseline gap-2">
+    <span className={lineContentClassName}>
       <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{label}</span>
+      {scheduleLabel && (
+        <span className="shrink-0 text-xs text-neutral-500 dark:text-neutral-400">{scheduleLabel}</span>
+      )}
       <span className="min-w-0 truncate text-xs font-semibold text-neutral-900 dark:text-neutral-100 sm:text-sm group-hover:underline">
         {title}
       </span>
@@ -220,6 +234,12 @@ function CompactContentItem({
         </button>
       ) : (
         <div className="px-1.5 py-1">{lineContent}</div>
+      )}
+
+      {!hiddenSpoiler && content.externalLink && (
+        <div className="mt-1 px-1.5">
+          <Button href={content.externalLink} target="_blank" size="xs" icon={LinkIcon} text="자세히 보기" />
+        </div>
       )}
 
       {spoilerVisible && content.recruitments && content.recruitments.length > 0 && (
@@ -305,6 +325,10 @@ function CompactRecruitmentStudents({
 }
 
 function getContentTypeLabel(content: ContentTimelineProps["contents"][number]): string {
+  if (content.contentType === "live" || content.contentType === "offline_event") {
+    return timelineContentTypeLocale[content.contentType];
+  }
+
   if ((content.contentType === "event" || content.contentType === "pickup") && content.runType === "rerun") {
     return `복각 ${contentTypeLocale[content.contentType]}`;
   }

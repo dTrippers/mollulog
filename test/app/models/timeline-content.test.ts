@@ -13,6 +13,7 @@ function timelineContent(overrides: Partial<TimelineContent> & { uid: string }):
     endAt: "2026-11-24T02:00:00.000Z",
     endless: false,
     imageUrl: null,
+    externalLink: null,
     videos: [],
     contentType: "event",
     runType: "first",

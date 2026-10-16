@@ -48,6 +48,33 @@ function recruitment(
 }
 
 describe("buildFutureRecruitmentTableRows", () => {
+  it("does not add offline event schedules to recruitment-table auxiliary content", () => {
+    const rows = buildFutureRecruitmentTableRows([
+      content({
+        uid: "event-with-recruitment",
+        name: "이벤트",
+        startAt: "2026-09-01T02:00:00.000Z",
+        endAt: "2026-09-08T02:00:00.000Z",
+        recruitments: [
+          recruitment({
+            studentName: "학생 A",
+            since: "2026-09-01T02:00:00.000Z",
+            until: "2026-09-08T02:00:00.000Z",
+          }),
+        ],
+      }),
+      content({
+        uid: "offline-event",
+        name: "콜라보 전시",
+        contentType: "offline_event",
+        startAt: "2026-09-02T02:00:00.000Z",
+        endAt: "2026-09-03T02:00:00.000Z",
+      }),
+    ]);
+
+    expect(rows.flatMap((row) => row.events).map(({ uid }) => uid)).toEqual(["event-with-recruitment"]);
+  });
+
   it("groups overlapping recruitments by their own recruitment periods", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({

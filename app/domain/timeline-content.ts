@@ -4,6 +4,7 @@ import type { UtcIsoString } from "~/lib/date-time";
 
 export type TimelineContentType =
   | "live"
+  | "offline_event"
   | "event"
   | "mini_event"
   | "pickup"
@@ -33,6 +34,7 @@ export type TimelineContent = {
   endAt: UtcIsoString | null;
   endless: boolean;
   imageUrl: string | null;
+  externalLink: string | null;
   videos: TimelineContentVideo[];
   contentType: TimelineContentType;
   runType: RunType;

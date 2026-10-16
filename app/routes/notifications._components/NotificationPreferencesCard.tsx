@@ -60,10 +60,10 @@ export default function NotificationPreferencesCard({
       ) : null}
       <Form method="post" onChange={markDirty}>
         <input type="hidden" name="intent" value="save" />
-        <div className="relative">
+        <div>
           {!isAvailable ? (
-            <div className="absolute inset-0 z-10 grid place-items-center" role="status">
-              <p className="rounded-md bg-card/95 px-4 py-3 text-center text-sm font-medium shadow-sm">
+            <div className="mb-4 flex justify-center" role="status">
+              <p className="rounded-md bg-card px-4 py-3 text-center text-sm font-medium shadow-sm">
                 하나 이상의 알림 수단을 등록해주세요
               </p>
             </div>
@@ -145,25 +145,46 @@ export default function NotificationPreferencesCard({
                   />
                 </div>
               </div>
-              <Field
-                label="알림 시점"
-                htmlFor="notification-lead-hours"
-                description="알림은 기준 시점부터 수 분 정도 걸릴 수 있어요"
-              >
-                <Dropdown
-                  id="notification-lead-hours"
-                  value={leadHours}
-                  options={LEAD_HOUR_OPTIONS}
-                  size="md"
-                  fullWidth
-                  disabled={!isAvailable || isSaving}
-                  onChange={(value) => {
-                    setLeadHours(value);
-                    markDirty();
-                  }}
-                />
-              </Field>
             </section>
+
+            <section aria-labelledby="notification-offline-event-heading" className="space-y-4">
+              <h3 id="notification-offline-event-heading" className="text-sm font-semibold text-foreground">
+                행사/콜라보
+              </h3>
+              <div className="p-2 flex items-center justify-between hover:bg-muted/70 rounded transition-colors">
+                <div className="min-w-0">
+                  <p className="text-sm">행사/콜라보 관련 일정 알림</p>
+                  <p className="text-xs text-muted-foreground">공식 방송은 제외합니다.</p>
+                </div>
+                <Toggle
+                  name="offlineEventEnabled"
+                  initialState={settings.offlineEventEnabled}
+                  disabled={isSaving}
+                  aria-label="행사/콜라보 관련 일정 알림"
+                  className="my-0 shrink-0"
+                  onChange={markDirty}
+                />
+              </div>
+            </section>
+
+            <Field
+              label="알림 시점"
+              htmlFor="notification-lead-hours"
+              description="알림은 기준 시점부터 수 분 정도 걸릴 수 있어요"
+            >
+              <Dropdown
+                id="notification-lead-hours"
+                value={leadHours}
+                options={LEAD_HOUR_OPTIONS}
+                size="md"
+                fullWidth
+                disabled={!isAvailable || isSaving}
+                onChange={(value) => {
+                  setLeadHours(value);
+                  markDirty();
+                }}
+              />
+            </Field>
 
             <section className="space-y-4 border-t border-border pt-4" aria-labelledby="notification-mollulog-heading">
               <h3 id="notification-mollulog-heading" className="text-sm font-semibold text-foreground">

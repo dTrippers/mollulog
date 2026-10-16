@@ -32,6 +32,7 @@ function toDomain(row: PostgresTimelineContentRow): TimelineContent {
     endAt: row.endAt ? normalizePostgresInstant(row.endAt) : null,
     endless: row.endless,
     imageUrl: row.imageUrl,
+    externalLink: row.externalLink,
     videos: row.videos,
     contentType: row.contentType as TimelineContentType,
     runType: row.runType as RunType,
@@ -105,7 +106,21 @@ export async function getPostgresTimelineContents(
         db
           .select()
           .from(pgTimelineContentsTable)
-          .where(or(isNull(pgTimelineContentsTable.endAt), gte(pgTimelineContentsTable.endAt, new Date(now))))
+          .where(
+            or(
+              and(
+                eq(pgTimelineContentsTable.contentType, "offline_event"),
+                or(
+                  and(isNull(pgTimelineContentsTable.endAt), gte(pgTimelineContentsTable.startAt, new Date(now))),
+                  gte(pgTimelineContentsTable.endAt, new Date(now)),
+                ),
+              ),
+              and(
+                ne(pgTimelineContentsTable.contentType, "offline_event"),
+                or(isNull(pgTimelineContentsTable.endAt), gte(pgTimelineContentsTable.endAt, new Date(now))),
+              ),
+            ),
+          )
           .orderBy(asc(pgTimelineContentsTable.startAt), asc(pgTimelineContentsTable.uid)),
       options,
     ),

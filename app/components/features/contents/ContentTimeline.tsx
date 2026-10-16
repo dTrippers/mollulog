@@ -32,6 +32,7 @@ export type ContentTimelineProps = {
   contents: {
     name: string;
     imageUrl?: string | null;
+    externalLink?: string | null;
     since: UtcIsoString;
     until: UtcIsoString | null;
     endless: boolean;

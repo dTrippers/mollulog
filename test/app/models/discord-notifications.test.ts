@@ -20,6 +20,8 @@ const laterEffectiveAt = new Date("2026-09-02T00:00:00.000Z");
 const PREFERENCE_KEYS_FOR_TEST = [
   "event-start",
   "event-end",
+  "offline-event-start",
+  "offline-event-end",
   "reward-exchange-end",
   "recruitment-start",
   "shop-reset",
@@ -31,6 +33,8 @@ function preferenceRows(leadHours = 24, effectiveAt = existingEffectiveAt) {
   return [
     { notification_type: "event-start", enabled: true, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "event-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "offline-event-start", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
+    { notification_type: "offline-event-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "reward-exchange-end", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "recruitment-start", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
     { notification_type: "shop-reset", enabled: false, lead_hours: leadHours, effective_at: effectiveAt },
@@ -44,6 +48,7 @@ describe("Discord notification settings boundary", () => {
     const form = new FormData();
     form.set("eventStartEnabled", "true");
     form.set("eventEndEnabled", "false");
+    form.set("offlineEventEnabled", "true");
     form.set("rewardExchangeEndEnabled", "true");
     form.set("recruitmentStartEnabled", "false");
     form.set("shopResetEnabled", "true");
@@ -53,6 +58,7 @@ describe("Discord notification settings boundary", () => {
     expect(parseDiscordNotificationSettingsForm(form)).toEqual({
       eventStartEnabled: true,
       eventEndEnabled: false,
+      offlineEventEnabled: true,
       rewardExchangeEndEnabled: true,
       recruitmentStartEnabled: false,
       shopResetEnabled: true,
@@ -99,7 +105,7 @@ describe("Discord notification settings boundary", () => {
     expect(statements.some((statement) => statement.startsWith("delete from notification_preferences"))).toBe(false);
   });
 
-  it("writes the shared lead time to all seven preference rows transactionally", async () => {
+  it("writes the shared lead time to all nine preference rows transactionally", async () => {
     const statements: string[] = [];
     const insertValues: unknown[][] = [];
     const client = {
@@ -110,7 +116,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows(), rowCount: 7 };
+          return { rows: preferenceRows(), rowCount: 9 };
         }
         if (normalized.startsWith("insert into notification_preferences")) {
           insertValues.push([...values]);
@@ -126,6 +132,7 @@ describe("Discord notification settings boundary", () => {
       {
         eventStartEnabled: true,
         eventEndEnabled: true,
+        offlineEventEnabled: true,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
@@ -145,6 +152,8 @@ describe("Discord notification settings boundary", () => {
       expect.arrayContaining([
         "event-start",
         "event-end",
+        "offline-event-start",
+        "offline-event-end",
         "reward-exchange-end",
         "recruitment-start",
         "shop-reset",
@@ -185,6 +194,7 @@ describe("Discord notification settings boundary", () => {
       {
         eventStartEnabled: true,
         eventEndEnabled: false,
+        offlineEventEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
@@ -201,6 +211,8 @@ describe("Discord notification settings boundary", () => {
       [
         ["event-start", laterEffectiveAt, 12],
         ["event-end", laterEffectiveAt, 12],
+        ["offline-event-start", laterEffectiveAt, 12],
+        ["offline-event-end", laterEffectiveAt, 12],
         ["reward-exchange-end", laterEffectiveAt, 12],
         ["recruitment-start", laterEffectiveAt, 12],
         ["shop-reset", laterEffectiveAt, 12],
@@ -229,6 +241,7 @@ describe("Discord notification settings boundary", () => {
       saveDiscordNotificationSettings(env, 7, {
         eventStartEnabled: true,
         eventEndEnabled: false,
+        offlineEventEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: false,
@@ -248,7 +261,7 @@ describe("Discord notification settings boundary", () => {
           return { rows: [{ status: "active" }], rowCount: 1 };
         }
         if (normalized.startsWith("select notification_type")) {
-          return { rows: preferenceRows().slice(0, 4), rowCount: 4 };
+          return { rows: preferenceRows().slice(0, 2), rowCount: 2 };
         }
         if (normalized.startsWith("insert into notification_preferences")) {
           insertValues.push([...values]);
@@ -264,6 +277,7 @@ describe("Discord notification settings boundary", () => {
       {
         eventStartEnabled: true,
         eventEndEnabled: false,
+        offlineEventEnabled: false,
         rewardExchangeEndEnabled: false,
         recruitmentStartEnabled: false,
         shopResetEnabled: true,
@@ -388,6 +402,7 @@ describe("Discord notification settings boundary", () => {
     });
 
     expect(state.settings.shopResetEnabled).toBe(false);
+    expect(state.settings.offlineEventEnabled).toBe(false);
     expect(state.settings.leadHours).toBe(24);
   });
 
