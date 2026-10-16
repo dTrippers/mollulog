@@ -1,5 +1,14 @@
 import { ArrowUpIcon, CheckIcon, LockClosedIcon, LockOpenIcon } from "@heroicons/react/16/solid";
-import { type KeyboardEvent, type RefObject, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import {
+  type KeyboardEvent,
+  type RefObject,
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { IconButton } from "../../primitives/IconButton";
@@ -10,6 +19,8 @@ export type CommentDraft = { body: string; visibility: CommentVisibility };
 export type CommentComposerProps = {
   label: string;
   placeholder: string;
+  // Keyboard shortcut help appended to the placeholder. Touch devices omit it, since they have no hardware keyboard.
+  shortcutHint?: string;
   initialBody?: string;
   initialVisibility?: CommentVisibility;
   // Only a new top-level opinion and a top-level edit can change visibility. Replies keep the parent's public visibility.
@@ -28,11 +39,28 @@ export type CommentComposerProps = {
 
 const MAX_EDITOR_HEIGHT_PX = 120;
 
+const COARSE_POINTER_QUERY = "(pointer: coarse)";
+
+function subscribeCoarsePointer(onChange: () => void) {
+  const query = window.matchMedia(COARSE_POINTER_QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+function useCoarsePointer(): boolean {
+  return useSyncExternalStore(
+    subscribeCoarsePointer,
+    () => window.matchMedia(COARSE_POINTER_QUERY).matches,
+    () => false,
+  );
+}
+
 // One field holds the text, the visibility toggle, and the submit control. The text grows with its content up to a limit.
 // Enter submits, Shift+Enter inserts a line break, and Enter during IME composition is ignored.
 export function CommentComposer({
   label,
   placeholder,
+  shortcutHint,
   initialBody = "",
   initialVisibility = "public",
   showVisibility = true,
@@ -52,6 +80,8 @@ export function CommentComposer({
   const [visibility, setVisibility] = useState<CommentVisibility>(initialVisibility);
   const trimmed = body.trim();
   const canSubmit = !disabled && trimmed.length > 0;
+  const coarsePointer = useCoarsePointer();
+  const shownPlaceholder = shortcutHint && !coarsePointer ? `${placeholder} (${shortcutHint})` : placeholder;
 
   // Focus moves to the editor when it opens for a reply or an edit, and the editor scrolls into view. The page never
   // autofocuses the editor on open.
@@ -110,10 +140,10 @@ export function CommentComposer({
           onDraftChange?.({ body: event.target.value, visibility });
         }}
         onKeyDown={handleKeyDown}
-        placeholder={placeholder}
+        placeholder={shownPlaceholder}
         disabled={disabled}
         rows={1}
-        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary disabled:opacity-60"
+        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm max-lg:min-h-11 max-lg:py-3 leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary disabled:opacity-60"
       />
       {showVisibility ? (
         <button
@@ -127,7 +157,7 @@ export function CommentComposer({
           aria-label={`공개 범위: ${isPrivate ? "나만 보기" : "전체 공개"}`}
           title={nextVisibilityText}
           className={cn(
-            "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+            "inline-flex h-8 shrink-0 cursor-pointer max-lg:h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
             v2FocusRing,
           )}
         >

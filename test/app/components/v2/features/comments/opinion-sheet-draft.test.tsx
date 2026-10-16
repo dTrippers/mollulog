@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { OpinionSheet, type OpinionSheetProps } from "~/components/v2/features/comments/OpinionSheet";
 import { installLayoutTestEnv } from "../../layout/layout-test-env";
+import { stubCoarsePointer } from "./pointer-media-stub";
 
 const EDITOR_PLACEHOLDER = "의견을 남겨보세요 (Enter로 등록, Shift+Enter 줄바꿈)";
 type CreateHandler = (body: string, visibility: "private" | "public") => void;
@@ -64,6 +65,7 @@ function renderSheet(contentUid: string | null, onCreate: CreateHandler) {
 describe("OpinionSheet footer draft", () => {
   beforeEach(() => {
     installLayoutTestEnv();
+    stubCoarsePointer(false);
   });
 
   it("keeps the private draft and visibility across opening and cancelling a reply", () => {

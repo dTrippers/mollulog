@@ -1,9 +1,10 @@
 /**
  * @jest-environment jsdom
  */
-import { describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { CommentComposer } from "~/components/v2/features/comments/CommentComposer";
+import { stubCoarsePointer } from "./pointer-media-stub";
 
 function renderComposer(onSubmit = jest.fn<(body: string, visibility: "private" | "public") => void>()) {
   render(
@@ -18,6 +19,8 @@ function renderComposer(onSubmit = jest.fn<(body: string, visibility: "private" 
 }
 
 describe("CommentComposer", () => {
+  beforeEach(() => stubCoarsePointer(false));
+
   it("resets visibility to public after a submit, with the cleared body", () => {
     const onSubmit = renderComposer();
     fireEvent.click(screen.getByRole("button", { name: "공개 범위: 전체 공개" }));
@@ -43,5 +46,24 @@ describe("CommentComposer", () => {
     expect(editors).toHaveLength(2);
     expect(editors[0].id).not.toBe(editors[1].id);
     expect(screen.getAllByLabelText("의견 작성")).toHaveLength(2);
+  });
+
+  it("appends the shortcut hint to the placeholder only for a fine pointer", () => {
+    const composer = (
+      <CommentComposer
+        label="의견 작성"
+        placeholder="의견을 남겨보세요"
+        shortcutHint="Enter로 등록"
+        submitLabel="등록"
+        onSubmit={() => undefined}
+      />
+    );
+    const { unmount } = render(composer);
+    expect(screen.getByRole("textbox").getAttribute("placeholder")).toBe("의견을 남겨보세요 (Enter로 등록)");
+    unmount();
+
+    stubCoarsePointer(true);
+    render(composer);
+    expect(screen.getByRole("textbox").getAttribute("placeholder")).toBe("의견을 남겨보세요");
   });
 });

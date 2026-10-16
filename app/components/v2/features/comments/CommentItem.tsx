@@ -75,9 +75,16 @@ export function CommentItem({
   ];
 
   const actions = editing ? (
-    <IconButton icon={XMarkIcon} label="수정 취소" onClick={onEdit} disabled={submitting} />
+    <IconButton
+      icon={XMarkIcon}
+      label="수정 취소"
+      onClick={onEdit}
+      disabled={submitting}
+      className="-my-2 max-lg:-my-3.5"
+    />
   ) : (
-    <div className="flex shrink-0 items-center">
+    // The buttons center on the name line and overflow it instead of growing it, so the name stays level with the avatar top.
+    <div className="-my-2 flex shrink-0 items-center max-lg:-my-3.5">
       {top && canReply ? (
         <IconButton
           icon={replying ? XMarkIcon : ArrowUturnLeftIcon}
@@ -124,8 +131,6 @@ export function CommentItem({
       ) : null}
     </div>
   );
-  const hasActions = editing || (top && canReply) || pinnable || own;
-
   return (
     <li
       className={cn(
@@ -136,7 +141,7 @@ export function CommentItem({
       <Link
         to={`/@${username}`}
         aria-label={`@${username} 프로필`}
-        className="mt-0.5 shrink-0 rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+        className="flex shrink-0 self-start rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
       >
         <SenseiAvatar
           profileStudentId={comment.sensei.profileStudentId}
@@ -145,8 +150,8 @@ export function CommentItem({
         />
       </Link>
       <div className="min-w-0">
-        <div className={cn("flex items-center justify-between gap-2", hasActions && "min-h-8 max-lg:min-h-11")}>
-          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs leading-4">
             <Link to={`/@${username}`} className="text-[0.8125rem] font-semibold text-v2-fg hover:underline">
               {username}
             </Link>
@@ -172,7 +177,9 @@ export function CommentItem({
         {editor ? (
           <div className="mt-3">{editor}</div>
         ) : (
-          <p className="mt-0.5 text-sm leading-[1.375rem] whitespace-pre-line text-v2-fg">{comment.body}</p>
+          <p className="mt-1 text-sm leading-[1.375rem] wrap-break-word whitespace-pre-line text-v2-fg">
+            {comment.body}
+          </p>
         )}
         {children}
       </div>

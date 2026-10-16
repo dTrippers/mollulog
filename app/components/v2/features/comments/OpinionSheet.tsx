@@ -91,7 +91,8 @@ export function OpinionSheet({
         key={contentUid ?? ""}
         label="의견 작성"
         textareaRef={composerRef}
-        placeholder="의견을 남겨보세요 (Enter로 등록, Shift+Enter 줄바꿈)"
+        placeholder="의견을 남겨보세요"
+        shortcutHint="Enter로 등록, Shift+Enter 줄바꿈"
         submitLabel="등록"
         disabled={submitting}
         onSubmit={actions.onCreate}
