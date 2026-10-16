@@ -283,7 +283,7 @@ describe("home bottom and aside", () => {
         onRetryNews={noop}
       />,
     );
-    expect(five).toContain("오늘부터 30일");
+    expect(five).not.toContain("오늘부터 30일");
     expect(five.match(/<li class="min-w-0">/g)).toHaveLength(5);
     expect(five).toContain("grid grid-cols-5");
     expect(five).not.toContain("flex flex-wrap");
@@ -342,7 +342,7 @@ describe("home bottom and aside", () => {
     expect(youtube).not.toContain('target="_blank"');
   });
 
-  it("keeps the YouTube card flush, with a divider under its header and a full-width divider between videos", () => {
+  it("places the YouTube title above a flush card with dividers between videos", () => {
     const video = (id: string, title: string) => ({
       id,
       title,
@@ -368,27 +368,24 @@ describe("home bottom and aside", () => {
         onRetry={noop}
       />,
     );
-    // The card has no inner padding: its header carries the divider, and each row brings its own padding.
-    expect(markup).toContain("overflow-hidden");
-    expect(markup).toContain("border-b border-v2-control-border");
+    expect(markup.indexOf("공식 유튜브 최근 영상")).toBeLessThan(
+      markup.indexOf("overflow-hidden rounded-lg bg-v2-surface"),
+    );
     expect(markup).toContain("divide-y divide-v2-control-border");
     expect(markup.match(/<li>/g)?.length).toBe(2);
     expect(markup).toContain("px-v2-block-p py-3");
-    expect(markup).not.toContain("mt-3 flex flex-col gap-v2-block-gap");
   });
 
-  it("puts the YouTube empty and failure states below the same flush header", () => {
+  it("puts the YouTube empty and failure states below the section title", () => {
     const empty = renderToStaticMarkup(
       <HomeYoutubeBlock youtube={{ status: "success", sections: [] }} timeZone={TZ} onRetry={noop} />,
     );
-    expect(empty).toContain("border-b border-v2-control-border");
-    expect(empty.indexOf("border-b")).toBeLessThan(empty.indexOf("최근 영상이 없어요"));
+    expect(empty.indexOf("공식 유튜브 최근 영상")).toBeLessThan(empty.indexOf("최근 영상이 없어요"));
 
     const failed = renderToStaticMarkup(
       <HomeYoutubeBlock youtube={{ status: "error" }} timeZone={TZ} onRetry={noop} />,
     );
-    expect(failed).toContain("border-b border-v2-control-border");
-    expect(failed.indexOf("border-b")).toBeLessThan(failed.indexOf("최근 영상을 불러오지 못했어요"));
+    expect(failed.indexOf("공식 유튜브 최근 영상")).toBeLessThan(failed.indexOf("최근 영상을 불러오지 못했어요"));
     expect(failed).toContain("다시 시도");
   });
 });
@@ -575,8 +572,12 @@ describe("home feed items", () => {
 
     const markup = render(<HomeFeedBlock feed={{ status: "success", posts: [post] }} timeZone={TZ} onRetry={noop} />);
     expect(markup).toContain("@hellodhlyn");
-    expect(markup).toContain("이벤트 의견 · 10/15");
-    expect(markup).toContain("람과천청 · 픽업 키사키(수영복), 슌(수영복)");
+    expect(markup).toContain("이벤트 의견");
+    expect(markup).toContain(">10/15</time>");
+    expect(markup).toContain("람과천청");
+    expect(markup).toContain("픽업");
+    expect(markup).toContain('aria-label="키사키(수영복) 정보"');
+    expect(markup).toContain('aria-label="슌(수영복) 정보"');
     expect(markup).toContain("안녕하세요");
     expect(markup).toContain('href="/events/ev-1"');
   });
@@ -585,7 +586,7 @@ describe("home feed items", () => {
 describe("home feed item links and reference meta", () => {
   const author = { username: "hellodhlyn", profileStudentId: null, labels: [] };
 
-  it("renders a student review body, a named link, and the meta on two lines", () => {
+  it("renders a student review body, a named link, and inline meta", () => {
     const post = {
       uid: "review-1",
       postType: "student_review",
@@ -602,9 +603,8 @@ describe("home feed item links and reference meta", () => {
     expect(markup).toContain("카요코");
     expect(markup).toContain("애정해요");
     expect(markup).toContain('href="/students/kayoko"');
-    // The author and the type line are separate elements, so they sit on two lines.
-    expect(markup).toMatch(/@hellodhlyn<\/a><\/div>|@hellodhlyn<\/a>/);
-    expect(markup).toContain("학생 평가 · 09/27");
+    expect(markup).toContain("학생 평가");
+    expect(markup).toContain(">09/27</time>");
   });
 
   it("joins the grading tag names in display order when a student review has no text block", () => {
@@ -643,7 +643,7 @@ describe("home feed item links and reference meta", () => {
     expect(markup).not.toContain("애정해요");
   });
 
-  it("names every link: each anchor in the feed has text, and the avatar is not a link", () => {
+  it("names every link, including image-only links for the avatar and subject", () => {
     const posts = [
       {
         uid: "review-2",
@@ -669,13 +669,13 @@ describe("home feed item links and reference meta", () => {
     ] as unknown as EnrichedCommunityFeedPost[];
 
     const markup = render(<HomeFeedBlock feed={{ status: "success", posts }} timeZone={TZ} onRetry={noop} />);
-    const anchors = [...markup.matchAll(/<a [^>]*>(.*?)<\/a>/g)];
+    const anchors = [...markup.matchAll(/<a ([^>]*)>(.*?)<\/a>/g)];
     expect(anchors.length).toBeGreaterThan(0);
-    for (const [, inner] of anchors) {
-      expect(inner.replace(/<[^>]+>/g, "").trim().length).toBeGreaterThan(0);
+    for (const [, attributes, inner] of anchors) {
+      const hasAccessibleName = attributes.includes("aria-label=") || inner.replace(/<[^>]+>/g, "").trim().length > 0;
+      expect(hasAccessibleName).toBe(true);
     }
-    // An item with no title or body has no content link, so no empty link is rendered for it.
-    expect(markup).not.toContain('href="/events/ev-1"');
+    expect(markup).toContain('href="/events/ev-1"');
   });
 
   it("adds the walkthrough context line as the existing feed does", () => {

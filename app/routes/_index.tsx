@@ -172,7 +172,7 @@ export default function Index() {
   const retry = () => revalidator.revalidate();
 
   return (
-    <V2Page width="full">
+    <V2Page width="wide">
       <main className="flex w-full min-w-0 flex-col gap-2.5 pt-2 md:gap-6 md:pt-4">
         <HomeHeader now={now} timeZone={timeZone} />
         {accountLeft ? <HomeAccountLeftNotice /> : null}

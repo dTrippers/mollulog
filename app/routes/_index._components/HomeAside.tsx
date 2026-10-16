@@ -1,14 +1,14 @@
-import { ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
-import { cn } from "~/lib/utils";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
+import { studentImageUrl } from "~/models/assets";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import type { HomeYoutubeChannelSection, YoutubeChannelKey } from "~/models/youtube";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
-import { HomeEmpty, HomeRetryButton } from "./HomePrimitives";
+import { HomeEmpty, HomeRetryButton, HomeSection } from "./HomePrimitives";
 
 export type HomeFeedState = { status: "success"; posts: EnrichedCommunityFeedPost[] } | { status: "error" };
 
@@ -27,41 +27,6 @@ const POST_TYPE_LABELS: Record<string, string> = {
   walkthrough_timeline: "공략 타임라인",
 };
 
-// A flush card has no inner padding: its header carries a divider, and its children bring their own padding.
-function AsideCard({
-  id,
-  title,
-  action,
-  flush = false,
-  children,
-}: {
-  id: string;
-  title: string;
-  action?: ReactNode;
-  flush?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      aria-labelledby={id}
-      className={cn("rounded-lg bg-v2-surface", flush ? "overflow-hidden" : "p-v2-block-p")}
-    >
-      <div
-        className={cn(
-          "flex items-baseline justify-between gap-3",
-          flush && "border-b border-v2-control-border px-v2-block-p py-3",
-        )}
-      >
-        <h2 id={id} className="text-base font-semibold text-v2-fg">
-          {title}
-        </h2>
-        {action}
-      </div>
-      <div className={cn(!flush && "mt-3 flex flex-col gap-v2-block-gap")}>{children}</div>
-    </section>
-  );
-}
-
 // The item's target follows the existing community feed: an event opinion opens its event, a student review opens its
 // student, and a walkthrough opens its timeline. The item has no link when the post has no such target.
 function feedItemHref(post: EnrichedCommunityFeedPost): string | null {
@@ -78,16 +43,57 @@ function feedItemHref(post: EnrichedCommunityFeedPost): string | null {
   return null;
 }
 
-// The context line names the subject, as the existing feed does: the event and its pickup students, the reviewed student,
-// or a walkthrough's terrain, defense, difficulty, and student count.
-function feedContext(post: EnrichedCommunityFeedPost): string | null {
+function FeedStudentImage({ uid, name, showName = false }: { uid: string; name: string; showName?: boolean }) {
+  return (
+    <Link
+      to={`/students/${uid}`}
+      aria-label={`${name} 정보`}
+      title={name}
+      className="inline-flex min-w-0 items-center gap-1.5 rounded-sm transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+    >
+      <img src={studentImageUrl(uid)} alt="" loading="lazy" className="size-6 rounded-full bg-v2-inset object-cover" />
+      {showName ? <span className="truncate">{name}</span> : null}
+    </Link>
+  );
+}
+
+// The subject follows the existing feed: a student portrait and name, or an event line followed by pickup portraits.
+function feedContext(post: EnrichedCommunityFeedPost): ReactNode {
   if (post.postType === "student_review") {
-    return post.subjectStudentName;
+    return post.subjectStudentUid && post.subjectStudentName ? (
+      <FeedStudentImage uid={post.subjectStudentUid} name={post.subjectStudentName} showName />
+    ) : null;
   }
   if (post.postType === "event_opinion" || post.postType === "recruitment_result") {
-    const pickups = post.pickupStudents?.map((student) => student.name) ?? [];
-    const parts = [post.subjectContentName, pickups.length > 0 ? `픽업 ${pickups.join(", ")}` : null];
-    return parts.filter(Boolean).join(" · ") || null;
+    const students = post.pickupStudents ?? [];
+    const visibleStudents = students.slice(0, students.length > 7 ? 5 : students.length);
+    const remainingCount = students.length - visibleStudents.length;
+    return post.subjectContentName || visibleStudents.length > 0 ? (
+      <div className="flex min-w-0 flex-col gap-1">
+        {post.subjectContentName ? (
+          post.subjectContentUid ? (
+            <Link
+              to={`/events/${post.subjectContentUid}`}
+              className="inline-flex min-w-0 items-center gap-1.5 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
+            >
+              <UserGroupIcon aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate">{post.subjectContentName}</span>
+            </Link>
+          ) : (
+            <span className="truncate">{post.subjectContentName}</span>
+          )
+        ) : null}
+        {visibleStudents.length > 0 ? (
+          <span className="flex flex-wrap items-center gap-1">
+            <span>픽업</span>
+            {visibleStudents.map((student) => (
+              <FeedStudentImage key={student.uid} uid={student.uid} name={student.name} />
+            ))}
+            {remainingCount > 0 ? <span>외 {remainingCount}명</span> : null}
+          </span>
+        ) : null}
+      </div>
+    ) : null;
   }
   if (post.postType === "walkthrough_timeline") {
     const timeline = post.blocks.find((block) => block.type === "walkthrough_timeline");
@@ -134,55 +140,74 @@ function feedBody(post: EnrichedCommunityFeedPost): string | null {
   return null;
 }
 
-// One feed item, as in the reference: the avatar with the author on the first row, and "유형 · MM/DD" under the author.
-// Below them, at full width, come the title, the context line, and the body. The avatar is decorative (the author name is
-// the link), so it is hidden from assistive technology. The title and body are a link only when there is text to name it.
+// As in the existing feed preview, the author avatar stays beside the author, subject, and body column.
 function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZone: string }) {
   const href = feedItemHref(post);
   const context = feedContext(post);
   const body = feedBody(post);
-  const hasContent = Boolean(post.title || body);
-  const content = (
-    <>
-      {post.title ? <p className="text-sm font-semibold text-v2-fg line-clamp-2">{post.title}</p> : null}
-      {context ? <p className="text-xs text-v2-fg-tertiary line-clamp-1">{context}</p> : null}
-      {body ? <p className="text-sm text-v2-fg-secondary line-clamp-2">{body}</p> : null}
-    </>
-  );
   return (
-    <li className="flex flex-col gap-1 px-v2-block-p py-3">
-      <div className="flex min-w-0 items-center gap-2">
-        {post.author ? (
-          <span aria-hidden="true" className="shrink-0">
-            <SenseiAvatar profileStudentId={post.author.profileStudentId} labels={post.author.labels} />
-          </span>
-        ) : (
-          <span className="size-8 shrink-0" aria-hidden="true" />
-        )}
-        <div className="flex min-w-0 flex-1 flex-col">
+    <li className="flex min-w-0 items-start gap-2.5 px-v2-block-p py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover motion-reduce:transition-none">
+      {post.author ? (
+        <Link
+          to={`/@${post.author.username}`}
+          aria-label={`@${post.author.username} 프로필`}
+          className="shrink-0 transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80 motion-reduce:transition-none"
+        >
+          <SenseiAvatar profileStudentId={post.author.profileStudentId} labels={post.author.labels} />
+        </Link>
+      ) : (
+        <span className="size-8 shrink-0" aria-hidden="true" />
+      )}
+      <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 text-xs leading-4">
           {post.author ? (
-            <Link to={`/@${post.author.username}`} className="min-w-0 truncate text-xs font-semibold text-v2-fg">
+            <Link
+              to={`/@${post.author.username}`}
+              className="min-w-0 truncate text-xs font-semibold text-v2-fg underline decoration-transparent transition-colors duration-v2-fast ease-v2-standard hover:decoration-current motion-reduce:transition-none"
+            >
               @{post.author.username}
             </Link>
           ) : (
             <span className="min-w-0 truncate text-xs font-semibold text-v2-fg">알 수 없음</span>
           )}
-          <p className="text-xs text-v2-fg-tertiary tabular-nums">
-            {POST_TYPE_LABELS[post.postType] ?? "공략"} ·{" "}
+          <span className="text-v2-fg-tertiary">{POST_TYPE_LABELS[post.postType] ?? "공략"}</span>
+          <span aria-hidden="true" className="text-v2-fg-tertiary">
+            ·
+          </span>
+          <time dateTime={post.displayAt} className="text-v2-fg-tertiary tabular-nums">
             {formatInstant(post.displayAt as UtcIsoString, { timeZone, format: "MM/DD" })}
-          </p>
+          </time>
         </div>
+        {context ? <div className="mt-1 text-xs text-v2-fg-tertiary">{context}</div> : null}
+        {post.title || body ? (
+          <div className="mt-2 flex min-w-0 flex-col gap-0.5">
+            {post.title ? (
+              href ? (
+                <Link
+                  to={href}
+                  className="text-sm font-semibold text-v2-fg underline decoration-transparent line-clamp-2 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                >
+                  {post.title}
+                </Link>
+              ) : (
+                <p className="text-sm font-semibold text-v2-fg line-clamp-2">{post.title}</p>
+              )
+            ) : null}
+            {body ? (
+              href ? (
+                <Link
+                  to={href}
+                  className="text-sm text-v2-fg-secondary line-clamp-2 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                >
+                  {body}
+                </Link>
+              ) : (
+                <p className="text-sm text-v2-fg-secondary line-clamp-2">{body}</p>
+              )
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      {href && hasContent ? (
-        <Link
-          to={href}
-          className="flex min-w-0 flex-col gap-0.5 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-        >
-          {content}
-        </Link>
-      ) : hasContent || context ? (
-        <div className="flex min-w-0 flex-col gap-0.5">{content}</div>
-      ) : null}
     </li>
   );
 }
@@ -197,40 +222,42 @@ export function HomeFeedBlock({
   onRetry: () => void;
 }) {
   return (
-    <AsideCard
+    <HomeSection
       id="home-feed"
       title="최근 피드"
-      flush
+      className="md:[&_h2]:text-lg"
       action={
         <Link
           to="/community"
-          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary hover:text-v2-fg"
+          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
         >
           더 보기
           <ChevronRightIcon aria-hidden="true" className="size-4" />
         </Link>
       }
     >
-      {feed.status === "error" ? (
-        <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
-          <p className="text-sm font-medium text-v2-fg">최근 피드를 불러오지 못했어요</p>
-          <p className="text-xs text-v2-fg-tertiary">일시적인 문제일 수 있어요.</p>
-          <div>
-            <HomeRetryButton onClick={onRetry} />
+      <div className="overflow-hidden rounded-lg bg-v2-surface">
+        {feed.status === "error" ? (
+          <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
+            <p className="text-sm font-medium text-v2-fg">최근 피드를 불러오지 못했어요</p>
+            <p className="text-xs text-v2-fg-tertiary">일시적인 문제일 수 있어요.</p>
+            <div>
+              <HomeRetryButton onClick={onRetry} />
+            </div>
           </div>
-        </div>
-      ) : feed.posts.length === 0 ? (
-        <div className="p-v2-block-p">
-          <HomeEmpty className="p-0">최근 피드가 없어요</HomeEmpty>
-        </div>
-      ) : (
-        <ul className="flex flex-col divide-y divide-v2-control-border">
-          {feed.posts.map((post) => (
-            <FeedItem key={post.uid} post={post} timeZone={timeZone} />
-          ))}
-        </ul>
-      )}
-    </AsideCard>
+        ) : feed.posts.length === 0 ? (
+          <div className="p-v2-block-p">
+            <HomeEmpty className="p-0">최근 피드가 없어요</HomeEmpty>
+          </div>
+        ) : (
+          <ul className="flex flex-col divide-y divide-v2-control-border">
+            {feed.posts.map((post) => (
+              <FeedItem key={post.uid} post={post} timeZone={timeZone} />
+            ))}
+          </ul>
+        )}
+      </div>
+    </HomeSection>
   );
 }
 
@@ -243,60 +270,59 @@ export function HomeYoutubeBlock({
   timeZone: string;
   onRetry: () => void;
 }) {
-  // Like the feed, the card is flush: its header carries the divider, and the failure, empty, and video rows sit below it.
-  if (youtube.status === "error") {
-    return (
-      <AsideCard id="home-youtube" title="공식 유튜브 최근 영상" flush>
-        <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
-          <p className="text-sm font-medium text-v2-fg">최근 영상을 불러오지 못했어요</p>
-          <div>
-            <HomeRetryButton onClick={onRetry} />
-          </div>
-        </div>
-      </AsideCard>
-    );
-  }
-  const videos = youtube.sections
-    .flatMap((section) => section.videos.map((video) => ({ ...video, channelKey: section.channelKey })))
-    .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
-    .slice(0, 3);
+  const videos =
+    youtube.status === "success"
+      ? youtube.sections
+          .flatMap((section) => section.videos.map((video) => ({ ...video, channelKey: section.channelKey })))
+          .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt))
+          .slice(0, 3)
+      : [];
   return (
-    <AsideCard id="home-youtube" title="공식 유튜브 최근 영상" flush>
-      {videos.length === 0 ? (
-        <div className="p-v2-block-p">
-          <HomeEmpty className="p-0">최근 영상이 없어요</HomeEmpty>
-        </div>
-      ) : (
-        <ul className="flex flex-col divide-y divide-v2-control-border">
-          {videos.map((video) => (
-            <li key={`${video.channelKey}-${video.id}`}>
-              <a
-                href={video.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-w-0 gap-3 px-v2-block-p py-3 hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-              >
-                <img
-                  src={video.thumbnailUrl}
-                  alt=""
-                  loading="lazy"
-                  className="aspect-video w-28 shrink-0 rounded-md bg-v2-inset object-cover"
-                />
-                <div className="flex min-w-0 flex-col gap-1">
-                  <p className="text-sm font-semibold text-v2-fg line-clamp-2">{video.title}</p>
-                  <p className="text-xs text-v2-fg-tertiary tabular-nums">
-                    {formatInstant(video.publishedAt as UtcIsoString, { timeZone, format: "YYYY.MM.DD" })}
-                    {" · "}
-                    {video.channelKey === "jp" ? "일본 서버" : "한국 서버"}
-                    {video.isShorts ? " · Shorts" : null}
-                  </p>
-                </div>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
-    </AsideCard>
+    <HomeSection id="home-youtube" title="공식 유튜브 최근 영상" className="md:[&_h2]:text-lg">
+      <div className="overflow-hidden rounded-lg bg-v2-surface">
+        {youtube.status === "error" ? (
+          <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
+            <p className="text-sm font-medium text-v2-fg">최근 영상을 불러오지 못했어요</p>
+            <div>
+              <HomeRetryButton onClick={onRetry} />
+            </div>
+          </div>
+        ) : videos.length === 0 ? (
+          <div className="p-v2-block-p">
+            <HomeEmpty className="p-0">최근 영상이 없어요</HomeEmpty>
+          </div>
+        ) : (
+          <ul className="flex flex-col divide-y divide-v2-control-border">
+            {videos.map((video) => (
+              <li key={`${video.channelKey}-${video.id}`}>
+                <a
+                  href={video.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 gap-3 px-v2-block-p py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                >
+                  <img
+                    src={video.thumbnailUrl}
+                    alt=""
+                    loading="lazy"
+                    className="aspect-video w-28 shrink-0 rounded-md bg-v2-inset object-cover"
+                  />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <p className="text-sm font-semibold text-v2-fg line-clamp-2">{video.title}</p>
+                    <p className="text-xs text-v2-fg-tertiary tabular-nums">
+                      {formatInstant(video.publishedAt as UtcIsoString, { timeZone, format: "YYYY.MM.DD" })}
+                      {" · "}
+                      {video.channelKey === "jp" ? "일본 서버" : "한국 서버"}
+                      {video.isShorts ? " · Shorts" : null}
+                    </p>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </HomeSection>
   );
 }
 
@@ -311,7 +337,7 @@ export function HomeChannelLinks({ channels }: { channels: HomeYoutubeChannelLin
             href={channel.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="-my-3 inline-flex min-h-11 items-center rounded-sm font-medium text-v2-fg-secondary underline-offset-4 hover:text-v2-fg hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="-my-3 inline-flex min-h-11 items-center rounded-sm font-medium text-v2-fg-secondary underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
           >
             {CHANNEL_TITLES[channel.key]}
             <span className="sr-only">새 창</span>

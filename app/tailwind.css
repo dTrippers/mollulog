@@ -445,6 +445,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-danger-subtle: var(--v2-danger-subtle);
   --color-v2-live: var(--v2-live);
   --color-v2-favorite: var(--v2-favorite);
+  --color-v2-completed-badge: var(--v2-completed-badge);
+  --color-v2-favorite-badge: var(--v2-favorite-badge);
   --color-v2-new: var(--v2-new);
   --color-v2-warning: var(--v2-warning);
   --color-v2-perk: var(--v2-perk);
@@ -485,6 +487,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-danger-subtle: oklch(0.971 0.013 17.38);
   --v2-live: oklch(0.505 0.213 27.518);
   --v2-favorite: oklch(0.577 0.245 27.325);
+  /* These badges sit on images and keep white text legible in both themes. */
+  --v2-completed-badge: rgb(22 96 50 / 80%);
+  --v2-favorite-badge: rgb(173 28 28 / 80%);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.55 0.163 48.998);
   --v2-perk: oklch(0.52 0.105 223.128);

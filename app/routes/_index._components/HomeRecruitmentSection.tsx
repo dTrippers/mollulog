@@ -144,7 +144,10 @@ export function HomeRecruitmentSection({
                     {students.map((recruitment) => {
                       const key = `${group.groupUid}:${recruitment.favoriteKey}`;
                       return (
-                        <li key={key}>
+                        <li
+                          key={key}
+                          className="[&_button]:transition-opacity [&_button]:duration-v2-fast [&_button]:ease-v2-standard [&_button:hover]:opacity-90 motion-reduce:[&_button]:transition-none"
+                        >
                           <StudentSlot
                             entry={toStudentEntry({ group, recruitment, viewer, now })}
                             signedIn={viewer.signedIn}

@@ -47,7 +47,7 @@ export function HomeBirthdaysBlock({
           <Link
             to={`/students/${birthday.uid}`}
             className={cn(
-              "flex flex-col items-center gap-1 rounded-md text-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+              "flex flex-col items-center gap-1 rounded-md text-center transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none",
               spread ? "w-full min-w-0" : "w-20",
             )}
           >
@@ -120,11 +120,7 @@ export function HomeBottomSection({
 }) {
   return (
     <div className="grid gap-6 md:grid-cols-2 md:items-start">
-      <HomeSection
-        id="home-birthdays"
-        title="다가오는 생일"
-        action={<span className="text-sm text-v2-fg-tertiary">오늘부터 30일</span>}
-      >
+      <HomeSection id="home-birthdays" title="다가오는 생일">
         <HomeBirthdaysBlock birthdays={birthdays} onRetry={onRetryBirthdays} />
       </HomeSection>
       <HomeSection
@@ -133,7 +129,7 @@ export function HomeBottomSection({
         action={
           <Link
             to="/news"
-            className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary hover:text-v2-fg"
+            className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
           >
             모두 보기
             <ChevronRightIcon aria-hidden="true" className="size-4" />

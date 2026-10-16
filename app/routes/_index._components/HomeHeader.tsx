@@ -16,7 +16,7 @@ export function HomeHeader({ now, timeZone }: { now: UtcIsoString; timeZone: str
       </div>
       <Link
         to="/futures"
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-medium text-v2-fg-secondary hover:text-v2-fg md:pb-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:pb-2"
       >
         <CalendarDaysIcon aria-hidden="true" className="size-4" />
         전체 일정 (미래시)

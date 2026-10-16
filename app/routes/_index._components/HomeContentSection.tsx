@@ -144,7 +144,7 @@ function MainStoryTile({
       name={
         <Link
           to="/mainstory"
-          className="whitespace-pre-line rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          className="-mx-1 rounded-md px-1 whitespace-pre-line transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
         >
           {story.name}
           <ChevronRightIcon

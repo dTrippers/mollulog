@@ -10,7 +10,11 @@ import { formatHomeTimeChip } from "./home-format";
 // the tile it sits in; the hover background keeps the full button.
 export function HomeRetryButton({ onClick }: { onClick: () => void }) {
   return (
-    <Button variant="text" className="-ml-3" onClick={onClick}>
+    <Button
+      variant="text"
+      className="-ml-3 transition-colors duration-v2-fast ease-v2-standard motion-reduce:transition-none"
+      onClick={onClick}
+    >
       <ArrowPathIcon aria-hidden="true" className="size-4 shrink-0" />
       다시 시도
     </Button>

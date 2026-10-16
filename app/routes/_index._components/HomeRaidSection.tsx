@@ -27,7 +27,7 @@ function RaidTile({ content, now, timeZone }: { content: TimelineRaidContent; no
   return (
     <Link
       to={`/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`}
-      className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg bg-v2-surface focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      className="flex min-w-0 flex-1 items-stretch overflow-hidden rounded-lg bg-v2-surface transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
     >
       <img
         src={bossImageUrl(schedule.raidBoss.uid)}
@@ -40,12 +40,9 @@ function RaidTile({ content, now, timeZone }: { content: TimelineRaidContent; no
           <p className="min-w-0 truncate text-xs text-v2-fg-tertiary md:text-sm">{seasonLabel}</p>
           <HomeTimeChip chip={raidChip(content, now, timeZone)} dense />
         </div>
-        <p className="text-base leading-6 font-semibold break-keep text-v2-fg md:text-lg md:leading-7">
-          {schedule.raidBoss.name}
-          <ChevronRightIcon
-            aria-hidden="true"
-            className="ml-1 inline-block size-3.5 shrink-0 align-middle text-v2-fg-tertiary md:size-4"
-          />
+        <p className="flex min-w-0 items-center gap-1 text-base leading-6 font-semibold break-keep text-v2-fg md:text-lg md:leading-7">
+          <span>{schedule.raidBoss.name}</span>
+          <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-v2-fg-tertiary md:size-4" />
         </p>
         <RaidSummary raid={schedule} />
       </div>
@@ -100,7 +97,7 @@ function RaidSlotColumn({
       detail={
         <Link
           to="/futures"
-          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-v2-fg-secondary hover:text-v2-fg"
+          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
         >
           미래시에서 보기
           <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-v2-fg-tertiary md:size-4" />

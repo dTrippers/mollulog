@@ -177,14 +177,15 @@ function VideoRowsSkeleton() {
   );
 }
 
-// An aside card in its loaded form: the header with a divider under it, then the rows of the feed or the video card.
+// Match the loaded aside sections: title above the content card.
 export function HomeAsideSkeleton({ title, variant }: { title: string; variant: "feed" | "video" }) {
   return (
-    <section aria-hidden="true" className="overflow-hidden rounded-lg bg-v2-surface">
-      <div className="border-b border-v2-control-border px-v2-block-p py-3">
-        <p className="text-base font-semibold text-v2-fg">{title}</p>
-      </div>
-      {variant === "feed" ? <FeedRowsSkeleton /> : <VideoRowsSkeleton />}
-    </section>
+    <div aria-hidden="true">
+      <HomeSection id={`home-skeleton-${variant}`} title={title} className="md:[&_h2]:text-lg">
+        <div className="overflow-hidden rounded-lg bg-v2-surface">
+          {variant === "feed" ? <FeedRowsSkeleton /> : <VideoRowsSkeleton />}
+        </div>
+      </HomeSection>
+    </div>
   );
 }
