@@ -1,5 +1,14 @@
 import { Portal, Transition } from "@headlessui/react";
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  type MouseEventHandler,
+  type ReactNode,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "~/lib/utils";
 import { getPopoverPosition, type PopoverPosition } from "./popover-position";
 
@@ -13,6 +22,8 @@ export type PopoverProps = {
   // block passes the block, so the panel clears the whole block. A press inside it does not count as outside.
   anchorRef?: RefObject<HTMLElement | null>;
   className?: string;
+  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
+  onMouseLeave?: MouseEventHandler<HTMLDivElement>;
   children: ReactNode;
 };
 
@@ -30,7 +41,17 @@ const hiddenPanelMotion =
 // the trigger on resize and scroll. Escape and an outside pointer press close it, and focus returns to the trigger on
 // Escape. It fades and settles from the trigger side. Motion is off for reduced-motion users, and the exit finishes
 // before the panel unmounts.
-export function Popover({ open, label, onClose, returnFocusRef, anchorRef, className, children }: PopoverProps) {
+export function Popover({
+  open,
+  label,
+  onClose,
+  returnFocusRef,
+  anchorRef,
+  className,
+  onMouseEnter,
+  onMouseLeave,
+  children,
+}: PopoverProps) {
   const placementRef = anchorRef ?? returnFocusRef;
   const panelRef = useRef<HTMLDivElement | null>(null);
   // The transition mounts the panel one commit after `open` turns true, so focus waits for the node itself.
@@ -137,6 +158,8 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
           role="dialog"
           aria-label={label}
           data-placement={placement}
+          onMouseEnter={onMouseEnter}
+          onMouseLeave={onMouseLeave}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
             "fixed z-30 w-72 rounded-lg bg-v2-elevated p-v2-block-p shadow-lg ring-1 ring-v2-control-border",

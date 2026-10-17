@@ -1,27 +1,31 @@
-import { ArchiveBoxIcon, GiftIcon, MagnifyingGlassIcon, UserIcon } from "@heroicons/react/24/outline";
-import {
-  type Dispatch,
-  type ReactNode,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { ArchiveBoxIcon, GiftIcon, UserIcon } from "@heroicons/react/24/outline";
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { data, redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Page } from "~/components/features/layout";
 import {
-  FavoritedItemSelector,
-  FavoriteItemSelector,
-  type ItemQuantityBreakdownEntry,
-  RelationshipStudentPicker,
-  RequiredGifts,
-  StudentRelationshipLevel,
-} from "~/components/features/relationship";
-import { Button, ProfileImage } from "~/components/primitives";
+  AsideLinks,
+  MobileActionBar,
+  PageAside,
+  PageHeader,
+  PageMain,
+  PageToolbar,
+  PanelSheet,
+  ScreenTabs,
+  V2Page,
+  type V2PanelRequest,
+} from "~/components/v2/layout";
+import { RelationshipStudentPicker } from "~/components/v2/features/relationship/RelationshipStudentPicker";
+import { RelationshipStudentScreen } from "./utils.relationship._components/RelationshipStudentScreen";
+import {
+  RelationshipGiftScreen,
+  RELATIONSHIP_GIFT_PANEL_ID,
+} from "./utils.relationship._components/RelationshipGiftScreen";
+import type {
+  AllFavoriteItemsLoad,
+  RelationshipGiftCalculationMode,
+} from "./utils.relationship._components/relationship-types";
+import { getRelationshipGiftQuantityBreakdown } from "~/domain/relationship-gifts";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
   getRelationshipGiftPlanValidationError,
@@ -43,12 +47,9 @@ import {
   removeRelationshipLevel,
   upsertRelationshipLevel,
 } from "~/models/relationship-level";
-import { getAllStudentsFavoriteItems } from "~/models/resource";
+import { COMMON_FAVORITE_ITEM_UIDS, getAllStudentsFavoriteItems } from "~/models/resource";
 import { formatVisibleName, getAllStudents } from "~/models/student";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
-import RelationshipGiftCalculationMode, {
-  type RelationshipGiftCalculationModeValue,
-} from "./utils.relationship._components/RelationshipGiftCalculationMode";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "인연 랭크 계산기 | 몰루로그";
@@ -83,6 +84,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
+  const logger = getLogger(env, context.cloudflare.ctx, { route: "utils.relationship.loader" });
   const [allStudents, currentUser] = await Promise.all([getAllStudents(env, true), getActiveSensei(env, request)]);
   const writeMode = currentUser ? await getStudentStateWriteMode(env) : "legacy";
 
@@ -108,7 +110,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     const savedLevel = savedRelationships[student.uid];
     return {
       uid: student.uid,
-      name: student.name,
+      name: formatVisibleName(student.name),
       order: student.order,
       currentLevel: savedLevel?.currentLevel ?? null,
       currentExp: savedLevel?.currentExp ?? null,
@@ -122,6 +124,31 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     };
   });
 
+  const allStudentsFavoriteItems: Promise<AllFavoriteItemsLoad> = getAllStudentsFavoriteItems(env).then(
+    (items) => ({
+      status: "ready" as const,
+      items: items.map((item) => ({
+        ...item,
+        favoriteLevels: Object.fromEntries(
+          Object.entries(item.favoriteLevels).map(([level, favoriteLevel]) => [
+            level,
+            {
+              ...favoriteLevel,
+              students: favoriteLevel.students.map((student) => ({
+                ...student,
+                name: formatVisibleName(student.name),
+              })),
+            },
+          ]),
+        ),
+      })),
+    }),
+    (error: unknown) => {
+      logger.error("Failed to load relationship favorite items", error, { operation: "all_students_favorite_items" });
+      return { status: "error" as const };
+    },
+  );
+
   return {
     students: studentsWithRelationships.sort((a, b) => {
       const aLevel = a.currentLevel ?? 0;
@@ -131,7 +158,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
       }
       return bLevel - aLevel;
     }),
-    allStudentsFavoriteItems: getAllStudentsFavoriteItems(env),
+    allStudentsFavoriteItems,
     writeMode,
     isAuthenticated: !!currentUser,
     ownedQuantities,
@@ -295,11 +322,9 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   return { success: true };
 };
 
-type SaveState = "idle" | "pending" | "submitting" | "loading";
-
 const RELATIONSHIP_STUDENT_PATH = "/utils/relationship";
 const RELATIONSHIP_ITEM_SEARCH = "?mode=item";
-const EMPTY_GIFT_QUANTITIES: Record<string, number> = {};
+const STUDENT_PANEL_ID = "relationship-students";
 
 export default function RelationshipUtil() {
   const {
@@ -339,7 +364,7 @@ export default function RelationshipUtil() {
   const initialSelectedStudentUid =
     queryStudentUid && students.some((student) => student.uid === queryStudentUid) ? queryStudentUid : null;
   const [selectedStudentUid, setSelectedStudentUid] = useState<string | null>(initialSelectedStudentUid);
-  const [giftCalculationMode, setGiftCalculationMode] = useState<RelationshipGiftCalculationModeValue>("manual");
+  const [giftCalculationMode, setGiftCalculationMode] = useState<RelationshipGiftCalculationMode>("manual");
   const syncedQueryStudentUidRef = useRef<string | null>(initialSelectedStudentUid);
   const selectedStudent = useMemo(
     () => managedStudents.find((student) => student.uid === selectedStudentUid) ?? null,
@@ -350,22 +375,11 @@ export default function RelationshipUtil() {
       return null;
     }
 
-    return buildRelationshipItemQuantityState(managedStudents);
+    return getRelationshipGiftQuantityBreakdown(managedStudents);
   }, [isAuthenticated, managedStudents]);
-  const [selectedItemExp, setSelectedItemExp] = useState<number>(0);
-
-  const handleGiftCalculationModeChange = (mode: RelationshipGiftCalculationModeValue) => {
-    if (mode === "owned" && !isAuthenticated) {
-      showSignIn();
-      return;
-    }
-    setSelectedItemExp(0);
-    setGiftCalculationMode(mode);
-  };
 
   const handleSelectStudentUid = (studentUid: string | null) => {
     setSaveSuccess(false);
-    setSelectedItemExp(0);
     setSelectedStudentUid(studentUid);
   };
 
@@ -423,7 +437,6 @@ export default function RelationshipUtil() {
 
     syncedQueryStudentUidRef.current = queryStudentUid;
     setSaveSuccess(false);
-    setSelectedItemExp(0);
     setSelectedStudentUid(queryStudentUid);
   }, [queryStudentUid, managedStudents]);
 
@@ -775,292 +788,147 @@ export default function RelationshipUtil() {
       saveTimerRef.current = null;
     }
   }, []);
+  const [stacked, setStacked] = useState(true);
+  const [panelRequest, setPanelRequest] = useState<V2PanelRequest | null>(null);
+  const [panelCloseRequest, setPanelCloseRequest] = useState<number | null>(null);
+  const panelRequestCounterRef = useRef(0);
+  const requestPanel = useCallback((panelId: string) => {
+    panelRequestCounterRef.current += 1;
+    setPanelRequest({ panelId, requestId: panelRequestCounterRef.current });
+  }, []);
+  const requestPanelClose = useCallback(() => {
+    panelRequestCounterRef.current += 1;
+    setPanelCloseRequest(panelRequestCounterRef.current);
+  }, []);
   const studentPicker = (
     <RelationshipStudentPicker
       students={managedStudents}
       selectedStudentUid={selectedStudentUid}
       nullableSemantics={writeMode === "nullable"}
-      onSelectStudentUid={handleSelectStudentUid}
+      onSelectStudentUid={(studentUid) => {
+        handleSelectStudentUid(studentUid);
+        requestPanelClose();
+      }}
     />
   );
 
   return (
-    <Page
-      title="인연 랭크 계산기"
-      description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요."
-      contentWidth="full"
-      screens={[
-        {
-          text: "학생별",
-          description: "학생을 선택하고 목표 인연 랭크 계산",
-          Icon: UserIcon,
-          link: RELATIONSHIP_STUDENT_PATH,
-          active: !isItemScreen,
-        },
-        {
-          text: "선물별",
-          description: "선물별 선호 학생과 입력 수량 확인",
-          Icon: GiftIcon,
-          link: `${RELATIONSHIP_STUDENT_PATH}${RELATIONSHIP_ITEM_SEARCH}`,
-          active: isItemScreen,
-        },
-      ]}
-      panels={
-        isItemScreen
-          ? undefined
-          : [
-              {
-                title: "학생 찾기",
-                description: "인연 랭크를 계산할 학생을 선택해주세요",
-                Icon: MagnifyingGlassIcon,
-                children: studentPicker,
-              },
-            ]
-      }
-      links={[
-        {
-          title: "재화 플래너",
-          description: "보유 아이템 수량을 관리할 수 있어요",
-          Icon: ArchiveBoxIcon,
-          to: "/utils/growth/resources?category=favor",
-          preventScrollReset: true,
-        },
-      ]}
+    <V2Page
+      width="wide"
+      panelRequest={panelRequest}
+      panelCloseRequest={panelCloseRequest}
+      onPanelCloseRequestHandled={() => setPanelCloseRequest(null)}
+      onStackedChange={setStacked}
     >
+      <PageHeader
+        title="인연 랭크 계산기"
+        description="학생들의 목표 인연 랭크까지 필요한 선물 개수를 계산할 수 있어요."
+      />
+      <PageToolbar>
+        <ScreenTabs
+          items={[
+            { key: "student", text: "학생별", Icon: UserIcon, link: RELATIONSHIP_STUDENT_PATH, active: !isItemScreen },
+            {
+              key: "gift",
+              text: "선물별",
+              Icon: GiftIcon,
+              link: `${RELATIONSHIP_STUDENT_PATH}${RELATIONSHIP_ITEM_SEARCH}`,
+              active: isItemScreen,
+            },
+          ]}
+        />
+      </PageToolbar>
       {isItemScreen ? (
-        <FavoritedItemSelector
+        <RelationshipGiftScreen
           items={allStudentsFavoriteItems}
           students={managedStudents}
           isAuthenticated={isAuthenticated}
           ownedQuantities={ownedQuantities}
           writeMode={writeMode}
           staleWriteBlocked={staleWriteBlocked}
+          commonItemUids={COMMON_FAVORITE_ITEM_UIDS}
           onStaleWriteBlocked={handleStaleWriteBlocked}
           onStudentItemsSaved={handleSavedGiftPlans}
+          stacked={stacked}
+          onChooseAnotherGift={() => requestPanel(RELATIONSHIP_GIFT_PANEL_ID)}
+          onClosePanel={requestPanelClose}
         />
       ) : (
-        <RelationshipStudentScreen
-          studentPicker={studentPicker}
-          selectedStudentUid={selectedStudentUid}
-          selectedStudent={selectedStudent}
-          writeMode={writeMode}
-          currentRelationship={currentRelationship}
-          giftCalculationMode={giftCalculationMode}
-          selectedItemExp={selectedItemExp}
-          saveState={savePending ? "pending" : saveFetcher.state}
-          saveError={saveError}
-          saveSuccess={saveSuccess}
-          staleWriteBlocked={staleWriteBlocked}
-          onRetry={retryAvailable ? handleRetry : null}
-          itemRequiredQuantities={itemQuantityState?.requiredQuantities ?? null}
-          itemQuantityBreakdowns={itemQuantityState?.breakdowns ?? null}
-          ownedQuantities={ownedQuantities}
-          onGiftCalculationModeChange={handleGiftCalculationModeChange}
-          onCurrentRelationshipChange={updateCurrentRelationship}
-          onSelectedItemExpChange={setSelectedItemExp}
-          onDelete={handleDelete}
-        />
-      )}
-    </Page>
-  );
-}
-
-function RelationshipStudentScreen({
-  studentPicker,
-  selectedStudentUid,
-  selectedStudent,
-  writeMode,
-  currentRelationship,
-  giftCalculationMode,
-  selectedItemExp,
-  saveState,
-  saveError,
-  saveSuccess,
-  staleWriteBlocked,
-  onRetry,
-  itemRequiredQuantities,
-  itemQuantityBreakdowns,
-  ownedQuantities,
-  onGiftCalculationModeChange,
-  onCurrentRelationshipChange,
-  onSelectedItemExpChange,
-  onDelete,
-}: {
-  studentPicker: ReactNode;
-  selectedStudentUid: string | null;
-  selectedStudent: RelationshipStudentState | null;
-  writeMode: "legacy" | "nullable";
-  currentRelationship: Relationship;
-  giftCalculationMode: RelationshipGiftCalculationModeValue;
-  selectedItemExp: number;
-  saveState: SaveState;
-  saveError: string | null;
-  saveSuccess: boolean;
-  staleWriteBlocked: boolean;
-  onRetry: (() => void) | null;
-  itemRequiredQuantities: Record<string, number> | null;
-  itemQuantityBreakdowns: Record<string, ItemQuantityBreakdownEntry[]> | null;
-  ownedQuantities: Record<string, number> | null;
-  onGiftCalculationModeChange: (mode: RelationshipGiftCalculationModeValue) => void;
-  onCurrentRelationshipChange: Dispatch<SetStateAction<Relationship>>;
-  onSelectedItemExpChange: (exp: number) => void;
-  onDelete: () => void;
-}) {
-  const [ownedGiftPlan, setOwnedGiftPlan] = useState<{
-    studentUid: string;
-    quantities: Record<string, number>;
-  } | null>(null);
-  const ownedGiftQuantities =
-    ownedGiftPlan?.studentUid === selectedStudentUid ? ownedGiftPlan.quantities : EMPTY_GIFT_QUANTITIES;
-  const ownedGiftCount = useMemo(
-    () => Object.values(ownedGiftQuantities).reduce((total, quantity) => total + quantity, 0),
-    [ownedGiftQuantities],
-  );
-  const handleOwnedGiftQuantitiesChange = useCallback(
-    (quantities: Record<string, number>) => {
-      if (!selectedStudentUid) {
-        return;
-      }
-      setOwnedGiftPlan({ studentUid: selectedStudentUid, quantities });
-    },
-    [selectedStudentUid],
-  );
-
-  const handleSaveOwnedGiftPlan = () => {
-    if (ownedGiftCount <= 0) {
-      return;
-    }
-
-    const hasExistingGiftPlan = Object.values(currentRelationship.items).some((quantity) => quantity > 0);
-    if (hasExistingGiftPlan && !window.confirm("현재 학생의 기존 선물 계획을 보유 선물 수량으로 변경할까요?")) {
-      return;
-    }
-
-    onCurrentRelationshipChange((previous) => ({ ...previous, items: ownedGiftQuantities }));
-    onGiftCalculationModeChange("manual");
-  };
-
-  return (
-    <div className="min-w-0 overflow-x-hidden">
-      {selectedStudentUid && selectedStudent ? (
         <>
-          <RelationshipActionHeader
-            student={selectedStudent}
-            saveState={saveState}
-            saveError={saveError}
-            saveSuccess={saveSuccess}
-            staleWriteBlocked={staleWriteBlocked}
-            onRetry={onRetry}
+          <PageMain>
+            {selectedStudentUid && selectedStudent ? (
+              <RelationshipStudentScreen
+                student={selectedStudent}
+                isAuthenticated={isAuthenticated}
+                nullableSemantics={writeMode === "nullable"}
+                relationship={currentRelationship}
+                giftCalculationMode={giftCalculationMode}
+                onGiftCalculationModeChange={setGiftCalculationMode}
+                saveState={savePending ? "pending" : saveFetcher.state}
+                saveError={saveError}
+                saveSuccess={saveSuccess}
+                staleWriteBlocked={staleWriteBlocked}
+                onRetry={retryAvailable ? handleRetry : null}
+                requiredQuantities={itemQuantityState?.requiredQuantities ?? {}}
+                quantityBreakdowns={itemQuantityState?.breakdowns ?? {}}
+                ownedQuantities={ownedQuantities}
+                onRelationshipChange={updateCurrentRelationship}
+                onDelete={handleDelete}
+                onSignIn={showSignIn}
+                onChooseAnotherStudent={() => requestPanel(STUDENT_PANEL_ID)}
+              />
+            ) : (
+              <>
+                {stacked ? (
+                  <div className="@min-[48rem]/page-available:hidden rounded-lg bg-v2-surface p-v2-block-p">
+                    <RelationshipStudentPicker
+                      students={managedStudents}
+                      selectedStudentUid={selectedStudentUid}
+                      nullableSemantics={writeMode === "nullable"}
+                      showAllStudents
+                      onSelectStudentUid={handleSelectStudentUid}
+                    />
+                  </div>
+                ) : null}
+                <p className="hidden py-8 text-sm text-v2-fg-secondary @min-[48rem]/page-available:block">
+                  학생을 고르면 계산을 시작해요.
+                </p>
+              </>
+            )}
+          </PageMain>
+          <PageAside>
+            <PanelSheet panelId={STUDENT_PANEL_ID} title="학생 찾기" Icon={UserIcon} defaultExpanded>
+              {studentPicker}
+            </PanelSheet>
+            <AsideLinks
+              items={[
+                {
+                  key: "resource-planner",
+                  title: "재화 플래너",
+                  description: "보유 선물 수량 관리",
+                  Icon: ArchiveBoxIcon,
+                  to: "/utils/growth/resources?category=favor",
+                  preventScrollReset: true,
+                },
+              ]}
+            />
+          </PageAside>
+          <MobileActionBar
+            links={[
+              {
+                key: "resource-planner",
+                title: "재화 플래너",
+                shortTitle: "재화 플래너",
+                Icon: ArchiveBoxIcon,
+                to: "/utils/growth/resources?category=favor",
+                preventScrollReset: true,
+              },
+            ]}
+            panels={[{ panelId: STUDENT_PANEL_ID, title: "학생 찾기", shortTitle: "학생", Icon: UserIcon }]}
           />
-
-          <RelationshipGiftCalculationMode
-            mode={giftCalculationMode}
-            ownedGiftCount={ownedGiftCount}
-            ownedGiftExp={selectedItemExp}
-            canSaveOwnedGiftPlan={ownedGiftCount > 0}
-            onModeChange={onGiftCalculationModeChange}
-            onSaveOwnedGiftPlan={handleSaveOwnedGiftPlan}
-          />
-
-          <StudentRelationshipLevel
-            studentName={selectedStudent.name}
-            nullableSemantics={writeMode === "nullable"}
-            currentExp={currentRelationship.currentExp}
-            currentLevel={currentRelationship.currentLevel}
-            targetLevel={currentRelationship.targetLevel}
-            selectedItemExp={selectedItemExp}
-            onCurrentLevelUpdate={({ level, exp }) =>
-              onCurrentRelationshipChange({ ...currentRelationship, currentLevel: level, currentExp: exp })
-            }
-            onTargetLevelUpdate={(value) => onCurrentRelationshipChange({ ...currentRelationship, targetLevel: value })}
-          />
-
-          <RequiredGifts
-            nullableSemantics={writeMode === "nullable"}
-            currentLevel={currentRelationship.currentLevel}
-            currentExp={currentRelationship.currentExp}
-            targetLevel={currentRelationship.targetLevel}
-          />
-
-          <FavoriteItemSelector
-            studentUid={selectedStudentUid}
-            quantities={currentRelationship.items}
-            useOwnedQuantities={giftCalculationMode === "owned"}
-            itemRequiredQuantities={itemRequiredQuantities}
-            itemQuantityBreakdowns={itemQuantityBreakdowns}
-            ownedQuantities={ownedQuantities}
-            onQuantitiesChange={(quantities) => onCurrentRelationshipChange((prev) => ({ ...prev, items: quantities }))}
-            onOwnedGiftQuantitiesChange={handleOwnedGiftQuantitiesChange}
-            onSelectedItemExpChange={onSelectedItemExpChange}
-          />
-
-          <div className="my-4 flex justify-end">
-            <Button text="초기화" size="xs" variant="danger-subtle" onClick={onDelete} />
-          </div>
-        </>
-      ) : (
-        <>
-          <div className="lg:hidden">
-            <p className="mb-3 text-sm text-muted-foreground">
-              저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
-            </p>
-            {studentPicker}
-          </div>
-          <div className="hidden rounded-lg bg-muted/40 px-4 py-10 text-center lg:block">
-            <p className="font-semibold text-foreground">학생을 선택해 주세요</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              학생 찾기에서 저장된 학생을 고르거나 이름으로 검색하면 계산을 시작할 수 있어요.
-            </p>
-          </div>
         </>
       )}
-    </div>
-  );
-}
-
-export function RelationshipActionHeader({
-  student,
-  saveState,
-  saveError,
-  saveSuccess,
-  staleWriteBlocked,
-  onRetry,
-}: {
-  student: { uid: string; name: string };
-  saveState: SaveState;
-  saveError: string | null;
-  saveSuccess: boolean;
-  staleWriteBlocked: boolean;
-  onRetry: (() => void) | null;
-}) {
-  const visibleName = formatVisibleName(student.name);
-  const isSaving = saveState === "pending" || saveState === "submitting" || saveState === "loading";
-  const visibleSaveError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : saveError;
-
-  return (
-    <div className="my-4">
-      <div className="flex min-w-0 items-center gap-2.5">
-        <ProfileImage studentUid={student.uid} imageSize={10} />
-        <div className="min-w-0">
-          <p className="truncate pt-0.5 text-sm font-bold leading-tight text-foreground md:text-base">{visibleName}</p>
-          {isSaving ? (
-            <p className="text-xs text-muted-foreground">저장 중...</p>
-          ) : saveSuccess ? (
-            <p className="text-xs text-emerald-600 dark:text-emerald-400">저장됨</p>
-          ) : null}
-        </div>
-      </div>
-      {visibleSaveError && (
-        <div className="mt-2 flex flex-wrap items-center gap-2" role="alert">
-          <p className="text-sm text-red-600 dark:text-red-400">{visibleSaveError}</p>
-          {staleWriteBlocked ? (
-            <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
-          ) : onRetry ? (
-            <Button text="다시 시도" size="xs" onClick={onRetry} />
-          ) : null}
-        </div>
-      )}
-    </div>
+    </V2Page>
   );
 }
 
@@ -1082,41 +950,4 @@ function sortRelationshipStudents<T extends { currentLevel: number | null; order
     }
     return bLevel - aLevel;
   });
-}
-
-function buildRelationshipItemQuantityState(students: RelationshipStudentState[]): {
-  requiredQuantities: Record<string, number>;
-  breakdowns: Record<string, ItemQuantityBreakdownEntry[]>;
-} {
-  const requiredQuantities: Record<string, number> = {};
-  const breakdowns: Record<string, ItemQuantityBreakdownEntry[]> = {};
-
-  for (const student of students) {
-    for (const [itemUid, quantity] of Object.entries(student.items)) {
-      if (quantity <= 0) {
-        continue;
-      }
-
-      requiredQuantities[itemUid] = (requiredQuantities[itemUid] ?? 0) + quantity;
-      breakdowns[itemUid] = [
-        ...(breakdowns[itemUid] ?? []),
-        {
-          studentUid: student.uid,
-          name: student.name,
-          quantity,
-        },
-      ];
-    }
-  }
-
-  for (const entries of Object.values(breakdowns)) {
-    entries.sort((a, b) => {
-      if (a.quantity !== b.quantity) {
-        return b.quantity - a.quantity;
-      }
-      return a.name.localeCompare(b.name, "ko");
-    });
-  }
-
-  return { requiredQuantities, breakdowns };
 }

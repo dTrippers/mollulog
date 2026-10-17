@@ -4,6 +4,7 @@ import { cn } from "~/lib/utils";
 import { studentImageUrl } from "~/models/assets";
 import { useImageFailure } from "../../primitives/use-image-failure";
 import { FavoriteLabel } from "./FavoriteLabel";
+import { StudentNameLines } from "./StudentNameLines";
 
 export type StudentThumbProps = {
   // Null while the student data is still being prepared. The thumbnail then shows a neutral placeholder.
@@ -82,19 +83,8 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         </span>
         <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
       </button>
-      <span
-        className={cn(
-          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
-          large ? "mt-0.5 md:mt-1" : "mt-1",
-        )}
-      >
-        {name}
-      </span>
-      {variant ? (
-        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-          {variant}
-        </span>
-      ) : studentUid === null ? (
+      <StudentNameLines name={name} variant={variant} className={large ? "mt-0.5 md:mt-1" : "mt-1"} />
+      {!variant && studentUid === null ? (
         <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
           정보 준비 중
         </span>
