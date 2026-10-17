@@ -19,7 +19,7 @@ export function Button({ variant = "secondary", className, type = "button", ...p
     <button
       type={type}
       className={cn(
-        "inline-flex min-h-v2-row-min cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:opacity-100",
+        "inline-flex min-h-v2-control-min cursor-pointer items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:opacity-100",
         variantClassName[variant],
         v2FocusRing,
         className,

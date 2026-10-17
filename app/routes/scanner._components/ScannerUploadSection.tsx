@@ -1,20 +1,26 @@
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { PhotoIcon } from "@heroicons/react/24/outline";
 import { type DragEvent, type ReactNode, useEffect, useRef, useState } from "react";
-import { Button, Checkbox, SubTitle } from "~/components/primitives";
+import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Button } from "~/components/v2/primitives/Button";
+import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { cn } from "~/lib/utils";
 
 type ScannerUploadSectionProps = {
-  title: string;
-  description: string;
-  descriptionLines?: ReadonlyArray<string>;
   inputId: string;
+  // The accessible name of the file input. The stacked layout has no visible label for it.
+  inputLabel: string;
   accept: string;
   multiple?: boolean;
   selectionDisabled: boolean;
   onFiles: (files: File[]) => void;
-  icon: ReactNode;
   targetGuide?: ReactNode;
+  // The in-game screen to capture, such as "[메뉴] > [아이템]". Each scanner passes its own.
+  targetPath: string;
+  // The mobile select button label; the student scanner also takes videos.
+  selectLabel?: string;
   helpText: string;
-  dropDetail?: ReactNode;
+  descriptionLines?: ReadonlyArray<string>;
   children?: ReactNode;
   consentChecked: boolean;
   consentDisabled: boolean;
@@ -22,21 +28,25 @@ type ScannerUploadSectionProps = {
   actionDisabled: boolean;
   actionLabel: string;
   onAction: () => void;
+  // Stacked layouts (from V2Page) show a select button and a folded guide. Desktop shows the drop zone.
+  stacked: boolean;
+  // On stacked layouts, the primary action moves to the fixed bottom bar once files are selected.
+  hasFiles: boolean;
 };
 
+// The upload panel. Desktop shows the drop zone with the in-game guide. Stacked layouts show a select button and a folded guide.
 export default function ScannerUploadSection({
-  title,
-  description,
-  descriptionLines,
   inputId,
+  inputLabel,
   accept,
   multiple = false,
   selectionDisabled,
   onFiles,
-  icon,
   targetGuide,
+  targetPath,
+  selectLabel = "스크린샷 선택",
   helpText,
-  dropDetail,
+  descriptionLines = [],
   children,
   consentChecked,
   consentDisabled,
@@ -44,10 +54,15 @@ export default function ScannerUploadSection({
   actionDisabled,
   actionLabel,
   onAction,
+  stacked,
+  hasFiles,
 }: ScannerUploadSectionProps) {
   const [isDragging, setIsDragging] = useState(false);
   const dragDepthRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
   const helpId = `${inputId}-help`;
+  const consentId = `${inputId}-consent`;
+  const showsInPanelAction = !(stacked && hasFiles);
 
   useEffect(() => registerScannerPasteListener(document, onFiles, selectionDisabled), [onFiles, selectionDisabled]);
 
@@ -72,84 +87,100 @@ export default function ScannerUploadSection({
     onFiles(Array.from(event.dataTransfer.files));
   }
 
+  const guideLines = descriptionLines.map((line) => (
+    <span key={line} className="text-xs text-v2-fg-tertiary">
+      {line}
+    </span>
+  ));
+
   return (
-    <section>
-      <div className="flex items-end justify-between gap-4">
-        <SubTitle text={title} description={description} />
-      </div>
-      {descriptionLines ? (
-        <div className="-mt-2 mb-4 space-y-1 text-sm text-muted-foreground">
-          {descriptionLines.map((line) => (
-            <p key={line}>{line}</p>
-          ))}
-        </div>
-      ) : null}
-      <div className="space-y-5 rounded-lg bg-card p-5 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-6">
-        <div className="focus-within:rounded-lg focus-within:ring-2 focus-within:ring-ring/30">
-          <input
-            id={inputId}
-            type="file"
-            accept={accept}
-            multiple={multiple}
+    <section className="flex flex-col gap-v2-block-gap rounded-lg bg-v2-surface p-v2-block-p">
+      <input
+        ref={inputRef}
+        id={inputId}
+        type="file"
+        aria-label={inputLabel}
+        accept={accept}
+        multiple={multiple}
+        disabled={selectionDisabled}
+        aria-describedby={helpId}
+        className="sr-only"
+        onChange={(event) => {
+          onFiles(Array.from(event.currentTarget.files ?? []));
+          event.currentTarget.value = "";
+        }}
+      />
+      {stacked ? (
+        <div className="flex flex-col gap-2">
+          <Button
+            variant="secondary"
+            className="w-full"
             disabled={selectionDisabled}
-            aria-describedby={helpId}
-            className="sr-only"
-            onChange={(event) => {
-              onFiles(Array.from(event.currentTarget.files ?? []));
-              event.currentTarget.value = "";
-            }}
-          />
-          <label
-            htmlFor={inputId}
-            onDragEnter={handleDragEnter}
-            onDragOver={(event) => event.preventDefault()}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={cn(
-              "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed px-5 py-8 text-center transition-colors",
-              isDragging
-                ? "border-primary bg-primary/5"
-                : "border-border bg-muted/20 hover:border-primary/60 hover:bg-muted/40",
-              selectionDisabled && "cursor-not-allowed opacity-60",
-            )}
+            onClick={() => inputRef.current?.click()}
           >
-            {targetGuide}
-            {targetGuide ? null : (
-              <span className="flex size-11 items-center justify-center rounded-full bg-primary/10 text-primary">
-                {icon}
+            <PhotoIcon className="size-5" aria-hidden="true" />
+            {selectLabel}
+          </Button>
+          <details className="group text-sm text-v2-fg-secondary">
+            <summary
+              className={cn("flex min-h-v2-row-min cursor-pointer list-none items-center rounded-md", v2FocusRing)}
+            >
+              <span className="min-w-0 flex-1">어떤 화면을 올리나요? · 게임 내 {targetPath}</span>
+              <ChevronDownIcon className="size-4 shrink-0 group-open:rotate-180" aria-hidden="true" />
+            </summary>
+            <div className="flex flex-col gap-2 pt-2">
+              {targetGuide}
+              <span id={helpId} className="text-xs text-v2-fg-tertiary">
+                {helpText}
               </span>
-            )}
-            <span className={cn(targetGuide ? "mt-4" : "mt-3", "font-medium text-foreground")}>
-              파일을 선택하거나 이 곳에 끌어다 놓아주세요
-            </span>
-            <span id={helpId} className="mt-1 text-sm text-muted-foreground">
+              {guideLines}
+            </div>
+          </details>
+        </div>
+      ) : (
+        <label
+          htmlFor={inputId}
+          onDragEnter={handleDragEnter}
+          onDragOver={(event) => event.preventDefault()}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={cn(
+            "flex min-h-44 cursor-pointer items-center gap-v2-block-gap rounded-lg border border-dashed border-v2-control-border px-v2-block-p py-v2-block-p",
+            isDragging && "bg-v2-highlight",
+            selectionDisabled && "cursor-not-allowed text-v2-fg-disabled",
+            v2FocusRing,
+          )}
+        >
+          {targetGuide}
+          <span className="flex min-w-0 flex-col gap-1">
+            <span className="font-medium text-v2-fg">게임 내 {targetPath} 화면을 찍어 주세요</span>
+            <span id={helpId} className="text-sm text-v2-fg-secondary">
               {helpText}
             </span>
-            {dropDetail}
-          </label>
-        </div>
+            {guideLines}
+          </span>
+        </label>
+      )}
 
-        {children}
+      {children}
 
-        <div className="space-y-4 pt-4">
-          <Checkbox
-            checked={consentChecked}
-            disabled={consentDisabled}
-            onChange={onConsentChange}
-            className="w-full items-start"
-            label={
-              <span>
-                업로드한 파일을 인식률 향상에 사용하는 것에 동의합니다. (
-                <strong className="font-semibold">동의하지 않아도 사용할 수 있어요</strong>.)
-              </span>
-            }
-          />
+      <div className="flex flex-col gap-v2-block-gap pt-1">
+        <Checkbox id={consentId} checked={consentChecked} disabled={consentDisabled} onCheckedChange={onConsentChange}>
+          업로드한 파일을 인식률 향상에 사용하는 것에 동의합니다. (
+          <strong className="font-semibold">동의하지 않아도 사용할 수 있어요</strong>.)
+        </Checkbox>
+        {showsInPanelAction ? (
           <div className="flex justify-end">
-            <Button variant="primary" className="w-full sm:w-fit" disabled={actionDisabled} onClick={onAction}>
+            <Button
+              variant="primary"
+              className="w-full sm:w-fit disabled:bg-v2-inset"
+              disabled={actionDisabled}
+              onClick={onAction}
+            >
               {actionLabel}
             </Button>
           </div>
-        </div>
+        ) : null}
       </div>
     </section>
   );

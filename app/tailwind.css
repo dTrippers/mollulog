@@ -451,6 +451,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-favorite-badge: var(--v2-favorite-badge);
   --color-v2-new: var(--v2-new);
   --color-v2-warning: var(--v2-warning);
+  --color-v2-warning-subtle: var(--v2-warning-subtle);
   --color-v2-perk: var(--v2-perk);
   --color-v2-selected: var(--v2-selected);
   --color-v2-on-selected: var(--v2-on-selected);
@@ -464,6 +465,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-elevated: var(--v2-elevated);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
+  --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
 }
 
 /*
@@ -496,6 +498,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-favorite-badge: rgb(173 28 28 / 80%);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.55 0.163 48.998);
+  --v2-warning-subtle: oklch(0.965 0.05 95);
   --v2-perk: oklch(0.52 0.105 223.128);
   --v2-selected: oklch(0.205 0 0);
   --v2-on-selected: oklch(1 0 0);
@@ -509,6 +512,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-elevated: oklch(1 0 0);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: oklch(0.623 0.214 259.815 / 10%);
+  /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
+  --v2-marker-shade: oklch(0.2 0 0 / 80%);
+  --v2-marker-light: oklch(1 0 0 / 90%);
 }
 
 /*
@@ -538,6 +544,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-favorite: oklch(0.704 0.191 22.216);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.828 0.189 84.429);
+  --v2-warning-subtle: oklch(0.33 0.07 75);
   --v2-perk: oklch(0.865 0.127 207.078);
   --v2-selected: oklch(0.985 0 0);
   --v2-on-selected: oklch(0.205 0 0);
@@ -567,6 +574,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --spacing-v2-block-gap: 0.75rem;
   --spacing-v2-column-gap: 2rem;
   --spacing-v2-row-min: 2.25rem;
+  --spacing-v2-control-min: 2rem;
+  --spacing-v2-input-min: 2rem;
 
   --transition-duration-v2-fast: 120ms;
   --transition-duration-v2-base: 200ms;
@@ -581,12 +590,16 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     --spacing-v2-block-p: 1rem;
     --spacing-v2-block-gap: 0.5rem;
     --spacing-v2-row-min: 2.75rem;
+    --spacing-v2-control-min: 2.5rem;
+    --spacing-v2-input-min: 2.25rem;
   }
 }
 
 @media (pointer: coarse) {
   :root {
     --spacing-v2-row-min: 2.75rem;
+    --spacing-v2-control-min: 2.5rem;
+    --spacing-v2-input-min: 2.25rem;
   }
 }
 

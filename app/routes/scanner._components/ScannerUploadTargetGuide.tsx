@@ -20,7 +20,7 @@ function ItemInventoryGuide() {
   return (
     <svg
       viewBox="0 0 640 360"
-      className="block aspect-video w-full rounded-md border border-border/80 bg-muted/30 text-muted-foreground"
+      className="block aspect-video w-full rounded-md border border-v2-divider bg-v2-inset text-v2-fg-tertiary"
       aria-hidden="true"
     >
       <rect width="640" height="360" rx="8" fill="currentColor" opacity="0.05" />
@@ -61,7 +61,7 @@ function StudentDetailGuide() {
   return (
     <svg
       viewBox="0 0 640 360"
-      className="block aspect-video w-full rounded-md border border-border/80 bg-muted/30 text-muted-foreground"
+      className="block aspect-video w-full rounded-md border border-v2-divider bg-v2-inset text-v2-fg-tertiary"
       aria-hidden="true"
     >
       <rect width="640" height="360" rx="8" fill="currentColor" opacity="0.05" />
@@ -159,7 +159,7 @@ function TopNavigation({ titleWidth }: { titleWidth: number }) {
       <path
         d="m42 25-10 10 10 10M32 35h19"
         fill="none"
-        stroke="var(--color-primary-foreground)"
+        stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="3.5"

@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation } from "react-router";
-import { PanelActionRow, PanelBody } from "~/components/primitives";
-import { cn } from "~/lib/utils";
-import { formatScannerRelativeTime } from "./scanner-messages";
+import { useLocation } from "react-router";
+import {
+  ScannerJobList,
+  type ScannerJobListItem,
+  type ScannerJobTone,
+} from "~/components/v2/features/scanner/ScannerJobList";
+import { Button } from "~/components/v2/primitives/Button";
+import { Skeleton } from "~/components/v2/primitives/Skeleton";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { formatScannerRelativeTime, getScannerJobStatusLabel } from "./scanner-messages";
 
 const SCANNER_JOBS_UPDATED_EVENT = "scanner-jobs-updated";
 const ACTIVE_JOB_STATUSES = new Set(["queued", "processing", "finalizing"]);
@@ -74,6 +80,16 @@ export function notifyScannerJobsChanged(update?: ScannerJobStatusUpdate) {
   window.dispatchEvent(
     new CustomEvent<ScannerJobStatusUpdate | undefined>(SCANNER_JOBS_UPDATED_EVENT, { detail: update }),
   );
+}
+
+// The list tone follows the same split as the label: an expired upload is a failure, and so is a failed recognition.
+export function getScannerJobTone(status: string, isApplied: boolean): ScannerJobTone {
+  if (isApplied) return "done";
+  if (status === "review_ready") return "review";
+  if (status === "queued") return "waiting";
+  if (status === "processing" || status === "finalizing") return "processing";
+  if (status === "expired" || status === "failed") return "failed";
+  return "waiting";
 }
 
 export default function ScannerJobsPanel() {
@@ -153,117 +169,36 @@ export default function ScannerJobsPanel() {
 
   if (hasError) {
     return (
-      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3">
-        <p className="text-xs text-destructive">진행 상황을 불러오지 못했어요.</p>
-        <button
-          type="button"
-          className="mt-2 text-xs font-semibold text-destructive underline underline-offset-2"
-          onClick={() => void loadJobs()}
-        >
-          다시 시도
-        </button>
-      </div>
+      <StatusNotice
+        tone="danger"
+        action={
+          <Button variant="text" onClick={() => void loadJobs()}>
+            다시 시도
+          </Button>
+        }
+      >
+        진행 상황을 불러오지 못했어요.
+      </StatusNotice>
     );
   }
 
   if (jobs.length === 0) {
-    return <p className="py-2 text-xs text-muted-foreground">최근 인식 작업이 없어요.</p>;
+    return <p className="py-2 text-sm text-v2-fg-tertiary">최근 인식 작업이 없어요.</p>;
   }
 
-  return (
-    <PanelBody className="space-y-1.5">
-      {jobs.map((job) => {
-        const link = getJobLink(job);
-        const isSelected = selectedJobUid === job.uid && location.pathname === link.split("?")[0];
-
-        return (
-          <Link
-            key={job.uid}
-            to={link}
-            aria-current={isSelected ? "page" : undefined}
-            className={cn(
-              "block rounded-md border px-3 py-0.5 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-              isSelected
-                ? "border-primary/50 bg-primary/5"
-                : "border-border bg-background text-foreground hover:bg-muted/60",
-            )}
-          >
-            <PanelActionRow
-              title={jobKindLabel(job.jobKind)}
-              description={`${jobInputLabel(job)} · ${formatScannerRelativeTime(job.createdAt)}`}
-              actions={<JobStatusBadge job={job} />}
-            />
-          </Link>
-        );
-      })}
-    </PanelBody>
-  );
-}
-
-function JobStatusBadge({ job }: { job: ScannerJobSummary }) {
-  const { label, className, animated } = getJobStatus(job);
-
-  return (
-    <span
-      className={cn(
-        "inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium",
-        className,
-      )}
-    >
-      <span className={cn("size-1.5 rounded-full bg-current", animated && "animate-pulse")} aria-hidden="true" />
-      {label}
-    </span>
-  );
-}
-
-function getJobStatus(job: ScannerJobSummary) {
-  if (job.application?.status === "applied") {
+  const items: ScannerJobListItem[] = jobs.map((job) => {
+    const isApplied = job.application?.status === "applied";
     return {
-      label: "반영 완료",
-      className: "border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-      animated: false,
+      uid: job.uid,
+      kindLabel: jobKindLabel(job.jobKind),
+      detail: `${jobInputLabel(job)} · ${formatScannerRelativeTime(job.createdAt)}`,
+      statusLabel: getScannerJobStatusLabel(job.status, isApplied),
+      tone: getScannerJobTone(job.status, isApplied),
+      href: getJobLink(job),
+      selected: selectedJobUid === job.uid && location.pathname === getJobLink(job).split("?")[0],
     };
-  }
-  if (job.status === "review_ready") {
-    return {
-      label: "검토 필요",
-      className: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-      animated: false,
-    };
-  }
-  if (job.status === "queued") {
-    return {
-      label: "대기 중",
-      className: "border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-      animated: true,
-    };
-  }
-  if (job.status === "processing" || job.status === "finalizing") {
-    return {
-      label: "인식 중",
-      className: "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-      animated: true,
-    };
-  }
-  if (job.status === "failed") {
-    return {
-      label: "인식 실패",
-      className: "border-destructive/20 bg-destructive/10 text-destructive",
-      animated: false,
-    };
-  }
-  if (job.status === "cancelled") {
-    return {
-      label: "취소됨",
-      className: "border-border bg-muted text-muted-foreground",
-      animated: false,
-    };
-  }
-  return {
-    label: "처리 중",
-    className: "border-sky-500/20 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-    animated: true,
-  };
+  });
+  return <ScannerJobList items={items} />;
 }
 
 function getJobLink(job: ScannerJobSummary) {
@@ -284,23 +219,18 @@ function jobInputLabel(job: ScannerJobSummary) {
 
 function ScannerJobsSkeleton() {
   return (
-    <PanelBody className="space-y-1.5">
+    <div className="flex flex-col gap-v2-list-gap" aria-busy="true">
       <p className="sr-only">진행 상황을 불러오는 중</p>
       {["first", "second", "third"].map((key) => (
         <div
           key={key}
-          className="animate-pulse rounded-md border border-border bg-background px-3 py-0.5"
+          className="flex min-h-v2-row-min flex-col justify-center gap-1.5 px-v2-row-x py-v2-row-y"
           aria-hidden="true"
         >
-          <div className="flex min-h-8 items-center gap-2 py-1.5 lg:min-h-7 lg:gap-1.5">
-            <div className="min-w-0 grow space-y-1.5">
-              <div className="h-4 w-20 rounded-sm bg-muted" />
-              <div className="h-3 w-24 rounded-sm bg-muted" />
-            </div>
-            <div className="h-6 w-16 rounded-full bg-muted" />
-          </div>
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-3 w-24" />
         </div>
       ))}
-    </PanelBody>
+    </div>
   );
 }

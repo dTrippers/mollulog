@@ -1,7 +1,11 @@
-import { Popover, PopoverButton, PopoverPanel } from "@headlessui/react";
-import { CheckIcon, Square3Stack3DIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { CheckIcon, Square3Stack3DIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
-import { NumberInput, ResourceCard } from "~/components/primitives";
+import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
+import { scannerNumberInputClassName } from "~/components/v2/features/scanner/scanner-number-input";
+import { Button } from "~/components/v2/primitives/Button";
+import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { Popover } from "~/components/v2/primitives/Popover";
+import { Sheet } from "~/components/v2/primitives/Sheet";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import { requestScannerJson, toScannerErrorMessage } from "../scanner._components/scanner-client";
@@ -61,16 +65,6 @@ export type CandidateDetails = {
   }>;
 };
 
-export type CellApplySummary = {
-  applicableChanged: number;
-  unchangedSafe: number;
-  omitted: number;
-  omittedCells: Array<{ imageIndex: number; position: number; reason: string; duplicateUid?: string }>;
-  duplicateUids: string[];
-  appliedItemUids: string[];
-  unchangedItemUids: string[];
-};
-
 export function getCellReviewCandidateList(
   current: CandidateDetails["current"],
   candidates: CandidateDetails["candidates"],
@@ -80,10 +74,6 @@ export function getCellReviewCandidateList(
 
 export function cellAddressKey(cell: Pick<ReviewCell, "imageIndex" | "position">): string {
   return `${cell.imageIndex}:${cell.position}`;
-}
-
-export function hasCellReviewCells(cells: ReviewCell[] | undefined): boolean {
-  return (cells?.length ?? 0) > 0;
 }
 
 export function hasCellEditChanges(edit: CellEdit): boolean {
@@ -211,6 +201,7 @@ export function buildCellReviewAttentionCounts(
 
 export function CellReviewPanel({
   jobUid,
+  stacked = false,
   selectedImageUid,
   cells,
   edits,
@@ -221,6 +212,7 @@ export function CellReviewPanel({
   onEdit,
 }: {
   jobUid: string;
+  stacked?: boolean;
   selectedImageUid: string | null;
   cells: ReviewCell[];
   edits: Record<string, CellEdit>;
@@ -231,13 +223,13 @@ export function CellReviewPanel({
   onEdit: (cell: ReviewCell, edit: CellEdit) => void;
 }) {
   const visibleCells = selectedImageUid ? cells.filter((cell) => cell.imageUid === selectedImageUid) : cells;
-  const recognizedCount = visibleCells.filter((cell) => {
-    const edit = edits[cellAddressKey(cell)];
-    return (edit?.itemUid ?? cell.itemUid) !== undefined && (edit?.itemUid ?? cell.itemUid) !== null;
-  }).length;
+  const attentionCount = Object.values(buildCellReviewAttentionCounts(visibleCells, edits)).reduce(
+    (sum, count) => sum + count,
+    0,
+  );
   if (visibleCells.length === 0) {
     return (
-      <p className="rounded-md bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
+      <p className="rounded-md bg-v2-inset px-4 py-6 text-center text-sm text-v2-fg-tertiary">
         검토할 셀을 찾을 수 없어요.
       </p>
     );
@@ -245,13 +237,10 @@ export function CellReviewPanel({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-foreground">인식 결과</p>
-        <p className="text-xs text-muted-foreground">
-          재화 식별{" "}
-          <span className="tabular-nums">
-            {recognizedCount} / {visibleCells.length}
-          </span>
+      <div className="flex items-baseline justify-between gap-3">
+        <p className="text-sm font-semibold text-v2-fg">인식 결과</p>
+        <p className="text-xs text-v2-fg-secondary tabular-nums">
+          {visibleCells.length}칸 · 확인 필요 {attentionCount}칸
         </p>
       </div>
       <div className="grid grid-cols-5 gap-x-2 gap-y-1">
@@ -259,6 +248,7 @@ export function CellReviewPanel({
           <CellReviewTile
             key={cellAddressKey(cell)}
             jobUid={jobUid}
+            stacked={stacked}
             cell={cell}
             edit={edits[cellAddressKey(cell)] ?? {}}
             details={candidateDetails[cellAddressKey(cell)]}
@@ -275,6 +265,7 @@ export function CellReviewPanel({
 
 function CellReviewTile({
   jobUid,
+  stacked = false,
   cell,
   edit,
   details,
@@ -284,6 +275,7 @@ function CellReviewTile({
   onEdit,
 }: {
   jobUid: string;
+  stacked?: boolean;
   cell: ReviewCell;
   edit: CellEdit;
   details?: CandidateDetails;
@@ -326,11 +318,10 @@ function CellReviewTile({
             : null;
 
   return (
-    <div
-      className={cn("flex w-12 justify-self-center flex-col items-center rounded-md md:w-14", excluded && "opacity-50")}
-    >
+    <div className={cn("flex min-w-0 flex-col items-center rounded-md", excluded && "opacity-50")}>
       <CellCandidatePopover
         jobUid={jobUid}
+        stacked={stacked}
         cell={cell}
         selectedUid={selectedUid}
         details={details}
@@ -342,23 +333,21 @@ function CellReviewTile({
       >
         <span className="relative block">
           {currentResource?.name ? (
-            <ResourceCard
+            <ResourceThumb
               itemUid={currentResource.assetUid ?? selectedUid ?? ""}
               resourceType={currentResource.resourceType}
-              rarity={currentResource.rarity}
               name={currentResource.name}
               size="lg"
             />
           ) : requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid ? (
             <span className="relative block">
-              <ResourceCard
+              <ResourceThumb
                 itemUid={cell.sameAppearanceResource.assetUid}
                 resourceType={cell.sameAppearanceResource.resourceType}
-                rarity={cell.sameAppearanceResource.rarity}
                 size="lg"
               />
               <span
-                className="pointer-events-none absolute left-0 top-0 size-12 rounded-lg ring-1 ring-inset ring-amber-500/60 md:size-14"
+                className="pointer-events-none absolute left-0 top-0 size-12 rounded-lg ring-1 ring-inset ring-v2-warning md:size-14"
                 aria-hidden="true"
               />
             </span>
@@ -372,12 +361,12 @@ function CellReviewTile({
                     : undefined
               }
               className={cn(
-                "mb-1 flex size-12 items-center justify-center rounded-lg bg-muted/50 text-lg font-medium md:size-14",
+                "mb-1 flex size-12 items-center justify-center rounded-lg bg-v2-inset text-lg font-medium md:size-14",
                 requiresSameAppearanceSelection
-                  ? "bg-amber-500/10 text-amber-700 ring-1 ring-amber-500/30 dark:text-amber-300"
+                  ? "bg-v2-warning-subtle text-v2-fg ring-1 ring-v2-warning"
                   : unavailable
-                    ? "text-destructive"
-                    : "text-muted-foreground",
+                    ? "text-v2-danger"
+                    : "text-v2-fg-tertiary",
               )}
             >
               {requiresSameAppearanceSelection ? (
@@ -393,13 +382,13 @@ function CellReviewTile({
             <span
               title={warning.title}
               className={cn(
-                "pointer-events-none absolute top-0.5 z-10 inline-flex origin-top-right scale-80 items-center whitespace-nowrap rounded-md bg-black/70 px-1.5 py-0.5 text-xs font-medium leading-tight backdrop-blur-sm",
+                "pointer-events-none absolute top-0.5 z-10 inline-flex origin-top-right scale-80 items-center whitespace-nowrap rounded-md bg-v2-scrim px-1.5 py-0.5 text-xs font-medium leading-tight backdrop-blur-sm",
                 currentResource?.name || (requiresSameAppearanceSelection && cell.sameAppearanceResource?.assetUid)
                   ? "right-1.5"
                   : "right-0.5",
-                warning.tone === "destructive" && "text-red-300 dark:text-red-200",
-                warning.tone === "attention" && "text-amber-300",
-                warning.tone === "muted" && "text-neutral-300",
+                warning.tone === "destructive" && "text-v2-on-media",
+                warning.tone === "attention" && "text-v2-on-media",
+                warning.tone === "muted" && "text-v2-on-media",
               )}
             >
               {warning.label}
@@ -419,34 +408,34 @@ function CellReviewTile({
       </span>
       <div className="mt-1 w-full">
         <NumberInput
-          nullable
-          minValue={0}
-          showDecrease={false}
-          showIncrease={false}
-          size="sm"
+          min={0}
           disabled={disabled}
-          value={quantity === "" ? null : Number(quantity)}
-          inputProps={{ "aria-label": `${currentResource?.name ?? "아이템"} 인식 수량` }}
-          onChange={(nextQuantity) =>
+          value={quantity}
+          className={cn("px-1", scannerNumberInputClassName)}
+          warning={warning !== null && warning.tone !== "muted"}
+          aria-label={`${currentResource?.name ?? "아이템"} 인식 수량`}
+          onChange={(event) =>
             onEdit({
-              quantity: nextQuantity == null ? "" : String(nextQuantity),
+              quantity: event.currentTarget.value,
               quantityTouched: true,
             })
           }
         />
       </div>
-      {currentQuantity != null ? (
-        <div className="mt-1 flex flex-col items-center">
-          <p className="w-max whitespace-nowrap text-center text-[10px] leading-none text-muted-foreground">
-            보유 <strong className="font-bold tabular-nums text-foreground">{currentQuantity.toLocaleString()}</strong>
+      {/* The line is always reserved, so tiles without a "보유" value keep the same height and alignment. */}
+      <div className="mt-1 flex h-3 flex-col items-center">
+        {currentQuantity != null ? (
+          <p className="w-max whitespace-nowrap text-center text-[10px] leading-none text-v2-fg-tertiary">
+            보유 <strong className="font-bold tabular-nums text-v2-fg">{currentQuantity.toLocaleString()}</strong>
           </p>
-        </div>
-      ) : null}
+        ) : null}
+      </div>
     </div>
   );
 }
 
 function CellCandidatePopover({
+  stacked = false,
   jobUid,
   cell,
   selectedUid,
@@ -458,6 +447,7 @@ function CellCandidatePopover({
   onExclude,
   children,
 }: {
+  stacked?: boolean;
   jobUid: string;
   cell: ReviewCell;
   selectedUid: string | null;
@@ -469,56 +459,9 @@ function CellCandidatePopover({
   onExclude: () => void;
   children: ReactNode;
 }) {
-  return (
-    <Popover className="relative">
-      {({ close, open }) => (
-        <CellCandidatePopoverContent
-          close={close}
-          open={open}
-          jobUid={jobUid}
-          cell={cell}
-          selectedUid={selectedUid}
-          details={details}
-          disabled={disabled}
-          onHighlightChange={onHighlightChange}
-          onLoadCandidates={onLoadCandidates}
-          onSelect={onSelect}
-          onExclude={onExclude}
-        >
-          {children}
-        </CellCandidatePopoverContent>
-      )}
-    </Popover>
-  );
-}
-
-function CellCandidatePopoverContent({
-  close,
-  open,
-  jobUid,
-  cell,
-  selectedUid,
-  details,
-  disabled,
-  onHighlightChange,
-  onLoadCandidates,
-  onSelect,
-  onExclude,
-  children,
-}: {
-  close: () => void;
-  open: boolean;
-  jobUid: string;
-  cell: ReviewCell;
-  selectedUid: string | null;
-  details?: CandidateDetails;
-  disabled: boolean;
-  onHighlightChange: (highlighted: boolean) => void;
-  onLoadCandidates: (details: CandidateDetails) => void;
-  onSelect: (itemUid: string) => void;
-  onExclude: () => void;
-  children: ReactNode;
-}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => setOpen(false), []);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -624,111 +567,141 @@ function CellCandidatePopoverContent({
     setLoading(false);
   }, [open]);
 
+  const candidateBody = (
+    <div className="space-y-1">
+      <input
+        value={query}
+        onChange={(event) => setQuery(event.target.value)}
+        placeholder="아이템 검색"
+        aria-label="아이템 검색"
+        className="min-w-0 w-full rounded-md border border-v2-control-border bg-v2-surface px-2.5 py-2 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      />
+      {!query.trim() && sameAppearanceSelectionRequired ? (
+        <p className="rounded-md bg-v2-warning-subtle px-2.5 py-2 text-xs text-v2-fg">
+          같은 모양의 아이템이 있어요. 맞는 아이템을 선택해 주세요.
+        </p>
+      ) : null}
+      {error ? <p className="text-xs text-v2-danger">{error}</p> : null}
+      {showingLoading ? <CandidateChoiceSkeleton /> : null}
+      {!showingLoading && !query.trim() && current?.unavailable ? (
+        <p className="px-2 py-2 text-xs text-v2-danger">아이템 정보를 찾을 수 없어요.</p>
+      ) : null}
+      {!showingLoading && !query.trim() && current?.name ? (
+        <CandidateChoiceButton
+          candidate={{
+            uid: current.uid,
+            assetUid: current.assetUid ?? current.uid,
+            name: current.name,
+            description: current.description,
+            resourceType: current.resourceType ?? ResourceTypeEnum.Item,
+            rarity: current.rarity ?? 0,
+            currentQuantity: current.currentQuantity,
+            score: null,
+            selectionSource: "stored_recognition",
+          }}
+          selected={current.uid === selectedUid}
+          onSelect={() => {
+            onSelect(current.uid);
+            close();
+          }}
+        />
+      ) : null}
+      {!showingLoading && candidates.length === 0 && (query.trim() || (!current?.name && !current?.unavailable)) ? (
+        <p className="px-2 py-2 text-xs text-v2-fg-tertiary">검색 결과가 없어요.</p>
+      ) : null}
+      {candidates.length > 0 ? <p className="px-1.5 pt-1 text-xs text-v2-fg-tertiary">인식 후보</p> : null}
+      <div className="max-h-[min(20rem,50vh)] space-y-0.5 overflow-y-auto">
+        {candidates.map((candidate) => (
+          <CandidateChoiceButton
+            key={`${candidate.uid}-${candidate.selectionSource}`}
+            candidate={candidate}
+            selected={candidate.uid === selectedUid}
+            onSelect={() => {
+              onSelect(candidate.uid);
+              close();
+            }}
+          />
+        ))}
+      </div>
+      {defaultDetails || error ? (
+        <div className="flex justify-end pt-1">
+          <Button
+            variant="danger"
+            className="text-v2-fg"
+            onClick={() => {
+              onExclude();
+              close();
+            }}
+          >
+            이 칸 제외
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+  const popoverHeader = stacked ? null : (
+    <div className="flex items-baseline justify-between gap-2 px-2 pb-1">
+      <p className="text-sm font-semibold text-v2-fg">아이템 선택</p>
+      <p className="text-xs text-v2-fg-tertiary tabular-nums">
+        {cell.imageIndex + 1}번 스크린샷 {cell.position + 1}번 칸
+      </p>
+    </div>
+  );
+
   return (
     <>
-      <PopoverButton
+      <button
+        ref={triggerRef}
+        type="button"
         disabled={disabled}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         aria-label={
           sameAppearanceSelectionRequired
             ? `${candidateTriggerResourceName} 같은 모양의 아이템 선택`
             : `${candidateTriggerResourceName} 후보 열기`
         }
         onMouseEnter={() => onHighlightChange(true)}
-        className="block cursor-pointer rounded-lg leading-none outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring/40 disabled:cursor-default"
+        onClick={() => setOpen(true)}
+        className="block cursor-pointer rounded-lg leading-none outline-none hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-default"
       >
         {children}
-      </PopoverButton>
-      <PopoverPanel
-        anchor="bottom"
-        className="z-layer-navigation-menu w-[min(20rem,calc(100vw-1.5rem))] overflow-hidden rounded-lg bg-popover p-2 shadow-xl [--anchor-gap:0.375rem]"
-      >
-        <div className="space-y-1.5">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="아이템 검색"
-            aria-label="아이템 검색"
-            className="mb-1 min-w-0 w-full rounded-md border border-input bg-background px-2.5 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-          />
-          {!query.trim() && sameAppearanceSelectionRequired ? (
-            <p className="rounded-md bg-amber-500/10 px-2.5 py-2 text-xs text-amber-800 dark:text-amber-200">
-              같은 모양의 아이템이 있어요. 맞는 아이템을 선택해 주세요.
-            </p>
-          ) : null}
-          {error ? <p className="text-xs text-destructive">{error}</p> : null}
-          {showingLoading ? <CandidateChoiceSkeleton /> : null}
-          {!showingLoading && !query.trim() && current?.unavailable ? (
-            <p className="px-2 py-2 text-xs text-destructive">아이템 정보를 찾을 수 없어요.</p>
-          ) : null}
-          {!showingLoading && !query.trim() && current?.name ? (
-            <CandidateChoiceButton
-              candidate={{
-                uid: current.uid,
-                assetUid: current.assetUid ?? current.uid,
-                name: current.name,
-                description: current.description,
-                resourceType: current.resourceType ?? ResourceTypeEnum.Item,
-                rarity: current.rarity ?? 0,
-                currentQuantity: current.currentQuantity,
-                score: null,
-                selectionSource: "stored_recognition",
-              }}
-              selected={current.uid === selectedUid}
-              onSelect={() => {
-                onSelect(current.uid);
-                close();
-              }}
-            />
-          ) : null}
-          {!showingLoading && candidates.length === 0 && (query.trim() || (!current?.name && !current?.unavailable)) ? (
-            <p className="px-2 py-2 text-xs text-muted-foreground">검색 결과가 없어요.</p>
-          ) : null}
-          <div className="max-h-[min(20rem,50vh)] space-y-0.5 overflow-y-auto">
-            {candidates.map((candidate) => (
-              <CandidateChoiceButton
-                key={`${candidate.uid}-${candidate.selectionSource}`}
-                candidate={candidate}
-                selected={candidate.uid === selectedUid}
-                onSelect={() => {
-                  onSelect(candidate.uid);
-                  close();
-                }}
-              />
-            ))}
-          </div>
-          {defaultDetails || error ? (
-            <button
-              type="button"
-              onClick={() => {
-                onExclude();
-                close();
-              }}
-              className="flex w-full cursor-pointer items-center gap-2.5 rounded-md p-2 text-left text-sm text-muted-foreground outline-none transition-colors hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40"
-            >
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted">
-                <XMarkIcon className="size-5" aria-hidden="true" />
-              </span>
-              이 아이템을 인식 대상에서 제외
-            </button>
-          ) : null}
-        </div>
-      </PopoverPanel>
+      </button>
+      {/* Desktop keeps the anchored popover. Stacked layouts use a sheet with the same content (V17). */}
+      {stacked ? (
+        <Sheet
+          open={open}
+          title="아이템 선택"
+          description={`${cell.imageIndex + 1}번 스크린샷 ${cell.position + 1}번 칸`}
+          onClose={close}
+        >
+          {candidateBody}
+        </Sheet>
+      ) : (
+        <Popover
+          open={open}
+          label="아이템 선택"
+          onClose={close}
+          returnFocusRef={triggerRef}
+          anchorRef={triggerRef}
+          className="w-[min(20rem,calc(100vw-1.5rem))] p-2"
+        >
+          {popoverHeader}
+          {candidateBody}
+        </Popover>
+      )}
     </>
   );
 }
 
 function CandidateChoiceSkeleton() {
   return (
-    <div
-      role="status"
-      aria-label="아이템 후보를 불러오는 중"
-      className="flex animate-pulse items-start gap-2.5 rounded-md p-2"
-    >
-      <span className="size-10 shrink-0 rounded-md bg-muted" aria-hidden="true" />
+    <div role="status" aria-label="아이템 후보를 불러오는 중" className="flex items-start gap-2.5 rounded-md p-2">
+      <span className="size-10 shrink-0 rounded-md bg-v2-inset" aria-hidden="true" />
       <span className="min-w-0 flex-1 space-y-2 py-1" aria-hidden="true">
-        <span className="block h-4 w-2/5 rounded-sm bg-muted" />
-        <span className="block h-3 w-full rounded-sm bg-muted/70" />
-        <span className="block h-3 w-3/4 rounded-sm bg-muted/70" />
+        <span className="block h-4 w-2/5 rounded-sm bg-v2-inset" />
+        <span className="block h-3 w-full rounded-sm bg-v2-inset" />
+        <span className="block h-3 w-3/4 rounded-sm bg-v2-inset" />
       </span>
     </div>
   );
@@ -749,26 +722,23 @@ function CandidateChoiceButton({
       aria-pressed={selected}
       onClick={onSelect}
       className={cn(
-        "flex w-full cursor-pointer items-start gap-2.5 rounded-md p-2 text-left outline-none transition-colors hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring/40",
-        selected && "bg-primary/10",
+        "flex w-full cursor-pointer items-center gap-2 rounded-md p-1.5 text-left outline-none hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+        selected && "bg-v2-highlight",
       )}
     >
-      <ResourceCard
+      <ResourceThumb
         itemUid={candidate.assetUid}
         resourceType={candidate.resourceType}
-        rarity={candidate.rarity}
         name={candidate.name}
-        size="md"
+        size="sm"
       />
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">{candidate.name}</span>
-        {candidate.description ? (
-          <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-muted-foreground">
-            {candidate.description}
-          </span>
-        ) : null}
-      </span>
-      {selected ? <CheckIcon className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" /> : null}
+      <span className="min-w-0 flex-1 truncate text-sm font-medium text-v2-fg">{candidate.name}</span>
+      {candidate.currentQuantity != null ? (
+        <span className="shrink-0 text-xs text-v2-fg-secondary tabular-nums">
+          보유 <strong className="font-bold text-v2-fg">{candidate.currentQuantity.toLocaleString()}</strong>
+        </span>
+      ) : null}
+      {selected ? <CheckIcon className="size-4 shrink-0 text-v2-fg" aria-hidden="true" /> : null}
     </button>
   );
 }
@@ -788,38 +758,4 @@ function mergeCandidateDetails(
   const merged = new Map(defaults.map((candidate) => [candidate.uid, candidate]));
   for (const candidate of searchResults) merged.set(candidate.uid, candidate);
   return [...merged.values()];
-}
-
-export function CellApplySummaryPanel({ summary }: { summary: CellApplySummary }) {
-  return (
-    <section className="space-y-2 rounded-lg bg-muted/40 p-4">
-      <p className="text-sm font-semibold text-foreground">서버 반영 결과</p>
-      <p className="text-sm text-muted-foreground">
-        변경 반영 {summary.applicableChanged}개 · 변경 없음 {summary.unchangedSafe}개 · 제외 {summary.omitted}개
-      </p>
-      {summary.duplicateUids.length > 0 ? (
-        <p className="text-xs text-destructive">
-          중복으로 제외된 아이템이 있어요. 해당 셀을 하나만 남겨 다시 반영해 주세요.
-        </p>
-      ) : null}
-      {summary.omittedCells.length > 0 ? (
-        <ul className="space-y-0.5 text-xs text-muted-foreground">
-          {summary.omittedCells.slice(0, 5).map((cell) => (
-            <li key={`${cell.imageIndex}:${cell.position}`}>
-              {cell.imageIndex + 1}번 이미지 {cell.position + 1}번 셀: {formatOmissionReason(cell.reason)}
-            </li>
-          ))}
-          {summary.omittedCells.length > 5 ? <li>외 {summary.omittedCells.length - 5}개</li> : null}
-        </ul>
-      ) : null}
-    </section>
-  );
-}
-
-function formatOmissionReason(reason: string): string {
-  if (reason === "duplicate_uid") return "아이템 중복";
-  if (reason === "unresolved_item") return "아이템 확인 필요";
-  if (reason === "unresolved_quantity") return "수량 확인 필요";
-  if (reason === "excluded") return "사용자 제외";
-  return "반영 제외";
 }

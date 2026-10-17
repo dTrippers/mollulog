@@ -6,7 +6,7 @@ import { getOcrJob } from "~/models/ocr-job";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
-import { getSyncDraftBySourceRef } from "~/models/sync-draft";
+import { getSyncDraft, getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { loader } from "~/routes/api.ocr.jobs.$jobUid";
 import studentVideoResult from "../../fixtures/student-detail-video-result.v1.json";
@@ -17,7 +17,7 @@ jest.mock("~/models/ocr-job", () => ({ getOcrJob: jest.fn() }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: jest.fn() }));
 jest.mock("~/models/relationship-level", () => ({ getRelationshipLevels: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn() }));
-jest.mock("~/models/sync-draft", () => ({ getSyncDraftBySourceRef: jest.fn() }));
+jest.mock("~/models/sync-draft", () => ({ getSyncDraft: jest.fn(), getSyncDraftBySourceRef: jest.fn() }));
 jest.mock("~/models/user-resource-inventory", () => ({ getUserResourceInventoryMapByItemUids: jest.fn() }));
 jest.mock("~/models/item-catalog", () => ({
   getItemCatalogResourceDescriptionMap: jest.fn(),
@@ -32,6 +32,7 @@ const mockedGetOcrJob = getOcrJob as jest.MockedFunction<typeof getOcrJob>;
 const mockedGetRecruitedStudents = getRecruitedStudents as jest.MockedFunction<typeof getRecruitedStudents>;
 const mockedGetRelationshipLevels = getRelationshipLevels as jest.MockedFunction<typeof getRelationshipLevels>;
 const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof getAllStudentsMap>;
+const mockedGetSyncDraft = getSyncDraft as jest.MockedFunction<typeof getSyncDraft>;
 const mockedGetSyncDraftBySourceRef = getSyncDraftBySourceRef as jest.MockedFunction<typeof getSyncDraftBySourceRef>;
 const mockedGetInventory = getUserResourceInventoryMapByItemUids as jest.MockedFunction<
   typeof getUserResourceInventoryMapByItemUids
@@ -212,5 +213,122 @@ describe("OCR job detail cell review", () => {
     }>(await loader(args()));
 
     expect(response.data.currentStudentStates["10000"]?.bond).toBeNull();
+  });
+
+  it("returns the job with no result and an explicit flag when a stored student result cannot be read", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      jobKind: "student_detail_video_v1",
+      result: { students: "not a list" },
+    } as never);
+
+    const response = expectDataResult<{
+      result: unknown;
+      resultInvalid: boolean;
+      currentStudentStates: Record<string, unknown>;
+    }>(await loader(args()));
+
+    // Not a server failure: the client shows the unavailable state, and a retry cannot change the stored result.
+    expect((response as unknown as { init?: { status?: number } }).init?.status ?? 200).toBe(200);
+    expect(response.data).toMatchObject({ result: null, resultInvalid: true, currentStudentStates: {} });
+    expect(logger.error).toHaveBeenCalledWith("Stored student video OCR result is invalid", expect.anything());
+  });
+});
+
+describe("OCR job detail completion summary", () => {
+  const appliedAt = "2026-01-02T00:00:00.000Z";
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedGetActiveSensei.mockResolvedValue({ id: 7 } as never);
+    mockedGetLogger.mockReturnValue(logger);
+    mockedGetOcrJob.mockResolvedValue(job as never);
+    mockedGetRecruitedStudents.mockResolvedValue([] as never);
+    mockedGetRelationshipLevels.mockResolvedValue([] as never);
+    mockedGetAllStudentsMap.mockResolvedValue({} as never);
+    mockedGetInventory.mockResolvedValue({ "100": 1 });
+    mockedGetCatalogMap.mockResolvedValue({
+      "100": { uid: "100", name: "기존 아이템", rarity: 1, type: "item", category: null, subCategory: null },
+    } as never);
+  });
+
+  const args = () =>
+    ({
+      request: new Request("https://mollulog.net/api/ocr/jobs/job-1"),
+      context: { cloudflare: { env, ctx } },
+      params: { jobUid: "job-1" },
+    }) as never;
+
+  it("summarizes an applied item draft from its saved entries and reports the cells it did not cover", async () => {
+    mockedGetSyncDraftBySourceRef.mockResolvedValue({ uid: "draft-1", status: "applied", appliedAt } as never);
+    mockedGetSyncDraft.mockResolvedValue({
+      uid: "draft-1",
+      entries: [
+        {
+          entryKey: "100",
+          value: 5,
+          valueJson: null,
+          meta: JSON.stringify({ cells: [{ imageIndex: 0, position: 0 }] }),
+        },
+      ],
+    } as never);
+
+    const response = expectDataResult<{ cells: unknown[]; completionSummary: unknown }>(await loader(args()));
+
+    expect(mockedGetSyncDraft).toHaveBeenCalledWith(env, 7, "draft-1");
+    expect(response.data.completionSummary).toEqual({
+      appliedCount: 1,
+      unappliedCellCount: response.data.cells.length - 1,
+      items: [{ uid: "100", assetUid: "100", resourceType: "item", name: "기존 아이템", quantity: 5 }],
+    });
+  });
+
+  it("returns no completion summary before the result is applied", async () => {
+    mockedGetSyncDraftBySourceRef.mockResolvedValue(null);
+
+    const response = expectDataResult<{ completionSummary: unknown; cells: unknown[] }>(await loader(args()));
+
+    expect(response.data.completionSummary).toBeNull();
+    expect(response.data.cells.length).toBeGreaterThan(0);
+    expect(mockedGetSyncDraft).not.toHaveBeenCalled();
+  });
+
+  it("returns an explicit null summary when a saved entry cannot be read, instead of a guessed value", async () => {
+    mockedGetSyncDraftBySourceRef.mockResolvedValue({ uid: "draft-1", status: "applied", appliedAt } as never);
+    mockedGetSyncDraft.mockResolvedValue({
+      uid: "draft-1",
+      entries: [{ entryKey: "100", value: 5, valueJson: null, meta: "{not json" }],
+    } as never);
+
+    const response = expectDataResult<{ completionSummary: unknown }>(await loader(args()));
+
+    expect(response.data.completionSummary).toBeNull();
+  });
+
+  it("summarizes an applied student draft with the applied and excluded students", async () => {
+    const resultStudentUids = [...new Set(studentVideoResult.students.map(({ studentUid }) => studentUid))];
+    const [appliedUid] = resultStudentUids;
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      jobKind: "student_detail_video_v1",
+      result: studentVideoResult,
+    } as never);
+    mockedGetSyncDraftBySourceRef.mockResolvedValue({ uid: "draft-2", status: "applied", appliedAt } as never);
+    mockedGetSyncDraft.mockResolvedValue({
+      uid: "draft-2",
+      entries: [{ entryKey: appliedUid, value: 1, valueJson: "{}", meta: null }],
+    } as never);
+    mockedGetAllStudentsMap.mockResolvedValue({
+      [appliedUid]: { uid: appliedUid, name: "첫 학생", initialTier: 1 },
+    } as never);
+
+    const response = expectDataResult<{ completionSummary: unknown }>(await loader(args()));
+
+    expect(response.data.completionSummary).toEqual({
+      appliedCount: 1,
+      excludedCount: resultStudentUids.length - 1,
+      applied: [{ uid: appliedUid, name: "첫 학생" }],
+      excluded: resultStudentUids.slice(1).map((uid) => ({ uid, name: null })),
+    });
   });
 });

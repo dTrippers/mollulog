@@ -13,6 +13,8 @@ export type PageHeaderProps = {
   description?: string;
   back?: PageHeaderBack;
   meta?: ReactNode;
+  // Optional block beside the title on wide page-available widths, under the description otherwise.
+  trailing?: ReactNode;
 };
 
 const backClassName = cn(
@@ -20,9 +22,9 @@ const backClassName = cn(
   v2FocusRing,
 );
 
-export function PageHeader({ title, description, back, meta }: PageHeaderProps) {
+function HeaderText({ title, description, back, meta }: Omit<PageHeaderProps, "trailing">) {
   return (
-    <div className="v2-header min-w-0 pb-v2-group-gap">
+    <>
       {back ? (
         "to" in back ? (
           <Link to={back.to} className={backClassName} {...getV2LinkTransitionProps("reverse")}>
@@ -39,6 +41,24 @@ export function PageHeader({ title, description, back, meta }: PageHeaderProps) 
       <h1 className="text-xl font-bold text-v2-fg md:text-2xl">{title}</h1>
       {description ? <p className="mt-2 max-w-prose text-sm text-v2-fg-secondary">{description}</p> : null}
       {meta ? <div className="mt-2 text-sm text-v2-fg-tertiary">{meta}</div> : null}
+    </>
+  );
+}
+
+export function PageHeader({ title, description, back, meta, trailing }: PageHeaderProps) {
+  if (!trailing) {
+    return (
+      <div className="v2-header min-w-0 pb-v2-group-gap">
+        <HeaderText title={title} description={description} back={back} meta={meta} />
+      </div>
+    );
+  }
+  return (
+    <div className="v2-header flex min-w-0 flex-col gap-v2-block-gap pb-v2-group-gap @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between">
+      <div className="min-w-0">
+        <HeaderText title={title} description={description} back={back} meta={meta} />
+      </div>
+      <div className="min-w-0 @min-[60rem]/page-available:shrink-0">{trailing}</div>
     </div>
   );
 }

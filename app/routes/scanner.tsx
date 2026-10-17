@@ -1,19 +1,38 @@
-import { AcademicCapIcon, ArchiveBoxIcon, ClockIcon } from "@heroicons/react/24/outline";
-import { type Dispatch, type SetStateAction, useState } from "react";
+import { AcademicCapIcon, ArchiveBoxIcon, ChatBubbleOvalLeftIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { type Dispatch, type SetStateAction, useCallback, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { Outlet, redirect, useLocation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import FeatureFeedbackButton from "~/components/features/feedback/FeatureFeedbackButton";
-import Page from "~/components/features/layout/Page";
+import { FeedbackSheet } from "~/components/v2/features/feedback/FeedbackSheet";
+import {
+  ScannerQuota,
+  ScannerQuotaMeter,
+  type ScannerQuotaMeterState,
+} from "~/components/v2/features/scanner/ScannerQuota";
+import { AsideLinks } from "~/components/v2/layout/AsideLinks";
+import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
+import { PageAside } from "~/components/v2/layout/PageAside";
+import { PageHeader } from "~/components/v2/layout/PageHeader";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { PageToolbar } from "~/components/v2/layout/PageToolbar";
+import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { ScreenTabs } from "~/components/v2/layout/ScreenTabs";
+import { V2Page, type V2PanelRequest } from "~/components/v2/layout/V2Page";
 import ScannerJobsPanel from "./scanner._components/ScannerJobsPanel";
-import { type ScannerUploadQuota, UploadQuotaMeter } from "./scanner._components/UploadQuotaMeter";
-import { getScannerQuotaError, isScannerQuotaEnabled, useScannerQuota } from "./scanner._components/useScannerQuota";
+import type { ScannerUploadQuota } from "./scanner._components/UploadQuotaMeter";
+import { getScannerQuotaDisplayState, useScannerQuota } from "./scanner._components/useScannerQuota";
 
 export type ScannerOutletContext = {
   imageUploadQuota: ScannerUploadQuota | null;
   setImageUploadQuota: Dispatch<SetStateAction<ScannerUploadQuota | null>>;
   videoUploadQuota: ScannerUploadQuota | null;
   setVideoUploadQuota: Dispatch<SetStateAction<ScannerUploadQuota | null>>;
+  // Opens the recent-jobs sheet on stacked layouts, such as the "최근 작업" button of a step.
+  openJobsPanel: () => void;
+  // Hides the stacked action bar while a step has its own bottom action bar, such as selected files or a review.
+  setMobileActionBarHidden: (hidden: boolean) => void;
+  // The stacked layout from V2Page. Stacked screens show their mobile controls: the select button, fixed bars, and the PC notice.
+  stacked: boolean;
 };
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
@@ -22,104 +41,122 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   return null;
 };
 
+const FEEDBACK_TITLE = "의견/오류 제보";
+
 export default function ScannerLayout() {
   const { pathname } = useLocation();
-  const [imageQuotaError, setImageQuotaError] = useState<string | null>(null);
-  const [videoQuotaError, setVideoQuotaError] = useState<string | null>(null);
-  const showVideoQuota = isScannerQuotaEnabled(pathname, "video");
-  const [imageUploadQuota, setImageUploadQuota] = useScannerQuota(
-    "item_inventory_images_v1",
-    setImageQuotaError,
-    isScannerQuotaEnabled(pathname, "image"),
+  const image = useScannerQuota("item_inventory_images_v1");
+  const video = useScannerQuota("student_detail_video_v1");
+  const [panelRequest, setPanelRequest] = useState<V2PanelRequest | null>(null);
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [isMobileActionBarHidden, setMobileActionBarHidden] = useState(false);
+  const [isStacked, setStacked] = useState(false);
+  const openJobsPanel = useCallback(
+    () => setPanelRequest((current) => ({ panelId: "jobs", requestId: (current?.requestId ?? 0) + 1 })),
+    [],
   );
-  const [videoUploadQuota, setVideoUploadQuota] = useScannerQuota(
-    "student_detail_video_v1",
-    setVideoQuotaError,
-    showVideoQuota,
-  );
-  const quotaError = getScannerQuotaError({
-    imageError: imageQuotaError,
-    videoError: videoQuotaError,
-    showVideoQuota,
-  });
   const quotaContext: ScannerOutletContext = {
-    imageUploadQuota,
-    setImageUploadQuota,
-    videoUploadQuota,
-    setVideoUploadQuota,
+    imageUploadQuota: image.quota,
+    setImageUploadQuota: image.setQuota,
+    videoUploadQuota: video.quota,
+    setVideoUploadQuota: video.setQuota,
+    openJobsPanel,
+    setMobileActionBarHidden,
+    stacked: isStacked,
   };
 
   return (
-    <Page
-      title="게임 화면 인식기"
-      description="게임 화면 스크린샷 또는 녹화 영상을 업로드하여 인게임 데이터를 인식 후 등록할 수 있어요"
-      belowTitle={
-        <ScannerQuotaSummary
-          imageUploadQuota={imageUploadQuota}
-          videoUploadQuota={videoUploadQuota}
-          showVideoQuota={showVideoQuota}
-          error={quotaError}
+    <V2Page width="wide" panelRequest={panelRequest} onStackedChange={setStacked}>
+      <PageHeader
+        title="게임 화면 인식기"
+        description="게임 화면 스크린샷 또는 녹화 영상을 업로드하여 인게임 데이터를 인식 후 등록할 수 있어요"
+        trailing={
+          <ScannerQuota>
+            <ScannerQuotaMeter subject="이미지" unit="장" state={toMeterState(image)} />
+            <ScannerQuotaMeter subject="영상" unit="개" state={toMeterState(video)} />
+          </ScannerQuota>
+        }
+      />
+      <PageToolbar>
+        <ScreenTabs
+          items={[
+            {
+              key: "resource",
+              text: "아이템",
+              Icon: ArchiveBoxIcon,
+              link: "/scanner/resource",
+              active: pathname.startsWith("/scanner/resource"),
+            },
+            {
+              key: "student",
+              text: "학생 성장도",
+              Icon: AcademicCapIcon,
+              link: "/scanner/student",
+              active: pathname.startsWith("/scanner/student"),
+            },
+          ]}
         />
-      }
-      contentWidth="full"
-      maxWidth="wide"
-      layout="horizontal"
-      panels={[
-        {
-          title: "진행 상황",
-          description: "최근 7일 동안의 인식 작업",
-          Icon: ClockIcon,
-          children: <ScannerJobsPanel />,
-        },
-      ]}
-      belowPanels={<FeatureFeedbackButton featureName="스크린샷 인식기" feedbackType="resource_scanner_feedback" />}
-      screens={[
-        {
-          text: "아이템",
-          description: "보유 재화 화면 스크린샷",
-          Icon: ArchiveBoxIcon,
-          link: "/scanner/resource",
-          active: pathname.startsWith("/scanner/resource"),
-        },
-        {
-          text: "학생 성장도",
-          description: "학생 상세 화면 스크린샷 또는 영상",
-          Icon: AcademicCapIcon,
-          link: "/scanner/student",
-          active: pathname.startsWith("/scanner/student"),
-        },
-      ]}
-    >
-      <Outlet context={quotaContext} />
-    </Page>
+      </PageToolbar>
+      <PageMain>
+        <Outlet context={quotaContext} />
+      </PageMain>
+      <PageAside>
+        <PanelSheet panelId="jobs" title="진행 상황" description="최근 7일 동안의 인식 작업" Icon={ClockIcon}>
+          <ScannerJobsPanel />
+        </PanelSheet>
+        <AsideLinks
+          items={[
+            {
+              key: "feedback",
+              title: FEEDBACK_TITLE,
+              description: "인식기를 쓰며 겪은 문제를 알려주세요",
+              Icon: ChatBubbleOvalLeftIcon,
+              onClick: () => setIsFeedbackOpen(true),
+            },
+          ]}
+        />
+      </PageAside>
+      <div className={isMobileActionBarHidden ? "hidden" : undefined}>
+        <MobileActionBar
+          links={[
+            {
+              key: "feedback",
+              title: FEEDBACK_TITLE,
+              shortTitle: "제보",
+              Icon: ChatBubbleOvalLeftIcon,
+              onClick: () => setIsFeedbackOpen(true),
+            },
+          ]}
+          panels={[{ panelId: "jobs", title: "진행 상황", shortTitle: "작업", Icon: ClockIcon }]}
+        />
+      </div>
+      <FeedbackSheet
+        open={isFeedbackOpen}
+        onClose={() => setIsFeedbackOpen(false)}
+        featureName="스크린샷 인식기"
+        feedbackType="resource_scanner_feedback"
+      />
+    </V2Page>
   );
 }
 
-function ScannerQuotaSummary({
-  imageUploadQuota,
-  videoUploadQuota,
-  showVideoQuota,
-  error,
-}: {
-  imageUploadQuota: ScannerUploadQuota | null;
-  videoUploadQuota: ScannerUploadQuota | null;
-  showVideoQuota: boolean;
-  error: string | null;
-}) {
-  return (
-    <div className="space-y-2" aria-busy={!imageUploadQuota || (showVideoQuota && !videoUploadQuota)}>
-      <p className="py-2 text-xs font-medium text-muted-foreground">7일간 업로드 가능 횟수</p>
-      <div className="flex flex-wrap gap-4">
-        {imageUploadQuota ? <UploadQuotaMeter quota={imageUploadQuota} unit="장" subject="이미지" /> : null}
-        {showVideoQuota && videoUploadQuota ? (
-          <UploadQuotaMeter quota={videoUploadQuota} unit="개" subject="영상" />
-        ) : null}
-      </div>
-      {error ? (
-        <p className="text-xs text-destructive" role="alert">
-          {error}
-        </p>
-      ) : null}
-    </div>
-  );
+// Both kinds use the same meter. Exhaustion is an error color with the next available time; a low amount is a warning color.
+function toMeterState(quota: {
+  quota: ScannerUploadQuota | null;
+  hasError: boolean;
+  retry: () => void;
+}): ScannerQuotaMeterState {
+  const state = getScannerQuotaDisplayState(quota.quota, quota.hasError);
+  if (state.kind === "loading") return { kind: "loading" };
+  if (state.kind === "error") return { kind: "error", onRetry: quota.retry };
+  if (state.kind === "exhausted") {
+    return {
+      kind: "exhausted",
+      remaining: state.quota.remaining,
+      limit: state.quota.limit,
+      availableAt: state.quota.nextAvailableAt,
+    };
+  }
+  if (state.kind === "low") return { kind: "low", remaining: state.quota.remaining, limit: state.quota.limit };
+  return { kind: "normal", remaining: state.quota.remaining, limit: state.quota.limit };
 }

@@ -7,7 +7,6 @@ import {
   buildCellReviewPreviewSummary,
   CellReviewPanel,
   getCellReviewCandidateList,
-  hasCellReviewCells,
   type ReviewCell,
 } from "~/routes/scanner.resource._components/resource-cell-review";
 
@@ -122,11 +121,6 @@ describe("resource cell review preview", () => {
 
     expect(getCellReviewCandidateList(current, topCandidates).map(({ uid }) => uid)).toEqual(["200"]);
     expect(getCellReviewCandidateList(current, searchResults).map(({ uid }) => uid)).toEqual(["999"]);
-  });
-
-  it("uses the complete cell set for the empty warning", () => {
-    expect(hasCellReviewCells([])).toBe(false);
-    expect(hasCellReviewCells(cells)).toBe(true);
   });
 
   it("counts unresolved cells by image and clears attention after correction or exclusion", () => {
