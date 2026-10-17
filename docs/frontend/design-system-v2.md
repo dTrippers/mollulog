@@ -24,6 +24,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-fg` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Primary text |
 | `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
 | `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
+| `text-v2-link` | `oklch(0.546 0.215 262.881)` | `oklch(0.809 0.105 251.813)` | Underlined links in news post Markdown |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
 | `bg-v2-favorite-neutral-badge` | `rgb(0 0 0 / 85%)` | same | Count badge on a student image when not personally favorited |
 | `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.56 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |

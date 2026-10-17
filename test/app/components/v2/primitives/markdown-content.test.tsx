@@ -17,14 +17,23 @@ describe("MarkdownContent", () => {
 
   it("starts at h3 inside an expanded list post and keeps the visual size of the markdown level", () => {
     const markup = render("### 작은 제목\n\n#### 더 작은 제목", 3);
-    expect(markup).toMatch(/<h3 class="mt-6 mb-2 text-base[^"]*">작은 제목<\/h3>/);
-    expect(markup).toMatch(/<h4 class="mt-6 mb-2 text-base[^"]*">더 작은 제목<\/h4>/);
+    expect(markup).toMatch(/<h3 class="mt-6 mb-2 text-sm[^"]*">작은 제목<\/h3>/);
+    expect(markup).toMatch(/<h4 class="mt-6 mb-2 text-sm[^"]*">더 작은 제목<\/h4>/);
   });
 
   it("uses the large heading size for # and ## and the body-strong size for ###", () => {
     const markup = render("## 큰 제목\n\n### 중간 제목");
-    expect(markup).toMatch(/<h2 class="mt-8 mb-2 text-lg[^"]*">큰 제목<\/h2>/);
-    expect(markup).toMatch(/<h3 class="mt-6 mb-2 text-base[^"]*">중간 제목<\/h3>/);
+    expect(markup).toMatch(/<h2 class="mt-8 mb-2 text-base[^"]*">큰 제목<\/h2>/);
+    expect(markup).toMatch(/<h3 class="mt-6 mb-2 text-sm[^"]*">중간 제목<\/h3>/);
+  });
+
+  it("keeps headings and emphasis primary while body text is quieter and links are blue", () => {
+    const markup = render("# 제목\n\n본문 **강조** [링크](https://mollulog.net/news)");
+    expect(markup).toContain("text-v2-fg-secondary");
+    expect(markup).toContain('font-semibold text-v2-fg">제목</h2>');
+    expect(markup).toContain("[&amp;_strong]:text-v2-fg");
+    expect(markup).toContain("[&amp;_a]:text-v2-link");
+    expect(markup).toContain('href="https://mollulog.net/news"');
   });
 
   it("uses circle markers for nested unordered lists and no extra gap above them", () => {

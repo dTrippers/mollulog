@@ -1,6 +1,6 @@
 import { Dialog, DialogBackdrop, DialogPanel, DialogTitle, Transition, TransitionChild } from "@headlessui/react";
 import { XMarkIcon } from "@heroicons/react/24/solid";
-import { type ElementType, type ReactNode, useRef } from "react";
+import { type ElementType, type ReactNode, type Ref, useRef } from "react";
 import { v2FocusRing } from "../layout/styles";
 
 export type SheetProps = {
@@ -13,6 +13,7 @@ export type SheetProps = {
   onExited?: () => void;
   // Fixed under the scrolling body, such as a composer. It does not scroll with the body.
   footer?: ReactNode;
+  bodyRef?: Ref<HTMLDivElement>;
   // Set by a panel sheet, so a focus request for the panel title finds the title on stacked.
   panelId?: string;
   children: ReactNode;
@@ -27,6 +28,7 @@ export function Sheet({
   onClose,
   onExited,
   footer,
+  bodyRef,
   panelId,
   children,
 }: SheetProps) {
@@ -84,7 +86,7 @@ export function Sheet({
                   </button>
                 </div>
               </div>
-              <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
+              <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]">
                 {children}
               </div>
               {footer ? (

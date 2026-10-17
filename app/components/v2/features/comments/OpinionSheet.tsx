@@ -1,6 +1,6 @@
 import { InformationCircleIcon } from "@heroicons/react/24/outline";
 import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/react/24/solid";
-import { type ReactNode, type RefObject, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { NestedComment } from "~/models/content";
 import { Button } from "../../primitives/Button";
@@ -64,6 +64,21 @@ export function OpinionSheet({
   composerRef,
 }: OpinionSheetProps) {
   const [inlineComposerOpen, setInlineComposerOpen] = useState(false);
+  const [scrollBody, setScrollBody] = useState<HTMLDivElement | null>(null);
+  const autoScrolledContentUid = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open) {
+      autoScrolledContentUid.current = null;
+      return;
+    }
+    // Keep the one-time feature hint visible until the reader dismisses it.
+    if (tutorial || !contentUid || loading || unavailable || comments === undefined || !scrollBody) return;
+    if (autoScrolledContentUid.current === contentUid) return;
+    // The thread is oldest first. Start at the newest opinion, once per opening, without snapping back
+    // after the reader scrolls upward or opens an inline editor.
+    scrollBody.scrollTop = scrollBody.scrollHeight;
+    autoScrolledContentUid.current = contentUid;
+  }, [open, contentUid, loading, unavailable, comments, scrollBody, tutorial]);
   // The footer composer unmounts while an inline reply or edit is open. Its draft lives here, so it comes back as typed.
   // The draft is tagged with its content, so another content's sheet starts empty.
   const [footerDraftState, setFooterDraftState] = useState<{ contentUid: string | null; draft: CommentDraft }>({
@@ -113,6 +128,7 @@ export function OpinionSheet({
       onClose={onClose}
       onExited={onExited}
       footer={footer}
+      bodyRef={setScrollBody}
     >
       <div className="flex flex-col gap-v2-group-gap pb-2">
         {tutorial ? <OpinionTutorial {...tutorial} /> : null}

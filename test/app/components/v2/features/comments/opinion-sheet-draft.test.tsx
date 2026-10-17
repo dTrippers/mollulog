@@ -3,7 +3,7 @@
  */
 import "../../layout/layout-test-polyfills";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { OpinionSheet, type OpinionSheetProps } from "~/components/v2/features/comments/OpinionSheet";
 import { installLayoutTestEnv } from "../../layout/layout-test-env";
@@ -114,5 +114,24 @@ describe("OpinionSheet footer draft", () => {
     fireEvent.change(editor, { target: { value: "B 의견" } });
     fireEvent.keyDown(editor, { key: "Enter" });
     expect(onCreate).toHaveBeenCalledWith("B 의견", "public");
+  });
+
+  it("opens at the newest opinion after loading without resetting a reader's scroll", async () => {
+    const props = sheetProps("content-a", jest.fn<CreateHandler>());
+    const ui = (next: OpinionSheetProps) => (
+      <MemoryRouter>
+        <OpinionSheet {...next} />
+      </MemoryRouter>
+    );
+    const view = render(ui({ ...props, loading: true, comments: undefined }));
+    const scrollBody = document.querySelector(".overscroll-contain") as HTMLDivElement;
+    Object.defineProperty(scrollBody, "scrollHeight", { configurable: true, value: 640 });
+
+    view.rerender(ui(props));
+    await waitFor(() => expect(scrollBody.scrollTop).toBe(640));
+
+    scrollBody.scrollTop = 100;
+    view.rerender(ui({ ...props, submitting: true }));
+    expect(scrollBody.scrollTop).toBe(100);
   });
 });

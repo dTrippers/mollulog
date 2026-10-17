@@ -12,8 +12,8 @@ const allowedAttributes = {
 
 // Visual size follows the markdown level: `#` and `##` read as the section size, `###` and deeper as the body-strong size.
 const headingClassName = {
-  large: "mt-8 mb-2 text-lg leading-7 font-semibold",
-  small: "mt-6 mb-2 text-base leading-6 font-semibold",
+  large: "mt-8 mb-2 text-base leading-6 font-semibold text-v2-fg",
+  small: "mt-6 mb-2 text-sm leading-5 font-semibold text-v2-fg",
 } as const;
 
 const headingPattern = /<h([1-6])(\s[^>]*)?>([\s\S]*?)<\/h\1>/g;
@@ -37,15 +37,15 @@ function shiftHeadings(html: string, headingLevel: 2 | 3): string {
 // Body typography and the image rule (A): left-aligned, a 1px divider boundary, height capped at min(60svh, 36rem), and
 // the aspect ratio kept. Color comes from v2 tokens only.
 const contentClassName = cn(
-  "break-keep text-base leading-7 text-v2-fg [overflow-wrap:anywhere]",
+  "break-keep text-sm leading-6 text-v2-fg-secondary [overflow-wrap:anywhere]",
   "[&>:first-child]:mt-0 [&>:last-child]:mb-0",
   "[&_p]:my-3",
   "[&_ul]:my-3 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-3 [&_ol]:list-decimal [&_ol]:pl-5",
   "[&_li>ul]:my-0 [&_li>ul]:[list-style-type:circle]",
   "[&_li]:my-1 [&_li::marker]:text-v2-fg-tertiary",
-  "[&_a]:font-medium [&_a]:text-v2-fg [&_a]:underline [&_a]:decoration-v2-fg-tertiary [&_a]:underline-offset-2",
-  "[&_a:hover]:decoration-v2-fg",
-  "[&_strong]:font-semibold",
+  "[&_a]:font-medium [&_a]:text-v2-link [&_a]:underline [&_a]:decoration-v2-link [&_a]:underline-offset-2",
+  "[&_a:hover]:decoration-2",
+  "[&_strong]:font-semibold [&_strong]:text-v2-fg [&_a_strong]:text-v2-link",
   "[&_hr]:my-6 [&_hr]:border-v2-divider",
   "[&_img]:my-5 [&_img]:block [&_img]:h-auto [&_img]:max-w-full [&_img]:max-h-[min(60svh,36rem)]",
   "[&_img]:rounded-md [&_img]:bg-v2-inset [&_img]:outline-1 [&_img]:-outline-offset-1 [&_img]:outline-v2-divider",

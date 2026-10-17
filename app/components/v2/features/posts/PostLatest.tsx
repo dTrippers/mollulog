@@ -25,7 +25,7 @@ export function PostLatest({ post, timeZone, linkState }: PostLatestProps) {
   const { head: titleHead, tail: titleTail } = splitLastWord(post.title);
   return (
     <article aria-labelledby="latest-post-title" className="rounded-lg bg-v2-surface p-v2-block-p">
-      <h2 id="latest-post-title" className="break-keep break-words text-xl leading-7 font-semibold text-v2-fg">
+      <h2 id="latest-post-title" className="break-keep break-words text-lg leading-7 font-semibold text-v2-fg">
         <Link
           to={`/posts/${post.uid}`}
           state={linkState}
@@ -38,7 +38,7 @@ export function PostLatest({ post, timeZone, linkState }: PostLatestProps) {
           <span className="whitespace-nowrap">
             {titleTail}
             <ChevronRightIcon
-              className="ml-0.5 inline-block size-5 align-[-0.25em] text-v2-fg-tertiary"
+              className="ml-0.5 inline-block size-4 align-[-0.2em] text-v2-fg-tertiary"
               aria-hidden="true"
             />
           </span>
