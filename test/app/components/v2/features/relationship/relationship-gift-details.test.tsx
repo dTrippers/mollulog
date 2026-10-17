@@ -12,7 +12,10 @@ import {
   type StudentItemsMap,
 } from "~/domain/relationship-gift-plan";
 import { STUDENT_STATE_STALE_CODE, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
-import { RelationshipGiftDetails, type RelationshipGiftStudent } from "~/components/v2/features/relationship/RelationshipGiftDetails";
+import {
+  RelationshipGiftDetails,
+  type RelationshipGiftStudent,
+} from "~/components/v2/features/relationship/RelationshipGiftDetails";
 import { V2Page } from "~/components/v2/layout";
 import type { AllStudentsFavoriteItems } from "~/models/resource";
 
@@ -32,12 +35,18 @@ const item: AllStudentsFavoriteItems = {
   favoriteLevels: { 3: { exp: 60, students: [{ uid: student.uid, name: student.name }] } },
 };
 
-function GiftDetailsHarness({ onStaleWriteBlocked }: { onStaleWriteBlocked: () => void }) {
+function GiftDetailsHarness({
+  onStaleWriteBlocked,
+  initiallyStale = false,
+}: {
+  onStaleWriteBlocked: () => void;
+  initiallyStale?: boolean;
+}) {
   const [studentItemsMap, setStudentItemsMap] = useState<StudentItemsMap>(() =>
     createStudentItemsMap([{ uid: student.uid, items: { "gift-a": 2 } }]),
   );
   const [initialStudentItems] = useState(() => createStudentItemsMap([{ uid: student.uid, items: { "gift-a": 0 } }]));
-  const [staleWriteBlocked, setStaleWriteBlocked] = useState(false);
+  const [staleWriteBlocked, setStaleWriteBlocked] = useState(initiallyStale);
   return (
     <RelationshipGiftDetails
       item={item}
@@ -67,6 +76,7 @@ function renderGiftDetails(
   action: () => Promise<unknown>,
   onStaleWriteBlocked = jest.fn(),
   openEditor = true,
+  initiallyStale = false,
 ) {
   const router = createMemoryRouter(
     [
@@ -74,7 +84,7 @@ function renderGiftDetails(
         path: "/",
         Component: () => (
           <V2Page width="wide">
-            <GiftDetailsHarness onStaleWriteBlocked={onStaleWriteBlocked} />
+            <GiftDetailsHarness onStaleWriteBlocked={onStaleWriteBlocked} initiallyStale={initiallyStale} />
           </V2Page>
         ),
         action,
@@ -101,7 +111,11 @@ describe("RelationshipGiftDetails", () => {
   });
 
   it("shows formatted student variants on separate lines in the read-only gift grid", () => {
-    renderGiftDetails(jest.fn(async () => ({ success: true })), jest.fn(), false);
+    renderGiftDetails(
+      jest.fn(async () => ({ success: true })),
+      jest.fn(),
+      false,
+    );
 
     expect(screen.getByText("키사키")).toBeTruthy();
     expect(screen.getByText("수영복")).toBeTruthy();
@@ -167,6 +181,19 @@ describe("RelationshipGiftDetails", () => {
     expect(await screen.findByText(STUDENT_STATE_STALE_MESSAGE)).toBeTruthy();
     expect(onStaleWriteBlocked).toHaveBeenCalledTimes(1);
     expect(screen.getByRole("button", { name: "새로고침" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
+  });
+
+  it("shows global stale recovery even when this gift has no local save error", () => {
+    renderGiftDetails(
+      jest.fn(async () => ({ success: true })),
+      jest.fn(),
+      true,
+      true,
+    );
+    expect(screen.getByRole("alert").textContent).toBe(STUDENT_STATE_STALE_MESSAGE + "새로고침");
+    expect(screen.getByRole("button", { name: "새로고침" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "변경 사항 저장" }).hasAttribute("disabled")).toBe(true);
     expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull();
   });
 

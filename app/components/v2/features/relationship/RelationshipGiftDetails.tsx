@@ -182,6 +182,7 @@ function RelationshipGiftLevel({
   const saveFetcher = useFetcher<typeof action>();
   const revalidator = useRevalidator();
   const [saveError, setSaveError] = useState<string | null>(null);
+  const visibleSaveError = staleWriteBlocked ? STUDENT_STATE_STALE_MESSAGE : saveError;
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [retryAvailable, setRetryAvailable] = useState(false);
   const saveBarRef = useRef<HTMLDivElement>(null);
@@ -413,9 +414,9 @@ function RelationshipGiftLevel({
             )}
           >
             <div className="min-w-0 flex-1">
-              {saveError ? (
+              {visibleSaveError ? (
                 <div className="flex flex-wrap items-center gap-2" role="alert">
-                  <span className="text-xs text-v2-warning">{saveError}</span>
+                  <span className="text-xs text-v2-warning">{visibleSaveError}</span>
                   {staleWriteBlocked ? (
                     <Button onClick={() => window.location.reload()} className="min-h-8 px-2 text-xs">
                       새로고침
