@@ -1,5 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
+import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
+import { v2FocusRing } from "~/components/v2/layout/styles";
 import { HOME_BIRTHDAY_LIMIT, type HomeBirthday } from "~/domain/home-portal";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
@@ -93,11 +95,18 @@ export function HomeNewsBlock({
   return (
     <ul className="divide-y divide-v2-divider rounded-lg bg-v2-surface px-v2-block-p">
       {news.data.map((post) => (
-        <li key={post.uid} className="flex items-center justify-between gap-3 py-3">
-          <span className="min-w-0 truncate text-sm text-v2-fg">{post.title}</span>
-          <span className="shrink-0 text-sm text-v2-fg-tertiary tabular-nums">
-            {formatInstant(post.createdAt as UtcIsoString, { timeZone, format: "MM/DD" })}
-          </span>
+        <li key={post.uid}>
+          <Link
+            to={`/posts/${post.uid}`}
+            prefetch="intent"
+            {...getV2LinkTransitionProps("forward")}
+            className={`relative isolate -mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-3 text-sm text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing}`}
+          >
+            <span className="min-w-0 truncate">{post.title}</span>
+            <time dateTime={post.createdAt} className="shrink-0 text-sm text-v2-fg-tertiary tabular-nums">
+              {formatInstant(post.createdAt as UtcIsoString, { timeZone, format: "MM/DD" })}
+            </time>
+          </Link>
         </li>
       ))}
     </ul>
