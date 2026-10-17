@@ -15,13 +15,18 @@ export type StudentThumbProps = {
   isNew: boolean;
   favorite: FavoriteLabelState;
   personalStatePending?: boolean;
-  // Clicking opens the quick panel. Hover and focus styling belong to the button.
-  onOpen: () => void;
+  // Clicking opens the quick panel. Hover and focus styling belong to the button. Without it the thumbnail is not interactive:
+  // it has no button role and cannot take focus.
+  onOpen?: () => void;
   // Shows the quick panel as the popover anchor.
   expanded?: boolean;
   compact?: boolean;
+  // A portrait beside its name, such as a completion list row (24px wide).
+  small?: boolean;
   // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default keeps the 60px thumbnail.
   large?: boolean;
+  // False hides the name, variant, and preparing line below the image, for layouts that show the name beside the portrait.
+  showCaption?: boolean;
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
@@ -37,7 +42,9 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     onOpen,
     expanded = false,
     compact = false,
+    small = false,
     large = false,
+    showCaption = true,
   },
   ref,
 ) {
@@ -47,57 +54,75 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   // button's own name. A hidden label (no count, no own state) adds nothing.
   const detailName = `${name}${variant ? `(${variant})` : ""} 상세`;
   const accessibleName = favorite.visible ? `${detailName}, ${favorite.accessibleName}` : detailName;
+  const frameClassName = "relative block aspect-[5/6] w-full overflow-hidden rounded-md bg-v2-inset";
+  const frame = (
+    <>
+      {imageSrc && !image.failed ? (
+        <img
+          ref={image.ref}
+          src={imageSrc}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={image.onError}
+          className="size-full object-cover"
+        />
+      ) : null}
+      <span
+        aria-hidden="true"
+        className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
+      >
+        <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
+      </span>
+      <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
+    </>
+  );
+
   return (
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        large ? "w-[4.375rem] md:w-[5.5rem]" : compact ? "w-[3.25rem]" : "w-[3.75rem]",
+        large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : "w-[3.75rem]",
       )}
     >
-      <button
-        ref={ref}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={expanded}
-        aria-label={accessibleName}
-        onClick={onOpen}
-        className="relative block aspect-[5/6] w-full cursor-pointer overflow-hidden rounded-md bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-      >
-        {imageSrc && !image.failed ? (
-          <img
-            ref={image.ref}
-            src={imageSrc}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            onError={image.onError}
-            className="size-full object-cover"
-          />
-        ) : null}
-        <span
-          aria-hidden="true"
-          className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
+      {onOpen ? (
+        <button
+          ref={ref}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={expanded}
+          aria-label={accessibleName}
+          onClick={onOpen}
+          className={cn(
+            frameClassName,
+            "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+          )}
         >
-          <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
-        </span>
-        <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
-      </button>
-      <span
-        className={cn(
-          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
-          large ? "mt-0.5 md:mt-1" : "mt-1",
-        )}
-      >
-        {name}
-      </span>
-      {variant ? (
-        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-          {variant}
-        </span>
-      ) : studentUid === null ? (
-        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-          정보 준비 중
-        </span>
+          {frame}
+        </button>
+      ) : (
+        <span className={frameClassName}>{frame}</span>
+      )}
+      {showCaption ? (
+        <>
+          <span
+            className={cn(
+              "block w-full truncate text-center text-xs leading-4 text-v2-fg",
+              large ? "mt-0.5 md:mt-1" : "mt-1",
+            )}
+          >
+            {name}
+          </span>
+          {variant ? (
+            <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
+              {variant}
+            </span>
+          ) : studentUid === null ? (
+            <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
+              정보 준비 중
+            </span>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

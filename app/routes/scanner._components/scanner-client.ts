@@ -9,7 +9,7 @@ export async function requestScannerJson<T>(input: string, init?: RequestInit): 
   });
   const body = (await response.json().catch(() => null)) as ({ error?: string; quota?: ScannerUploadQuota } & T) | null;
   if (!response.ok) {
-    throw new ScannerApiRequestError(body?.error ?? "요청을 처리하지 못했어요", body?.quota);
+    throw new ScannerApiRequestError(body?.error ?? "요청을 처리하지 못했어요", body?.quota, response.status);
   }
   return body as T;
 }
@@ -38,10 +38,19 @@ export async function uploadScannerFile({
   }
 }
 
+export type ScannerJobStatusErrorKind = "not_found" | "transient";
+
+// A missing job (404, for example a purged job) is not retryable. Any other failure is treated as transient.
+export function classifyScannerJobStatusError(error: unknown): ScannerJobStatusErrorKind {
+  return error instanceof ScannerApiRequestError && error.status === 404 ? "not_found" : "transient";
+}
+
 export class ScannerApiRequestError extends Error {
   constructor(
     message: string,
     readonly quota?: ScannerUploadQuota,
+    // The HTTP status, so a status read can tell a missing job (404) from a transient failure.
+    readonly status?: number,
   ) {
     super(message);
     this.name = "ScannerApiRequestError";

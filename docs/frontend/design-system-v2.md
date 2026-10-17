@@ -29,6 +29,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Floating action bar and popovers. Brighter than surface in dark mode |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
+| `shadow-v2-marker` | `inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light)` (fixed: `oklch(0.2 0 0 / 80%)` and `oklch(1 0 0 / 90%)`) | same | Recognized-cell marker over a game screenshot: a dark inner ring and a light outer ring, so the marker stays visible on any screenshot. The screenshot colors do not follow the theme, so the rings are fixed. Pair with `border-2 border-v2-focus bg-v2-highlight`. |
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
 | `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |
 | `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Control boundary for text inputs, selects, and textareas; popover ring. Not for cards, buttons, or region separation. |
@@ -36,8 +37,9 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.707 0.165 254.624)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
-| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. 4.5:1 or higher on subtle, surface, and canvas |
-| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction` |
+| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5). 4.5:1 or higher on subtle, surface, and canvas |
+| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction`, and of a failed value in a review table. Text on it: 8.4:1 light, 5.2:1 dark (measured) |
+| `bg-v2-warning-subtle` | `oklch(0.965 0.05 95)` | `oklch(0.33 0.07 75)` | Status: background of a value that needs confirmation (D6). The text on it keeps `text-v2-fg` (16.8:1 light, 18.0:1 dark, measured). The tone is the background only; the label carries the meaning |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
 | `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
@@ -72,7 +74,9 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 | `p-v2-block-p` / `--spacing-v2-block-p` | 1.25rem | 1rem | same | Block padding |
 | `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
-| `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | 2.75rem | 2.75rem | Minimum row height |
+| `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | 2.75rem | 2.75rem | Minimum row height. List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
+| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Button height (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers |
+| `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | 2.25rem | 2.25rem | Number and select inputs. 36px on stacked layouts and coarse pointers |
 
 ## Numeric and date formats
 
@@ -160,7 +164,8 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - Side-by-side starts at 48rem of the `@container/page-available` content box (root.tsx). The Aside is 16rem below 64rem and 18rem from 64rem. `V2Page` measures its own width with ResizeObserver to know the mode for JavaScript behavior, such as where a panel body mounts.
 - Header holds the back link, title, description (max-prose), and meta. It sits above Main and spans the full width, so the title x matches across recipes with and without an Aside.
 - Toolbar is sticky on stacked layouts. Use `stickyOnDesktop` only for data tables.
-- `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries.
+- `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
+- `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
 
 ### Width rules
 
@@ -294,8 +299,37 @@ These tokens are not part of 2.0 yet. Add one only when a screen actually uses i
 - Interaction: primary action state.
 - Status: info and neutral.
 - Domain: limited and fes recruitment colors, a role-only palette, star-grade colors, and any other domain color.
-- Reading density, a data visualization palette, KPI size, and control height.
+- Reading density, a data visualization palette, and KPI size.
 - Numeric: a numeric-only utility. `tabular-nums` covers it.
 - Radius tokens. Keep the 1.x base radius (`rounded-md` to `rounded-lg`).
 
 Do not add a token just because it would be useful later. Add it when a screen needs it.
+
+## Parts added in the scanner migration (MLLG-124)
+
+The scanner screen (`/scanner`) is the first 2.0 screen that uses these parts. Each lives in the folder shown.
+
+- `primitives/ProgressBar`: a native `progress` with a status tone (`default`, `warning`, `danger`). Its visible value text belongs to the parent.
+- `primitives/Checkbox`: a labeled native checkbox with the 2.0 focus ring.
+- `primitives/NumberInput`: a numeric input at `min-h-v2-input-min`. `warning` sets the subtle warning background, and the text keeps the default color. Flow navigation props from `use-number-input-flow-navigation` spread onto it.
+- `primitives/use-number-input-flow-navigation`: a copy of the 1.x hook for 2.0 code. The 1.x hook stays for the screens that still use it.
+- `primitives/StatusNotice`: one status line with an icon and text. `danger` is announced as an alert, and `warning` and `neutral` as a status. Color is never the only signal.
+- `primitives/Dialog`: a modal on Headless UI with the 2.0 backdrop, for a full-size image or a confirmation.
+- `layout/PageActionBar`: a bottom action bar for a step's primary and secondary actions. `placement="sticky"` (the default) stays at the bottom of `PageMain` on desktop. `placement="fixed"` pins it on stacked layouts above the mobile navigation bar (`--mobile-nav-height`, and at the viewport bottom from `lg`), and the screen then adds bottom padding so the bar does not cover the last content. The summary text previews what the primary action will do. `expandActions` makes the actions fill the row on mobile, with the last (primary) action taking the rest.
+- `features/scanner/*`: the scanner's presentation parts. `ScannerQuota` (the quota block and its meter, with loading, error, exhausted, low, and normal states), `ScannerStepHeader` (the four-step indicator, its title line, and an optional action), `ScannerFileStatusList`, `ScannerJobList`, `ScannerEndBlock`, `ScannerCompletionSummary`, `ScannerFailureNotice` (a failed file during recognition: a danger icon and secondary text, with a divider above), and `ScannerJobStatusNotice` (a failed job status read: a transient failure offers a retry, a missing job offers only a new upload).
+- `features/resources/ResourceThumb`: an item image with a labeled neutral placeholder when there is no image.
+- `features/students/StudentThumb`: the portrait with its favorite label. `onOpen` is optional: with it the thumbnail is a button for the quick panel, and without it the thumbnail is a non-interactive element with no button role and no focus. `showCaption={false}` hides the name below it for layouts that show the name beside the portrait.
+- `features/students/TierInput`: a growth-tier control. The visible face is "★n" up to 5, and the exclusive weapon icon with its level after 5 (the `GrowthTier` pattern), in a box with the `NumberInput` size, border, and warning background. A native select sits over it, invisible but focusable, so it keeps its keyboard behavior and joins the `use-number-input-flow-navigation` flow. Tiers below the initial tier are disabled.
+- `features/feedback/FeedbackSheet`: the v2 feedback sheet. It posts the same `/contact` request as the 1.x `FeatureFeedbackButton`. The 1.x button stays for the walkthrough timeline.
+
+### Failure and status rules used by the scanner
+
+- A failure (an expired upload, a failed recognition, a failed file, an unreadable result) uses `text-v2-danger` with an icon and a text label. Do not show an internal error code or a placeholder value for it.
+- A value that needs confirmation uses `bg-v2-warning-subtle` as its background. Its text keeps the default color. In the student review the background and the "⚠ n" count come from one predicate (`fieldNeedsReview`): an unconfirmed failure, a low-accuracy read, or a decreased value.
+- A step that is waiting shows its status line only. It has no progress bar until work has started.
+- A step's live region is the title and status line, so a change is announced once.
+- A job shows exactly one step body: the upload, waiting, review, unavailable result, completion, or terminal body. `getScannerStepBody` chooses it from the job state, so no two bodies render together.
+
+### Exception: compact text actions in the student review
+
+The student review's row actions ("보기" and "제외") are text buttons with a smaller height (`min-h-7`), in the desktop table and in the stacked student cards. They are the only 2.0 controls below `min-h-v2-control-min`, because a row of inputs needs the space and the actions stay secondary. Do not use this compact size for other controls.

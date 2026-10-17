@@ -6,6 +6,7 @@ export {
   type MobileActionLink,
   type MobileActionPanel,
 } from "./MobileActionBar";
+export { PageActionBar, type PageActionBarProps } from "./PageActionBar";
 export { PageAside } from "./PageAside";
 export { PageHeader, type PageHeaderBack, type PageHeaderProps } from "./PageHeader";
 export { PageMain } from "./PageMain";
