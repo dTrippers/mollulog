@@ -193,8 +193,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         {isSenseiProfilePath(location.pathname) ? <meta name="robots" content="noindex" /> : null}
         <meta name="mollulog:front-sentry-dsn" content={loaderData?.publicEnv?.FRONT_SENTRY_DSN ?? ""} />
         <Meta />
-        {/* Event detail metadata supplies its content image or this fallback. */}
-        {renderDefaultOpenGraphImage ? <meta property="og:image" content={DEFAULT_OPEN_GRAPH_IMAGE_URL} /> : null}
+        {/* Routes with a custom image or summary card supply their own metadata. */}
+        {renderDefaultOpenGraphImage ? (
+          <>
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta property="og:image" content={DEFAULT_OPEN_GRAPH_IMAGE_URL} />
+          </>
+        ) : null}
         <Links />
       </head>
       <body>

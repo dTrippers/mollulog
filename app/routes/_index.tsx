@@ -44,7 +44,6 @@ export const meta: MetaFunction = ({ location }) => {
     { property: "og:title", content: HOME_TITLE },
     { property: "og:description", content: HOME_DESCRIPTION },
     { property: "og:url", content: canonicalUrl(location.pathname) },
-    { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:title", content: HOME_TITLE },
     { name: "twitter:description", content: HOME_DESCRIPTION },
     { name: "twitter:image", content: DEFAULT_OPEN_GRAPH_IMAGE_URL },
