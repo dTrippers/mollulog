@@ -1,0 +1,53 @@
+{
+  "images": [
+    {
+      "filename": "screen.png",
+      "observations": [
+        {
+          "resource_uid": "item:23",
+          "quantity": 7,
+          "quantity_exact": true,
+          "candidates": [
+            {
+              "uid": "item:23",
+              "score": 0.99
+            }
+          ]
+        },
+        {
+          "resource_uid": "equipment:23",
+          "quantity": 8,
+          "quantity_exact": true,
+          "candidates": [
+            {
+              "uid": "equipment:23",
+              "score": 0.99
+            }
+          ]
+        },
+        {
+          "resource_uid": "equipment:501000",
+          "quantity": 9,
+          "quantity_exact": true,
+          "candidates": [
+            {
+              "uid": "equipment:501000",
+              "score": 0.99
+            }
+          ]
+        },
+        {
+          "resource_uid": null,
+          "quantity": 4,
+          "quantity_exact": true,
+          "candidates": [
+            {
+              "uid": "item:100",
+              "score": 0.8
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,11 @@ import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { OcrPublicError, toPublicOcrError } from "~/domain/ocr";
-import { buildOcrInventoryReview, getOcrReviewCell } from "~/domain/ocr-inventory-review";
+import {
+  buildOcrInventoryReview,
+  getOcrReviewCell,
+  normalizeOcrInventoryReviewResourceUids,
+} from "~/domain/ocr-inventory-review";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { getLogger } from "~/lib/observability.server";
 import { getItemCatalogResourceDescriptionMap, getItemCatalogResources } from "~/models/item-catalog";
@@ -37,14 +41,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     if (!job) throw new OcrPublicError("OCR 작업을 찾을 수 없어요", 404);
     if (job.status !== "review_ready") throw new OcrPublicError("검토할 수 있는 인식 결과가 없어요");
 
-    const review = buildOcrInventoryReview(job.result, job.images);
+    const resources = buildOcrInventoryCatalogResources(await getItemCatalogResources(env));
+    const review = normalizeOcrInventoryReviewResourceUids(buildOcrInventoryReview(job.result, job.images), resources);
     if (review.reviewMode !== "cells") {
       throw new OcrPublicError("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.");
     }
     const cell = getOcrReviewCell(review, { imageIndex, position });
     if (!cell) throw new OcrPublicError("검토할 셀을 찾을 수 없어요", 404);
 
-    const resources = buildOcrInventoryCatalogResources(await getItemCatalogResources(env));
     const resourceByUid = new Map(resources.map((resource) => [resource.inventoryUid, resource]));
     if (query) {
       const normalizedQuery = query.toLocaleLowerCase();

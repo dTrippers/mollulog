@@ -1,4 +1,5 @@
 import { OCR_CANDIDATE_SELECTION_LIMIT } from "./ocr";
+import { buildOcrInventoryUidResolver, type OcrInventoryCatalogResource } from "./ocr-resource-identity";
 
 /** A small subset of the image row returned by `getOcrJob`. */
 export type OcrReviewImageRow = {
@@ -436,4 +437,21 @@ export function evaluateOcrInventoryReview(
   const changedEntries = safeEntries.filter((entry) => entry.changed);
   const unchangedEntries = safeEntries.filter((entry) => !entry.changed);
   return { safeEntries, changedEntries, unchangedEntries, omittedCells, duplicateUids };
+}
+
+/** Normalize raw recognition and candidate identities before review, comparison, or apply. */
+export function normalizeOcrInventoryReviewResourceUids(
+  review: OcrInventoryReview,
+  resources: OcrInventoryCatalogResource[],
+): OcrInventoryReview {
+  if (review.reviewMode !== "cells") return review;
+  const resolveUid = buildOcrInventoryUidResolver(resources);
+  return {
+    ...review,
+    cells: review.cells.map((cell) => ({
+      ...cell,
+      itemUid: cell.itemUid === null ? null : resolveUid(cell.itemUid),
+      candidates: cell.candidates.map((candidate) => ({ ...candidate, uid: resolveUid(candidate.uid) })),
+    })),
+  };
 }

@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { buildOcrInventoryReview } from "~/domain/ocr-inventory-review";
+import { buildOcrInventoryReview, normalizeOcrInventoryReviewResourceUids } from "~/domain/ocr-inventory-review";
 import { parseStudentDetailImagesResult } from "~/domain/student-image-ocr";
 import { parseStudentDetailVideoResult } from "~/domain/student-video-ocr";
 import { getLogger } from "~/lib/observability.server";
@@ -105,13 +105,16 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     });
   }
 
-  const review = buildOcrInventoryReview(job.result, job.images);
+  const catalogResourceMap = await getItemCatalogResourceMap(env);
+  const review = normalizeOcrInventoryReviewResourceUids(
+    buildOcrInventoryReview(job.result, job.images),
+    Object.values(catalogResourceMap),
+  );
   if (review.reviewMode === "cells") {
     const currentItemUids = [...new Set(review.cells.flatMap(({ itemUid }) => (itemUid ? [itemUid] : [])))];
-    const [currentQuantities, draft, catalogResourceMap] = await Promise.all([
+    const [currentQuantities, draft] = await Promise.all([
       getUserResourceInventoryMapByItemUids(env, sensei.id, currentItemUids),
       getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid),
-      getItemCatalogResourceMap(env),
     ]);
     const completionSummary =
       draft?.status === "applied"

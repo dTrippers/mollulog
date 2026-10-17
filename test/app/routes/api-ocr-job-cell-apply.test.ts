@@ -6,6 +6,7 @@ import { getOcrJob } from "~/models/ocr-job";
 import { createAndApplySyncDraft, getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { action } from "~/routes/api.ocr.jobs.$jobUid.apply";
+import typedResult from "../../fixtures/item-inventory-typed-uids.v2.json";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
@@ -93,6 +94,78 @@ describe("OCR cell apply", () => {
       draft: { status: "applied", appliedAt: "2026-01-01T00:00:00.000Z" },
       alreadyApplied: false,
     } as never);
+  });
+
+  it("applies AOI v2 identities using existing inventory keys, preserving type collisions and candidate source", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: typedResult,
+      versions: { ...job.versions, schema: "2" },
+    } as never);
+    const response = expectDataResult<{ summary: { applicableChanged: number } }>(
+      await action(createArgs({ resultGeneration: 4, cells: [{ imageIndex: 0, position: 3, itemUid: "100" }] })),
+    );
+    expect(response.init?.status).toBe(201);
+    expect(mockedGetInventory).toHaveBeenCalledWith(env, 7, ["23", "equipment:23", "501000", "100"]);
+    expect(mockedCreateAndApply).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({
+        entries: [
+          expect.objectContaining({ entryKey: "23", value: 7 }),
+          expect.objectContaining({ entryKey: "equipment:23", value: 8 }),
+          expect.objectContaining({ entryKey: "501000", value: 9 }),
+          expect.objectContaining({
+            entryKey: "100",
+            value: 4,
+            meta: expect.objectContaining({ selectionSource: "ocr_candidate", candidateScore: 0.8 }),
+          }),
+        ],
+      }),
+    );
+  });
+
+  it("does not apply duplicate aliases or unknown typed resources as a different resource type", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: {
+        images: [
+          {
+            filename: "screen.png",
+            observations: [
+              { resource_uid: "item:100", quantity: 10, quantity_exact: true },
+              { resource_uid: "100", quantity: 11, quantity_exact: true },
+              { resource_uid: "equipment:200", quantity: 12, quantity_exact: true },
+              { resource_uid: "item:501000", quantity: 13, quantity_exact: true },
+              { resource_uid: "item:300", quantity: 14, quantity_exact: true },
+            ],
+          },
+        ],
+      },
+    } as never);
+    const response = expectDataResult<{ summary: { duplicateUids: string[]; omitted: number } }>(
+      await action(createArgs({ resultGeneration: 4, cells: [] })),
+    );
+    expect(response.data.summary).toMatchObject({ duplicateUids: ["100"], omitted: 4 });
+    expect(mockedCreateAndApply).toHaveBeenCalledWith(
+      env,
+      7,
+      expect.objectContaining({ entries: [expect.objectContaining({ entryKey: "300", value: 14 })] }),
+    );
+  });
+
+  it("compares typed recognition with the existing saved quantity", async () => {
+    mockedGetOcrJob.mockResolvedValue({
+      ...job,
+      result: {
+        images: [
+          { filename: "screen.png", observations: [{ resource_uid: "item:200", quantity: 3, quantity_exact: true }] },
+        ],
+      },
+    } as never);
+    const response = expectDataResult<{ error: string }>(await action(createArgs({ resultGeneration: 4, cells: [] })));
+    expect(response.data.error).toBe("변경된 수량이 없어요");
+    expect(mockedCreateAndApply).not.toHaveBeenCalled();
   });
 
   it("rejects a stale generation before applying", async () => {

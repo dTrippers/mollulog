@@ -8,7 +8,7 @@ export type OcrInventoryCatalogResource<T extends OcrCatalogResourceIdentity = O
 };
 
 /**
- * Mirrors the OCR catalog identity contract: item UIDs stay unchanged and a
+ * Preserves stored inventory keys: item UIDs stay unchanged and a
  * non-item resource is type-prefixed only when its source UID collides.
  */
 export function buildOcrInventoryCatalogResources<T extends OcrCatalogResourceIdentity>(
@@ -44,4 +44,14 @@ export function parseOcrInventoryResourceUid(inventoryUid: string): {
     sourceUid: inventoryUid.slice(separator + 1),
     resourceType: inventoryUid.slice(0, separator),
   };
+}
+
+/** Resolve AOI's typed identity to the existing inventory key, using both type and UID. */
+export function buildOcrInventoryUidResolver(resources: OcrInventoryCatalogResource[]): (uid: string) => string {
+  const inventoryUidByTypedUid = new Map(
+    resources.map((resource) => [`${resource.type}:${resource.uid}`, resource.inventoryUid]),
+  );
+  // Unknown typed identities remain unresolved; never strip a type and accidentally
+  // select another resource with the same source UID.
+  return (uid) => inventoryUidByTypedUid.get(uid) ?? uid;
 }

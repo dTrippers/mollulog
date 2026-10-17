@@ -94,7 +94,15 @@ describe("OCR job detail cell review", () => {
     mockedGetSyncDraftBySourceRef.mockResolvedValue(null);
     mockedGetInventory.mockResolvedValue({ "100": 1 });
     mockedGetCatalogMap.mockResolvedValue({
-      "100": { uid: "100", name: "기존 아이템", rarity: 1, type: "item", category: null, subCategory: null },
+      "100": {
+        uid: "100",
+        inventoryUid: "100",
+        name: "기존 아이템",
+        rarity: 1,
+        type: "item",
+        category: null,
+        subCategory: null,
+      },
     } as never);
   });
 
@@ -104,6 +112,19 @@ describe("OCR job detail cell review", () => {
       context: { cloudflare: { env, ctx } },
       params: { jobUid: "job-1" },
     }) as never;
+
+  it("normalizes typed recognition before loading current quantities and rendering resources", async () => {
+    const typedJob = structuredClone(job);
+    typedJob.result.images[0].observations[0].resource_uid = "item:100";
+    mockedGetOcrJob.mockResolvedValue(typedJob as never);
+    const response = expectDataResult<{ cells: Array<Record<string, unknown>> }>(await loader(args()));
+    expect(response.data.cells[0]).toMatchObject({
+      itemUid: "100",
+      currentQuantity: 1,
+      resource: { uid: "100", name: "기존 아이템" },
+    });
+    expect(mockedGetInventory).toHaveBeenCalledWith(env, 7, ["100"]);
+  });
 
   it("returns cells keyed by result index and observation position with imageUid", async () => {
     const response = expectDataResult<{ reviewMode: string; cells: Array<Record<string, unknown>> }>(
@@ -248,7 +269,15 @@ describe("OCR job detail completion summary", () => {
     mockedGetAllStudentsMap.mockResolvedValue({} as never);
     mockedGetInventory.mockResolvedValue({ "100": 1 });
     mockedGetCatalogMap.mockResolvedValue({
-      "100": { uid: "100", name: "기존 아이템", rarity: 1, type: "item", category: null, subCategory: null },
+      "100": {
+        uid: "100",
+        inventoryUid: "100",
+        name: "기존 아이템",
+        rarity: 1,
+        type: "item",
+        category: null,
+        subCategory: null,
+      },
     } as never);
   });
 

@@ -5,6 +5,7 @@ import { getItemCatalogResourceDescriptionMap, getItemCatalogResources } from "~
 import { getOcrJob } from "~/models/ocr-job";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { loader } from "~/routes/api.ocr.jobs.$jobUid.candidates";
+import typedResult from "../../fixtures/item-inventory-typed-uids.v2.json";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
@@ -90,6 +91,26 @@ describe("OCR candidate lookup", () => {
       "501000": "모자 만능 설계도 설명",
       "equipment:23": "티타늄 해머 설명",
     });
+  });
+
+  it.each([
+    [0, "23", 5],
+    [1, "equipment:23", 2],
+    [2, "501000", 6],
+  ])("resolves typed AOI candidate at %s", async (position, uid, quantity) => {
+    mockedGetOcrJob.mockResolvedValue({ ...job, result: typedResult } as never);
+    const response = expectDataResult<{
+      current: { uid: string; currentQuantity: number };
+      candidates: Array<{ uid: string }>;
+    }>(
+      await loader({
+        request: new Request(`https://mollulog.net/api/ocr/jobs/job-1/candidates?imageIndex=0&position=${position}`),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
+    expect(response.data.current).toMatchObject({ uid, currentQuantity: quantity });
+    expect(response.data.candidates.map((candidate) => candidate.uid)).toEqual([uid]);
   });
 
   it("returns the stored recognition before top-five candidates", async () => {

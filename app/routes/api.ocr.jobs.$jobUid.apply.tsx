@@ -6,6 +6,7 @@ import {
   buildOcrInventoryReview,
   evaluateOcrInventoryReview,
   getOcrReviewCell,
+  normalizeOcrInventoryReviewResourceUids,
   type OcrCellPatch,
   type OcrInventoryReviewEvaluation,
   parseOcrCellPatches,
@@ -91,7 +92,8 @@ async function applyCellReview(
   if (!Number.isSafeInteger(body.resultGeneration) || (body.resultGeneration as number) !== job.generation) {
     throw new OcrPublicError("인식 결과가 최신 상태가 아니에요. 결과를 새로고침해 주세요", 409);
   }
-  const review = buildOcrInventoryReview(job.result, job.images);
+  const resources = buildOcrInventoryCatalogResources(await getItemCatalogResources(env));
+  const review = normalizeOcrInventoryReviewResourceUids(buildOcrInventoryReview(job.result, job.images), resources);
   if (review.reviewMode !== "cells") {
     throw new OcrPublicError("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.");
   }
@@ -105,8 +107,7 @@ async function applyCellReview(
     if (!getOcrReviewCell(review, patch)) throw new OcrPublicError("존재하지 않는 셀은 반영할 수 없어요");
   }
 
-  const resources = await getItemCatalogResources(env);
-  const catalogUids = new Set(buildOcrInventoryCatalogResources(resources).map((resource) => resource.inventoryUid));
+  const catalogUids = new Set(resources.map((resource) => resource.inventoryUid));
   for (const patch of patches) {
     if (patch.itemUid && !catalogUids.has(patch.itemUid)) {
       throw new OcrPublicError("현재 아이템 카탈로그에 없는 아이템은 반영할 수 없어요");
