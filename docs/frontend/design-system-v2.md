@@ -40,7 +40,12 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction` |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
-| `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
+| `text-v2-bond` | `oklch(0.6 0.2 0)` | `oklch(0.76 0.15 0)` | Relationship heart. At least 3:1 on canvas, surface, and inset; visually distinct from favorite |
+| `bg-v2-rarity-1` | `oklch(0.97 0 0)` | `oklch(0.556 0 0)` | Gift rarity 1 background |
+| `bg-v2-rarity-2` | `oklch(0.882 0.059 254.128)` | `oklch(0.809 0.105 251.813)` | Gift rarity 2 background |
+| `bg-v2-rarity-3` | `oklch(0.901 0.076 70.697)` | `oklch(0.837 0.128 66.29)` | Gift rarity 3 background |
+| `bg-v2-rarity-4` | `oklch(0.902 0.063 306.703)` | `oklch(0.827 0.119 306.383)` | Gift rarity 4 background |
+| `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, restriction notice, and insufficient quantity. Pair with a text label |
 | `text-v2-perk` | `oklch(0.52 0.105 223.128)` | `oklch(0.865 0.127 207.078)` | Benefit, such as a free-recruit special case. Pair with a star icon and text, semibold |
 | `bg-v2-selected`, `text-v2-on-selected` | `oklch(0.205 0 0)` / `oklch(1 0 0)` | `oklch(0.985 0 0)` / `oklch(0.205 0 0)` | Selected filter chip (interaction state, not a status color). Filled dark in light mode, filled light in dark mode |
 | `text-v2-new` | `oklch(0.905 0.182 98.111)` | `oklch(0.905 0.182 98.111)` | "New" label on a scrim (domain) |

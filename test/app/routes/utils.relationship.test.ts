@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { createMemoryRouter, RouterProvider } from "react-router";
 
 const mockGetActiveSensei = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 const mockRemoveRelationshipLevel = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -26,14 +27,14 @@ jest.mock("~/models/student", () => ({
 }));
 jest.mock("~/models/user-resource-inventory", () => ({ getUserResourceInventoryMap: mockGetUserResourceInventoryMap }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: () => logger }));
+jest.mock("~/contexts/SignInProvider", () => ({ useSignIn: () => ({ showSignIn: jest.fn() }) }));
 
-import { STUDENT_STATE_STALE_MESSAGE, StaleStudentStateRequestError } from "~/domain/student-state-errors";
-import {
+import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
+import RelationshipUtil, {
   action,
   buildRelationshipSavePayload,
   hasSavedRelationshipState,
   loader,
-  RelationshipActionHeader,
   updateRelationshipStudentState,
 } from "~/routes/utils.relationship";
 
@@ -179,24 +180,22 @@ describe("utils.relationship action", () => {
 
     expect(result.students.map(({ uid }) => uid)).toEqual(["student-a", "student-b"]);
   });
-});
 
-describe("RelationshipActionHeader stale state", () => {
-  it("shows the shared stale alert even when the calculator has no local save error", () => {
-    const markup = renderToStaticMarkup(
-      createElement(RelationshipActionHeader, {
-        student: { uid: "student-a", name: "Student A" },
-        saveState: "idle",
-        saveError: null,
-        saveSuccess: false,
-        staleWriteBlocked: true,
-        onRetry: null,
-      }),
-    );
+  it("settles favorite-item source failures to an explicit screen error state", async () => {
+    mockGetActiveSensei.mockResolvedValue(null);
+    mockGetAllStudents.mockResolvedValue([]);
+    mockGetAllStudentsFavoriteItems.mockRejectedValue(new Error("private source failure"));
 
-    expect(markup).toContain('role="alert"');
-    expect(markup).toContain(STUDENT_STATE_STALE_MESSAGE);
-    expect(markup).toContain("새로고침");
+    const result = await loader({
+      context: { cloudflare: { env, ctx: {} } },
+      request: new Request("https://mollulog.test/utils/relationship"),
+    } as never);
+
+    await expect(result.allStudentsFavoriteItems).resolves.toEqual({ status: "error" });
+    expect(JSON.stringify(result)).not.toContain("private source failure");
+    expect(logger.error).toHaveBeenCalledWith("Failed to load relationship favorite items", expect.any(Error), {
+      operation: "all_students_favorite_items",
+    });
   });
 });
 
@@ -238,5 +237,43 @@ describe("relationship student list membership", () => {
 
   it("counts only positive gift quantities as saved state", () => {
     expect(hasSavedRelationshipState({ currentLevel: null, targetLevel: null, items: { "gift-a": 0 } })).toBe(false);
+  });
+});
+
+describe("relationship route first paint", () => {
+  it("keeps the unselected student list mobile-only before layout measurement", () => {
+    const loaderData = {
+      students: [
+        {
+          uid: "student-a",
+          name: "Student A",
+          order: 1,
+          currentLevel: null,
+          currentExp: null,
+          targetLevel: null,
+          items: {},
+          hasSavedState: false,
+        },
+      ],
+      allStudentsFavoriteItems: Promise.resolve({ status: "ready" as const, items: [] }),
+      writeMode: "legacy" as const,
+      isAuthenticated: false,
+      ownedQuantities: null,
+    };
+    const router = createMemoryRouter(
+      [{ id: "relationship", path: "/utils/relationship", loader: () => loaderData, Component: RelationshipUtil }],
+      {
+        initialEntries: ["/utils/relationship"],
+        hydrationData: { loaderData: { relationship: loaderData } },
+      },
+    );
+
+    const html = renderToStaticMarkup(createElement(RouterProvider, { router }));
+
+    expect(html).toContain('data-stacked="true"');
+    expect(html).toContain("@min-[48rem]/page-available:hidden");
+    expect(html).toContain('placeholder="이름으로 찾기"');
+    expect(html).toContain("학생을 고르면 계산을 시작해요.");
+    router.dispose();
   });
 });

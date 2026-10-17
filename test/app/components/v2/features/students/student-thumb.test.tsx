@@ -36,6 +36,14 @@ describe("StudentThumb accessible name", () => {
 
     expect(screen.getByRole("button", { name: "키사키(수영복) 상세" })).toBeTruthy();
   });
+
+  it("keeps the student's main name and variant as separate visible lines", () => {
+    const { container } = renderThumb();
+
+    expect(screen.getByText("키사키")).toBeTruthy();
+    expect(screen.getByText("수영복")).toBeTruthy();
+    expect(container.querySelectorAll("button + span")).toHaveLength(1);
+  });
 });
 
 describe("StudentThumb new recruitment accent", () => {

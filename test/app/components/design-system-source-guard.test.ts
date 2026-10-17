@@ -93,6 +93,11 @@ const migratedRouteFiles: string[] = [
   "routes/_index._components/HomeSkeleton.tsx",
   "routes/_index._components/HomeHeader.tsx",
   "routes/_index._components/HomeMain.tsx",
+  "routes/utils.relationship.tsx",
+  "routes/utils.relationship._components/RelationshipGiftScreen.tsx",
+  "routes/utils.relationship._components/RelationshipStudentScreen.tsx",
+  "routes/utils.relationship._components/relationship-types.ts",
+  "routes/utils.relationship._components/use-relationship-student-items.ts",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];
