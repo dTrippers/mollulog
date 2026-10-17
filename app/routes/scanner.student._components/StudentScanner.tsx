@@ -1,16 +1,36 @@
-import { ExclamationTriangleIcon, FunnelIcon, PhotoIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { ArrowUpTrayIcon, MagnifyingGlassPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
 import { useOutletContext } from "react-router";
-import { StudentCard, TierSelector } from "~/components/features/students";
+import { ScannerCompletionSummary } from "~/components/v2/features/scanner/ScannerCompletionSummary";
+import { ScannerEndBlock } from "~/components/v2/features/scanner/ScannerEndBlock";
 import {
-  Button,
-  Callout,
-  HoverTooltip,
-  NumberInput,
+  type ScannerFileStatusItem,
+  ScannerFileStatusList,
+} from "~/components/v2/features/scanner/ScannerFileStatusList";
+import { ScannerJobStatusNotice } from "~/components/v2/features/scanner/ScannerJobStatusNotice";
+import { formatScannerQuotaAvailability } from "~/components/v2/features/scanner/ScannerQuota";
+import {
+  ScannerStepHeader,
+  type ScannerStepStates,
+  ScannerStepTitle,
+} from "~/components/v2/features/scanner/ScannerStepHeader";
+import { scannerNumberInputClassName } from "~/components/v2/features/scanner/scanner-number-input";
+import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
+import { TierInput } from "~/components/v2/features/students/TierInput";
+import { PageActionBar } from "~/components/v2/layout/PageActionBar";
+import { Button } from "~/components/v2/primitives/Button";
+import { IconButton } from "~/components/v2/primitives/IconButton";
+import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { ProgressBar } from "~/components/v2/primitives/ProgressBar";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { Switch } from "~/components/v2/primitives/Switch";
+import {
   type NumberInputFlowNavigationInputProps,
-  SubTitle,
   useNumberInputFlowNavigation,
-} from "~/components/primitives";
+} from "~/components/v2/primitives/use-number-input-flow-navigation";
+import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
 import type { OcrUploadInput, OcrVideoUploadInput } from "~/domain/ocr";
 import {
   STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
@@ -25,13 +45,10 @@ import type {
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
 import type { ScannerOutletContext } from "../scanner";
-import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
 import ScannerFileList from "../scanner._components/ScannerFileList";
 import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
-import ScannerJobShell from "../scanner._components/ScannerJobShell";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
-import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import ScannerUploadTargetGuide from "../scanner._components/ScannerUploadTargetGuide";
 import {
@@ -43,11 +60,15 @@ import {
   uploadScannerFile,
 } from "../scanner._components/scanner-client";
 import {
+  formatScannerRelativeTime,
+  getScannerCompletionState,
+  getScannerJobStatusView,
   getScannerTerminalJobDescription,
   getScannerTerminalJobTitle,
   getScannerUnavailableResultMessage,
   scannerMessages,
 } from "../scanner._components/scanner-messages";
+import { getScannerStepBody } from "../scanner._components/scanner-step-body";
 import {
   getScannerImageContentType,
   getScannerVideoContentType,
@@ -175,7 +196,6 @@ const fields: readonly FieldDefinition[] = [
 
 const LOW_ACCURACY_THRESHOLD = 0.8;
 const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
-const BASIC_GROUP_GRID = "grid-cols-[10rem_repeat(3,minmax(0,1fr))]";
 
 type CurrentStudentState = Partial<Record<ApplyFieldName, number | null>> & {
   studentUid: string;
@@ -187,7 +207,15 @@ type StudentGrowthResult = StudentDetailVideoResult | StudentDetailImagesResult;
 type StudentGrowthStudent = StudentDetailVideoResult["students"][number] | StudentDetailImageStudent;
 type StudentFieldDetail = StudentGrowthStudent["fieldDetails"][StudentVideoFieldName];
 
+export type StudentCompletionSummary = {
+  appliedCount: number;
+  excludedCount: number;
+  applied: Array<{ uid: string; name: string | null }>;
+  excluded: Array<{ uid: string; name: string | null }>;
+};
+
 type StudentVideoJob = {
+  completionSummary?: StudentCompletionSummary | null;
   uid: string;
   jobKind: "student_detail_video_v1" | "student_detail_images_v1";
   status: string;
@@ -201,6 +229,8 @@ type StudentVideoJob = {
     evidenceAvailableUntil: string | null;
   } | null;
   result: StudentGrowthResult | null;
+  // The stored result could not be read. The job is kept, with no retry: the unavailable state is the outcome.
+  resultInvalid?: boolean;
   artifacts: Array<{
     uid: string;
     studentUid: string;
@@ -500,6 +530,9 @@ export default function StudentScanner() {
     setVideoUploadQuota: setUploadQuota,
     imageUploadQuota,
     setImageUploadQuota,
+    openJobsPanel,
+    setMobileActionBarHidden,
+    stacked,
   } = useOutletContext<ScannerOutletContext>();
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [allowsTrainingDataUse, setAllowsTrainingDataUse] = useState(false);
@@ -545,6 +578,9 @@ export default function StudentScanner() {
     acceptJob,
     updateJob,
     resetForNewUpload,
+    refreshJob,
+    beginNewUpload,
+    statusError,
     cancelResult,
   } = lifecycle;
 
@@ -562,6 +598,7 @@ export default function StudentScanner() {
       return;
     }
 
+    beginNewUpload();
     setError(null);
     setPartialFailure(null);
     setPhase("uploading");
@@ -639,9 +676,16 @@ export default function StudentScanner() {
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
-      updateJob((currentJob) => (currentJob ? { ...currentJob, application: response.application } : null));
+      // The summary is read again with the job detail below; until then the completion view shows it is loading.
+      updateJob((currentJob) =>
+        currentJob ? { ...currentJob, application: response.application, completionSummary: undefined } : null,
+      );
       setPhase("applied");
       notifyScannerJobsChanged();
+      // A failed re-read leaves no summary to wait for: the completion view then shows its error with a new upload.
+      if ((await refreshJob()) === "failed") {
+        updateJob((currentJob) => (currentJob ? { ...currentJob, completionSummary: null } : null));
+      }
     } catch (applyError) {
       setPhase("review");
       setError(toScannerErrorMessage(applyError));
@@ -686,104 +730,165 @@ export default function StudentScanner() {
     (selectedUpload.images.length > 0 && (!imageUploadQuota || imageUploadQuota.remaining === 0)) ||
     (selectedUpload.video !== null && (!uploadQuota || uploadQuota.remaining === 0));
   const selectedPartialFailure = getStudentUploadPartialFailureForJob(partialFailure, selectedJobUid);
+  const isApplied = job?.application?.status === "applied";
+  const isReviewing = job?.status === "review_ready" && job.result != null && !isApplied;
+  // Stacked layouts pin the primary action to the bottom: the upload bar once files are selected, and the review bar.
+  const showsUploadBar = stacked && !job && !selectedJobUid && selectedFiles.length > 0;
+  const hasFixedBar = stacked && (showsUploadBar || isReviewing);
+  // One body per job state. Each step below renders only when it is the body.
+  const stepBody = getScannerStepBody({
+    hasSelectedJob: selectedJobUid !== null,
+    hasJob: job !== null,
+    phase,
+    isApplied,
+    isTerminal: job ? TERMINAL_JOB_STATUSES.has(job.status) : false,
+    reviewBody: getStudentReviewBody(job),
+  });
+  // The site's mobile bar hides only while a step bar takes its place: files chosen for a new upload, or the review.
+  // Files kept after a submit do not count, so recognizing and completion show the bar again.
+  const hidesMobileActionBar = (!job && !selectedJobUid && selectedFiles.length > 0) || isReviewing;
+  useEffect(() => {
+    setMobileActionBarHidden(hidesMobileActionBar);
+    return () => setMobileActionBarHidden(false);
+  }, [hidesMobileActionBar, setMobileActionBarHidden]);
 
-  const uploadContent = !selectedJobUid ? (
-    <ScannerUploadSection
-      title="학생 성장도 파일 업로드"
-      description="학생 성장도 정보를 확인할 수 있는 이미지 또는 영상을 업로드해주세요."
-      descriptionLines={[
-        "이미지: 게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 뒤 스크린샷을 찍어주세요.",
-        "영상: 같은 화면에서 좌/우 화살표로 이동하는 과정을 녹화해주세요.",
-      ]}
-      inputId="student-scanner-files"
-      accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
-      multiple
-      selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
-      onFiles={selectFiles}
-      icon={<PhotoIcon className="size-6" aria-hidden="true" />}
-      targetGuide={selectedFiles.length === 0 ? <ScannerUploadTargetGuide target="student" /> : undefined}
-      helpText="1회당 최대 이미지 30장 또는 영상 1개"
-      dropDetail={
-        selectedFiles.length > 0 ? (
-          <span className="mt-2 flex max-w-full flex-col items-center gap-1.5 text-xs text-muted-foreground">
-            <span>
-              {selectedUpload.images.length > 0
-                ? `이미지 ${selectedUpload.images.length}장 · ${formatScannerBytes(selectedImageBytes)}`
-                : ""}
-              {selectedUpload.video ? ` · 영상 ${formatScannerBytes(selectedUpload.video.size)}` : ""}
-              {phase === "uploading"
-                ? hashProgress < 1
-                  ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
-                  : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
-                : ""}
-            </span>
-            {phase === "uploading" ? (
-              <progress
-                aria-label={hashProgress < 1 ? "학생 이미지·영상 파일 확인 진행률" : "학생 이미지·영상 업로드 진행률"}
-                className="h-1.5 w-40 accent-primary"
-                max={1}
-                value={hashProgress < 1 ? hashProgress : uploadProgress}
-              />
-            ) : null}
-          </span>
-        ) : null
-      }
-      consentChecked={allowsTrainingDataUse}
-      consentDisabled={phase !== "idle"}
-      onConsentChange={setAllowsTrainingDataUse}
-      actionDisabled={uploadActionDisabled}
-      actionLabel={
-        phase === "uploading"
-          ? hashProgress < 1
-            ? "파일 확인 중..."
-            : `업로드 ${Math.round(uploadProgress * 100)}%`
-          : "인식 시작"
-      }
-      onAction={startRecognition}
-    >
-      <ScannerFileList
-        files={selectedFiles}
-        disabled={phase !== "idle"}
-        onRemove={(index) => {
-          if (phase !== "idle") return;
-          setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
-          setError(null);
-        }}
-      />
-      {selectedFiles.length > 0 ? (
-        <div className="flex justify-end">
-          <Button size="sm" disabled={phase !== "idle"} onClick={clearSelectedFiles}>
-            선택 초기화
+  const stepStates = getStudentStepStates(phase, job);
+  const uploadPercent = Math.round((hashProgress < 1 ? hashProgress : uploadProgress) * 100);
+  const selectedSummary = [
+    selectedUpload.images.length > 0
+      ? `이미지 ${selectedUpload.images.length}장 · ${formatScannerBytes(selectedImageBytes)}`
+      : null,
+    selectedUpload.video ? `영상 ${formatScannerBytes(selectedUpload.video.size)}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  // The stacked "최근 작업" button shows only while the mobile action bar is hidden (files selected, review).
+  const recentJobsButton =
+    stacked && hidesMobileActionBar ? (
+      <Button variant="secondary" onClick={openJobsPanel}>
+        최근 작업
+      </Button>
+    ) : null;
+  const headerAction =
+    job && !TERMINAL_JOB_STATUSES.has(job.status) && !isApplied && phase !== "applying" ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={() => resetForNewUpload()}>
+          <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+          {scannerMessages.student.uploadAction}
+        </Button>
+        {recentJobsButton}
+      </div>
+    ) : (
+      recentJobsButton
+    );
+
+  const uploadStep = !selectedJobUid ? (
+    <>
+      <ScannerStepHeader states={stepStates} action={headerAction}>
+        {phase === "uploading" ? (
+          <>
+            <ScannerStepTitle title="파일을 업로드하고 있어요" meta={selectedSummary} />
+            <ProgressBar
+              value={hashProgress < 1 ? hashProgress : uploadProgress}
+              max={1}
+              label={hashProgress < 1 ? "파일 확인 진행률" : "업로드 진행률"}
+            />
+            <p className="text-sm text-v2-fg-secondary tabular-nums">
+              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`} · 업로드가 끝나면 바로
+              인식을 시작해요.
+            </p>
+          </>
+        ) : (
+          <ScannerStepTitle
+            title={selectedFiles.length === 0 ? "이미지 또는 영상을 선택해 주세요" : "인식을 시작할 수 있어요"}
+            meta={selectedFiles.length === 0 ? "1회 최대 이미지 30장 또는 영상 1개" : selectedSummary}
+          />
+        )}
+        {selectedQuotaError ? <StatusNotice tone="warning">{selectedQuotaError}</StatusNotice> : null}
+        {selectedPartialFailure && phase !== "review" && phase !== "applying" ? (
+          <StatusNotice tone="warning">일부 파일만 제출됐어요. {selectedPartialFailure}</StatusNotice>
+        ) : null}
+      </ScannerStepHeader>
+      <ScannerUploadSection
+        inputId="student-scanner-files"
+        inputLabel="이미지 또는 영상 파일 선택"
+        accept="image/png,image/jpeg,image/webp,video/mp4,video/quicktime,.png,.jpg,.jpeg,.webp,.mp4,.mov"
+        multiple
+        selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
+        onFiles={selectFiles}
+        targetGuide={<ScannerUploadTargetGuide target="student" className="w-44 shrink-0" />}
+        targetPath="[학생] > [기본 정보]"
+        selectLabel="이미지·영상 선택"
+        helpText="1회당 최대 이미지 30장 또는 영상 1개"
+        descriptionLines={[
+          "이미지: 게임 내 [학생] 메뉴에서 학생을 한 명 선택하여 [기본 정보] 화면을 띄운 뒤 스크린샷을 찍어주세요.",
+          "영상: 같은 화면에서 좌/우 화살표로 이동하는 과정을 녹화해주세요.",
+        ]}
+        consentChecked={allowsTrainingDataUse}
+        consentDisabled={phase !== "idle"}
+        onConsentChange={setAllowsTrainingDataUse}
+        actionDisabled={uploadActionDisabled}
+        actionLabel="인식 시작"
+        onAction={startRecognition}
+        stacked={stacked}
+        hasFiles={selectedFiles.length > 0}
+      >
+        <ScannerFileList
+          files={selectedFiles}
+          disabled={phase !== "idle"}
+          onRemove={(index) => {
+            if (phase !== "idle") return;
+            setSelectedFiles((current) => current.filter((_, fileIndex) => fileIndex !== index));
+            setError(null);
+          }}
+          onClear={clearSelectedFiles}
+        />
+      </ScannerUploadSection>
+      {showsUploadBar ? (
+        <PageActionBar placement="fixed" summary={selectedSummary}>
+          <Button variant="primary" disabled={uploadActionDisabled} onClick={startRecognition}>
+            인식 시작
           </Button>
-        </div>
+        </PageActionBar>
       ) : null}
-    </ScannerUploadSection>
+    </>
   ) : null;
 
-  const progressContent =
+  const waitingStep =
     phase === "waiting" && job ? (
-      <ScannerProgressCard
-        title="학생 성장도를 인식하고 있어요"
-        description="이미지 또는 영상에서 학생 정보를 읽고 있어요. 화면을 벗어나도 인식은 계속 진행돼요."
-        progress={job.progress}
-        segmentStatuses={[
-          ...job.images.map((image) => ({ key: image.uid, status: image.status })),
-          ...(job.video ? [{ key: `video:${job.video.inputUid}`, status: job.video.status }] : []),
-        ]}
-        segmentLabel="파일 처리"
-        remainingLabel="{remaining}개 남았어요"
-        etaLabel="파일 종류와 수에 따라 시간이 달라질 수 있어요."
-      />
+      <>
+        <ScannerStepHeader states={stepStates} action={headerAction}>
+          {job.status === "queued" ? (
+            <ScannerStepTitle title="인식 대기 중이에요" meta="곧 인식을 시작해요" />
+          ) : (
+            <>
+              <ScannerStepTitle
+                title="학생 성장도를 인식하고 있어요"
+                meta={`${job.progress.total}장 중 ${processedStudentCountOf(job)}장 처리 · 완료 ${job.progress.completed} · 실패 ${job.progress.failed} · 대기 ${job.progress.total - processedStudentCountOf(job)}`}
+              />
+              <ProgressBar value={processedStudentCountOf(job)} max={job.progress.total} label="인식 진행률" />
+            </>
+          )}
+          <p className="text-sm text-v2-fg-secondary">
+            페이지를 닫아도 인식은 계속돼요. 파일 종류와 수에 따라 시간이 달라질 수 있어요.
+          </p>
+        </ScannerStepHeader>
+        <ScannerFileStatusList items={toStudentFileStatusItems(job)} />
+      </>
     ) : null;
 
-  const reviewContent =
-    job?.status === "review_ready" && job.result ? (
+  const reviewStep =
+    isReviewing && job?.result ? (
       <ReviewPanel
         key={job.uid}
         job={{ ...job, result: job.result }}
         review={review}
         excludedStudentUids={excludedStudentUids}
         phase={phase}
+        stepStates={stepStates}
+        headerAction={headerAction}
+        stacked={stacked}
         onReviewChange={setReview}
         onExcludeStudent={(studentUid) =>
           setExcludedStudentUids((current) => {
@@ -792,83 +897,237 @@ export default function StudentScanner() {
             return next;
           })
         }
+        onRestoreStudent={(studentUid) =>
+          setExcludedStudentUids((current) => {
+            const next = new Set(current);
+            next.delete(studentUid);
+            return next;
+          })
+        }
         onApply={applyReview}
         onCancel={cancelResult}
-        onStartNew={() => resetForNewUpload()}
         isCancelling={isCancelling}
         error={error}
         partialFailure={selectedPartialFailure}
       />
     ) : null;
 
-  const completionContent = (
-    <>
-      {job?.status === "review_ready" && !job.result ? (
-        <ScannerCompletionState
-          tone="destructive"
-          title="학생 인식 결과를 확인하지 못했어요"
-          description={getScannerUnavailableResultMessage()}
-          actionLabel={scannerMessages.student.uploadAction}
-          onStartNew={() => resetForNewUpload()}
-        />
-      ) : null}
+  const completionState = getScannerCompletionState(job?.completionSummary);
+  const completionStep =
+    job && isApplied ? (
+      <>
+        <ScannerStepHeader states={stepStates} action={headerAction}>
+          <ScannerStepTitle
+            title="반영했어요"
+            meta={
+              completionState.kind === "summary"
+                ? `학생 ${completionState.summary.appliedCount}명 · ${formatScannerQuotaAvailability(job.updatedAt)}`
+                : formatScannerQuotaAvailability(job.updatedAt)
+            }
+          />
+        </ScannerStepHeader>
+        {completionState.kind === "summary" ? (
+          <ScannerCompletionSummary
+            title="반영 결과"
+            meta=""
+            summary={`반영 ${completionState.summary.appliedCount}명${completionState.summary.excludedCount > 0 ? ` · 제외 ${completionState.summary.excludedCount}명` : ""}`}
+            actions={
+              <Button variant="primary" className="w-full sm:w-auto" onClick={() => resetForNewUpload()}>
+                <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                {scannerMessages.student.uploadAction}
+              </Button>
+            }
+          >
+            <div className="flex flex-col gap-v2-block-gap">
+              <StudentCompletionList title="반영한 학생" students={completionState.summary.applied} />
+              {completionState.summary.excluded.length > 0 ? (
+                <StudentCompletionList title="제외한 학생" students={completionState.summary.excluded} />
+              ) : null}
+            </div>
+          </ScannerCompletionSummary>
+        ) : completionState.kind === "loading" ? (
+          <ScannerEndBlock
+            action={
+              <Button variant="primary" onClick={() => resetForNewUpload()}>
+                <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                {scannerMessages.student.uploadAction}
+              </Button>
+            }
+          >
+            <p role="status" className="text-sm text-v2-fg-tertiary">
+              반영 기록을 불러오고 있어요
+            </p>
+          </ScannerEndBlock>
+        ) : (
+          // Without a summary there are no counts to show, but a new upload stays one step away.
+          <ScannerEndBlock
+            action={
+              <Button variant="primary" onClick={() => resetForNewUpload()}>
+                <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                {scannerMessages.student.uploadAction}
+              </Button>
+            }
+          >
+            <StatusNotice tone="danger">{completionState.message}</StatusNotice>
+          </ScannerEndBlock>
+        )}
+      </>
+    ) : null;
 
-      {job &&
-      selectedJobUid &&
-      phase === "idle" &&
-      error &&
-      !TERMINAL_JOB_STATUSES.has(job.status) &&
-      !(job.status === "review_ready" && !job.result) ? (
-        <ScannerCompletionState
-          tone="destructive"
-          title="인식 작업 상태를 확인하지 못했어요"
-          description={error}
-          actionLabel={scannerMessages.student.uploadAction}
-          onStartNew={() => resetForNewUpload(false)}
-        />
-      ) : null}
+  const endStep =
+    job && TERMINAL_JOB_STATUSES.has(job.status) ? (
+      <>
+        <ScannerStepHeader states={stepStates}>
+          <ScannerStepTitle
+            title={getScannerTerminalJobTitle(job.status, job.jobKind)}
+            meta={formatScannerRelativeTime(job.createdAt)}
+          />
+        </ScannerStepHeader>
+        <ScannerEndBlock
+          action={
+            <Button variant="primary" onClick={() => resetForNewUpload()}>
+              <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+              {scannerMessages.student.uploadAction}
+            </Button>
+          }
+        >
+          {getScannerTerminalJobDescription(job.status, job.jobKind, job.images)}
+        </ScannerEndBlock>
+      </>
+    ) : null;
 
-      {job?.status === "review_ready" && job.application?.status === "applied" ? (
-        <ScannerCompletionState
-          title="학생 성장도 반영이 완료됐어요"
-          description="새로운 인식을 시작하려면 아래 버튼을 눌러주세요."
-          actionLabel={scannerMessages.student.uploadAction}
-          onStartNew={() => resetForNewUpload()}
-        />
-      ) : null}
-
-      {job && TERMINAL_JOB_STATUSES.has(job.status) ? (
-        <ScannerCompletionState
-          tone="destructive"
-          title={getScannerTerminalJobTitle(job.status, job.jobKind)}
-          description={getScannerTerminalJobDescription(job.status, job.jobKind, job.images)}
-          actionLabel={scannerMessages.student.uploadAction}
-          onStartNew={() => resetForNewUpload()}
-        />
-      ) : null}
-    </>
-  );
+  // The unavailable state: the explicit notice, with no computed counts and no retry. The actions are "결과 삭제" and "새로 업로드".
+  const unavailableStep =
+    job?.status === "review_ready" && (!job.result || job.resultInvalid) ? (
+      <ScannerStepHeader states={stepStates}>
+        <ScannerStepTitle title="학생 인식 결과를 확인하지 못했어요" />
+        <StatusNotice tone="danger">{getScannerUnavailableResultMessage()}</StatusNotice>
+        {/* The transition stores the unavailable message as the error; anything else is a failed delete request. */}
+        {error && error !== getScannerUnavailableResultMessage() ? (
+          <StatusNotice tone="danger">{error}</StatusNotice>
+        ) : null}
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={isCancelling} onClick={cancelResult}>
+            {isCancelling ? "삭제 중..." : "결과 삭제"}
+          </Button>
+          <Button variant="primary" disabled={isCancelling} onClick={() => resetForNewUpload()}>
+            <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+            {scannerMessages.student.uploadAction}
+          </Button>
+        </div>
+      </ScannerStepHeader>
+    ) : null;
 
   return (
-    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error && phase !== "review" && phase !== "applying" && !(selectedJobUid && job && phase === "idle") ? (
-        <Callout tone="destructive">{error}</Callout>
-      ) : selectedPartialFailure && phase !== "review" && phase !== "applying" ? (
-        <Callout tone="warning" title="일부 파일만 제출됐어요">
-          {selectedPartialFailure}
-        </Callout>
+    <div
+      className={cn(
+        "flex flex-col gap-v2-block-gap",
+        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+5.5rem)]" : "pb-v2-block-p",
+      )}
+    >
+      {error && stepBody !== "unavailable" && phase !== "review" && phase !== "applying" ? (
+        <StatusNotice tone="danger">{error}</StatusNotice>
       ) : null}
-      {selectedQuotaError && !error ? <Callout tone="warning">{selectedQuotaError}</Callout> : null}
-      {selectedJobUid && !job ? <ScannerJobSkeleton variant="student" /> : null}
-      <ScannerJobShell
-        phase={phase}
-        upload={uploadContent}
-        progress={progressContent}
-        review={reviewContent}
-        completion={completionContent}
-      />
+      {statusError ? (
+        <ScannerJobStatusNotice
+          title={getScannerJobStatusView(statusError.kind).title}
+          action={getScannerJobStatusView(statusError.kind).action}
+          onRetry={() => void refreshJob()}
+          onStartNew={() => resetForNewUpload(false)}
+          startNewLabel={scannerMessages.student.uploadAction}
+        />
+      ) : null}
+      {selectedJobUid && !job && !statusError ? <ScannerJobSkeleton /> : null}
+      {stepBody === "upload" ? uploadStep : null}
+      {stepBody === "waiting" ? waitingStep : null}
+      {stepBody === "review" ? reviewStep : null}
+      {stepBody === "completion" ? completionStep : null}
+      {stepBody === "terminal" ? endStep : null}
+      {stepBody === "unavailable" ? unavailableStep : null}
     </div>
   );
+}
+
+// A completion list (V10): small portraits with the name beside each, in up to five columns.
+function StudentCompletionList({
+  title,
+  students,
+}: {
+  title: string;
+  students: ReadonlyArray<{ uid: string; name?: string | null }>;
+}) {
+  return (
+    <div className="flex flex-col gap-v2-group-gap">
+      <p className="text-sm font-semibold text-v2-fg">{title}</p>
+      <ul className="grid grid-cols-2 gap-x-v2-column-gap gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
+        {students.map((student) => (
+          <li key={student.uid} className="flex min-h-7 min-w-0 items-center gap-2 text-sm">
+            <StudentThumb
+              studentUid={student.uid}
+              name={student.name ?? "학생 정보 없음"}
+              variant={null}
+              recruitmentLabel=""
+              isNew={false}
+              favorite={NO_FAVORITE_LABEL}
+              small
+              showCaption={false}
+            />
+            <span className="truncate text-v2-fg">{student.name ?? "학생 정보 없음"}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+const NO_FAVORITE_LABEL: FavoriteLabelState = {
+  visible: false,
+  icon: "unfavorited",
+  countText: null,
+  accessibleName: "",
+};
+
+function processedStudentCountOf(job: StudentVideoJob): number {
+  return job.progress.completed + job.progress.failed;
+}
+
+function toStudentFileStatusItems(job: StudentVideoJob): ScannerFileStatusItem[] {
+  const items: ScannerFileStatusItem[] = job.images.map((image) => ({
+    key: image.uid,
+    name: image.filename,
+    status: toFileStatus(image.status),
+  }));
+  if (job.video) {
+    items.push({ key: `video:${job.video.inputUid}`, name: "영상", status: toFileStatus(job.video.status) });
+  }
+  return items;
+}
+
+function toFileStatus(status: string): ScannerFileStatusItem["status"] {
+  if (status === "succeeded") return "done";
+  if (status === "failed") return "failed";
+  if (status === "queued") return "queued";
+  return "processing";
+}
+
+// The review body for a reviewable job. A missing or unreadable result is the unavailable state, never a review.
+export function getStudentReviewBody(
+  job: Pick<StudentVideoJob, "status" | "result" | "resultInvalid"> | null,
+): "review" | "unavailable" | null {
+  if (job?.status !== "review_ready") return null;
+  return job.result && !job.resultInvalid ? "review" : "unavailable";
+}
+
+export function getStudentStepStates(phase: ScannerPhase, job: StudentVideoJob | null): ScannerStepStates {
+  if (!job) return ["active", "pending", "pending", "pending"];
+  if (job.status === "expired") return ["failed", "pending", "pending", "pending"];
+  if (job.status === "cancelled") return ["pending", "pending", "pending", "pending"];
+  if (job.status === "failed") return ["done", "failed", "pending", "pending"];
+  if (["queued", "processing", "finalizing"].includes(job.status)) return ["done", "active", "pending", "pending"];
+  if (job.status === "review_ready" && !job.result) return ["done", "done", "failed", "pending"];
+  if (job.application?.status === "applied") return ["done", "done", "done", "done"];
+  if (phase === "applying") return ["done", "done", "done", "active"];
+  return ["done", "done", "active", "pending"];
 }
 
 function ReviewPanel({
@@ -876,11 +1135,14 @@ function ReviewPanel({
   review,
   excludedStudentUids,
   phase,
+  stepStates,
+  headerAction,
+  stacked,
   onReviewChange,
   onExcludeStudent,
+  onRestoreStudent,
   onApply,
   onCancel,
-  onStartNew,
   isCancelling,
   error,
   partialFailure,
@@ -889,11 +1151,14 @@ function ReviewPanel({
   review: ReviewState;
   excludedStudentUids: ReadonlySet<string>;
   phase: ScannerPhase;
-  onReviewChange: React.Dispatch<React.SetStateAction<ReviewState>>;
+  stepStates: ScannerStepStates;
+  headerAction: ReactNode;
+  stacked: boolean;
+  onReviewChange: Dispatch<SetStateAction<ReviewState>>;
   onExcludeStudent: (studentUid: string) => void;
+  onRestoreStudent: (studentUid: string) => void;
   onApply: (remainingReviewStudentCount: number, excludedStudentUids: ReadonlySet<string>) => void;
   onCancel: () => void;
-  onStartNew: () => void;
   isCancelling: boolean;
   error: string | null;
   partialFailure: string | null;
@@ -919,14 +1184,18 @@ function ReviewPanel({
   const saveableStudentCount = activeStudents.filter(
     (student) => review[student.studentUid]?.confirmed.tier && validStudentUids.has(student.studentUid),
   ).length;
-  const reviewDescription =
-    remainingReviewStudents.length > 0
-      ? `${job.result.students.length}명 인식 · ${remainingReviewStudents.length}명 검토 필요`
-      : `${job.result.students.length}명 인식 · 검토 완료`;
+  const reviewMeta = [
+    `학생 ${job.result.students.length}명 인식`,
+    `${remainingReviewStudents.length}명 확인 필요`,
+    failedImages.length > 0 ? `이미지 ${failedImages.length}장 실패` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const showReviewRequiredOnly = reviewFilterStudentUids !== null;
+  // An excluded student keeps its row, dimmed with a restore action, so the list does not shift under the pointer.
   const visibleStudents = showReviewRequiredOnly
-    ? activeStudents.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
-    : activeStudents;
+    ? job.result.students.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
+    : job.result.students;
 
   useEffect(() => {
     if (!pendingFocusTarget) return;
@@ -952,9 +1221,12 @@ function ReviewPanel({
   };
 
   const excludeStudent = (studentUid: string, studentName: string) => {
-    const currentIndex = visibleStudents.findIndex((student) => student.studentUid === studentUid);
+    const focusableStudents = visibleStudents.filter(
+      (student) => student.studentUid === studentUid || !excludedStudentUids.has(student.studentUid),
+    );
+    const currentIndex = focusableStudents.findIndex((student) => student.studentUid === studentUid);
     const nextFocusStudentUid =
-      visibleStudents[currentIndex + 1]?.studentUid ?? visibleStudents[currentIndex - 1]?.studentUid ?? null;
+      focusableStudents[currentIndex + 1]?.studentUid ?? focusableStudents[currentIndex - 1]?.studentUid ?? null;
     setPendingFocusTarget(
       nextFocusStudentUid === null ? { kind: "action-bar" } : { kind: "student", studentUid: nextFocusStudentUid },
     );
@@ -962,252 +1234,276 @@ function ReviewPanel({
     onExcludeStudent(studentUid);
   };
 
+  const registerExcludeButton = (studentUid: string) => (element: HTMLButtonElement | null) => {
+    if (!element) {
+      excludeButtonRefs.current.delete(studentUid);
+      return;
+    }
+    excludeButtonRefs.current.set(studentUid, element);
+  };
+
+  const restoreStudent = (studentUid: string, studentName: string) => {
+    setPendingFocusTarget({ kind: "student", studentUid });
+    setExclusionAnnouncement(`${studentName} 학생을 다시 저장 대상에 넣었어요.`);
+    onRestoreStudent(studentUid);
+  };
+
+  const rowsEmpty =
+    visibleStudents.length === 0 ? (
+      <p className="rounded-lg bg-v2-surface px-4 py-8 text-center text-sm text-v2-fg-tertiary">
+        {showReviewRequiredOnly ? "검토가 필요한 데이터가 없습니다." : "저장할 학생이 없습니다."}
+      </p>
+    ) : null;
+
+  const updateValueFor = (studentUid: string) => (field: ApplyFieldName, value: number | null) =>
+    updateStudent(studentUid, (current) => ({
+      ...current,
+      confirmed: { ...current.confirmed, [field]: value !== null },
+      values: { ...current.values, [field]: value === null ? "" : String(value) },
+    }));
+
   return (
-    <section className="space-y-4">
+    <>
       {exclusionAnnouncement ? (
         <p role="status" aria-live="polite" className="sr-only">
           {exclusionAnnouncement}
         </p>
       ) : null}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <SubTitle text="인식 결과 검토" description={reviewDescription} />
-        </div>
-        <div className="flex w-full min-w-0 flex-wrap justify-end gap-2 sm:w-auto">
-          <Button size="sm" onClick={onStartNew}>
-            {scannerMessages.student.uploadAction}
-          </Button>
-          <Button
-            size="sm"
-            variant={showReviewRequiredOnly ? "inverse" : "default"}
-            pressed={showReviewRequiredOnly}
-            className="gap-1.5"
-            onClick={() =>
-              setReviewFilterStudentUids((current) =>
-                current === null ? remainingReviewStudents.map(({ studentUid }) => studentUid) : null,
-              )
+      <ScannerStepHeader states={stepStates} action={headerAction}>
+        <ScannerStepTitle title="인식 결과를 검토해 주세요" meta={reviewMeta} />
+        {error ? <StatusNotice tone="danger">{error}</StatusNotice> : null}
+        {partialFailure ? <StatusNotice tone="warning">{partialFailure}</StatusNotice> : null}
+        {failedImages.length > 0 ? (
+          <StatusNotice tone="danger">
+            일부 이미지를 인식하지 못했어요. {getStudentFailedImagesDescription(failedImages)}
+          </StatusNotice>
+        ) : null}
+      </ScannerStepHeader>
+      <div className="flex flex-col gap-v2-block-gap">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <p className="text-sm font-semibold text-v2-fg tabular-nums">학생 {job.result.students.length}명</p>
+            {stacked ? null : <ReviewLegend />}
+          </div>
+          <Switch
+            id={`student-review-filter-${job.uid}`}
+            label="확인 필요만 보기"
+            checked={showReviewRequiredOnly}
+            onCheckedChange={(checked) =>
+              setReviewFilterStudentUids(checked ? remainingReviewStudents.map(({ studentUid }) => studentUid) : null)
             }
-          >
-            <FunnelIcon className="size-4 shrink-0" aria-hidden="true" />
-            <span>검토가 필요한 데이터만 보기</span>
-          </Button>
+          />
         </div>
-      </div>
 
-      {error || partialFailure || failedImages.length > 0 ? (
-        <div role="alert" className="space-y-1 text-sm text-destructive">
-          {error ? <p>{error}</p> : null}
-          {partialFailure ? <p>{partialFailure}</p> : null}
-          {failedImages.length > 0 ? (
-            <p>
-              <span className="font-semibold">일부 이미지를 인식하지 못했어요.</span>{" "}
-              {getStudentFailedImagesDescription(failedImages)}
-            </p>
-          ) : null}
-        </div>
-      ) : null}
-
-      <div className="max-h-[70vh] max-w-full overflow-auto rounded-lg border border-border">
-        <table className="w-full min-w-[64rem] table-fixed border-collapse text-sm">
-          <colgroup>
-            <col className="w-24" />
-            <col className="w-[20.5rem]" />
-            <col className="w-56" />
-            <col className="w-56" />
-            <col className="w-[10.5rem]" />
-          </colgroup>
-          <thead className="text-xs text-muted-foreground">
-            <tr className="border-b border-border">
-              <th
-                scope="col"
-                className="sticky top-0 left-0 z-30 w-24 bg-muted/95 px-1 py-2 text-center font-semibold backdrop-blur-sm"
-              >
-                학생
-              </th>
-              <ReviewGroupHeader
-                label="기본 정보"
-                fields={[tierField, ...basicNumberFields]}
-                gridClass={BASIC_GROUP_GRID}
-              />
-              <ReviewGroupHeader label="스킬" fields={skillFields} />
-              <ReviewGroupHeader label="장비" fields={equipmentFields} />
-              <ReviewGroupHeader label="능력 해방" fields={abilityFields} />
-            </tr>
-          </thead>
-          <tbody>
+        {stacked ? (
+          <div className="flex flex-col gap-v2-block-gap">
             {visibleStudents.map((student) => {
               const state = review[student.studentUid];
               const catalogStudent = job.studentCatalog?.[student.studentUid];
               const studentName = catalogStudent?.name ?? student.studentName;
               const artifact = artifactsByStudentUid.get(student.studentUid);
               if (!state) return null;
-              const reviewIssueCount = fields.filter(({ resultKey, applyKey }) => {
-                const detail = student.fieldDetails[resultKey];
-                return fieldNeedsReview(
-                  detail,
-                  state.values[applyKey],
-                  state.confirmed[applyKey],
-                  job.currentStudentStates?.[student.studentUid]?.[applyKey],
-                );
-              }).length;
-              const updateValue = (field: ApplyFieldName, value: number | null) =>
-                updateStudent(student.studentUid, (current) => ({
-                  ...current,
-                  confirmed: { ...current.confirmed, [field]: value !== null },
-                  values: { ...current.values, [field]: value === null ? "" : String(value) },
-                }));
-
+              const excluded = excludedStudentUids.has(student.studentUid);
+              const initialTier = catalogStudent?.initialTier ?? tierField.min;
               return (
-                <tr
-                  key={student.studentUid}
-                  className={cn(
-                    "border-b border-border align-middle last:border-b-0",
-                    !catalogStudent && "bg-muted/30",
+                <article key={student.studentUid} className="flex flex-col gap-3 rounded-lg bg-v2-surface p-v2-block-p">
+                  <StudentIdentity
+                    studentUid={catalogStudent?.uid ?? null}
+                    name={studentName}
+                    issueCount={reviewIssueCountOf(student, state, job)}
+                    unavailable={!catalogStudent}
+                    excluded={excluded}
+                    stacked
+                    onPreview={artifact ? () => setSelectedPreview({ artifact, studentName }) : null}
+                    onExclude={() => excludeStudent(student.studentUid, studentName)}
+                    onRestore={() => restoreStudent(student.studentUid, studentName)}
+                    excludeRef={registerExcludeButton(student.studentUid)}
+                    excludeDisabled={phase === "applying" || isCancelling}
+                  />
+                  {excluded ? (
+                    <p className="text-sm text-v2-fg-tertiary">제외됨 · 반영하지 않아요</p>
+                  ) : (
+                    REVIEW_GROUPS.map((group) => (
+                      <ReviewCardGroup key={group.label} label={group.label}>
+                        {group.fields.map((field) => (
+                          <ReviewFieldCell
+                            key={field.resultKey}
+                            studentName={studentName}
+                            field={field}
+                            student={student}
+                            state={state}
+                            currentState={job.currentStudentStates?.[student.studentUid]}
+                            disabled={!catalogStudent}
+                            getInputProps={numberInputNavigation.getInputProps}
+                            onValueChange={updateValueFor(student.studentUid)}
+                            initialTier={initialTier}
+                          />
+                        ))}
+                      </ReviewCardGroup>
+                    ))
                   )}
-                >
-                  <th
-                    scope="row"
-                    className={cn(
-                      "sticky left-0 z-10 w-24 bg-card px-1 py-1.5 font-medium",
-                      !catalogStudent && "bg-muted",
-                    )}
-                  >
-                    <div className="flex min-w-0 items-stretch justify-between gap-1">
-                      <div className="relative w-11 shrink-0">
-                        <StudentCard
-                          uid={catalogStudent?.uid ?? null}
-                          name={studentName}
-                          nameSize="small"
-                          namePlacement="overlay"
-                          flush
-                        />
-                        {reviewIssueCount > 0 ? (
-                          <span
-                            title={`${reviewIssueCount}개 확인 필요`}
-                            className="absolute -top-1.5 -right-1.5 z-10 inline-flex size-6 items-center justify-center rounded-full border border-amber-500/50 bg-card/95 text-amber-500 shadow-sm shadow-black/25 backdrop-blur-sm dark:border-amber-400/40 dark:bg-muted/95 dark:text-amber-300"
-                          >
-                            <ExclamationTriangleIcon className="size-4" strokeWidth={2.25} aria-hidden="true" />
-                            <span className="sr-only">{reviewIssueCount}개 확인 필요</span>
-                          </span>
-                        ) : null}
-                        {!catalogStudent ? (
-                          <span className="mt-1 block whitespace-nowrap text-center text-xs font-semibold leading-none text-destructive">
-                            반영 불가
-                          </span>
-                        ) : null}
-                      </div>
-                      <div className="flex w-10 shrink-0 flex-col justify-center gap-1">
-                        {artifact ? (
-                          <HoverTooltip as="div" className="w-full" content="인식 화면 보기">
-                            <Button
-                              size="xs"
-                              fullWidth
-                              onClick={() =>
-                                setSelectedPreview({
-                                  artifact,
-                                  studentName,
-                                })
-                              }
-                              className="px-1"
-                            >
-                              <span aria-hidden="true">보기</span>
-                              <span className="sr-only">{studentName} 인식 화면 보기</span>
-                            </Button>
-                          </HoverTooltip>
-                        ) : null}
-                        <div
-                          className="w-full"
-                          ref={(element) => {
-                            if (!element) {
-                              excludeButtonRefs.current.delete(student.studentUid);
-                              return;
-                            }
-                            const button = element.querySelector<HTMLButtonElement>("button");
-                            if (button) excludeButtonRefs.current.set(student.studentUid, button);
-                          }}
-                        >
-                          <Button
-                            size="xs"
-                            fullWidth
-                            variant="danger-subtle"
-                            className="px-1"
-                            disabled={phase === "applying" || isCancelling}
-                            onClick={() => excludeStudent(student.studentUid, studentName)}
-                          >
-                            <span aria-hidden="true">제외</span>
-                            <span className="sr-only">{studentName} 학생을 저장 대상에서 제외</span>
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </th>
-                  <td className="border-l border-border px-1 py-1.5 align-top">
-                    <ReviewBasicGroup
-                      studentName={studentName}
-                      initialTier={catalogStudent?.initialTier ?? tierField.min}
-                      student={student}
-                      state={state}
-                      currentState={job.currentStudentStates?.[student.studentUid]}
-                      disabled={!catalogStudent}
-                      getInputProps={numberInputNavigation.getInputProps}
-                      onValueChange={updateValue}
-                    />
-                  </td>
-                  <ReviewNumberGroup
-                    studentName={studentName}
-                    student={student}
-                    state={state}
-                    currentState={job.currentStudentStates?.[student.studentUid]}
-                    fields={skillFields}
-                    disabled={!catalogStudent}
-                    getInputProps={numberInputNavigation.getInputProps}
-                    onValueChange={updateValue}
-                  />
-                  <ReviewNumberGroup
-                    studentName={studentName}
-                    student={student}
-                    state={state}
-                    currentState={job.currentStudentStates?.[student.studentUid]}
-                    fields={equipmentFields}
-                    disabled={!catalogStudent}
-                    getInputProps={numberInputNavigation.getInputProps}
-                    onValueChange={updateValue}
-                  />
-                  <ReviewNumberGroup
-                    studentName={studentName}
-                    student={student}
-                    state={state}
-                    currentState={job.currentStudentStates?.[student.studentUid]}
-                    fields={abilityFields}
-                    disabled={!catalogStudent}
-                    getInputProps={numberInputNavigation.getInputProps}
-                    onValueChange={updateValue}
-                  />
-                </tr>
+                </article>
               );
             })}
-            {visibleStudents.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-4 py-12 text-center text-sm text-muted-foreground">
-                  {showReviewRequiredOnly ? "검토가 필요한 데이터가 없습니다." : "저장할 학생이 없습니다."}
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+            {rowsEmpty}
+          </div>
+        ) : (
+          <div className="max-h-[70vh] max-w-full overflow-auto overscroll-contain rounded-lg bg-v2-surface">
+            <table className="w-full min-w-[50rem] table-fixed border-separate border-spacing-0 text-sm">
+              <colgroup>
+                <col className="w-[10rem]" />
+                {REVIEW_GROUPS.map((group, groupIndex) => (
+                  <col key={group.label} className={reviewGroupColumnClassName(group.fields.length, groupIndex)} />
+                ))}
+              </colgroup>
+              <thead className="text-xs">
+                <tr>
+                  <th
+                    scope="col"
+                    rowSpan={2}
+                    className={cn(
+                      "sticky top-0 left-0 z-30 bg-v2-surface pr-3 pb-1.5 pl-v2-block-p text-left align-bottom font-semibold text-v2-fg-secondary",
+                      tableDividerStartClassName,
+                    )}
+                  >
+                    학생
+                  </th>
+                  {REVIEW_GROUPS.map((group, groupIndex) => (
+                    <th
+                      key={group.label}
+                      scope="colgroup"
+                      className={cn(
+                        "sticky top-0 z-20 h-9 bg-v2-surface text-left align-bottom font-semibold text-v2-fg-secondary",
+                        reviewGroupCellClassName(groupIndex),
+                      )}
+                    >
+                      <span className="block border-b border-v2-divider pb-1 leading-4">{group.label}</span>
+                    </th>
+                  ))}
+                </tr>
+                <tr>
+                  {REVIEW_GROUPS.map((group, groupIndex) => (
+                    <th
+                      key={group.label}
+                      scope="col"
+                      className={cn(
+                        "sticky top-9 z-20 h-7 bg-v2-surface font-medium text-v2-fg-tertiary",
+                        reviewGroupCellClassName(groupIndex),
+                        groupIndex === REVIEW_GROUPS.length - 1
+                          ? tableDividerEndClassName
+                          : "border-b border-v2-divider",
+                      )}
+                    >
+                      <span className={cn("grid", group.fields.length === 3 ? "grid-cols-3" : "grid-cols-4")}>
+                        {group.fields.map((field) => (
+                          <span key={field.resultKey} className="truncate text-center">
+                            {getReviewFieldLabel(field)}
+                          </span>
+                        ))}
+                      </span>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleStudents.map((student, rowIndex) => {
+                  const state = review[student.studentUid];
+                  const catalogStudent = job.studentCatalog?.[student.studentUid];
+                  const studentName = catalogStudent?.name ?? student.studentName;
+                  const artifact = artifactsByStudentUid.get(student.studentUid);
+                  if (!state) return null;
+                  const excluded = excludedStudentUids.has(student.studentUid);
+                  const initialTier = catalogStudent?.initialTier ?? tierField.min;
+                  const lastRow = rowIndex === visibleStudents.length - 1;
+
+                  return (
+                    <tr key={student.studentUid} className={cn(!catalogStudent && "opacity-60")}>
+                      <th
+                        scope="row"
+                        className={cn(
+                          "sticky left-0 z-10 bg-v2-surface py-2 pr-2 pl-v2-block-p text-left align-top font-medium",
+                          !lastRow && tableDividerStartClassName,
+                        )}
+                      >
+                        <StudentIdentity
+                          studentUid={catalogStudent?.uid ?? null}
+                          name={studentName}
+                          issueCount={reviewIssueCountOf(student, state, job)}
+                          unavailable={!catalogStudent}
+                          excluded={excluded}
+                          stacked={false}
+                          onPreview={artifact ? () => setSelectedPreview({ artifact, studentName }) : null}
+                          onExclude={() => excludeStudent(student.studentUid, studentName)}
+                          onRestore={() => restoreStudent(student.studentUid, studentName)}
+                          excludeRef={registerExcludeButton(student.studentUid)}
+                          excludeDisabled={phase === "applying" || isCancelling}
+                        />
+                      </th>
+                      {excluded ? (
+                        <td
+                          colSpan={REVIEW_GROUPS.length}
+                          className={cn(
+                            "pr-v2-block-p pl-3 align-middle text-sm text-v2-fg-tertiary",
+                            !lastRow && tableDividerEndClassName,
+                          )}
+                        >
+                          제외됨 · 반영하지 않아요
+                        </td>
+                      ) : (
+                        REVIEW_GROUPS.map((group, groupIndex) => (
+                          <td
+                            key={group.label}
+                            className={cn(
+                              "py-2 align-top",
+                              reviewGroupCellClassName(groupIndex),
+                              !lastRow &&
+                                (groupIndex === REVIEW_GROUPS.length - 1
+                                  ? tableDividerEndClassName
+                                  : "border-b border-v2-divider"),
+                            )}
+                          >
+                            <ReviewFieldGroup
+                              fields={group.fields}
+                              studentName={studentName}
+                              student={student}
+                              state={state}
+                              currentState={job.currentStudentStates?.[student.studentUid]}
+                              disabled={!catalogStudent}
+                              getInputProps={numberInputNavigation.getInputProps}
+                              onValueChange={updateValueFor(student.studentUid)}
+                              initialTier={initialTier}
+                            />
+                          </td>
+                        ))
+                      )}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {rowsEmpty}
+          </div>
+        )}
       </div>
-      <div ref={actionBarRef} className="flex flex-wrap justify-end gap-2">
-        <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
-          {isCancelling ? "취소 중..." : "인식 결과 삭제"}
+      <PageActionBar
+        ref={actionBarRef}
+        placement={stacked ? "fixed" : "sticky"}
+        expandActions
+        summary={
+          phase === "applying" ? "반영 중이에요" : `반영 ${saveableStudentCount}명 · 제외 ${excludedStudentUids.size}명`
+        }
+      >
+        <Button variant="secondary" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
+          {isCancelling ? "삭제 중..." : "결과 삭제"}
         </Button>
         <Button
           variant="primary"
           disabled={phase === "applying" || isCancelling || saveableStudentCount === 0}
           onClick={() => onApply(remainingReviewStudents.length, excludedStudentUids)}
         >
-          {phase === "applying" ? "반영 중..." : "성장도 저장"}
+          반영
         </Button>
-      </div>
+      </PageActionBar>
       <ScannerImageDialog
         open={selectedPreview !== null}
         src={
@@ -1223,130 +1519,219 @@ function ReviewPanel({
         alt={selectedPreview ? `${selectedPreview.studentName} 인식 화면` : "인식 화면"}
         onClose={() => setSelectedPreview(null)}
       />
-    </section>
+    </>
   );
 }
 
-function ReviewGroupHeader({
-  label,
-  fields: groupFields,
-  gridClass,
+export function reviewIssueCountOf(student: StudentGrowthStudent, state: ReviewStudent, job: StudentVideoJob): number {
+  return fields.filter(({ resultKey, applyKey }) => {
+    const detail = student.fieldDetails[resultKey];
+    return fieldNeedsReview(
+      detail,
+      state.values[applyKey],
+      state.confirmed[applyKey],
+      job.currentStudentStates?.[student.studentUid]?.[applyKey],
+    );
+  }).length;
+}
+
+// The student cell: the portrait, the name, and the review count, with two actions that take no text width.
+// The portrait opens the recognized frame when the job has one, and a red icon button excludes the student.
+// In the table the exclude button sits at the top right of the cell, on the name line, so it keeps one place in every row.
+// On a mobile card it is the card header with the exclude button on the right.
+function StudentIdentity({
+  studentUid,
+  name,
+  issueCount,
+  unavailable,
+  excluded,
+  stacked,
+  onPreview,
+  onExclude,
+  onRestore,
+  excludeRef,
+  excludeDisabled,
 }: {
-  label: string;
-  fields: readonly FieldDefinition[];
-  gridClass?: string;
+  studentUid: string | null;
+  name: string;
+  issueCount: number;
+  unavailable: boolean;
+  excluded: boolean;
+  stacked: boolean;
+  onPreview: (() => void) | null;
+  onExclude: () => void;
+  onRestore: () => void;
+  excludeRef: (element: HTMLButtonElement | null) => void;
+  excludeDisabled: boolean;
 }) {
-  const resolvedGridClass = gridClass ?? (groupFields.length === 3 ? "grid-cols-3" : "grid-cols-4");
+  const status = unavailable ? (
+    <span className="text-xs font-semibold text-v2-danger">반영 불가</span>
+  ) : !excluded && issueCount > 0 ? (
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-warning tabular-nums">
+      <ExclamationTriangleIcon className="size-3 shrink-0" aria-hidden="true" />
+      {stacked ? `${issueCount}개 확인 필요` : issueCount}
+      {stacked ? null : <span className="sr-only">개 확인 필요</span>}
+    </span>
+  ) : null;
+  const thumbFace = (
+    <StudentThumb
+      studentUid={studentUid}
+      name={name}
+      variant={null}
+      recruitmentLabel=""
+      isNew={false}
+      favorite={NO_FAVORITE_LABEL}
+      compact
+      showCaption={false}
+    />
+  );
+  const thumb =
+    onPreview && !excluded ? (
+      <button
+        type="button"
+        aria-label={`${name} 인식 화면 보기`}
+        title="인식 화면 보기"
+        onClick={onPreview}
+        className="group relative block shrink-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      >
+        {thumbFace}
+        <span
+          aria-hidden="true"
+          className="absolute inset-0 flex items-center justify-center rounded-md bg-v2-scrim text-v2-on-media opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
+        >
+          <MagnifyingGlassPlusIcon className="size-4" />
+        </span>
+      </button>
+    ) : (
+      <span className={cn("block shrink-0", excluded && "opacity-40")}>{thumbFace}</span>
+    );
+  // The focus after an exclusion or a restore lands on this row's action, through the wrapper's button.
+  const registerAction = (wrapper: HTMLSpanElement | null) =>
+    excludeRef(wrapper?.querySelector<HTMLButtonElement>("button") ?? null);
+  const action = excluded ? (
+    <span ref={registerAction} className="inline-flex">
+      <Button
+        variant="text"
+        className={stacked ? "min-h-v2-control-min px-2.5 text-sm" : "-my-1 -ml-1.5 min-h-6 px-1.5 text-xs"}
+        disabled={excludeDisabled}
+        onClick={onRestore}
+      >
+        되돌리기
+        <span className="sr-only">{name} 학생을 다시 저장 대상에 넣기</span>
+      </Button>
+    </span>
+  ) : (
+    <span ref={registerAction} className="inline-flex">
+      <IconButton
+        icon={XMarkIcon}
+        label={`${name} 학생 제외`}
+        danger
+        disabled={excludeDisabled}
+        onClick={onExclude}
+        className={cn(
+          "text-v2-danger hover:text-v2-danger",
+          !stacked && "-my-1 -mr-1 size-6 max-lg:size-6 [&>svg]:size-3.5",
+        )}
+      />
+    </span>
+  );
+  // The main name and the variant on their own lines, in the StudentThumb caption type that Futures uses.
+  const visibleName = splitVisibleStudentName(name);
+  const nameLines = (
+    <span className="block min-w-0" title={name}>
+      <span className={cn("block truncate text-xs leading-4", excluded ? "text-v2-fg-tertiary" : "text-v2-fg")}>
+        {visibleName.name}
+      </span>
+      {visibleName.variant ? (
+        <span className="block truncate text-[0.6875rem] leading-4 text-v2-fg-tertiary">{visibleName.variant}</span>
+      ) : null}
+    </span>
+  );
+
+  if (stacked) {
+    return (
+      <div className="flex min-w-0 items-center gap-2">
+        {thumb}
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          {nameLines}
+          {status}
+        </div>
+        <div className="-mr-2 flex shrink-0 items-center">{action}</div>
+      </div>
+    );
+  }
 
   return (
-    <th
-      scope="col"
-      className="sticky top-0 z-20 border-l border-border bg-muted/95 px-2 py-2 text-center font-semibold backdrop-blur-sm"
-    >
-      <span>{label}</span>
-      <span className={cn("mt-1 grid font-medium", resolvedGridClass)}>
-        {groupFields.map(({ resultKey, label: fieldLabel }) => (
-          <span key={resultKey} className="min-w-0 text-center">
-            {fieldLabel}
-          </span>
-        ))}
-      </span>
-    </th>
+    <div className="flex min-w-0 items-center gap-2">
+      {thumb}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 items-start gap-1">
+          <span className="min-w-0 flex-1">{nameLines}</span>
+          {excluded ? null : action}
+        </div>
+        <div className="flex h-4 items-center whitespace-nowrap">{excluded ? action : status}</div>
+      </div>
+    </div>
   );
 }
 
-function ReviewBasicGroup({
-  studentName,
-  initialTier,
-  student,
-  state,
-  currentState,
-  disabled,
-  getInputProps,
-  onValueChange,
-}: ReviewGroupProps & { initialTier: number }) {
-  const tierDetail = student.fieldDetails.tier;
-  const tierRecognized = tierDetail.state === "recognized";
-  const tierEditable = tierRecognized || isRecognitionFailure(tierDetail.state);
-  const tierValue = state.values.tier === "" ? null : Number(state.values.tier);
-  const tierNeedsWarning = tierRecognized && tierDetail.confidence < LOW_ACCURACY_THRESHOLD;
-  const tierFailed = isRecognitionFailure(tierDetail.state);
-  const tierFailureUnresolved = tierFailed && !state.confirmed.tier;
-  const tierComparison = getFieldComparison(tierDetail, state.values.tier, currentState?.tier, state.confirmed.tier);
-  const tierUnchanged = tierComparison === "same";
-  const tierDecreased = tierComparison === "decreased";
+// The table and the mobile cards show the same fields. The label drops the "학생 " prefix, such as "Lv".
+// The value input shows every digit: no side padding, and the spin buttons are hidden (shared scanner input class).
+const valueInputClassName = cn("min-h-v2-input-min px-0", scannerNumberInputClassName);
 
+function getReviewFieldLabel(field: FieldDefinition): string {
+  return field.label.replace("학생 ", "");
+}
+
+// The review groups in column order. Each group has one header over its fields.
+const REVIEW_GROUPS: ReadonlyArray<{ label: string; fields: readonly FieldDefinition[] }> = [
+  { label: "기본 정보", fields: [tierField, ...basicNumberFields] },
+  { label: "스킬", fields: skillFields },
+  { label: "장비", fields: equipmentFields },
+  { label: "능력 해방", fields: abilityFields },
+];
+
+// Each value is a 2.375rem segment of its group's box. The first group keeps 0.75rem from the student column,
+// the groups keep 0.75rem between them, and the last one carries the panel padding on the right.
+function reviewGroupCellClassName(groupIndex: number): string {
+  return cn(groupIndex === 0 ? "pl-3" : "pl-1.5", groupIndex === REVIEW_GROUPS.length - 1 ? "pr-v2-block-p" : "pr-1.5");
+}
+
+function reviewGroupColumnClassName(fieldCount: number, groupIndex: number): string {
+  if (groupIndex === REVIEW_GROUPS.length - 1) return fieldCount === 3 ? "w-[8.75rem]" : "w-[11.125rem]";
+  if (groupIndex === 0) return fieldCount === 3 ? "w-[8.25rem]" : "w-[10.625rem]";
+  return fieldCount === 3 ? "w-[7.875rem]" : "w-[10.25rem]";
+}
+
+// Row dividers stop at the panel padding on both ends, so every rule lines up with the content edge.
+// The sticky student cell draws its part of the rule as a background, because it covers what scrolls under it.
+const tableDividerStartClassName =
+  "[background:linear-gradient(var(--color-v2-divider),var(--color-v2-divider))_right_bottom/calc(100%-var(--spacing-v2-block-p))_1px_no-repeat,var(--color-v2-surface)]";
+const tableDividerEndClassName =
+  "[background:linear-gradient(var(--color-v2-divider),var(--color-v2-divider))_left_bottom/calc(100%-var(--spacing-v2-block-p))_1px_no-repeat,var(--color-v2-surface)]";
+
+// The key for the review table. Each sample says what the mark means. Accuracy is in each cell's tooltip only.
+function ReviewLegend() {
   return (
-    <div>
-      <div className={cn("grid overflow-hidden rounded-md border border-input bg-background", BASIC_GROUP_GRID)}>
-        <HoverTooltip
-          as="div"
-          content={`인식 정확도 ${formatConfidence(tierDetail.state === "recognized" ? tierDetail.confidence : 0)}`}
-          disabled={!tierNeedsWarning}
-          className={cn(
-            "flex min-w-0 items-center justify-center px-1",
-            tierNeedsWarning && "cursor-help",
-            tierNeedsWarning && "bg-amber-50 dark:bg-amber-500/10",
-            tierFailureUnresolved && "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-300",
-            tierUnchanged && "bg-muted/40",
-            tierDecreased && "bg-red-50 dark:bg-red-500/10",
-            !tierRecognized && !tierFailed && "bg-muted/50",
-          )}
-        >
-          {tierEditable ? (
-            <div
-              className={cn(
-                disabled && "pointer-events-none opacity-60",
-                tierUnchanged && "opacity-60",
-                tierDecreased && "[&_svg]:!text-red-600 dark:[&_svg]:!text-red-300",
-              )}
-            >
-              <TierSelector
-                initialTier={initialTier}
-                currentTier={tierValue}
-                iconSize="sm"
-                disabled={disabled}
-                onTierChange={(tier) => {
-                  onValueChange("tier", tier);
-                }}
-              />
-            </div>
-          ) : (
-            <UnavailableFieldValue state={tierDetail.state} />
-          )}
-        </HoverTooltip>
-        {basicNumberFields.map((field) => (
-          <ReviewNumberInput
-            key={field.resultKey}
-            studentName={studentName}
-            field={field}
-            detail={student.fieldDetails[field.resultKey]}
-            value={state.values[field.applyKey]}
-            currentValue={currentState?.[field.applyKey]}
-            disabled={disabled}
-            inputProps={getInputProps({ disabled })}
-            onValueChange={onValueChange}
-          />
-        ))}
-      </div>
-      <div className={cn("mt-1 grid", BASIC_GROUP_GRID)}>
-        <ReviewFieldMeta
-          detail={tierDetail}
-          proposedValue={state.values.tier}
-          currentValue={currentState?.tier ?? null}
-          confirmed={state.confirmed.tier}
-          tier
-        />
-        {basicNumberFields.map((field) => (
-          <ReviewFieldMeta
-            key={field.resultKey}
-            detail={student.fieldDetails[field.resultKey]}
-            proposedValue={state.values[field.applyKey]}
-            currentValue={currentState?.[field.applyKey] ?? null}
-            confirmed={state.confirmed[field.applyKey]}
-          />
-        ))}
-      </div>
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-tertiary">
+      <span className="flex items-center gap-1.5">
+        <span aria-hidden="true" className="size-3 rounded-sm border border-v2-control-border bg-v2-warning-subtle" />
+        확인 필요
+      </span>
+      <span className="tabular-nums">현재 10 · 저장된 값</span>
+      <span>— · 미장착</span>
+    </div>
+  );
+}
+
+// A mobile card group: the group name on the left, and its values in four columns.
+function ReviewCardGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-start gap-2">
+      <p className="flex h-[calc(1rem+var(--spacing-v2-input-min))] w-14 shrink-0 items-center pt-4 text-xs font-semibold text-v2-fg-secondary">
+        {label}
+      </p>
+      <div className="grid min-w-0 flex-1 grid-cols-4 gap-x-2">{children}</div>
     </div>
   );
 }
@@ -1361,52 +1746,175 @@ type ReviewGroupProps = {
   onValueChange: (field: ApplyFieldName, value: number | null) => void;
 };
 
-function ReviewNumberGroup({
+type ReviewFieldProps = ReviewGroupProps & {
+  field: FieldDefinition;
+  initialTier: number;
+};
+
+// The value control for one field: the tier box, a number input, or the mark of a value the recognizer did not read.
+// A segment sits inside a grouped box (the table), so it drops its own border and corners; the group draws them.
+function ReviewFieldInput({
   studentName,
+  field,
   student,
   state,
   currentState,
-  fields: groupFields,
   disabled,
   getInputProps,
   onValueChange,
-}: ReviewGroupProps & { fields: readonly FieldDefinition[] }) {
-  const gridClass = groupFields.length === 3 ? "grid-cols-3" : "grid-cols-4";
-
+  initialTier,
+  segment,
+}: ReviewFieldProps & { segment: boolean }) {
+  const detail = student.fieldDetails[field.resultKey];
+  const value = state.values[field.applyKey];
+  const warning = fieldNeedsReview(detail, value, state.confirmed[field.applyKey], currentState?.[field.applyKey]);
+  const segmentClassName = segment ? cn(segmentInputClassName, !warning && "bg-transparent") : undefined;
+  if (field.resultKey === tierField.resultKey) {
+    return (
+      <ReviewTierInput
+        studentName={studentName}
+        detail={detail}
+        value={value}
+        warning={warning}
+        initialTier={initialTier}
+        disabled={disabled}
+        inputProps={getInputProps({ disabled })}
+        onChange={(tier) => onValueChange(field.applyKey, tier)}
+        className={segmentClassName}
+        segment={segment}
+      />
+    );
+  }
   return (
-    <td className="border-l border-border px-1 py-1.5 align-top">
-      <div>
-        <div className={cn("grid overflow-hidden rounded-md border border-input bg-background", gridClass)}>
-          {groupFields.map((field) => (
-            <ReviewNumberInput
-              key={field.resultKey}
-              studentName={studentName}
-              field={field}
-              detail={student.fieldDetails[field.resultKey]}
-              value={state.values[field.applyKey]}
-              currentValue={currentState?.[field.applyKey]}
-              disabled={disabled}
-              inputProps={getInputProps({ disabled })}
-              onValueChange={onValueChange}
-            />
-          ))}
-        </div>
-        <div className={cn("mt-1 grid", gridClass)}>
-          {groupFields.map((field) => {
-            const detail = student.fieldDetails[field.resultKey];
-            return (
-              <ReviewFieldMeta
-                key={field.resultKey}
-                detail={detail}
-                proposedValue={state.values[field.applyKey]}
-                currentValue={currentState?.[field.applyKey] ?? null}
-                confirmed={state.confirmed[field.applyKey]}
-              />
-            );
-          })}
-        </div>
+    <ReviewNumberInput
+      studentName={studentName}
+      field={field}
+      detail={detail}
+      value={value}
+      warning={warning}
+      disabled={disabled}
+      inputProps={getInputProps({ disabled })}
+      onValueChange={onValueChange}
+      className={segmentClassName}
+      segment={segment}
+    />
+  );
+}
+
+// A segment of a grouped box: no border or corners of its own, and a focus ring drawn inside, so the group clips nothing.
+const segmentInputClassName = "rounded-none border-0 outline-offset-[-2px] focus-within:outline-offset-[-2px]";
+
+// One group of values in the table: one bordered box split by inner rules, with the caption line under each value.
+function ReviewFieldGroup({
+  fields: groupFields,
+  ...props
+}: ReviewGroupProps & { fields: readonly FieldDefinition[]; initialTier: number }) {
+  const gridClassName = groupFields.length === 3 ? "grid-cols-3" : "grid-cols-4";
+  return (
+    <div className="flex flex-col">
+      <div
+        className={cn(
+          "grid divide-x divide-v2-control-border overflow-hidden rounded-md border border-v2-control-border bg-v2-surface",
+          gridClassName,
+        )}
+      >
+        {groupFields.map((field) => (
+          <ReviewFieldInput key={field.resultKey} {...props} field={field} segment />
+        ))}
       </div>
-    </td>
+      <div className={cn("grid", gridClassName)}>
+        {groupFields.map((field) => (
+          <ReviewFieldMeta
+            key={field.resultKey}
+            detail={props.student.fieldDetails[field.resultKey]}
+            value={props.state.values[field.applyKey]}
+            currentValue={props.currentState?.[field.applyKey] ?? null}
+            confirmed={props.state.confirmed[field.applyKey]}
+            tier={field.resultKey === tierField.resultKey}
+            reserveLine
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// One value on a mobile card: its name above a full-width input, and a caption only when there is one.
+export function ReviewFieldCell(props: ReviewFieldProps) {
+  const { field, student, state, currentState } = props;
+  return (
+    <div className="flex min-w-0 flex-col">
+      <span className="h-4 text-center text-xs leading-4 text-v2-fg-tertiary">{getReviewFieldLabel(field)}</span>
+      <ReviewFieldInput {...props} segment={false} />
+      <ReviewFieldMeta
+        detail={student.fieldDetails[field.resultKey]}
+        value={state.values[field.applyKey]}
+        currentValue={currentState?.[field.applyKey] ?? null}
+        confirmed={state.confirmed[field.applyKey]}
+        tier={field.resultKey === tierField.resultKey}
+        reserveLine={false}
+      />
+    </div>
+  );
+}
+
+// A value the recognizer did not read. On its own it keeps the input's shape with a dashed box; as a segment it is the mark only.
+function ReviewUnavailableValue({ state, segment }: { state: StudentVideoFieldState; segment: boolean }) {
+  return (
+    <div
+      className={cn(
+        "flex min-h-v2-input-min items-center justify-center text-sm text-v2-fg-tertiary",
+        !segment && "rounded-md border border-dashed border-v2-control-border",
+      )}
+    >
+      <UnavailableFieldValue state={state} />
+    </div>
+  );
+}
+
+function ReviewTierInput({
+  studentName,
+  detail,
+  value,
+  warning,
+  initialTier,
+  disabled,
+  inputProps,
+  onChange,
+  className,
+  segment,
+}: {
+  studentName: string;
+  detail: StudentFieldDetail;
+  value: string;
+  warning: boolean;
+  initialTier: number;
+  disabled: boolean;
+  inputProps: NumberInputFlowNavigationInputProps;
+  onChange: (tier: number) => void;
+  className?: string;
+  segment: boolean;
+}) {
+  const recognized = detail.state === "recognized";
+  if (!recognized && !isRecognitionFailure(detail.state)) {
+    return <ReviewUnavailableValue state={detail.state} segment={segment} />;
+  }
+  const lowAccuracy = recognized && detail.confidence < LOW_ACCURACY_THRESHOLD;
+  return (
+    <div title={lowAccuracy ? `인식 정확도 ${formatConfidence(detail.confidence)}` : undefined}>
+      <TierInput
+        label={studentName}
+        value={value === "" ? null : Number(value)}
+        initialTier={initialTier}
+        min={tierField.min}
+        max={tierField.max}
+        disabled={disabled}
+        warning={warning}
+        flowProps={inputProps}
+        onChange={onChange}
+        className={className}
+      />
+    </div>
   );
 }
 
@@ -1415,145 +1923,104 @@ function ReviewNumberInput({
   field,
   detail,
   value,
-  currentValue,
+  warning,
   disabled,
   inputProps,
   onValueChange,
+  className,
+  segment,
 }: {
   studentName: string;
   field: FieldDefinition;
   detail: StudentFieldDetail;
   value: string;
-  currentValue?: number | null;
+  warning: boolean;
   disabled: boolean;
   inputProps: NumberInputFlowNavigationInputProps;
   onValueChange: (field: ApplyFieldName, value: number | null) => void;
+  className?: string;
+  segment: boolean;
 }) {
   const recognized = detail.state === "recognized";
-  const needsWarning = recognized && detail.confidence < LOW_ACCURACY_THRESHOLD;
-  const failed = isRecognitionFailure(detail.state);
-  const confirmed = recognized || value !== "";
-  const unresolvedFailure = failed && !confirmed;
-  const comparison = getFieldComparison(detail, value, currentValue, confirmed);
-  const unchanged = comparison === "same";
-  const decreased = comparison === "decreased";
-
+  if (!recognized && !isRecognitionFailure(detail.state)) {
+    return <ReviewUnavailableValue state={detail.state} segment={segment} />;
+  }
+  const lowAccuracy = recognized && detail.confidence < LOW_ACCURACY_THRESHOLD;
   return (
-    <HoverTooltip
-      as="div"
-      content={`인식 정확도 ${formatConfidence(recognized ? detail.confidence : 0)}`}
-      disabled={!needsWarning}
-      className={cn(
-        "min-w-0 border-l border-input first:border-l-0",
-        needsWarning && "cursor-help",
-        needsWarning && "bg-amber-50 dark:bg-amber-500/10",
-        unresolvedFailure && "bg-red-50 dark:bg-red-500/10",
-        unchanged && "bg-muted/40",
-        decreased && "bg-red-50 dark:bg-red-500/10",
-        !recognized && !failed && "bg-muted/50",
-      )}
-    >
-      {recognized ? (
-        <NumberInput
-          value={Number(value)}
-          minValue={field.min}
-          maxValue={field.max}
-          showDecrease={false}
-          showIncrease={false}
-          fullWidth
-          disabled={disabled}
-          controlClassName="max-w-none rounded-none border-0 bg-transparent focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40"
-          inputProps={{
-            ...inputProps,
-            "aria-label": `${studentName} ${field.label} 인식 결과`,
-            className: cn(
-              "h-6 px-1 py-0 text-sm font-normal tabular-nums",
-              unchanged && "text-muted-foreground/50",
-              decreased && "text-red-700 dark:text-red-300",
-            ),
-          }}
-          onChange={(nextValue) => onValueChange(field.applyKey, nextValue)}
-        />
-      ) : failed ? (
-        <NumberInput
-          nullable
-          value={value === "" ? null : Number(value)}
-          minValue={field.min}
-          maxValue={field.max}
-          showDecrease={false}
-          showIncrease={false}
-          fullWidth
-          disabled={disabled}
-          controlClassName="max-w-none rounded-none border-0 bg-transparent focus-within:ring-2 focus-within:ring-inset focus-within:ring-ring/40"
-          inputProps={{
-            ...inputProps,
-            "aria-label": `${studentName} ${field.label} 인식 결과 직접 입력`,
-            className: cn(
-              "h-6 px-1 py-0 text-sm font-normal tabular-nums",
-              unchanged && "text-muted-foreground/50",
-              decreased && "text-red-700 dark:text-red-300",
-            ),
-          }}
-          onChange={(nextValue) => onValueChange(field.applyKey, nextValue)}
-        />
-      ) : (
-        <div className="flex h-6 items-center justify-center text-sm font-normal text-muted-foreground">
-          <UnavailableFieldValue state={detail.state} />
-        </div>
-      )}
-    </HoverTooltip>
+    <div title={lowAccuracy ? `인식 정확도 ${formatConfidence(detail.confidence)}` : undefined} className="min-w-0">
+      <NumberInput
+        {...inputProps}
+        min={field.min}
+        max={field.max}
+        value={value}
+        disabled={disabled}
+        warning={warning}
+        className={cn(valueInputClassName, className)}
+        aria-label={`${studentName} ${field.label} ${recognized ? "인식 결과" : "인식 결과 직접 입력"}`}
+        onChange={(event) => {
+          const nextValue = event.currentTarget.value === "" ? null : Number(event.currentTarget.value);
+          onValueChange(field.applyKey, nextValue);
+        }}
+      />
+    </div>
   );
 }
 
+// One caption line under a value, only when it helps the check: an unconfirmed recognition failure first,
+// then the saved value when the new value is lower, then a value the user typed after a failure.
+// The saved value of a failed cell and the recognition accuracy stay in the tooltip.
 function ReviewFieldMeta({
   detail,
-  proposedValue,
+  value,
   currentValue,
   confirmed,
   tier = false,
+  reserveLine,
 }: {
   detail: StudentFieldDetail;
-  proposedValue: string;
+  value: string;
   currentValue: number | null;
   confirmed: boolean;
   tier?: boolean;
+  // The table keeps the line empty when there is no caption, so every row has the same height.
+  reserveLine: boolean;
 }) {
   const failed = isRecognitionFailure(detail.state);
-  const comparison = getFieldComparison(detail, proposedValue, currentValue, confirmed);
-  if (currentValue === null && detail.state === "recognized") {
-    return <span aria-hidden="true" />;
-  }
+  const decreased = getFieldComparison(detail, value, currentValue, confirmed) === "decreased";
+  const savedValue =
+    currentValue === null ? null : (
+      <span className="inline-flex items-center gap-0.5 tabular-nums">
+        현재 {tier ? <GrowthTier tier={currentValue} /> : currentValue}
+      </span>
+    );
+  const caption =
+    failed && !confirmed ? (
+      <span
+        className="font-medium text-v2-danger"
+        title={[fieldFailureReason(detail.state), currentValue === null ? null : `저장된 값 ${currentValue}`]
+          .filter(Boolean)
+          .join(" · ")}
+      >
+        인식 실패
+      </span>
+    ) : decreased ? (
+      savedValue
+    ) : failed ? (
+      "직접 입력"
+    ) : null;
 
+  if (!caption && !reserveLine) return null;
   return (
     <span
-      className={cn(
-        "flex min-w-0 flex-col items-center px-0.5 text-center text-xs leading-3 text-muted-foreground",
-        comparison === "same" && "opacity-50",
-        comparison === "decreased" && "text-red-700 dark:text-red-300",
-      )}
+      className="block h-4 truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary"
+      title={decreased && currentValue !== null ? `저장된 값 ${currentValue}` : undefined}
     >
-      {currentValue !== null ? (
-        <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-          현재 {tier ? <GrowthTier tier={currentValue} /> : currentValue}
-        </span>
-      ) : null}
-      {failed && !confirmed ? (
-        <HoverTooltip
-          content={fieldFailureReason(detail.state)}
-          focusable
-          className="cursor-help whitespace-nowrap rounded-sm font-medium text-red-700 outline-none focus-visible:ring-2 focus-visible:ring-ring dark:text-red-300"
-        >
-          인식 실패
-        </HoverTooltip>
-      ) : failed ? (
-        <span className="whitespace-nowrap">직접 입력</span>
-      ) : detail.state === "not_applicable" ? (
-        <span className="inline-flex items-center gap-0.5 whitespace-nowrap">{fieldStateLabel(detail.state)}</span>
-      ) : null}
+      {caption}
     </span>
   );
 }
 
+// Growth tier label: stars for 1 to 5, and the exclusive weapon icon with its level after 5.
 function GrowthTier({ tier }: { tier: number }) {
   if (tier <= 5) {
     return <span>★{tier}</span>;
@@ -1595,13 +2062,16 @@ export function getFieldComparison(
   return null;
 }
 
-function fieldNeedsReview(
+// The one predicate for a value that needs a check: a failure not yet confirmed, a low-accuracy read, or a decreased value.
+// The cell's warning background and its count in "⚠ n" both use it, so they always agree.
+export function fieldNeedsReview(
   detail: StudentFieldDetail,
   proposedValue: string,
   confirmed: boolean,
   currentValue?: number | null,
 ): boolean {
   if (isRecognitionFailure(detail.state) && !confirmed) return true;
+  if (detail.state === "recognized" && detail.confidence < LOW_ACCURACY_THRESHOLD) return true;
   return getFieldComparison(detail, proposedValue, currentValue, confirmed) === "decreased";
 }
 
@@ -1676,15 +2146,6 @@ export function buildStudentVideoApplyRequest(
       return [{ studentUid: student.studentUid, current, confirmedFields }];
     }),
   };
-}
-
-function fieldStateLabel(state: StudentVideoFieldState): string {
-  return {
-    recognized: "정확도",
-    not_applicable: "미장착",
-    unknown: "인식 실패",
-    conflict: "인식 실패",
-  }[state];
 }
 
 function formatConfidence(value: number): string {

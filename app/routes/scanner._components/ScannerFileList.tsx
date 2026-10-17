@@ -1,40 +1,43 @@
-import { XMarkIcon } from "@heroicons/react/24/outline";
+import { XMarkIcon } from "@heroicons/react/16/solid";
 import { useEffect, useState } from "react";
+import { Button } from "~/components/v2/primitives/Button";
+import { IconButton } from "~/components/v2/primitives/IconButton";
 import { cn } from "~/lib/utils";
 import { formatScannerBytes } from "./scanner-client";
 import { scannerFileKey } from "./scanner-upload";
 
+// The selected files: a count and size line with a clear action, then a preview grid. Each preview has a remove control.
 export default function ScannerFileList({
   files,
   disabled,
   onRemove,
+  onClear,
 }: {
   files: ReadonlyArray<File>;
   disabled: boolean;
   onRemove: (index: number) => void;
+  onClear: () => void;
 }) {
   if (files.length === 0) return null;
 
   return (
-    <fieldset className="space-y-3">
-      <legend className="sr-only">선택한 파일</legend>
+    <div className="flex flex-col gap-v2-group-gap">
       <div className="flex items-center justify-between gap-3 text-sm">
-        <p className="font-medium text-foreground">선택한 파일</p>
-        <p className="text-muted-foreground" aria-live="polite">
-          {files.length}개 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
+        <p className="text-v2-fg-secondary tabular-nums" aria-live="polite">
+          {files.length}장 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
         </p>
+        <Button variant="text" disabled={disabled} onClick={onClear}>
+          선택 초기화
+        </Button>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+      <ul className="grid grid-cols-2 gap-v2-block-gap sm:grid-cols-3 lg:grid-cols-6">
         {files.map((file, index) => (
-          <ScannerFilePreview
-            key={scannerFileKey(file)}
-            file={file}
-            disabled={disabled}
-            onRemove={() => onRemove(index)}
-          />
+          <li key={scannerFileKey(file)}>
+            <ScannerFilePreview file={file} disabled={disabled} onRemove={() => onRemove(index)} />
+          </li>
         ))}
-      </div>
-    </fieldset>
+      </ul>
+    </div>
   );
 }
 
@@ -49,31 +52,24 @@ function ScannerFilePreview({ file, disabled, onRemove }: { file: File; disabled
   }, [file]);
 
   return (
-    <div className="group relative overflow-hidden rounded-lg border border-border bg-muted/30">
-      <div className="aspect-video bg-muted">
+    <div className="flex min-w-0 flex-col gap-1">
+      <div className="relative aspect-video overflow-hidden rounded-md bg-v2-inset">
         {previewUrl && isVideo ? (
           <video src={previewUrl} muted playsInline preload="metadata" className="size-full object-contain" />
         ) : previewUrl ? (
           <img src={previewUrl} alt={`${file.name} 미리보기`} className="size-full object-contain" />
         ) : null}
+        <IconButton
+          icon={XMarkIcon}
+          label={`${file.name} 삭제`}
+          disabled={disabled}
+          onClick={onRemove}
+          className={cn("absolute top-1 right-1 rounded-full bg-v2-scrim text-v2-on-media")}
+        />
       </div>
-      <div className="min-w-0 px-3 py-2">
-        <p className="truncate text-xs font-medium text-foreground" title={file.name}>
-          {file.name}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{formatScannerBytes(file.size)}</p>
-      </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={onRemove}
-        aria-label={`${file.name} 삭제`}
-        className={cn(
-          "absolute right-2 top-2 flex size-7 cursor-pointer items-center justify-center rounded-full bg-black/65 text-white transition-colors hover:bg-black/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:pointer-events-none disabled:cursor-default disabled:opacity-50",
-        )}
-      >
-        <XMarkIcon className="size-4" aria-hidden="true" />
-      </button>
+      <p className="truncate text-xs text-v2-fg-tertiary" title={file.name}>
+        {file.name}
+      </p>
     </div>
   );
 }

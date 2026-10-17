@@ -51,3 +51,18 @@ describe("StudentThumb new recruitment accent", () => {
     expect(screen.getByText("신규 복각").className).not.toContain("text-v2-new");
   });
 });
+
+describe("StudentThumb without onOpen", () => {
+  it("renders the same portrait as a non-interactive element with no button role", () => {
+    renderThumb({ onOpen: undefined });
+
+    expect(screen.queryByRole("button")).toBeNull();
+    expect(screen.getByText("키사키")).toBeTruthy();
+  });
+
+  it("keeps the button when onOpen is given", () => {
+    renderThumb();
+
+    expect(screen.getByRole("button")).toBeTruthy();
+  });
+});

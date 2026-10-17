@@ -12,6 +12,7 @@ import { getRelationshipLevels } from "~/models/relationship-level";
 import { getAllStudentsMap } from "~/models/student";
 import { getSyncDraftBySourceRef } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
+import { loadItemCompletionSummary, loadStudentCompletionSummary } from "~/views/scanner-completion";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -24,6 +25,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   if (job.jobKind === "student_detail_video_v1" || job.jobKind === "student_detail_images_v1") {
     let result = null;
+    // A stored result that cannot be read is not a transient failure: the job is returned with no result and an explicit flag.
+    let resultInvalid = false;
     if (job.result) {
       try {
         result =
@@ -32,13 +35,14 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
             : parseStudentDetailImagesResult(job.result);
       } catch (error) {
         logger.error("Stored student video OCR result is invalid", error);
-        return data({ error: "인식 결과를 불러오지 못했어요. 잠시 후 다시 시도해 주세요." }, { status: 500 });
+        resultInvalid = true;
       }
     }
     if (job.status !== "review_ready" || !result) {
       return data({
         ...job,
         result,
+        resultInvalid,
         currentStudentStates: {},
         studentCatalog: {},
         application: null,
@@ -70,10 +74,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         bond: relationship.currentLevel,
       };
     }
+    const completionSummary =
+      draft?.status === "applied"
+        ? await loadStudentCompletionSummary(env, sensei.id, draft.uid, result.students, studentsMap)
+        : null;
     return data({
       ...job,
       result,
       currentStudentStates,
+      completionSummary,
       studentCatalog: Object.fromEntries(
         (result?.students ?? []).flatMap(({ studentUid }) => {
           const student = studentsMap[studentUid];
@@ -104,10 +113,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid),
       getItemCatalogResourceMap(env),
     ]);
+    const completionSummary =
+      draft?.status === "applied"
+        ? await loadItemCompletionSummary(env, sensei.id, draft.uid, review.cells, catalogResourceMap)
+        : null;
     return data({
       ...job,
       result: null,
       reviewMode: "cells" as const,
+      completionSummary,
       cells: review.cells.map(({ observationId: _observationId, candidates: _candidates, itemUid, ...cell }) => {
         const resource = itemUid ? catalogResourceMap[itemUid] : undefined;
         const sameAppearanceCandidateCount = getSameAppearanceCandidateCount(cell.reasons, _candidates);

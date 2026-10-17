@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import { runV2StateTransition } from "~/components/v2/layout/screen-transition";
 import { notifyScannerJobsChanged } from "./ScannerJobsPanel";
-import { requestScannerJson, type ScannerPhase, toScannerErrorMessage } from "./scanner-client";
+import {
+  classifyScannerJobStatusError,
+  requestScannerJson,
+  type ScannerJobStatusErrorKind,
+  type ScannerPhase,
+} from "./scanner-client";
 import { getScannerCancelConfirmation, getScannerNewUploadConfirmation } from "./scanner-messages";
 
 export type ScannerJobLike = {
@@ -14,6 +20,9 @@ export type ScannerJobLike = {
 export type ScannerJobTransition = { phase: ScannerPhase; error?: string | null };
 
 export type ScannerJobUpdate<T extends ScannerJobLike> = T | ((current: T | null) => T | null);
+
+// A failed status read. A transient failure keeps the job uid, so a retry can request the same job again.
+export type ScannerJobStatusError = { kind: ScannerJobStatusErrorKind; uid: string | null };
 
 export function getScannerPollDelay(attempt: number): number {
   const safeAttempt = Number.isFinite(attempt) ? Math.max(0, Math.floor(attempt)) : 0;
@@ -42,40 +51,69 @@ export function useScannerJob<T extends ScannerJobLike>({
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedJobUid = searchParams.get("job");
   const [job, setJob] = useState<T | null>(null);
-  const [phase, setPhase] = useState<ScannerPhase>("idle");
+  const [phase, setPhaseState] = useState<ScannerPhase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [statusError, setStatusError] = useState<ScannerJobStatusError | null>(null);
   const [isCancelling, setIsCancelling] = useState(false);
   const [pollTick, setPollTick] = useState(0);
   const pollAttemptRef = useRef(0);
-  const pendingLoadErrorRef = useRef<string | null>(null);
   const getTransitionRef = useRef(getTransition);
   const onJobRef = useRef(onJob);
   const onResetRef = useRef(onReset);
   getTransitionRef.current = getTransition;
   onJobRef.current = onJob;
   onResetRef.current = onReset;
+  // Each selection change or reset starts a new generation. A manual re-request that finishes after the user moved
+  // to another job (or started a new upload) belongs to an old generation and is dropped, so it cannot replace the view.
+  const selectionGenerationRef = useRef(0);
+  const lastSelectedJobUidRef = useRef(selectedJobUid);
+  if (lastSelectedJobUidRef.current !== selectedJobUid) {
+    lastSelectedJobUidRef.current = selectedJobUid;
+    selectionGenerationRef.current += 1;
+  }
+
+  // Every step change crosses the v2 helper, so a screen never writes a transition of its own.
+  const setPhase = useCallback((next: ScannerPhase) => {
+    runV2StateTransition("crossfade", () => setPhaseState(next));
+  }, []);
 
   const acceptJob = useCallback((next: T) => {
     const transition = getTransitionRef.current(next);
-    setJob(next);
-    setPhase(transition.phase);
-    setError(transition.error ?? null);
+    runV2StateTransition("crossfade", () => {
+      setJob(next);
+      setPhaseState(transition.phase);
+      setError(transition.error ?? null);
+      setStatusError(null);
+    });
     onJobRef.current?.(next);
     notifyScannerJobsChanged({ uid: next.uid, status: next.status, updatedAt: next.updatedAt });
+  }, []);
+
+  const clearJob = useCallback(() => {
+    runV2StateTransition("crossfade", () => {
+      setJob(null);
+      setPhaseState("idle");
+      setError(null);
+    });
   }, []);
 
   const updateJob = useCallback((next: ScannerJobUpdate<T>) => {
     setJob((current) => (typeof next === "function" ? next(current) : next));
   }, []);
 
+  // A missing job (purged, or no longer readable) ends the job view: the param is removed and only a new upload is offered.
+  const dropMissingJob = useCallback(() => {
+    setSearchParams(removeScannerJobParam, { replace: true });
+    clearJob();
+    setStatusError({ kind: "not_found", uid: null });
+    onResetRef.current?.();
+  }, [clearJob, setSearchParams]);
+
   useEffect(() => {
     let cancelled = false;
     if (!selectedJobUid) {
       pollAttemptRef.current = 0;
-      setJob(null);
-      setPhase("idle");
-      setError(pendingLoadErrorRef.current);
-      pendingLoadErrorRef.current = null;
+      clearJob();
       onResetRef.current?.();
       return () => {
         cancelled = true;
@@ -93,15 +131,15 @@ export function useScannerJob<T extends ScannerJobLike>({
       })
       .catch((loadError) => {
         if (cancelled) return;
-        const message = toScannerErrorMessage(loadError);
-        pendingLoadErrorRef.current = message;
+        const kind = classifyScannerJobStatusError(loadError);
+        // The param is stripped on failure, as before. A transient failure keeps the uid in memory for the retry.
         setSearchParams(removeScannerJobParam, { replace: true });
-        setError(message);
+        setStatusError({ kind, uid: kind === "transient" ? selectedJobUid : null });
       });
     return () => {
       cancelled = true;
     };
-  }, [acceptJob, job, selectedJobUid, setSearchParams]);
+  }, [acceptJob, clearJob, job, selectedJobUid, setSearchParams]);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: pollTick restarts the backoff timer after a transient poll failure.
   useEffect(() => {
@@ -118,7 +156,12 @@ export function useScannerJob<T extends ScannerJobLike>({
         .catch((pollError) => {
           if (cancelled) return;
           pollAttemptRef.current += 1;
-          setError(toScannerErrorMessage(pollError));
+          const kind = classifyScannerJobStatusError(pollError);
+          if (kind === "not_found") {
+            dropMissingJob();
+            return;
+          }
+          setStatusError({ kind, uid: job.uid });
           setPollTick((current) => current + 1);
         });
     }, delay);
@@ -126,7 +169,39 @@ export function useScannerJob<T extends ScannerJobLike>({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [acceptJob, job, phase, pollTick]);
+  }, [acceptJob, dropMissingJob, job, phase, pollTick]);
+
+  // Re-requests the same job after a failed status read. A success restores `?job=` and shows the job again.
+  // "stale" means the selection changed while the request ran, so the caller must not touch the current job.
+  const refreshJob = useCallback(async (): Promise<"ok" | "failed" | "stale"> => {
+    const uid = job?.uid ?? statusError?.uid ?? null;
+    if (!uid) return "stale";
+    const generation = selectionGenerationRef.current;
+    try {
+      const next = await requestScannerJson<T>(`/api/ocr/jobs/${encodeURIComponent(uid)}`);
+      if (generation !== selectionGenerationRef.current) return "stale";
+      if (!job) setSearchParams({ job: uid }, { replace: true });
+      acceptJob(next);
+      return "ok";
+    } catch (refreshError) {
+      if (generation !== selectionGenerationRef.current) return "stale";
+      const kind = classifyScannerJobStatusError(refreshError);
+      if (kind === "not_found") {
+        dropMissingJob();
+        return "failed";
+      }
+      // The status notice explains the failure; the raw request error is never shown.
+      setStatusError({ kind, uid });
+      return "failed";
+    }
+  }, [acceptJob, dropMissingJob, job, setSearchParams, statusError?.uid]);
+
+  // A new upload starts a new generation and drops the retry state of an earlier job, so a late re-request of that
+  // job cannot replace the upload in progress. The selected files are the caller's and stay as they are.
+  const beginNewUpload = useCallback(() => {
+    selectionGenerationRef.current += 1;
+    setStatusError(null);
+  }, []);
 
   const resetForNewUpload = useCallback(
     (confirmUnapplied = true) => {
@@ -134,9 +209,13 @@ export function useScannerJob<T extends ScannerJobLike>({
         if (!window.confirm(getScannerNewUploadConfirmation())) return false;
       }
       setSearchParams(removeScannerJobParam, { replace: true });
-      setJob(null);
-      setPhase("idle");
-      setError(null);
+      selectionGenerationRef.current += 1;
+      runV2StateTransition("crossfade", () => {
+        setJob(null);
+        setPhaseState("idle");
+        setError(null);
+      });
+      setStatusError(null);
       setIsCancelling(false);
       pollAttemptRef.current = 0;
       onResetRef.current?.();
@@ -158,8 +237,8 @@ export function useScannerJob<T extends ScannerJobLike>({
       resetForNewUpload(false);
       notifyScannerJobsChanged();
       return true;
-    } catch (cancelError) {
-      setError(toScannerErrorMessage(cancelError));
+    } catch {
+      setError("결과를 삭제하지 못했어요. 잠시 후 다시 시도해 주세요.");
       return false;
     } finally {
       setIsCancelling(false);
@@ -172,12 +251,15 @@ export function useScannerJob<T extends ScannerJobLike>({
     setPhase,
     error,
     setError,
+    statusError,
     isCancelling,
     selectedJobUid,
     setSearchParams,
     acceptJob,
     updateJob,
     resetForNewUpload,
+    refreshJob,
+    beginNewUpload,
     cancelResult,
   };
 }

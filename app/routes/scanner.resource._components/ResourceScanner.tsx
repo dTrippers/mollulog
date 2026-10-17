@@ -1,18 +1,36 @@
-import { ArrowsPointingOutIcon, PhotoIcon } from "@heroicons/react/24/outline";
+import { ArrowRightIcon, ArrowsPointingOutIcon, ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useOutletContext } from "react-router";
-import { Button, Callout, FloatingActionBar, HorizontalScroll, SubTitle } from "~/components/primitives";
+import { Link, useOutletContext } from "react-router";
+import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
+import { ScannerCompletionSummary } from "~/components/v2/features/scanner/ScannerCompletionSummary";
+import { ScannerEndBlock } from "~/components/v2/features/scanner/ScannerEndBlock";
+import { ScannerFailureNotice } from "~/components/v2/features/scanner/ScannerFailureNotice";
+import {
+  type ScannerFileStatusItem,
+  ScannerFileStatusList,
+} from "~/components/v2/features/scanner/ScannerFileStatusList";
+import { ScannerJobStatusNotice } from "~/components/v2/features/scanner/ScannerJobStatusNotice";
+import { formatScannerQuotaAvailability } from "~/components/v2/features/scanner/ScannerQuota";
+import {
+  ScannerStepHeader,
+  type ScannerStepStates,
+  ScannerStepTitle,
+} from "~/components/v2/features/scanner/ScannerStepHeader";
+import { PageActionBar } from "~/components/v2/layout/PageActionBar";
+import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Button } from "~/components/v2/primitives/Button";
+import { IconButton } from "~/components/v2/primitives/IconButton";
+import { ProgressBar } from "~/components/v2/primitives/ProgressBar";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { OCR_ALLOWED_CONTENT_TYPES } from "~/domain/ocr";
+import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { cn } from "~/lib/utils";
 import type { ScannerOutletContext } from "../scanner";
-import ScannerCompletionState from "../scanner._components/ScannerCompletionState";
 import ScannerFileList from "../scanner._components/ScannerFileList";
 import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
-import ScannerJobShell from "../scanner._components/ScannerJobShell";
 import ScannerJobSkeleton from "../scanner._components/ScannerJobSkeleton";
 import { notifyScannerJobsChanged } from "../scanner._components/ScannerJobsPanel";
-import ScannerProgressCard from "../scanner._components/ScannerProgressCard";
 import ScannerUploadSection from "../scanner._components/ScannerUploadSection";
 import ScannerUploadTargetGuide from "../scanner._components/ScannerUploadTargetGuide";
 import {
@@ -25,11 +43,14 @@ import {
 } from "../scanner._components/scanner-client";
 import {
   formatScannerRelativeTime,
+  getScannerCompletionState,
+  getScannerJobStatusView,
   getScannerTerminalJobDescription,
   getScannerTerminalJobTitle,
   getScannerUnavailableResultMessage,
   scannerMessages,
 } from "../scanner._components/scanner-messages";
+import { getScannerStepBody } from "../scanner._components/scanner-step-body";
 import {
   getScannerImageContentType,
   ITEM_SCANNER_ACCEPT_SPEC,
@@ -45,12 +66,9 @@ import {
   buildCellReviewAttentionCounts,
   buildCellReviewPreviewSummary,
   type CandidateDetails,
-  type CellApplySummary,
-  CellApplySummaryPanel,
   type CellEdit,
   CellReviewPanel,
   cellAddressKey,
-  hasCellReviewCells,
   mergeCellCandidateQuantities,
   type ReviewCell,
 } from "./resource-cell-review";
@@ -79,12 +97,27 @@ type JobStatus = {
   cells?: ReviewCell[];
   currentQuantities: Record<string, number>;
   application: JobApplication;
+  completionSummary?: ItemCompletionSummary | null;
   createdAt: string;
   updatedAt: string;
   expiresAt: string;
 };
 
 type JobApplication = { status: "pending" | "applied" | "discarded" | "expired"; appliedAt: string | null } | null;
+
+// The saved apply record, read from the job detail, so the completion view matches before and after a reload.
+export type ItemCompletionSummary = {
+  appliedCount: number;
+  unappliedCellCount: number;
+  // assetUid and resourceType are the catalog's image key and type, null when the catalog no longer has the resource.
+  items: Array<{
+    uid: string;
+    assetUid: string | null;
+    resourceType: ResourceTypeEnum | null;
+    name: string | null;
+    quantity: number;
+  }>;
+};
 
 type OcrUploadQuota = ScannerUploadQuota;
 
@@ -95,6 +128,8 @@ const REVIEW_IMAGE_MIN_BUFFER_RATIO = 0.02;
 const REVIEW_IMAGE_HOVER_CONTEXT_RATIO = 2.25;
 const REVIEW_IMAGE_HOVER_MAX_SCALE = 3;
 const REVIEW_IMAGE_HOVER_MAX_ITEM_SIZE = 176;
+// A shared empty list. A new default array per render would re-run the review image effect on every render.
+const NO_CONTENT_BOXES: ImageBoundingBox[] = [];
 
 const TERMINAL_JOB_STATUSES = new Set(["failed", "cancelled", "expired"]);
 export const RESOURCE_FILE_CONCURRENCY = 4;
@@ -154,9 +189,26 @@ export function getResourceJobTransition(job: JobStatus): { phase: ScannerPhase;
   return { phase: "idle", error: getScannerUnavailableResultMessage() };
 }
 
+export function getResourceStepStates(phase: ScannerPhase, job: JobStatus | null): ScannerStepStates {
+  if (!job) return ["active", "pending", "pending", "pending"];
+  if (job.status === "expired") return ["failed", "pending", "pending", "pending"];
+  if (job.status === "cancelled") return ["pending", "pending", "pending", "pending"];
+  if (job.status === "failed") return ["done", "failed", "pending", "pending"];
+  if (["queued", "processing", "finalizing"].includes(job.status)) return ["done", "active", "pending", "pending"];
+  if (job.reviewError) return ["done", "done", "failed", "pending"];
+  if (job.application?.status === "applied") return ["done", "done", "done", "done"];
+  if (phase === "applying") return ["done", "done", "done", "active"];
+  return ["done", "done", "active", "pending"];
+}
+
 export default function ResourceScanner() {
-  const { imageUploadQuota: uploadQuota, setImageUploadQuota: setUploadQuota } =
-    useOutletContext<ScannerOutletContext>();
+  const {
+    imageUploadQuota: uploadQuota,
+    setImageUploadQuota: setUploadQuota,
+    openJobsPanel,
+    setMobileActionBarHidden,
+    stacked,
+  } = useOutletContext<ScannerOutletContext>();
   const [files, setFiles] = useState<File[]>([]);
   const [hashProgress, setHashProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -166,7 +218,6 @@ export default function ResourceScanner() {
   const [highlightedReviewPosition, setHighlightedReviewPosition] = useState<number | null>(null);
   const [cellEdits, setCellEdits] = useState<Record<string, CellEdit>>({});
   const [cellCandidateDetails, setCellCandidateDetails] = useState<Record<string, CandidateDetails>>({});
-  const [cellApplySummary, setCellApplySummary] = useState<CellApplySummary | null>(null);
   const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   const handleJob = useCallback((next: JobStatus) => {
@@ -181,7 +232,6 @@ export default function ResourceScanner() {
     setIsImageExpanded(false);
     setCellEdits({});
     setCellCandidateDetails({});
-    setCellApplySummary(null);
   }, []);
 
   const handleReset = useCallback(() => {
@@ -191,7 +241,6 @@ export default function ResourceScanner() {
     setHighlightedReviewPosition(null);
     setCellEdits({});
     setCellCandidateDetails({});
-    setCellApplySummary(null);
     setIsImageExpanded(false);
     setAllowsTrainingDataUse(false);
   }, []);
@@ -213,6 +262,9 @@ export default function ResourceScanner() {
     acceptJob,
     updateJob,
     resetForNewUpload,
+    refreshJob,
+    beginNewUpload,
+    statusError,
     cancelResult,
   } = lifecycle;
 
@@ -233,8 +285,6 @@ export default function ResourceScanner() {
     () => groupScannerImagesByStatus(job?.images ?? [], partialRecognitionReviewImageUids),
     [job?.images, partialRecognitionReviewImageUids],
   );
-  const selectedImageRequiresRecognitionReview =
-    selectedImageHasNoResult || (selectedImage !== null && partialRecognitionReviewImageUids.has(selectedImage.uid));
 
   const selectedResultImage = useMemo(() => getSelectedResultImage(job, selectedImageUid), [job, selectedImageUid]);
 
@@ -282,6 +332,7 @@ export default function ResourceScanner() {
 
   async function startRecognition() {
     if (files.length === 0) return;
+    beginNewUpload();
     setError(null);
     setPhase("uploading");
     setHashProgress(0);
@@ -362,13 +413,14 @@ export default function ResourceScanner() {
       const cells = buildCellApplyPayload(job.cells ?? [], cellEdits);
       const response = await requestScannerJson<{
         application: NonNullable<JobApplication>;
-        summary: CellApplySummary;
       }>(`/api/ocr/jobs/${job.uid}/apply`, {
         method: "POST",
         body: JSON.stringify({ resultGeneration: job.generation, cells }),
       });
-      updateJob((currentJob) => (currentJob ? { ...currentJob, application: response.application } : null));
-      setCellApplySummary(response.summary);
+      // The summary is read again with the job detail below; until then the completion view shows it is loading.
+      updateJob((currentJob) =>
+        currentJob ? { ...currentJob, application: response.application, completionSummary: undefined } : null,
+      );
       setCellEdits({});
       setCellCandidateDetails({});
       setSelectedImageUid(null);
@@ -377,351 +429,552 @@ export default function ResourceScanner() {
       setIsImageExpanded(false);
       setPhase("applied");
       notifyScannerJobsChanged();
+      // A failed re-read leaves no summary to wait for: the completion view then shows its error with a new upload.
+      if ((await refreshJob()) === "failed") {
+        updateJob((currentJob) => (currentJob ? { ...currentJob, completionSummary: null } : null));
+      }
     } catch (applyError) {
       setError(toScannerErrorMessage(applyError));
       setPhase("review");
     }
   }
 
-  const uploadContent = !selectedJobUid ? (
+  function selectFirstFailedImage(current: JobStatus) {
+    const failedImage = current.images.find((image) => image.status !== "succeeded");
+    if (failedImage) setSelectedImageUid(failedImage.uid);
+  }
+
+  const hidesMobileActionBar = (!job && files.length > 0) || phase === "review" || phase === "applying";
+  useEffect(() => {
+    setMobileActionBarHidden(hidesMobileActionBar);
+    return () => setMobileActionBarHidden(false);
+  }, [hidesMobileActionBar, setMobileActionBarHidden]);
+
+  const stepStates = getResourceStepStates(phase, job);
+  const failedImageCount = job?.images.filter((image) => image.status !== "succeeded").length ?? 0;
+  const recognizedCellCount = (job?.cells ?? []).filter((cell) => cell.status === "recognized").length;
+  const isTerminal = job ? TERMINAL_JOB_STATUSES.has(job.status) : false;
+  const isApplied = job?.application?.status === "applied";
+  const uploadPercent = Math.round((hashProgress < 1 ? hashProgress : uploadProgress) * 100);
+  const selectedBytes = formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0));
+  const isUploadQuotaExhausted = uploadQuota?.remaining === 0;
+  const uploadActionDisabled =
+    files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining;
+  const isReviewActionVisible =
+    job !== null && (phase === "review" || phase === "applying") && shouldShowScannerCancelAction(job.status);
+  // Stacked layouts pin the step's primary action to the bottom: the upload bar once files are selected, and the review bar.
+  const hasFixedBar = stacked && ((!job && files.length > 0) || isReviewActionVisible);
+
+  // The stacked "최근 작업" button shows only while the mobile action bar is hidden (files selected, review, applying).
+  const recentJobsButton =
+    stacked && hidesMobileActionBar ? (
+      <Button variant="secondary" onClick={openJobsPanel}>
+        최근 작업
+      </Button>
+    ) : null;
+  const headerAction =
+    job && !isTerminal && !isApplied && phase !== "applying" ? (
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={() => resetForNewUpload()}>
+          <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+          {scannerMessages.item.uploadAction}
+        </Button>
+        {recentJobsButton}
+      </div>
+    ) : (
+      recentJobsButton
+    );
+
+  const reviewBody =
+    job && !job.reviewError ? (
+      <div className="flex flex-col gap-v2-block-gap lg:grid lg:grid-cols-[minmax(0,11fr)_minmax(0,9fr)] lg:items-start">
+        {selectedImage ? (
+          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p lg:sticky lg:top-4">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <p className="min-w-0 truncate text-sm font-semibold text-v2-fg">
+                {job.images.findIndex((image) => image.uid === selectedImage.uid) + 1} / {job.images.length} ·{" "}
+                {selectedImage.filename}
+              </p>
+              <div className="flex shrink-0 items-center gap-2">
+                {selectionRequiredCountByImageUid[selectedImage.uid] ? (
+                  <p className="text-xs text-v2-warning tabular-nums">
+                    확인 필요 {selectionRequiredCountByImageUid[selectedImage.uid]}칸
+                  </p>
+                ) : null}
+                <IconButton
+                  icon={ArrowsPointingOutIcon}
+                  label={`${selectedImage.filename} 크게 보기`}
+                  onClick={() => setIsImageExpanded(true)}
+                />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsImageExpanded(true)}
+              aria-label={`${selectedImage.filename} 크게 보기`}
+              className={cn("relative block w-full cursor-pointer overflow-hidden rounded-md bg-v2-inset", v2FocusRing)}
+            >
+              <ReviewSourceImage
+                key={selectedImage.uid}
+                src={`/api/ocr/jobs/${encodeURIComponent(job.uid)}/images/${encodeURIComponent(selectedImage.uid)}`}
+                alt={`${selectedImage.filename} 원본`}
+                imageWidth={selectedResultImage?.width}
+                imageHeight={selectedResultImage?.height}
+                contentBoxes={selectedResultImage?.boxes}
+                highlightedBox={highlightedObservation?.bbox ?? undefined}
+              />
+            </button>
+            <div className="flex flex-col gap-v2-block-gap">
+              {imageGroups.reviewRequired.length > 0 ? (
+                <ScannerImageGroup
+                  jobUid={job.uid}
+                  images={imageGroups.reviewRequired}
+                  label={`검토 필요 ${imageGroups.reviewRequired.length}장`}
+                  selectedImageUid={selectedImage.uid}
+                  highlightedSources={highlightedSources}
+                  selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
+                  allImages={job.images}
+                  onSelect={(image) => {
+                    setHighlightedSources([]);
+                    setHighlightedReviewPosition(null);
+                    setSelectedImageUid(image.uid);
+                  }}
+                />
+              ) : null}
+              {imageGroups.succeeded.length > 0 ? (
+                <ScannerImageGroup
+                  jobUid={job.uid}
+                  images={imageGroups.succeeded}
+                  label={`인식 성공 ${imageGroups.succeeded.length}장`}
+                  selectedImageUid={selectedImage.uid}
+                  highlightedSources={highlightedSources}
+                  selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
+                  allImages={job.images}
+                  onSelect={(image) => {
+                    setHighlightedSources([]);
+                    setHighlightedReviewPosition(null);
+                    setSelectedImageUid(image.uid);
+                  }}
+                />
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+        {/* A screenshot that was not recognized keeps the source and the screenshot strip, so another one can be chosen;
+            only the cell area says that it has no result. */}
+        {selectedImageHasNoResult ? (
+          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p">
+            <StatusNotice tone="danger">
+              이 스크린샷은 인식하지 못했어요. 이 스크린샷의 아이템은 반영되지 않아요.
+            </StatusNotice>
+          </section>
+        ) : (
+          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p">
+            <CellReviewPanel
+              jobUid={job.uid}
+              stacked={stacked}
+              selectedImageUid={selectedImage?.uid ?? null}
+              cells={job.cells ?? []}
+              edits={cellEdits}
+              candidateDetails={cellCandidateDetails}
+              disabled={phase === "applying"}
+              onHighlightChange={setReviewPositionHighlight}
+              onLoadCandidates={(cell, details) => {
+                setCellCandidateDetails((current) => ({ ...current, [cellAddressKey(cell)]: details }));
+                updateJob((currentJob) =>
+                  currentJob
+                    ? {
+                        ...currentJob,
+                        currentQuantities: mergeCellCandidateQuantities(currentJob.currentQuantities, details),
+                      }
+                    : null,
+                );
+              }}
+              onEdit={(cell, edit) =>
+                setCellEdits((current) => ({
+                  ...current,
+                  [cellAddressKey(cell)]: { ...current[cellAddressKey(cell)], ...edit },
+                }))
+              }
+            />
+          </section>
+        )}
+      </div>
+    ) : null;
+
+  const reviewStep = job ? (
+    <>
+      <ScannerStepHeader states={stepStates} action={headerAction}>
+        <ScannerStepTitle
+          title={job.reviewError ? "아이템 인식 결과를 확인하지 못했어요" : "인식 결과를 검토해 주세요"}
+          meta={
+            job.reviewError
+              ? undefined
+              : [
+                  `아이템 ${recognizedCellCount}개 인식`,
+                  `${unknownCount}개 확인 필요`,
+                  failedImageCount > 0 ? `스크린샷 ${failedImageCount}장 실패` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+          }
+        />
+        {error ? (
+          <StatusNotice tone="danger">{error}</StatusNotice>
+        ) : job.reviewError ? (
+          <StatusNotice tone="danger">{getScannerUnavailableResultMessage()}</StatusNotice>
+        ) : failedImageCount > 0 ? (
+          <StatusNotice
+            tone="danger"
+            action={
+              <Button variant="text" onClick={() => selectFirstFailedImage(job)}>
+                보기
+              </Button>
+            }
+          >
+            스크린샷 {job.images.findIndex((image) => image.status !== "succeeded") + 1}번(
+            {job.images.find((image) => image.status !== "succeeded")?.filename})을 인식하지 못했어요. 이 화면의
+            아이템은 반영되지 않아요.
+          </StatusNotice>
+        ) : unknownCount > 0 ? (
+          <StatusNotice tone="warning">
+            확인이 필요한 칸이 {unknownCount}개 있어요. 칸을 눌러 아이템과 수량을 확인해 주세요.
+          </StatusNotice>
+        ) : null}
+      </ScannerStepHeader>
+      {reviewBody}
+    </>
+  ) : null;
+
+  const reviewActionBar =
+    isReviewActionVisible && job ? (
+      <PageActionBar
+        placement={stacked ? "fixed" : "sticky"}
+        expandActions
+        summary={
+          phase === "applying"
+            ? "반영 중이에요"
+            : isCancelling
+              ? "삭제 중이에요"
+              : job.reviewError
+                ? null
+                : `반영 ${cellReviewPreview?.applicableChanged ?? 0}개 · 변경 없음 ${cellReviewPreview?.unchangedSafe ?? 0}개 · 제외 ${cellReviewPreview?.omitted ?? 0}개`
+        }
+      >
+        <Button variant="secondary" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
+          결과 삭제
+        </Button>
+        {shouldShowScannerResultActions(job.status, job.reviewMode, job.reviewError) ? (
+          <Button
+            variant="primary"
+            disabled={phase === "applying" || isCancelling || !hasChanges}
+            onClick={applyResult}
+          >
+            반영
+          </Button>
+        ) : null}
+      </PageActionBar>
+    ) : null;
+
+  const completionState = getScannerCompletionState(job?.completionSummary);
+  const completionStep =
+    job && isApplied ? (
+      <>
+        <ScannerStepHeader states={stepStates} action={headerAction}>
+          <ScannerStepTitle title="반영했어요" meta={formatCompletionMeta(job.updatedAt, completionState)} />
+        </ScannerStepHeader>
+        {completionState.kind === "summary" ? (
+          <ScannerCompletionSummary
+            title="반영 결과"
+            meta=""
+            summary={`반영 ${completionState.summary.appliedCount}개${completionState.summary.unappliedCellCount > 0 ? ` · 반영하지 않은 칸 ${completionState.summary.unappliedCellCount}개` : ""}`}
+            actions={
+              <>
+                <Button variant="primary" className="w-full sm:w-auto" onClick={() => resetForNewUpload()}>
+                  <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                  {scannerMessages.item.uploadAction}
+                </Button>
+                <Link
+                  to="/utils/resources/inventory"
+                  className={cn(
+                    "inline-flex min-h-v2-control-min w-full items-center justify-center gap-1.5 rounded-md bg-v2-inset px-3 text-sm font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover sm:w-auto",
+                    v2FocusRing,
+                  )}
+                >
+                  보유 아이템 보기
+                  <ArrowRightIcon className="size-4" aria-hidden="true" />
+                </Link>
+              </>
+            }
+          >
+            <div className="flex flex-col gap-v2-group-gap">
+              <div className="flex items-baseline justify-between gap-3 text-xs text-v2-fg-tertiary">
+                <p className="font-semibold text-v2-fg-secondary">반영한 아이템</p>
+                <p>반영 후 수량</p>
+              </div>
+              <ul className="grid grid-cols-1 gap-x-v2-column-gap gap-y-v2-list-gap sm:grid-cols-2 lg:grid-cols-3">
+                {completionState.summary.items.map((item) => (
+                  <li
+                    key={item.uid}
+                    className="flex min-h-v2-row-min min-w-0 items-center justify-between gap-v2-media-gap text-sm"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      {item.assetUid && item.resourceType ? (
+                        <ResourceThumb
+                          itemUid={item.assetUid}
+                          resourceType={item.resourceType}
+                          name={item.name ?? undefined}
+                          size="sm"
+                        />
+                      ) : (
+                        <span aria-hidden="true" className="size-6 shrink-0 rounded-md bg-v2-inset" />
+                      )}
+                      <span className="truncate text-v2-fg">{item.name ?? "아이템 정보 없음"}</span>
+                    </span>
+                    <span className="shrink-0 text-v2-fg font-semibold tabular-nums">
+                      {item.quantity.toLocaleString()}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </ScannerCompletionSummary>
+        ) : completionState.kind === "loading" ? (
+          <ScannerEndBlock
+            action={
+              <Button variant="primary" onClick={() => resetForNewUpload()}>
+                <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                {scannerMessages.item.uploadAction}
+              </Button>
+            }
+          >
+            <p role="status" className="text-sm text-v2-fg-tertiary">
+              반영 기록을 불러오고 있어요
+            </p>
+          </ScannerEndBlock>
+        ) : (
+          // Without a summary there are no counts to show, but a new upload stays one step away.
+          <ScannerEndBlock
+            action={
+              <Button variant="primary" onClick={() => resetForNewUpload()}>
+                <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+                {scannerMessages.item.uploadAction}
+              </Button>
+            }
+          >
+            <StatusNotice tone="danger">{completionState.message}</StatusNotice>
+          </ScannerEndBlock>
+        )}
+      </>
+    ) : null;
+
+  const endStep =
+    job && isTerminal ? (
+      <>
+        <ScannerStepHeader states={stepStates}>
+          <ScannerStepTitle
+            title={getScannerTerminalJobTitle(job.status, "item_inventory_images_v1")}
+            meta={`스크린샷 ${job.images.length}장 · ${formatScannerRelativeTime(job.createdAt)}`}
+          />
+        </ScannerStepHeader>
+        {job.images.length > 0 && job.status === "failed" ? (
+          <ScannerFileStatusList items={toFileStatusItems(job)} />
+        ) : null}
+        <ScannerEndBlock
+          action={
+            <Button variant="primary" onClick={() => resetForNewUpload()}>
+              <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
+              {scannerMessages.item.uploadAction}
+            </Button>
+          }
+        >
+          {getScannerTerminalJobDescription(job.status, "item_inventory_images_v1")}
+        </ScannerEndBlock>
+      </>
+    ) : null;
+
+  const waitingStep =
+    job && phase === "waiting" ? (
+      <>
+        <ScannerStepHeader states={stepStates} action={headerAction}>
+          {job.status === "queued" ? (
+            <ScannerStepTitle
+              title="인식 대기 중이에요"
+              meta={`스크린샷 ${job.images.length}장 · 곧 인식을 시작해요`}
+            />
+          ) : (
+            <>
+              <ScannerStepTitle
+                title="스크린샷을 인식하고 있어요"
+                meta={`${job.progress.total}장 중 ${processedCountOf(job)}장 처리 · 완료 ${job.progress.completed} · 실패 ${job.progress.failed} · 대기 ${job.progress.total - processedCountOf(job)}`}
+              />
+              <ProgressBar value={processedCountOf(job)} max={job.progress.total} label="인식 진행률" />
+            </>
+          )}
+          <p className="text-sm text-v2-fg-secondary">
+            {job.status === "queued"
+              ? "페이지를 닫아도 차례가 오면 인식을 시작해요."
+              : "페이지를 닫아도 인식은 계속돼요. 이미지 수에 따라 최대 1분 정도 걸려요."}
+          </p>
+          {job.progress.failed > 0 ? (
+            <ScannerFailureNotice>
+              스크린샷 {job.progress.failed}장을 인식하지 못했어요. 나머지 스크린샷은 계속 인식해요.
+            </ScannerFailureNotice>
+          ) : null}
+        </ScannerStepHeader>
+        <ScannerFileStatusList items={toFileStatusItems(job)} />
+      </>
+    ) : null;
+
+  const uploadBody = (
     <ScannerUploadSection
-      title="아이템 스크린샷 업로드"
-      description="게임 내 [메뉴] > [아이템] 페이지의 스크린샷을 첨부해주세요"
       inputId="resource-scanner-files"
+      inputLabel="스크린샷 파일 선택"
       accept={OCR_ALLOWED_CONTENT_TYPES.join(",")}
       multiple
       selectionDisabled={isFileSelectionDisabled}
       onFiles={addFiles}
-      icon={<PhotoIcon className="size-6" aria-hidden="true" />}
-      targetGuide={files.length === 0 ? <ScannerUploadTargetGuide target="item" /> : undefined}
-      helpText="1회당 최대 이미지 30장"
-      dropDetail={
-        files.length > 0 ? (
-          <span className="mt-2 text-xs text-muted-foreground">
-            {files.length}장 · {formatScannerBytes(files.reduce((sum, file) => sum + file.size, 0))}
-            {phase === "uploading"
-              ? hashProgress < 1
-                ? ` · 파일 확인 ${Math.round(hashProgress * 100)}%`
-                : ` · 업로드 ${Math.round(uploadProgress * 100)}%`
-              : ""}
-            {phase === "uploading" ? (
-              <progress
-                aria-label={hashProgress < 1 ? "아이템 스크린샷 파일 확인 진행률" : "아이템 스크린샷 업로드 진행률"}
-                className="mt-1.5 h-1.5 w-40 accent-primary"
-                max={1}
-                value={hashProgress < 1 ? hashProgress : uploadProgress}
-              />
-            ) : null}
-          </span>
-        ) : null
-      }
+      targetGuide={<ScannerUploadTargetGuide target="item" className="w-44 shrink-0" />}
+      targetPath="[메뉴] > [아이템]"
+      helpText="파일을 끌어다 놓거나 붙여넣기(Ctrl+V), 또는 클릭해서 선택"
+      descriptionLines={["1회 최대 이미지 30장 · PNG, JPG, WEBP"]}
       consentChecked={allowsTrainingDataUse}
       consentDisabled={isUploadLocked}
       onConsentChange={setAllowsTrainingDataUse}
-      actionDisabled={files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining}
-      actionLabel={
-        phase === "uploading"
-          ? hashProgress < 1
-            ? "파일 확인 중..."
-            : `업로드 ${Math.round(uploadProgress * 100)}%`
-          : "인식 시작"
-      }
+      actionDisabled={uploadActionDisabled}
+      actionLabel="인식 시작"
       onAction={startRecognition}
+      stacked={stacked}
+      hasFiles={files.length > 0}
     >
       <ScannerFileList
         files={files}
         disabled={isUploadLocked}
         onRemove={(index) => setFiles((current) => current.filter((_, fileIndex) => fileIndex !== index))}
+        onClear={() => setFiles([])}
       />
     </ScannerUploadSection>
-  ) : null;
+  );
 
-  const progressContent =
-    job && phase === "waiting" ? (
-      <ScannerProgressCard
-        title="스크린샷을 인식하고 있어요"
-        description="페이지를 닫아도 작업은 계속돼요."
-        progress={job.progress}
-        segmentStatuses={job.images.map((image) => ({ key: image.uid, status: image.status }))}
-        segmentLabel="이미지 처리"
-        remainingLabel="{remaining}장 남았어요"
-        etaLabel="이미지 수에 따라 최대 1분 정도 소요될 수 있어요."
-      />
-    ) : null;
-
-  const reviewContent =
-    phase === "review" || phase === "applying" ? (
-      <>
-        <section className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="min-w-0">
-              <SubTitle
-                text={job?.status === "failed" ? "스크린샷 확인" : "결과 검토"}
-                description={
-                  job?.status === "failed"
-                    ? "인식하지 못한 스크린샷을 확인한 뒤 다시 시도해 주세요"
-                    : "인식 결과를 검토 후 반영 여부를 선택해주세요"
-                }
-              />
-              {job ? (
-                <p className="inline-flex max-w-full items-center gap-1.5 rounded-full border border-border bg-muted/40 px-2.5 py-1 text-xs text-muted-foreground">
-                  <span className="font-medium text-foreground">현재 작업</span>
-                  <span className="truncate">
-                    아이템 · 스크린샷 {job.images.length}장 · {formatScannerRelativeTime(job.createdAt)}
-                  </span>
-                </p>
-              ) : null}
-            </div>
-            <div className="flex flex-wrap justify-end gap-2">
-              <Button size="sm" onClick={() => resetForNewUpload()}>
-                {scannerMessages.item.uploadAction}
-              </Button>
-            </div>
-          </div>
-          <div className="space-y-4 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 md:p-5">
-            {error ? (
-              <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} />
-            ) : job?.reviewError ? (
-              <Callout
-                tone="destructive"
-                title="인식 결과를 확인하지 못했어요"
-                description={getScannerUnavailableResultMessage()}
-              />
-            ) : selectedImageHasNoResult ? (
-              <Callout
-                tone="warning"
-                title="검토가 필요한 스크린샷이 있어요"
-                description="인식 결과를 만들지 못한 스크린샷이에요. 원본을 확인한 뒤 새로 업로드해 주세요."
-              />
-            ) : !selectedImage ? (
-              <Callout
-                tone="warning"
-                title="스크린샷을 표시할 수 없어요"
-                description="원본 스크린샷 정보를 확인할 수 없어 결과를 표시하지 못하고 있어요."
-              />
-            ) : !hasCellReviewCells(job?.cells) ? (
-              <Callout
-                tone="warning"
-                title="인식된 아이템이 없어요"
-                description={'스크린샷에 "아이템" 화면이 선명하게 보이는지 확인한 뒤 다시 시도해 주세요.'}
-              />
-            ) : unknownCount > 0 ? (
-              <Callout
-                tone="warning"
-                title={`자동으로 인식하지 못한 항목이 ${unknownCount}개 있어요`}
-                description="결과 화면에서 필요한 아이템과 수량을 확인해주세요."
-              />
-            ) : null}
-            <div
-              className={cn(
-                "grid min-w-0 gap-5",
-                job?.images.length ? "xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)] xl:items-start" : null,
-              )}
-            >
-              {job?.images.length && selectedImage ? (
-                <div className="min-w-0 space-y-3 xl:sticky xl:top-16">
-                  <div className="flex min-w-0 items-end justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-foreground">
-                        {selectedImageRequiresRecognitionReview ? "검토 필요한 스크린샷" : "인식한 스크린샷"}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground" title={selectedImage.filename}>
-                        {job.images.findIndex((image) => image.uid === selectedImage.uid) + 1} / {job.images.length} ·{" "}
-                        {selectedImage.filename}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsImageExpanded(true)}
-                      className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-primary outline-none hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-ring/30"
-                    >
-                      <ArrowsPointingOutIcon className="size-4" aria-hidden="true" />
-                      크게 보기
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsImageExpanded(true)}
-                    aria-label={`${selectedImage.filename} 크게 보기`}
-                    className="group relative block w-full cursor-pointer overflow-hidden rounded-lg border border-border bg-black/90 outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
-                  >
-                    <ReviewSourceImage
-                      key={selectedImage.uid}
-                      src={`/api/ocr/jobs/${encodeURIComponent(job.uid)}/images/${encodeURIComponent(selectedImage.uid)}`}
-                      alt={`${selectedImage.filename} 원본`}
-                      imageWidth={selectedResultImage?.width}
-                      imageHeight={selectedResultImage?.height}
-                      contentBoxes={selectedResultImage?.boxes}
-                      highlightedBox={highlightedObservation?.bbox ?? undefined}
-                    />
-                    <span className="absolute bottom-3 right-3 flex size-9 items-center justify-center rounded-full bg-black/70 text-white opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-                      <ArrowsPointingOutIcon className="size-5" aria-hidden="true" />
-                    </span>
-                  </button>
-                  <div className="space-y-3">
-                    {imageGroups.reviewRequired.length > 0 ? (
-                      <ScannerImageGroup
-                        jobUid={job.uid}
-                        images={imageGroups.reviewRequired}
-                        label={`검토 필요 ${imageGroups.reviewRequired.length}장`}
-                        selectedImageUid={selectedImage.uid}
-                        highlightedSources={highlightedSources}
-                        selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
-                        allImages={job.images}
-                        onSelect={(image) => {
-                          setHighlightedSources([]);
-                          setHighlightedReviewPosition(null);
-                          setSelectedImageUid(image.uid);
-                        }}
-                      />
-                    ) : null}
-                    {imageGroups.succeeded.length > 0 ? (
-                      <ScannerImageGroup
-                        jobUid={job.uid}
-                        images={imageGroups.succeeded}
-                        label={`인식 성공 ${imageGroups.succeeded.length}장`}
-                        selectedImageUid={selectedImage.uid}
-                        highlightedSources={highlightedSources}
-                        selectionRequiredCountByImageUid={selectionRequiredCountByImageUid}
-                        allImages={job.images}
-                        onSelect={(image) => {
-                          setHighlightedSources([]);
-                          setHighlightedReviewPosition(null);
-                          setSelectedImageUid(image.uid);
-                        }}
-                      />
-                    ) : null}
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="min-w-0 space-y-3">
-                {job && !selectedImageHasNoResult && !job.reviewError ? (
-                  <CellReviewPanel
-                    jobUid={job.uid}
-                    selectedImageUid={selectedImage?.uid ?? null}
-                    cells={job.cells ?? []}
-                    edits={cellEdits}
-                    candidateDetails={cellCandidateDetails}
-                    disabled={phase === "applying"}
-                    onHighlightChange={setReviewPositionHighlight}
-                    onLoadCandidates={(cell, details) => {
-                      setCellCandidateDetails((current) => ({ ...current, [cellAddressKey(cell)]: details }));
-                      updateJob((currentJob) =>
-                        currentJob
-                          ? {
-                              ...currentJob,
-                              currentQuantities: mergeCellCandidateQuantities(currentJob.currentQuantities, details),
-                            }
-                          : null,
-                      );
-                    }}
-                    onEdit={(cell, edit) =>
-                      setCellEdits((current) => ({
-                        ...current,
-                        [cellAddressKey(cell)]: { ...current[cellAddressKey(cell)], ...edit },
-                      }))
-                    }
-                  />
-                ) : null}
-              </div>
-            </div>
-            {shouldShowScannerCancelAction(job?.status) ? (
-              <div className="sticky bottom-[var(--mobile-bottom-offset)] z-layer-navigation lg:bottom-4">
-                <FloatingActionBar className="mx-3 flex items-center justify-between gap-4 p-4 md:mx-5">
-                  {job?.reviewError ? (
-                    <p className="text-sm font-medium text-destructive">인식 결과를 확인할 수 없어요</p>
-                  ) : unknownCount > 0 ? (
-                    <p className="text-sm font-medium">{unknownCount}개 검토 필요</p>
-                  ) : (
-                    <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300">검토 완료</p>
-                  )}
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button
-                      variant="danger-subtle"
-                      disabled={phase === "applying" || isCancelling}
-                      onClick={cancelResult}
-                    >
-                      {isCancelling ? "취소 중..." : "인식 결과 삭제"}
-                    </Button>
-                    {shouldShowScannerResultActions(job?.status, job?.reviewMode, job?.reviewError) ? (
-                      <Button
-                        variant="primary"
-                        disabled={phase === "applying" || isCancelling || !hasChanges}
-                        onClick={applyResult}
-                      >
-                        {phase === "applying" ? "반영 중..." : "수량 반영"}
-                      </Button>
-                    ) : null}
-                  </div>
-                </FloatingActionBar>
-              </div>
-            ) : null}
-          </div>
-        </section>
-        {job && selectedImage ? (
-          <ScannerImageDialog
-            open={isImageExpanded}
-            src={`/api/ocr/jobs/${encodeURIComponent(job.uid)}/images/${encodeURIComponent(selectedImage.uid)}`}
-            title={selectedImage.filename}
-            alt={`${selectedImage.filename} 원본`}
-            onClose={() => setIsImageExpanded(false)}
-          />
-        ) : null}
-      </>
-    ) : null;
-
-  const completionContent = (
+  // One body per job state. Each step below renders only when it is the body.
+  const stepBody = getScannerStepBody({
+    hasSelectedJob: selectedJobUid !== null,
+    hasJob: job !== null,
+    phase,
+    isApplied,
+    isTerminal,
+    reviewBody: job ? "review" : null,
+  });
+  const showsUploadBar = stacked && !job && files.length > 0 && !selectedJobUid;
+  const uploadStep = !selectedJobUid ? (
     <>
-      {job?.status === "review_ready" && job.application?.status === "applied" ? (
-        <>
-          {cellApplySummary ? <CellApplySummaryPanel summary={cellApplySummary} /> : null}
-          <ScannerCompletionState
-            title="아이템 수량 반영이 완료됐어요"
-            description="새로운 인식을 시작하려면 아래 버튼을 눌러주세요."
-            actionLabel={scannerMessages.item.uploadAction}
-            onStartNew={() => resetForNewUpload()}
-          />
-        </>
-      ) : null}
-
-      {job && selectedJobUid && phase === "idle" && error && !TERMINAL_JOB_STATUSES.has(job.status) ? (
-        <ScannerCompletionState
-          tone="destructive"
-          title="인식 작업 상태를 확인하지 못했어요"
-          description={error}
-          actionLabel={scannerMessages.item.uploadAction}
-          onStartNew={() => resetForNewUpload(false)}
-        />
-      ) : null}
-
-      {job && TERMINAL_JOB_STATUSES.has(job.status) && phase !== "review" ? (
-        <ScannerCompletionState
-          tone="destructive"
-          title={getScannerTerminalJobTitle(job.status, "item_inventory_images_v1")}
-          description={getScannerTerminalJobDescription(job.status, "item_inventory_images_v1")}
-          actionLabel={scannerMessages.item.uploadAction}
-          onStartNew={() => resetForNewUpload()}
-        />
+      <ScannerStepHeader states={stepStates} action={headerAction}>
+        {phase === "uploading" ? (
+          <>
+            <ScannerStepTitle title="스크린샷을 업로드하고 있어요" meta={`${files.length}장 · ${selectedBytes}`} />
+            <ProgressBar
+              value={hashProgress < 1 ? hashProgress : uploadProgress}
+              max={1}
+              label={hashProgress < 1 ? "파일 확인 진행률" : "업로드 진행률"}
+            />
+            <p className="text-sm text-v2-fg-secondary tabular-nums">
+              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`} · 업로드가 끝나면 바로
+              인식을 시작해요.
+            </p>
+          </>
+        ) : isUploadQuotaExhausted && uploadQuota ? (
+          <>
+            <ScannerStepTitle
+              title="이미지 업로드 가능 횟수를 모두 사용했어요"
+              meta={
+                uploadQuota.nextAvailableAt
+                  ? `${formatScannerQuotaAvailability(uploadQuota.nextAvailableAt)}부터 다시 올릴 수 있어요`
+                  : undefined
+              }
+            />
+            <StatusNotice tone="neutral">
+              최근 7일 동안 이미지 {uploadQuota.limit}장을 올렸어요. 가장 오래된 업로드가 7일을 넘기면 다시 올릴 수
+              있어요.
+            </StatusNotice>
+          </>
+        ) : (
+          <ScannerStepTitle title="스크린샷을 선택해 주세요" meta="1회 최대 30장" />
+        )}
+      </ScannerStepHeader>
+      {uploadBody}
+      {showsUploadBar ? (
+        <PageActionBar placement="fixed" summary={`스크린샷 ${files.length}장 · ${selectedBytes}`}>
+          <Button variant="primary" disabled={uploadActionDisabled} onClick={startRecognition}>
+            인식 시작
+          </Button>
+        </PageActionBar>
       ) : null}
     </>
-  );
+  ) : null;
 
   return (
-    <div className="space-y-8 pb-12 pt-6 lg:pt-2">
-      {error && phase !== "review" && phase !== "applying" && !(selectedJobUid && job && phase === "idle") ? (
-        <Callout tone="destructive" title="처리 중 오류가 발생했어요" description={error} />
+    <div
+      className={cn(
+        "flex flex-col gap-v2-block-gap",
+        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+5.5rem)]" : "pb-v2-block-p",
+      )}
+    >
+      {error && phase !== "review" && phase !== "applying" ? <StatusNotice tone="danger">{error}</StatusNotice> : null}
+      {statusError ? (
+        <ScannerJobStatusNotice
+          title={getScannerJobStatusView(statusError.kind).title}
+          action={getScannerJobStatusView(statusError.kind).action}
+          onRetry={() => void refreshJob()}
+          onStartNew={() => resetForNewUpload(false)}
+          startNewLabel={scannerMessages.item.uploadAction}
+        />
       ) : null}
-      {selectedJobUid && !job ? <ScannerJobSkeleton variant="resource" /> : null}
-      <ScannerJobShell
-        phase={phase}
-        upload={uploadContent}
-        progress={progressContent}
-        review={reviewContent}
-        completion={completionContent}
-      />
+      {selectedJobUid && !job && !statusError ? <ScannerJobSkeleton /> : null}
+      {stepBody === "upload" ? uploadStep : null}
+      {stepBody === "waiting" ? waitingStep : null}
+      {stepBody === "review" ? reviewStep : null}
+      {stepBody === "completion" ? completionStep : null}
+      {stepBody === "terminal" ? endStep : null}
+      {stepBody === "review" ? reviewActionBar : null}
+      {job && selectedImage ? (
+        <ScannerImageDialog
+          open={isImageExpanded}
+          src={`/api/ocr/jobs/${encodeURIComponent(job.uid)}/images/${encodeURIComponent(selectedImage.uid)}`}
+          title={selectedImage.filename}
+          alt={`${selectedImage.filename} 원본`}
+          onClose={() => setIsImageExpanded(false)}
+        />
+      ) : null}
     </div>
   );
+}
+
+function processedCountOf(job: JobStatus): number {
+  return job.progress.completed + job.progress.failed;
+}
+
+function toFileStatusItems(job: JobStatus): ScannerFileStatusItem[] {
+  return job.images.map((image) => ({
+    key: image.uid,
+    name: image.filename,
+    status:
+      image.status === "succeeded"
+        ? "done"
+        : image.status === "failed"
+          ? "failed"
+          : image.status === "queued"
+            ? "queued"
+            : "processing",
+  }));
+}
+
+// The count comes only from a summary; without one the meta is the time alone, never a zero count.
+function formatCompletionMeta(
+  updatedAt: string,
+  completionState: ReturnType<typeof getScannerCompletionState<ItemCompletionSummary>>,
+): string {
+  const time = formatScannerQuotaAvailability(updatedAt);
+  return completionState.kind === "summary" ? `아이템 ${completionState.summary.appliedCount}개 · ${time}` : time;
 }
 
 function getSelectedResultImage(
@@ -746,7 +999,7 @@ function ReviewSourceImage({
   alt,
   imageWidth,
   imageHeight,
-  contentBoxes = [],
+  contentBoxes = NO_CONTENT_BOXES,
   highlightedBox,
 }: {
   src: string;
@@ -830,16 +1083,12 @@ function ReviewSourceImage({
       className="relative flex aspect-video max-h-[calc(100vh-10rem)] items-center justify-center overflow-hidden"
     >
       {imageError ? (
-        <span className="px-4 text-center text-sm text-white/80">스크린샷을 표시할 수 없어요.</span>
+        <span className="px-4 text-center text-sm text-v2-fg-secondary">스크린샷을 표시할 수 없어요.</span>
       ) : (
         <img
           src={src}
           alt={alt}
-          className={cn(
-            renderedImage
-              ? "pointer-events-none absolute max-w-none transition-[left,top,width,height] duration-200 ease-out"
-              : "size-full object-contain",
-          )}
+          className={cn(renderedImage ? "pointer-events-none absolute max-w-none" : "size-full object-contain")}
           style={renderedImage ?? undefined}
           onLoad={(event) => {
             const image = event.currentTarget;
@@ -852,7 +1101,7 @@ function ReviewSourceImage({
         <span
           aria-hidden="true"
           data-review-highlight=""
-          className="pointer-events-none absolute rounded-md border-2 border-rose-400 bg-rose-400/20 shadow-[0_0_0_2px_rgba(76,5,25,0.9),0_0_0_4px_rgba(251,113,133,0.95),0_0_16px_rgba(244,63,94,0.65)] transition-[left,top,width,height] duration-200 ease-out"
+          className="pointer-events-none absolute rounded-md border-2 border-v2-focus bg-v2-highlight shadow-v2-marker"
           style={highlightStyle}
         />
       ) : null}
@@ -941,16 +1190,8 @@ function ScannerImageGroup({
 }) {
   return (
     <div className="space-y-2">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <HorizontalScroll
-        itemWidth={{ mobile: "w-24", desktop: "w-24" }}
-        gap="gap-2"
-        showArrowsOnMobile
-        fadeEdges
-        className="pb-1"
-        previousButtonLabel={`${label} 이전 스크린샷 보기`}
-        nextButtonLabel={`${label} 다음 스크린샷 보기`}
-      >
+      <p className="text-xs font-medium text-v2-fg-tertiary">{label}</p>
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {images.map((image) => (
           <SourceImagePreview
             key={image.uid}
@@ -963,7 +1204,7 @@ function ScannerImageGroup({
             onSelect={() => onSelect(image)}
           />
         ))}
-      </HorizontalScroll>
+      </div>
     </div>
   );
 }
@@ -992,14 +1233,15 @@ function SourceImagePreview({
       aria-pressed={selected}
       aria-label={`${number}번 스크린샷 ${image.filename} ${selected ? "선택됨" : "결과 보기"}${selectionRequiredCount > 0 ? `, ${selectionRequiredCount}개 확인 필요` : ""}`}
       className={cn(
-        "relative w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border bg-muted/30 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/30",
-        selected || highlighted ? "border-primary ring-1 ring-primary" : "border-border hover:border-primary/60",
+        "relative w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border bg-v2-inset text-left",
+        selected || highlighted ? "border-v2-fg" : "border-v2-divider hover:border-v2-control-border",
+        v2FocusRing,
       )}
     >
-      <span className="absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-full bg-black/70 text-xs font-semibold text-white">
+      <span className="absolute left-1.5 top-1.5 z-10 flex size-5 items-center justify-center rounded-full bg-v2-scrim text-xs font-semibold text-v2-on-media">
         {number}
       </span>
-      <span className="block aspect-video bg-muted">
+      <span className="block aspect-video bg-v2-inset">
         <img
           src={`/api/ocr/jobs/${encodeURIComponent(jobUid)}/images/${encodeURIComponent(image.uid)}`}
           alt=""
@@ -1007,12 +1249,12 @@ function SourceImagePreview({
           className="size-full object-cover"
         />
       </span>
-      <span className="block truncate px-2 py-1.5 text-xs text-muted-foreground" title={image.filename}>
+      <span className="block truncate px-2 py-1.5 text-xs text-v2-fg-tertiary" title={image.filename}>
         {image.filename}
       </span>
       {selectionRequiredCount > 0 ? (
-        <span className="flex min-h-5 items-center gap-1 px-2 pb-1.5 text-[10px] font-medium text-blue-600 dark:text-blue-400">
-          <span className="size-1.5 shrink-0 rounded-full bg-blue-500" aria-hidden="true" />
+        <span className="flex min-h-5 items-center gap-1 px-2 pb-1.5 text-[10px] font-medium text-v2-warning">
+          <span className="size-1.5 shrink-0 rounded-full bg-v2-warning" aria-hidden="true" />
           <span className="tabular-nums">{selectionRequiredCount}개</span> 확인 필요
         </span>
       ) : (
