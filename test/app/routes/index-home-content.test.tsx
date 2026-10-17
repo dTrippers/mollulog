@@ -272,6 +272,34 @@ describe("home bottom and aside", () => {
     expect(markup).toContain('href="/news"');
   });
 
+  it("links each news row to its post detail and keeps the MM/DD date", () => {
+    const markup = render(
+      <HomeBottomSection
+        birthdays={{ status: "success", data: [] }}
+        news={{
+          status: "success",
+          data: [
+            {
+              uid: "post-1",
+              title: "9/8 업데이트 안내",
+              content: "본문",
+              board: "news",
+              timelineContentUid: null,
+              createdAt: "2026-09-08T00:00:00.000Z",
+              updatedAt: "2026-09-08T00:00:00.000Z",
+            },
+          ],
+        }}
+        timeZone={TZ}
+        onRetryBirthdays={noop}
+        onRetryNews={noop}
+      />,
+    );
+    expect(markup).toContain('href="/posts/post-1"');
+    expect(markup).toContain("9/8 업데이트 안내");
+    expect(markup).toContain(">09/08</time>");
+  });
+
   it("spreads five birthdays across five columns, and keeps a shorter list left-aligned", () => {
     const birthday = (uid: string, daysUntil: number) => ({ uid, name: `학생${uid}`, monthDay: "10-20", daysUntil });
     const five = render(

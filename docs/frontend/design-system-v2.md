@@ -78,6 +78,7 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 
 - Use Tailwind's `tabular-nums` for every number, date, time, count, and remaining duration. Do not add a numeric-only utility.
 - Dates and periods: `MM/DD ~ MM/DD`. Period with time: `MM/DD HH:mm ~ MM/DD HH:mm`.
+- Past records whose year may differ, such as a news post date: `YYYY/MM/DD`.
 - Remaining time: `N일 남음` for a running period, `N일 후 시작` for a future one.
 - Counts: thousands separator, for example `1,234`.
 - Comparison tables: right-align the date and figure columns so rows compare by digit position.

@@ -1,4 +1,4 @@
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, ne } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgPostsTable } from "~/db/postgres/schema";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
@@ -140,6 +140,30 @@ export async function getPostgresNewsPosts(
         totalCount,
         totalPages,
       };
+    },
+    options,
+  );
+}
+
+export async function getPostgresRecentNewsPosts(
+  env: Pick<Env, "HYPERDRIVE">,
+  excludeUid: string,
+  limit = 3,
+  options: PostgresPostsOptions = {},
+): Promise<Post[]> {
+  const safeLimit = Math.max(1, limit);
+
+  return withPostsDatabase(
+    env,
+    "get_recent_news",
+    async (db) => {
+      const rows = await db
+        .select()
+        .from(pgPostsTable)
+        .where(and(eq(pgPostsTable.board, "news"), ne(pgPostsTable.uid, excludeUid)))
+        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .limit(safeLimit);
+      return rows.map(toPost);
     },
     options,
   );

@@ -44,9 +44,10 @@ import {
   getBrowserStorage,
   readFutureVisitState,
 } from "./routes/futures._components/futures-navigation";
+import { shouldKeepNewsScrollOnNavigation } from "./routes/news._components/news-scroll-state";
 import styles from "./tailwind.css?url";
-import { getNavigationBarContents } from "./views/navigation";
 import type { NavigationBarContents } from "./views/navigation";
+import { getNavigationBarContents } from "./views/navigation";
 import { getSiteBanner } from "./views/site-banner";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
@@ -303,6 +304,17 @@ export default function App() {
         ? readFutureVisitState(getBrowserStorage("sessionStorage"), routeKey)
         : null;
     if (restoredFutureVisit) {
+      return;
+    }
+    // A back navigation to the news list restores its own saved offset (news route), so root must not reset it.
+    if (
+      shouldKeepNewsScrollOnNavigation({
+        pathname: location.pathname,
+        navigationType,
+        entryKey: routeKey,
+        storage: getBrowserStorage("sessionStorage"),
+      })
+    ) {
       return;
     }
 

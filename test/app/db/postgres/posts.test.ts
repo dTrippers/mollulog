@@ -6,6 +6,7 @@ import {
   getPostgresPostByTimelineContentUid,
   getPostgresPostByUid,
   getPostgresPosts,
+  getPostgresRecentNewsPosts,
 } from "~/db/postgres/posts";
 
 function postRow(
@@ -131,6 +132,27 @@ describe("PostgreSQL posts read", () => {
     expect(pageQuery.text).toContain("limit $2");
     expect(pageQuery.text).toContain("offset $3");
     expect(pageValues).toEqual(["news", 5, 5]);
+  });
+
+  it("loads recent news excluding the current post, newest first, limited to the requested count", async () => {
+    const client = {
+      connect: jest.fn(async () => undefined),
+      end: jest.fn(async () => undefined),
+      query: jest.fn(async () => ({ rows: [postRow("post-2")], rowCount: 1 })),
+    } as unknown as Client;
+
+    await expect(
+      getPostgresRecentNewsPosts({ HYPERDRIVE: { connectionString: "postgres://unused" } as Hyperdrive }, "post-1", 3, {
+        createClient: () => client,
+      }),
+    ).resolves.toMatchObject([{ uid: "post-2", board: "news" }]);
+
+    const [{ text }, values] = (client.query as jest.Mock).mock.calls[0] as [{ text: string }, unknown[]];
+    expect(text).toContain('"posts"."uid" <> $2');
+    expect(text).toContain('order by "posts"."created_at" desc, "posts"."uid" desc');
+    expect(text).toContain("limit $3");
+    expect(values).toEqual(["news", "post-1", 3]);
+    expect(client.end).toHaveBeenCalledTimes(1);
   });
 
   it("returns the latest post time as a Date and null for an empty board", async () => {

@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { Post } from "~/models/post";
 import { getPostByUid } from "~/models/post";
 import { loader, meta } from "~/routes/posts.$uid";
-import PostArticle from "~/routes/posts.$uid._components/PostArticle";
 
+jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn(() => ({ error: jest.fn() })) }));
 jest.mock("~/models/post", () => ({
   getPostByUid: jest.fn(),
+  getRecentNewsPosts: jest.fn(),
 }));
 
 const mockedGetPostByUid = getPostByUid as jest.MockedFunction<typeof getPostByUid>;
@@ -44,16 +45,15 @@ describe("post detail route", () => {
 
     const result = await loader(createLoaderArgs({ uid: loadedPost.uid }));
 
-    expect(result).toEqual({
-      post: {
-        uid: loadedPost.uid,
-        title: loadedPost.title,
-        content: loadedPost.content,
-        createdAt: loadedPost.createdAt,
-      },
+    expect(result.post).toEqual({
+      uid: loadedPost.uid,
+      title: loadedPost.title,
+      content: loadedPost.content,
+      createdAt: loadedPost.createdAt,
     });
     expect(result.post).not.toHaveProperty("board");
     expect(result.post).not.toHaveProperty("timelineContentUid");
+    expect(result.recent).toBeNull();
     expect(mockedGetPostByUid).toHaveBeenCalledWith(env, loadedPost.uid, { ctx });
   });
 
@@ -81,15 +81,5 @@ describe("post detail route", () => {
       { name: "description", content: "새로운 공지 게시물 내용을 확인해보세요." },
       { tagName: "link", rel: "canonical", href: `https://mollulog.net/posts/${loadedPost.uid}` },
     ]);
-  });
-
-  it("renders a responsive article surface with title and date", () => {
-    const loadedPost = post();
-    const article = PostArticle({ post: loadedPost });
-
-    expect(article.type).toBe("article");
-    expect(article.props.className).toContain("max-w-3xl");
-    expect(article.props.children[0].props.children[0].props.children).toBe(loadedPost.title);
-    expect(article.props.children[0].props.children[1].props.dateTime).toBe(loadedPost.createdAt);
   });
 });
