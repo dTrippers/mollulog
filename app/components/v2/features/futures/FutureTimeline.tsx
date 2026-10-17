@@ -1,5 +1,6 @@
 import {
   CheckCircleIcon as CheckCircleSolidIcon,
+  ChevronRightIcon,
   EyeIcon,
   EyeSlashIcon,
   PencilSquareIcon,
@@ -62,7 +63,7 @@ export type FutureTimelineProps = {
 // group join on the left media column, and the join breaks at the next divider.
 export function FutureTimeline(props: FutureTimelineProps) {
   return (
-    <div className="space-y-1">
+    <div className="space-y-2">
       {props.groups.map((group) => {
         const dateKey = group.groupDate ? formatInstantDateKey(group.groupDate, props.timeZone) : "live";
         return (
@@ -168,9 +169,7 @@ function TimelineItem({
       {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
     >
       {content.name}
-      <span aria-hidden="true" className="ml-1 inline-block text-v2-fg-tertiary">
-        ›
-      </span>
+      <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary" />
     </Link>
   ) : (
     <p className="text-base font-semibold whitespace-pre-line text-v2-fg">{content.name}</p>
@@ -179,19 +178,19 @@ function TimelineItem({
   return (
     <article
       data-futures-content-uid={content.uid}
-      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-5 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4"
+      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]"
     >
       {connectsNext ? (
         <span
           aria-hidden="true"
-          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem]"
+          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem] lg:left-6"
         />
       ) : null}
       <div className="relative z-10">
         <ContentMedia source={mediaSource} contentType={content.contentType} typeLabel={typeLabel} size="timeline" />
       </div>
 
-      <div className="min-w-0 space-y-1.5">
+      <div className="min-w-0 space-y-2">
         {hidden ? (
           <div className="space-y-1">
             <p className="text-base font-semibold text-v2-fg">스포일러가 포함되어 있어요</p>
@@ -206,19 +205,6 @@ function TimelineItem({
 
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-v2-fg-secondary">
           <span>{typeLabel}</span>
-          {content.minigameType ? <MinigameMark minigameType={content.minigameType} /> : null}
-          {content.confirmed && isInstantAfter(content.since, now) ? (
-            <MetaSeparatorAnd>
-              <span className="inline-flex items-center gap-1 font-semibold text-v2-success">
-                <CheckCircleSolidIcon className="size-3.5" aria-hidden="true" />
-                확정
-              </span>
-            </MetaSeparatorAnd>
-          ) : null}
-          {content.tags.includes("shop") ? <MetaSeparatorAnd>이벤트 상점</MetaSeparatorAnd> : null}
-          {specialCases.map((specialCase) => (
-            <SpecialCaseChip key={specialCase.kind} specialCase={specialCase} />
-          ))}
           <MetaSeparatorAnd>
             <span className="tabular-nums">
               {formatContentPeriod({
@@ -235,6 +221,19 @@ function TimelineItem({
               <RemainingLabel remaining={remaining} />
             </MetaSeparatorAnd>
           ) : null}
+          {content.minigameType ? <MinigameMark minigameType={content.minigameType} /> : null}
+          {content.confirmed && isInstantAfter(content.since, now) ? (
+            <MetaSeparatorAnd>
+              <span className="inline-flex items-center gap-1 font-semibold text-v2-success">
+                <CheckCircleSolidIcon className="size-3.5" aria-hidden="true" />
+                확정
+              </span>
+            </MetaSeparatorAnd>
+          ) : null}
+          {content.tags.includes("shop") ? <MetaSeparatorAnd>이벤트 상점</MetaSeparatorAnd> : null}
+          {specialCases.map((specialCase) => (
+            <SpecialCaseChip key={specialCase.kind} specialCase={specialCase} />
+          ))}
         </div>
 
         {isRaid && !hidden && content.raid ? <RaidSummary raid={content.raid} /> : null}
@@ -352,13 +351,8 @@ export function RaidSummary({
   raid: Pick<NonNullable<FutureViewContent["raid"]>, "terrain" | "attackType" | "defenseTypes">;
 }) {
   return (
-    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-v2-fg-secondary">
+    <p className="flex flex-wrap items-center gap-x-2.5 gap-y-0.5 text-xs text-v2-fg-secondary">
       <span>{terrainLocale[raid.terrain]}</span>
-      {raid.attackType ? (
-        <span aria-hidden="true" className="text-v2-fg-disabled">
-          |
-        </span>
-      ) : null}
       {raid.attackType ? (
         <span className="inline-flex items-center gap-1.5">
           <span
@@ -370,9 +364,6 @@ export function RaidSummary({
       ) : null}
       {raid.defenseTypes.map((defense) => (
         <span key={defense.defenseType} className="inline-flex items-center gap-1.5">
-          <span aria-hidden="true" className="px-1 text-v2-fg-disabled">
-            |
-          </span>
           <span
             aria-hidden="true"
             className={`h-3 w-0.5 rounded-full bg-v2-attr-${defenseTypeColor[defense.defenseType]}`}

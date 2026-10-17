@@ -36,6 +36,7 @@ const NOW = "2026-10-16T03:00:00.000Z";
 const healthyContents = {
   events: { status: "success", data: { main: null, together: [], upcoming: null, minigameType: null } },
   recruitmentGroups: { status: "success", data: [] },
+  upcomingRecruitmentGroups: [],
   raids: { status: "success", data: { total: { ongoing: [], upcoming: null }, unlimit: { ongoing: [], upcoming: null } } },
   overview: {
     campaigns: { status: "success", data: [] },
@@ -112,8 +113,7 @@ describe("home route with deferred sources that reject", () => {
     expect(link.className).toContain("min-h-11");
     // The negative vertical margin is gone: it pulled the text up by the margin amount.
     expect(link.className).not.toContain("-my-3");
-    // On desktop the bottom padding centers the text in the 36px box it had before.
-    expect(link.className).toContain("md:pb-2");
+    expect(link.className).toContain("items-center");
   });
 
   it("shows the section and aside skeletons with their real titles while the sources are still loading", async () => {

@@ -80,11 +80,11 @@ export function ScannerStepHeader({
   );
 }
 
-// The step title is bold text, with the count or time after it. On mobile the status line sits below the title (V16).
+// Keep the title and any secondary detail on separate lines so long status text does not crowd the heading.
 export function ScannerStepTitle({ title, meta }: { title: string; meta?: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <p className="flex flex-col text-base font-semibold text-v2-fg sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-2">
+      <p className="flex flex-col text-base font-semibold text-v2-fg">
         <span>{title}</span>
         {meta ? <span className="text-sm font-normal text-v2-fg-secondary tabular-nums">{meta}</span> : null}
       </p>

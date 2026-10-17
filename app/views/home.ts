@@ -116,6 +116,7 @@ export type HomeRaidSlots = {
 export type HomeIndexContents = {
   events: HomeSourceResult<HomeEventsSource>;
   recruitmentGroups: HomeSourceResult<HomeRecruitmentGroup[]>;
+  upcomingRecruitmentGroups: HomeRecruitmentGroup[];
   raids: HomeSourceResult<HomeRaidSlots>;
   overview: HomeOverviewSources;
   news: HomeSourceResult<Post[]>;
@@ -267,17 +268,26 @@ async function loadHomeIndexContents(
           (error) => logger.error("Failed to load home event minigame type", error),
         );
 
-  const recruitmentGroups: HomeSourceResult<HomeRecruitmentGroup[]> =
-    timeline.status === "error" || groups.status === "error"
-      ? { status: "error" }
-      : {
-          status: "success",
-          data: selectShownRecruitmentGroups(buildRecruitmentGroups(groups.data, timeline.data, now), now),
-        };
+  const recruitmentCandidates =
+    timeline.status === "success" && groups.status === "success"
+      ? buildRecruitmentGroups(groups.data, timeline.data, now)
+      : null;
+  const recruitmentGroups: HomeSourceResult<HomeRecruitmentGroup[]> = recruitmentCandidates
+    ? { status: "success", data: selectShownRecruitmentGroups(recruitmentCandidates, now) }
+    : { status: "error" };
+  const upcomingRecruitmentGroups =
+    recruitmentCandidates &&
+    recruitmentGroups.status === "success" &&
+    recruitmentGroups.data.some((group) => !isInstantAfter(group.since, now))
+      ? recruitmentCandidates
+          .filter((group) => isInstantAfter(group.since, now))
+          .sort((a, b) => a.since.localeCompare(b.since))
+      : [];
 
   return {
     events,
     recruitmentGroups,
+    upcomingRecruitmentGroups,
     raids,
     overview,
     news,
@@ -346,7 +356,7 @@ export async function getIndexContents(
     return await fetchRouteCached<HomeIndexContents>(
       env,
       ctx,
-      cacheKey("route", "index", 5, "all"),
+      cacheKey("route", "index", 6, "all"),
       async () => {
         const contents = await loadHomeIndexContents(env, forceRefresh, ctx);
         if (!isCompleteHomeIndexContents(contents)) {

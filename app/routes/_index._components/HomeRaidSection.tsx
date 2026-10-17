@@ -1,4 +1,5 @@
-import { ChevronRightIcon, ShieldCheckIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ShieldCheckIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
 import { RaidSummary } from "~/components/v2/features/futures/FutureTimeline";
 import { getHomeOngoingChip, getHomeUpcomingChip, type HomeTimeChip as HomeTimeChipValue } from "~/domain/home-portal";
@@ -23,7 +24,7 @@ function RaidTile({ content, now, timeZone }: { content: TimelineRaidContent; no
   if (!schedule) {
     return null;
   }
-  const seasonLabel = `${raidTypeLocale[schedule.raidType as keyof typeof raidTypeLocale]} ${schedule.seasonIndex}`;
+  const seasonLabel = `${raidTypeLocale[schedule.raidType as keyof typeof raidTypeLocale]} #${schedule.seasonIndex}`;
   return (
     <Link
       to={`/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`}
@@ -42,7 +43,7 @@ function RaidTile({ content, now, timeZone }: { content: TimelineRaidContent; no
         </div>
         <p className="flex min-w-0 items-center gap-1 text-base leading-6 font-semibold break-keep text-v2-fg md:text-lg md:leading-7">
           <span>{schedule.raidBoss.name}</span>
-          <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-v2-fg-tertiary md:size-4" />
+          <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-v2-fg-tertiary" />
         </p>
         <RaidSummary raid={schedule} />
       </div>
@@ -100,7 +101,7 @@ function RaidSlotColumn({
           className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
         >
           미래시에서 보기
-          <ChevronRightIcon aria-hidden="true" className="size-3.5 shrink-0 text-v2-fg-tertiary md:size-4" />
+          <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-v2-fg-tertiary" />
         </Link>
       }
     />

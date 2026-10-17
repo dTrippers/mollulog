@@ -50,7 +50,7 @@ export function ScannerFileStatusList({ items }: { items: ScannerFileStatusItem[
                   className={cn(
                     "size-4 shrink-0",
                     statusClassName[item.status],
-                    item.status === "processing" && "motion-safe:animate-spin",
+                    item.status === "processing" && "motion-safe:animate-[spin_2s_linear_infinite]",
                   )}
                   aria-hidden="true"
                 />

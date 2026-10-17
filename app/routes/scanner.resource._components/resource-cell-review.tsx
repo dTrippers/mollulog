@@ -199,6 +199,14 @@ export function buildCellReviewAttentionCounts(
   return counts;
 }
 
+function getSelectedCurrentQuantity(cell: ReviewCell, selectedUid: string | null, details?: CandidateDetails) {
+  if (!selectedUid) return null;
+  if (details?.current?.uid === selectedUid) return details.current.currentQuantity;
+  const candidate = details?.candidates.find((entry) => entry.uid === selectedUid);
+  if (candidate) return candidate.currentQuantity;
+  return selectedUid === cell.itemUid ? (cell.currentQuantity ?? 0) : null;
+}
+
 export function CellReviewPanel({
   jobUid,
   stacked = false,
@@ -223,10 +231,14 @@ export function CellReviewPanel({
   onEdit: (cell: ReviewCell, edit: CellEdit) => void;
 }) {
   const visibleCells = selectedImageUid ? cells.filter((cell) => cell.imageUid === selectedImageUid) : cells;
-  const attentionCount = Object.values(buildCellReviewAttentionCounts(visibleCells, edits)).reduce(
-    (sum, count) => sum + count,
-    0,
-  );
+  const hasExistingValuesBelow = visibleCells.some((cell) => {
+    const edit = edits[cellAddressKey(cell)] ?? {};
+    const selectedUid = edit.itemUid ?? cell.itemUid;
+    const details = candidateDetails[cellAddressKey(cell)];
+    const currentQuantity = getSelectedCurrentQuantity(cell, selectedUid, details);
+    const quantity = edit.quantity ?? (cell.quantity == null ? "" : String(cell.quantity));
+    return !edit.excluded && currentQuantity != null && quantity !== "" && Number(quantity) < currentQuantity;
+  });
   if (visibleCells.length === 0) {
     return (
       <p className="rounded-md bg-v2-inset px-4 py-6 text-center text-sm text-v2-fg-tertiary">
@@ -237,11 +249,11 @@ export function CellReviewPanel({
 
   return (
     <>
-      <div className="flex items-baseline justify-between gap-3">
-        <p className="text-sm font-semibold text-v2-fg">인식 결과</p>
-        <p className="text-xs text-v2-fg-secondary tabular-nums">
-          {visibleCells.length}칸 · 확인 필요 {attentionCount}칸
-        </p>
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <p className="text-sm font-semibold text-v2-fg tabular-nums">검토할 칸 {visibleCells.length}개</p>
+        {hasExistingValuesBelow ? (
+          <p className="text-xs text-v2-fg-tertiary">입력칸 아래 숫자는 기존 보유량</p>
+        ) : null}
       </div>
       <div className="grid grid-cols-5 gap-x-2 gap-y-1">
         {visibleCells.map((cell) => (
@@ -292,11 +304,10 @@ function CellReviewTile({
     details?.current && details.current.uid === selectedUid
       ? details.current
       : (selectedCandidate ?? (cell.resource?.uid === selectedUid ? cell.resource : undefined));
-  const currentQuantity =
-    details?.current && details.current.uid === selectedUid
-      ? details.current.currentQuantity
-      : (selectedCandidate?.currentQuantity ??
-        (selectedUid && selectedUid === cell.itemUid ? (cell.currentQuantity ?? 0) : null));
+  const currentQuantity = getSelectedCurrentQuantity(cell, selectedUid, details);
+  const showCurrentQuantity =
+    !excluded && currentQuantity != null && quantity !== "" && Number(quantity) < currentQuantity;
+  const matchesExisting = !excluded && currentQuantity != null && quantity !== "" && Number(quantity) === currentQuantity;
   const unavailable = currentResource && "unavailable" in currentResource && currentResource.unavailable === true;
   const sameAppearanceCandidateCount = cell.sameAppearanceCandidateCount ?? 0;
   const requiresSameAppearanceSelection =
@@ -408,10 +419,15 @@ function CellReviewTile({
       </span>
       <div className="mt-1 w-full">
         <NumberInput
+          compact
           min={0}
           disabled={disabled}
           value={quantity}
-          className={cn("px-1", scannerNumberInputClassName)}
+          className={cn(
+            "border-v2-control-border/40 px-1 font-normal focus:border-v2-control-border",
+            matchesExisting && "text-v2-fg-secondary focus:text-v2-fg focus-visible:text-v2-fg",
+            scannerNumberInputClassName,
+          )}
           warning={warning !== null && warning.tone !== "muted"}
           aria-label={`${currentResource?.name ?? "아이템"} 인식 수량`}
           onChange={(event) =>
@@ -422,11 +438,11 @@ function CellReviewTile({
           }
         />
       </div>
-      {/* The line is always reserved, so tiles without a "보유" value keep the same height and alignment. */}
       <div className="mt-1 flex h-3 flex-col items-center">
-        {currentQuantity != null ? (
+        {showCurrentQuantity && currentQuantity != null ? (
           <p className="w-max whitespace-nowrap text-center text-[10px] leading-none text-v2-fg-tertiary">
-            보유 <strong className="font-bold tabular-nums text-v2-fg">{currentQuantity.toLocaleString()}</strong>
+            <span className="sr-only">기존 보유량 </span>
+            <span className="tabular-nums">{currentQuantity.toLocaleString()}</span>
           </p>
         ) : null}
       </div>
@@ -627,7 +643,6 @@ function CellCandidatePopover({
         <div className="flex justify-end pt-1">
           <Button
             variant="danger"
-            className="text-v2-fg"
             onClick={() => {
               onExclude();
               close();

@@ -1,6 +1,6 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import {
   CalendarDaysIcon,
-  ChevronRightIcon,
   RectangleStackIcon,
   ShoppingCartIcon,
   SparklesIcon,
@@ -124,7 +124,7 @@ function EventHero({
               className="inline-flex items-center gap-1 rounded-sm underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
             >
               <span className="whitespace-pre-line">{content.name}</span>
-              <ChevronRightIcon aria-hidden="true" className="size-5 shrink-0" />
+              <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0" />
             </Link>
           </h3>
         </div>

@@ -224,7 +224,7 @@ function ScannerJobsSkeleton() {
       {["first", "second", "third"].map((key) => (
         <div
           key={key}
-          className="flex min-h-v2-row-min flex-col justify-center gap-1.5 px-v2-row-x py-v2-row-y"
+          className="flex min-h-v2-row-min flex-col justify-center gap-1.5 py-v2-row-y"
           aria-hidden="true"
         >
           <Skeleton className="h-4 w-20" />

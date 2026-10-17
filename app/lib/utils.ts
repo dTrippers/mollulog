@@ -16,6 +16,7 @@ const twMerge = extendTailwindMerge({
         "v2-block-gap",
         "v2-column-gap",
         "v2-row-min",
+        "v2-control-min",
       ],
     },
   },

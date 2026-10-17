@@ -164,7 +164,7 @@ function ListRow({
   const row = (
     <div
       className={cn(
-        "flex items-center gap-3 px-v2-block-p py-2 lg:grid lg:min-h-11 lg:grid-cols-[1.75rem_7rem_minmax(0,1fr)_6.25rem_6.5rem_1rem] lg:gap-x-3 lg:py-1",
+        "flex items-center gap-3 px-v2-block-p py-2 lg:grid lg:min-h-11 lg:grid-cols-[2rem_7rem_minmax(0,1fr)_6.25rem_6.5rem_1rem] lg:gap-x-3 lg:py-1",
       )}
     >
       {media}

@@ -15,7 +15,6 @@ export type ScannerQuotaMeterState =
 
 export type ScannerQuotaMeterProps = {
   subject: string;
-  unit: string;
   state: ScannerQuotaMeterState;
 };
 
@@ -24,7 +23,7 @@ export function formatScannerQuotaAvailability(value: string): string {
 }
 
 // One kind of quota: the remaining amount beside the limit, a bar of the remaining share, and the next available time when used up.
-export function ScannerQuotaMeter({ subject, unit, state }: ScannerQuotaMeterProps) {
+export function ScannerQuotaMeter({ subject, state }: ScannerQuotaMeterProps) {
   if (state.kind === "loading") {
     return (
       <div className="flex min-w-0 flex-1 basis-0 flex-col gap-1.5" aria-busy="true">
@@ -67,14 +66,13 @@ export function ScannerQuotaMeter({ subject, unit, state }: ScannerQuotaMeterPro
       <div className="flex items-baseline justify-between gap-2 text-sm">
         <span className="whitespace-nowrap text-v2-fg-tertiary">{subject}</span>
         <span className={cn("whitespace-nowrap font-semibold tabular-nums", numberClassName)}>
-          {state.remaining}
-          {unit} 남음 / {state.limit}
+          {state.remaining} / {state.limit}
         </span>
       </div>
       <ProgressBar
         value={state.remaining}
         max={state.limit}
-        label={`${subject} 업로드 가능 횟수, ${state.remaining}${unit} 남음`}
+        label={`${subject} 업로드 가능 횟수, ${state.remaining} / ${state.limit}`}
         tone={barTone}
         track={isExhausted ? "danger" : "default"}
       />
@@ -92,10 +90,10 @@ export function ScannerQuotaMeter({ subject, unit, state }: ScannerQuotaMeterPro
 export function ScannerQuota({ children }: { children: ReactNode }) {
   return (
     <section
-      aria-label="업로드 가능 횟수"
+      aria-label="남은 업로드 횟수 (7일간)"
       className="flex w-full max-w-[26rem] flex-col gap-2 rounded-lg bg-v2-surface p-v2-block-p"
     >
-      <p className="text-xs font-medium text-v2-fg-tertiary">업로드 가능 횟수 · 최근 7일</p>
+      <p className="text-xs font-medium text-v2-fg-tertiary">남은 업로드 횟수 (7일간)</p>
       <div className="flex gap-x-v2-column-gap">{children}</div>
     </section>
   );

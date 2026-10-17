@@ -60,7 +60,7 @@ export function ScannerJobList({ items }: { items: ScannerJobListItem[] }) {
               to={item.href}
               aria-current={item.selected ? "page" : undefined}
               className={cn(
-                "flex min-h-v2-row-min items-center justify-between gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y hover:bg-v2-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min items-center justify-between gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y hover:bg-v2-hover",
                 item.selected && "bg-v2-hover",
                 v2FocusRing,
               )}
@@ -76,7 +76,7 @@ export function ScannerJobList({ items }: { items: ScannerJobListItem[] }) {
                   className={cn(
                     "size-3.5",
                     toneIconClassName[item.tone],
-                    item.tone === "processing" && "motion-safe:animate-spin",
+                    item.tone === "processing" && "motion-safe:animate-[spin_2s_linear_infinite]",
                   )}
                   aria-hidden="true"
                 />

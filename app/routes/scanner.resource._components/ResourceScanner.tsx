@@ -20,6 +20,7 @@ import { PageActionBar } from "~/components/v2/layout/PageActionBar";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
 import { IconButton } from "~/components/v2/primitives/IconButton";
+import { Popover } from "~/components/v2/primitives/Popover";
 import { ProgressBar } from "~/components/v2/primitives/ProgressBar";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { OCR_ALLOWED_CONTENT_TYPES } from "~/domain/ocr";
@@ -105,6 +106,12 @@ type JobStatus = {
 
 type JobApplication = { status: "pending" | "applied" | "discarded" | "expired"; appliedAt: string | null } | null;
 
+function completionCountLabel(count: number): string {
+  if (count >= 1_000_000) return `${(count / 1_000_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
+  if (count >= 10_000) return `${(count / 1_000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
+  return count.toLocaleString();
+}
+
 // The saved apply record, read from the job detail, so the completion view matches before and after a reload.
 export type ItemCompletionSummary = {
   appliedCount: number;
@@ -118,6 +125,48 @@ export type ItemCompletionSummary = {
     quantity: number;
   }>;
 };
+
+function CompletionResourceCard({ item }: { item: ItemCompletionSummary["items"][number] }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const name = item.name ?? "아이템 정보 없음";
+  return (
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`${name}, 반영 후 수량 ${item.quantity.toLocaleString()}`}
+        onClick={() => setOpen((current) => !current)}
+        className="relative block size-10 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      >
+        {item.assetUid && item.resourceType ? (
+          <ResourceThumb itemUid={item.assetUid} resourceType={item.resourceType} name={name} size="md" />
+        ) : (
+          <span className="flex size-10 items-center justify-center rounded-md bg-v2-inset px-1 text-center text-[8px] text-v2-fg-tertiary">
+            이미지 없음
+          </span>
+        )}
+        <span className="absolute -right-1 -bottom-1 rounded border-2 border-v2-surface bg-v2-fg px-1 text-xs font-medium text-v2-canvas tabular-nums">
+          {completionCountLabel(item.quantity)}
+        </span>
+      </button>
+      <Popover
+        open={open}
+        label={`${name} 반영 결과`}
+        onClose={() => setOpen(false)}
+        returnFocusRef={triggerRef}
+        className="w-max max-w-72 p-3"
+      >
+        <p className="text-sm font-medium break-words text-v2-fg">{name}</p>
+        <p className="mt-1 text-xs text-v2-fg-secondary tabular-nums">
+          반영 후 수량 {item.quantity.toLocaleString()}
+        </p>
+      </Popover>
+    </>
+  );
+}
 
 type OcrUploadQuota = ScannerUploadQuota;
 
@@ -452,7 +501,6 @@ export default function ResourceScanner() {
 
   const stepStates = getResourceStepStates(phase, job);
   const failedImageCount = job?.images.filter((image) => image.status !== "succeeded").length ?? 0;
-  const recognizedCellCount = (job?.cells ?? []).filter((cell) => cell.status === "recognized").length;
   const isTerminal = job ? TERMINAL_JOB_STATUSES.has(job.status) : false;
   const isApplied = job?.application?.status === "applied";
   const uploadPercent = Math.round((hashProgress < 1 ? hashProgress : uploadProgress) * 100);
@@ -462,8 +510,8 @@ export default function ResourceScanner() {
     files.length === 0 || isUploadLocked || !uploadQuota || files.length > uploadQuota.remaining;
   const isReviewActionVisible =
     job !== null && (phase === "review" || phase === "applying") && shouldShowScannerCancelAction(job.status);
-  // Stacked layouts pin the step's primary action to the bottom: the upload bar once files are selected, and the review bar.
-  const hasFixedBar = stacked && ((!job && files.length > 0) || isReviewActionVisible);
+  // Only the upload bar is fixed on stacked layouts; review actions stay sticky at the end of the step.
+  const hasFixedBar = stacked && !job && files.length > 0;
 
   // The stacked "최근 작업" button shows only while the mobile action bar is hidden (files selected, review, applying).
   const recentJobsButton =
@@ -605,20 +653,7 @@ export default function ResourceScanner() {
   const reviewStep = job ? (
     <>
       <ScannerStepHeader states={stepStates} action={headerAction}>
-        <ScannerStepTitle
-          title={job.reviewError ? "아이템 인식 결과를 확인하지 못했어요" : "인식 결과를 검토해 주세요"}
-          meta={
-            job.reviewError
-              ? undefined
-              : [
-                  `아이템 ${recognizedCellCount}개 인식`,
-                  `${unknownCount}개 확인 필요`,
-                  failedImageCount > 0 ? `스크린샷 ${failedImageCount}장 실패` : null,
-                ]
-                  .filter(Boolean)
-                  .join(" · ")
-          }
-        />
+        <ScannerStepTitle title="인식 결과" />
         {error ? (
           <StatusNotice tone="danger">{error}</StatusNotice>
         ) : job.reviewError ? (
@@ -632,14 +667,10 @@ export default function ResourceScanner() {
               </Button>
             }
           >
-            스크린샷 {job.images.findIndex((image) => image.status !== "succeeded") + 1}번(
-            {job.images.find((image) => image.status !== "succeeded")?.filename})을 인식하지 못했어요. 이 화면의
-            아이템은 반영되지 않아요.
+            스크린샷 {failedImageCount}장 인식 실패
           </StatusNotice>
         ) : unknownCount > 0 ? (
-          <StatusNotice tone="warning">
-            확인이 필요한 칸이 {unknownCount}개 있어요. 칸을 눌러 아이템과 수량을 확인해 주세요.
-          </StatusNotice>
+          <StatusNotice tone="warning">확인이 필요한 칸을 선택해 주세요.</StatusNotice>
         ) : null}
       </ScannerStepHeader>
       {reviewBody}
@@ -649,24 +680,18 @@ export default function ResourceScanner() {
   const reviewActionBar =
     isReviewActionVisible && job ? (
       <PageActionBar
-        placement={stacked ? "fixed" : "sticky"}
+        placement="sticky"
         expandActions
-        summary={
-          phase === "applying"
-            ? "반영 중이에요"
-            : isCancelling
-              ? "삭제 중이에요"
-              : job.reviewError
-                ? null
-                : `반영 ${cellReviewPreview?.applicableChanged ?? 0}개 · 변경 없음 ${cellReviewPreview?.unchangedSafe ?? 0}개 · 제외 ${cellReviewPreview?.omitted ?? 0}개`
-        }
+        className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
+        summary={phase === "applying" ? "반영 중이에요" : isCancelling ? "삭제 중이에요" : null}
       >
-        <Button variant="secondary" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
+        <Button variant="danger" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
           결과 삭제
         </Button>
         {shouldShowScannerResultActions(job.status, job.reviewMode, job.reviewError) ? (
           <Button
             variant="primary"
+            aria-label={`${cellReviewPreview?.applicableChanged ?? 0}개 반영`}
             disabled={phase === "applying" || isCancelling || !hasChanges}
             onClick={applyResult}
           >
@@ -681,7 +706,7 @@ export default function ResourceScanner() {
     job && isApplied ? (
       <>
         <ScannerStepHeader states={stepStates} action={headerAction}>
-          <ScannerStepTitle title="반영했어요" meta={formatCompletionMeta(job.updatedAt, completionState)} />
+          <ScannerStepTitle title="반영했어요" meta={formatScannerQuotaAvailability(job.updatedAt)} />
         </ScannerStepHeader>
         {completionState.kind === "summary" ? (
           <ScannerCompletionSummary
@@ -708,32 +733,11 @@ export default function ResourceScanner() {
             }
           >
             <div className="flex flex-col gap-v2-group-gap">
-              <div className="flex items-baseline justify-between gap-3 text-xs text-v2-fg-tertiary">
-                <p className="font-semibold text-v2-fg-secondary">반영한 아이템</p>
-                <p>반영 후 수량</p>
-              </div>
-              <ul className="grid grid-cols-1 gap-x-v2-column-gap gap-y-v2-list-gap sm:grid-cols-2 lg:grid-cols-3">
+              <p className="text-sm font-semibold text-v2-fg">반영한 아이템</p>
+              <ul className="flex flex-wrap gap-2">
                 {completionState.summary.items.map((item) => (
-                  <li
-                    key={item.uid}
-                    className="flex min-h-v2-row-min min-w-0 items-center justify-between gap-v2-media-gap text-sm"
-                  >
-                    <span className="flex min-w-0 items-center gap-2">
-                      {item.assetUid && item.resourceType ? (
-                        <ResourceThumb
-                          itemUid={item.assetUid}
-                          resourceType={item.resourceType}
-                          name={item.name ?? undefined}
-                          size="sm"
-                        />
-                      ) : (
-                        <span aria-hidden="true" className="size-6 shrink-0 rounded-md bg-v2-inset" />
-                      )}
-                      <span className="truncate text-v2-fg">{item.name ?? "아이템 정보 없음"}</span>
-                    </span>
-                    <span className="shrink-0 text-v2-fg font-semibold tabular-nums">
-                      {item.quantity.toLocaleString()}
-                    </span>
+                  <li key={item.uid} className="w-12 shrink-0">
+                    <CompletionResourceCard item={item} />
                   </li>
                 ))}
               </ul>
@@ -799,14 +803,14 @@ export default function ResourceScanner() {
         <ScannerStepHeader states={stepStates} action={headerAction}>
           {job.status === "queued" ? (
             <ScannerStepTitle
-              title="인식 대기 중이에요"
-              meta={`스크린샷 ${job.images.length}장 · 곧 인식을 시작해요`}
+              title="인식 대기 중"
+              meta={`스크린샷 ${job.images.length}장`}
             />
           ) : (
             <>
               <ScannerStepTitle
-                title="스크린샷을 인식하고 있어요"
-                meta={`${job.progress.total}장 중 ${processedCountOf(job)}장 처리 · 완료 ${job.progress.completed} · 실패 ${job.progress.failed} · 대기 ${job.progress.total - processedCountOf(job)}`}
+                title="아이템 인식 중"
+                meta={`처리 ${processedCountOf(job)}/${job.progress.total}${job.progress.failed > 0 ? ` · 실패 ${job.progress.failed}` : ""}`}
               />
               <ProgressBar value={processedCountOf(job)} max={job.progress.total} label="인식 진행률" />
             </>
@@ -814,7 +818,7 @@ export default function ResourceScanner() {
           <p className="text-sm text-v2-fg-secondary">
             {job.status === "queued"
               ? "페이지를 닫아도 차례가 오면 인식을 시작해요."
-              : "페이지를 닫아도 인식은 계속돼요. 이미지 수에 따라 최대 1분 정도 걸려요."}
+              : "페이지를 닫아도 인식은 계속돼요."}
           </p>
           {job.progress.failed > 0 ? (
             <ScannerFailureNotice>
@@ -834,7 +838,7 @@ export default function ResourceScanner() {
       multiple
       selectionDisabled={isFileSelectionDisabled}
       onFiles={addFiles}
-      targetGuide={<ScannerUploadTargetGuide target="item" className="w-44 shrink-0" />}
+      targetGuide={<ScannerUploadTargetGuide target="item" />}
       targetPath="[메뉴] > [아이템]"
       helpText="파일을 끌어다 놓거나 붙여넣기(Ctrl+V), 또는 클릭해서 선택"
       descriptionLines={["1회 최대 이미지 30장 · PNG, JPG, WEBP"]}
@@ -871,15 +875,14 @@ export default function ResourceScanner() {
       <ScannerStepHeader states={stepStates} action={headerAction}>
         {phase === "uploading" ? (
           <>
-            <ScannerStepTitle title="스크린샷을 업로드하고 있어요" meta={`${files.length}장 · ${selectedBytes}`} />
+            <ScannerStepTitle title="파일 업로드 중" />
             <ProgressBar
               value={hashProgress < 1 ? hashProgress : uploadProgress}
               max={1}
               label={hashProgress < 1 ? "파일 확인 진행률" : "업로드 진행률"}
             />
             <p className="text-sm text-v2-fg-secondary tabular-nums">
-              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`} · 업로드가 끝나면 바로
-              인식을 시작해요.
+              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`}
             </p>
           </>
         ) : isUploadQuotaExhausted && uploadQuota ? (
@@ -898,7 +901,7 @@ export default function ResourceScanner() {
             </StatusNotice>
           </>
         ) : (
-          <ScannerStepTitle title="스크린샷을 선택해 주세요" meta="1회 최대 30장" />
+          <ScannerStepTitle title="스크린샷을 선택해 주세요" />
         )}
       </ScannerStepHeader>
       {uploadBody}
@@ -966,15 +969,6 @@ function toFileStatusItems(job: JobStatus): ScannerFileStatusItem[] {
             ? "queued"
             : "processing",
   }));
-}
-
-// The count comes only from a summary; without one the meta is the time alone, never a zero count.
-function formatCompletionMeta(
-  updatedAt: string,
-  completionState: ReturnType<typeof getScannerCompletionState<ItemCompletionSummary>>,
-): string {
-  const time = formatScannerQuotaAvailability(updatedAt);
-  return completionState.kind === "summary" ? `아이템 ${completionState.summary.appliedCount}개 · ${time}` : time;
 }
 
 function getSelectedResultImage(

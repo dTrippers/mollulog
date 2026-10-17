@@ -1,6 +1,6 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import {
   CheckCircleIcon,
-  ChevronRightIcon,
   IdentificationIcon,
   HeartIcon as OutlineHeartIcon,
   PencilSquareIcon,
@@ -43,7 +43,7 @@ export function StudentQuickPanelBody({
   const pending = entry.viewerPending || entry.viewerUnavailable;
   const favoriteLabel = entry.favorited ? "관심 학생에서 해제" : "관심 학생에 등록";
   const FavoriteIcon = entry.favorited ? SolidHeartIcon : OutlineHeartIcon;
-  const completeLabel = entry.completed ? "모집 완료 취소" : "모집 완료로 표시";
+  const completeLabel = entry.completed ? "모집 기록 삭제" : "모집 완료로 표시";
   return (
     <div className="space-y-2">
       <div>
@@ -68,7 +68,7 @@ export function StudentQuickPanelBody({
             <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
           </Link>
         ) : null}
-        {detailHref ? <div aria-hidden="true" className="mx-2 my-1 border-t border-v2-inset" /> : null}
+        {detailHref ? <div aria-hidden="true" className="mx-2 my-1 border-t border-v2-popover-divider" /> : null}
         <button
           type="button"
           className={rowClassName}

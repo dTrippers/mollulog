@@ -87,7 +87,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         (result?.students ?? []).flatMap(({ studentUid }) => {
           const student = studentsMap[studentUid];
           return student
-            ? [[studentUid, { uid: student.uid, name: student.name, initialTier: student.initialTier }]]
+            ? [[studentUid, { uid: student.uid, name: student.name, initialTier: student.initialTier, equipments: student.equipments }]]
             : [];
         }),
       ),

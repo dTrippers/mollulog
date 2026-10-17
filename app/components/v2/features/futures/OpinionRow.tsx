@@ -1,4 +1,5 @@
-import { ChatBubbleOvalLeftEllipsisIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ChatBubbleOvalLeftEllipsisIcon } from "@heroicons/react/24/outline";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
 import { Skeleton } from "../../primitives/Skeleton";
@@ -7,7 +8,7 @@ import type { FutureOpinionState } from "./types";
 const PREVIEW_LENGTH = 50;
 
 // Inset opinion row, limited to a readable width on desktop. Count, a live dot for an opinion from the last three days,
-// and the pinned opinion's preview. Pressing it opens the opinion sheet. A failed summary is disabled, so the row cannot
+// and the pinned opinion's preview or a prompt to write one. Pressing it opens the opinion sheet. A failed summary is disabled, so the row cannot
 // open an empty thread. While the summary loads, the row is a skeleton of the same size.
 export function OpinionRow({ opinion, onOpen }: { opinion: FutureOpinionState; onOpen: () => void }) {
   const summary = opinion.summary;
@@ -55,23 +56,22 @@ export function OpinionRow({ opinion, onOpen }: { opinion: FutureOpinionState; o
       )}
     >
       <ChatBubbleOvalLeftEllipsisIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-      {summary.count > 0 ? (
-        <span className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="shrink-0 text-v2-fg-tertiary tabular-nums">의견 {summary.count}</span>
-          {summary.hasRecentComment ? (
-            <>
-              <span
-                aria-hidden="true"
-                className="size-1.5 shrink-0 rounded-full bg-v2-live motion-safe:animate-pulse"
-              />
-              <span className="sr-only">최근 3일 내 새 의견 있음</span>
-            </>
-          ) : null}
-          {preview ? <span className="min-w-0 truncate text-v2-fg-secondary">{preview}</span> : null}
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="text-v2-fg-tertiary tabular-nums" aria-hidden="true">
+          {summary.count}
         </span>
-      ) : (
-        <span className="min-w-0 flex-1 truncate text-v2-fg-secondary">의견을 남겨보세요</span>
-      )}
+        <span className="sr-only">의견 {summary.count}개</span>
+        {summary.hasRecentComment ? (
+          <>
+            <span
+              aria-hidden="true"
+              className="size-1.5 shrink-0 rounded-full bg-v2-live motion-safe:animate-pulse"
+            />
+            <span className="sr-only">최근 3일 내 새 의견 있음</span>
+          </>
+        ) : null}
+      </span>
+      <span className="min-w-0 flex-1 truncate text-v2-fg-secondary">{preview ?? "의견을 남겨보세요"}</span>
       <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
     </button>
   );

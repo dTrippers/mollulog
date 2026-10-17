@@ -126,7 +126,7 @@ export function CommentComposer({
   return (
     <div
       ref={containerRef}
-      className="flex items-end gap-1 rounded-lg border border-v2-control-border bg-v2-surface py-1 pr-1 pl-3 focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus"
+      className="flex items-end gap-1 rounded-lg border border-v2-control-border/40 bg-v2-surface py-1 pr-1 pl-3 focus-within:border-v2-control-border focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus"
     >
       <label className="sr-only" htmlFor={`${fieldId}-textarea`}>
         {label}
@@ -143,7 +143,7 @@ export function CommentComposer({
         placeholder={shownPlaceholder}
         disabled={disabled}
         rows={1}
-        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm max-lg:min-h-11 max-lg:py-3 leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary disabled:opacity-60"
+        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm max-lg:min-h-11 max-lg:py-3 leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary/75 disabled:opacity-60"
       />
       {showVisibility ? (
         <button

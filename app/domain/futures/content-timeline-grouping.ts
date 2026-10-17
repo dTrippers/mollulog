@@ -6,13 +6,46 @@ import {
   type UtcIsoString,
 } from "~/lib/date-time";
 import type { EventType, RaidType } from "~/models/content.d";
-import { CONTENT_ORDER } from "~/models/content-rules";
 
 export type FutureGroupableContent = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   contentType: EventType | RaidType;
+  runType: "first" | "rerun" | "permanent";
+  students: readonly unknown[];
 };
+
+// Priority applies within one date group. Types outside the requested order keep their chronological order before pickup.
+function contentPriority(content: FutureGroupableContent): number {
+  switch (content.contentType) {
+    case "live":
+      return 0;
+    case "event":
+      return content.runType === "permanent" ? 5 : content.runType === "rerun" ? 2 : 1;
+    case "main_story":
+      return 3;
+    case "mini_story":
+      return 4;
+    case "immortal_event":
+      return 5;
+    case "raid":
+    case "total_assault":
+    case "elimination":
+    case "unlimit":
+    case "allied":
+      return 6;
+    case "mini_event":
+      return 7;
+    case "joint_firing_drill":
+      return 8;
+    case "campaign":
+      return 9;
+    case "pickup":
+      return 11;
+    default:
+      return 10;
+  }
+}
 
 export type FutureContentGroup<T extends FutureGroupableContent> = {
   // null marks the in-progress group, which comes first.
@@ -48,6 +81,11 @@ export function groupFutureContents<T extends FutureGroupableContent>(
 
   return groups.map(({ groupDate, contents }) => ({
     groupDate,
-    contents: contents.sort((a, b) => CONTENT_ORDER.indexOf(a.contentType) - CONTENT_ORDER.indexOf(b.contentType)),
+    contents: contents.sort(
+      (a, b) =>
+        Number(b.students.length > 0) - Number(a.students.length > 0) ||
+        contentPriority(a) - contentPriority(b) ||
+        compareInstantAsc(a.since, b.since),
+    ),
   }));
 }

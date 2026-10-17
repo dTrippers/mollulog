@@ -449,6 +449,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-favorite: var(--v2-favorite);
   --color-v2-completed-badge: var(--v2-completed-badge);
   --color-v2-favorite-badge: var(--v2-favorite-badge);
+  --color-v2-favorite-neutral-badge: var(--v2-favorite-neutral-badge);
   --color-v2-new: var(--v2-new);
   --color-v2-warning: var(--v2-warning);
   --color-v2-warning-subtle: var(--v2-warning-subtle);
@@ -463,6 +464,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-attr-grey: var(--v2-attr-grey);
   --color-v2-fg-disabled: var(--v2-fg-disabled);
   --color-v2-elevated: var(--v2-elevated);
+  --color-v2-popover-surface: var(--v2-popover-surface);
+  --color-v2-popover-divider: var(--v2-popover-divider);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
   --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
@@ -494,8 +497,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-live: oklch(0.505 0.213 27.518);
   --v2-favorite: oklch(0.577 0.245 27.325);
   /* These badges sit on images and keep white text legible in both themes. */
-  --v2-completed-badge: rgb(22 96 50 / 80%);
-  --v2-favorite-badge: rgb(173 28 28 / 80%);
+  --v2-completed-badge: rgb(22 96 50 / 90%);
+  --v2-favorite-badge: rgb(173 28 28 / 90%);
+  --v2-favorite-neutral-badge: rgb(0 0 0 / 85%);
   --v2-new: oklch(0.905 0.182 98.111);
   --v2-warning: oklch(0.55 0.163 48.998);
   --v2-warning-subtle: oklch(0.965 0.05 95);
@@ -510,6 +514,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-attr-grey: oklch(0.556 0 0);
   --v2-fg-disabled: oklch(0.72 0 0);
   --v2-elevated: oklch(1 0 0);
+  --v2-popover-surface: rgb(255 255 255 / 94%);
+  --v2-popover-divider: rgb(0 0 0 / 18%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: oklch(0.623 0.214 259.815 / 10%);
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
@@ -556,6 +562,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-attr-grey: oklch(0.708 0 0);
   --v2-fg-disabled: oklch(0.56 0 0);
   --v2-elevated: oklch(0.36 0 0);
+  --v2-popover-surface: rgb(24 24 24 / 94%);
+  --v2-popover-divider: rgb(255 255 255 / 22%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: oklch(0.707 0.165 254.624 / 16%);
 }
@@ -691,6 +699,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
 .v2-header {
   grid-area: header;
+  padding-top: var(--spacing-v2-group-gap);
 }
 
 .v2-toolbar,

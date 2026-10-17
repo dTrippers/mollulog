@@ -48,7 +48,7 @@ const baseJob = {
 };
 
 const UPLOAD_TITLE = "스크린샷을 선택해 주세요";
-const REVIEW_TITLE = "인식 결과를 검토해 주세요";
+const REVIEW_TITLE = "인식 결과";
 const COMPLETION_TITLE = "반영했어요";
 
 // One body per job state: the expected body title is shown, and no other body is rendered with it.
@@ -63,7 +63,7 @@ const phaseCases = [
       reviewMode: undefined,
       cells: undefined,
     },
-    body: "인식 대기 중이에요",
+    body: "인식 대기 중",
     progressBars: 0,
     absent: [UPLOAD_TITLE, REVIEW_TITLE, COMPLETION_TITLE],
   },
@@ -77,7 +77,7 @@ const phaseCases = [
       reviewMode: undefined,
       cells: undefined,
     },
-    body: "스크린샷을 인식하고 있어요",
+    body: "아이템 인식 중",
     progressBars: 1,
     absent: [UPLOAD_TITLE, REVIEW_TITLE, COMPLETION_TITLE],
   },

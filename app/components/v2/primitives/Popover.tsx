@@ -51,7 +51,7 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
   // Focus moves to the first control once, when the panel mounts for an open popover. Later rerenders do not move it.
   useEffect(() => {
     if (open && panelNode) {
-      panelNode.querySelector<HTMLElement>("button, [href]")?.focus();
+      panelNode.querySelector<HTMLElement>("button:not(:disabled), [href]")?.focus();
     }
   }, [open, panelNode]);
 
@@ -139,7 +139,7 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
           data-placement={placement}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
-            "fixed z-30 w-72 rounded-lg bg-v2-elevated p-v2-block-p shadow-lg ring-1 ring-v2-control-border",
+            "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,
           )}

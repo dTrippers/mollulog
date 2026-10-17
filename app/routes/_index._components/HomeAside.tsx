@@ -1,4 +1,5 @@
-import { ChevronRightIcon, UserGroupIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ArrowTopRightOnSquareIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
@@ -146,7 +147,7 @@ function FeedItem({ post, timeZone }: { post: EnrichedCommunityFeedPost; timeZon
   const context = feedContext(post);
   const body = feedBody(post);
   return (
-    <li className="flex min-w-0 items-start gap-2.5 px-v2-block-p py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover motion-reduce:transition-none">
+    <li className="flex min-w-0 items-start gap-2.5 py-3 first:pt-v2-block-p transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover motion-reduce:transition-none">
       {post.author ? (
         <Link
           to={`/@${post.author.username}`}
@@ -222,20 +223,7 @@ export function HomeFeedBlock({
   onRetry: () => void;
 }) {
   return (
-    <HomeSection
-      id="home-feed"
-      title="최근 피드"
-      className="md:[&_h2]:text-lg"
-      action={
-        <Link
-          to="/community"
-          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
-        >
-          더 보기
-          <ChevronRightIcon aria-hidden="true" className="size-4" />
-        </Link>
-      }
-    >
+    <HomeSection id="home-feed" title="최근 피드" className="md:[&_h2]:text-lg">
       <div className="overflow-hidden rounded-lg bg-v2-surface">
         {feed.status === "error" ? (
           <div className="flex flex-col gap-v2-block-gap p-v2-block-p">
@@ -250,11 +238,20 @@ export function HomeFeedBlock({
             <HomeEmpty className="p-0">최근 피드가 없어요</HomeEmpty>
           </div>
         ) : (
-          <ul className="flex flex-col divide-y divide-v2-divider">
-            {feed.posts.map((post) => (
-              <FeedItem key={post.uid} post={post} timeZone={timeZone} />
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col divide-y divide-v2-divider/60 px-v2-block-p">
+              {feed.posts.map((post) => (
+                <FeedItem key={post.uid} post={post} timeZone={timeZone} />
+              ))}
+            </ul>
+            <Link
+              to="/community"
+              className="relative flex min-h-11 items-center justify-center gap-0.5 text-sm text-v2-fg-secondary before:absolute before:inset-x-v2-block-p before:top-0 before:border-t before:border-v2-divider/60 before:content-[''] transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+            >
+              더 보기
+              <ChevronRightIcon aria-hidden="true" className="size-4" />
+            </Link>
+          </>
         )}
       </div>
     </HomeSection>
@@ -292,14 +289,14 @@ export function HomeYoutubeBlock({
             <HomeEmpty className="p-0">최근 영상이 없어요</HomeEmpty>
           </div>
         ) : (
-          <ul className="flex flex-col divide-y divide-v2-divider">
+          <ul className="flex flex-col divide-y divide-v2-divider/60 px-v2-block-p">
             {videos.map((video) => (
               <li key={`${video.channelKey}-${video.id}`}>
                 <a
                   href={video.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex min-w-0 gap-3 px-v2-block-p py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                  className="flex min-w-0 gap-3 py-3 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
                 >
                   <img
                     src={video.thumbnailUrl}
@@ -330,15 +327,16 @@ export function HomeYoutubeBlock({
 // opens in a new window, which the hidden 새 창 text tells screen reader users.
 export function HomeChannelLinks({ channels }: { channels: HomeYoutubeChannelLink[] }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-2 px-1 text-sm">
+    <ul className="flex flex-wrap gap-x-3 gap-y-2 px-1 text-xs text-v2-fg-tertiary">
       {channels.map((channel) => (
         <li key={channel.key}>
           <a
             href={channel.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="-my-3 inline-flex min-h-11 items-center rounded-sm font-medium text-v2-fg-secondary underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+            className="-my-3 inline-flex min-h-11 items-center gap-0.5 rounded-sm transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
           >
+            <ArrowTopRightOnSquareIcon aria-hidden="true" className="size-3" />
             {CHANNEL_TITLES[channel.key]}
             <span className="sr-only">새 창</span>
           </a>

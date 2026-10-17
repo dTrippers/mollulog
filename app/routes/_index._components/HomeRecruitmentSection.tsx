@@ -1,10 +1,13 @@
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
+import { Link } from "react-router";
 import { StudentSlot } from "~/components/v2/features/students/StudentSlot";
 import type { FutureStudentEntry } from "~/components/v2/features/students/types";
 import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
-import type { UtcIsoString } from "~/lib/date-time";
+import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale } from "~/locales/ko";
+import { studentImageUrl } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { HomeRecruitmentGroup, HomeSourceResult, IndexRecruitment } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
@@ -88,14 +91,70 @@ function GroupBanner({ group }: { group: HomeRecruitmentGroup }) {
   );
 }
 
+function studentRecruitments(group: HomeRecruitmentGroup) {
+  return group.recruitments.filter(
+    (recruitment): recruitment is IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> } =>
+      recruitment.student !== null,
+  );
+}
+
+function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentGroup[]; timeZone: string }) {
+  const firstGroup = groups[0];
+  if (!firstGroup) return null;
+  const nextDate = formatInstantDateKey(firstGroup.since, timeZone);
+  const nextGroups = groups.filter((group) => formatInstantDateKey(group.since, timeZone) === nextDate);
+  return (
+    <Link
+      to="/futures"
+      className="flex min-w-0 items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-2.5 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-v2-fg-tertiary">
+          다음 모집 · {formatInstant(firstGroup.since, { timeZone, format: "MM/DD" })} 시작
+        </p>
+        <ul className="mt-1.5 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-2">
+          {nextGroups.map((group) => {
+            const students = studentRecruitments(group);
+            return (
+              <li key={group.groupUid} className="col-span-2 grid min-w-0 grid-cols-subgrid items-center">
+                {students.length > 0 ? (
+                  <div className="flex shrink-0 items-center -space-x-2">
+                    {students.map((recruitment) => (
+                      <img
+                        key={recruitment.favoriteKey}
+                        src={studentImageUrl(recruitment.student.uid)}
+                        alt={recruitment.studentName}
+                        loading="lazy"
+                        className="size-8 rounded-full border-2 border-v2-surface bg-v2-inset object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <span aria-hidden="true" />
+                )}
+                <span className="min-w-0 flex-1 text-xs whitespace-pre-line text-v2-fg-secondary line-clamp-2">
+                  {group.eventName ?? group.kindLabel}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-v2-fg-tertiary" />
+    </Link>
+  );
+}
+
 export function HomeRecruitmentSection({
   groups,
+  upcomingGroups,
   viewer,
   now,
   timeZone,
   onRetry,
 }: {
   groups: HomeSourceResult<HomeRecruitmentGroup[]>;
+  upcomingGroups: HomeRecruitmentGroup[];
   viewer: HomeViewerState;
   now: UtcIsoString;
   timeZone: string;
@@ -124,7 +183,7 @@ export function HomeRecruitmentSection({
         <HomeEmpty>모집 중인 학생이 없어요</HomeEmpty>
       ) : (
         // Every group sits on one surface, with a divider between groups.
-        <div className="divide-y divide-v2-divider overflow-hidden rounded-lg bg-v2-surface">
+        <div className="divide-y divide-v2-divider/60 overflow-hidden rounded-lg bg-v2-surface">
           {groups.data.map((group) => {
             const students = group.recruitments.filter(
               (recruitment): recruitment is IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> } =>
@@ -165,6 +224,7 @@ export function HomeRecruitmentSection({
           })}
         </div>
       )}
+      {upcomingGroups.length > 0 ? <NextRecruitmentPreview groups={upcomingGroups} timeZone={timeZone} /> : null}
     </HomeSection>
   );
 }

@@ -9,7 +9,6 @@ import {
   ScannerQuotaMeter,
   type ScannerQuotaMeterState,
 } from "~/components/v2/features/scanner/ScannerQuota";
-import { AsideLinks } from "~/components/v2/layout/AsideLinks";
 import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
 import { PageAside } from "~/components/v2/layout/PageAside";
 import { PageHeader } from "~/components/v2/layout/PageHeader";
@@ -18,6 +17,7 @@ import { PageToolbar } from "~/components/v2/layout/PageToolbar";
 import { PanelSheet } from "~/components/v2/layout/PanelSheet";
 import { ScreenTabs } from "~/components/v2/layout/ScreenTabs";
 import { V2Page, type V2PanelRequest } from "~/components/v2/layout/V2Page";
+import { Button } from "~/components/v2/primitives/Button";
 import ScannerJobsPanel from "./scanner._components/ScannerJobsPanel";
 import type { ScannerUploadQuota } from "./scanner._components/UploadQuotaMeter";
 import { getScannerQuotaDisplayState, useScannerQuota } from "./scanner._components/useScannerQuota";
@@ -72,8 +72,8 @@ export default function ScannerLayout() {
         description="게임 화면 스크린샷 또는 녹화 영상을 업로드하여 인게임 데이터를 인식 후 등록할 수 있어요"
         trailing={
           <ScannerQuota>
-            <ScannerQuotaMeter subject="이미지" unit="장" state={toMeterState(image)} />
-            <ScannerQuotaMeter subject="영상" unit="개" state={toMeterState(video)} />
+            <ScannerQuotaMeter subject="이미지" state={toMeterState(image)} />
+            <ScannerQuotaMeter subject="영상" state={toMeterState(video)} />
           </ScannerQuota>
         }
       />
@@ -104,17 +104,12 @@ export default function ScannerLayout() {
         <PanelSheet panelId="jobs" title="진행 상황" description="최근 7일 동안의 인식 작업" Icon={ClockIcon}>
           <ScannerJobsPanel />
         </PanelSheet>
-        <AsideLinks
-          items={[
-            {
-              key: "feedback",
-              title: FEEDBACK_TITLE,
-              description: "인식기를 쓰며 겪은 문제를 알려주세요",
-              Icon: ChatBubbleOvalLeftIcon,
-              onClick: () => setIsFeedbackOpen(true),
-            },
-          ]}
-        />
+        <div className="flex justify-end">
+          <Button variant="secondary" className="text-xs" onClick={() => setIsFeedbackOpen(true)}>
+            <ChatBubbleOvalLeftIcon className="size-4" aria-hidden="true" />
+            {FEEDBACK_TITLE}
+          </Button>
+        </div>
       </PageAside>
       <div className={isMobileActionBarHidden ? "hidden" : undefined}>
         <MobileActionBar
@@ -127,7 +122,7 @@ export default function ScannerLayout() {
               onClick: () => setIsFeedbackOpen(true),
             },
           ]}
-          panels={[{ panelId: "jobs", title: "진행 상황", shortTitle: "작업", Icon: ClockIcon }]}
+          panels={[{ panelId: "jobs", title: "진행 상황", Icon: ClockIcon }]}
         />
       </div>
       <FeedbackSheet

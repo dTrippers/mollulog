@@ -1,4 +1,5 @@
-import { BookOpenIcon, ChevronRightIcon, MegaphoneIcon, ViewfinderCircleIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
+import { BookOpenIcon, MegaphoneIcon, ViewfinderCircleIcon } from "@heroicons/react/24/outline";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { RaidSummary } from "~/components/v2/features/futures/FutureTimeline";
@@ -149,7 +150,7 @@ function MainStoryTile({
           {story.name}
           <ChevronRightIcon
             aria-hidden="true"
-            className="ml-1 inline-block size-3.5 shrink-0 align-middle text-v2-fg-tertiary md:size-4"
+            className="ml-1 inline-block size-4 shrink-0 align-middle text-v2-fg-tertiary"
           />
         </Link>
       }

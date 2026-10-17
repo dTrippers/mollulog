@@ -27,6 +27,7 @@ export type StudentThumbProps = {
   large?: boolean;
   // False hides the name, variant, and preparing line below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
+  showRecruitmentLabel?: boolean;
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
@@ -45,6 +46,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     small = false,
     large = false,
     showCaption = true,
+    showRecruitmentLabel = true,
   },
   ref,
 ) {
@@ -68,12 +70,14 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           className="size-full object-cover"
         />
       ) : null}
-      <span
-        aria-hidden="true"
-        className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
-      >
-        <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
-      </span>
+      {showRecruitmentLabel ? (
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
+        >
+          <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
+        </span>
+      ) : null}
       <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
     </>
   );

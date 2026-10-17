@@ -20,7 +20,7 @@ const skeletonGroups = [
 
 export function FutureSkeleton() {
   return (
-    <div role="status" aria-busy="true" className="space-y-1">
+    <div role="status" aria-busy="true" className="space-y-2">
       <span className="sr-only">미래시를 불러오는 중</span>
       {skeletonGroups.map((group) => (
         <section key={group.key} aria-hidden="true">
@@ -41,15 +41,15 @@ const skeletonStudentKeys = ["a", "b", "c", "d"];
 
 function SkeletonItem({ withStudents, connectsNext }: { withStudents: boolean; connectsNext: boolean }) {
   return (
-    <article className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-5 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4">
+    <article className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]">
       {connectsNext ? (
         <span
           aria-hidden="true"
-          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem]"
+          className="absolute top-12 -bottom-5 left-5 w-px bg-v2-divider md:left-[1.375rem] lg:left-6"
         />
       ) : null}
-      <Skeleton className="relative z-10 size-10 md:size-11" />
-      <div className="min-w-0 space-y-1.5">
+      <Skeleton className="relative z-10 size-10 md:size-11 lg:size-12" />
+      <div className="min-w-0 space-y-2">
         <Skeleton className="h-5 w-3/5" />
         <Skeleton className="h-3.5 w-2/5" />
         {withStudents ? (

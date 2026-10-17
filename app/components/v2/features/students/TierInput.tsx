@@ -1,5 +1,8 @@
-import type { FocusEventHandler, KeyboardEventHandler } from "react";
+import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
+import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import { type FocusEventHandler, type KeyboardEventHandler, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
+import { Popover } from "../../primitives/Popover";
 import type { NumberInputFlowNavigationInputProps } from "../../primitives/use-number-input-flow-navigation";
 
 export type TierInputProps = {
@@ -12,6 +15,7 @@ export type TierInputProps = {
   max: number;
   disabled?: boolean;
   warning?: boolean;
+  compact?: boolean;
   flowProps: NumberInputFlowNavigationInputProps;
   onChange: (tier: number) => void;
   // Extra classes for the box, such as a segment inside a grouped input that drops its own border.
@@ -34,8 +38,8 @@ function TierFace({ tier }: { tier: number }) {
   );
 }
 
-// The box matches NumberInput: same height, border, and warning background. A native select sits over it, invisible but focusable,
-// so the choice keeps its keyboard and screen-reader behavior and joins the useNumberInputFlowNavigation flow.
+// The box matches NumberInput and stays in the keyboard navigation flow. Tier choices open in a popover instead of a
+// native select menu that obscures the review table.
 export function TierInput({
   label,
   value,
@@ -44,44 +48,74 @@ export function TierInput({
   max,
   disabled = false,
   warning = false,
+  compact = false,
   flowProps,
   onChange,
   className,
 }: TierInputProps) {
-  const tiers = Array.from({ length: max - min + 1 }, (_, index) => min + index);
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   return (
-    <span
-      className={cn(
-        "relative block min-h-v2-input-min w-full min-w-0 rounded-md border border-v2-control-border bg-v2-surface text-sm font-medium text-v2-fg tabular-nums focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus",
-        warning && "bg-v2-warning-subtle",
-        disabled && "text-v2-fg-disabled",
-        className,
-      )}
-    >
-      <span aria-hidden="true" className="flex min-h-v2-input-min items-center justify-center px-2">
-        {value === null ? "—" : <TierFace tier={value} />}
-      </span>
-      <select
+    <>
+      <button
+        ref={triggerRef}
+        type="button"
         data-number-input-flow={flowProps["data-number-input-flow"]}
-        onFocus={flowProps.onFocus as unknown as FocusEventHandler<HTMLSelectElement>}
-        onKeyDown={flowProps.onKeyDown as unknown as KeyboardEventHandler<HTMLSelectElement>}
+        onFocus={flowProps.onFocus as FocusEventHandler<HTMLButtonElement>}
+        onKeyDown={flowProps.onKeyDown as KeyboardEventHandler<HTMLButtonElement>}
         aria-label={`${label} ${value === null ? "선택" : getTierMeaning(value)}`}
-        value={value ?? ""}
+        aria-haspopup="dialog"
+        aria-expanded={open}
         disabled={disabled}
-        onChange={(event) => onChange(Number(event.currentTarget.value))}
-        className="absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-not-allowed"
+        onClick={() => setOpen((current) => !current)}
+        className={cn(
+          "block w-full min-w-0 cursor-pointer rounded-md border border-v2-control-border bg-v2-surface text-sm font-medium text-v2-fg tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-not-allowed",
+          compact ? "min-h-7" : "min-h-v2-input-min",
+          warning && "bg-v2-warning-subtle",
+          disabled && "text-v2-fg-disabled",
+          className,
+        )}
       >
-        {value === null ? (
-          <option value="" disabled>
-            선택
-          </option>
-        ) : null}
-        {tiers.map((tier) => (
-          <option key={tier} value={tier} disabled={tier < initialTier}>
-            {getTierMeaning(tier)}
-          </option>
-        ))}
-      </select>
-    </span>
+        <span aria-hidden="true" className={cn("flex items-center justify-center px-2", compact ? "min-h-7" : "min-h-v2-input-min")}>
+          {value === null ? "—" : <TierFace tier={value} />}
+        </span>
+      </button>
+      <Popover
+        open={open}
+        label={`${label} 성급 선택`}
+        onClose={() => setOpen(false)}
+        returnFocusRef={triggerRef}
+        className="w-fit p-3"
+      >
+        <fieldset className="flex items-center" aria-label="성급 선택">
+          {Array.from({ length: max - min + 1 }, (_, index) => min + index).map((tier) => {
+            const Icon = value !== null && tier <= value ? StarIconSolid : StarIconOutline;
+            const selectable = tier >= initialTier;
+            return (
+              <button
+                key={tier}
+                type="button"
+                aria-label={getTierMeaning(tier)}
+                aria-pressed={value === tier}
+                disabled={disabled || !selectable}
+                onClick={() => {
+                  onChange(tier);
+                  setOpen(false);
+                  triggerRef.current?.focus({ preventScroll: true });
+                }}
+                className={cn(
+                  "inline-flex size-7 cursor-pointer items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-default disabled:opacity-40",
+                  tier === 5 && "mr-1",
+                  tier <= 5 ? "text-v2-warning" : "text-v2-perk",
+                  value === null || tier > value ? "opacity-50 hover:opacity-100" : "",
+                )}
+              >
+                <Icon className="size-5" aria-hidden="true" />
+              </button>
+            );
+          })}
+        </fieldset>
+      </Popover>
+    </>
   );
 }

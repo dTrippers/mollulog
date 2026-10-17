@@ -1,4 +1,4 @@
-import { ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { v2FocusRing } from "~/components/v2/layout/styles";
@@ -93,7 +93,7 @@ export function HomeNewsBlock({
     return <HomeEmpty>등록된 소식이 없어요</HomeEmpty>;
   }
   return (
-    <ul className="divide-y divide-v2-divider rounded-lg bg-v2-surface px-v2-block-p">
+    <ul className="divide-y divide-v2-divider/60 rounded-lg bg-v2-surface px-v2-block-p">
       {news.data.map((post) => (
         <li key={post.uid}>
           <Link

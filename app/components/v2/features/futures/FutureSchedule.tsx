@@ -107,8 +107,8 @@ export function FutureSchedule({
       <table className="w-full table-fixed border-collapse text-sm">
         <colgroup>
           <col className="w-20" />
+          <col className="w-[35%]" />
           <col />
-          <col className="w-[20rem]" />
         </colgroup>
         <thead>
           <tr className="text-xs font-semibold text-v2-fg-tertiary">
@@ -188,7 +188,7 @@ function ScheduleRow({
                 <div key={group.uid} className="space-y-2">
                   {group.showName || group.showPeriod ? (
                     <p className="flex items-baseline gap-1.5 text-xs">
-                      {group.showName ? <span className="font-medium text-v2-fg-secondary">{group.name}</span> : null}
+                      {group.showName ? <span className="font-medium whitespace-pre-line text-v2-fg-secondary">{group.name}</span> : null}
                       {group.showPeriod ? (
                         <span className="text-v2-fg-tertiary tabular-nums">
                           {`${formatInstant(group.since, { timeZone, format: "MM/DD" })} ~ ${
@@ -262,7 +262,7 @@ function groupRecruitmentsForRow(
     } else {
       groups.push({
         uid: content.uid,
-        name: content.name.replaceAll("\n", " "),
+        name: content.name,
         entries: [entry],
         contentUntil: content.until,
       });
@@ -303,7 +303,7 @@ function HeldContent({
     contentType: content.contentType,
   });
   const typeLabel = getFutureMediaTypeLabel(view);
-  const name = content.name.replaceAll("\n", " ");
+  const name = content.name;
 
   if (!visible) {
     return (
@@ -331,7 +331,9 @@ function HeldContent({
       />
       <div className="min-w-0 flex-1">
         <p className="text-xs text-v2-fg-tertiary">{typeLabel}</p>
-        <p className={cn("truncate text-sm font-semibold text-v2-fg", linkable && "group-hover:underline")}>{name}</p>
+        <p className={cn("text-sm font-semibold whitespace-pre-line text-v2-fg", linkable && "group-hover:underline")}>
+          {name}
+        </p>
         {periodLabel ? <p className="text-xs text-v2-fg-tertiary tabular-nums">{periodLabel}</p> : null}
       </div>
     </div>

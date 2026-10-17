@@ -55,14 +55,14 @@ describe("scanner step header", () => {
 
 describe("scanner quota meter states", () => {
   it("separates loading from an empty quota", () => {
-    const markup = renderToStaticMarkup(<ScannerQuotaMeter subject="이미지" unit="장" state={{ kind: "loading" }} />);
+    const markup = renderToStaticMarkup(<ScannerQuotaMeter subject="이미지" state={{ kind: "loading" }} />);
     expect(markup).toContain("불러오는 중");
     expect(markup).not.toContain("남음");
   });
 
   it("offers a retry for a failed quota read", () => {
     const markup = renderToStaticMarkup(
-      <ScannerQuotaMeter subject="영상" unit="개" state={{ kind: "error", onRetry: () => undefined }} />,
+      <ScannerQuotaMeter subject="영상" state={{ kind: "error", onRetry: () => undefined }} />,
     );
     expect(markup).toContain("불러오지 못했어요");
     expect(markup).toContain("다시 시도");
@@ -72,11 +72,10 @@ describe("scanner quota meter states", () => {
     const markup = renderToStaticMarkup(
       <ScannerQuotaMeter
         subject="이미지"
-        unit="장"
         state={{ kind: "exhausted", remaining: 0, limit: 200, availableAt: "2026-10-24T05:30:00.000Z" }}
       />,
     );
-    expect(markup).toContain("0장 남음 / 200");
+    expect(markup).toContain("0 / 200");
     expect(markup).toContain("부터 가능");
     expect(markup).toContain("text-v2-danger");
     // The meter value is the real remaining amount, and the exhausted track is danger-subtle (D-1).
@@ -86,9 +85,9 @@ describe("scanner quota meter states", () => {
 
   it("shows a low amount with the warning tone and the remaining count", () => {
     const markup = renderToStaticMarkup(
-      <ScannerQuotaMeter subject="영상" unit="개" state={{ kind: "low", remaining: 1, limit: 10 }} />,
+      <ScannerQuotaMeter subject="영상" state={{ kind: "low", remaining: 1, limit: 10 }} />,
     );
-    expect(markup).toContain("1개 남음 / 10");
+    expect(markup).toContain("1 / 10");
     expect(markup).toContain("text-v2-warning");
   });
 });

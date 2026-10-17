@@ -32,6 +32,7 @@ export function HomeMain({
       <HomeEventSection events={contents.events} now={now} timeZone={timeZone} onRetry={onRetry} />
       <HomeRecruitmentSection
         groups={contents.recruitmentGroups}
+        upcomingGroups={contents.upcomingRecruitmentGroups}
         viewer={viewer}
         now={now}
         timeZone={timeZone}

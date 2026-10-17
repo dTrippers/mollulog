@@ -58,6 +58,7 @@ function unavailableHomeContents(): HomeIndexContents {
   return {
     events: failed,
     recruitmentGroups: failed,
+    upcomingRecruitmentGroups: [],
     raids: failed,
     overview: { campaigns: failed, jointFiringDrills: failed, mainStoryContent: failed },
     news: failed,
@@ -174,7 +175,7 @@ export default function Index() {
   return (
     <V2Page width="wide">
       <main className="flex w-full min-w-0 flex-col gap-2.5 pt-2 md:gap-6 md:pt-4">
-        <HomeHeader now={now} timeZone={timeZone} />
+        <HomeHeader />
         {accountLeft ? <HomeAccountLeftNotice /> : null}
         <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:gap-8">
           <div className="min-w-0 flex-1">
@@ -215,14 +216,16 @@ export default function Index() {
                 {(state) => <HomeFeedBlock feed={state} timeZone={timeZone} onRetry={retry} />}
               </Await>
             </Suspense>
-            <Suspense fallback={<HomeAsideSkeleton title="공식 유튜브 최근 영상" variant="video" />}>
-              <Await
-                resolve={youtube}
-                errorElement={<HomeYoutubeBlock youtube={{ status: "error" }} timeZone={timeZone} onRetry={retry} />}
-              >
-                {(state) => <HomeYoutubeBlock youtube={state} timeZone={timeZone} onRetry={retry} />}
-              </Await>
-            </Suspense>
+            <div className="mt-3">
+              <Suspense fallback={<HomeAsideSkeleton title="공식 유튜브 최근 영상" variant="video" />}>
+                <Await
+                  resolve={youtube}
+                  errorElement={<HomeYoutubeBlock youtube={{ status: "error" }} timeZone={timeZone} onRetry={retry} />}
+                >
+                  {(state) => <HomeYoutubeBlock youtube={state} timeZone={timeZone} onRetry={retry} />}
+                </Await>
+              </Suspense>
+            </div>
             <HomeChannelLinks channels={youtubeChannels} />
           </aside>
         </div>

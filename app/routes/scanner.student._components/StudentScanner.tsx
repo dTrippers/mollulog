@@ -1,7 +1,6 @@
-import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
-import { ArrowUpTrayIcon, MagnifyingGlassPlusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { ArrowUpTrayIcon } from "@heroicons/react/24/outline";
 import { type Dispatch, type ReactNode, type SetStateAction, useCallback, useEffect, useRef, useState } from "react";
-import { useOutletContext } from "react-router";
+import { Link, useOutletContext } from "react-router";
 import { ScannerCompletionSummary } from "~/components/v2/features/scanner/ScannerCompletionSummary";
 import { ScannerEndBlock } from "~/components/v2/features/scanner/ScannerEndBlock";
 import {
@@ -21,8 +20,8 @@ import { splitVisibleStudentName } from "~/components/v2/features/students/split
 import { TierInput } from "~/components/v2/features/students/TierInput";
 import { PageActionBar } from "~/components/v2/layout/PageActionBar";
 import { Button } from "~/components/v2/primitives/Button";
-import { IconButton } from "~/components/v2/primitives/IconButton";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { Popover } from "~/components/v2/primitives/Popover";
 import { ProgressBar } from "~/components/v2/primitives/ProgressBar";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { Switch } from "~/components/v2/primitives/Switch";
@@ -31,6 +30,7 @@ import {
   useNumberInputFlowNavigation,
 } from "~/components/v2/primitives/use-number-input-flow-navigation";
 import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
+import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import type { OcrUploadInput, OcrVideoUploadInput } from "~/domain/ocr";
 import {
   STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
@@ -44,6 +44,7 @@ import type {
   StudentVideoFieldState,
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
+import { formatVisibleName } from "~/models/student";
 import type { ScannerOutletContext } from "../scanner";
 import ScannerFileList from "../scanner._components/ScannerFileList";
 import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
@@ -120,14 +121,14 @@ const abilityHpField = { resultKey: "abilityHp", applyKey: "abilityHp", label: "
 const abilityAtkField = {
   resultKey: "abilityAtk",
   applyKey: "abilityAtk",
-  label: "공격",
+  label: "공격력",
   min: 0,
   max: 25,
 } as const;
 const abilityHealField = {
   resultKey: "abilityHeal",
   applyKey: "abilityHeal",
-  label: "치유",
+  label: "치유력",
   min: 0,
   max: 25,
 } as const;
@@ -238,7 +239,7 @@ type StudentVideoJob = {
     timestampSeconds: number;
   }>;
   currentStudentStates?: Record<string, CurrentStudentState>;
-  studentCatalog?: Record<string, { uid: string; name: string; initialTier: number }>;
+  studentCatalog?: Record<string, { uid: string; name: string; initialTier: number; equipments: string[] }>;
   application: JobApplication;
   createdAt: string;
   updatedAt: string;
@@ -483,7 +484,7 @@ export function getStudentFailedImagesDescription(images: ReadonlyArray<StudentI
   const failedImages = images.filter((image) => image.status === "failed");
   const oversizedImages = failedImages.filter((image) => image.error?.code === STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE);
   if (oversizedImages.length === 0) {
-    return `${failedImages.map((image) => image.filename).join(", ")} · 성공한 이미지의 결과만 검토할 수 있어요.`;
+    return failedImages.map((image) => image.filename).join(", ");
   }
 
   const descriptions = [
@@ -493,9 +494,9 @@ export function getStudentFailedImagesDescription(images: ReadonlyArray<StudentI
     (image) => image.error?.code !== STUDENT_IMAGE_DIMENSIONS_EXCEEDED_CODE,
   );
   if (otherFailedImages.length > 0) {
-    descriptions.push(`${otherFailedImages.map((image) => image.filename).join(", ")} · 이미지를 인식하지 못했어요`);
+    descriptions.push(otherFailedImages.map((image) => image.filename).join(", "));
   }
-  return `${descriptions.join(" ")} 성공한 이미지의 결과만 검토할 수 있어요.`;
+  return descriptions.join(" · ");
 }
 
 export function getStudentJobTransition(job: Pick<StudentVideoJob, "status" | "result" | "application">): {
@@ -732,9 +733,9 @@ export default function StudentScanner() {
   const selectedPartialFailure = getStudentUploadPartialFailureForJob(partialFailure, selectedJobUid);
   const isApplied = job?.application?.status === "applied";
   const isReviewing = job?.status === "review_ready" && job.result != null && !isApplied;
-  // Stacked layouts pin the primary action to the bottom: the upload bar once files are selected, and the review bar.
+  // Only the stacked upload bar is fixed; the review actions stay in the page flow and stick below its scroll area.
   const showsUploadBar = stacked && !job && !selectedJobUid && selectedFiles.length > 0;
-  const hasFixedBar = stacked && (showsUploadBar || isReviewing);
+  const hasFixedBar = showsUploadBar;
   // One body per job state. Each step below renders only when it is the body.
   const stepBody = getScannerStepBody({
     hasSelectedJob: selectedJobUid !== null,
@@ -766,14 +767,14 @@ export default function StudentScanner() {
   // The stacked "최근 작업" button shows only while the mobile action bar is hidden (files selected, review).
   const recentJobsButton =
     stacked && hidesMobileActionBar ? (
-      <Button variant="secondary" onClick={openJobsPanel}>
+      <Button variant="secondary" className="min-h-8" onClick={openJobsPanel}>
         최근 작업
       </Button>
     ) : null;
   const headerAction =
     job && !TERMINAL_JOB_STATUSES.has(job.status) && !isApplied && phase !== "applying" ? (
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" onClick={() => resetForNewUpload()}>
+        <Button variant="secondary" className={stacked ? "min-h-8" : undefined} onClick={() => resetForNewUpload()}>
           <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
           {scannerMessages.student.uploadAction}
         </Button>
@@ -788,21 +789,19 @@ export default function StudentScanner() {
       <ScannerStepHeader states={stepStates} action={headerAction}>
         {phase === "uploading" ? (
           <>
-            <ScannerStepTitle title="파일을 업로드하고 있어요" meta={selectedSummary} />
+            <ScannerStepTitle title="파일 업로드 중" />
             <ProgressBar
               value={hashProgress < 1 ? hashProgress : uploadProgress}
               max={1}
               label={hashProgress < 1 ? "파일 확인 진행률" : "업로드 진행률"}
             />
             <p className="text-sm text-v2-fg-secondary tabular-nums">
-              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`} · 업로드가 끝나면 바로
-              인식을 시작해요.
+              {hashProgress < 1 ? `파일 확인 ${uploadPercent}%` : `업로드 ${uploadPercent}%`}
             </p>
           </>
         ) : (
           <ScannerStepTitle
             title={selectedFiles.length === 0 ? "이미지 또는 영상을 선택해 주세요" : "인식을 시작할 수 있어요"}
-            meta={selectedFiles.length === 0 ? "1회 최대 이미지 30장 또는 영상 1개" : selectedSummary}
           />
         )}
         {selectedQuotaError ? <StatusNotice tone="warning">{selectedQuotaError}</StatusNotice> : null}
@@ -817,7 +816,7 @@ export default function StudentScanner() {
         multiple
         selectionDisabled={phase !== "idle" || (imageUploadQuota?.remaining === 0 && uploadQuota?.remaining === 0)}
         onFiles={selectFiles}
-        targetGuide={<ScannerUploadTargetGuide target="student" className="w-44 shrink-0" />}
+        targetGuide={<ScannerUploadTargetGuide target="student" />}
         targetPath="[학생] > [기본 정보]"
         selectLabel="이미지·영상 선택"
         helpText="1회당 최대 이미지 30장 또는 영상 1개"
@@ -860,19 +859,17 @@ export default function StudentScanner() {
       <>
         <ScannerStepHeader states={stepStates} action={headerAction}>
           {job.status === "queued" ? (
-            <ScannerStepTitle title="인식 대기 중이에요" meta="곧 인식을 시작해요" />
+            <ScannerStepTitle title="인식 대기 중" />
           ) : (
             <>
               <ScannerStepTitle
-                title="학생 성장도를 인식하고 있어요"
-                meta={`${job.progress.total}장 중 ${processedStudentCountOf(job)}장 처리 · 완료 ${job.progress.completed} · 실패 ${job.progress.failed} · 대기 ${job.progress.total - processedStudentCountOf(job)}`}
+                title="학생 성장도 인식 중"
+                meta={`처리 ${processedStudentCountOf(job)}/${job.progress.total}${job.progress.failed > 0 ? ` · 실패 ${job.progress.failed}` : ""}`}
               />
               <ProgressBar value={processedStudentCountOf(job)} max={job.progress.total} label="인식 진행률" />
             </>
           )}
-          <p className="text-sm text-v2-fg-secondary">
-            페이지를 닫아도 인식은 계속돼요. 파일 종류와 수에 따라 시간이 달라질 수 있어요.
-          </p>
+          <p className="text-sm text-v2-fg-secondary">페이지를 닫아도 인식은 계속돼요.</p>
         </ScannerStepHeader>
         <ScannerFileStatusList items={toStudentFileStatusItems(job)} />
       </>
@@ -919,11 +916,7 @@ export default function StudentScanner() {
         <ScannerStepHeader states={stepStates} action={headerAction}>
           <ScannerStepTitle
             title="반영했어요"
-            meta={
-              completionState.kind === "summary"
-                ? `학생 ${completionState.summary.appliedCount}명 · ${formatScannerQuotaAvailability(job.updatedAt)}`
-                : formatScannerQuotaAvailability(job.updatedAt)
-            }
+            meta={formatScannerQuotaAvailability(job.updatedAt)}
           />
         </ScannerStepHeader>
         {completionState.kind === "summary" ? (
@@ -1048,7 +1041,7 @@ export default function StudentScanner() {
   );
 }
 
-// A completion list (V10): small portraits with the name beside each, in up to five columns.
+// Completion uses the same portrait cards as the student lists elsewhere in the app.
 function StudentCompletionList({
   title,
   students,
@@ -1059,24 +1052,52 @@ function StudentCompletionList({
   return (
     <div className="flex flex-col gap-v2-group-gap">
       <p className="text-sm font-semibold text-v2-fg">{title}</p>
-      <ul className="grid grid-cols-2 gap-x-v2-column-gap gap-y-3 sm:grid-cols-3 lg:grid-cols-5">
-        {students.map((student) => (
-          <li key={student.uid} className="flex min-h-7 min-w-0 items-center gap-2 text-sm">
-            <StudentThumb
-              studentUid={student.uid}
-              name={student.name ?? "학생 정보 없음"}
-              variant={null}
-              recruitmentLabel=""
-              isNew={false}
-              favorite={NO_FAVORITE_LABEL}
-              small
-              showCaption={false}
-            />
-            <span className="truncate text-v2-fg">{student.name ?? "학생 정보 없음"}</span>
-          </li>
-        ))}
+      <ul className="flex flex-wrap gap-3">
+        {students.map((student) => <StudentCompletionCard key={student.uid} student={student} />)}
       </ul>
     </div>
+  );
+}
+
+function StudentCompletionCard({ student }: { student: { uid: string; name?: string | null } }) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const studentName = student.name ?? "학생 정보 없음";
+  const { name, variant } = splitVisibleStudentName(studentName);
+
+  return (
+    <li title={studentName}>
+      <StudentThumb
+        ref={triggerRef}
+        studentUid={student.uid}
+        name={name}
+        variant={variant}
+        recruitmentLabel=""
+        isNew={false}
+        favorite={NO_FAVORITE_LABEL}
+        showRecruitmentLabel={false}
+        onOpen={student.name ? () => setOpen(true) : undefined}
+        expanded={open}
+      />
+      {student.name ? (
+        <Popover
+          open={open}
+          label={`${studentName} 빠른 보기`}
+          onClose={() => setOpen(false)}
+          returnFocusRef={triggerRef}
+          className="w-64 p-3"
+        >
+          <p className="mb-2 text-sm font-semibold text-v2-fg">{studentName}</p>
+          <Link
+            to={`/students/${student.uid}`}
+            prefetch="intent"
+            className="flex min-h-v2-row-min items-center rounded-md px-2 text-sm text-v2-fg hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          >
+            학생부 보기 (평가·통계)
+          </Link>
+        </Popover>
+      ) : null}
+    </li>
   );
 }
 
@@ -1184,18 +1205,26 @@ function ReviewPanel({
   const saveableStudentCount = activeStudents.filter(
     (student) => review[student.studentUid]?.confirmed.tier && validStudentUids.has(student.studentUid),
   ).length;
-  const reviewMeta = [
-    `학생 ${job.result.students.length}명 인식`,
-    `${remainingReviewStudents.length}명 확인 필요`,
-    failedImages.length > 0 ? `이미지 ${failedImages.length}장 실패` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
   const showReviewRequiredOnly = reviewFilterStudentUids !== null;
   // An excluded student keeps its row, dimmed with a restore action, so the list does not shift under the pointer.
   const visibleStudents = showReviewRequiredOnly
     ? job.result.students.filter(({ studentUid }) => reviewFilterStudentUids.includes(studentUid))
     : job.result.students;
+  const hasExistingValuesBelow = visibleStudents.some((student) => {
+    if (excludedStudentUids.has(student.studentUid)) return false;
+    const state = review[student.studentUid];
+    if (!state) return false;
+    const currentState = job.currentStudentStates?.[student.studentUid];
+    return fields.some(
+      ({ resultKey, applyKey }) =>
+        getFieldComparison(
+          student.fieldDetails[resultKey],
+          state.values[applyKey],
+          currentState?.[applyKey],
+          state.confirmed[applyKey],
+        ) === "decreased",
+    );
+  });
 
   useEffect(() => {
     if (!pendingFocusTarget) return;
@@ -1270,24 +1299,27 @@ function ReviewPanel({
         </p>
       ) : null}
       <ScannerStepHeader states={stepStates} action={headerAction}>
-        <ScannerStepTitle title="인식 결과를 검토해 주세요" meta={reviewMeta} />
+        <ScannerStepTitle title="인식 결과" />
         {error ? <StatusNotice tone="danger">{error}</StatusNotice> : null}
         {partialFailure ? <StatusNotice tone="warning">{partialFailure}</StatusNotice> : null}
         {failedImages.length > 0 ? (
           <StatusNotice tone="danger">
-            일부 이미지를 인식하지 못했어요. {getStudentFailedImagesDescription(failedImages)}
+            <span className="block">이미지 {failedImages.length}장 인식 실패</span>
+            <span className="block text-v2-fg-secondary">{getStudentFailedImagesDescription(failedImages)}</span>
           </StatusNotice>
         ) : null}
       </ScannerStepHeader>
       <div className="flex flex-col gap-v2-block-gap">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <p className="text-sm font-semibold text-v2-fg tabular-nums">학생 {job.result.students.length}명</p>
-            {stacked ? null : <ReviewLegend />}
+            {hasExistingValuesBelow ? (
+              <p className="text-xs text-v2-fg-tertiary">입력칸 아래 숫자는 기존 값</p>
+            ) : null}
           </div>
           <Switch
             id={`student-review-filter-${job.uid}`}
-            label="확인 필요만 보기"
+            label="확인이 필요한 학생만 보기"
             checked={showReviewRequiredOnly}
             onCheckedChange={(checked) =>
               setReviewFilterStudentUids(checked ? remainingReviewStudents.map(({ studentUid }) => studentUid) : null)
@@ -1310,7 +1342,6 @@ function ReviewPanel({
                   <StudentIdentity
                     studentUid={catalogStudent?.uid ?? null}
                     name={studentName}
-                    issueCount={reviewIssueCountOf(student, state, job)}
                     unavailable={!catalogStudent}
                     excluded={excluded}
                     stacked
@@ -1325,20 +1356,19 @@ function ReviewPanel({
                   ) : (
                     REVIEW_GROUPS.map((group) => (
                       <ReviewCardGroup key={group.label} label={group.label}>
-                        {group.fields.map((field) => (
-                          <ReviewFieldCell
-                            key={field.resultKey}
-                            studentName={studentName}
-                            field={field}
-                            student={student}
-                            state={state}
-                            currentState={job.currentStudentStates?.[student.studentUid]}
-                            disabled={!catalogStudent}
-                            getInputProps={numberInputNavigation.getInputProps}
-                            onValueChange={updateValueFor(student.studentUid)}
-                            initialTier={initialTier}
-                          />
-                        ))}
+                        <ReviewFieldGroup
+                          fields={group.fields}
+                          studentName={studentName}
+                          student={student}
+                          state={state}
+                          currentState={job.currentStudentStates?.[student.studentUid]}
+                          disabled={!catalogStudent}
+                          getInputProps={numberInputNavigation.getInputProps}
+                          onValueChange={updateValueFor(student.studentUid)}
+                          initialTier={initialTier}
+                          equipments={catalogStudent?.equipments}
+                          mobile
+                        />
                       </ReviewCardGroup>
                     ))
                   )}
@@ -1348,10 +1378,10 @@ function ReviewPanel({
             {rowsEmpty}
           </div>
         ) : (
-          <div className="max-h-[70vh] max-w-full overflow-auto overscroll-contain rounded-lg bg-v2-surface">
+          <div className="max-w-full overflow-x-auto rounded-lg bg-v2-surface">
             <table className="w-full min-w-[50rem] table-fixed border-separate border-spacing-0 text-sm">
               <colgroup>
-                <col className="w-[10rem]" />
+                <col className="w-[12rem]" />
                 {REVIEW_GROUPS.map((group, groupIndex) => (
                   <col key={group.label} className={reviewGroupColumnClassName(group.fields.length, groupIndex)} />
                 ))}
@@ -1413,6 +1443,7 @@ function ReviewPanel({
                   const artifact = artifactsByStudentUid.get(student.studentUid);
                   if (!state) return null;
                   const excluded = excludedStudentUids.has(student.studentUid);
+                  const currentState = job.currentStudentStates?.[student.studentUid];
                   const initialTier = catalogStudent?.initialTier ?? tierField.min;
                   const lastRow = rowIndex === visibleStudents.length - 1;
 
@@ -1428,7 +1459,6 @@ function ReviewPanel({
                         <StudentIdentity
                           studentUid={catalogStudent?.uid ?? null}
                           name={studentName}
-                          issueCount={reviewIssueCountOf(student, state, job)}
                           unavailable={!catalogStudent}
                           excluded={excluded}
                           stacked={false}
@@ -1467,11 +1497,12 @@ function ReviewPanel({
                               studentName={studentName}
                               student={student}
                               state={state}
-                              currentState={job.currentStudentStates?.[student.studentUid]}
+                              currentState={currentState}
                               disabled={!catalogStudent}
                               getInputProps={numberInputNavigation.getInputProps}
                               onValueChange={updateValueFor(student.studentUid)}
                               initialTier={initialTier}
+                              equipments={catalogStudent?.equipments}
                             />
                           </td>
                         ))
@@ -1487,17 +1518,17 @@ function ReviewPanel({
       </div>
       <PageActionBar
         ref={actionBarRef}
-        placement={stacked ? "fixed" : "sticky"}
+        placement="sticky"
         expandActions
-        summary={
-          phase === "applying" ? "반영 중이에요" : `반영 ${saveableStudentCount}명 · 제외 ${excludedStudentUids.size}명`
-        }
+        className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
+        summary={phase === "applying" ? "반영 중이에요" : null}
       >
-        <Button variant="secondary" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
+        <Button variant="danger" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
           {isCancelling ? "삭제 중..." : "결과 삭제"}
         </Button>
         <Button
           variant="primary"
+          aria-label={`${saveableStudentCount}명 반영`}
           disabled={phase === "applying" || isCancelling || saveableStudentCount === 0}
           onClick={() => onApply(remainingReviewStudents.length, excludedStudentUids)}
         >
@@ -1523,26 +1554,10 @@ function ReviewPanel({
   );
 }
 
-export function reviewIssueCountOf(student: StudentGrowthStudent, state: ReviewStudent, job: StudentVideoJob): number {
-  return fields.filter(({ resultKey, applyKey }) => {
-    const detail = student.fieldDetails[resultKey];
-    return fieldNeedsReview(
-      detail,
-      state.values[applyKey],
-      state.confirmed[applyKey],
-      job.currentStudentStates?.[student.studentUid]?.[applyKey],
-    );
-  }).length;
-}
-
-// The student cell: the portrait, the name, and the review count, with two actions that take no text width.
-// The portrait opens the recognized frame when the job has one, and a red icon button excludes the student.
-// In the table the exclude button sits at the top right of the cell, on the name line, so it keeps one place in every row.
-// On a mobile card it is the card header with the exclude button on the right.
+// Keep preview and exclusion actions beside the student's name, with visible labels on both layouts.
 function StudentIdentity({
   studentUid,
   name,
-  issueCount,
   unavailable,
   excluded,
   stacked,
@@ -1554,7 +1569,6 @@ function StudentIdentity({
 }: {
   studentUid: string | null;
   name: string;
-  issueCount: number;
   unavailable: boolean;
   excluded: boolean;
   stacked: boolean;
@@ -1564,112 +1578,67 @@ function StudentIdentity({
   excludeRef: (element: HTMLButtonElement | null) => void;
   excludeDisabled: boolean;
 }) {
-  const status = unavailable ? (
-    <span className="text-xs font-semibold text-v2-danger">반영 불가</span>
-  ) : !excluded && issueCount > 0 ? (
-    <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-warning tabular-nums">
-      <ExclamationTriangleIcon className="size-3 shrink-0" aria-hidden="true" />
-      {stacked ? `${issueCount}개 확인 필요` : issueCount}
-      {stacked ? null : <span className="sr-only">개 확인 필요</span>}
-    </span>
-  ) : null;
-  const thumbFace = (
-    <StudentThumb
-      studentUid={studentUid}
-      name={name}
-      variant={null}
-      recruitmentLabel=""
-      isNew={false}
-      favorite={NO_FAVORITE_LABEL}
-      compact
-      showCaption={false}
-    />
-  );
-  const thumb =
-    onPreview && !excluded ? (
-      <button
-        type="button"
-        aria-label={`${name} 인식 화면 보기`}
-        title="인식 화면 보기"
-        onClick={onPreview}
-        className="group relative block shrink-0 cursor-pointer rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-      >
-        {thumbFace}
-        <span
-          aria-hidden="true"
-          className="absolute inset-0 flex items-center justify-center rounded-md bg-v2-scrim text-v2-on-media opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100"
-        >
-          <MagnifyingGlassPlusIcon className="size-4" />
-        </span>
-      </button>
-    ) : (
-      <span className={cn("block shrink-0", excluded && "opacity-40")}>{thumbFace}</span>
-    );
+  const status = unavailable ? <span className="text-xs font-semibold text-v2-danger">반영 불가</span> : null;
   // The focus after an exclusion or a restore lands on this row's action, through the wrapper's button.
   const registerAction = (wrapper: HTMLSpanElement | null) =>
     excludeRef(wrapper?.querySelector<HTMLButtonElement>("button") ?? null);
-  const action = excluded ? (
-    <span ref={registerAction} className="inline-flex">
-      <Button
-        variant="text"
-        className={stacked ? "min-h-v2-control-min px-2.5 text-sm" : "-my-1 -ml-1.5 min-h-6 px-1.5 text-xs"}
-        disabled={excludeDisabled}
-        onClick={onRestore}
-      >
-        되돌리기
-        <span className="sr-only">{name} 학생을 다시 저장 대상에 넣기</span>
-      </Button>
-    </span>
-  ) : (
-    <span ref={registerAction} className="inline-flex">
-      <IconButton
-        icon={XMarkIcon}
-        label={`${name} 학생 제외`}
-        danger
-        disabled={excludeDisabled}
-        onClick={onExclude}
-        className={cn(
-          "text-v2-danger hover:text-v2-danger",
-          !stacked && "-my-1 -mr-1 size-6 max-lg:size-6 [&>svg]:size-3.5",
-        )}
-      />
+  const actionClassName = cn(
+    "border border-v2-control-border/40 bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+    stacked ? "min-h-8 text-sm" : "min-h-6 text-[0.6875rem]",
+  );
+  const nameLine = (
+    <span
+      className={cn(
+        "block min-w-0 truncate",
+        stacked ? "text-base font-semibold leading-5" : "text-xs leading-4",
+        excluded ? "text-v2-fg-tertiary" : "text-v2-fg",
+      )}
+      title={name}
+    >
+      {formatVisibleName(name)}
     </span>
   );
-  // The main name and the variant on their own lines, in the StudentThumb caption type that Futures uses.
-  const visibleName = splitVisibleStudentName(name);
-  const nameLines = (
-    <span className="block min-w-0" title={name}>
-      <span className={cn("block truncate text-xs leading-4", excluded ? "text-v2-fg-tertiary" : "text-v2-fg")}>
-        {visibleName.name}
-      </span>
-      {visibleName.variant ? (
-        <span className="block truncate text-[0.6875rem] leading-4 text-v2-fg-tertiary">{visibleName.variant}</span>
-      ) : null}
-    </span>
-  );
-
-  if (stacked) {
-    return (
-      <div className="flex min-w-0 items-center gap-2">
-        {thumb}
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          {nameLines}
-          {status}
-        </div>
-        <div className="-mr-2 flex shrink-0 items-center">{action}</div>
-      </div>
-    );
-  }
 
   return (
     <div className="flex min-w-0 items-center gap-2">
-      {thumb}
+      <span className={cn("block shrink-0", excluded && "opacity-40")}>
+        <StudentThumb
+          studentUid={studentUid}
+          name={name}
+          variant={null}
+          recruitmentLabel=""
+          isNew={false}
+          favorite={NO_FAVORITE_LABEL}
+          compact
+          showCaption={false}
+        />
+      </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-start gap-1">
-          <span className="min-w-0 flex-1">{nameLines}</span>
-          {excluded ? null : action}
+        {nameLine}
+        {status}
+        <div className="flex flex-wrap items-center gap-1">
+          {onPreview && !excluded ? (
+            <Button
+              variant="text"
+              className={actionClassName}
+              aria-label={`${name} 인식 화면 보기`}
+              onClick={onPreview}
+            >
+              인식 화면
+            </Button>
+          ) : null}
+          <span ref={registerAction} className="inline-flex">
+            <Button
+              variant="text"
+              className={actionClassName}
+              aria-label={excluded ? `${name} 학생 제외 취소` : `${name} 학생을 반영 대상에서 제외`}
+              disabled={excludeDisabled}
+              onClick={excluded ? onRestore : onExclude}
+            >
+              {excluded ? "제외 취소" : "반영 제외"}
+            </Button>
+          </span>
         </div>
-        <div className="flex h-4 items-center whitespace-nowrap">{excluded ? action : status}</div>
       </div>
     </div>
   );
@@ -1677,9 +1646,14 @@ function StudentIdentity({
 
 // The table and the mobile cards show the same fields. The label drops the "학생 " prefix, such as "Lv".
 // The value input shows every digit: no side padding, and the spin buttons are hidden (shared scanner input class).
-const valueInputClassName = cn("min-h-v2-input-min px-0", scannerNumberInputClassName);
+const valueInputClassName = cn("px-0", scannerNumberInputClassName);
 
-function getReviewFieldLabel(field: FieldDefinition): string {
+function getReviewFieldLabel(field: FieldDefinition, equipments?: readonly string[]): string {
+  const equipmentIndex = ["equip1", "equip2", "equip3"].indexOf(field.resultKey);
+  if (equipmentIndex >= 0 && equipments) {
+    const equipmentType = equipments[equipmentIndex];
+    return equipmentType ? (EQUIPMENT_TYPE_LABELS[equipmentType] ?? "장비 정보 없음") : "장비 정보 없음";
+  }
   return field.label.replace("학생 ", "");
 }
 
@@ -1688,7 +1662,7 @@ const REVIEW_GROUPS: ReadonlyArray<{ label: string; fields: readonly FieldDefini
   { label: "기본 정보", fields: [tierField, ...basicNumberFields] },
   { label: "스킬", fields: skillFields },
   { label: "장비", fields: equipmentFields },
-  { label: "능력 해방", fields: abilityFields },
+  { label: "능력 개방", fields: abilityFields },
 ];
 
 // Each value is a 2.375rem segment of its group's box. The first group keeps 0.75rem from the student column,
@@ -1710,28 +1684,12 @@ const tableDividerStartClassName =
 const tableDividerEndClassName =
   "[background:linear-gradient(var(--color-v2-divider),var(--color-v2-divider))_left_bottom/calc(100%-var(--spacing-v2-block-p))_1px_no-repeat,var(--color-v2-surface)]";
 
-// The key for the review table. Each sample says what the mark means. Accuracy is in each cell's tooltip only.
-function ReviewLegend() {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-tertiary">
-      <span className="flex items-center gap-1.5">
-        <span aria-hidden="true" className="size-3 rounded-sm border border-v2-control-border bg-v2-warning-subtle" />
-        확인 필요
-      </span>
-      <span className="tabular-nums">현재 10 · 저장된 값</span>
-      <span>— · 미장착</span>
-    </div>
-  );
-}
-
-// A mobile card group: the group name on the left, and its values in four columns.
+// A mobile card group: the heading sits above four full-width field columns.
 function ReviewCardGroup({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2">
-      <p className="flex h-[calc(1rem+var(--spacing-v2-input-min))] w-14 shrink-0 items-center pt-4 text-xs font-semibold text-v2-fg-secondary">
-        {label}
-      </p>
-      <div className="grid min-w-0 flex-1 grid-cols-4 gap-x-2">{children}</div>
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <p className="text-sm font-semibold text-v2-fg-secondary">{label}</p>
+      {children}
     </div>
   );
 }
@@ -1744,6 +1702,7 @@ type ReviewGroupProps = {
   disabled: boolean;
   getInputProps: (options?: { disabled?: boolean }) => NumberInputFlowNavigationInputProps;
   onValueChange: (field: ApplyFieldName, value: number | null) => void;
+  equipments?: readonly string[];
 };
 
 type ReviewFieldProps = ReviewGroupProps & {
@@ -1762,13 +1721,25 @@ function ReviewFieldInput({
   disabled,
   getInputProps,
   onValueChange,
+  equipments,
   initialTier,
   segment,
-}: ReviewFieldProps & { segment: boolean }) {
+  compact = segment,
+}: ReviewFieldProps & { segment: boolean; compact?: boolean }) {
   const detail = student.fieldDetails[field.resultKey];
   const value = state.values[field.applyKey];
   const warning = fieldNeedsReview(detail, value, state.confirmed[field.applyKey], currentState?.[field.applyKey]);
-  const segmentClassName = segment ? cn(segmentInputClassName, !warning && "bg-transparent") : undefined;
+  const matchesExisting =
+    !warning &&
+    getFieldComparison(detail, value, currentState?.[field.applyKey], state.confirmed[field.applyKey]) === "same";
+  const segmentClassName = segment
+    ? cn(segmentInputClassName, !warning && "bg-transparent")
+    : "border-v2-control-border/40 focus:border-v2-control-border focus-within:border-v2-control-border";
+  const inputClassName = cn(
+    segmentClassName,
+    "font-normal",
+    matchesExisting && "text-v2-fg-secondary focus:text-v2-fg focus-visible:text-v2-fg",
+  );
   if (field.resultKey === tierField.resultKey) {
     return (
       <ReviewTierInput
@@ -1780,8 +1751,9 @@ function ReviewFieldInput({
         disabled={disabled}
         inputProps={getInputProps({ disabled })}
         onChange={(tier) => onValueChange(field.applyKey, tier)}
-        className={segmentClassName}
+        className={inputClassName}
         segment={segment}
+        compact={compact}
       />
     );
   }
@@ -1795,8 +1767,10 @@ function ReviewFieldInput({
       disabled={disabled}
       inputProps={getInputProps({ disabled })}
       onValueChange={onValueChange}
-      className={segmentClassName}
+      fieldLabel={getReviewFieldLabel(field, equipments)}
+      className={inputClassName}
       segment={segment}
+      compact={compact}
     />
   );
 }
@@ -1807,14 +1781,24 @@ const segmentInputClassName = "rounded-none border-0 outline-offset-[-2px] focus
 // One group of values in the table: one bordered box split by inner rules, with the caption line under each value.
 function ReviewFieldGroup({
   fields: groupFields,
+  mobile = false,
   ...props
-}: ReviewGroupProps & { fields: readonly FieldDefinition[]; initialTier: number }) {
+}: ReviewGroupProps & { fields: readonly FieldDefinition[]; initialTier: number; mobile?: boolean }) {
   const gridClassName = groupFields.length === 3 ? "grid-cols-3" : "grid-cols-4";
   return (
     <div className="flex flex-col">
+      {mobile ? (
+        <div className={cn("grid", gridClassName)}>
+          {groupFields.map((field) => (
+            <span key={field.resultKey} className="h-4 text-center text-xs leading-4 text-v2-fg-tertiary">
+              {getReviewFieldLabel(field, props.equipments ?? [])}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div
         className={cn(
-          "grid divide-x divide-v2-control-border overflow-hidden rounded-md border border-v2-control-border bg-v2-surface",
+          "grid divide-x divide-v2-control-border/40 overflow-hidden rounded-md border border-v2-control-border/40 bg-v2-surface focus-within:border-v2-control-border",
           gridClassName,
         )}
       >
@@ -1831,7 +1815,7 @@ function ReviewFieldGroup({
             currentValue={props.currentState?.[field.applyKey] ?? null}
             confirmed={props.state.confirmed[field.applyKey]}
             tier={field.resultKey === tierField.resultKey}
-            reserveLine
+            reserveLine={!mobile}
           />
         ))}
       </div>
@@ -1839,32 +1823,26 @@ function ReviewFieldGroup({
   );
 }
 
-// One value on a mobile card: its name above a full-width input, and a caption only when there is one.
-export function ReviewFieldCell(props: ReviewFieldProps) {
-  const { field, student, state, currentState } = props;
-  return (
-    <div className="flex min-w-0 flex-col">
-      <span className="h-4 text-center text-xs leading-4 text-v2-fg-tertiary">{getReviewFieldLabel(field)}</span>
-      <ReviewFieldInput {...props} segment={false} />
-      <ReviewFieldMeta
-        detail={student.fieldDetails[field.resultKey]}
-        value={state.values[field.applyKey]}
-        currentValue={currentState?.[field.applyKey] ?? null}
-        confirmed={state.confirmed[field.applyKey]}
-        tier={field.resultKey === tierField.resultKey}
-        reserveLine={false}
-      />
-    </div>
-  );
-}
-
 // A value the recognizer did not read. On its own it keeps the input's shape with a dashed box; as a segment it is the mark only.
-function ReviewUnavailableValue({ state, segment }: { state: StudentVideoFieldState; segment: boolean }) {
+function ReviewUnavailableValue({
+  state,
+  segment,
+  compact,
+  small = false,
+}: {
+  state: StudentVideoFieldState;
+  segment: boolean;
+  compact: boolean;
+  small?: boolean;
+}) {
   return (
     <div
+      title={state === "not_applicable" ? "해당 없음" : "인식 결과 없음"}
       className={cn(
-        "flex min-h-v2-input-min items-center justify-center text-sm text-v2-fg-tertiary",
-        !segment && "rounded-md border border-dashed border-v2-control-border",
+        "flex items-center justify-center text-sm text-v2-fg-tertiary",
+        compact ? "min-h-7" : "min-h-v2-input-min",
+        small && "text-xs",
+        !segment && "rounded-md border border-dashed border-v2-control-border/40",
       )}
     >
       <UnavailableFieldValue state={state} />
@@ -1883,6 +1861,7 @@ function ReviewTierInput({
   onChange,
   className,
   segment,
+  compact,
 }: {
   studentName: string;
   detail: StudentFieldDetail;
@@ -1894,10 +1873,11 @@ function ReviewTierInput({
   onChange: (tier: number) => void;
   className?: string;
   segment: boolean;
+  compact: boolean;
 }) {
   const recognized = detail.state === "recognized";
   if (!recognized && !isRecognitionFailure(detail.state)) {
-    return <ReviewUnavailableValue state={detail.state} segment={segment} />;
+    return <ReviewUnavailableValue state={detail.state} segment={segment} compact={compact} />;
   }
   const lowAccuracy = recognized && detail.confidence < LOW_ACCURACY_THRESHOLD;
   return (
@@ -1910,9 +1890,10 @@ function ReviewTierInput({
         max={tierField.max}
         disabled={disabled}
         warning={warning}
+        compact={compact}
         flowProps={inputProps}
         onChange={onChange}
-        className={className}
+        className={cn(className, segment && "h-full")}
       />
     </div>
   );
@@ -1921,6 +1902,7 @@ function ReviewTierInput({
 function ReviewNumberInput({
   studentName,
   field,
+  fieldLabel,
   detail,
   value,
   warning,
@@ -1929,9 +1911,11 @@ function ReviewNumberInput({
   onValueChange,
   className,
   segment,
+  compact,
 }: {
   studentName: string;
   field: FieldDefinition;
+  fieldLabel: string;
   detail: StudentFieldDetail;
   value: string;
   warning: boolean;
@@ -1940,23 +1924,32 @@ function ReviewNumberInput({
   onValueChange: (field: ApplyFieldName, value: number | null) => void;
   className?: string;
   segment: boolean;
+  compact: boolean;
 }) {
   const recognized = detail.state === "recognized";
   if (!recognized && !isRecognitionFailure(detail.state)) {
-    return <ReviewUnavailableValue state={detail.state} segment={segment} />;
+    return (
+      <ReviewUnavailableValue
+        state={detail.state}
+        segment={segment}
+        compact={compact}
+        small={field.resultKey === "equipSpecial" && detail.state === "not_applicable"}
+      />
+    );
   }
   const lowAccuracy = recognized && detail.confidence < LOW_ACCURACY_THRESHOLD;
   return (
     <div title={lowAccuracy ? `인식 정확도 ${formatConfidence(detail.confidence)}` : undefined} className="min-w-0">
       <NumberInput
         {...inputProps}
+        compact={compact}
         min={field.min}
         max={field.max}
         value={value}
         disabled={disabled}
         warning={warning}
         className={cn(valueInputClassName, className)}
-        aria-label={`${studentName} ${field.label} ${recognized ? "인식 결과" : "인식 결과 직접 입력"}`}
+        aria-label={`${studentName} ${fieldLabel} ${recognized ? "인식 결과" : "인식 결과 직접 입력"}`}
         onChange={(event) => {
           const nextValue = event.currentTarget.value === "" ? null : Number(event.currentTarget.value);
           onValueChange(field.applyKey, nextValue);
@@ -1990,7 +1983,8 @@ function ReviewFieldMeta({
   const savedValue =
     currentValue === null ? null : (
       <span className="inline-flex items-center gap-0.5 tabular-nums">
-        현재 {tier ? <GrowthTier tier={currentValue} /> : currentValue}
+        <span className="sr-only">기존 값 </span>
+        {tier ? <GrowthTier tier={currentValue} /> : currentValue}
       </span>
     );
   const caption =
@@ -2037,7 +2031,7 @@ function GrowthTier({ tier }: { tier: number }) {
 function UnavailableFieldValue({ state }: { state: StudentVideoFieldState }) {
   return {
     recognized: "",
-    not_applicable: "—",
+    not_applicable: "없음",
     unknown: "—",
     conflict: "—",
   }[state];
@@ -2063,7 +2057,7 @@ export function getFieldComparison(
 }
 
 // The one predicate for a value that needs a check: a failure not yet confirmed, a low-accuracy read, or a decreased value.
-// The cell's warning background and its count in "⚠ n" both use it, so they always agree.
+// The filter and the cell's warning background use the same condition.
 export function fieldNeedsReview(
   detail: StudentFieldDetail,
   proposedValue: string,

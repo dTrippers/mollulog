@@ -164,8 +164,8 @@ describe("home raid and other content sections", () => {
   });
 });
 
-// The chevron is the heroicon ChevronRight path. Each test looks for it inside the link it marks.
-const CHEVRON = 'd="m8.25 4.5 7.5 7.5-7.5 7.5"';
+// The chevron is the solid Heroicon ChevronRight path. Each test looks for it inside the link it marks.
+const CHEVRON = 'd="M6.22 4.22';
 const countChevrons = (markup: string) => markup.split(CHEVRON).length - 1;
 const linkWith = (markup: string, href: string) =>
   markup.match(new RegExp(`<a [^>]*href="${href}"[^>]*>[\\s\\S]*?</a>`))?.[0] ?? "";
@@ -346,7 +346,7 @@ describe("home bottom and aside", () => {
     const feed = render(<HomeFeedBlock feed={{ status: "error" }} timeZone={TZ} onRetry={noop} />);
     expect(feed).toContain("최근 피드를 불러오지 못했어요");
     expect(feed).toContain("일시적인 문제일 수 있어요.");
-    expect(feed).toContain('href="/community"');
+    expect(feed).not.toContain('href="/community"');
 
     const youtube = render(
       <HomeYoutubeBlock
@@ -401,7 +401,8 @@ describe("home bottom and aside", () => {
     );
     expect(markup).toContain("divide-y divide-v2-divider");
     expect(markup.match(/<li>/g)?.length).toBe(2);
-    expect(markup).toContain("px-v2-block-p py-3");
+    expect(markup).toContain("divide-v2-divider/60 px-v2-block-p");
+    expect(markup).toContain("gap-3 py-3");
   });
 
   it("puts the YouTube empty and failure states below the section title", () => {
@@ -446,6 +447,7 @@ describe("home recruitment section", () => {
     const markup = render(
       <HomeRecruitmentSection
         groups={{ status: "success", data: [group] }}
+        upcomingGroups={[]}
         viewer={viewer}
         now={NOW}
         timeZone={TZ}
@@ -460,6 +462,7 @@ describe("home recruitment section", () => {
     const failed = render(
       <HomeRecruitmentSection
         groups={{ status: "error" }}
+        upcomingGroups={[]}
         viewer={viewer}
         now={NOW}
         timeZone={TZ}
@@ -471,6 +474,7 @@ describe("home recruitment section", () => {
     const ownStateFailed = render(
       <HomeRecruitmentSection
         groups={{ status: "success", data: [group] }}
+        upcomingGroups={[]}
         viewer={{ ...viewer, status: "failed" } as HomeViewerState}
         now={NOW}
         timeZone={TZ}
@@ -508,6 +512,7 @@ describe("home recruitment section", () => {
     const markup = render(
       <HomeRecruitmentSection
         groups={{ status: "success", data: [withStudent] }}
+        upcomingGroups={[]}
         viewer={favoritedViewer}
         now={NOW}
         timeZone={TZ}

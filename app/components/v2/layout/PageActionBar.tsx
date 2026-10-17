@@ -9,11 +9,12 @@ export type PageActionBarProps = {
   placement?: "sticky" | "fixed";
   // On mobile the actions fill the row, and the last action (the primary) takes the rest. Desktop keeps its content width.
   expandActions?: boolean;
+  className?: string;
 };
 
 // Bottom action bar for the step's primary and secondary actions. The screen adds bottom padding while a fixed bar shows.
 export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(function PageActionBar(
-  { summary, children, placement = "sticky", expandActions = false },
+  { summary, children, placement = "sticky", expandActions = false, className },
   ref,
 ) {
   return (
@@ -24,12 +25,14 @@ export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(func
         placement === "fixed"
           ? "fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-30 lg:bottom-0"
           : "sticky bottom-0 rounded-lg",
+        className,
       )}
     >
-      <div className="min-w-0 text-sm text-v2-fg-secondary tabular-nums">{summary}</div>
+      {summary != null ? <div className="min-w-0 text-sm text-v2-fg-secondary tabular-nums">{summary}</div> : null}
       <div
         className={cn(
           "flex shrink-0 items-center gap-2",
+          summary == null && "ml-auto",
           expandActions && "w-full sm:w-auto [&>:last-child]:flex-1 sm:[&>:last-child]:flex-none",
         )}
       >

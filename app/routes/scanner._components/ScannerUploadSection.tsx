@@ -145,15 +145,16 @@ export default function ScannerUploadSection({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex min-h-44 cursor-pointer items-center gap-v2-block-gap rounded-lg border border-dashed border-v2-control-border px-v2-block-p py-v2-block-p",
+            "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-v2-control-border px-v2-block-p py-8 text-center",
             isDragging && "bg-v2-highlight",
             selectionDisabled && "cursor-not-allowed text-v2-fg-disabled",
             v2FocusRing,
           )}
         >
           {targetGuide}
-          <span className="flex min-w-0 flex-col gap-1">
-            <span className="font-medium text-v2-fg">게임 내 {targetPath} 화면을 찍어 주세요</span>
+          <span className="mt-4 flex min-w-0 flex-col gap-1">
+            <span className="font-medium text-v2-fg">파일을 선택하거나 이곳에 끌어다 놓아주세요</span>
+            <span className="text-sm text-v2-fg-secondary">게임 내 {targetPath} 화면</span>
             <span id={helpId} className="text-sm text-v2-fg-secondary">
               {helpText}
             </span>

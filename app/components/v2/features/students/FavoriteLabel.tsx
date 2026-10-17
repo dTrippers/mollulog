@@ -18,25 +18,29 @@ export function FavoriteLabel({
     return null;
   }
   const backgroundClassName = personalStatePending
-    ? "bg-v2-scrim"
+    ? "bg-v2-favorite-neutral-badge"
     : state.icon === "completed"
       ? "bg-v2-completed-badge"
       : state.icon === "favorited"
         ? "bg-v2-favorite-badge"
-        : "bg-v2-scrim";
+        : "bg-v2-favorite-neutral-badge";
   const HeartGlyph = state.icon === "favorited" ? SolidHeartIcon : OutlineHeartIcon;
   return (
     <span
       role="img"
       aria-label={state.accessibleName}
-      className={`absolute top-0.5 right-0.5 flex max-w-[calc(100%-0.25rem)] items-center gap-px rounded-full px-[3px] text-[0.6875rem] leading-4 font-medium text-v2-on-media tabular-nums ${backgroundClassName}`}
+      className={`absolute top-0.5 right-0.5 flex max-w-[calc(100%-0.25rem)] items-center gap-px rounded-full px-[3px] text-[0.6875rem] leading-4 font-bold text-v2-on-media tabular-nums ${backgroundClassName}`}
     >
       {personalStatePending ? (
         <Skeleton className="size-2.5 rounded-full bg-v2-hover" />
       ) : state.icon === "completed" ? (
         <CheckIcon className="size-3 shrink-0" aria-hidden="true" />
       ) : (
-        <HeartGlyph className="size-3 shrink-0" aria-hidden="true" />
+        <HeartGlyph
+          className="size-3 shrink-0"
+          strokeWidth={state.icon === "unfavorited" ? 2 : undefined}
+          aria-hidden="true"
+        />
       )}
       {state.countText ? <span aria-hidden="true">{state.countText}</span> : null}
     </span>

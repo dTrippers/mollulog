@@ -25,8 +25,11 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
 | `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
+| `bg-v2-favorite-neutral-badge` | `rgb(0 0 0 / 85%)` | same | Count badge on a student image when not personally favorited |
 | `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.56 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |
-| `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Floating action bar and popovers. Brighter than surface in dark mode |
+| `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Floating action bars and dialogs. Brighter than surface in dark mode |
+| `bg-v2-popover-surface` | `rgb(255 255 255 / 94%)` | `rgb(24 24 24 / 94%)` | Student quick-view popover surface |
+| `ring-v2-popover-divider`, `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Quick-view outline and action divider |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
 | `shadow-v2-marker` | `inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light)` (fixed: `oklch(0.2 0 0 / 80%)` and `oklch(1 0 0 / 90%)`) | same | Recognized-cell marker over a game screenshot: a dark inner ring and a light outer ring, so the marker stays visible on any screenshot. The screenshot colors do not follow the theme, so the rings are fixed. Pair with `border-2 border-v2-focus bg-v2-highlight`. |
@@ -162,7 +165,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - DOM order is Header, Toolbar, Main, Aside. On side-by-side the Aside sits left of Main, placed by grid areas.
 - Omit `PageAside` and there is no Aside column and no reserved space.
 - Side-by-side starts at 48rem of the `@container/page-available` content box (root.tsx). The Aside is 16rem below 64rem and 18rem from 64rem. `V2Page` measures its own width with ResizeObserver to know the mode for JavaScript behavior, such as where a panel body mounts.
-- Header holds the back link, title, description (max-prose), and meta. It sits above Main and spans the full width, so the title x matches across recipes with and without an Aside.
+- Header holds the back link, title, description (max-prose), and meta. It sits above Main with one group-gap of top padding and spans the full width, so the title x matches across recipes with and without an Aside.
 - Toolbar is sticky on stacked layouts. Use `stickyOnDesktop` only for data tables.
 - `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
@@ -311,7 +314,7 @@ The scanner screen (`/scanner`) is the first 2.0 screen that uses these parts. E
 
 - `primitives/ProgressBar`: a native `progress` with a status tone (`default`, `warning`, `danger`). Its visible value text belongs to the parent.
 - `primitives/Checkbox`: a labeled native checkbox with the 2.0 focus ring.
-- `primitives/NumberInput`: a numeric input at `min-h-v2-input-min`. `warning` sets the subtle warning background, and the text keeps the default color. Flow navigation props from `use-number-input-flow-navigation` spread onto it.
+- `primitives/NumberInput`: a numeric input at `min-h-v2-input-min`, with a 28px `compact` size for grouped scanner review fields. `warning` sets the subtle warning background, and the text keeps the default color. Flow navigation props from `use-number-input-flow-navigation` spread onto it.
 - `primitives/use-number-input-flow-navigation`: a copy of the 1.x hook for 2.0 code. The 1.x hook stays for the screens that still use it.
 - `primitives/StatusNotice`: one status line with an icon and text. `danger` is announced as an alert, and `warning` and `neutral` as a status. Color is never the only signal.
 - `primitives/Dialog`: a modal on Headless UI with the 2.0 backdrop, for a full-size image or a confirmation.
@@ -319,17 +322,18 @@ The scanner screen (`/scanner`) is the first 2.0 screen that uses these parts. E
 - `features/scanner/*`: the scanner's presentation parts. `ScannerQuota` (the quota block and its meter, with loading, error, exhausted, low, and normal states), `ScannerStepHeader` (the four-step indicator, its title line, and an optional action), `ScannerFileStatusList`, `ScannerJobList`, `ScannerEndBlock`, `ScannerCompletionSummary`, `ScannerFailureNotice` (a failed file during recognition: a danger icon and secondary text, with a divider above), and `ScannerJobStatusNotice` (a failed job status read: a transient failure offers a retry, a missing job offers only a new upload).
 - `features/resources/ResourceThumb`: an item image with a labeled neutral placeholder when there is no image.
 - `features/students/StudentThumb`: the portrait with its favorite label. `onOpen` is optional: with it the thumbnail is a button for the quick panel, and without it the thumbnail is a non-interactive element with no button role and no focus. `showCaption={false}` hides the name below it for layouts that show the name beside the portrait.
-- `features/students/TierInput`: a growth-tier control. The visible face is "★n" up to 5, and the exclusive weapon icon with its level after 5 (the `GrowthTier` pattern), in a box with the `NumberInput` size, border, and warning background. A native select sits over it, invisible but focusable, so it keeps its keyboard behavior and joins the `use-number-input-flow-navigation` flow. Tiers below the initial tier are disabled.
+- Scanner completion lists use v2 `StudentThumb` cards without recruitment labels; clicking a student opens a popover with the detail-page link. Item completion uses v2 `ResourceThumb` with a quantity label and a popover for the full item name and exact quantity.
+- `features/students/TierInput`: a growth-tier control. The visible face is "★n" up to 5, and the exclusive weapon icon with its level after 5 (the `GrowthTier` pattern), in a box with the `NumberInput` size, border, and warning background. Its button joins the `use-number-input-flow-navigation` flow and opens a v2 popover for tier selection. Tiers below the initial tier are disabled.
 - `features/feedback/FeedbackSheet`: the v2 feedback sheet. It posts the same `/contact` request as the 1.x `FeatureFeedbackButton`. The 1.x button stays for the walkthrough timeline.
 
 ### Failure and status rules used by the scanner
 
 - A failure (an expired upload, a failed recognition, a failed file, an unreadable result) uses `text-v2-danger` with an icon and a text label. Do not show an internal error code or a placeholder value for it.
-- A value that needs confirmation uses `bg-v2-warning-subtle` as its background. Its text keeps the default color. In the student review the background and the "⚠ n" count come from one predicate (`fieldNeedsReview`): an unconfirmed failure, a low-accuracy read, or a decreased value.
+- A value that needs confirmation uses `bg-v2-warning-subtle` as its background. Its text keeps the default color. In the student review, the background and the review-required filter use one predicate (`fieldNeedsReview`): an unconfirmed failure, a low-accuracy read, or a decreased value. Confirmed values matching the saved value use quieter text while retaining the same editable control.
 - A step that is waiting shows its status line only. It has no progress bar until work has started.
 - A step's live region is the title and status line, so a change is announced once.
 - A job shows exactly one step body: the upload, waiting, review, unavailable result, completion, or terminal body. `getScannerStepBody` chooses it from the job state, so no two bodies render together.
 
-### Exception: compact text actions in the student review
+### Exception: compact row actions in the student review
 
-The student review's row actions ("보기" and "제외") are text buttons with a smaller height (`min-h-7`), in the desktop table and in the stacked student cards. They are the only 2.0 controls below `min-h-v2-control-min`, because a row of inputs needs the space and the actions stay secondary. Do not use this compact size for other controls.
+The student review's row actions ("인식 화면" and "반영 제외") have a subtle border and background so they read as controls beside the student's static name. The desktop table uses a compact `min-h-6` height; stacked student cards use `min-h-8`. Do not use the compact size for other controls. A single note above the review explains that numbers below inputs are saved values, shown only when the recognized value is lower. Mobile cards place each field-group heading above the values and join each group's 28px inputs in one bordered control, using the full card width. Equipment labels use each student's equipment names, and the ability group follows the game's `능력 개방` / `체력` / `공격력` / `치유력` names.

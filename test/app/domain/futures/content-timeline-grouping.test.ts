@@ -1,10 +1,17 @@
 import { describe, expect, it } from "@jest/globals";
-import { groupFutureContents } from "~/domain/futures/content-timeline-grouping";
+import { type FutureGroupableContent, groupFutureContents } from "~/domain/futures/content-timeline-grouping";
 
 const timeZone = "Asia/Seoul";
 
-function content(uid: string, since: string, until: string | null, contentType: "event" | "live" | "main_story") {
-  return { uid, since, until, contentType };
+function content(
+  uid: string,
+  since: string,
+  until: string | null,
+  contentType: FutureGroupableContent["contentType"],
+  runType: FutureGroupableContent["runType"] = "first",
+  students: string[] = [],
+) {
+  return { uid, since, until, contentType, runType, students };
 }
 
 describe("groupFutureContents", () => {
@@ -19,7 +26,7 @@ describe("groupFutureContents", () => {
       "2026-10-15T03:00:00.000Z",
     );
     expect(groups[0].groupDate).toBeNull();
-    // Contents inside a group follow CONTENT_ORDER, which lists live before events.
+    // Contents without students follow the type priority, which lists live before events.
     expect(groups[0].contents.map((item) => item.uid)).toEqual(["running-live", "running"]);
     expect(groups[1].groupDate).toBe("2026-10-20T00:00:00.000Z");
   });
@@ -35,5 +42,19 @@ describe("groupFutureContents", () => {
       "2026-10-15T03:00:00.000Z",
     );
     expect(groups.map((group) => group.contents.map((item) => item.uid))).toEqual([["a", "b"], ["c"]]);
+  });
+
+  it("places contents with recruitable students first, then new events before reruns", () => {
+    const since = "2026-10-20T00:00:00.000Z";
+    const groups = groupFutureContents(
+      [
+        content("rerun", since, null, "event", "rerun", ["student"]),
+        content("live", since, null, "live"),
+        content("new", since, null, "event", "first", ["student"]),
+      ],
+      timeZone,
+      "2026-10-15T03:00:00.000Z",
+    );
+    expect(groups[0].contents.map((item) => item.uid)).toEqual(["new", "rerun", "live"]);
   });
 });

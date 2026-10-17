@@ -57,13 +57,13 @@ afterEach(() => {
 });
 
 describe("getIndexContents", () => {
-  it("caches a complete snapshot under the route index version 5 key, without the favorited counts", async () => {
+  it("caches a complete snapshot under the route index version 6 key, without the favorited counts", async () => {
     healthySources();
     mockedFetchRouteCached.mockImplementation((_env, _ctx, _key, fn) => fn());
 
     const result = await getIndexContents(env, false, ctx);
 
-    expect(mockedFetchRouteCached).toHaveBeenCalledWith(env, ctx, "route::index::v5::all", expect.any(Function), false);
+    expect(mockedFetchRouteCached).toHaveBeenCalledWith(env, ctx, "route::index::v6::all", expect.any(Function), false);
     expect(result).not.toHaveProperty("favoritedCounts");
     expect(getFavoritedCounts).not.toHaveBeenCalled();
     expect(result.events).toEqual({
