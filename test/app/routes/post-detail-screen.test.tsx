@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  */
 import "../components/v2/layout/layout-test-polyfills";
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
 import { ErrorBoundary, default as PostDetailPage } from "~/routes/posts.$uid";
@@ -19,6 +19,7 @@ const newsView: PostDetailView = {
     uid: "post-1",
     title: "9/8 업데이트 안내",
     content: "## 새로운 기능\n\n- 알림 이력을 확인할 수 있어요.\n\n![사진](https://mollulog.net/a.png)",
+    thumbnailImageUrl: null,
     createdAt: "2026-09-08T00:00:00.000Z",
   },
   back: { kind: "news" },
@@ -62,6 +63,11 @@ describe("post detail screen", () => {
     installLayoutTestEnv();
   });
 
+  afterEach(() => {
+    Reflect.deleteProperty(navigator, "share");
+    Reflect.deleteProperty(navigator, "clipboard");
+  });
+
   it("shows the header with a news back link, the title, the date, the body, and recent news", async () => {
     renderPost({ view: newsView });
 
@@ -73,6 +79,30 @@ describe("post detail screen", () => {
     expect(screen.getByRole("heading", { name: "최근 소식" })).toBeTruthy();
     expect(screen.getByRole("link", { name: "8/30 업데이트 안내" }).getAttribute("href")).toBe("/posts/post-2");
     expect(screen.getByRole("link", { name: "모두 보기" }).getAttribute("href")).toBe("/news");
+    expect(screen.getByRole("button", { name: "공유" }).closest(".v2-action-bar")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "공유하기" }).closest("article")).toBeNull();
+  });
+
+  it("opens the native share sheet when Web Share is available", async () => {
+    const share = jest.fn<(data: ShareData) => Promise<void>>().mockResolvedValue();
+    Object.defineProperty(navigator, "share", { configurable: true, value: share });
+    renderPost({ view: newsView });
+
+    fireEvent.click(await screen.findByRole("button", { name: "공유" }));
+
+    await waitFor(() => expect(share).toHaveBeenCalledWith({ title: newsView.post.title, url: window.location.href }));
+  });
+
+  it("copies the page address when Web Share is unavailable", async () => {
+    const writeText = jest.fn<(text: string) => Promise<void>>().mockResolvedValue();
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderPost({ view: newsView });
+
+    fireEvent.click(await screen.findByRole("button", { name: "공유하기" }));
+
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(window.location.href));
+    expect(screen.getByRole("button", { name: "링크 복사됨" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "복사됨" })).toBeTruthy();
   });
 
   it("returns to the list page with a history back action when the detail was opened from the news list", async () => {

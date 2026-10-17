@@ -11,7 +11,7 @@ export type PostSummary = Pick<Post, "uid" | "title" | "createdAt">;
 export type RecentNewsSource = { status: "success"; data: PostSummary[] } | { status: "error" };
 
 export type PostDetailView = {
-  post: Pick<Post, "uid" | "title" | "content" | "createdAt">;
+  post: Pick<Post, "uid" | "title" | "content" | "thumbnailImageUrl" | "createdAt">;
   back: PostDetailBack;
   // Null for a post outside the news board, which has no recent-news block.
   recent: RecentNewsSource | null;
@@ -56,7 +56,13 @@ export async function getPostDetailView(
   }
 
   const view = {
-    post: { uid: post.uid, title: post.title, content: post.content, createdAt: post.createdAt },
+    post: {
+      uid: post.uid,
+      title: post.title,
+      content: post.content,
+      thumbnailImageUrl: post.thumbnailImageUrl,
+      createdAt: post.createdAt,
+    },
     back: getBackLink(post),
   };
   if (post.board !== "news") {

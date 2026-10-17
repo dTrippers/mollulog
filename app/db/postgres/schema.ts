@@ -348,6 +348,7 @@ export const pgPostsTable = pgTable(
     content: text().notNull(),
     board: text().notNull(),
     timelineContentUid: text("timeline_content_uid"),
+    thumbnailImageUrl: text("thumbnail_image_url"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },

@@ -12,6 +12,7 @@ export type Post = {
   content: string;
   board: string;
   timelineContentUid: string | null;
+  thumbnailImageUrl: string | null;
   createdAt: UtcIsoString;
   updatedAt: UtcIsoString;
 };
@@ -40,6 +41,7 @@ export function toPost(row: PostgresPostRow): Post {
     content: row.content,
     board: row.board,
     timelineContentUid: row.timelineContentUid,
+    thumbnailImageUrl: row.thumbnailImageUrl,
     createdAt: toUtcIso(row.createdAt),
     updatedAt: toUtcIso(row.updatedAt),
   };

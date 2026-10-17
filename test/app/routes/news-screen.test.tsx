@@ -25,6 +25,7 @@ function post(index: number): Post {
     content: index === 0 ? "## 새로운 기능\n\n- 항목" : "짧은 본문",
     board: "news",
     timelineContentUid: null,
+    thumbnailImageUrl: null,
     createdAt: `2026-09-${day}T00:00:00.000Z`,
     updatedAt: `2026-09-${day}T00:00:00.000Z`,
   };

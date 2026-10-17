@@ -15,7 +15,7 @@ function postRow(
   timelineContentUid: string | null = null,
   board = "news",
 ) {
-  return [1, uid, "제목", "본문", board, timelineContentUid, new Date(createdAt), new Date(createdAt)];
+  return [1, uid, "제목", "본문", board, timelineContentUid, null, new Date(createdAt), new Date(createdAt)];
 }
 
 describe("PostgreSQL posts read", () => {
@@ -37,6 +37,7 @@ describe("PostgreSQL posts read", () => {
         content: "본문",
         board: "news",
         timelineContentUid: null,
+        thumbnailImageUrl: null,
         createdAt: "2026-07-14T00:00:00.000Z",
         updatedAt: "2026-07-14T00:00:00.000Z",
       },

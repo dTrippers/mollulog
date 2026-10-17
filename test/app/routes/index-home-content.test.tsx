@@ -285,6 +285,7 @@ describe("home bottom and aside", () => {
               content: "본문",
               board: "news",
               timelineContentUid: null,
+              thumbnailImageUrl: null,
               createdAt: "2026-09-08T00:00:00.000Z",
               updatedAt: "2026-09-08T00:00:00.000Z",
             },

@@ -28,6 +28,7 @@ function post(overrides: Partial<Post> = {}): Post {
     content: "본문입니다.",
     board: "internal-notice",
     timelineContentUid: null,
+    thumbnailImageUrl: null,
     createdAt: "2026-07-26T00:00:00.000Z",
     updatedAt: "2026-07-26T00:00:00.000Z",
     ...overrides,
@@ -49,6 +50,7 @@ describe("post detail route", () => {
       uid: loadedPost.uid,
       title: loadedPost.title,
       content: loadedPost.content,
+      thumbnailImageUrl: null,
       createdAt: loadedPost.createdAt,
     });
     expect(result.post).not.toHaveProperty("board");
@@ -79,7 +81,21 @@ describe("post detail route", () => {
     expect(descriptors).toEqual([
       { title: "새로운 공지 | 몰루로그" },
       { name: "description", content: "새로운 공지 게시물 내용을 확인해보세요." },
+      { property: "og:image", content: "https://mollulog.net/mollulog-og.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:image", content: "https://mollulog.net/mollulog-og.png" },
       { tagName: "link", rel: "canonical", href: `https://mollulog.net/posts/${loadedPost.uid}` },
     ]);
+  });
+
+  it("uses the post thumbnail as the social preview image when present", () => {
+    const loadedPost = post({ thumbnailImageUrl: "https://cdn.example.test/post.png" });
+    const descriptors = meta({
+      data: { post: loadedPost },
+      location: { pathname: `/posts/${loadedPost.uid}` },
+    } as never);
+
+    expect(descriptors).toContainEqual({ property: "og:image", content: loadedPost.thumbnailImageUrl });
+    expect(descriptors).toContainEqual({ name: "twitter:image", content: loadedPost.thumbnailImageUrl });
   });
 });
