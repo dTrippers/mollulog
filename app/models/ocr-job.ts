@@ -128,12 +128,14 @@ export type OcrClaimResult =
       attemptUid: string;
       contractVersion: string;
       task: OcrTaskMessage;
+      uploadedAt?: string;
       input?: {
         inputUid?: string;
         filename: string;
         contentType: string;
         byteSize: number;
         sha256: string;
+        uploadedAt?: string;
         downloadUrl: string;
         validation?: {
           allowedContainers: string[];
@@ -946,6 +948,7 @@ export async function claimOcrTask(
                 ? OCR_STUDENT_IMAGE_CONTRACT_VERSION
                 : OCR_CONTRACT_VERSION,
             task,
+            ...(task.type === "ocr.image.recognize.v1" ? { uploadedAt: image.createdAt.toISOString() } : {}),
             jobKind: imageJobKind,
             images: [
               {
@@ -1060,6 +1063,7 @@ export async function claimOcrTask(
       contentType: metadata.contentType,
       byteSize: metadata.byteSize,
       sha256: metadata.sha256,
+      ...(claim.uploadedAt ? { uploadedAt: claim.uploadedAt } : {}),
       downloadUrl: await createR2Url(env, metadata.objectKey, "GET", OCR_DOWNLOAD_EXPIRES_SECONDS),
       ...(task.type === "ocr.student_detail_video.recognize.v1"
         ? {

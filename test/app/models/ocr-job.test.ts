@@ -780,6 +780,40 @@ describe("PostgreSQL OCR control plane", () => {
     ).toBe(true);
   });
 
+  it("sends the upload time only on an item inventory image claim", async () => {
+    const { client } = createClient((sql) => {
+      if (sql.includes('inner join "ocr_jobs"')) return [[...imageDatabaseRow(), "processing"]];
+      return [];
+    });
+    const itemClaim = await claimOcrTask(
+      createEnv(),
+      { type: "ocr.image.recognize.v1", taskUid: "image-1", generation: 1 },
+      "worker-1",
+      2,
+      { createClient: () => client },
+    );
+    expect(itemClaim).toEqual(
+      expect.objectContaining({
+        disposition: "ready",
+        input: expect.objectContaining({ uploadedAt: "2026-07-20T00:00:00.000Z" }),
+      }),
+    );
+
+    const studentClient = createClient((sql) => {
+      if (sql.includes('inner join "ocr_jobs"')) return [[...imageDatabaseRow(), "processing"]];
+      return [];
+    }).client;
+    const studentClaim = await claimOcrTask(
+      createEnv(),
+      { type: "ocr.student_detail_image.recognize.v1", taskUid: "image-1", generation: 1 },
+      "worker-1",
+      2,
+      { createClient: () => studentClient },
+    );
+    expect(studentClaim).toEqual(expect.objectContaining({ disposition: "ready" }));
+    expect(studentClaim).not.toHaveProperty("input.uploadedAt");
+  });
+
   it("claims a student video as one contract-v2 task with integrity metadata", async () => {
     const { client } = createClient((sql) => {
       if (sql.includes('from "ocr_video_inputs"') && sql.includes('inner join "ocr_jobs"')) {
