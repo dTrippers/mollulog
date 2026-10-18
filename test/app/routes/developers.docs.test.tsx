@@ -9,6 +9,7 @@ import {
   API_STUDENT_STATE_FIELD_SPECS,
   resolveApiDocumentUrls,
 } from "~/domain/mollulog-api-spec";
+import DevelopersLayout from "~/routes/developers";
 import DevelopersDocs, { loader } from "~/routes/developers.docs";
 
 const siteHost = "https://mollulog.net";
@@ -21,10 +22,17 @@ function renderDocsPage() {
   } as never);
   const RoutesStub = createRoutesStub([
     {
-      id: "developers-docs",
-      path: "/developers/docs",
-      loader: () => loaderData,
-      Component: DevelopersDocs,
+      id: "developers",
+      path: "/developers",
+      Component: DevelopersLayout,
+      children: [
+        {
+          id: "developers-docs",
+          path: "docs",
+          loader: () => loaderData,
+          Component: DevelopersDocs,
+        },
+      ],
     },
   ]);
   return renderToStaticMarkup(
@@ -232,7 +240,9 @@ describe("developers API documentation page", () => {
     expect(markup).toContain("육성 목표, 선물 계획, 플래너는 남아요");
     expect(markup).toContain("\n  --url &#x27;https://api.mollulog.net/v1/");
     expect(markup).toContain("scroll-mt-[calc(var(--mobile-header-height)+4.5rem)]");
-    expect(markup).toContain("target:bg-muted");
+    expect(markup).toContain("target:bg-v2-inset");
+    expect(markup).toContain("@min-[48rem]/page-available:scroll-mt-4");
+    expect(markup).not.toContain("lg:scroll-mt-4");
     expect(markup.match(/<details\b[^>]*\bopen(?:="")?/g)).toHaveLength(1);
   });
 
@@ -253,21 +263,21 @@ describe("developers API documentation page", () => {
       '<span class="whitespace-nowrap">api.mollulog.net</span><wbr/><span class="whitespace-nowrap">/llms-full.txt</span>',
     );
 
-    expect(markup).toContain('<span class="sr-only">llms-full.txt 주소 복사</span>');
-    expect(markup).toContain('<span class="sr-only">llms.txt 주소 복사</span>');
-    expect(markup).toContain('<span class="sr-only">OpenAPI 주소 복사</span>');
-    expect(markup).not.toContain('<span class="sr-only">OpenAPI </span>');
+    expect(markup).toContain('aria-label="llms-full.txt 주소 복사"');
+    expect(markup).toContain('aria-label="llms.txt 주소 복사"');
+    expect(markup).toContain('aria-label="OpenAPI 주소 복사"');
+    expect(markup).not.toContain('aria-label="OpenAPI 복사하기"');
 
     expect(text).toContain("응답: students(UID·이름)와 nextCursor");
     expect(text).toContain("응답: 모집 학생의 현재 상태 목록");
     expect(text).toContain("능력 해방 (HP · 공격력 · 치유력)");
-    expect(markup).toMatch(/<thead[^>]*>[\s\S]*?<\/thead>\s*<tbody class="border-t border-border">/);
+    expect(markup).toMatch(/<thead[^>]*>[\s\S]*?<\/thead>\s*<tbody class="border-t border-v2-divider">/);
     expect(markup).toMatch(
       /<th class="w-14 py-2 align-top whitespace-nowrap font-semibold"[^>]*scope="rowgroup"[^>]*><code>400<\/code><\/th>/,
     );
     expect(text).toContain('"fields": [{ "field": "level", "message": "1부터 90 사이여야 해요." }],');
     expect(markup).toMatch(
-      /<a class="whitespace-nowrap text-primary hover:underline" href="#error-student_not_recruited"><code>\s*404 student_not_recruited\s*<\/code><\/a>/,
+      /<a class="[^"]*text-v2-link[^"]*" href="#error-student_not_recruited"><code>\s*404 student_not_recruited\s*<\/code><\/a>/,
     );
   });
 });

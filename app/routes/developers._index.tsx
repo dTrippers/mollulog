@@ -9,12 +9,13 @@ import {
 } from "@heroicons/react/24/outline";
 import type { ElementType } from "react";
 import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, useLoaderData } from "react-router";
+import { data, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Button, SectionCard } from "~/components/primitives";
+import { ApiName } from "~/components/v2/features/developers/ApiName";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
+import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { ApiName } from "./developers._components/ApiName";
-import { DeveloperPage } from "./developers._components/DeveloperPage";
 
 export const meta: MetaFunction = () => [{ title: "몰루로그 API" }];
 
@@ -54,53 +55,56 @@ export default function DevelopersIndex() {
   const { showSignIn } = useSignIn();
 
   return (
-    <DeveloperPage>
-      <div className="@container space-y-12 pb-8 pt-6 sm:space-y-16 sm:pt-10">
+    <PageMain>
+      <div className="@container flex flex-col gap-12 pt-2 pb-8">
         <section aria-labelledby="api-introduction" className="text-center">
-          <h2
-            id="api-introduction"
-            className="break-keep text-3xl font-bold leading-tight tracking-tight @xl:text-4xl @3xl:text-5xl"
-          >
+          <h2 id="api-introduction" className="break-keep text-2xl font-bold tracking-[-0.01em] @3xl:text-3xl">
             몰루로그 데이터를
-            <span className="mt-2 block text-primary">다른 도구와 연결해요.</span>
+            <span className="mt-1 block text-v2-dev-accent">다른 도구와 연결해요.</span>
           </h2>
-          <p className="mx-auto mt-6 max-w-2xl break-keep text-base leading-relaxed text-muted-foreground @3xl:text-lg">
+          <p className="mx-auto mt-4 max-w-2xl break-keep text-sm leading-relaxed text-v2-fg-secondary @3xl:text-base">
             개인용 도구부터 여러 사람이 함께 쓰는 서비스까지, <br className="hidden @xl:block" />
             API로 몰루로그의 데이터를 조회하고 수정할 수 있어요.
           </p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            <Button
-              variant="primary"
-              className="gap-3 px-5 py-3"
-              to={loaderData.isSignedIn ? "/developers/keys" : undefined}
-              onClick={loaderData.isSignedIn ? undefined : showSignIn}
+          <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+            {loaderData.isSignedIn ? (
+              <Link to="/developers/keys" className={introCtaClassName()} {...getV2LinkTransitionProps("crossfade")}>
+                API 키 만들기
+                <ArrowRightIcon className="size-4" aria-hidden="true" />
+              </Link>
+            ) : (
+              <Button variant="primary" className={introCtaClassName()} onClick={showSignIn}>
+                로그인하고 키 발급하기
+                <ArrowRightIcon className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+            <Link
+              to="/developers/docs"
+              className={v2ButtonClassName({ variant: "secondary", className: "gap-2.5 px-4" })}
+              {...getV2LinkTransitionProps("crossfade")}
             >
-              {loaderData.isSignedIn ? "API 키 만들기" : "로그인하고 키 발급하기"}
-              <ArrowRightIcon className="size-4" aria-hidden="true" />
-            </Button>
-            <Button variant="secondary" className="gap-3 px-5 py-3" to="/developers/docs">
               API 문서 보기
               <ArrowUpRightIcon className="size-4" aria-hidden="true" />
-            </Button>
+            </Link>
           </div>
         </section>
 
         <ApiConnections />
 
         <section aria-labelledby="api-use-cases">
-          <h2 id="api-use-cases" className="text-lg font-semibold @xl:text-xl">
+          <h2 id="api-use-cases" className="text-lg font-semibold">
             이렇게 활용할 수 있어요
           </h2>
-          <ul className="mt-6 grid gap-4 @2xl:grid-cols-3">
+          <ul className="mt-4 grid gap-v2-block-gap @2xl:grid-cols-3">
             {useCases.map(({ title, description, Icon }) => (
               <li key={title}>
-                <SectionCard className="flex h-full items-start gap-4 space-y-0 p-5 md:p-6 @2xl:flex-col">
-                  <Icon className="size-7 shrink-0 text-primary" aria-hidden="true" />
+                <div className="flex h-full items-start gap-4 rounded-lg bg-v2-surface p-v2-block-p @2xl:flex-col @2xl:gap-3">
+                  <Icon className="mt-0.5 size-5 shrink-0 text-v2-dev-accent" aria-hidden="true" />
                   <div>
-                    <h3 className="text-base font-semibold">{title}</h3>
-                    <p className="mt-2 break-keep text-sm leading-relaxed text-muted-foreground">{description}</p>
+                    <h3 className="text-sm font-semibold">{title}</h3>
+                    <p className="mt-1.5 break-keep text-sm leading-relaxed text-v2-fg-secondary">{description}</p>
                   </div>
-                </SectionCard>
+                </div>
               </li>
             ))}
           </ul>
@@ -110,7 +114,7 @@ export default function DevelopersIndex() {
           <h2 id="api-usage-notice" className="text-base font-semibold">
             이용 안내
           </h2>
-          <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-muted-foreground">
+          <ul className="list-disc space-y-2 pl-5 text-sm leading-relaxed text-v2-fg-secondary">
             <li>몰루로그 API는 블루 아카이브의 공식 API가 아니며 게임 개발/운영사와는 무관합니다.</li>
             <li>
               몰루로그에 기록한 개인 데이터를 조회, 관리하기 위해서만 사용되며 인게임 데이터 제공을 목적으로 하지
@@ -122,7 +126,7 @@ export default function DevelopersIndex() {
               기능 추가 등의 의견은{" "}
               <a
                 href="https://mollulog.net/contact"
-                className="rounded-sm text-primary underline underline-offset-4 hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                className="rounded-sm text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
               >
                 제안/문의
               </a>{" "}
@@ -131,8 +135,15 @@ export default function DevelopersIndex() {
           </ul>
         </section>
       </div>
-    </DeveloperPage>
+    </PageMain>
   );
+}
+
+function introCtaClassName() {
+  return v2ButtonClassName({
+    variant: "primary",
+    className: "gap-2.5 px-4 bg-v2-dev-accent-strong text-v2-dev-on-accent hover:opacity-100 hover:brightness-90",
+  });
 }
 
 function ApiConnections() {
@@ -141,7 +152,7 @@ function ApiConnections() {
       <div className="relative isolate mx-auto grid max-w-4xl justify-items-center gap-4 @2xl:grid-cols-3 @2xl:items-center @2xl:gap-x-4 @2xl:gap-y-5">
         <svg
           aria-hidden="true"
-          className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-64 w-full text-primary/25 @2xl:block"
+          className="pointer-events-none absolute inset-x-0 top-0 -z-10 hidden h-64 w-full text-v2-dev-accent/25 @2xl:block"
           viewBox="0 0 900 256"
           preserveAspectRatio="none"
         >
@@ -153,8 +164,8 @@ function ApiConnections() {
             vectorEffect="non-scaling-stroke"
           />
         </svg>
-        <div className="flex size-48 flex-col items-center justify-center gap-4 rounded-full bg-primary/5 @2xl:col-start-2 @2xl:row-start-1 @2xl:size-56">
-          <div className="flex size-20 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-lg shadow-primary/20">
+        <div className="flex size-48 flex-col items-center justify-center gap-4 rounded-full bg-v2-dev-accent/5 @2xl:col-start-2 @2xl:row-start-1 @2xl:size-56">
+          <div className="flex size-20 items-center justify-center rounded-lg bg-v2-dev-accent text-v2-dev-on-accent shadow-lg shadow-v2-dev-accent/20">
             <CodeBracketIcon className="size-10" aria-hidden="true" />
           </div>
           <p className="text-base font-semibold">
@@ -197,13 +208,13 @@ function ConnectionExample({
 }) {
   return (
     <div
-      className={`flex w-full max-w-64 items-center gap-3 rounded-lg bg-card p-4 shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 ${className}`}
+      className={`flex w-full max-w-64 items-center gap-3 rounded-lg bg-v2-surface p-4 shadow-lg shadow-v2-dev-shadow/5 dark:shadow-md dark:shadow-v2-dev-shadow/20 ${className}`}
     >
-      <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+      <div className="flex size-11 shrink-0 items-center justify-center rounded-md bg-v2-dev-accent/10 text-v2-dev-accent">
         <Icon className="size-6" aria-hidden="true" />
       </div>
       <div className="min-w-0">
-        <p className="break-keep text-xs text-muted-foreground">{description}</p>
+        <p className="break-keep text-xs text-v2-fg-tertiary">{description}</p>
         <p className="mt-1 break-keep text-sm font-semibold">{title}</p>
       </div>
     </div>

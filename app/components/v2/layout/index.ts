@@ -13,6 +13,8 @@ export { PageMain } from "./PageMain";
 export { PageToolbar, type PageToolbarProps } from "./PageToolbar";
 export { PanelAction, type PanelActionProps } from "./PanelAction";
 export { PanelSheet, type PanelSheetProps } from "./PanelSheet";
+export { ScreenNavigation, ScreenNavigationToolbar } from "./ScreenNavigation";
+export { ScreenNavigationFocusScope } from "./screen-navigation-focus";
 export { type ScreenTabItem, ScreenTabs, type ScreenTabsProps } from "./ScreenTabs";
 export {
   canUseV2ViewTransition,

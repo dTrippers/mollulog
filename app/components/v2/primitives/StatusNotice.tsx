@@ -1,9 +1,14 @@
-import { ExclamationTriangleIcon, InformationCircleIcon, XCircleIcon } from "@heroicons/react/16/solid";
+import {
+  CheckCircleIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  XCircleIcon,
+} from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
 export type StatusNoticeProps = {
-  tone: "danger" | "warning" | "neutral";
+  tone: "danger" | "warning" | "neutral" | "success";
   children: ReactNode;
   action?: ReactNode;
   className?: string;
@@ -13,12 +18,14 @@ const toneClassName = {
   danger: "text-v2-danger",
   warning: "text-v2-warning",
   neutral: "text-v2-fg-secondary",
+  success: "text-v2-success",
 } as const;
 
 const Icon = {
   danger: XCircleIcon,
   warning: ExclamationTriangleIcon,
   neutral: InformationCircleIcon,
+  success: CheckCircleIcon,
 } as const;
 
 // A status line: the icon and the text carry the meaning together, so color is never the only signal.

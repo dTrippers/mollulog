@@ -1,9 +1,14 @@
-import { ExclamationTriangleIcon, KeyIcon } from "@heroicons/react/24/outline";
+import { ChevronDownIcon, KeyIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Button, Callout, Checkbox, EmptyView, Input, Section, SectionCard, SubTitle } from "~/components/primitives";
+import { type CopyStatus, CopyStatusMessage, CopyTextButton } from "~/components/v2/features/developers/CopyTextButton";
+import { PageMain } from "~/components/v2/layout/PageMain";
+import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
+import { Button } from "~/components/v2/primitives/Button";
+import { Checkbox } from "~/components/v2/primitives/Checkbox";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { type ApiFieldError, ApiInputError } from "~/domain/mollulog-api";
 import {
   createPersonalApiKey,
@@ -11,13 +16,6 @@ import {
   type PersonalApiKey,
   revokePersonalApiKey,
 } from "~/models/mollulog-api";
-import {
-  type CopyStatus,
-  CopyStatusMessage,
-  CopyTextButton,
-  DeveloperPage,
-  formatDate,
-} from "./developers._components/DeveloperPage";
 import { formatKeyExpiryRemaining } from "./developers._components/api-key-expiry";
 
 export const meta: MetaFunction = () => [{ title: "API 키 | 몰루로그" }];
@@ -223,13 +221,13 @@ export default function DevelopersKeys() {
   }
 
   return (
-    <DeveloperPage>
-      <div className="@container space-y-6">
+    <PageMain>
+      <div className="@container space-y-v2-block-gap">
         <header className="flex items-start justify-between gap-3">
-          <SubTitle text="API 키" />
+          <h2 className="text-lg font-semibold">API 키</h2>
           <Button
             variant="primary"
-            size="sm"
+            className="disabled:bg-v2-inset"
             disabled={isSubmitting || isIssueOpen || Boolean(reveal)}
             onClick={() => {
               setIsRevealVisible(false);
@@ -242,31 +240,49 @@ export default function DevelopersKeys() {
         </header>
 
         {isIssueOpen ? (
-          <SectionCard title="새 API 키 발급" className="p-5 md:p-6">
-            <Form method="post" className="space-y-5" onSubmit={() => setIssueResponseDismissed(false)}>
+          <section aria-labelledby="api-key-issue-title" className="rounded-lg bg-v2-surface p-v2-block-p">
+            <h3 id="api-key-issue-title" className="text-base font-semibold">
+              새 API 키 발급
+            </h3>
+            <Form
+              method="post"
+              className="mt-v2-group-gap space-y-v2-group-gap"
+              onSubmit={() => setIssueResponseDismissed(false)}
+            >
               <input type="hidden" name="intent" value="issue" />
-              <Input
-                id="api-key-name"
-                name="name"
-                label="이름"
-                error={nameError}
-                className="max-w-md"
-                placeholder="API 키 구분을 위한 이름"
-                maxLength={80}
-                required
-                value={name}
-                onChange={setName}
-                autoComplete="off"
-              />
+              <div>
+                <label htmlFor="api-key-name" className="block text-sm font-medium">
+                  이름
+                </label>
+                <input
+                  id="api-key-name"
+                  name="name"
+                  type="text"
+                  maxLength={80}
+                  required
+                  value={name}
+                  placeholder="API 키 구분을 위한 이름"
+                  autoComplete="off"
+                  aria-invalid={nameError ? true : undefined}
+                  aria-describedby={nameError ? "api-key-name-error" : undefined}
+                  onChange={(event) => setName(event.currentTarget.value)}
+                  className="mt-2 min-h-v2-input-min w-full max-w-md rounded-md border border-v2-control-border bg-v2-surface px-3 text-sm text-v2-fg placeholder:text-v2-fg-tertiary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                />
+                {nameError ? (
+                  <p id="api-key-name-error" className="mt-1 text-sm font-medium text-v2-danger">
+                    {nameError}
+                  </p>
+                ) : null}
+              </div>
               <fieldset
                 className="space-y-2"
                 aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
                 aria-invalid={scopeError ? true : undefined}
               >
                 <legend className="text-sm font-semibold">권한</legend>
-                <table className="w-full max-w-md text-sm">
+                <table className="w-full max-w-md border-separate border-spacing-y-1 text-sm">
                   <thead>
-                    <tr className="text-left text-xs font-semibold text-muted-foreground">
+                    <tr className="text-left text-xs font-semibold text-v2-fg-tertiary">
                       <th className="pb-2" scope="col">
                         데이터
                       </th>
@@ -279,132 +295,140 @@ export default function DevelopersKeys() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="bg-muted">
+                    <tr className="bg-v2-inset">
                       <th className="rounded-l-md py-2.5 pl-3 text-left font-medium" scope="row">
                         학생
-                        <span className="block text-xs font-normal text-muted-foreground">
+                        <span className="block text-xs font-normal text-v2-fg-secondary">
                           학생 모집 여부, 성장도, 인연 랭크 등
                         </span>
                       </th>
                       <td className="py-2.5 text-center">
                         {writeScope ? <input type="hidden" name="readScope" value="true" /> : null}
-                        <Checkbox
-                          name="readScope"
-                          value="true"
-                          checked={readScope}
-                          disabled={writeScope}
-                          className="justify-center gap-0"
-                          onChange={setReadScope}
-                          label={<span className="sr-only">학생 읽기</span>}
-                          aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
-                        />
+                        <div className="flex justify-center">
+                          <Checkbox
+                            id="api-key-read-scope"
+                            name="readScope"
+                            value="true"
+                            checked={readScope}
+                            disabled={writeScope}
+                            onCheckedChange={setReadScope}
+                            aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
+                            aria-invalid={scopeError ? true : undefined}
+                          >
+                            <span className="sr-only">학생 읽기</span>
+                          </Checkbox>
+                        </div>
                       </td>
                       <td className="rounded-r-md py-2.5 text-center">
-                        <Checkbox
-                          name="writeScope"
-                          value="true"
-                          checked={writeScope}
-                          className="justify-center gap-0"
-                          onChange={(checked) => {
-                            setWriteScope(checked);
-                            if (checked) setReadScope(true);
-                          }}
-                          label={<span className="sr-only">학생 쓰기</span>}
-                          aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
-                        />
+                        <div className="flex justify-center">
+                          <Checkbox
+                            id="api-key-write-scope"
+                            name="writeScope"
+                            value="true"
+                            checked={writeScope}
+                            onCheckedChange={(checked) => {
+                              setWriteScope(checked);
+                              if (checked) setReadScope(true);
+                            }}
+                            aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
+                            aria-invalid={scopeError ? true : undefined}
+                          >
+                            <span className="sr-only">학생 쓰기</span>
+                          </Checkbox>
+                        </div>
                       </td>
                     </tr>
                   </tbody>
                 </table>
                 {scopeError ? (
-                  <p id="api-key-scopes-error" className="text-sm font-medium text-destructive">
+                  <p id="api-key-scopes-error" className="text-sm font-medium text-v2-danger">
                     {scopeError}
                   </p>
                 ) : null}
               </fieldset>
-              <p className="text-sm text-muted-foreground">
-                <span>
-                  발급일로부터 <strong className="font-semibold text-foreground">1년</strong> 동안 사용할 수 있어요.
-                </span>
+              <p className="text-sm text-v2-fg-secondary">
+                발급일로부터 <strong className="font-semibold text-v2-fg">1년</strong> 동안 사용할 수 있어요.
               </p>
               {issueError && !hasFieldErrors ? (
-                <Callout tone="destructive" title="키를 발급하지 못했어요">
-                  {issueError.message}
-                </Callout>
+                <StatusNotice tone="danger">
+                  <span className="font-semibold">키를 발급하지 못했어요.</span> {issueError.message}
+                </StatusNotice>
               ) : null}
               <div className="flex justify-end gap-2">
-                <Button type="button" variant="default" size="sm" onClick={resetIssueForm} disabled={isSubmitting}>
+                <Button type="button" variant="text" onClick={resetIssueForm} disabled={isSubmitting}>
                   취소
                 </Button>
-                <Button type="submit" variant="primary" size="sm" className="min-w-24" disabled={isSubmitting}>
+                <Button type="submit" variant="primary" className="min-w-24" disabled={isSubmitting}>
                   {isSubmitting ? "발급 중..." : "발급"}
                 </Button>
               </div>
             </Form>
-          </SectionCard>
+          </section>
         ) : reveal ? (
-          <SectionCard title="API 키를 발급했어요" className="p-5 md:p-6">
-            <div className="space-y-5">
-              <Callout
-                tone="warning"
-                Icon={ExclamationTriangleIcon}
-                title="키는 지금만 확인할 수 있어요."
-                description="이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요."
-              />
+          <section aria-labelledby="api-key-reveal-title" className="rounded-lg bg-v2-surface p-v2-block-p">
+            <h3 id="api-key-reveal-title" className="text-base font-semibold">
+              API 키를 발급했어요
+            </h3>
+            <div className="mt-v2-group-gap space-y-v2-group-gap">
+              <StatusNotice tone="warning">
+                <span className="block font-semibold">키는 지금만 확인할 수 있어요.</span>
+                <span className="block">이 화면을 벗어나면 다시 확인할 수 없어요. 안전한 곳에 복사해 두세요.</span>
+              </StatusNotice>
               <RevealedTokenField key={reveal.token} token={reveal.token} />
-              <footer className="flex items-center justify-end gap-4">
-                <Link to="/developers/docs" className="text-sm font-medium text-primary hover:underline">
+              <footer className="flex flex-wrap items-center justify-end gap-4">
+                <Link
+                  to="/developers/docs"
+                  className="text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+                  {...getV2LinkTransitionProps("crossfade")}
+                >
                   API 문서 보기
                 </Link>
-                <Button type="button" variant="default" size="sm" onClick={() => setIsRevealVisible(false)}>
+                <Button type="button" variant="secondary" onClick={() => setIsRevealVisible(false)}>
                   확인했어요
                 </Button>
               </footer>
             </div>
-          </SectionCard>
+          </section>
         ) : null}
 
         {actionData?.ok && actionData.intent === "revoke" ? (
-          <Callout tone="success" title="API 키를 삭제했어요">
+          <StatusNotice tone="success">
+            <span className="font-semibold">API 키를 삭제했어요.</span>{" "}
             {actionData.keyName
               ? `“${actionData.keyName}” 키는 더 이상 사용할 수 없어요.`
               : "선택한 키는 더 이상 사용할 수 없어요."}
-          </Callout>
+          </StatusNotice>
         ) : null}
 
         {actionData && !actionData.ok && actionData.intent === "revoke" ? (
-          <Callout tone="destructive" title="API 키를 삭제하지 못했어요">
-            {actionData.message}
-          </Callout>
+          <StatusNotice tone="danger">
+            <span className="font-semibold">API 키를 삭제하지 못했어요.</span> {actionData.message}
+          </StatusNotice>
         ) : null}
 
         {loadError ? (
-          <SectionCard>
-            <div className="space-y-4">
-              <Callout tone="destructive" title="API 키 목록을 불러오지 못했어요">
-                다시 시도하거나 잠시 후 이 화면을 새로고침해주세요.
-              </Callout>
-              <Button
-                type="button"
-                variant="secondary"
-                disabled={revalidator.state !== "idle"}
-                onClick={() => revalidator.revalidate()}
-              >
-                {revalidator.state === "idle" ? "다시 불러오기" : "불러오는 중..."}
-              </Button>
-            </div>
-          </SectionCard>
+          <section className="space-y-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p">
+            <StatusNotice tone="danger">
+              <span className="font-semibold">API 키 목록을 불러오지 못했어요.</span>
+              <span className="block">다시 시도하거나 잠시 후 이 화면을 새로고침해주세요.</span>
+            </StatusNotice>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={revalidator.state !== "idle"}
+              onClick={() => revalidator.revalidate()}
+            >
+              {revalidator.state === "idle" ? "다시 불러오기" : "불러오는 중..."}
+            </Button>
+          </section>
         ) : (
           <>
             {activeKeys.length === 0 ? (
-              <SectionCard>
-                <EmptyView
-                  Icon={KeyIcon}
-                  text="사용할 수 있는 API 키가 없어요"
-                  description="필요한 권한을 선택해 새 키를 발급해주세요."
-                  className="my-8"
-                />
-              </SectionCard>
+              <section className="flex flex-col items-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-8 text-center">
+                <KeyIcon className="size-8 text-v2-fg-tertiary" aria-hidden="true" />
+                <h3 className="font-semibold">사용할 수 있는 API 키가 없어요</h3>
+                <p className="max-w-prose text-sm text-v2-fg-secondary">필요한 권한을 선택해 새 키를 발급해주세요.</p>
+              </section>
             ) : (
               <ul className="space-y-4" aria-label="사용 가능한 API 키">
                 {activeKeys.map((key) => (
@@ -422,8 +446,15 @@ export default function DevelopersKeys() {
             )}
 
             {inactiveKeys.length > 0 ? (
-              <Section title={`만료·삭제된 키 ${inactiveKeys.length}개`} collapsible defaultExpanded={false}>
-                <ul className="space-y-4">
+              <details className="group rounded-lg bg-v2-surface">
+                <summary className="flex min-h-v2-row-min cursor-pointer list-none items-center justify-between gap-3 rounded-lg px-v2-block-p py-v2-row-y font-semibold hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus">
+                  <span>만료·삭제된 키 {inactiveKeys.length}개</span>
+                  <ChevronDownIcon
+                    className="size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform motion-safe:duration-v2-base motion-safe:ease-v2-standard group-open:rotate-180"
+                    aria-hidden="true"
+                  />
+                </summary>
+                <ul className="space-y-4 px-v2-block-p pb-v2-block-p" aria-label="만료되거나 삭제된 API 키">
                   {inactiveKeys.map((key) => (
                     <KeyRow
                       key={key.uid}
@@ -436,12 +467,12 @@ export default function DevelopersKeys() {
                     />
                   ))}
                 </ul>
-              </Section>
+              </details>
             ) : null}
           </>
         )}
       </div>
-    </DeveloperPage>
+    </PageMain>
   );
 }
 
@@ -474,88 +505,91 @@ function KeyRow({
 
   return (
     <li>
-      <SectionCard className="space-y-5 p-5 md:p-6">
+      <article className="space-y-5 rounded-lg bg-v2-surface p-v2-block-p">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-3">
+          <div className="flex min-w-0 items-start gap-v2-media-gap">
             <KeyIcon
-              className={`mt-0.5 size-5 shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}
+              className={
+                isActive ? "mt-0.5 size-5 shrink-0 text-v2-fg-secondary" : "mt-0.5 size-5 shrink-0 text-v2-fg-tertiary"
+              }
               aria-hidden="true"
             />
             <div className="min-w-0 space-y-2">
-              <h3 className={`break-words text-base font-semibold ${isActive ? "" : "text-muted-foreground"}`}>
+              <h3 className={isActive ? "break-words font-semibold" : "break-words font-semibold text-v2-fg-tertiary"}>
                 {keyRecord.name}
               </h3>
-              <span className="inline-flex rounded-md bg-muted px-2.5 py-1 text-xs font-medium">{scopeText}</span>
+              <span className="inline-flex rounded-md bg-v2-inset px-2.5 py-1 text-xs font-medium">{scopeText}</span>
             </div>
           </div>
           <span
-            className={`shrink-0 rounded-full px-2.5 py-1 text-xs font-medium ${
-              isActive ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground"
-            }`}
+            className={
+              isActive
+                ? "shrink-0 rounded-full bg-v2-success-subtle px-2.5 py-1 text-xs font-medium text-v2-success"
+                : "shrink-0 rounded-full bg-v2-inset px-2.5 py-1 text-xs font-medium text-v2-fg-secondary"
+            }
           >
             {status}
           </span>
         </div>
         <dl className="grid grid-cols-2 gap-4 text-sm @xl:grid-cols-3">
           <div className="space-y-1">
-            <dt className="text-xs text-muted-foreground">발급일</dt>
+            <dt className="text-xs text-v2-fg-tertiary">발급일</dt>
             <dd className="tabular-nums">{formatDate(keyRecord.createdAt)}</dd>
           </div>
           <div className="space-y-1">
-            <dt className="text-xs text-muted-foreground">{keyRecord.revokedAt ? "삭제일" : "만료일"}</dt>
+            <dt className="text-xs text-v2-fg-tertiary">{keyRecord.revokedAt ? "삭제일" : "만료일"}</dt>
             <dd className="flex flex-wrap items-baseline gap-x-1 tabular-nums">
               <span>{formatDate(keyRecord.revokedAt ?? keyRecord.expiresAt)}</span>
               {isActive ? (
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-v2-fg-secondary">
                   ({formatKeyExpiryRemaining(keyRecord.expiresAt, now)})
                 </span>
               ) : null}
             </dd>
           </div>
           <div className="col-span-2 space-y-1 @xl:col-span-1">
-            <dt className="text-xs text-muted-foreground">마지막 사용</dt>
+            <dt className="text-xs text-v2-fg-tertiary">마지막 사용</dt>
             <dd className="tabular-nums">
               {keyRecord.lastUsedAt ? `${formatDate(keyRecord.lastUsedAt)} ${lastUsedTime}` : "아직 사용하지 않음"}
             </dd>
           </div>
         </dl>
         <footer className="flex flex-wrap items-center justify-end gap-4">
-          <Link to="/data-history?filter=api" className="whitespace-nowrap text-sm font-medium text-primary hover:underline">
+          <Link
+            to="/data-history?filter=api"
+            className="whitespace-nowrap text-sm font-medium text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            {...getV2LinkTransitionProps("crossfade")}
+          >
             데이터 변경 이력
           </Link>
           {isActive ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="danger-subtle"
-              disabled={isSubmitting || confirming}
-              onClick={onConfirm}
-            >
+            <Button type="button" variant="danger" disabled={isSubmitting || confirming} onClick={onConfirm}>
               <span className="sr-only">{keyRecord.name} API 키 </span>
               삭제
             </Button>
           ) : null}
         </footer>
         {confirming ? (
-          <div className="space-y-4 rounded-md bg-destructive/10 p-4">
+          <fieldset className="space-y-4 rounded-md bg-v2-inset p-4">
+            <legend className="sr-only">{`${keyRecord.name} API 키 삭제 확인`}</legend>
             <p className="break-keep text-sm">삭제하면 이 키로 연결한 도구에서 더 이상 API를 사용할 수 없어요.</p>
             <div className="flex flex-wrap justify-end gap-2">
-              <Button type="button" size="sm" variant="default" onClick={onCancel} disabled={isSubmitting}>
+              <Button type="button" variant="text" onClick={onCancel} disabled={isSubmitting}>
                 취소
               </Button>
               <Form method="post">
                 <input type="hidden" name="intent" value="revoke" />
                 <input type="hidden" name="keyUid" value={keyRecord.uid} />
                 <input type="hidden" name="keyName" value={keyRecord.name} />
-                <Button type="submit" size="sm" variant="danger" disabled={isSubmitting}>
+                <Button type="submit" variant="danger" disabled={isSubmitting}>
                   <span className="sr-only">{keyRecord.name} API 키 </span>
                   {isSubmitting ? "삭제 중..." : "삭제 확인"}
                 </Button>
               </Form>
             </div>
-          </div>
+          </fieldset>
         ) : null}
-      </SectionCard>
+      </article>
     </li>
   );
 }
@@ -566,20 +600,25 @@ function RevealedTokenField({ token }: { token: string }) {
   return (
     <div>
       <div className="flex flex-wrap items-end gap-2">
-        <Input
-          label="API 키"
-          value={token}
-          readOnly
-          autoComplete="off"
-          containerClassName="min-w-[14rem] flex-1"
-          className="max-w-none font-mono text-xs"
-          onFocus={(event) => event.currentTarget.select()}
-        />
+        <div className="min-w-[14rem] flex-1">
+          <label htmlFor="revealed-api-key" className="mb-2 block text-sm font-medium">
+            API 키
+          </label>
+          <input
+            id="revealed-api-key"
+            type="text"
+            value={token}
+            readOnly
+            autoComplete="off"
+            onFocus={(event) => event.currentTarget.select()}
+            className="min-h-v2-input-min w-full rounded-md border border-v2-control-border bg-v2-surface px-3 font-mono text-xs text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          />
+        </div>
         <CopyTextButton
           value={token}
           label="복사하기"
           variant="text"
-          buttonVariant="primary"
+          buttonVariant="secondary"
           accessibleContext="API 키"
           onStatusChange={setCopyStatus}
         />
@@ -587,4 +626,15 @@ function RevealedTokenField({ token }: { token: string }) {
       <CopyStatusMessage status={copyStatus} />
     </div>
   );
+}
+
+function formatDate(value: string) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    timeZone: "Asia/Seoul",
+  }).formatToParts(new Date(value));
+  const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
+  return `${part("year")}.${part("month")}.${part("day")}`;
 }
