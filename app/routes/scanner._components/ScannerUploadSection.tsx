@@ -145,7 +145,7 @@ export default function ScannerUploadSection({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-v2-control-border px-v2-block-p py-8 text-center",
+            "flex min-h-44 cursor-pointer flex-col items-center justify-center rounded-lg border border-dashed border-v2-control-border-strong px-v2-block-p py-8 text-center",
             isDragging && "bg-v2-highlight",
             selectionDisabled && "cursor-not-allowed text-v2-fg-disabled",
             v2FocusRing,

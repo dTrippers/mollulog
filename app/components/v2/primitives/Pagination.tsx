@@ -164,7 +164,7 @@ function PageJumpForm({ totalPages, onJump }: { totalPages: number; onJump: (pag
         autoComplete="off"
         value={value}
         onChange={(event) => setValue(event.target.value)}
-        className={`min-h-v2-row-min w-16 rounded-md border border-v2-control-border bg-v2-surface px-2 text-center text-sm text-v2-fg tabular-nums ${v2FocusRing}`}
+        className={`min-h-v2-row-min w-16 rounded-md border border-v2-control-border bg-v2-surface px-2 text-center text-sm text-v2-fg tabular-nums focus:border-v2-control-border-strong ${v2FocusRing}`}
       />
       <span aria-hidden="true" className="tabular-nums">
         / {totalPages}

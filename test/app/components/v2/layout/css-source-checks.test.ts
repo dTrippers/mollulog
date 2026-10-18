@@ -187,10 +187,15 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
 
   it("W2: the control border token is defined for light and dark and exposed to utilities", () => {
     const lightStart = css.indexOf("--v2-inset: oklch(0.955 0 0);");
-    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-control-border: oklch(0.92 0 0);");
+    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain("--v2-control-border: oklch(0.968 0 0);");
+    expect(css.slice(lightStart, css.indexOf("}", lightStart))).toContain(
+      "--v2-control-border-strong: oklch(0.92 0 0);",
+    );
     const darkStart = css.indexOf("--v2-inset: oklch(0.33 0 0);");
-    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.55 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border: oklch(0.388 0 0);");
+    expect(css.slice(darkStart, css.indexOf("}", darkStart))).toContain("--v2-control-border-strong: oklch(0.55 0 0);");
     expect(css).toContain("--color-v2-control-border: var(--v2-control-border);");
+    expect(css).toContain("--color-v2-control-border-strong: var(--v2-control-border-strong);");
   });
 
   it("W3: the switch off-track has its own token, so the input border can stay light", () => {
@@ -219,7 +224,10 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
   it("W2: the docs use the control border, not the inset surface", () => {
     const docs = readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8");
     expect(docs).toContain(
-      "| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Control boundary for text inputs, selects, and textareas; popover ring. Not for cards, buttons, or region separation. |",
+      "| `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |",
+    );
+    expect(docs).toContain(
+      "| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |",
     );
     expect(docs).toContain("- Radius tokens. Keep the 1.x base radius");
     expect(docs).not.toContain("Border and radius tokens");

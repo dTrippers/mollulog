@@ -424,7 +424,7 @@ function CellReviewTile({
           disabled={disabled}
           value={quantity}
           className={cn(
-            "border-v2-control-border/40 px-1 font-normal focus:border-v2-control-border",
+            "px-1 font-normal",
             matchesExisting && "text-v2-fg-secondary focus:text-v2-fg focus-visible:text-v2-fg",
             scannerNumberInputClassName,
           )}
@@ -590,7 +590,7 @@ function CellCandidatePopover({
         onChange={(event) => setQuery(event.target.value)}
         placeholder="아이템 검색"
         aria-label="아이템 검색"
-        className="min-w-0 w-full rounded-md border border-v2-control-border bg-v2-surface px-2.5 py-2 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+        className="min-w-0 w-full rounded-md border border-v2-control-border bg-v2-surface px-2.5 py-2 text-sm outline-none focus:border-v2-control-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
       />
       {!query.trim() && sameAppearanceSelectionRequired ? (
         <p className="rounded-md bg-v2-warning-subtle px-2.5 py-2 text-xs text-v2-fg">

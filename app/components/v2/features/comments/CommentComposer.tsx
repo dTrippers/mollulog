@@ -126,7 +126,7 @@ export function CommentComposer({
   return (
     <div
       ref={containerRef}
-      className="flex items-end gap-1 rounded-lg border border-v2-control-border/40 bg-v2-surface py-1 pr-1 pl-3 focus-within:border-v2-control-border focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus"
+      className="flex items-end gap-1 rounded-lg border border-v2-control-border bg-v2-surface py-1 pr-1 pl-3 focus-within:border-v2-control-border-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus"
     >
       <label className="sr-only" htmlFor={`${fieldId}-textarea`}>
         {label}
