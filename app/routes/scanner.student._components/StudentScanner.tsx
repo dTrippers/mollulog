@@ -1583,7 +1583,7 @@ function StudentIdentity({
   const registerAction = (wrapper: HTMLSpanElement | null) =>
     excludeRef(wrapper?.querySelector<HTMLButtonElement>("button") ?? null);
   const actionClassName = cn(
-    "border border-v2-control-border/40 bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
+    "border border-v2-control-border bg-v2-surface px-1.5 text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
     stacked ? "min-h-8 text-sm" : "min-h-6 text-[0.6875rem]",
   );
   const nameLine = (
@@ -1734,7 +1734,7 @@ function ReviewFieldInput({
     getFieldComparison(detail, value, currentState?.[field.applyKey], state.confirmed[field.applyKey]) === "same";
   const segmentClassName = segment
     ? cn(segmentInputClassName, !warning && "bg-transparent")
-    : "border-v2-control-border/40 focus:border-v2-control-border focus-within:border-v2-control-border";
+    : "focus:border-v2-control-border-strong focus-within:border-v2-control-border-strong";
   const inputClassName = cn(
     segmentClassName,
     "font-normal",
@@ -1798,7 +1798,7 @@ function ReviewFieldGroup({
       ) : null}
       <div
         className={cn(
-          "grid divide-x divide-v2-control-border/40 overflow-hidden rounded-md border border-v2-control-border/40 bg-v2-surface focus-within:border-v2-control-border",
+          "grid divide-x divide-v2-control-border overflow-hidden rounded-md border border-v2-control-border bg-v2-surface focus-within:border-v2-control-border-strong",
           gridClassName,
         )}
       >
@@ -1842,7 +1842,7 @@ function ReviewUnavailableValue({
         "flex items-center justify-center text-sm text-v2-fg-tertiary",
         compact ? "min-h-7" : "min-h-v2-input-min",
         small && "text-xs",
-        !segment && "rounded-md border border-dashed border-v2-control-border/40",
+        !segment && "rounded-md border border-dashed border-v2-control-border",
       )}
     >
       <UnavailableFieldValue state={state} />

@@ -432,6 +432,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-inset: var(--v2-inset);
   --color-v2-divider: var(--v2-divider);
   --color-v2-control-border: var(--v2-control-border);
+  --color-v2-control-border-strong: var(--v2-control-border-strong);
   --color-v2-filled-hover: var(--v2-filled-hover);
   --color-v2-switch-off: var(--v2-switch-off);
   --color-v2-scrim: var(--v2-scrim);
@@ -481,7 +482,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-surface: oklch(1 0 0);
   --v2-inset: oklch(0.955 0 0);
   --v2-divider: oklch(0.92 0 0);
-  --v2-control-border: oklch(0.92 0 0);
+  --v2-control-border: oklch(0.968 0 0);
+  --v2-control-border-strong: oklch(0.92 0 0);
   --v2-filled-hover: oklch(0.94 0 0);
   --v2-switch-off: oklch(0.64 0 0);
   --v2-scrim: oklch(0 0 0 / 70%);
@@ -534,7 +536,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-surface: oklch(0.27 0 0);
   --v2-inset: oklch(0.33 0 0);
   --v2-divider: oklch(0.40 0 0);
-  --v2-control-border: oklch(0.55 0 0);
+  --v2-control-border: oklch(0.388 0 0);
+  --v2-control-border-strong: oklch(0.55 0 0);
   --v2-filled-hover: oklch(0.37 0 0);
   --v2-switch-off: oklch(0.56 0 0);
   --v2-scrim: oklch(0 0 0 / 70%);

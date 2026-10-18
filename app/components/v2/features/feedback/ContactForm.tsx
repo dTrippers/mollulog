@@ -26,7 +26,7 @@ export function ContactForm({ errors, values, submitting = false }: ContactFormP
             required
             aria-invalid={Boolean(errors?.title)}
             aria-describedby={errors?.title ? "contact-title-error" : undefined}
-            className={`${v2FocusRing} min-h-v2-input-min w-full rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
+            className={`${v2FocusRing} min-h-v2-input-min w-full rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg focus:border-v2-control-border-strong aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
           />
           {errors?.title ? (
             <p id="contact-title-error" role="alert" className="text-sm text-v2-danger">
@@ -49,7 +49,7 @@ export function ContactForm({ errors, values, submitting = false }: ContactFormP
             aria-describedby={
               errors?.content ? "contact-content-error contact-content-description" : "contact-content-description"
             }
-            className={`${v2FocusRing} min-h-40 w-full resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
+            className={`${v2FocusRing} min-h-40 w-full resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg focus:border-v2-control-border-strong aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
           />
           {errors?.content ? (
             <p id="contact-content-error" role="alert" className="text-sm text-v2-danger">

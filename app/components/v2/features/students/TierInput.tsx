@@ -69,7 +69,7 @@ export function TierInput({
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
         className={cn(
-          "block w-full min-w-0 cursor-pointer rounded-md border border-v2-control-border bg-v2-surface text-sm font-medium text-v2-fg tabular-nums focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-not-allowed",
+          "block w-full min-w-0 cursor-pointer rounded-md border border-v2-control-border bg-v2-surface text-sm font-medium text-v2-fg tabular-nums focus-visible:border-v2-control-border-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-not-allowed",
           compact ? "min-h-7" : "min-h-v2-input-min",
           warning && "bg-v2-warning-subtle",
           disabled && "text-v2-fg-disabled",

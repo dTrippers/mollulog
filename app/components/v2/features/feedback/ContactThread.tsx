@@ -43,7 +43,7 @@ export function ContactThread({ ticket, replies }: { ticket: FeedbackTicket; rep
                 >
                   <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                     <p className={reply.isAdmin ? "text-xs font-semibold text-v2-fg-secondary" : "text-xs text-v2-fg-tertiary"}>
-                      {reply.isAdmin ? "운영팀 답변" : "내 문의"}
+                      {reply.isAdmin ? "답변" : "내 문의"}
                     </p>
                     <time dateTime={reply.createdAt} className="text-xs tabular-nums text-v2-fg-tertiary">
                       {formatInstant(reply.createdAt, { timeZone, format: "YYYY/MM/DD HH:mm" })}

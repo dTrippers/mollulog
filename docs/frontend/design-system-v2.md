@@ -36,7 +36,8 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `shadow-v2-marker` | `inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light)` (fixed: `oklch(0.2 0 0 / 80%)` and `oklch(1 0 0 / 90%)`) | same | Recognized-cell marker over a game screenshot: a dark inner ring and a light outer ring, so the marker stays visible on any screenshot. The screenshot colors do not follow the theme, so the rings are fixed. Pair with `border-2 border-v2-focus bg-v2-highlight`. |
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
 | `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |
-| `border-v2-control-border` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Control boundary for text inputs, selects, and textareas; popover ring. Not for cards, buttons, or region separation. |
+| `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |
+| `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |
 | `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.56 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
 | `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.707 0.165 254.624)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |

@@ -1228,7 +1228,7 @@ function SourceImagePreview({
       aria-label={`${number}번 스크린샷 ${image.filename} ${selected ? "선택됨" : "결과 보기"}${selectionRequiredCount > 0 ? `, ${selectionRequiredCount}개 확인 필요` : ""}`}
       className={cn(
         "relative w-24 shrink-0 cursor-pointer overflow-hidden rounded-md border bg-v2-inset text-left",
-        selected || highlighted ? "border-v2-fg" : "border-v2-divider hover:border-v2-control-border",
+        selected || highlighted ? "border-v2-fg" : "border-v2-divider hover:border-v2-control-border-strong",
         v2FocusRing,
       )}
     >

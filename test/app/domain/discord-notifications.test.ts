@@ -16,7 +16,7 @@ describe("Discord notification timing and copy", () => {
         sourceAnchor: "2026-09-01T02:00:00.000Z",
         contentName: "should not be included",
       }),
-    ).toBe("작성한 제안/문의에 운영팀 답변이 등록되었습니다.");
+    ).toBe("작성한 제안/문의에 답변이 등록되었습니다.");
     expect(
       formatDiscordNotificationMessage({
         trigger: "event-opinion-reply",

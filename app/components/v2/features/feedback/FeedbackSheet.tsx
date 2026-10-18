@@ -102,7 +102,7 @@ export function FeedbackSheet({ open, onClose, featureName, feedbackType }: Feed
               placeholder="불편했던 점이나 문제가 발생한 상황을 알려주세요"
               aria-invalid={fetcher.data?.error?.content ? true : undefined}
               className={cn(
-                "w-full min-w-0 resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm font-normal text-v2-fg placeholder:text-v2-fg-tertiary",
+                "w-full min-w-0 resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm font-normal text-v2-fg placeholder:text-v2-fg-tertiary focus:border-v2-control-border-strong",
                 v2FocusRing,
               )}
             />

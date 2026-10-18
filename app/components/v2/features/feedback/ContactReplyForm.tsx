@@ -42,7 +42,7 @@ export function ContactReplyForm() {
             required
             aria-invalid={Boolean(contentError)}
             aria-describedby={contentError ? "contact-reply-content-error" : undefined}
-            className={`${v2FocusRing} min-h-32 w-full resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
+            className={`${v2FocusRing} min-h-32 w-full resize-y rounded-md border border-v2-control-border bg-v2-surface px-3 py-2 text-sm text-v2-fg focus:border-v2-control-border-strong aria-invalid:border-v2-danger aria-invalid:ring-1 aria-invalid:ring-v2-danger`}
           />
           {contentError ? (
             <p id="contact-reply-content-error" role="alert" className="text-sm text-v2-danger">
