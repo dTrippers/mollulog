@@ -123,6 +123,7 @@ describe("contact presentation", () => {
     try {
       expect(await screen.findByRole("heading", { name: "알 수 없는 오류가 발생했어요" })).toBeTruthy();
       expect(screen.getByText("잠시 후 다시 시도해주세요.")).toBeTruthy();
+      expect(screen.getByRole("button", { name: "새로고침" })).toBeTruthy();
       expect(screen.queryByText(/PostgreSQL host=db\.internal password=secret/)).toBeNull();
     } finally {
       view.unmount();
