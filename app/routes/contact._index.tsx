@@ -1,15 +1,17 @@
-import { EnvelopeIcon } from "@heroicons/react/24/outline";
+import { BellIcon, ChatBubbleLeftRightIcon, EnvelopeIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { RouteErrorBoundary } from "~/components/features/layout";
-import { Callout, Title } from "~/components/primitives";
+import { ContactForm } from "~/components/v2/features/feedback/ContactForm";
+import { ContactHistoryPanel } from "~/components/v2/features/feedback/ContactHistoryPanel";
+import { ContactNotificationLink } from "~/components/v2/features/feedback/ContactNotificationLink";
+import { ContactRouteError } from "~/components/v2/features/feedback/ContactRouteError";
+import { MobileActionBar, PageAside, PageHeader, PageMain, PanelSheet, V2Page } from "~/components/v2/layout";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { parseFeedbackAdditional } from "~/domain/feedback";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
-import TicketForm from "./contact._components/TicketForm";
-import TicketList from "./contact._components/TicketList";
 
 type ContactActionData = {
   error?: {
@@ -91,7 +93,7 @@ export const meta: MetaFunction = () => [
   },
 ];
 
-export const ErrorBoundary = RouteErrorBoundary;
+export const ErrorBoundary = ContactRouteError;
 
 export default function Contact() {
   const loaderData = useLoaderData<typeof loader>();
@@ -100,34 +102,63 @@ export default function Contact() {
   const isSubmitting = navigation.state === "submitting" && navigation.formMethod?.toLowerCase() === "post";
 
   return (
-    <div className="max-w-3xl">
-      <Title
-        text="제안/문의"
+    <V2Page width="reading">
+      <PageHeader
+        title="제안/문의"
         description="서비스 개선을 위한 의견이나 새로운 기능 요청, 발견한 문제점이 있다면 알려주세요."
       />
-
-      {!loaderData.authenticated ? (
-        <Callout
-          Icon={EnvelopeIcon}
-          title="문의 등록에는 로그인이 필요해요."
-          description={
-            <>
-              <p>계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
-              <p>
-                <a className="underline underline-offset-4 hover:text-foreground" href="mailto:contact@mollulog.net">
+      <PageMain>
+        {loaderData.authenticated ? (
+          <ContactForm errors={actionData?.error} values={actionData?.values} submitting={isSubmitting} />
+        ) : (
+          <section className="rounded-lg bg-v2-surface p-v2-block-p">
+            <StatusNotice tone="neutral">
+              <div className="flex flex-col gap-2">
+                <p className="font-medium">문의 등록에는 로그인이 필요해요.</p>
+                <p className="text-sm text-v2-fg-secondary">계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
+                <a
+                  className="inline-flex min-h-v2-control-min items-center gap-2 rounded-md underline underline-offset-4 hover:text-v2-fg"
+                  href="mailto:contact@mollulog.net"
+                >
+                  <EnvelopeIcon className="size-4" aria-hidden="true" />
                   contact@mollulog.net
                 </a>
-              </p>
-            </>
-          }
-          tone="info"
-        />
-      ) : (
-        <div className="flex flex-col gap-8">
-          <TicketList tickets={loaderData.tickets} />
-          <TicketForm errors={actionData?.error} values={actionData?.values} submitting={isSubmitting} />
-        </div>
-      )}
-    </div>
+              </div>
+            </StatusNotice>
+          </section>
+        )}
+      </PageMain>
+      {loaderData.authenticated ? (
+        <>
+          <PageAside>
+            <PanelSheet panelId="contact-history" title="내 문의 내역" Icon={ChatBubbleLeftRightIcon}>
+              <ContactHistoryPanel tickets={loaderData.tickets} />
+            </PanelSheet>
+            <div className="flex justify-end">
+              <ContactNotificationLink />
+            </div>
+          </PageAside>
+          <MobileActionBar
+            links={[
+              {
+                key: "notifications",
+                title: "답변 알림 설정",
+                Icon: BellIcon,
+                to: "/notifications",
+                transition: "forward",
+              },
+            ]}
+            panels={[
+              {
+                panelId: "contact-history",
+                title: "내 문의 내역",
+                shortTitle: "내 문의",
+                Icon: ChatBubbleLeftRightIcon,
+              },
+            ]}
+          />
+        </>
+      ) : null}
+    </V2Page>
   );
 }
