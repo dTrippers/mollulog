@@ -48,7 +48,15 @@
       "name": "API_READ_RATE_LIMITER",
       "namespace_id": "2026101001",
       "simple": { "limit": 60, "period": 60 }
+    },
+    {
+      "name": "QUESTION_RATE_LIMITER",
+      "namespace_id": "2026101901",
+      "simple": { "limit": 10, "period": 60 }
     }
+  ],
+  "services": [
+    { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
   ],
   "ai": { "binding": "AI" },
   "r2_buckets": [
@@ -109,6 +117,16 @@
       "hyperdrive": [
         { "binding": "HYPERDRIVE", "id": "0531527296514c808ba518ad5cbaa3d2" }
       ],
+      "ratelimits": [
+        {
+          "name": "QUESTION_RATE_LIMITER",
+          "namespace_id": "2026101902",
+          "simple": { "limit": 10, "period": 60 }
+        }
+      ],
+      "services": [
+        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
+      ],
       "ai": { "binding": "AI" },
       "r2_buckets": [
         { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
@@ -163,7 +181,15 @@
           "name": "API_READ_RATE_LIMITER",
           "namespace_id": "2026101002",
           "simple": { "limit": 60, "period": 60 }
+        },
+        {
+          "name": "QUESTION_RATE_LIMITER",
+          "namespace_id": "2026101903",
+          "simple": { "limit": 10, "period": 60 }
         }
+      ],
+      "services": [
+        { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
       ],
       "ai": { "binding": "AI" },
       "r2_buckets": [

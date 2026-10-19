@@ -57,6 +57,69 @@ export async function getSenseiById(
   );
 }
 
+export async function getQuestionMemberDataConsentAt(
+  env: Env,
+  id: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Date | null> {
+  return withIdentityDatabase(
+    env,
+    "question_member_data_consent_by_sensei",
+    async (db) => {
+      const [row] = await db
+        .select({ questionMemberDataConsentedAt: pgSenseisTable.questionMemberDataConsentedAt })
+        .from(pgSenseisTable)
+        .where(eq(pgSenseisTable.id, id))
+        .limit(1);
+      if (!row) throw new Error("Sensei does not exist.");
+      return row.questionMemberDataConsentedAt;
+    },
+    options,
+  );
+}
+
+export async function consentToQuestionMemberData(
+  env: Env,
+  id: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<Date> {
+  const consentedAt = new Date();
+  await withIdentityDatabase(
+    env,
+    "consent_to_question_member_data",
+    async (db) => {
+      const [row] = await db
+        .update(pgSenseisTable)
+        .set({ questionMemberDataConsentedAt: consentedAt, updatedAt: consentedAt })
+        .where(eq(pgSenseisTable.id, id))
+        .returning({ id: pgSenseisTable.id });
+      if (!row) throw new Error("Sensei does not exist.");
+    },
+    options,
+  );
+  return consentedAt;
+}
+
+export async function revokeQuestionMemberDataConsent(
+  env: Env,
+  id: number,
+  options: IdentityRepositoryOptions = {},
+): Promise<void> {
+  await withIdentityDatabase(
+    env,
+    "revoke_question_member_data_consent",
+    async (db) => {
+      const [row] = await db
+        .update(pgSenseisTable)
+        .set({ questionMemberDataConsentedAt: null, updatedAt: new Date() })
+        .where(eq(pgSenseisTable.id, id))
+        .returning({ id: pgSenseisTable.id });
+      if (!row) throw new Error("Sensei does not exist.");
+    },
+    options,
+  );
+}
+
 export async function getSenseiByUsername(
   env: Env,
   username: string,

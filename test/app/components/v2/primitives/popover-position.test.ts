@@ -25,6 +25,28 @@ describe("getPopoverPosition", () => {
     expect(position).toEqual({ top: 392, left: 300, placement: "above" });
   });
 
+  it("stays above when requested even if there is room below", () => {
+    const position = getPopoverPosition({
+      anchor: { top: 300, bottom: 340, left: 300 },
+      panel,
+      viewport,
+      placement: "above",
+    });
+
+    expect(position).toEqual({ top: 92, left: 300, placement: "above" });
+  });
+
+  it("clamps a requested above placement to the viewport margin", () => {
+    const position = getPopoverPosition({
+      anchor: { top: 60, bottom: 100, left: 300 },
+      panel,
+      viewport,
+      placement: "above",
+    });
+
+    expect(position).toEqual({ top: 8, left: 300, placement: "above" });
+  });
+
   it("stays below when neither side fits, if below has more room", () => {
     const position = getPopoverPosition({
       anchor: { top: 60, bottom: 640, left: 300 },

@@ -18,6 +18,7 @@ import {
   MegaphoneIcon as MegaphoneIconOutline,
   QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
+  SparklesIcon as SparklesIconOutline,
   TicketIcon as TicketIconOutline,
   UserCircleIcon as UserCircleIconOutline,
   UserIcon as UserIconOutline,
@@ -41,6 +42,7 @@ import {
   MegaphoneIcon as MegaphoneIconSolid,
   QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
+  SparklesIcon as SparklesIconSolid,
   TicketIcon as TicketIconSolid,
   UserCircleIcon as UserCircleIconSolid,
   UserIcon as UserIconSolid,
@@ -87,6 +89,7 @@ export type NavigationItem = {
   badgeLabel?: string;
   disabled?: boolean;
   requiresSignIn?: boolean;
+  requiresAdmin?: boolean;
   mobileNavigationId?: MobileNavigationId;
   mobileLabel?: string;
   group?: NavigationGroupId;
@@ -105,6 +108,7 @@ export type SearchableMenuItem = {
   name: string;
   to: string;
   requiresSignIn?: boolean;
+  requiresAdmin?: boolean;
 };
 
 export type NavigationCatalogOptions = {
@@ -113,6 +117,7 @@ export type NavigationCatalogOptions = {
   hasOngoingRaid: boolean;
   hasUnconsumedCoupons: boolean;
   isSignedIn: boolean;
+  isAdmin?: boolean;
   currentUsername?: string | null;
   hasRecentNews?: boolean;
   hasUnreadFeedbackReplies?: boolean;
@@ -205,6 +210,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return pathname === "/furniture" || pathname.startsWith("/furniture/");
     case "coupons":
       return pathname.startsWith("/coupons");
+    case "ai-question":
+      return pathname === "/ask" || pathname.startsWith("/ask/");
     case "integrated-planner":
       return pathname.startsWith("/planner");
     case "pyroxene-planner":
@@ -390,6 +397,18 @@ export function getNavigationCatalog({
       SolidIcon: TicketIconSolid,
       isActive: itemIsActive("coupons", pathname, currentUsername),
       showRedDot: hasUnconsumedCoupons,
+    },
+    {
+      menuId: "ai-question",
+      group: "game",
+      surfaces: ["desktop", "more", "search"],
+      to: "/ask",
+      name: "AI 질문",
+      description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
+      requiresAdmin: true,
+      OutlineIcon: SparklesIconOutline,
+      SolidIcon: SparklesIconSolid,
+      isActive: itemIsActive("ai-question", pathname, currentUsername),
     },
     {
       menuId: "integrated-planner",
@@ -714,7 +733,10 @@ export type DesktopNavigation = {
 
 export function getDesktopNavigation(options: NavigationCatalogOptions): DesktopNavigation {
   const catalog = getNavigationCatalog(options).filter(
-    (item) => item.surfaces.includes("desktop") && (!item.requiresSignIn || options.isSignedIn),
+    (item) =>
+      item.surfaces.includes("desktop") &&
+      (!item.requiresSignIn || options.isSignedIn) &&
+      (!item.requiresAdmin || options.isAdmin),
   );
   const homeItem = catalog.find((item) => item.menuId === "home");
   if (!homeItem) throw new Error("Navigation catalog is missing the home item");
@@ -731,7 +753,8 @@ export function getDesktopNavigation(options: NavigationCatalogOptions): Desktop
 
 export function getNavigationFavoriteItems(options: NavigationCatalogOptions): NavigationItem[] {
   return getNavigationCatalog(options).filter(
-    (item) => item.favoriteId && (!item.requiresSignIn || options.isSignedIn),
+    (item) =>
+      item.favoriteId && (!item.requiresSignIn || options.isSignedIn) && (!item.requiresAdmin || options.isAdmin),
   );
 }
 
@@ -798,7 +821,10 @@ export function getMobileNavigationOptions(options: NavigationCatalogOptions): N
 
 export function getMoreNavigationItems(options: NavigationCatalogOptions): NavigationItem[] {
   return getNavigationCatalog(options).filter(
-    (item) => item.surfaces.includes("more") && (!item.requiresSignIn || options.isSignedIn),
+    (item) =>
+      item.surfaces.includes("more") &&
+      (!item.requiresSignIn || options.isSignedIn) &&
+      (!item.requiresAdmin || options.isAdmin),
   );
 }
 
@@ -820,10 +846,12 @@ export function getMoreNavigationSections(options: NavigationCatalogOptions): Mo
 export function getSearchableMenuItems({
   currentUsername = null,
   isSignedIn = currentUsername !== null,
+  isAdmin = false,
   menuBadgeOverrides,
 }: {
   currentUsername?: string | null;
   isSignedIn?: boolean;
+  isAdmin?: boolean;
   menuBadgeOverrides?: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
 } = {}): SearchableMenuItem[] {
   return getNavigationCatalog({
@@ -832,10 +860,16 @@ export function getSearchableMenuItems({
     hasOngoingRaid: false,
     hasUnconsumedCoupons: false,
     isSignedIn,
+    isAdmin,
     currentUsername,
     menuBadgeOverrides,
   })
-    .filter((item) => item.surfaces.includes("search") && (isSignedIn || !item.requiresSignIn))
+    .filter(
+      (item) =>
+        item.surfaces.includes("search") &&
+        (isSignedIn || !item.requiresSignIn) &&
+        (isAdmin || !item.requiresAdmin),
+    )
     .sort(
       (left, right) =>
         (navigationSearchGroupRank.get(left.group) ?? Number.POSITIVE_INFINITY) -
@@ -846,12 +880,16 @@ export function getSearchableMenuItems({
       name: item.name,
       to: item.to,
       requiresSignIn: item.requiresSignIn,
+      requiresAdmin: item.requiresAdmin,
     }));
 }
 
 export function getAccountNavigationActions(options: NavigationCatalogOptions): NavigationItem[] {
   return getNavigationCatalog(options).filter(
-    (item) => item.surfaces.includes("account") && (!item.requiresSignIn || options.isSignedIn),
+    (item) =>
+      item.surfaces.includes("account") &&
+      (!item.requiresSignIn || options.isSignedIn) &&
+      (!item.requiresAdmin || options.isAdmin),
   );
 }
 

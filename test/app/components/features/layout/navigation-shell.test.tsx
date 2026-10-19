@@ -19,6 +19,7 @@ function renderNavigation(
         element: (
           <NavigationBar
             currentUsername={username}
+            isAdmin={false}
             currentProfileStudentId={null}
             favoriteNavigationIds={favoriteNavigationIds}
             mobileNavigationIds={["feed", "students"]}
@@ -50,6 +51,7 @@ function renderProfileRootNavigation(pathname: string): string {
       <>
         <NavigationBar
           currentUsername="hellodhlyn"
+          isAdmin={false}
           currentProfileStudentId={null}
           favoriteNavigationIds={[]}
           mobileNavigationIds={["feed", "students"]}

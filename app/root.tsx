@@ -64,6 +64,7 @@ const reportedServerRouteErrorKeys = new Set<string>();
 
 export type RootOutletContext = {
   currentUsername: string | null;
+  isAdmin: boolean;
   darkMode: boolean;
   setDarkMode: (fn: (prev: boolean) => boolean) => void;
   mobileNavigationIds: MobileNavigationPair;
@@ -95,6 +96,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     return {
       currentUsername: sensei?.username ?? null,
+      isAdmin: sensei?.role === "admin",
       currentProfileStudentId: sensei?.profileStudentId ?? null,
       darkMode: preference.darkMode ?? true,
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
@@ -219,6 +221,7 @@ export default function App() {
   const loaderData = useLoaderData<typeof loader>();
   const {
     currentUsername,
+    isAdmin,
     currentProfileStudentId,
     favoriteNavigationIds,
     mobileNavigationIds: initialMobileNavigationIds,
@@ -347,6 +350,7 @@ export default function App() {
         <div className="flex flex-col lg:flex-row h-dvh">
           <NavigationBar
             currentUsername={currentUsername}
+            isAdmin={isAdmin}
             currentProfileStudentId={currentProfileStudentId}
             favoriteNavigationIds={favoriteNavigationIds}
             mobileNavigationIds={mobileNavigationIds}
@@ -380,6 +384,7 @@ export default function App() {
                         mobileNavigationIds,
                         setMobileNavigationIds,
                         currentUsername,
+                        isAdmin,
                         navigationBarContents,
                       } satisfies RootOutletContext
                     }

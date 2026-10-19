@@ -33,6 +33,10 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `ring-v2-popover-divider`, `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Quick-view outline and action divider |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
+| `text-v2-info` | `oklch(0.546 0.215 262.881)` | `oklch(0.809 0.105 251.813)` | Information status text; separate semantic token with the link color |
+| `bg-v2-ai-gradient` | `linear-gradient(135deg, oklch(0.623 0.214 259.815), oklch(0.606 0.25 292.717))` | `linear-gradient(135deg, oklch(0.707 0.165 254.624), oklch(0.702 0.183 293.541))` | AI mark, input focus glow, and working halo only |
+| `shadow-v2-ai-glow` | `0 0 1.25rem oklch(0.606 0.25 292.717 / 16%)` | `0 0 1.25rem oklch(0.702 0.183 293.541 / 24%)` | AI input focus glow |
+| `animate-v2-ai-working` | `v2-ai-working 2s ease-in-out infinite` | same | AI working halo; stopped by reduced motion |
 | `shadow-v2-marker` | `inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light)` (fixed: `oklch(0.2 0 0 / 80%)` and `oklch(1 0 0 / 90%)`) | same | Recognized-cell marker over a game screenshot: a dark inner ring and a light outer ring, so the marker stays visible on any screenshot. The screenshot colors do not follow the theme, so the rings are fixed. Pair with `border-2 border-v2-focus bg-v2-highlight`. |
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
 | `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |

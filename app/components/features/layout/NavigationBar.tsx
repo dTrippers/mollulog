@@ -50,6 +50,7 @@ import { SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
 
 type NavigationBarProps = {
   currentUsername: string | null;
+  isAdmin: boolean;
   currentProfileStudentId: string | null;
   favoriteNavigationIds: string[];
   mobileNavigationIds: MobileNavigationPair;
@@ -313,6 +314,7 @@ function useNavigationFavorites(initialFavoriteIds: string[]) {
 
 export default function NavigationBar({
   currentUsername,
+  isAdmin,
   currentProfileStudentId,
   favoriteNavigationIds,
   mobileNavigationIds,
@@ -341,6 +343,7 @@ export default function NavigationBar({
     hasOngoingRaid,
     hasUnconsumedCoupons,
     isSignedIn: currentUsername !== null,
+    isAdmin,
     currentUsername,
     hasRecentNews,
     hasUnreadFeedbackReplies,

@@ -284,6 +284,24 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   }
 }
 
+@keyframes v2-ai-working {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-v2-ai-working {
+    animation: none;
+  }
+}
+
 /*
   ---break---
 */
@@ -471,6 +489,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
   --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
+  --color-v2-info: var(--v2-info);
+  --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
+  --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
+  --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
 }
 
 /*
@@ -522,6 +544,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-popover-divider: rgb(0 0 0 / 18%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: oklch(0.623 0.214 259.815 / 10%);
+  --v2-ai-from: oklch(0.623 0.214 259.815);
+  --v2-ai-to: oklch(0.606 0.25 292.717);
+  --v2-info: oklch(0.546 0.215 262.881);
+  --v2-ai-glow: oklch(0.606 0.25 292.717 / 16%);
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
   --v2-marker-shade: oklch(0.2 0 0 / 80%);
   --v2-marker-light: oklch(1 0 0 / 90%);
@@ -572,6 +598,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-popover-divider: rgb(255 255 255 / 22%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: oklch(0.707 0.165 254.624 / 16%);
+  --v2-ai-from: oklch(0.707 0.165 254.624);
+  --v2-ai-to: oklch(0.702 0.183 293.541);
+  --v2-info: oklch(0.809 0.105 251.813);
+  --v2-ai-glow: oklch(0.702 0.183 293.541 / 24%);
 }
 
 /*
