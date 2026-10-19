@@ -81,6 +81,7 @@ export const pgSenseisTable = pgTable(
     role: text().$type<SenseiRole>().notNull().default("guest"),
     profileVisibility: text("profile_visibility").$type<ProfileVisibility>().notNull().default("public"),
     growthVisibility: boolean("growth_visibility").notNull().default(false),
+    questionMemberDataConsentedAt: timestamptz("question_member_data_consented_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
     hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(false),

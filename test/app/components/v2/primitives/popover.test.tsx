@@ -8,16 +8,52 @@ import { join } from "node:path";
 import { useRef } from "react";
 import { Popover } from "~/components/v2/primitives/Popover";
 
-function Harness({ open, onClose }: { open: boolean; onClose: () => void }) {
+function Harness({
+  open,
+  onClose,
+  placement = "auto",
+}: {
+  open: boolean;
+  onClose: () => void;
+  placement?: "auto" | "above";
+}) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
     <>
       <button ref={triggerRef} type="button">
         trigger
       </button>
-      <Popover open={open} label="테스트" onClose={onClose} returnFocusRef={triggerRef}>
+      <Popover open={open} label="테스트" onClose={onClose} returnFocusRef={triggerRef} placement={placement}>
         <button type="button">first</button>
         <button type="button">second</button>
+      </Popover>
+    </>
+  );
+}
+
+function EmptyHarness({
+  open,
+  onClose,
+  focusPanelIfNoFocusable = false,
+}: {
+  open: boolean;
+  onClose: () => void;
+  focusPanelIfNoFocusable?: boolean;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  return (
+    <>
+      <button ref={triggerRef} type="button">
+        trigger
+      </button>
+      <Popover
+        open={open}
+        label="테스트"
+        onClose={onClose}
+        returnFocusRef={triggerRef}
+        focusPanelIfNoFocusable={focusPanelIfNoFocusable}
+      >
+        <p>no controls</p>
       </Popover>
     </>
   );
@@ -29,6 +65,22 @@ describe("Popover focus", () => {
     rerender(<Harness open onClose={() => undefined} />);
 
     expect(document.activeElement).toBe(screen.getByRole("button", { name: "first" }));
+  });
+
+  it("focuses the panel when opted in and there is no enabled control", () => {
+    const { rerender } = render(<EmptyHarness open={false} onClose={() => undefined} focusPanelIfNoFocusable />);
+    rerender(<EmptyHarness open onClose={() => undefined} focusPanelIfNoFocusable />);
+
+    const panel = screen.getByRole("dialog", { name: "테스트" });
+    expect((panel as HTMLElement).tabIndex).toBe(-1);
+    expect(document.activeElement).toBe(panel);
+  });
+
+  it("does not focus an empty panel unless the fallback is opted in", () => {
+    const { rerender } = render(<EmptyHarness open={false} onClose={() => undefined} />);
+    rerender(<EmptyHarness open onClose={() => undefined} />);
+
+    expect(document.activeElement).not.toBe(screen.getByRole("dialog", { name: "테스트" }));
   });
 
   it("keeps focus where the user moved it when the parent rerenders with a new onClose", () => {
@@ -93,6 +145,28 @@ describe("Popover placement", () => {
       const dialog = screen.getByRole("dialog", { name: "테스트" }) as HTMLElement;
       expect(dialog.style.top).toBe("392px");
       expect(dialog.style.left).toBe("20px");
+    } finally {
+      height.mockRestore();
+      window.innerHeight = originalHeight;
+    }
+  });
+
+  it("honors forced above placement even when the panel fits below", () => {
+    const originalHeight = window.innerHeight;
+    window.innerHeight = 700;
+    const height = jest.spyOn(HTMLElement.prototype, "offsetHeight", "get").mockReturnValue(200);
+    try {
+      const { rerender } = render(<Harness open={false} onClose={() => undefined} placement="above" />);
+      const trigger = screen.getByRole("button", { name: "trigger" });
+      Object.defineProperty(trigger, "getBoundingClientRect", {
+        value: () => ({ top: 300, bottom: 340, left: 20, right: 60, width: 40, height: 40 }),
+      });
+
+      rerender(<Harness open onClose={() => undefined} placement="above" />);
+
+      const dialog = screen.getByRole("dialog", { name: "테스트" }) as HTMLElement;
+      expect(dialog.getAttribute("data-placement")).toBe("above");
+      expect(dialog.style.top).toBe("92px");
     } finally {
       height.mockRestore();
       window.innerHeight = originalHeight;

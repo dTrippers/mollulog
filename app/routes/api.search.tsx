@@ -62,8 +62,12 @@ function isSearchableTimelineContent(
   return SEARCHABLE_TIMELINE_CONTENT_TYPES.includes(content.contentType as SearchableTimelineContentType);
 }
 
-function getMenuSearchIndexEntries(username?: string | null): SearchIndexEntry[] {
-  return getSearchableMenuItems({ currentUsername: username ?? null, isSignedIn: Boolean(username) }).map((item) => ({
+function getMenuSearchIndexEntries(username?: string | null, isAdmin = false): SearchIndexEntry[] {
+  return getSearchableMenuItems({
+    currentUsername: username ?? null,
+    isSignedIn: Boolean(username),
+    isAdmin,
+  }).map((item) => ({
     candidate: item.name,
     result: { type: "menu", name: item.name, to: item.to },
   }));
@@ -179,6 +183,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs): Promise<
 
   const { env, ctx } = context.cloudflare;
   const [index, sensei] = await Promise.all([getSearchIndex(env, ctx), getActiveSensei(env, request)]);
-  const menuEntries = getMenuSearchIndexEntries(sensei?.username);
+  const menuEntries = getMenuSearchIndexEntries(sensei?.username, sensei?.role === "admin");
   return { results: searchIndex([...menuEntries, ...index], q) };
 };

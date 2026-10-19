@@ -7,19 +7,25 @@ export function getPopoverPosition({
   anchor,
   panel,
   viewport,
+  placement: requestedPlacement = "auto",
   gap = 8,
   margin = 8,
 }: {
   anchor: { top: number; bottom: number; left: number };
   panel: { width: number; height: number };
   viewport: { width: number; height: number };
+  placement?: "auto" | "above";
   gap?: number;
   margin?: number;
 }): PopoverPosition {
   const roomBelow = viewport.height - margin - (anchor.bottom + gap);
   const roomAbove = anchor.top - gap - margin;
-  let placement: PopoverPlacement = "below";
-  if (panel.height > roomBelow && (panel.height <= roomAbove || roomAbove > roomBelow)) {
+  let placement: PopoverPlacement = requestedPlacement === "above" ? "above" : "below";
+  if (
+    requestedPlacement === "auto" &&
+    panel.height > roomBelow &&
+    (panel.height <= roomAbove || roomAbove > roomBelow)
+  ) {
     placement = "above";
   }
   const rawTop = placement === "below" ? anchor.bottom + gap : anchor.top - gap - panel.height;

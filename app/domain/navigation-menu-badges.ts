@@ -11,6 +11,7 @@ export const NAVIGATION_MENU_IDS = [
   "main-story",
   "furniture-catalog",
   "coupons",
+  "ai-question",
   "integrated-planner",
   "pyroxene-planner",
   "ap-planner",

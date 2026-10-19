@@ -22,6 +22,7 @@ import {
   getPostgresNestedCommunityComments,
   getPostgresRecentStudentGradingsPage,
   getPostgresUserParties,
+  getPostgresUserPartiesByUserId,
   pinPostgresContentComment,
   setPostgresCommunityPostLike,
   unpinPostgresContentComment,
@@ -73,6 +74,7 @@ function createClient(
                       "guest",
                       author.profileVisibility,
                       false,
+                      null,
                       new Date("2026-08-01T00:00:00.000Z"),
                       new Date("2026-08-01T00:00:00.000Z"),
                       false,
@@ -841,5 +843,17 @@ describe("PostgreSQL community repository", () => {
     const postQuery = query.mock.calls.find(([config]) => config.text.includes('from "community_posts"'))?.[0];
     expect(postQuery?.text).toContain('"user_id"');
     expect(query.mock.calls.some(([config]) => config.text.includes('inner join "senseis"'))).toBe(true);
+  });
+
+  it("loads private parties by immutable account id after a username change and reuse", async () => {
+    const { client, query } = createClient(() => []);
+
+    await getPostgresUserPartiesByUserId(env, 7, true, { createClient: () => client });
+
+    const [queryConfig, values] =
+      query.mock.calls.find(([config]) => config.text.includes('from "community_posts"')) ?? [];
+    expect(queryConfig?.text).toContain('"senseis"."id" =');
+    expect(queryConfig?.text).not.toMatch(/"senseis"\."username"\s*=/);
+    expect(values).toContain(7);
   });
 });

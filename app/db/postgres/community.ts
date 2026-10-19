@@ -1665,6 +1665,36 @@ export async function getPostgresUserParties(
   return rows.map((row) => toParty(row.community_posts));
 }
 
+export async function getPostgresUserPartiesByUserId(
+  env: Env,
+  userId: number,
+  includePrivate = false,
+  options: PostgresCommunityOptions = {},
+): Promise<Party[]> {
+  const rows = await withCommunityDatabase(
+    env,
+    "user_parties_by_user_id",
+    (db) =>
+      db
+        .select()
+        .from(pgCommunityPostsTable)
+        .innerJoin(pgSenseisTable, eq(pgCommunityPostsTable.userId, pgSenseisTable.id))
+        .where(
+          and(
+            eq(pgCommunityPostsTable.postType, "guide"),
+            eq(pgSenseisTable.id, userId),
+            includePrivate ? undefined : communityAuthorVisiblePredicate(pgCommunityPostsTable.userId),
+            includePrivate ? undefined : eq(pgSenseisTable.profileVisibility, "public"),
+            includePrivate
+              ? undefined
+              : inArray(pgCommunityPostsTable.visibility, ["public", "unlisted"] as CommunityVisibility[]),
+          ),
+        ),
+    options,
+  );
+  return rows.map((row) => toParty(row.community_posts));
+}
+
 function toParty(row: CommunityPostRow, author?: CommunityAuthor): Party {
   const blocks = toBlocks(row.blocks);
   const info = blocks.find((block) => block.type === "party_info") as

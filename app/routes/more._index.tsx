@@ -61,6 +61,7 @@ export default function MoreIndexPage() {
     mobileNavigationIds,
     setMobileNavigationIds,
     navigationBarContents,
+    isAdmin,
   } = useOutletContext<RootOutletContext>();
   const submit = useSubmit();
   const { showSignIn } = useSignIn();
@@ -77,6 +78,7 @@ export default function MoreIndexPage() {
     hasUnreadFeedbackReplies: navigationBarContents.hasUnreadFeedbackReplies,
     menuBadgeOverrides: navigationBarContents.menuBadgeOverrides,
     isSignedIn: currentUser !== null,
+    isAdmin,
     currentUsername: currentUser?.username ?? null,
   };
   const menuSections = getMoreNavigationSections(navigationOptions).map((section) => ({

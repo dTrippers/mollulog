@@ -26,6 +26,7 @@ const signedInOptions = {
   isSignedIn: true,
   currentUsername: "sensei",
 };
+const adminOptions = { ...signedInOptions, isAdmin: true };
 
 describe("global navigation catalog", () => {
   it("keeps the account trigger inactive on the owner's profile root but active on account routes", () => {
@@ -50,6 +51,7 @@ describe("global navigation catalog", () => {
     expect(catalogIds).toEqual([...NAVIGATION_MENU_IDS].sort());
     expect(namesById).toMatchObject({
       "integrated-planner": "통합 플래너",
+      "ai-question": "AI 질문",
       "ap-planner": "AP 플래너",
       "resource-planner": "재화 플래너",
       "farming-calculator": "파밍 계산기",
@@ -71,6 +73,59 @@ describe("global navigation catalog", () => {
     });
     expect(items.map((item) => item.to)).toEqual(
       expect.arrayContaining(["/planner", "/utils/pyroxene", "/utils/event-shop"]),
+    );
+  });
+
+  it("places AI questions last in game information and omits them from the mobile bottom bar", () => {
+    const catalog = getNavigationCatalog({ ...guestOptions, pathname: "/ask" });
+    const item = catalog.find(({ menuId }) => menuId === "ai-question");
+    const mobile = getMobileNavigationItems(guestOptions);
+
+    expect(item).toMatchObject({
+      to: "/ask",
+      name: "AI 질문",
+      description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
+      group: "game",
+      surfaces: ["desktop", "more", "search"],
+      requiresAdmin: true,
+      isActive: true,
+    });
+    expect(catalog.filter(({ group }) => group === "game").at(-1)).toBe(item);
+    expect(mobile).not.toContainEqual(expect.objectContaining({ menuId: "ai-question" }));
+  });
+
+  it("shows AI questions on desktop, more, and search only to admins", () => {
+    for (const options of [guestOptions, signedInOptions]) {
+      expect(
+        getDesktopNavigation(options)
+          .groups.flatMap(({ items }) => items)
+          .some(({ to }) => to === "/ask"),
+      ).toBe(false);
+      expect(
+        getMoreNavigationSections(options)
+          .flatMap(({ items }) => items)
+          .some(({ to }) => to === "/ask"),
+      ).toBe(false);
+      expect(
+        getSearchableMenuItems({
+          currentUsername: options.isSignedIn ? "sensei" : null,
+          isSignedIn: options.isSignedIn,
+        }).some(({ to }) => to === "/ask"),
+      ).toBe(false);
+    }
+
+    expect(
+      getDesktopNavigation(adminOptions)
+        .groups.flatMap(({ items }) => items)
+        .some(({ to }) => to === "/ask"),
+    ).toBe(true);
+    expect(
+      getMoreNavigationSections(adminOptions)
+        .flatMap(({ items }) => items)
+        .some(({ to }) => to === "/ask"),
+    ).toBe(true);
+    expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true }).some(({ to }) => to === "/ask")).toBe(
+      true,
     );
   });
 
@@ -165,6 +220,9 @@ describe("global navigation catalog", () => {
   it("keeps every existing game and planner destination in its new group", () => {
     const desktop = getDesktopNavigation(guestOptions);
     const itemsByGroup = Object.fromEntries(desktop.groups.map(({ id, items }) => [id, items.map(({ to }) => to)]));
+    const adminGameDestinations = getDesktopNavigation(adminOptions)
+      .groups.find(({ id }) => id === "game")
+      ?.items.map(({ to }) => to);
 
     expect(itemsByGroup.game).toEqual([
       "/futures",
@@ -175,6 +233,7 @@ describe("global navigation catalog", () => {
       "/furniture",
       "/coupons",
     ]);
+    expect(adminGameDestinations).toEqual([...itemsByGroup.game, "/ask"]);
     expect(itemsByGroup.planner).toEqual([
       "/planner",
       "/utils/pyroxene",
@@ -242,9 +301,10 @@ describe("global navigation catalog", () => {
     ]);
   });
 
-  it("projects the exact More groups and keeps coupons visible to guests", () => {
+  it("projects the More groups and keeps AI questions hidden from non-admins", () => {
     const guestSections = getMoreNavigationSections(guestOptions);
     const signedInSections = getMoreNavigationSections(signedInOptions);
+    const adminSections = getMoreNavigationSections(adminOptions);
 
     expect(guestSections.map(({ name }) => name)).toEqual([
       "게임 정보",
@@ -262,7 +322,9 @@ describe("global navigation catalog", () => {
       "가구 도감",
       "쿠폰",
     ]);
-    expect(guestSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/coupons");
+    expect(guestSections.flatMap(({ items }) => items).some(({ to }) => to === "/ask")).toBe(false);
+    expect(signedInSections.flatMap(({ items }) => items).some(({ to }) => to === "/ask")).toBe(false);
+    expect(adminSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/ask");
     expect(signedInSections.map(({ name }) => name)).toEqual([
       "게임 정보",
       "플래너·계산기",
@@ -330,8 +392,12 @@ describe("global navigation catalog", () => {
   it("respects sign-in requirements in shared search and adds personal routes only for a signed-in user", () => {
     const guestItems = getSearchableMenuItems();
     const signedInItems = getSearchableMenuItems({ currentUsername: "sensei" });
+    const adminItems = getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true });
 
     expect(guestItems.some(({ requiresSignIn }) => requiresSignIn)).toBe(false);
+    expect(guestItems.some(({ to }) => to === "/ask")).toBe(false);
+    expect(signedInItems.some(({ to }) => to === "/ask")).toBe(false);
+    expect(adminItems).toContainEqual(expect.objectContaining({ id: "ai-question", to: "/ask", requiresAdmin: true }));
     expect(guestItems.some(({ to }) => to === "/unauthorized")).toBe(false);
     expect(guestItems).toEqual(expect.arrayContaining([expect.objectContaining({ name: "이벤트", to: "/events" })]));
     expect(signedInItems).toEqual(

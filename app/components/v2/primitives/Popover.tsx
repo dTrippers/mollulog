@@ -12,6 +12,10 @@ export type PopoverProps = {
   // The element the panel is placed against. Defaults to the trigger. A caller whose trigger is only part of a larger
   // block passes the block, so the panel clears the whole block. A press inside it does not count as outside.
   anchorRef?: RefObject<HTMLElement | null>;
+  // `auto` preserves the usual flip behavior; `above` always places the panel above the anchor.
+  placement?: "auto" | "above";
+  // When enabled, focus the panel if it contains no enabled button or link.
+  focusPanelIfNoFocusable?: boolean;
   className?: string;
   children: ReactNode;
 };
@@ -30,7 +34,17 @@ const hiddenPanelMotion =
 // the trigger on resize and scroll. Escape and an outside pointer press close it, and focus returns to the trigger on
 // Escape. It fades and settles from the trigger side. Motion is off for reduced-motion users, and the exit finishes
 // before the panel unmounts.
-export function Popover({ open, label, onClose, returnFocusRef, anchorRef, className, children }: PopoverProps) {
+export function Popover({
+  open,
+  label,
+  onClose,
+  returnFocusRef,
+  anchorRef,
+  placement: placementMode = "auto",
+  focusPanelIfNoFocusable = false,
+  className,
+  children,
+}: PopoverProps) {
   const placementRef = anchorRef ?? returnFocusRef;
   const panelRef = useRef<HTMLDivElement | null>(null);
   // The transition mounts the panel one commit after `open` turns true, so focus waits for the node itself.
@@ -51,9 +65,14 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
   // Focus moves to the first control once, when the panel mounts for an open popover. Later rerenders do not move it.
   useEffect(() => {
     if (open && panelNode) {
-      panelNode.querySelector<HTMLElement>("button:not(:disabled), [href]")?.focus();
+      const focusableControl = panelNode.querySelector<HTMLElement>("button:not(:disabled), [href]");
+      if (focusableControl) {
+        focusableControl.focus();
+      } else if (focusPanelIfNoFocusable) {
+        panelNode.focus();
+      }
     }
-  }, [open, panelNode]);
+  }, [open, panelNode, focusPanelIfNoFocusable]);
 
   // Placed before the first paint, and again when the viewport or any scroll container moves the trigger.
   useIsomorphicLayoutEffect(() => {
@@ -69,6 +88,7 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
         anchor,
         panel: { width: panelNode.offsetWidth, height: panelNode.offsetHeight },
         viewport: { width: window.innerWidth, height: window.innerHeight },
+        placement: placementMode,
       });
       setPosition((prev) =>
         prev && prev.top === next.top && prev.left === next.left && prev.placement === next.placement ? prev : next,
@@ -88,7 +108,7 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
       window.removeEventListener("scroll", place, true);
       observer?.disconnect();
     };
-  }, [open, panelNode, placementRef]);
+  }, [open, panelNode, placementMode, placementRef]);
 
   useEffect(() => {
     if (!open) {
@@ -136,10 +156,12 @@ export function Popover({ open, label, onClose, returnFocusRef, anchorRef, class
           ref={setPanelElement}
           role="dialog"
           aria-label={label}
+          tabIndex={-1}
           data-placement={placement}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
             "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",
+            "focus:outline-none",
             placement === "above" ? "origin-bottom-left" : "origin-top-left",
             className,
           )}

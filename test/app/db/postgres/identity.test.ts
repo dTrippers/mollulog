@@ -24,6 +24,7 @@ const row: typeof pgSenseisTable.$inferSelect = {
   role: "guest",
   profileVisibility: "private",
   growthVisibility: false,
+  questionMemberDataConsentedAt: null,
   hideRecruitmentOpinions: false,
   createdAt: new Date("2026-08-01T00:00:00.000Z"),
   updatedAt: new Date("2026-08-01T00:00:00.000Z"),

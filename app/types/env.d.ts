@@ -1,3 +1,7 @@
+import type { QuestionRequest } from "~/models/al1s-question-contract";
+
+type Al1sBinding = { runQuestion(request: QuestionRequest): Promise<unknown> };
+
 declare global {
   interface Env {
     /** Set to any truthy string to bypass KV cache. For local development only. */
@@ -8,7 +12,7 @@ declare global {
     OCR_QUEUE_API_TOKEN?: string;
     AI: Ai;
     API_READ_RATE_LIMITER?: RateLimit;
+    QUESTION_RATE_LIMITER: RateLimit;
+    AL1S: Al1sBinding;
   }
 }
-
-export {};

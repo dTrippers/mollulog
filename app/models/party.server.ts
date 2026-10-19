@@ -2,6 +2,7 @@ import {
   deletePostgresCommunityPostByUid,
   getPostgresPartiesByRaidReference,
   getPostgresUserParties,
+  getPostgresUserPartiesByUserId,
 } from "~/db/postgres/community";
 import type { Party } from "./party";
 
@@ -13,6 +14,14 @@ export async function getUserParties(
   { includePrivate = false }: { includePrivate?: boolean } = {},
 ): Promise<Party[]> {
   return getPostgresUserParties(env, username, includePrivate);
+}
+
+export async function getUserPartiesByUserId(
+  env: Env,
+  userId: number,
+  { includePrivate = false }: { includePrivate?: boolean } = {},
+): Promise<Party[]> {
+  return getPostgresUserPartiesByUserId(env, userId, includePrivate);
 }
 
 export async function getPartiesByRaidReference(

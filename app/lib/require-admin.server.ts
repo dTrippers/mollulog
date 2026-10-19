@@ -1,5 +1,6 @@
 import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { isAdminSensei } from "~/domain/sensei-role";
 import type { Sensei } from "~/models/sensei";
 
 export async function requireAdmin(env: Env, request: Request, ctx: ExecutionContext): Promise<Sensei | Response> {
@@ -7,7 +8,7 @@ export async function requireAdmin(env: Env, request: Request, ctx: ExecutionCon
   if (!currentUser) {
     return redirect("/unauthorized");
   }
-  if (currentUser.role !== "admin") {
+  if (!isAdminSensei(currentUser)) {
     return new Response(null, { status: 403 });
   }
   return currentUser;
