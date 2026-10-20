@@ -1,7 +1,8 @@
 import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
-import { SectionCard, SubTitle } from "~/components/primitives";
+import { type CopyStatus, CopyStatusMessage, CopyTextButton } from "~/components/v2/features/developers/CopyTextButton";
+import { PageMain } from "~/components/v2/layout/PageMain";
 import { API_GUIDE_COPY, getApiEndpointGuide } from "~/domain/mollulog-api-guide";
 import {
   API_PUBLIC_ERRORS,
@@ -17,15 +18,12 @@ import {
 } from "~/domain/mollulog-api-spec";
 import {
   CodeBlock,
-  type CopyStatus,
-  CopyStatusMessage,
-  CopyTextButton,
   DataTable,
-  DeveloperPage,
+  DocsSection,
   EndpointRow,
   TableCell,
   TableHeader,
-} from "./developers._components/DeveloperPage";
+} from "./developers._components/ApiDocsComponents";
 
 export const meta: MetaFunction = () => [{ title: "API 문서 | 몰루로그" }];
 
@@ -55,15 +53,15 @@ export default function DevelopersDocs() {
   });
 
   return (
-    <DeveloperPage>
-      <div className="space-y-6">
+    <PageMain>
+      <div className="space-y-v2-block-gap">
         <header>
-          <SubTitle text={API_GUIDE_COPY.pageTitle} />
+          <h2 className="mb-v2-group-gap text-lg font-semibold">{API_GUIDE_COPY.pageTitle}</h2>
         </header>
 
-        <SectionCard title={API_GUIDE_COPY.sections.agent}>
+        <DocsSection title={API_GUIDE_COPY.sections.agent}>
           <AgentPromptBlock label={API_GUIDE_COPY.agentPromptLabel} prompt={prompt} />
-          <dl className="mt-4 grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+          <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
             {API_GUIDE_COPY.documentLinks.map((documentLink) => (
               <DocumentUrlRow
                 key={documentLink.key}
@@ -73,14 +71,14 @@ export default function DevelopersDocs() {
               />
             ))}
           </dl>
-        </SectionCard>
+        </DocsSection>
 
-        <SectionCard title={API_GUIDE_COPY.sections.connection}>
+        <DocsSection title={API_GUIDE_COPY.sections.connection}>
           <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-            <dt className="text-muted-foreground sm:pt-2">{API_GUIDE_COPY.connection.baseUrl}</dt>
+            <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.baseUrl}</dt>
             <dd className="min-w-0">
-              <div className="flex min-w-0 items-center justify-between gap-2 font-mono text-sm">
-                <code className="min-w-0 break-all">{urls.baseUrl}</code>
+              <div className="flex min-w-0 items-start justify-between gap-2 font-mono text-sm">
+                <code className="min-w-0 break-all pt-1.5">{urls.baseUrl}</code>
                 <CopyTextButton
                   value={urls.baseUrl}
                   variant="icon"
@@ -90,10 +88,10 @@ export default function DevelopersDocs() {
               </div>
               <CopyStatusMessage status={baseUrlCopyStatus} />
             </dd>
-            <dt className="text-muted-foreground sm:pt-2">{API_GUIDE_COPY.connection.authorization}</dt>
+            <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.authorization}</dt>
             <dd>
               <div className="flex items-start justify-between gap-2">
-                <code className="break-all">{API_GUIDE_COPY.connection.authorizationValue}</code>
+                <code className="break-all pt-1.5">{API_GUIDE_COPY.connection.authorizationValue}</code>
                 <CopyTextButton
                   value={API_GUIDE_COPY.connection.authorizationValue}
                   variant="icon"
@@ -104,9 +102,9 @@ export default function DevelopersDocs() {
               <CopyStatusMessage status={authCopyStatus} />
             </dd>
           </dl>
-        </SectionCard>
+        </DocsSection>
 
-        <SectionCard title={API_GUIDE_COPY.sections.endpoints}>
+        <DocsSection title={API_GUIDE_COPY.sections.endpoints}>
           <EndpointGroup title={API_READ_ROUTE_GROUP.title}>
             {API_ROUTES.filter((route) => route.permission === API_READ_ROUTE_GROUP.permission).map((route, index) => (
               <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} initiallyOpen={index === 0} />
@@ -117,9 +115,9 @@ export default function DevelopersDocs() {
               <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
             ))}
           </EndpointGroup>
-        </SectionCard>
+        </DocsSection>
 
-        <SectionCard title={API_GUIDE_COPY.sections.fields}>
+        <DocsSection title={API_GUIDE_COPY.sections.fields}>
           <DataTable label={API_GUIDE_COPY.sections.fields}>
             <TableHeader columns={[...API_GUIDE_COPY.fieldTable.columns]} />
             <tbody>
@@ -127,7 +125,7 @@ export default function DevelopersDocs() {
                 const firstField =
                   API_STUDENT_STATE_FIELD_SPECS[group.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
                 return (
-                  <tr className="border-t border-border" key={group.fields[0]}>
+                  <tr className="border-t border-v2-divider" key={group.fields[0]}>
                     <TableCell firstColumn>
                       {group.fields.map((field) => (
                         <code className="block whitespace-nowrap font-mono text-sm" key={field}>
@@ -138,13 +136,13 @@ export default function DevelopersDocs() {
                     <TableCell>
                       <span className="whitespace-nowrap">{group.meaning}</span>
                       {"detail" in group ? (
-                        <span className="block text-xs text-muted-foreground">{group.detail}</span>
+                        <span className="block text-xs text-v2-fg-secondary">{group.detail}</span>
                       ) : null}
                     </TableCell>
                     <TableCell className="whitespace-nowrap tabular-nums">
                       {formatFieldRange(firstField.min, firstField.max)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                    <TableCell className="whitespace-nowrap text-v2-fg-secondary">
                       {firstField.nullable
                         ? API_GUIDE_COPY.fieldTable.nullAllowed
                         : API_GUIDE_COPY.fieldTable.nullForbidden}
@@ -159,24 +157,24 @@ export default function DevelopersDocs() {
               <RuleItem key={rule}>{rule}</RuleItem>
             ))}
           </ul>
-        </SectionCard>
+        </DocsSection>
 
-        <SectionCard title={API_GUIDE_COPY.sections.errors}>
+        <DocsSection title={API_GUIDE_COPY.sections.errors}>
           <ApiErrorTable />
           <CodeBlock label={API_GUIDE_COPY.errorExampleLabel} copyable>
             {errorExample}
           </CodeBlock>
-        </SectionCard>
+        </DocsSection>
 
-        <SectionCard title={API_GUIDE_COPY.sections.limits}>
+        <DocsSection title={API_GUIDE_COPY.sections.limits}>
           <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
             {API_GUIDE_COPY.pageLimits.map(({ label, value }) => (
               <LimitRow key={label} label={label} value={value} />
             ))}
           </dl>
-        </SectionCard>
+        </DocsSection>
       </div>
-    </DeveloperPage>
+    </PageMain>
   );
 }
 
@@ -185,7 +183,7 @@ function AgentPromptBlock({ label, prompt }: { label: string; prompt: string }) 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+        <p className="text-xs font-semibold text-v2-fg-tertiary">{label}</p>
         <CopyTextButton
           value={prompt}
           label="복사하기"
@@ -194,7 +192,9 @@ function AgentPromptBlock({ label, prompt }: { label: string; prompt: string }) 
           onStatusChange={setCopyStatus}
         />
       </div>
-      <p className="rounded-md bg-muted p-3 text-sm leading-6 whitespace-pre-wrap break-keep">{renderPrompt(prompt)}</p>
+      <p className="rounded-md bg-v2-inset p-3 text-sm leading-6 whitespace-pre-wrap break-keep">
+        {renderPrompt(prompt)}
+      </p>
       <CopyStatusMessage status={copyStatus} />
     </div>
   );
@@ -220,11 +220,11 @@ function DocumentUrlRow({ label, url, copyLabel }: { label: string; url: string;
   const [copyStatus, setCopyStatus] = useState<CopyStatus>("idle");
   return (
     <>
-      <dt className="text-muted-foreground sm:pt-1">{label}</dt>
+      <dt className="text-v2-fg-secondary sm:pt-1.5">{label}</dt>
       <dd className="min-w-0">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <a
-            className="min-w-0 break-keep text-primary hover:underline"
+            className="min-w-0 break-keep pt-1.5 text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
             href={url}
             target="_blank"
             rel="noopener noreferrer"
@@ -279,29 +279,29 @@ function ApiEndpoint({
     <EndpointRow method={route.method} path={route.displayPath} summary={route.summary} initiallyOpen={initiallyOpen}>
       {route.parameters.length > 0 ? <ParameterTable route={route} /> : null}
       {"required" in guide ? <p className="text-sm">{guide.required}</p> : null}
-      <CodeBlock label={API_GUIDE_COPY.requestExampleLabel} tone="card" copyable>
+      <CodeBlock label={API_GUIDE_COPY.requestExampleLabel} tone="surface" copyable>
         {curl}
       </CodeBlock>
       {"response" in guide ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-v2-fg-secondary">
           {API_GUIDE_COPY.responseLabel}: {guide.response}
         </p>
       ) : (
-        <CodeBlock label={`${API_GUIDE_COPY.responseLabel} ${route.responseExample.status}`} tone="card">
+        <CodeBlock label={`${API_GUIDE_COPY.responseLabel} ${route.responseExample.status}`} tone="surface">
           {responseJson}
         </CodeBlock>
       )}
       {"note" in guide && "error" in guide ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-v2-fg-secondary">
           {guide.note} <EndpointErrorLink code={guide.error} />
         </p>
       ) : null}
       {"readPermission" in guide && "error" in guide ? (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-v2-fg-secondary">
           {guide.readPermission} · 이미 등록한 학생이면 <EndpointErrorLink code={guide.error} />
         </p>
       ) : null}
-      {"note" in guide && !("error" in guide) ? <p className="text-sm text-muted-foreground">{guide.note}</p> : null}
+      {"note" in guide && !("error" in guide) ? <p className="text-sm text-v2-fg-secondary">{guide.note}</p> : null}
     </EndpointRow>
   );
 }
@@ -310,7 +310,7 @@ function ParameterTable({ route }: { route: ApiRouteSpec }) {
   return (
     <table className="w-full text-sm">
       <thead>
-        <tr className="text-left text-xs font-semibold text-muted-foreground">
+        <tr className="text-left text-xs font-semibold text-v2-fg-tertiary">
           <th className="pb-1 pr-3" scope="col">
             {API_GUIDE_COPY.parameterTable.name}
           </th>
@@ -336,7 +336,10 @@ function ParameterTable({ route }: { route: ApiRouteSpec }) {
 function EndpointErrorLink({ code }: { code: ApiPublicErrorCode }) {
   const error = API_PUBLIC_ERRORS[code];
   return (
-    <a className="whitespace-nowrap text-primary hover:underline" href={`#error-${code}`}>
+    <a
+      className="whitespace-nowrap text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      href={`#error-${code}`}
+    >
       <code>
         {error.status} {code}
       </code>
@@ -357,10 +360,10 @@ function ApiErrorTable() {
     <table className="w-full text-left text-sm" aria-label={API_GUIDE_COPY.sections.errors}>
       <TableHeader columns={["상태", "코드 · 의미"]} />
       {Array.from(groups.entries()).map(([status, errors]) => (
-        <tbody className="border-t border-border" key={status}>
+        <tbody className="border-t border-v2-divider" key={status}>
           {errors.map(([code, error], rowIndex) => (
             <tr
-              className="scroll-mt-[calc(var(--mobile-header-height)+4.5rem)] target:bg-muted lg:scroll-mt-4"
+              className="scroll-mt-[calc(var(--mobile-header-height)+4.5rem)] target:bg-v2-inset @min-[48rem]/page-available:scroll-mt-4"
               id={`error-${code}`}
               key={code}
             >
@@ -376,7 +379,7 @@ function ApiErrorTable() {
               <td className="py-2 pr-3 align-top break-keep">
                 <code className="block font-mono text-sm font-medium">{renderBreakableCode(code)}</code>
                 <span className="font-medium">{error.title}</span>
-                <span className="text-muted-foreground"> · {error.description}</span>
+                <span className="text-v2-fg-secondary"> · {error.description}</span>
               </td>
             </tr>
           ))}
@@ -404,7 +407,7 @@ function renderBreakableCode(code: string) {
 function EndpointGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="space-y-1">
-      <h3 className="mb-1 text-xs font-semibold text-muted-foreground">{title}</h3>
+      <h3 className="mb-1 text-xs font-semibold text-v2-fg-tertiary">{title}</h3>
       <div className="space-y-1">{children}</div>
     </section>
   );
@@ -413,7 +416,7 @@ function EndpointGroup({ title, children }: { title: string; children: React.Rea
 function LimitRow({ label, value }: { label: string; value: string }) {
   return (
     <>
-      <dt className="leading-7 text-muted-foreground">{label}</dt>
+      <dt className="leading-7 text-v2-fg-secondary">{label}</dt>
       <dd>{value}</dd>
     </>
   );

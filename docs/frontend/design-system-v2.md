@@ -37,6 +37,10 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-ai-gradient` | `linear-gradient(135deg, oklch(0.623 0.214 259.815), oklch(0.606 0.25 292.717))` | `linear-gradient(135deg, oklch(0.707 0.165 254.624), oklch(0.702 0.183 293.541))` | AI mark, input focus glow, and working halo only |
 | `shadow-v2-ai-glow` | `0 0 1.25rem oklch(0.606 0.25 292.717 / 16%)` | `0 0 1.25rem oklch(0.702 0.183 293.541 / 24%)` | AI input focus glow |
 | `animate-v2-ai-working` | `v2-ai-working 2s ease-in-out infinite` | same | AI working halo; stopped by reduced motion |
+| `text-v2-dev-accent`, `bg-v2-dev-accent` | `oklch(0.623 0.214 259.815)` | same | Blue emphasis and illustration accents on the developers introduction. Tint with `/5`, `/10`, or `/25` when the surface needs a lighter treatment |
+| `bg-v2-dev-accent-strong` | `oklch(0.515 0.215 263.6)` | same | Developers introduction CTA fill; supports white text in normal and hover states |
+| `text-v2-dev-on-accent` | `oklch(0.985 0 0)` | same | Text and icons on a developers introduction accent fill |
+| `shadow-v2-dev-shadow` | `oklch(0 0 0)` | same | Developers introduction diagram node shadows only; use `/5` in light mode and `/20` in dark mode to preserve the approved shadow strength |
 | `shadow-v2-marker` | `inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light)` (fixed: `oklch(0.2 0 0 / 80%)` and `oklch(1 0 0 / 90%)`) | same | Recognized-cell marker over a game screenshot: a dark inner ring and a light outer ring, so the marker stays visible on any screenshot. The screenshot colors do not follow the theme, so the rings are fixed. Pair with `border-2 border-v2-focus bg-v2-highlight`. |
 | `bg-v2-hover` | `oklch(0.205 0 0 / 5%)` | `oklch(1 0 0 / 7%)` | Transparent hover fill for unfilled rows and controls; overlay on filled controls |
 | `bg-v2-filled-hover` | `oklch(0.94 0 0)` | `oklch(0.37 0 0)` | Opaque hover fill for inset buttons and rows |
@@ -168,7 +172,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 </V2Page>
 ```
 
-- DOM order is Header, Toolbar, Main, Aside. On side-by-side the Aside sits left of Main, placed by grid areas.
+- DOM order is Header, Toolbar, Main, Aside. On side-by-side the Aside sits left of Main, placed by grid areas. The opt-in responsive screen navigation recipe below places Aside before Main so desktop navigation and related links precede the body in keyboard order.
 - Omit `PageAside` and there is no Aside column and no reserved space.
 - Side-by-side starts at 48rem of the `@container/page-available` content box (root.tsx). The Aside is 16rem below 64rem and 18rem from 64rem. `V2Page` measures its own width with ResizeObserver to know the mode for JavaScript behavior, such as where a panel body mounts.
 - Header holds the back link, title, description (max-prose), and meta. It sits above Main with one group-gap of top padding and spans the full width, so the title x matches across recipes with and without an Aside.
@@ -187,10 +191,37 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 ### Behavior parts
 
 - **ScreenTabs:** link mode (`link`, `linkState`) sets `aria-current="page"`. onClick mode (`onClick`) sets `aria-pressed`. A `disabled` tab does not navigate and shows `disabledReason` as `title` and visually hidden text. `hiddenStacked` hides a tab on stacked layouts. `label` shows a count.
+- **Responsive screen navigation:** `ScreenNavigation` renders shared route items as a vertical link list inside Aside. `ScreenNavigationToolbar` adapts the same items to the existing horizontal `ScreenTabs` only while stacked. Both use the same `ScreenTabItem` meaning and item renderer. These are ordinary links with `aria-current`, not a tab widget; keyboard users follow normal Tab and Enter behavior.
 - **PanelSheet:** on side-by-side the panel is in the Aside (collapsible, `defaultExpanded`). On stacked it opens a sheet when open. Program requests use `panelRequest={{ panelId, requestId }}`, with a new `requestId` per request. Close with `panelCloseRequest`, a number to increment, and `onPanelCloseRequestHandled`. A desktop request expands the panel, scrolls it fully into view, and highlights it without moving focus. A stacked request opens the sheet. A location change or a switch to side-by-side closes an open sheet. A disabled panel never opens a sheet, and its `MobileActionBar` trigger is disabled.
 - **AsideLinks and MobileActionBar links:** `to` starting with `http` opens in a new window (`target="_blank"`, `rel="noopener noreferrer"`). `onClick` without `to` renders a button. `transition` (`forward`, `reverse`, `crossfade`) sets the screen transition for route navigation. `preventScrollReset` is passed to the router link.
 - **PanelAction:** a text action in a panel header, beside the title. It does not change the header row height, so showing or hiding it never moves the panel. When an action hides itself after use (for example 초기화 once the filters are reset), move focus to the panel heading or the first control so keyboard focus is not lost.
 - **MobileActionBar panels:** each `panelId` must match a `PanelSheet` in the same page's `PageAside`. The bar opens that panel's sheet.
+
+### Responsive screen navigation (opt-in)
+
+Use this recipe when a screen group needs vertical navigation on side-by-side layouts and the existing horizontal tabs on stacked layouts. Pass one `ScreenTabItem[]` to both navigation components.
+
+```tsx
+<V2Page width="wide">
+  <PageHeader title="몰루로그 API" />
+  <ScreenNavigationFocusScope>
+    <ScreenNavigationToolbar items={items} />
+    <PageAside>
+      <ScreenNavigation items={items} />
+      <AsideLinks items={historyLinks} />
+    </PageAside>
+  </ScreenNavigationFocusScope>
+  <PageMain>{/* screen content */}</PageMain>
+  <MobileActionBar links={mobileHistoryLinks} />
+</V2Page>
+```
+
+- The page root and `V2Page` keep the existing 48rem page-container breakpoint. The Aside remains in server-rendered markup and the existing layout CSS hides it while stacked. `ScreenNavigationToolbar` keeps the same sticky mobile tabs and mounts `ScreenTabs` only while stacked, so its initial indicator measurement and active-item scroll run after it becomes visible.
+- Keep the toolbar and Aside inside `ScreenNavigationFocusScope`. It adds no DOM wrapper; when a focused navigation item is replaced by its responsive counterpart, focus moves to the matching item with scroll prevention. Focus in the body or another control remains there, and initial layout measurement never moves focus.
+- At 48rem and wider, `PageToolbar stackedOnly` hides both its toolbar and measurement sentinel. The opt-in page grid removes the toolbar row so Aside and Main start together below the Header. Other `PageToolbar` users retain their existing layout.
+- The desktop navigation and history links precede Main in the DOM. On stacked layouts the Aside is hidden, so the existing toolbar tabs, Main, and bottom action bar retain their normal order.
+- Server output initially includes both navigation forms because `V2Page` starts in stacked mode. CSS exposes only the form for the current container width before hydration; the first measurement then mounts or unmounts the toolbar tabs to match the same breakpoint. Resizing back to stacked remounts the existing `ScreenTabs` behavior.
+- Active desktop links use an inset surface and semibold text; the inset surface remains on hover. Navigation items keep the shared link, disabled, state-button, label, and crossfade behavior. Use the recipe only on screens that need this responsive arrangement.
 
 ## Transitions
 

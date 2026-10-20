@@ -1,8 +1,11 @@
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
-export type CheckboxProps = {
+export type CheckboxProps = Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "type" | "id" | "checked" | "defaultChecked" | "disabled" | "onChange" | "children" | "className"
+> & {
   id: string;
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
@@ -10,13 +13,14 @@ export type CheckboxProps = {
   children: ReactNode;
 };
 
-export function Checkbox({ id, checked, onCheckedChange, disabled = false, children }: CheckboxProps) {
+export function Checkbox({ id, checked, onCheckedChange, disabled = false, children, ...inputProps }: CheckboxProps) {
   return (
     <label
       htmlFor={id}
       className={cn("inline-flex items-start gap-2 text-sm text-v2-fg", disabled && "text-v2-fg-disabled")}
     >
       <input
+        {...inputProps}
         id={id}
         type="checkbox"
         checked={checked}

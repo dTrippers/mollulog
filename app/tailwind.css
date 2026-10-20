@@ -488,6 +488,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-popover-divider: var(--v2-popover-divider);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
+  --color-v2-dev-accent: var(--v2-dev-accent);
+  --color-v2-dev-accent-strong: var(--v2-dev-accent-strong);
+  --color-v2-dev-on-accent: var(--v2-dev-on-accent);
+  --color-v2-dev-shadow: var(--v2-dev-shadow);
   --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
   --color-v2-info: var(--v2-info);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
@@ -551,6 +555,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
   --v2-marker-shade: oklch(0.2 0 0 / 80%);
   --v2-marker-light: oklch(1 0 0 / 90%);
+  --v2-dev-accent: oklch(0.623 0.214 259.815);
+  --v2-dev-accent-strong: oklch(0.515 0.215 263.6);
+  --v2-dev-on-accent: oklch(0.985 0 0);
+  --v2-dev-shadow: oklch(0 0 0);
 }
 
 /*
@@ -602,6 +610,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-ai-to: oklch(0.702 0.183 293.541);
   --v2-info: oklch(0.809 0.105 251.813);
   --v2-ai-glow: oklch(0.702 0.183 293.541 / 24%);
+  --v2-dev-accent: oklch(0.623 0.214 259.815);
+  --v2-dev-accent-strong: oklch(0.515 0.215 263.6);
+  --v2-dev-on-accent: oklch(0.985 0 0);
+  --v2-dev-shadow: oklch(0 0 0);
 }
 
 /*
@@ -803,6 +815,18 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
   [data-v2-layout][data-width="reading"]:has(> .v2-aside) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 48rem);
+  }
+
+  [data-v2-layout]:has(> .v2-aside):has(> .v2-toolbar[data-stacked-only="true"]) {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "aside main";
+  }
+
+  .v2-toolbar[data-stacked-only="true"],
+  .v2-toolbar-sentinel[data-stacked-only="true"] {
+    display: none;
   }
 
   .v2-aside {

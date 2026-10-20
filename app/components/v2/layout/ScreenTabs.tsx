@@ -1,23 +1,10 @@
-import { type ElementType, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
-import { getV2LinkTransitionProps, runV2StateTransition } from "./screen-transition";
-import { v2FocusRing } from "./styles";
+import { useScreenNavigationFocus } from "./screen-navigation-focus";
+import { ScreenNavigationItemRenderer } from "./screen-navigation-item";
+import type { ScreenTabItem } from "./screen-navigation-item";
 
-export type ScreenTabItem = {
-  key: string;
-  text: string;
-  label?: string;
-  Icon: ElementType;
-  active?: boolean;
-  disabled?: boolean;
-  disabledReason?: string;
-  // Link mode: navigates with `aria-current`. Onclick mode: state only, with `aria-pressed`.
-  link?: string;
-  linkState?: unknown;
-  onClick?: () => void;
-  hiddenStacked?: boolean;
-};
+export type { ScreenTabItem } from "./screen-navigation-item";
 
 export type ScreenTabsProps = { items: ScreenTabItem[] };
 
@@ -25,6 +12,7 @@ export type ScreenTabsProps = { items: ScreenTabItem[] };
 type IndicatorState = { visible: boolean; x: number; width: number };
 
 export function ScreenTabs({ items }: ScreenTabsProps) {
+  const focus = useScreenNavigationFocus();
   const listRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [indicator, setIndicator] = useState<IndicatorState>({ visible: false, x: 0, width: 0 });
@@ -94,14 +82,22 @@ export function ScreenTabs({ items }: ScreenTabsProps) {
 
   return (
     <nav
+      ref={focus ? (element) => focus.registerNavigation("horizontal", element) : undefined}
       aria-label="화면 탐색"
       className="v2-tabs min-w-0"
       data-indicator-ready={indicator.visible ? "true" : undefined}
+      onBlurCapture={focus?.onNavigationBlur}
+      onFocusCapture={focus ? (event) => focus.onNavigationFocus("horizontal", event) : undefined}
     >
       <div ref={listRef} className="no-scrollbar overflow-x-auto">
         <div ref={innerRef} className="v2-tabs-list relative flex w-max items-center gap-1">
           {items.map((item) => (
-            <TabItem key={item.key} item={item} />
+            <ScreenNavigationItemRenderer
+              key={item.key}
+              item={item}
+              orientation="horizontal"
+              responsiveNavigation={focus !== null}
+            />
           ))}
           <span
             aria-hidden="true"
@@ -118,64 +114,5 @@ export function ScreenTabs({ items }: ScreenTabsProps) {
         </div>
       </div>
     </nav>
-  );
-}
-
-function TabItem({ item }: { item: ScreenTabItem }) {
-  const { Icon } = item;
-  const className = cn(
-    "relative flex min-h-v2-row-min shrink-0 cursor-pointer items-center gap-1.5 rounded-md px-3 text-sm whitespace-nowrap hover:bg-v2-hover",
-    item.active ? "v2-tab-active font-semibold text-v2-fg" : "font-medium text-v2-fg-secondary",
-    item.hiddenStacked && "v2-hidden-stacked",
-    item.disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-transparent",
-    v2FocusRing,
-  );
-  const content = (
-    <>
-      <Icon className={cn("size-4 shrink-0", item.active ? "text-v2-fg" : "text-v2-fg-tertiary")} aria-hidden="true" />
-      <span>{item.text}</span>
-      {item.label ? <span className="text-xs tabular-nums text-v2-fg-tertiary">{item.label}</span> : null}
-      {item.disabled && item.disabledReason ? <span className="sr-only">{item.disabledReason}</span> : null}
-    </>
-  );
-
-  if (item.disabled) {
-    return (
-      <button type="button" disabled title={item.disabledReason} className={className}>
-        {content}
-      </button>
-    );
-  }
-
-  if (item.link) {
-    return (
-      <Link
-        to={item.link}
-        state={item.linkState}
-        aria-current={item.active ? "page" : undefined}
-        data-active={item.active ? "true" : undefined}
-        className={className}
-        {...getV2LinkTransitionProps("crossfade")}
-      >
-        {content}
-      </Link>
-    );
-  }
-
-  return (
-    <button
-      type="button"
-      aria-pressed={item.active ?? false}
-      data-active={item.active ? "true" : undefined}
-      disabled={!item.onClick}
-      onClick={() => {
-        if (item.onClick) {
-          runV2StateTransition("crossfade", item.onClick);
-        }
-      }}
-      className={className}
-    >
-      {content}
-    </button>
   );
 }
