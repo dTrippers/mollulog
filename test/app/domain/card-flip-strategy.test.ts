@@ -132,6 +132,29 @@ describe("card flip strategy calculations", () => {
     expect(result.rewards.map(({ quantity }) => quantity)).toEqual([500_000, 5_000_000]);
   });
 
+  it("keeps deterministic all-open costs free of floating-point noise", () => {
+    const sixDraws: Extract<CardFlipData, { status: "available" }> = {
+      status: "available",
+      slotCount: 6,
+      flipCosts: [100, 200, 300, 400, 500, 500].map((quantity, index) => ({
+        flip: index + 1,
+        payments: [{ ...photoCard, quantity }],
+      })),
+      drawRules: { initialGroup: 1, maxDrawCount: 6, advanceOnRarities: [3] },
+      cards: [1, 2, 3].map((rarity) => ({
+        uid: `card-${rarity}`,
+        name: null,
+        rarity,
+        imageUrl: null,
+        slots: [1, 2, 3, 4, 5, 6].map((slot) => ({ slot, weight: 0.1 * rarity + 0.7 * slot })),
+        rewards: [{ ...cardFlip.cards[0].rewards[0] }],
+      })),
+    };
+
+    expect(calculateCardFlipStrategy(sixDraws, 150, "all-open").costs[0]?.quantity).toBe(50_000);
+    expect(calculateCardFlipStrategy(sixDraws, 1200, "all-open").costs[0]?.quantity).toBe(400_000);
+  });
+
   it("returns selected-strategy costs and rewards to the shop calculation and rejects unavailable data", () => {
     const config: MinigameConfig = {
       minigameType: "card_flip",

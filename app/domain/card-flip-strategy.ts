@@ -239,12 +239,22 @@ function calculateOutcome(
   }
 
   return {
-    costs: model.costResources.map((payment, index) => ({ ...payment, quantity: totals[index] })),
+    costs: model.costResources.map((payment, index) => ({
+      ...payment,
+      quantity: roundExpectedQuantity(totals[index]),
+    })),
     rewards: model.rewardItems.map((reward, index) => ({
       ...reward,
-      quantity: totals[model.costResources.length + index] ?? 0,
+      quantity: roundExpectedQuantity(totals[model.costResources.length + index] ?? 0),
     })),
   };
+}
+
+// Matrix powering accumulates floating-point error, so a deterministic total such as
+// 30000 can surface as 29999.99999999982 or 30000.000000000116. Twelve significant
+// digits drop that noise while keeping genuine fractional expectations.
+function roundExpectedQuantity(quantity: number): number {
+  return Number(quantity.toPrecision(12));
 }
 
 export function calculateCardFlipStrategy(

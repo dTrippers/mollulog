@@ -407,7 +407,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                           onClick={() => {
                             const currentOverride = state.overriddenRequiredQuantities[itemUid];
                             setEditRequiredValue(
-                              currentOverride !== undefined ? currentOverride : lines.requiredSubtotal,
+                              currentOverride !== undefined ? currentOverride : Math.floor(lines.requiredSubtotal),
                             );
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
