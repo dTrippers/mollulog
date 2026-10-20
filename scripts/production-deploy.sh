@@ -21,8 +21,10 @@ if [[ $# -gt 1 ]]; then
   exit 2
 fi
 
-repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
+# Resolve the project root from this script so the deploy works both in the
+# monorepo (web/) and in the public mirror (repository root).
+project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$project_root"
 
 assert_deployable_git_state() {
   local expected_commit="$1"
