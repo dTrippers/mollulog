@@ -77,7 +77,8 @@ function EditPopup({ show, title, value, onValueChange, onCancel, onSave, onRese
   );
 }
 
-function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
+// Required quantities pass Math.ceil so fractional minigame expectations never understate the need.
+function BreakdownLines({ lines, round = Math.floor }: { lines: BreakdownLine[]; round?: (value: number) => number }) {
   if (lines.length === 0) {
     return <div className="text-xs text-muted-foreground">획득처 없음</div>;
   }
@@ -90,7 +91,7 @@ function BreakdownLines({ lines }: { lines: BreakdownLine[] }) {
             <span className="mr-1.5">·</span>
             {label}
           </span>
-          <span className="text-muted-foreground">{Math.floor(value).toLocaleString()}</span>
+          <span className="text-muted-foreground">{round(value).toLocaleString()}</span>
         </div>
       ))}
     </>
@@ -329,14 +330,14 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                         <div className="flex justify-between items-center">
                           <span className="font-medium text-foreground">필요 수량</span>
                           <span className="font-semibold text-foreground">
-                            {Math.floor(actualRequired).toLocaleString()}
+                            {Math.ceil(actualRequired).toLocaleString()}
                           </span>
                         </div>
                         <div className="pl-2 space-y-1">
                           {hasOverride ? (
                             <p className="text-xs text-muted-foreground">입력한 목표 수량</p>
                           ) : (
-                            <BreakdownLines lines={requiredLines} />
+                            <BreakdownLines lines={requiredLines} round={Math.ceil} />
                           )}
                         </div>
                       </div>
@@ -407,7 +408,7 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
                           onClick={() => {
                             const currentOverride = state.overriddenRequiredQuantities[itemUid];
                             setEditRequiredValue(
-                              currentOverride !== undefined ? currentOverride : lines.requiredSubtotal,
+                              currentOverride !== undefined ? currentOverride : Math.ceil(lines.requiredSubtotal),
                             );
                             setEditingRequiredItemUid(itemUid);
                             setEditingItemUid(null);
