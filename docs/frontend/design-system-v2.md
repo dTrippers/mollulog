@@ -88,7 +88,7 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 | `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
 | `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | 2.75rem | 2.75rem | Minimum row height. List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
-| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Button height (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers |
+| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Minimum button hit area (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers. The visible button stays 32px (`size="md"`) or 28px (`size="sm"`) on every layout; an invisible pseudo-element extends the hit area. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
 | `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | 2.25rem | 2.25rem | Number and select inputs. 36px on stacked layouts and coarse pointers |
 
 ## Numeric and date formats

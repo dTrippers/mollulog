@@ -309,7 +309,7 @@ function HeldContent({
     return (
       <div className="flex min-h-v2-row-min items-center gap-2">
         <span className="text-sm font-semibold text-v2-fg">스포일러가 포함되어 있어요</span>
-        <Button variant="secondary" className="h-7 px-2 text-xs" onClick={() => onRevealSpoiler(content.uid)}>
+        <Button variant="secondary" size="sm" onClick={() => onRevealSpoiler(content.uid)}>
           내용 보기
         </Button>
       </div>

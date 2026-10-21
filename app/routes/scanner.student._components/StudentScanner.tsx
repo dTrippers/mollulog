@@ -767,14 +767,14 @@ export default function StudentScanner() {
   // The stacked "최근 작업" button shows only while the mobile action bar is hidden (files selected, review).
   const recentJobsButton =
     stacked && hidesMobileActionBar ? (
-      <Button variant="secondary" className="min-h-8" onClick={openJobsPanel}>
+      <Button variant="secondary" onClick={openJobsPanel}>
         최근 작업
       </Button>
     ) : null;
   const headerAction =
     job && !TERMINAL_JOB_STATUSES.has(job.status) && !isApplied && phase !== "applying" ? (
       <div className="flex flex-wrap items-center gap-2">
-        <Button variant="secondary" className={stacked ? "min-h-8" : undefined} onClick={() => resetForNewUpload()}>
+        <Button variant="secondary" onClick={() => resetForNewUpload()}>
           <ArrowUpTrayIcon className="size-4" aria-hidden="true" />
           {scannerMessages.student.uploadAction}
         </Button>

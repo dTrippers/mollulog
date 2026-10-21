@@ -104,7 +104,7 @@ export function ViewerFailureNotice({ onRetry }: { onRetry: () => void }) {
       className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-v2-surface px-v2-block-p py-3"
     >
       <p className="text-sm text-v2-fg">관심 학생과 모집 기록을 불러오지 못했어요</p>
-      <Button variant="text" className="h-8 px-2 text-sm" onClick={onRetry}>
+      <Button variant="text" className="px-2" onClick={onRetry}>
         다시 시도
       </Button>
     </div>

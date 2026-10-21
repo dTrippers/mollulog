@@ -18,7 +18,7 @@ import {
 } from "~/components/v2/features/scanner/ScannerStepHeader";
 import { PageActionBar } from "~/components/v2/layout/PageActionBar";
 import { v2FocusRing } from "~/components/v2/layout/styles";
-import { Button } from "~/components/v2/primitives/Button";
+import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { ProgressBar } from "~/components/v2/primitives/ProgressBar";
@@ -721,10 +721,7 @@ export default function ResourceScanner() {
                 </Button>
                 <Link
                   to="/utils/resources/inventory"
-                  className={cn(
-                    "inline-flex min-h-v2-control-min w-full items-center justify-center gap-1.5 rounded-md bg-v2-inset px-3 text-sm font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover sm:w-auto",
-                    v2FocusRing,
-                  )}
+                  className={v2ButtonClassName({ variant: "secondary", className: "w-full sm:w-auto" })}
                 >
                   보유 아이템 보기
                   <ArrowRightIcon className="size-4" aria-hidden="true" />

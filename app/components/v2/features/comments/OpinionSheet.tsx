@@ -95,7 +95,7 @@ export function OpinionSheet({
       <div className="flex min-h-v2-row-min items-center gap-2 rounded-md bg-v2-inset py-1.5 pr-1.5 pl-3 pointer-coarse:py-0">
         <InformationCircleIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm text-v2-fg-secondary">로그인하면 의견을 남길 수 있어요</p>
-        <Button variant="primary" className="min-h-0 h-8 pointer-coarse:h-11" onClick={onRequestSignIn}>
+        <Button variant="primary" onClick={onRequestSignIn}>
           로그인
         </Button>
       </div>

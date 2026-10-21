@@ -194,7 +194,7 @@ function TimelineItem({
         {hidden ? (
           <div className="space-y-1">
             <p className="text-base font-semibold text-v2-fg">스포일러가 포함되어 있어요</p>
-            <Button variant="secondary" className="h-8" onClick={() => onRevealSpoiler(content.uid)}>
+            <Button variant="secondary" onClick={() => onRevealSpoiler(content.uid)}>
               <EyeIcon className="size-4" aria-hidden="true" />
               내용 보기
             </Button>
@@ -239,7 +239,7 @@ function TimelineItem({
         {isRaid && !hidden && content.raid ? <RaidSummary raid={content.raid} /> : null}
 
         {revealed && content.isSpoiler ? (
-          <Button variant="text" className="h-8 px-2 text-xs" onClick={() => onHideSpoiler(content.uid)}>
+          <Button variant="text" size="sm" onClick={() => onHideSpoiler(content.uid)}>
             <EyeSlashIcon className="size-4" aria-hidden="true" />
             다시 가리기
           </Button>
