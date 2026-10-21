@@ -8,6 +8,7 @@ import {
 } from "~/auth/authenticator.server";
 import { Button, Callout, SectionCard, Title } from "~/components/primitives";
 import { getLogger } from "~/lib/observability.server";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { leaveAccount } from "~/models/account-security";
 import { getSenseiById } from "~/models/sensei";
 import AccountLeaveNotice from "./edit.leave._components/AccountLeaveNotice";
@@ -54,7 +55,11 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     const leaseSession = await leaseStorage.getSession(request.headers.get("Cookie"));
     const headers = new Headers();
     headers.append("Set-Cookie", await leaseStorage.destroySession(leaseSession));
-    return await getAuthenticator(env, ctx).logout(request, { redirectTo: "/?account=left", headers });
+    headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "account_deleted" }]));
+    return await getAuthenticator(env, ctx).logout(request, {
+      redirectTo: "/?account=left",
+      headers,
+    });
   } catch (error) {
     if (error instanceof Response) return error;
     logger.error("Account leave logout failed", error, { userId: sensei.id });
@@ -69,6 +74,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       const headers = new Headers();
       headers.append("Set-Cookie", await authStorage.destroySession(session));
       headers.append("Set-Cookie", await leaseStorage.destroySession(leaseSession));
+      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "account_deleted" }]));
       return redirect("/?account=left", { headers });
     } catch (cleanupError) {
       logger.error("Account leave session cleanup failed", cleanupError, { userId: sensei.id });
@@ -78,6 +84,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       });
       headers.append("Set-Cookie", "__session=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax");
       headers.append("Set-Cookie", "__session_validation=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax");
+      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "account_deleted" }]));
       return new Response(null, {
         status: 302,
         headers,

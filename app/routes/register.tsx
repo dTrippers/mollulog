@@ -1,4 +1,5 @@
 import { ArrowPathIcon } from "@heroicons/react/20/solid";
+import { useEffect } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import {
@@ -15,6 +16,7 @@ import { createSenseiWithAuthIdentity, getSenseiByAuthIdentity } from "~/models/
 import { deletePendingSenseiRegistration, getPendingSenseiRegistration } from "~/models/pending-sensei-registration";
 import { getSenseiById, getSenseiByUsername } from "~/models/sensei";
 import { getAllStudents } from "~/models/student";
+import { rememberPendingAuthEvent } from "~/lib/google-analytics-events.client";
 
 export const meta: MetaFunction = () => [{ title: "선생님 등록 | 몰루로그" }];
 
@@ -42,11 +44,19 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   }
 
   const pendingUid = await getPendingSenseiRegistrationUid(env, request);
-  if (!pendingUid || !(await getPendingSenseiRegistration(env, pendingUid, { ctx }))) {
+  const pendingRegistration = pendingUid ? await getPendingSenseiRegistration(env, pendingUid, { ctx }) : null;
+  if (!pendingRegistration) {
     return redirect("/unauthorized");
   }
 
+  const linkedSensei =
+    pendingRegistration.provider === "discord"
+      ? null
+      : await getSenseiByAuthIdentity(env, pendingRegistration.provider, pendingRegistration.providerUserId, { ctx });
+
   return {
+    authEvent: linkedSensei ? ("login" as const) : ("sign_up" as const),
+    authMethod: pendingRegistration.provider,
     allStudents: (await getAllStudents(env, true))
       .map((student) => ({
         uid: student.uid,
@@ -153,10 +163,16 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
 };
 
 export default function Register() {
-  const { allStudents } = useLoaderData<typeof loader>();
+  const { allStudents, authEvent, authMethod } = useLoaderData<typeof loader>();
   const actionData = useActionData<ActionData>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    if (authMethod === "google" || authMethod === "github" || authMethod === "discord") {
+      rememberPendingAuthEvent(authEvent, authMethod);
+    }
+  }, [authEvent, authMethod]);
 
   return (
     <div className="max-w-3xl">

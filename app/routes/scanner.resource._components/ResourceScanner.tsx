@@ -27,6 +27,7 @@ import { OCR_ALLOWED_CONTENT_TYPES } from "~/domain/ocr";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent, trackOcrJobApplied } from "~/lib/google-analytics-events.client";
 import type { ScannerOutletContext } from "../scanner";
 import ScannerFileList from "../scanner._components/ScannerFileList";
 import ScannerImageDialog from "../scanner._components/ScannerImageDialog";
@@ -295,6 +296,7 @@ export default function ResourceScanner() {
   }, []);
 
   const lifecycle = useScannerJob<JobStatus>({
+    analyticsKind: "resource",
     getTransition: getResourceJobTransition,
     onJob: handleJob,
     onReset: handleReset,
@@ -412,6 +414,7 @@ export default function ResourceScanner() {
         method: "POST",
         body: JSON.stringify({ images: descriptors, trainingConsent: allowsTrainingDataUse }),
       });
+      trackGoogleAnalyticsEvent("ocr_job_created", { kind: "resource", input: "image" });
       setUploadQuota(created.quota);
       let uploadedBytes = 0;
       await mapWithConcurrencyLimit(created.images, RESOURCE_FILE_CONCURRENCY, async (upload, index) => {
@@ -432,6 +435,7 @@ export default function ResourceScanner() {
         `/api/ocr/jobs/${created.jobUid}/submit`,
         { method: "POST" },
       );
+      trackGoogleAnalyticsEvent("ocr_job_submitted", { kind: "resource", input: "image" });
       setUploadQuota(submitted.quota);
       setSearchParams({ job: created.jobUid }, { replace: true });
       acceptJob({
@@ -462,10 +466,12 @@ export default function ResourceScanner() {
       const cells = buildCellApplyPayload(job.cells ?? [], cellEdits);
       const response = await requestScannerJson<{
         application: NonNullable<JobApplication>;
+        alreadyApplied?: boolean;
       }>(`/api/ocr/jobs/${job.uid}/apply`, {
         method: "POST",
         body: JSON.stringify({ resultGeneration: job.generation, cells }),
       });
+      trackOcrJobApplied("item_inventory", response.alreadyApplied === true);
       // The summary is read again with the job detail below; until then the completion view shows it is loading.
       updateJob((currentJob) =>
         currentJob ? { ...currentJob, application: response.application, completionSummary: undefined } : null,

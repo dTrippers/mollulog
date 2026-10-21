@@ -1,4 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import {
   getSecurityCampaignIdentity,
   isSecurityCampaignToken,
@@ -83,7 +84,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
       },
     );
   } catch (error) {
-    console.error("Failed to update security campaign share", error);
+    console.error("Failed to update security campaign share", sanitizeErrorForLogging(error));
     return Response.json(
       { ok: false, error: "공유 정보를 저장하지 못했습니다." } satisfies SecurityCampaignActionResult,
       {

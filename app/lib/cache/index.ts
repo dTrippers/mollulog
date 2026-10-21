@@ -1,5 +1,6 @@
 import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
+import { serializeErrorForLogging } from "~/lib/privacy-scrub";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 
@@ -244,9 +245,9 @@ function warnIoFailure(label: string, dataKey: string, error: unknown, timeoutMs
 
   if (error instanceof Error) {
     details.errorName = error.name;
-    details.errorMessage = error.message;
+    details.error = serializeErrorForLogging(error);
   } else {
-    details.error = error;
+    details.error = serializeErrorForLogging(error);
   }
   console.error("[io-watchdog] failed", getIoWatchdogContext(details));
 }
@@ -590,7 +591,7 @@ function scheduleBackgroundRefresh<T>(
           label: "cache.swr_refresh_failed",
           cacheKey,
           errorName: error instanceof Error ? error.name : undefined,
-          errorMessage: error instanceof Error ? error.message : String(error),
+          error: serializeErrorForLogging(error),
           mode: options.mode,
         }),
       );

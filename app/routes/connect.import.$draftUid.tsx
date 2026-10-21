@@ -19,6 +19,7 @@ import {
   StudentStateMergeConflictError,
 } from "~/domain/student-state-errors";
 import { routeError } from "~/lib/http-errors";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -118,12 +119,23 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         studentStateMetadataByKey: metadataByKey,
         studentStateRequestMode: draft.type === "student_state" ? parseStudentStateRequestMode(formData) : null,
       });
-      return redirect("/connect/import");
+      const events =
+        draft.type === "student_state"
+          ? [
+              { eventName: "connect_import_applied" },
+              { eventName: "student_state_saved", parameters: { source: "connect_import", scope: "bulk" } },
+            ]
+          : [{ eventName: "connect_import_applied" }];
+      const headers = new Headers();
+      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, events));
+      return redirect("/connect/import", { headers });
     }
 
     if (intent === "discard") {
       await discardSyncDraft(env, currentUser.id, draftUid);
-      return redirect("/connect/import");
+      const headers = new Headers();
+      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "connect_import_discarded" }]));
+      return redirect("/connect/import", { headers });
     }
 
     return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });

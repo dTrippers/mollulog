@@ -8,6 +8,7 @@ import {
   readGuestPlanner,
   updateGuestPlanner,
 } from "~/lib/guest-planner.client";
+import { trackEventShopPlanSaved } from "~/lib/google-analytics-events.client";
 import type { ShopState } from "./useShopState";
 
 export type GuestPlannerStatus = "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
@@ -188,6 +189,7 @@ export function useAutoSave({
       if (resolution.snapshot?.status !== "ready") return;
       lastSavedStateRef.current = nextState;
       setSaveError(null);
+      trackEventShopPlanSaved(true);
     },
     [guestSaveGate, shopStateUid, timelineUid],
   );
@@ -205,6 +207,7 @@ export function useAutoSave({
         if (result.status === "ready") {
           lastSavedStateRef.current = nextState;
           setSaveError(null);
+          trackEventShopPlanSaved(true);
           return;
         }
         setSaveError(guestStorageError(result.status));
@@ -286,6 +289,7 @@ export function useAutoSave({
       initialAccountSavePendingRef.current = false;
       accountSaveFailedRef.current = false;
       setSaveError(null);
+      trackEventShopPlanSaved(true);
       return;
     }
 

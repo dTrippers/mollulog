@@ -19,6 +19,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { captureClientError } from "~/lib/observability.client";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
 import { getPostDetailView } from "~/views/post-detail";
 
@@ -146,6 +147,7 @@ export default function PostDetailPage() {
     if (typeof navigator.share === "function") {
       try {
         await navigator.share({ title: post.title, url });
+        trackGoogleAnalyticsEvent("share", { content_type: "post", method: "native" });
       } catch (error) {
         if (!(error instanceof DOMException && error.name === "AbortError")) {
           setShareStatus("error");
@@ -156,6 +158,7 @@ export default function PostDetailPage() {
     try {
       await copyPostUrl(url);
       setShareStatus("copied");
+      trackGoogleAnalyticsEvent("share", { content_type: "post", method: "copy" });
     } catch {
       setShareStatus("error");
     }

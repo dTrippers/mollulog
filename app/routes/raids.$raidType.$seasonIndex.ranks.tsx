@@ -12,6 +12,7 @@ import { EXACT_PARTY_SEARCH_PARAM, parseExactParties } from "~/domain/raid-exact
 import { getFilterableRaidDifficulties } from "~/domain/raid-score";
 import { nowUtcIso } from "~/lib/date-time";
 import { fetchRaidStatisticsByRaid } from "~/lib/ranks/stats";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import type { RaidType } from "~/models/content.d";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
@@ -73,6 +74,20 @@ export default function RaidRanks() {
       setRankFilterSettings((previous) => {
         const previousState = { ...previous, exactParties };
         const nextState = typeof updater === "function" ? updater(previousState) : updater;
+        const nextWithExactParties = { ...nextState, exactParties };
+        const trackedFields: [keyof RaidRankFilterState, string][] = [
+          ["difficulty", "difficulty"],
+          ["includeStudents", "includeStudents"],
+          ["excludeStudents", "excludeStudents"],
+          ["filterNotOwned", "filterNotOwned"],
+          ["allowBorrowedStudent", "allowBorrowedStudent"],
+          ["exactParties", "exactParties"],
+        ];
+        for (const [field, filter] of trackedFields) {
+          if (JSON.stringify(previousState[field]) !== JSON.stringify(nextWithExactParties[field])) {
+            trackGoogleAnalyticsEventIfAllowed("filter_apply", { scope: "raid_ranks", filter });
+          }
+        }
         return normalizeRaidRankFilterSettings(nextState);
       });
     },
@@ -123,7 +138,26 @@ export default function RaidRanks() {
       description: "특정 학생을 포함/제외한 편성을 찾아보세요",
       Icon: MagnifyingGlassIcon,
       headerAction: hasAppliedFilters ? (
-        <Button text="필터 해제" size="xs" variant="danger-subtle" onClick={clearRankFilterSettings} />
+        <Button
+          text="필터 해제"
+          size="xs"
+          variant="danger-subtle"
+          onClick={() => {
+            for (const [field, filter] of [
+              ["difficulty", "difficulty"],
+              ["includeStudents", "includeStudents"],
+              ["excludeStudents", "excludeStudents"],
+              ["filterNotOwned", "filterNotOwned"],
+              ["allowBorrowedStudent", "allowBorrowedStudent"],
+            ] as const) {
+              const value = rankFilterState[field as keyof RaidRankFilterState];
+              if (Array.isArray(value) ? value.length > 0 : Boolean(value)) {
+                trackGoogleAnalyticsEvent("filter_apply", { scope: "raid_ranks", filter });
+              }
+            }
+            clearRankFilterSettings();
+          }}
+        />
       ) : undefined,
       children: (
         <RaidRankFilter
@@ -152,6 +186,7 @@ export default function RaidRanks() {
     filterableStudents,
     hasAppliedFilters,
     jpSeasonIndex,
+    rankFilterState,
     setPanel,
     setRankFilterState,
     setSearchParams,

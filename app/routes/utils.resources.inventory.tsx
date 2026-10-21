@@ -1,8 +1,8 @@
+import { FunnelIcon } from "@heroicons/react/24/outline";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
-import { FunnelIcon } from "@heroicons/react/24/outline";
 import {
   aggregateGrowthResourceRequirements,
   buildRelationshipGiftResourceRequirements,
@@ -11,6 +11,7 @@ import {
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";
@@ -19,10 +20,10 @@ import {
   parseUserResourceInventoryQuantity,
   upsertUserResourceInventories,
 } from "~/models/user-resource-inventory";
+import type { ResourcePlannerOutletContext } from "./utils.resources";
 import ResourceInventoryEditor from "./utils.resources._components/ResourceInventoryEditor";
 import ResourceInventoryFilterPanel from "./utils.resources._components/ResourceInventoryFilterPanel";
 import { getResourcePlannerPageLinks } from "./utils.resources._components/resource-page-links";
-import type { ResourcePlannerOutletContext } from "./utils.resources";
 
 type ResourceInventorySavePayload = {
   items?: unknown;
@@ -138,6 +139,10 @@ export default function ResourceInventoryPage() {
     ...managedStudents.flatMap((student) => (student.resourceRequirements ? [student.resourceRequirements] : [])),
     relationshipGiftRequirements,
   ]);
+  const searchResultCount = resources.filter((resource) =>
+    resource.name.toLowerCase().includes(resourceInventoryFilter.search.trim().toLowerCase()),
+  ).length;
+  useTrackGoogleAnalyticsSearch(resourceInventoryFilter.search, "resources", searchResultCount);
 
   return (
     <Page

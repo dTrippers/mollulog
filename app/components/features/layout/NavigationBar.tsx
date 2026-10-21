@@ -26,6 +26,7 @@ import {
 import type { SiteBanner as SiteBannerData } from "~/domain/site-banner";
 import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { timelineContentTypeLocale } from "~/locales/ko";
 import { studentImageUrl } from "~/models/assets";
 import { submitPreference } from "~/routes/api.preference";
@@ -84,6 +85,9 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isPopupOpen, setIsPopupOpen] = useState(false);
+  const previousFetcherStateRef = useRef(fetcher.state);
+  const pendingSearchSequenceRef = useRef(0);
+  const reportedSearchSequenceRef = useRef(0);
 
   useEffect(() => {
     if (variant === "mobile" || variant === "rail") {
@@ -105,8 +109,26 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
     }
 
     fetcherLoad(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
+    pendingSearchSequenceRef.current += 1;
     setIsPopupOpen(true);
   }, [debouncedQuery, fetcherLoad]);
+
+  useEffect(() => {
+    const completed = previousFetcherStateRef.current !== "idle" && fetcher.state === "idle";
+    previousFetcherStateRef.current = fetcher.state;
+    if (
+      !completed ||
+      reportedSearchSequenceRef.current === pendingSearchSequenceRef.current ||
+      !fetcher.data ||
+      !Array.isArray(fetcher.data.results)
+    ) {
+      return;
+    }
+    reportedSearchSequenceRef.current = pendingSearchSequenceRef.current;
+    const resultCount = fetcher.data?.results.length ?? 0;
+    const resultBucket = resultCount === 0 ? "0" : resultCount <= 5 ? "1-5" : "6+";
+    trackGoogleAnalyticsEvent("search", { scope: "global", result_bucket: resultBucket });
+  }, [fetcher.data, fetcher.state]);
 
   useEffect(() => {
     if (!isPopupOpen) {
@@ -1027,7 +1049,14 @@ function MobileBottomNavigation({
           );
 
           return (
-            <Link key={item.name} to={item.to} className={className}>
+            <Link
+              key={item.name}
+              to={item.to}
+              className={className}
+              onClick={() => {
+                if (item.menuId) trackGoogleAnalyticsEvent("nav_menu_click", { menu_id: item.menuId });
+              }}
+            >
               {content}
             </Link>
           );

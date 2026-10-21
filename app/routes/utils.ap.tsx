@@ -50,6 +50,10 @@ import { getEventMetadata } from "~/models/event-content";
 import { isPlannerStateRevisionConflictError, updateApPlannerState } from "~/models/planner-state";
 import { updatePyroxenePlannerOptions } from "~/models/pyroxene-planner";
 import { getTimelineContent } from "~/models/timeline-content.server";
+import {
+  trackGoogleAnalyticsEvent,
+  trackGoogleAnalyticsEventOncePerPage,
+} from "~/lib/google-analytics-events.client";
 import { ApPlannerConditionsPanelContent } from "~/routes/utils.ap._components/ApPlannerConditionsPanel";
 import ApCalculationMethodSheet from "~/routes/utils.ap._components/ApCalculationMethodSheet";
 import ApPlannerConditionsSheet, {
@@ -633,6 +637,7 @@ export default function ApPlannerRoute() {
   const [conditionSaveError, setConditionSaveError] = useState<string | null>(null);
   const [panelCloseRequest, setPanelCloseRequest] = useState<number | null>(null);
   const pendingPanelConditionsOpen = useRef(false);
+  const processedAnalyticsResult = useRef<ApActionResult | null>(null);
   const actionResolvers = useRef(new Map<string, (result: ApActionResult) => void>());
   const eventUidFromQuery = searchParams.get("eventUid");
   const guestEnvelope =
@@ -667,6 +672,23 @@ export default function ApPlannerRoute() {
     if (!resolve) return;
     actionResolvers.current.delete(result.requestId);
     resolve(result);
+  }, [fetcher.data, fetcher.state]);
+
+  useEffect(() => {
+    const result = fetcher.data;
+    if (fetcher.state !== "idle" || !result?.success || result === processedAnalyticsResult.current) return;
+    processedAnalyticsResult.current = result;
+    switch (result.intent) {
+      case "save-conditions":
+      case "add-plan":
+      case "remove-plan":
+      case "add-plan-with-access":
+      case "save-access-time":
+      case "apply-charge-exception":
+      case "remove-charge-exception":
+        trackGoogleAnalyticsEvent("ap_plan_saved", { action: result.intent });
+        break;
+    }
   }, [fetcher.data, fetcher.state]);
 
   // Ended events are hidden but still own the AP of their period, so overlap checks use the full list.
@@ -803,6 +825,12 @@ export default function ApPlannerRoute() {
     apPackageRecords,
   ]);
 
+  useEffect(() => {
+    if (calculatedEvents.some((entry) => entry.calculation !== null)) {
+      trackGoogleAnalyticsEventOncePerPage("calculator_used", { tool: "ap" });
+    }
+  }, [calculatedEvents]);
+
   const groupedEvents = new Map<string, CalculatedApEvent[]>();
   for (const entry of calculatedEvents) {
     const month = dayjs(entry.event.startAt).tz(KST).format("YYYY-MM");
@@ -839,7 +867,11 @@ export default function ApPlannerRoute() {
       submitAction({ ...values, requestId });
     });
 
-  const updateGuestAp = async (update: (current: ApPlannerState) => ApPlannerState, eventUid?: string) => {
+  const updateGuestAp = async (
+    update: (current: ApPlannerState) => ApPlannerState,
+    eventUid: string | undefined,
+    analyticsAction: "add-plan" | "remove-plan" | "add-plan-with-access" | "save-access-time",
+  ) => {
     const errorKey = eventUid ?? "global";
     try {
       const result = await guestPlanner.update((current) => {
@@ -855,6 +887,7 @@ export default function ApPlannerRoute() {
         }));
         return false;
       } else {
+        trackGoogleAnalyticsEvent("ap_plan_saved", { action: analyticsAction });
         setGuestErrors((current) => {
           const next = { ...current };
           delete next[errorKey];
@@ -929,6 +962,7 @@ export default function ApPlannerRoute() {
         delete next[errorKey];
         return next;
       });
+      trackGoogleAnalyticsEvent("ap_plan_saved", { action: "save-conditions" });
       return true;
     } catch {
       setConditionSaveError("게스트 플래너를 저장하지 못했어요. 입력값은 유지돼요. 다시 시도해주세요.");
@@ -946,7 +980,7 @@ export default function ApPlannerRoute() {
       if (operation === "add-plan") eventPlans[eventUid] ??= { accessAt: null };
       else delete eventPlans[eventUid];
       return { ...current, eventPlans };
-    }, eventUid);
+    }, eventUid, operation);
   };
 
   const saveAccessAt = async (event: ApDisplayEvent, accessAt: string): Promise<boolean> => {
@@ -965,7 +999,7 @@ export default function ApPlannerRoute() {
           [event.timelineUid]: { ...plan, accessAt: new Date(accessAt).toISOString() },
         },
       };
-    }, event.timelineUid);
+    }, event.timelineUid, "save-access-time");
   };
 
   const addPlanWithAccessAt = async (event: ApDisplayEvent, accessAt: string): Promise<boolean> => {
@@ -988,7 +1022,7 @@ export default function ApPlannerRoute() {
         accessAt: new Date(accessAt).toISOString(),
       };
       return { ...current, eventPlans };
-    }, event.timelineUid);
+    }, event.timelineUid, "add-plan-with-access");
   };
 
   const applyException = (eventUid: string, suggestion: ApRefillSuggestion) => {
@@ -1020,6 +1054,7 @@ export default function ApPlannerRoute() {
             [eventUid]: "청휘석 플래너 설정을 저장하지 못했어요. 다시 시도해주세요.",
           }));
         } else {
+          trackGoogleAnalyticsEvent("ap_plan_saved", { action: "apply-charge-exception" });
           setGuestErrors((current) => {
             const next = { ...current };
             delete next[eventUid];
@@ -1049,6 +1084,7 @@ export default function ApPlannerRoute() {
             [eventUid]: "청휘석 플래너 설정을 저장하지 못했어요. 다시 시도해주세요.",
           }));
         } else {
+          trackGoogleAnalyticsEvent("ap_plan_saved", { action: "remove-charge-exception" });
           setGuestErrors((current) => {
             const next = { ...current };
             delete next[eventUid];

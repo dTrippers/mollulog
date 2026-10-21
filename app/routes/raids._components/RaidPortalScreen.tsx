@@ -238,7 +238,13 @@ function RaidVideoList({
     <>
       <div className="hidden grid-cols-4 gap-4 lg:grid">
         {videos.map((video) => (
-          <RaidPortalVideoCard key={video.youtubeId} video={video} allStudents={partyStudents} maxLevel={maxLevel} />
+          <RaidPortalVideoCard
+            key={video.youtubeId}
+            video={video}
+            allStudents={partyStudents}
+            maxLevel={maxLevel}
+            raidType={raid.raidType}
+          />
         ))}
       </div>
 
@@ -249,7 +255,13 @@ function RaidVideoList({
           className="-mx-4 px-4 pb-1"
         >
           {videos.map((video) => (
-            <RaidPortalVideoCard key={video.youtubeId} video={video} allStudents={partyStudents} maxLevel={maxLevel} />
+            <RaidPortalVideoCard
+              key={video.youtubeId}
+              video={video}
+              allStudents={partyStudents}
+              maxLevel={maxLevel}
+              raidType={raid.raidType}
+            />
           ))}
         </HorizontalScroll>
         <Button text="공략 영상 더보기" to={`${raidPath}/videos?sort=published_at_desc`} fullWidth className="mt-4" />

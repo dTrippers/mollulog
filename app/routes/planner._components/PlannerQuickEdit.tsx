@@ -16,6 +16,7 @@ import {
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 import { updateGuestPlanner } from "~/lib/guest-planner.client";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 export type PlannerQuickEditEntry = {
   id: string;
@@ -98,6 +99,7 @@ export default function PlannerQuickEdit({
   ]);
   const fetcher = useFetcher();
   const submissionIdRef = useRef<string | null>(null);
+  const pendingAnalyticsAction = useRef<"create" | "create_package" | "update" | null>(null);
   const [kind, setKind] = useState<PlannerQuickEditKind>(() => initialEntrySnapshot?.kind ?? initialKind ?? "buy");
   const [packageType, setPackageType] = useState<PlannerPackageType>("half");
   const [editingId, setEditingId] = useState<string | null>(() => initialEntrySnapshot?.id ?? null);
@@ -150,6 +152,10 @@ export default function PlannerQuickEdit({
     setMessage(response.success ? "저장했어요." : (response.error ?? "저장하지 못했어요."));
     setMessageIsError(!response.success);
     if (response.success) {
+      if (pendingAnalyticsAction.current) {
+        trackGoogleAnalyticsEvent("planner_saved", { action: pendingAnalyticsAction.current });
+      }
+      pendingAnalyticsAction.current = null;
       resetForm(kind);
       setMessage("저장했어요.");
       onSaved?.();
@@ -213,6 +219,7 @@ export default function PlannerQuickEdit({
     }
     const dateInstant = dateAtDisplayNoon.toISOString();
     const submissionId = crypto.randomUUID();
+    const analyticsAction = editingId ? "update" : kind === "package" ? "create_package" : "create";
     const formData = new FormData(form);
     formData.set("intent", editingId ? "update" : kind === "package" ? "create-package" : "create");
     formData.set("kind", kind);
@@ -223,6 +230,7 @@ export default function PlannerQuickEdit({
 
     if (isSignedIn) {
       submissionIdRef.current = submissionId;
+      pendingAnalyticsAction.current = analyticsAction;
       setMessage("");
       fetcher.submit(formData, { method: "post" });
       return;
@@ -337,11 +345,13 @@ export default function PlannerQuickEdit({
         return;
       }
       if (snapshot.status === "memory") {
+        trackGoogleAnalyticsEvent("planner_saved", { action: analyticsAction });
         if (newRecord) setEditingId(newRecord.recordId);
         setMessage("현재 입력은 이 화면에서만 유지돼요. 브라우저 저장소에 기록되지 않아 나가면 사라질 수 있어요.");
         setMessageIsError(false);
         return;
       }
+      trackGoogleAnalyticsEvent("planner_saved", { action: analyticsAction });
       setMessage("저장했어요.");
       setMessageIsError(false);
       resetForm(kind);

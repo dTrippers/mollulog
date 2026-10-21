@@ -7,6 +7,7 @@ import { FcGoogle } from "react-icons/fc";
 import { useFetcher, useLocation, useRouteLoaderData } from "react-router";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { rememberPendingAuthEvent } from "~/lib/google-analytics-events.client";
 
 type RootLoaderData = { currentUsername: string | null };
 type SignInBottomSheetProps = { initialError?: string | null };
@@ -47,18 +48,21 @@ export default function SignInBottomSheet({ initialError = null }: SignInBottomS
 
   const signInWithGoogle = () => {
     setClientError(null);
+    rememberPendingAuthEvent("login", "google");
     document.cookie = redirectToCookie;
     fetcher.submit({}, { action: "/auth/google/signin", method: "post", encType: "application/json" });
   };
 
   const signInWithGithub = () => {
     setClientError(null);
+    rememberPendingAuthEvent("login", "github");
     document.cookie = redirectToCookie;
     fetcher.submit({}, { action: "/auth/github/signin", method: "post", encType: "application/json" });
   };
 
   const signInWithDiscord = () => {
     setClientError(null);
+    rememberPendingAuthEvent("login", "discord");
     document.cookie = redirectToCookie;
     fetcher.submit({}, { action: "/auth/discord/signin", method: "post", encType: "application/json" });
   };
@@ -86,6 +90,7 @@ export default function SignInBottomSheet({ initialError = null }: SignInBottomS
     }
 
     document.cookie = redirectToCookie;
+    rememberPendingAuthEvent("login", "passkey");
     fetcher.submit(JSON.stringify(authenticationResponse), {
       action: "/auth/passkey/signin",
       method: "post",

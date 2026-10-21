@@ -6,6 +6,7 @@ import { Button, SubTitle, Textarea } from "~/components/primitives";
 import { serializeStudentStateDraftValue } from "~/domain/student-state";
 import { parseStudentStateImport } from "~/domain/student-state-serialization";
 import { getLogger } from "~/lib/observability.server";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { getAllStudentsMap } from "~/models/student";
 import {
   createSyncDraft,
@@ -116,7 +117,9 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     return formError(error instanceof Error ? error.message : GENERIC_IMPORT_ERROR);
   }
 
-  return redirect(`/connect/import/${draftUid}`);
+  const headers = new Headers();
+  headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "connect_import_submitted" }]));
+  return redirect(`/connect/import/${draftUid}`, { headers });
 };
 
 export default function ConnectImportIndexPage() {

@@ -6,7 +6,9 @@ import type { AppLoadContext, EntryContext, HandleErrorFunction } from "react-ro
 import { isRouteErrorResponse, ServerRouter } from "react-router";
 import { watchIo } from "./lib/io-watchdog";
 import { captureServerError, getLogger } from "./lib/observability.server";
+import { sanitizeErrorForLogging } from "./lib/privacy-scrub";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
+import { getRoutePageMetadata } from "./lib/route-pattern";
 import { canonicalUrl } from "./lib/seo";
 import {
   isGoogleSearchCrawler,
@@ -37,10 +39,16 @@ export default async function handleRequest(
   loadContext: AppLoadContext,
 ) {
   let statusCode = responseStatusCode;
+  const routePage = getRoutePageMetadata(
+    reactRouterContext.staticHandlerContext.matches.map((match) => ({
+      id: match.route.id,
+      params: match.params,
+    })),
+  );
   const logger = getLogger(loadContext.cloudflare.env, loadContext.cloudflare.ctx, {
     handler: "entry.server",
     method: request.method,
-    url: request.url,
+    routePattern: routePage.routePattern,
   });
   const path = new URL(request.url).pathname;
   const requestDiagnostics =
@@ -55,7 +63,7 @@ export default async function handleRequest(
     captureServerError(error, {
       handler: "entry.server",
       method: request.method,
-      url: request.url,
+      routePattern: routePage.routePattern,
     });
     statusCode = 500;
   };
@@ -65,17 +73,17 @@ export default async function handleRequest(
     body = (
       await watchIo("ssr.prerender", prerender(router, { signal: request.signal, onError: onRenderError }), {
         method: request.method,
-        path,
+        routePattern: routePage.routePattern,
       })
     ).prelude;
   } else {
     const streamingBody = await watchIo(
       "ssr.render",
       renderToReadableStream(router, { signal: request.signal, onError: onRenderError }),
-      { method: request.method, path },
+      { method: request.method, routePattern: routePage.routePattern },
     );
     if (botRequest) {
-      await watchIo("ssr.allReady", streamingBody.allReady, { method: request.method, path });
+      await watchIo("ssr.allReady", streamingBody.allReady, { method: request.method, routePattern: routePage.routePattern });
     }
     body = streamingBody;
   }
@@ -141,15 +149,13 @@ export default async function handleRequest(
       renderId: requestDiagnostics.renderId,
       cloudFrontRequestId: requestDiagnostics.cloudFrontRequestId,
       cloudflareRayId: requestDiagnostics.cloudflareRayId,
-      requestPath: requestDiagnostics.requestPath,
-      routerPath,
+      routePattern: routePage.routePattern,
       matchedRouteIds,
-      expectedCanonical: canonicalUrl(requestDiagnostics.requestPath),
       buildId: requestDiagnostics.buildId,
       statusCode,
       seoMode: responseHeaders.get(SEO_DEBUG_HEADERS.seoMode),
       invariant: responseHeaders.get(SEO_DEBUG_HEADERS.invariant),
-      invariantFailures,
+      invariantFailures: invariantFailures.map((failure) => failure.split(":", 1)[0]),
       bodySha256,
       cacheControl: responseHeaders.get("Cache-Control"),
       vary: responseHeaders.get("Vary"),
@@ -203,10 +209,9 @@ export const handleError: HandleErrorFunction = (error, { request }) => {
     return;
   }
 
-  console.error(error);
+  console.error(sanitizeErrorForLogging(error));
   captureServerError(error, {
     handler: "handleError",
     method: request.method,
-    url: request.url,
   });
 };

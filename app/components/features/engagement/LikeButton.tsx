@@ -1,8 +1,9 @@
 import { HeartIcon } from "@heroicons/react/24/outline";
 import { HeartIcon as SolidHeartIcon } from "@heroicons/react/24/solid";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFetcher } from "react-router";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { trackLikeAdded } from "~/lib/google-analytics-events.client";
 import type { LikeChangedActionResult } from "~/domain/like";
 
 export default function LikeButton({
@@ -22,6 +23,7 @@ export default function LikeButton({
 }) {
   const { showSignIn } = useSignIn();
   const fetcher = useFetcher<LikeChangedActionResult>();
+  const trackedLikeResultRef = useRef<unknown>(null);
   const [liked, setLiked] = useState(initialLiked);
   const [likeCount, setLikeCount] = useState(initialLikeCount);
 
@@ -34,8 +36,16 @@ export default function LikeButton({
     if (fetcher.data?.kind === "likeChanged" && fetcher.data.targetUid === targetUid) {
       setLiked(fetcher.data.liked);
       setLikeCount(fetcher.data.likeCount);
+      if (fetcher.data !== trackedLikeResultRef.current) {
+        trackedLikeResultRef.current = fetcher.data;
+        if (action.startsWith("/api/community/posts/")) {
+          trackLikeAdded("community_post", fetcher.data.liked);
+        } else if (action.startsWith("/api/timelines/")) {
+          trackLikeAdded("timeline", fetcher.data.liked);
+        }
+      }
     }
-  }, [fetcher.data, targetUid]);
+  }, [action, fetcher.data, targetUid]);
 
   const toggleLike = () => {
     if (!liked && !canLike) return;

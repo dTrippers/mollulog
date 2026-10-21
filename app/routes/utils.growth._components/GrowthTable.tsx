@@ -14,6 +14,7 @@ import {
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import GrowthViewSettingsPopover from "./GrowthViewSettingsPopover";
 import { shouldSyncRowDraft } from "./growth-row-sync";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { type GrowthSortOrder, sortGrowthStudents } from "./growth-sort";
 import { useGrowthViewSettings } from "./growth-view-settings";
 import type { GrowthActionResult, GrowthAvailableStudent, GrowthStudent } from "./types";
@@ -716,6 +717,7 @@ function GrowthRow({
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     submittedRef.current = null;
     if (isActionSuccess(fetcher.data)) {
+      trackGoogleAnalyticsEvent("growth_plan_changed", { action: "growth" });
       growthRetryRef.current = null;
       dispatchRow({ type: "growthSuccess", submitted });
       const next = extractStudentUpdate(fetcher.data);
@@ -745,6 +747,7 @@ function GrowthRow({
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     relationshipSubmittedRef.current = null;
     if (isActionSuccess(relationshipFetcher.data)) {
+      trackGoogleAnalyticsEvent("growth_plan_changed", { action: "relationship" });
       relationshipRetryRef.current = null;
       dispatchRow({ type: "relationshipSuccess", submitted });
       const next = extractStudentUpdate(relationshipFetcher.data);
@@ -781,6 +784,7 @@ function GrowthRow({
     const responseSubmissionId = getActionSubmissionId(tierFetcher.data);
     if (responseSubmissionId !== null && responseSubmissionId !== submitted.id) return;
     if (isActionSuccess(tierFetcher.data)) {
+      trackGoogleAnalyticsEvent("growth_plan_changed", { action: "tier" });
       tierSubmittedRef.current = null;
       tierRetryRef.current = null;
       dispatchRow({ type: "setTierError", error: null });
@@ -816,6 +820,7 @@ function GrowthRow({
     enrollSubmittedRef.current = null;
 
     if (isActionSuccess(enrollFetcher.data)) {
+      trackGoogleAnalyticsEvent("growth_plan_changed", { action: "enroll" });
       dispatchRow({ type: "enrollSuccess" });
       const next = extractStudentUpdate(enrollFetcher.data);
       if (next) {
@@ -841,6 +846,7 @@ function GrowthRow({
     }
     if (staleWriteBlockedRef.current) return;
     if (isActionSuccess(removeFetcher.data)) {
+      trackGoogleAnalyticsEvent("growth_plan_changed", { action: "remove" });
       removeSubmittedRef.current = null;
       removeRetryRef.current = false;
       dispatchRow({ type: "removeSuccess" });
@@ -1539,8 +1545,15 @@ function AddStudentControl({
   onSortOrderChange: (sortOrder: GrowthSortOrder) => void;
   onShowNumberInputShortcutsChange: (show: boolean) => void;
 }) {
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<GrowthActionResult>();
   const [selectKey, setSelectKey] = useState(0);
+  const trackedResult = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data || fetcher.data === trackedResult.current) return;
+    trackedResult.current = fetcher.data;
+    if (isActionSuccess(fetcher.data)) trackGoogleAnalyticsEvent("growth_plan_changed", { action: "add" });
+  }, [fetcher.data, fetcher.state]);
 
   return (
     <div className="relative z-50 flex flex-wrap items-center gap-x-3 gap-y-2">

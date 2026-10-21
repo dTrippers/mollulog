@@ -8,7 +8,7 @@ import {
   UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import hangul from "hangul-js";
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import {
   Button,
   Dropdown,
@@ -20,6 +20,7 @@ import {
   PanelSearchField,
 } from "~/components/primitives";
 import { Attack, Defense } from "~/graphql/graphql";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import {
   attackTypeLocale,
   defenseTypeShortLocale,
@@ -61,6 +62,7 @@ type StudentFilterProps = {
   sortBy?: SortBy[];
   useSearch?: boolean;
   directory?: boolean;
+  searchScope?: "students" | "my_students";
 };
 
 const attackFilterOptions = [
@@ -241,6 +243,28 @@ export function clearStudentDirectoryDisplaySettings(state: StudentFilterState):
   return { ...state, displayBy: "none", groupBy: "none" };
 }
 
+export function trackStudentFilterChanges(
+  scope: "students" | "my_students",
+  previous: StudentFilterState,
+  next: StudentFilterState,
+) {
+  for (const key of [
+    "attackTypes",
+    "defenseTypes",
+    "roles",
+    "tacticRoles",
+    "positions",
+    "schools",
+    "equipmentSlots",
+    "initialTiers",
+    "sort",
+    "groupBy",
+    "displayBy",
+  ] as const) {
+    if (JSON.stringify(previous[key]) !== JSON.stringify(next[key])) trackFilterApply(scope, key);
+  }
+}
+
 type StudentDirectoryDisplaySettingsProps = {
   state: StudentFilterState;
   onStateChange: (state: StudentFilterState) => void;
@@ -257,7 +281,12 @@ export function StudentDirectoryDisplaySettings({ state, onStateChange }: Studen
             aria-label="학생 카드에 표시할 정보"
             value={state.displayBy ?? "none"}
             options={studentDisplayOptions}
-            onChange={(displayBy) => onStateChange({ ...state, displayBy })}
+            onChange={(displayBy) => {
+              if (displayBy !== state.displayBy) {
+                trackGoogleAnalyticsEvent("filter_apply", { scope: "students", filter: "displayBy" });
+              }
+              onStateChange({ ...state, displayBy });
+            }}
             size="xs"
           />
         }
@@ -270,7 +299,12 @@ export function StudentDirectoryDisplaySettings({ state, onStateChange }: Studen
             aria-label="학생 묶어보기"
             value={state.groupBy ?? "none"}
             options={studentGroupOptions}
-            onChange={(groupBy) => onStateChange({ ...state, groupBy })}
+            onChange={(groupBy) => {
+              if (groupBy !== state.groupBy) {
+                trackGoogleAnalyticsEvent("filter_apply", { scope: "students", filter: "groupBy" });
+              }
+              onStateChange({ ...state, groupBy });
+            }}
             size="xs"
           />
         }
@@ -301,6 +335,7 @@ export default function StudentFilter({
   sortBy,
   useSearch,
   directory = false,
+  searchScope = "students",
 }: StudentFilterProps) {
   const [internalState, setInternalState] = useState<StudentFilterState>(() =>
     createStudentFilterState(sortBy?.[0] || "recent"),
@@ -329,7 +364,6 @@ export default function StudentFilter({
   const controlledSearch = controlledState?.search;
   const isControlled = controlledState !== undefined;
   const [localSearch, setLocalSearch] = useState(() => controlledSearch ?? "");
-
   useEffect(() => {
     setLocalSearch(isControlled ? (controlledSearch ?? "") : "");
   }, [controlledSearch, isControlled]);
@@ -347,34 +381,44 @@ export default function StudentFilter({
   }, [students, state, onFilterChange]);
 
   const toggleAttack = (attackType: Attack, activated: boolean) => {
+    if (state.attackTypes.includes(attackType) !== activated) trackFilterApply(searchScope, "attackTypes");
     updateFilterState("attackTypes", attackType, activated, setFilterState);
   };
 
   const toggleDefense = (defenseType: Defense, activated: boolean) => {
+    if (state.defenseTypes.includes(defenseType) !== activated) trackFilterApply(searchScope, "defenseTypes");
     updateFilterState("defenseTypes", defenseType, activated, setFilterState);
   };
 
   const toggleRole = (role: Role, activated: boolean) => {
+    if (state.roles.includes(role) !== activated) trackFilterApply(searchScope, "roles");
     updateFilterState("roles", role, activated, setFilterState);
   };
 
   const toggleSort = (sort: SortBy) => {
+    if (state.sort !== sort) trackFilterApply(searchScope, "sort");
     setFilterState((prev) => ({ ...prev, sort }));
   };
 
   const togglePosition = (position: Position, activated: boolean) => {
+    if (state.positions.includes(position) !== activated) trackFilterApply(searchScope, "positions");
     updateFilterState("positions", position, activated, setFilterState);
   };
 
   const toggleTacticRole = (tacticRole: TacticRole, activated: boolean) => {
+    if (state.tacticRoles.includes(tacticRole) !== activated) trackFilterApply(searchScope, "tacticRoles");
     updateFilterState("tacticRoles", tacticRole, activated, setFilterState);
   };
 
   const toggleSchool = (school: string, activated: boolean) => {
+    if (state.schools.includes(school) !== activated) trackFilterApply(searchScope, "schools");
     updateFilterState("schools", school, activated, setFilterState);
   };
 
   const toggleEquipment = (slotIndex: number, equipment: string, activated: boolean) => {
+    if ((state.equipmentSlots[slotIndex] ?? []).includes(equipment) !== activated) {
+      trackFilterApply(searchScope, "equipmentSlots");
+    }
     setFilterState((prev) => {
       const equipmentSlots: [string[], string[], string[]] = [
         [...(prev.equipmentSlots?.[0] ?? [])],
@@ -392,6 +436,7 @@ export default function StudentFilter({
   };
 
   const toggleInitialTier = (initialTier: number, activated: boolean) => {
+    if ((state.initialTiers ?? []).includes(initialTier) !== activated) trackFilterApply(searchScope, "initialTiers");
     setFilterState((prev) => {
       const initialTiers = prev.initialTiers ?? [];
       return {
@@ -572,7 +617,11 @@ export default function StudentFilter({
             text="필터 해제"
             size="xs"
             variant="danger-subtle"
-            onClick={() => setFilterState(clearStudentFilters)}
+            onClick={() => {
+              const nextState = clearStudentFilters(state);
+              trackStudentFilterChanges(searchScope, state, nextState);
+              setFilterState(nextState);
+            }}
           />
         </div>
       ) : null}
@@ -597,6 +646,10 @@ type FilterableStudent = {
 
   order: number;
 };
+
+function trackFilterApply(_scope: "students" | "my_students", filter: string) {
+  trackGoogleAnalyticsEventIfAllowed("filter_apply", { scope: "students", filter });
+}
 
 function updateFilterState<
   K extends keyof Pick<

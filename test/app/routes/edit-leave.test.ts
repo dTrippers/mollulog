@@ -114,7 +114,11 @@ describe("edit.leave", () => {
     });
     expect((result as Response).headers.get("Location")).toBe("/?account=left");
     expect((result as Response).headers.getSetCookie()).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^__session=/), expect.stringMatching(/^__session_validation=/)]),
+      expect.arrayContaining([
+        expect.stringMatching(/^__session=/),
+        expect.stringMatching(/^__session_validation=/),
+        expect.stringMatching(/^__mllg_analytics_events=/),
+      ]),
     );
   });
 
@@ -131,7 +135,11 @@ describe("edit.leave", () => {
     expect(result).toMatchObject({ status: 302 });
     expect((result as Response).headers.get("Location")).toBe("/?account=left");
     expect((result as Response).headers.getSetCookie()).toEqual(
-      expect.arrayContaining([expect.stringMatching(/^__session=/), expect.stringMatching(/^__session_validation=/)]),
+      expect.arrayContaining([
+        expect.stringMatching(/^__session=/),
+        expect.stringMatching(/^__session_validation=/),
+        expect.stringMatching(/^__mllg_analytics_events=/),
+      ]),
     );
   });
 

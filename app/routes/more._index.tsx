@@ -14,6 +14,7 @@ import {
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
 import { canonicalLink } from "~/lib/seo";
+import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
 import { submitPreference } from "~/routes/api.preference";
@@ -21,6 +22,7 @@ import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
   key: string;
+  menuId?: string;
   name: string;
   OutlineIcon: NavigationItem["OutlineIcon"];
   to?: string;
@@ -115,6 +117,7 @@ export default function MoreIndexPage() {
 function toMoreActionItem(item: NavigationItem): MoreActionItem {
   return {
     key: item.menuId ?? item.to,
+    menuId: item.menuId,
     to: item.to,
     name: item.name,
     OutlineIcon: item.OutlineIcon,
@@ -567,6 +570,9 @@ function MoreMenuItem({
         to={item.to}
         className="absolute inset-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
         aria-label={getMoreMenuItemAriaLabel(item)}
+        onClick={() => {
+          if (item.menuId) trackGoogleAnalyticsEventIfAllowed("nav_menu_click", { menu_id: item.menuId });
+        }}
       />
       <div
         className="pointer-events-none relative z-[1] flex min-w-0 flex-1 items-center gap-3 pr-11"

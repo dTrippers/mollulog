@@ -4,6 +4,7 @@ import { type IdentityRepositoryOptions, withIdentityDatabase } from "~/db/postg
 import { pgSenseisTable } from "~/db/postgres/schema";
 import type { AccountLabel } from "~/domain/account-label";
 import { postgresUniqueConstraintName } from "~/lib/db";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 
 export type SenseiRole = "guest" | "admin";
 export type ProfileVisibility = "public" | "private";
@@ -227,7 +228,7 @@ export async function createSensei(
     if (constraint === "senseis_google_id_uidx" || constraint === "senseis_github_id_uidx") {
       return { error: { form: "이미 다른 계정에 연결된 로그인 계정이에요." } };
     }
-    console.error(error);
+    console.error(sanitizeErrorForLogging(error));
     throw error;
   }
 }
@@ -281,7 +282,7 @@ export async function updateSensei(
     if (constraint === "senseis_username_uidx") {
       return { error: { username: "이미 사용중인 닉네임입니다." } };
     }
-    console.error(error);
+    console.error(sanitizeErrorForLogging(error));
     throw error;
   }
 }

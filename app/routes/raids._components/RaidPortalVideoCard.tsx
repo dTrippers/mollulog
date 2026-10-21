@@ -5,15 +5,18 @@ import { toRaidPartyRow } from "~/components/features/raids/toRaidPartyRow";
 import { AttributeBadge } from "~/components/primitives";
 import { defenseTypeColor, defenseTypeLocale } from "~/locales/ko";
 import { getRaidVideoParties, type RaidVideoItem } from "~/models/raid-videos";
+import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 
 export default function RaidPortalVideoCard({
   video,
   allStudents,
   maxLevel,
+  raidType,
 }: {
   video: RaidVideoItem;
   allStudents: RaidPartyStudentMap;
   maxLevel: number;
+  raidType: string;
 }) {
   const parties = getRaidVideoParties(video);
   const firstParty = parties[0];
@@ -30,6 +33,7 @@ export default function RaidPortalVideoCard({
     <article className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30">
       <Link
         to={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+        onClick={() => trackGoogleAnalyticsEventIfAllowed("raid_video_opened", { raid_type: raidType })}
         target="_blank"
         rel="noopener noreferrer"
         className="block transition-colors after:absolute after:inset-0 after:z-10 group-hover:bg-muted/40"

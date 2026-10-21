@@ -4,6 +4,7 @@ import { Authenticator, AuthorizationError } from "remix-auth";
 import { GitHubStrategy } from "remix-auth-github";
 import { GoogleStrategy } from "remix-auth-google";
 import { getLogger } from "~/lib/observability.server";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import {
   type AuthProvider,
   assertDiscordIdentityOwnership,
@@ -298,7 +299,12 @@ async function linkProvider(
     throw redirect("/edit?auth_error=identity_in_use");
   }
 
-  throw redirect("/edit?auth=linked");
+  const headers = new Headers();
+  headers.append(
+    "Set-Cookie",
+    createAnalyticsEventsCookie(request.url, [{ eventName: "account_linked", parameters: { provider } }]),
+  );
+  throw redirect("/edit?auth=linked", { headers });
 }
 
 async function fetchGoogleUserId(idToken: string): Promise<string> {

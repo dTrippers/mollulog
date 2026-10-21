@@ -1,5 +1,5 @@
 import { ChevronDownIcon, KeyIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -9,6 +9,8 @@ import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transiti
 import { Button } from "~/components/v2/primitives/Button";
 import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { type ApiFieldError, ApiInputError } from "~/domain/mollulog-api";
 import {
   createPersonalApiKey,
@@ -50,7 +52,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       { headers: privateHeaders },
     );
   } catch (error) {
-    console.error("[developers/keys] failed to load personal API keys", error);
+    console.error("[developers/keys] failed to load personal API keys", sanitizeErrorForLogging(error));
     return data(
       { keys: [] as PersonalApiKeyView[], loadError: true, loadedAt: Date.now() },
       { headers: privateHeaders },
@@ -109,7 +111,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
           { status: 400, headers: privateHeaders },
         );
       }
-      console.error("[developers/keys] failed to issue personal API key", error);
+      console.error("[developers/keys] failed to issue personal API key", sanitizeErrorForLogging(error));
       return data<KeyActionData>(
         { ok: false, intent, message: "API 키를 발급하지 못했어요. 잠시 후 다시 시도해주세요." },
         { status: 500, headers: privateHeaders },
@@ -139,7 +141,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         { headers: privateHeaders },
       );
     } catch (error) {
-      console.error("[developers/keys] failed to revoke personal API key", error);
+      console.error("[developers/keys] failed to revoke personal API key", sanitizeErrorForLogging(error));
       return data<KeyActionData>(
         { ok: false, intent, message: "API 키를 삭제하지 못했어요. 잠시 후 다시 시도해주세요." },
         { status: 500, headers: privateHeaders },
@@ -181,7 +183,15 @@ export default function DevelopersKeys() {
   const [writeScope, setWriteScope] = useState(false);
   const [confirmingUid, setConfirmingUid] = useState<string | null>(null);
   const [now, setNow] = useState(loadedAt);
+  const trackedActionData = useRef(actionData);
   const isSubmitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    if (actionData === trackedActionData.current) return;
+    trackedActionData.current = actionData;
+    if (actionData?.ok && actionData.intent === "issue") trackGoogleAnalyticsEvent("api_key_issued");
+    if (actionData?.ok && actionData.intent === "revoke") trackGoogleAnalyticsEvent("api_key_revoked");
+  }, [actionData]);
 
   useEffect(() => {
     setNow(loadedAt);

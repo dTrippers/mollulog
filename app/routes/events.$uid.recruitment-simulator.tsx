@@ -10,6 +10,7 @@ import {
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
 
@@ -184,7 +185,9 @@ export default function EventRecruitmentSimulator() {
 
   const handleTenPull = () => {
     stopUntilTarget();
+    if (!selectedPickupStudentUid) return;
     appendTenPull(null);
+    trackGoogleAnalyticsEvent("recruitment_simulated", { mode: "ten_pull" });
   };
 
   const handleOpenTargetChooser = () => {
@@ -201,11 +204,13 @@ export default function EventRecruitmentSimulator() {
   };
 
   const handleRunUntilTarget = (studentUid: string) => {
+    if (!selectedPickupStudentUid) return;
     stopUntilTarget();
     setTargetStudentUid(studentUid);
     setTargetChooserOpen(false);
     setTargetSearchText("");
     const found = appendTenPull(studentUid);
+    trackGoogleAnalyticsEvent("recruitment_simulated", { mode: "until_target" });
     if (found) {
       return;
     }

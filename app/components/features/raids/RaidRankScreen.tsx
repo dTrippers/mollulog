@@ -5,6 +5,8 @@ import { getRaidDifficultyScoreRange, normalizeBossUid, scoreToDifficultyAndTime
 import type { Defense } from "~/graphql/graphql";
 import type { UtcIsoString } from "~/lib/date-time";
 import { convertTier, fetchRanks, type ParsedRaidRankDocument } from "~/lib/ranks/ranks";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import type { RaidType } from "~/models/content.d";
 import RaidPartyCard, { type RaidPartySlot } from "./RaidPartyCard";
 import type { RaidRankFilterState } from "./RaidRankFilter";
@@ -215,6 +217,9 @@ export default function RaidRankScreen({
               <Button
                 key={youtubeId}
                 href={`https://www.youtube.com/watch?v=${youtubeId}`}
+                onClick={() =>
+                  trackGoogleAnalyticsEvent("raid_video_opened", { raid_type: currentRaid.raidType })
+                }
                 target="_blank"
                 variant="default"
                 size="xs"
@@ -292,7 +297,12 @@ function getClearTimeLabel({
   try {
     return formatClearTime(scoreToDifficultyAndTime(boss, score).clearTimeMillisec);
   } catch (error) {
-    console.error("Failed to format clear time label.", { raidType, bossUid, score, error });
+    console.error("Failed to format clear time label.", {
+      raidType,
+      bossUid,
+      score,
+      error: sanitizeErrorForLogging(error),
+    });
     return null;
   }
 }

@@ -1,12 +1,12 @@
 import * as Sentry from "@sentry/cloudflare";
 import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { createServerSentryOptions } from "~/lib/observability.server";
+import { serializeErrorForLogging } from "~/lib/privacy-scrub";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
 import { runScheduledJobs } from "~/jobs/scheduled";
 
 type ObservabilityEnv = Env & {
-  SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
   SERVER_SENTRY_DSN?: string;
 };
 
@@ -48,8 +48,7 @@ const handler: ExportedHandler<ObservabilityEnv> = {
           "[io-watchdog] failed",
           getIoWatchdogContext({
             label: "scheduled.run",
-            errorName: error instanceof Error ? error.name : undefined,
-            errorMessage: error instanceof Error ? error.message : String(error),
+            error: serializeErrorForLogging(error),
             ...scheduledContext,
           }),
         );

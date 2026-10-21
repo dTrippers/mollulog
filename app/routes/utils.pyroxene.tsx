@@ -32,6 +32,7 @@ import {
   guestPyroxeneRecordToTimelineItems,
 } from "~/domain/guest-pyroxene-planner";
 import { sortPlannerStateTimelineRecords } from "~/domain/planner-state";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { defaultPyroxenePlannerOptions, type PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
   createOptimisticApPackageTimelineItems,
@@ -377,7 +378,22 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     throw error;
   }
 
-  return { success: true };
+  const sectionByIntent = {
+    "save-buy": "buy",
+    "save-owned-resources": "owned_resources",
+    "save-monthly-package": "monthly_package",
+    "save-ap-package": "ap_package",
+    "save-attendance": "attendance",
+    "save-other": "other",
+    "update-event-data": "event_data",
+    "save-options": "options",
+    "remove-ap-charge-exception": "delete",
+    "collect-source": "source",
+    "uncollect-source": "source",
+    "delete-pickup-completion": "delete",
+    "delete-timeline-item": "delete",
+  } as const;
+  return { success: true, analyticsSection: sectionByIntent[actionData.intent] };
 };
 
 export const meta: MetaFunction = ({ location }) => {
@@ -396,6 +412,7 @@ export const meta: MetaFunction = ({ location }) => {
 
 type OwnedResourcesActionResult = {
   success: boolean;
+  analyticsSection?: "owned_resources";
   error?: string;
   revisionConflict?: boolean;
   savedAt?: string | null;
@@ -447,6 +464,7 @@ export default function PyroxenePlanner() {
   const favoriteFetcher = useFetcher();
   const timelineSaveInFlight = useRef(false);
   const pendingOwnedResourceSave = useRef<PendingOwnedResourceSave | null>(null);
+  const processedAnalyticsResponse = useRef<Awaited<ReturnType<typeof action>> | null>(null);
   const [ownedResourceSaveError, setOwnedResourceSaveError] = useState<string | null>(null);
 
   const confirmOwnedResourceSave = useCallback(
@@ -537,6 +555,23 @@ export default function PyroxenePlanner() {
   }, [fetcher.state]);
 
   useEffect(() => {
+    const result = fetcher.data;
+    if (
+      fetcher.state !== "idle" ||
+      !result ||
+      !("success" in result) ||
+      result.success !== true ||
+      !("analyticsSection" in result) ||
+      !result.analyticsSection ||
+      result === processedAnalyticsResponse.current
+    ) {
+      return;
+    }
+    processedAnalyticsResponse.current = result;
+    trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: result.analyticsSection });
+  }, [fetcher.data, fetcher.state]);
+
+  useEffect(() => {
     if (ownedResourcesFetcher.state !== "idle") return;
 
     const pendingSave = pendingOwnedResourceSave.current;
@@ -549,6 +584,7 @@ export default function PyroxenePlanner() {
     }
 
     setOwnedResourceSaveError(null);
+    trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "owned_resources" });
     confirmOwnedResourceSave(pendingSave, ownedResourcesFetcher.data.savedAt);
   }, [confirmOwnedResourceSave, ownedResourcesFetcher.data, ownedResourcesFetcher.state]);
 
@@ -573,7 +609,11 @@ export default function PyroxenePlanner() {
             ].sort(),
           },
         },
-      }));
+      })).then((snapshot) => {
+        if (snapshot.status === "ready" || snapshot.status === "memory") {
+          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "owned_resources" });
+        }
+      });
       return;
     }
 
@@ -589,6 +629,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleCollectedSourceChange = (sourceKey: string, collected: boolean) => {
+    if (localCollectedSourceKeys.includes(sourceKey) === collected) return;
     setLocalCollectedSourceKeys((prev) => {
       if (collected) {
         return prev.includes(sourceKey) ? prev : [...prev, sourceKey];
@@ -607,7 +648,11 @@ export default function PyroxenePlanner() {
               : envelope.document.pyroxene.collectedSourceKeys.filter((key) => key !== sourceKey),
           },
         },
-      }));
+      })).then((snapshot) => {
+        if (snapshot.status === "ready" || snapshot.status === "memory") {
+          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "source" });
+        }
+      });
       return;
     }
     fetcher.submit(
@@ -617,6 +662,8 @@ export default function PyroxenePlanner() {
   };
 
   const handleUpdateEventData = (eventUid: string, data: { expectedTrials?: number | null }) => {
+    const currentEventData = localEventData.find((entry) => entry.eventUid === eventUid);
+    if ((currentEventData?.expectedTrials ?? null) === (data.expectedTrials ?? null)) return;
     setLocalEventData((prev) => {
       const exists = prev.some((d) => d.eventUid === eventUid);
       if (exists) {
@@ -648,6 +695,10 @@ export default function PyroxenePlanner() {
           ...envelope,
           document: { ...envelope.document, pyroxene: { ...envelope.document.pyroxene, eventData } },
         };
+      }).then((snapshot) => {
+        if (snapshot.status === "ready" || snapshot.status === "memory") {
+          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "event_data" });
+        }
       });
       return;
     }
@@ -662,6 +713,7 @@ export default function PyroxenePlanner() {
     const recruitmentResultCompletion = localRecruitmentResultCompletions.find(
       (completion) => completion.eventUid === eventUid,
     );
+    if (!recruitmentResultCompletion) return;
     setLocalRecruitmentResultCompletions((prev) => prev.filter((completion) => completion.eventUid !== eventUid));
     fetcher.submit(
       {
@@ -674,6 +726,7 @@ export default function PyroxenePlanner() {
 
   const handleDeleteItem = (itemUid: string) => {
     const baseUid = extractPyroxeneTimelineBaseUid(itemUid);
+    if (!localTimelineItems.some((item) => item.uid.startsWith(baseUid))) return;
     setLocalTimelineItems((prev) => prev.filter((item) => !item.uid.startsWith(baseUid)));
     if (!signedIn) {
       void guestPlanner.update((envelope) => ({
@@ -687,7 +740,11 @@ export default function PyroxenePlanner() {
             ),
           },
         },
-      }));
+      })).then((snapshot) => {
+        if (snapshot.status === "ready" || snapshot.status === "memory") {
+          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "delete" });
+        }
+      });
       return;
     }
     fetcher.submit(
@@ -741,6 +798,20 @@ export default function PyroxenePlanner() {
           },
         },
       };
+    }).then((snapshot) => {
+      if (snapshot.status === "ready" || snapshot.status === "memory") {
+        const section =
+          record.kind === "buy"
+            ? "buy"
+            : record.kind === "monthlyPackage"
+              ? "monthly_package"
+              : record.kind === "apPackage"
+                ? "ap_package"
+                : record.kind === "attendance"
+                  ? "attendance"
+                  : "other";
+        trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section });
+      }
     });
   };
 
@@ -907,13 +978,18 @@ export default function PyroxenePlanner() {
   };
 
   const handleOptionsChange = (newOptions: PyroxenePlannerOptions) => {
+    if (JSON.stringify(newOptions) === JSON.stringify(options)) return;
     setOptions(newOptions);
     if (optionsSaveTimer.current) {
       clearTimeout(optionsSaveTimer.current);
     }
     optionsSaveTimer.current = setTimeout(() => {
       if (!signedIn) {
-        void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, newOptions));
+        void guestPlanner.update((envelope) => updateGuestPlannerOptions(envelope, newOptions)).then((snapshot) => {
+          if (snapshot.status === "ready" || snapshot.status === "memory") {
+            trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "options" });
+          }
+        });
         return;
       }
       fetcher.submit(
@@ -924,6 +1000,7 @@ export default function PyroxenePlanner() {
   };
 
   const handleRemoveApChargeException = (uid: string) => {
+    if (!options.consumption.apChargeExceptions.some((exception) => exception.uid === uid)) return;
     setOptions((current) => ({
       ...current,
       consumption: {
@@ -932,7 +1009,11 @@ export default function PyroxenePlanner() {
       },
     }));
     if (!signedIn) {
-      void guestPlanner.update((envelope) => removeGuestPlannerApChargeException(envelope, uid));
+      void guestPlanner.update((envelope) => removeGuestPlannerApChargeException(envelope, uid)).then((snapshot) => {
+        if (snapshot.status === "ready" || snapshot.status === "memory") {
+          trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "delete" });
+        }
+      });
       return;
     }
     fetcher.submit(

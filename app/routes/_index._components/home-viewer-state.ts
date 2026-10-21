@@ -4,6 +4,7 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import type { RecruitmentCompletionMeta, RecruitmentResult } from "~/models/recruitment-result";
 import type { ActionData as ContentsActionData } from "~/routes/api.contents";
 import type { ActionData as RecruitmentResultActionData } from "~/routes/api.recruitment-results";
+import { trackRecruitmentResultSubmitted } from "~/lib/google-analytics-events.client";
 import {
   applyFavoriteCountChange,
   equalFavorites,
@@ -96,11 +97,17 @@ async function sendWrite(
 // A write succeeded only when the route answered 200 with JSON, without a redirect, and the body is the one its action returns.
 // A resource route returns `null` as `Response.json(null)`, so a favorite write answers the body `null`. A completion write answers
 // `{ success: true, ... }`. A followed redirect to an HTML page and an error status both fail this check.
-async function writeSucceeded(response: Response | null, isSuccessBody: (json: unknown) => boolean): Promise<boolean> {
+async function writeSucceeded(
+  response: Response | null,
+  isSuccessBody: (json: unknown) => boolean,
+  onSuccess?: (json: unknown) => void,
+): Promise<boolean> {
   if (!response || response.redirected || response.type === "opaqueredirect" || response.status !== 200) return false;
   if (!response.headers.get("content-type")?.includes("application/json")) return false;
   const json: unknown = await response.json().catch(() => undefined);
-  return json !== undefined && isSuccessBody(json);
+  if (json === undefined || !isSuccessBody(json)) return false;
+  onSuccess?.(json);
+  return true;
 }
 
 const isFavoriteWriteBody = (json: unknown) => json === null;
@@ -250,7 +257,9 @@ export function useHomeViewerState({
         }
       : { action: "uncompleteStudent", recruitmentGroupUid: groupUid, studentUid };
     void sendWrite("/api/recruitment-results", body).then(async (response) => {
-      const succeeded = await writeSucceeded(response, isCompletionWriteBody);
+      const succeeded = await writeSucceeded(response, isCompletionWriteBody, (json) => {
+        trackRecruitmentResultSubmitted((json as { analyticsAction?: unknown }).analyticsAction);
+      });
       setWritesInFlight((count) => count - 1);
       if (succeeded) {
         setCompletionOverrides((prev) => confirmOverride(prev, key, requestId, latestSettled.current ?? null));

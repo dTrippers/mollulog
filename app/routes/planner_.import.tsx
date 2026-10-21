@@ -17,6 +17,7 @@ import { Button, Callout, Checkbox, ResourceCard, SectionCard } from "~/componen
 import type { ApPlannerState } from "~/domain/ap-planner";
 import { apPlannerStateHasData, formatApShortDate } from "~/domain/ap-planner";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
 import {
   clearGuestPlannerItemsIfUnchanged,
@@ -1093,6 +1094,10 @@ export default function UnifiedGuestPlannerImportPage() {
     const result = fetcher.data;
     if (!result || result === processedResult.current) return;
     processedResult.current = result;
+    if (result.success) {
+      const importTarget = new URLSearchParams(location.search).get("from") === "pyroxene" ? "pyroxene" : "planner";
+      trackGoogleAnalyticsEvent("planner_guest_imported", { target: importTarget });
+    }
     const submitted = submittedSources.current;
     let deletedCount = 0;
     void guestPlanner
@@ -1110,7 +1115,7 @@ export default function UnifiedGuestPlannerImportPage() {
         });
       })
       .catch(() => setCleanupOutcome({ deletedCount: 0, hasRemainingItems: true }));
-  }, [fetcher.data, guestPlanner.update]);
+  }, [fetcher.data, guestPlanner.update, location.search]);
 
   const toggleUnique = useCallback(
     (

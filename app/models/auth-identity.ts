@@ -12,6 +12,7 @@ import {
 } from "~/db/postgres/identity";
 import { pgAuthIdentitiesTable, pgSenseisTable } from "~/db/postgres/schema";
 import { postgresUniqueConstraintName } from "~/lib/db";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { type Sensei, type SenseiCreateFields, toSenseiModel } from "./sensei";
 
 export type AuthProvider = "google" | "github" | "discord";
@@ -298,7 +299,7 @@ export async function createSenseiWithAuthIdentity(
     if (error instanceof DiscordOwnershipConflictError) {
       return { error: { form: "이미 연결된 Discord 계정이 있거나 사용할 수 없는 Discord 계정이에요." } };
     }
-    console.error(error);
+    console.error(sanitizeErrorForLogging(error));
     throw error;
   }
 }

@@ -10,6 +10,7 @@ import { type CouponDisplayStatus, getCouponDisplayStatus } from "~/components/f
 import Page from "~/components/features/layout/Page";
 import { FilterButtons } from "~/components/primitives";
 import { canonicalLink } from "~/lib/seo";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
 import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
 
@@ -77,7 +78,7 @@ export default function CouponsPage() {
     <div className="rounded-lg bg-card px-3 py-2.5">
       <div className="flex items-center gap-2">
         <IdentificationIcon className="size-4 shrink-0 text-neutral-400 dark:text-neutral-500" strokeWidth={2} />
-        <CopyField text={currentUserData.memberCode} label="회원코드" />
+        <CopyField text={currentUserData.memberCode} label="회원코드" codeType="member_code" />
       </div>
     </div>
   ) : currentUserData ? (
@@ -120,7 +121,10 @@ export default function CouponsPage() {
             text: filter.label,
             active: statusFilter === filter.id,
             onToggle: (activated) => {
-              if (activated) setStatusFilter(filter.id);
+              if (activated && statusFilter !== filter.id) {
+                setStatusFilter(filter.id);
+                trackGoogleAnalyticsEvent("filter_apply", { scope: "coupons", filter: "status" });
+              }
             },
           }))}
         />

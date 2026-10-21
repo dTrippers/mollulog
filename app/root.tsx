@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs } from "react-router";
 import {
   Links,
@@ -32,12 +32,26 @@ import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
-import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
+import {
+  initializeGoogleAnalytics,
+  setGoogleAnalyticsEnabled,
+  setGoogleAnalyticsLoggedIn,
+  setGoogleAnalyticsPageContext,
+  trackCurrentGoogleAnalyticsPageView,
+} from "./lib/google-analytics.client";
+import {
+  consumePendingAuthEvent,
+  setGoogleAnalyticsPageKey,
+  trackGoogleAnalyticsEvent,
+  useConsumeGoogleAnalyticsEventCookie,
+} from "./lib/google-analytics-events.client";
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
+import { getRoutePageMetadata, rememberRoutePattern } from "./lib/route-pattern";
 import { DEFAULT_OPEN_GRAPH_IMAGE_URL, shouldRenderDefaultOpenGraphImage } from "./lib/seo";
 import { isGoogleSearchCrawler, isSenseiProfilePath } from "./lib/seo-crawler";
+import { initializeWebVitals } from "./lib/web-vitals.client";
 import {
   clearNavigationDirection,
   consumeNavigationDirection,
@@ -96,6 +110,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
     return {
       currentUsername: sensei?.username ?? null,
+      isLoggedIn: sensei !== null,
       isAdmin: sensei?.role === "admin",
       currentProfileStudentId: sensei?.profileStudentId ?? null,
       darkMode: preference.darkMode ?? true,
@@ -282,11 +297,29 @@ export default function App() {
   }, []);
 
   const location = useLocation();
+  const matches = useMatches();
   const navigationType = useNavigationType();
   const pathname = location.pathname;
-  const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
-  const pagePath = `${location.pathname}${location.search}`;
+  const routePage = getRoutePageMetadata(matches);
+  const previousRoutePatternRef = useRef<string | undefined>(undefined);
+  const pageViewLocationKeyRef = useRef<string | undefined>(undefined);
+  const analyticsPageContext = useMemo(
+    () => ({
+      routePattern: routePage.routePattern,
+      contentGroup: routePage.contentGroup,
+      ...(routePage.contentId ? { contentId: routePage.contentId } : {}),
+      referrer: typeof document === "undefined" ? undefined : document.referrer,
+      previousRoutePattern: previousRoutePatternRef.current,
+    }),
+    [routePage.contentGroup, routePage.contentId, routePage.routePattern],
+  );
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
+  setGoogleAnalyticsLoggedIn(loaderData.isLoggedIn);
+  setGoogleAnalyticsPageKey(location.key);
+  if (typeof window !== "undefined") setGoogleAnalyticsPageContext(analyticsPageContext);
+  setGoogleAnalyticsEnabled(analyticsEnabled);
+  rememberRoutePattern(location.pathname, routePage.routePattern);
+  const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
   const routeKey = location.key;
   const isContentTransitionRoute =
     pathname === "/futures" || pathname.startsWith("/events/") || pathname.startsWith("/raids/");
@@ -302,8 +335,30 @@ export default function App() {
     if (!analyticsEnabled) {
       return;
     }
-    trackCurrentGoogleAnalyticsPageView(pagePath);
-  }, [analyticsEnabled, pagePath]);
+    if (pageViewLocationKeyRef.current === location.key) return;
+    pageViewLocationKeyRef.current = location.key;
+    trackCurrentGoogleAnalyticsPageView({
+      ...analyticsPageContext,
+    });
+    previousRoutePatternRef.current = analyticsPageContext.routePattern;
+  }, [analyticsEnabled, location.key, analyticsPageContext]);
+
+  useEffect(() => {
+    if (analyticsEnabled) initializeWebVitals();
+  }, [analyticsEnabled]);
+
+  useEffect(() => {
+    if (!loaderData.isLoggedIn) return;
+    const pendingAuthEvent = consumePendingAuthEvent();
+    if (!pendingAuthEvent) return;
+    if (pendingAuthEvent.eventName === "login") {
+      trackGoogleAnalyticsEvent("login", { method: pendingAuthEvent.method });
+    } else {
+      trackGoogleAnalyticsEvent("sign_up", { method: pendingAuthEvent.method });
+    }
+  }, [loaderData.isLoggedIn]);
+
+  useConsumeGoogleAnalyticsEventCookie();
 
   useIsomorphicLayoutEffect(() => {
     void routeKey;

@@ -9,6 +9,7 @@ import { getFilterableRaidDifficulties, getRaidDifficultyScoreRange, parseDiffic
 import { fetchRaidVideos } from "~/lib/ranks";
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, getRaidScheduleByTypeAndSeason } from "~/models/raid";
 import { getRaidVideoParties, parseVideoSort, RAID_VIDEOS_PAGE_SIZE } from "~/models/raid-videos";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
@@ -130,7 +131,12 @@ export default function RaidVideos() {
           sort={sort}
           onSortChange={setSort}
           onlyWithParty={onlyWithParty}
-          onOnlyWithPartyChange={setOnlyWithParty}
+          onOnlyWithPartyChange={(value) => {
+            if (value !== onlyWithParty) {
+              setOnlyWithParty(value);
+              trackGoogleAnalyticsEvent("filter_apply", { scope: "raid_videos", filter: "onlyWithParty" });
+            }
+          }}
           showUnrecruitedStudents={showUnrecruitedStudents}
           onShowUnrecruitedStudentsChange={setShowUnrecruitedStudents}
           canShowUnrecruitedStudents={hasRecruitedStudentData}
@@ -160,6 +166,7 @@ export default function RaidVideos() {
       recruitedStudentTiers={recruitedStudentTiers}
       showUnrecruitedStudents={hasRecruitedStudentData && showUnrecruitedStudents}
       ranksPath={ranksPath}
+      raidType={currentRaid.raidType}
       emptyText={onlyWithParty ? "편성 정보가 있는 공략 영상이 없어요" : undefined}
     />
   );

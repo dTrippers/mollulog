@@ -45,6 +45,7 @@ import {
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/models/item-catalog";
 import {
   filterResourceInventoryResources,
@@ -149,6 +150,13 @@ export default function ResourceInventoryEditor({
   const submitError = fetcher.data?.error ?? error;
   const isSubmitting = fetcher.state !== "idle";
   const hasChanges = changedItems.length > 0;
+  const trackedSaveResultRef = useRef<unknown>(null);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data?.saved || fetcher.data === trackedSaveResultRef.current) return;
+    trackedSaveResultRef.current = fetcher.data;
+    trackGoogleAnalyticsEvent("resource_inventory_saved", { source: "manual" });
+  }, [fetcher.data, fetcher.state]);
   const hasActiveFilter = isResourceInventoryFilterActive(filter);
   const requestedCategory = searchParams.get("category");
   const favorCategoryVisible = resourceGroups.some((group) => group.kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor);

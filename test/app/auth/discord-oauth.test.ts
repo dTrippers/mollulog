@@ -186,6 +186,7 @@ describe("Discord OAuth callback", () => {
     );
 
     expect(response.headers.get("Location")).toBe("/edit?discord_auth=linked#connected-services");
+    expect(response.headers.getSetCookie().join("\n")).toContain("__mllg_analytics_events=");
     expect(mockLinkAuthIdentity).toHaveBeenCalledWith(env, 7, "discord", "1234567890", { ctx: undefined });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     const consumedSession = await sessionFromCookie(cookieValue(response.headers.get("Set-Cookie") as string));
@@ -281,6 +282,7 @@ describe("Discord OAuth callback", () => {
     );
 
     expect(response.headers.get("Location")).toBe("/edit?discord_notice=pending#discord-notifications");
+    expect(response.headers.getSetCookie().join("\n")).toContain("__mllg_analytics_events=");
     expect(mockGetActiveSensei).toHaveBeenCalled();
     expect(mockUpsertPendingDiscordConnection).toHaveBeenCalledWith(env, 7, "1234567890", { ctx });
     expect(mockDiscordNotificationQueueSend).toHaveBeenCalledWith({

@@ -16,6 +16,7 @@ import { findCurrentOrClosestRaidSchedule, raidTypeToParam } from "~/domain/raid
 import { WALKTHROUGH_TIMELINE_DIFFICULTIES } from "~/domain/walkthrough-timeline";
 import type { Defense } from "~/graphql/graphql";
 import { routeError } from "~/lib/http-errors";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale } from "~/locales/ko";
 import { getRaidDefenseTypeSetByQuery, getRaidDefenseTypeSetKey, type RaidDefenseTypeSet } from "~/models/raid";
@@ -161,6 +162,7 @@ export default function RaidPage() {
   }, [currentRaid.defenseTypeSets, searchParams, selectedDefenseTypeSet]);
 
   const selectDefenseTypeSet = (defenseTypeSet: RaidDefenseTypeSet) => {
+    if (getRaidDefenseTypeSetKey(defenseTypeSet) === selectedDefenseTypeSetKey) return;
     setDefenseTypeSet(defenseTypeSet);
     setSearchParams(
       (prev) => {
@@ -172,6 +174,7 @@ export default function RaidPage() {
       },
       { replace: true, state: futureLinkState },
     );
+    trackGoogleAnalyticsEvent("filter_apply", { scope: "raids", filter: "defenseTypeSet" });
   };
   const selectedDefenseTypeSetKey = getRaidDefenseTypeSetKey(selectedDefenseTypeSet);
   const selectedDefense = selectedDefenseTypeSet.primaryDefenseType;

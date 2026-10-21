@@ -17,6 +17,7 @@ import { classifyAndPersistRecruitmentOpinion } from "~/models/recruitment-opini
 export type CommentResponse = {
   comments: NestedComment[];
   unavailable: boolean;
+  createdComment?: boolean;
 };
 
 async function getCommentsResponse(
@@ -144,5 +145,9 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   // Return updated comments
-  return getCommentsResponse(env, contentUid, currentUser, ctx);
+  const response = await getCommentsResponse(env, contentUid, currentUser, ctx);
+  return {
+    ...response,
+    createdComment: actionData.action === "create" || actionData.action === "createSubcomment",
+  };
 };

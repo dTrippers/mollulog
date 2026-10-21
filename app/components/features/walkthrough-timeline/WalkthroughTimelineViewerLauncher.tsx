@@ -2,6 +2,7 @@ import { CheckIcon, ShareIcon, WindowIcon } from "@heroicons/react/24/outline";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import Button from "~/components/primitives/Button";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { TimelineViewerItem, TimelineViewerStudent } from "./WalkthroughTimelineViewer";
 import { WalkthroughTimelineViewer } from "./WalkthroughTimelineViewer";
 
@@ -71,6 +72,7 @@ export function WalkthroughTimelineViewerLauncher({
     try {
       await navigator.clipboard.writeText(shareUrl);
       showTemporaryShareState("copied");
+      trackGoogleAnalyticsEvent("share", { content_type: "timeline", method: "copy" });
     } catch {
       showTemporaryShareState("error");
     }
@@ -85,6 +87,7 @@ export function WalkthroughTimelineViewerLauncher({
 
     try {
       await navigator.share(shareData);
+      trackGoogleAnalyticsEvent("share", { content_type: "timeline", method: "native" });
     } catch (shareError) {
       if (shareError instanceof Error && shareError.name === "AbortError") return;
       await copyShareUrl();

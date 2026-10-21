@@ -21,6 +21,7 @@ import {
 } from "~/domain/walkthrough-timeline";
 import { DEMO_WALKTHROUGH_BOSS_NAME, DEMO_WALKTHROUGH_TIMELINE } from "~/domain/walkthrough-timeline-demo";
 import { formatInstant } from "~/lib/date-time";
+import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import {
   defenseTypeColor,
@@ -140,10 +141,12 @@ export default function WalkthroughTimelineCatalogPage() {
   const [showUnrecruitedStudents, setShowUnrecruitedStudents] = useState(true);
 
   const setFilter = (key: string, value: string | null) => {
+    if (searchParams.get(key) === value) return;
     const next = new URLSearchParams(searchParams);
     if (value) next.set(key, value);
     else next.delete(key);
     setSearchParams(next, { replace: true });
+    trackGoogleAnalyticsEventIfAllowed("filter_apply", { scope: "timelines", filter: key });
   };
 
   return (

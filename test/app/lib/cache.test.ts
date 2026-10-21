@@ -249,7 +249,6 @@ describe("fetchCached", () => {
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "cache.fn",
-        dataKey: "youtube",
         timeoutMs: 5_000,
       }),
     );
@@ -286,7 +285,6 @@ describe("fetchCached", () => {
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "kv.get",
-        dataKey: "youtube",
         timeoutMs: 2_000,
       }),
     );
@@ -371,7 +369,6 @@ describe("fetchCached", () => {
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "kv.put",
-        dataKey: "youtube",
         timeoutMs: 2_000,
       }),
     );
@@ -484,7 +481,6 @@ describe("fetchCached", () => {
       "[io-watchdog] cache.inflight",
       expect.objectContaining({
         phase: "evicted",
-        dataKey: "youtube",
         inflightAgeMs: 10_001,
       }),
     );
@@ -844,8 +840,8 @@ describe("fetchRouteCached", () => {
       "[cache] swr_refresh_failed",
       expect.objectContaining({
         label: "cache.swr_refresh_failed",
-        cacheKey: "route::home::v1::all",
-        errorMessage: "refresh failed",
+        errorName: "Error",
+        error: expect.objectContaining({ message: "refresh failed" }),
       }),
     );
   });
@@ -1111,7 +1107,7 @@ describe("fetchLazySourceCachedBatch", () => {
       "[io-watchdog] timeout",
       expect.objectContaining({
         label: "kv.get",
-        dataKey: "source::thing::v1::uid=a",
+        timeoutMs: 2_000,
       }),
     );
   });

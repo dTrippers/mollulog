@@ -21,11 +21,13 @@ import {
   STUDENT_DIRECTORY_GROUP_VALUES,
   StudentDirectoryDisplaySettings,
   default as StudentFilter,
+  trackStudentFilterChanges,
 } from "~/components/features/students/StudentFilter";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
 import type { RootOutletContext } from "~/root";
@@ -100,6 +102,7 @@ export default function StudentsLayout() {
       return student ? [student] : [];
     });
   }, [studentMap, filteredUids]);
+  useTrackGoogleAnalyticsSearch(filterState.search, "students", filteredStudents.length);
   const isStudentsIndex = pathname === "/students";
 
   if (!usesStudentsPageLayout) {
@@ -133,7 +136,11 @@ export default function StudentsLayout() {
                     text="필터 해제"
                     size="xs"
                     variant="danger-subtle"
-                    onClick={() => setFilterState(clearStudentFilters)}
+                    onClick={() => {
+                      const nextState = clearStudentFilters(filterState);
+                      trackStudentFilterChanges("students", filterState, nextState);
+                      setFilterState(() => nextState);
+                    }}
                   />
                 ) : undefined,
                 children: (
@@ -157,7 +164,11 @@ export default function StudentsLayout() {
                     text="초기화"
                     size="xs"
                     variant="danger-subtle"
-                    onClick={() => setFilterState(clearStudentDirectoryDisplaySettings)}
+                    onClick={() => {
+                      const nextState = clearStudentDirectoryDisplaySettings(filterState);
+                      trackStudentFilterChanges("students", filterState, nextState);
+                      setFilterState(() => nextState);
+                    }}
                   />
                 ) : undefined,
                 children: <StudentDirectoryDisplaySettings state={filterState} onStateChange={setFilterState} />,

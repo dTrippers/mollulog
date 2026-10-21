@@ -3,6 +3,7 @@ import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 import { Link } from "react-router";
 import type { NavigationGroup, NavigationItem } from "./navigation-menu";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 export type NavigationRailGroup = Omit<Pick<NavigationGroup, "name" | "shortName" | "OutlineIcon" | "SolidIcon">, "id"> & {
   id: string;
@@ -88,6 +89,9 @@ export function NavigationRail({
             "flex min-h-12 w-full flex-col items-center justify-center gap-0.5 rounded-md px-0.5 text-foreground/70 transition-colors hover:bg-muted hover:text-foreground",
             homeItem.isActive && "bg-background font-bold text-foreground",
           )}
+          onClick={() => {
+            if (homeItem.menuId) trackGoogleAnalyticsEvent("nav_menu_click", { menu_id: homeItem.menuId });
+          }}
         >
           {(() => {
             const Icon = homeIcon;

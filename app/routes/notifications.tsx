@@ -1,7 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { Title } from "~/components/primitives";
 import {
   DiscordNotificationValidationError,
@@ -58,7 +60,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     const expectedError =
       error instanceof DiscordSettingsUnavailableError || error instanceof DiscordNotificationValidationError;
     if (!expectedError) {
-      console.error("[notifications] failed to save Discord notification settings", error);
+      console.error("[notifications] failed to save Discord notification settings", sanitizeErrorForLogging(error));
     }
     return data<ActionData>(
       { intent, error: expectedError && error instanceof Error ? error.message : "알림 설정을 저장하지 못했어요." },
@@ -74,8 +76,15 @@ export default function Notifications() {
   const revalidator = useRevalidator();
   const isSaving = isNotificationSaveInFlight(navigation);
   const settingsActionData = actionData?.intent === "save" ? actionData : undefined;
+  const trackedSaveResult = useRef<unknown>(null);
   const globalError = actionData?.intent ? undefined : actionData?.error;
   const connectionStatus = state.connection?.status;
+
+  useEffect(() => {
+    if (!settingsActionData?.success || settingsActionData === trackedSaveResult.current) return;
+    trackedSaveResult.current = settingsActionData;
+    trackGoogleAnalyticsEvent("notification_preference_saved");
+  }, [settingsActionData]);
 
   useEffect(() => {
     if (connectionStatus !== "pending") return;

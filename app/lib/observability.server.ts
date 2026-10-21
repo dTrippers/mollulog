@@ -1,8 +1,7 @@
-import { Logtail } from "@logtail/edge";
 import * as Sentry from "@sentry/cloudflare";
+import { sanitizeErrorForLogging, sanitizeLogContext, serializeErrorForLogging } from "~/lib/privacy-scrub";
 
 type ObservabilityEnv = Env & {
-  SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
   SERVER_SENTRY_DSN?: string;
 };
 
@@ -13,50 +12,6 @@ type LogLevel = "debug" | "info" | "warn" | "error";
 type ConsoleMethod = "debug" | "info" | "warn" | "error";
 
 const service = "mollulog";
-type SerializedError = {
-  message?: string;
-  name?: string;
-  stack?: string;
-  cause?: SerializedError | unknown;
-  value?: unknown;
-};
-
-const logtailClients = new Map<string, Logtail>();
-
-function getLogtail(env: ObservabilityEnv): Logtail | null {
-  if (!env.SERVER_BETTER_STACK_SOURCE_TOKEN) {
-    return null;
-  }
-
-  const existing = logtailClients.get(env.SERVER_BETTER_STACK_SOURCE_TOKEN);
-  if (existing) {
-    return existing;
-  }
-
-  const created = new Logtail(env.SERVER_BETTER_STACK_SOURCE_TOKEN, {
-    captureStackContext: true,
-  });
-  logtailClients.set(env.SERVER_BETTER_STACK_SOURCE_TOKEN, created);
-  return created;
-}
-
-function serializeError(error: unknown): SerializedError {
-  if (error instanceof Error) {
-    return {
-      message: error.message,
-      name: error.name,
-      stack: error.stack,
-      cause: error.cause instanceof Error ? serializeError(error.cause) : error.cause,
-    };
-  }
-
-  if (typeof error === "string") {
-    return { message: error };
-  }
-
-  return { value: error };
-}
-
 function writeConsole(level: ConsoleMethod, message: string, context: LogContext) {
   if (Object.keys(context).length === 0) {
     console[level](message);
@@ -67,32 +22,74 @@ function writeConsole(level: ConsoleMethod, message: string, context: LogContext
 }
 
 function captureSentryError(error: unknown, context: LogContext) {
-  if (error instanceof Error) {
+  const safeError = sanitizeErrorForLogging(error);
+  const safeContext = sanitizeLogContext(context);
+  if (safeError instanceof Error) {
     Sentry.withScope((scope) => {
-      scope.setExtras(context);
-      Sentry.captureException(error);
+      scope.setExtras(safeContext);
+      Sentry.captureException(safeError);
     });
     return;
   }
 
   Sentry.withScope((scope) => {
-    scope.setExtras(context);
-    Sentry.captureMessage(typeof error === "string" ? error : "Non-Error exception captured", "error");
+    scope.setExtras(safeContext);
+    Sentry.captureMessage(typeof safeError === "string" ? safeError : "Non-Error exception captured", "error");
   });
 }
 
-const SENSITIVE_REQUEST_HEADERS = new Set(["authorization", "proxy-authorization", "cookie"]);
+const ALLOWED_REQUEST_HEADERS = new Set(["accept", "content-type", "user-agent"]);
 
-/** Drops credentials the SDK copies from the incoming request: API keys, session cookies and parsed cookies. */
-export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
-  const request = event.request;
-  if (!request) return event;
-  if (request.headers) {
-    request.headers = Object.fromEntries(
-      Object.entries(request.headers).filter(([name]) => !SENSITIVE_REQUEST_HEADERS.has(name.toLowerCase())),
-    );
+export function scrubServerSentryBreadcrumb<T extends { category?: string; data?: Record<string, unknown>; message?: string }>(
+  breadcrumb: T,
+): T | null {
+  if (breadcrumb.category === "console") return null;
+  if (breadcrumb.category !== "fetch" && breadcrumb.category !== "http") return breadcrumb;
+
+  const safeData: Record<string, unknown> = {};
+  if (typeof breadcrumb.data?.method === "string") safeData.method = breadcrumb.data.method;
+  if (typeof breadcrumb.data?.status === "number" || typeof breadcrumb.data?.status === "string") {
+    safeData.status = breadcrumb.data.status;
+  } else if (typeof breadcrumb.data?.status_code === "number") {
+    safeData.status = breadcrumb.data.status_code;
   }
-  delete request.cookies;
+  breadcrumb.data = safeData as T["data"];
+  delete breadcrumb.message;
+  return breadcrumb;
+}
+
+/** Removes request details and user supplied context before an event leaves the worker. */
+export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
+  if (event.request) {
+    const request = event.request;
+    if (request.headers) {
+      request.headers = Object.fromEntries(
+        Object.entries(request.headers).filter(([name]) => ALLOWED_REQUEST_HEADERS.has(name.toLowerCase())),
+      );
+    }
+    delete request.url;
+    delete request.query_string;
+    delete request.data;
+    delete request.cookies;
+    delete request.env;
+  }
+
+  delete event.user;
+  if (event.contexts) {
+    delete event.contexts.user;
+    event.contexts = sanitizeLogContext(event.contexts) as typeof event.contexts;
+  }
+  if (event.extra) {
+    event.extra = sanitizeLogContext(event.extra) as typeof event.extra;
+  }
+  if (event.tags) {
+    event.tags = sanitizeLogContext(event.tags) as typeof event.tags;
+  }
+  for (const exception of event.exception?.values ?? []) {
+    if (exception.value?.startsWith("Failed query:") && /\nparams:\s*/i.test(exception.value)) {
+      exception.value = exception.value.replace(/\nparams:\s*[\s\S]*$/i, "");
+    }
+  }
   return event;
 }
 
@@ -106,9 +103,11 @@ export function createServerSentryOptions(env: ObservabilityEnv): Sentry.Cloudfl
     dsn: env.SERVER_SENTRY_DSN,
     enabled: Boolean(env.SERVER_SENTRY_DSN),
     environment: env.STAGE ?? "local",
+    sendDefaultPii: false,
     integrations: [Sentry.httpServerIntegration({ maxRequestBodySize: "none" })],
     beforeSend: scrubServerSentryEvent,
     beforeSendTransaction: scrubServerSentryEvent,
+    beforeBreadcrumb: scrubServerSentryBreadcrumb,
   };
 }
 
@@ -116,25 +115,17 @@ export function captureServerError(error: unknown, context: LogContext = {}) {
   captureSentryError(error, context);
 }
 
-export function getLogger(env: ObservabilityEnv, ctx?: ExecutionContext, defaults: LogContext = {}) {
-  const logtail = getLogtail(env);
-  const edgeLogger = ctx && logtail ? logtail.withExecutionContext(ctx) : logtail;
-  const baseContext = {
+export function getLogger(env: ObservabilityEnv, _ctx?: ExecutionContext, defaults: LogContext = {}) {
+  const baseContext = sanitizeLogContext({
     service,
     stage: env.STAGE ?? "local",
     ...defaults,
-  };
+  });
 
   function emit(level: LogLevel, message: string, context: LogContext = {}) {
-    const payload = { ...baseContext, ...context };
+    const payload = sanitizeLogContext({ ...baseContext, ...context });
     const consoleMethod = level === "debug" ? "debug" : level;
     writeConsole(consoleMethod, message, payload);
-
-    if (!edgeLogger) {
-      return;
-    }
-
-    void edgeLogger[level](message, payload);
   }
 
   return {
@@ -150,7 +141,7 @@ export function getLogger(env: ObservabilityEnv, ctx?: ExecutionContext, default
     error(message: string, error?: unknown, context: LogContext = {}) {
       const payload = {
         ...context,
-        ...(error === undefined ? {} : { error: serializeError(error) }),
+        ...(error === undefined ? {} : { error: serializeErrorForLogging(error) }),
       };
 
       emit("error", message, payload);

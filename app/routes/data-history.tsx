@@ -5,6 +5,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import Page from "~/components/features/layout/Page";
 import { Button, EmptyView, FilterButtons, SectionCard } from "~/components/primitives";
 import { API_AUDIT_HISTORY_FILTERS, type ApiAuditHistoryFilter } from "~/domain/api-audit-history";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import type { ApiAuditEvent } from "~/models/mollulog-api";
 import { getDataHistoryView } from "~/views/data-history.server";
 
@@ -46,7 +47,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     });
     return data({ ...history, loadError: false }, { headers: privateHeaders });
   } catch (error) {
-    console.error("[data-history] failed to load personal data history", error);
+    console.error("[data-history] failed to load personal data history", sanitizeErrorForLogging(error));
     return data(
       {
         events: [] as ApiAuditEvent[],

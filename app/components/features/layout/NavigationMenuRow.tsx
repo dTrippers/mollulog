@@ -3,6 +3,7 @@ import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 import { Link } from "react-router";
 import type { NavigationItem } from "./navigation-menu";
 import { cn } from "~/lib/utils";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 type NavigationMenuRowProps = NavigationItem & {
   isFavorite?: boolean;
@@ -21,6 +22,7 @@ export function NavigationMenuRow({
   showRedDot,
   badgeLabel,
   favoriteId,
+  menuId,
   disabled,
   compact = false,
 }: NavigationMenuRowProps) {
@@ -62,6 +64,9 @@ export function NavigationMenuRow({
         aria-current={isActive ? "page" : undefined}
         aria-label={accessibleName}
         className="absolute inset-0 z-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        onClick={() => {
+          if (menuId) trackGoogleAnalyticsEvent("nav_menu_click", { menu_id: menuId });
+        }}
       />
       {content}
       {hasFavoriteStar ? (

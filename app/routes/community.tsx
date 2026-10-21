@@ -13,6 +13,7 @@ import { useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { CommunityInfiniteFeed } from "~/components/features/community";
 import { Page } from "~/components/features/layout";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
@@ -237,7 +238,10 @@ function CommunityPostTypeFilter({ selectedPostTypes }: { selectedPostTypes: Com
                 role="menuitemcheckbox"
                 aria-checked={active}
                 disabled={disabled}
-                onClick={() => navigate(getNextUrl(type, active))}
+                onClick={() => {
+                  navigate(getNextUrl(type, active));
+                  trackGoogleAnalyticsEvent("filter_apply", { scope: "community", filter: "type" });
+                }}
               >
                 <span className="inline-flex min-w-0 items-center gap-2">
                   <Icon className="size-4 shrink-0 text-muted-foreground" />

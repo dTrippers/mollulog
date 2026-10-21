@@ -1,12 +1,13 @@
 import { CheckIcon } from "@heroicons/react/16/solid";
 import { FunnelIcon } from "@heroicons/react/24/outline";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
 import { canonicalLink } from "~/lib/seo";
+import { getGoogleAnalyticsResultBucket, trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { RunType } from "~/models/timeline-content";
 import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
 import { type EventListItem, type EventListSchedule, getEventList } from "~/views/events";
@@ -202,6 +203,25 @@ export default function EventsIndex() {
   const { events, now } = useLoaderData<typeof loader>();
   const [filter, setFilter] = useState<EventFilterState>(defaultFilter);
   const filteredEvents = useMemo(() => filterEventList(events, filter, now), [events, filter, now]);
+  const searchResultCountRef = useRef(filteredEvents.length);
+  searchResultCountRef.current = filteredEvents.length;
+  const updateFilter = (nextFilter: EventFilterState) => {
+    if (filter.onlyUpcoming !== nextFilter.onlyUpcoming) {
+      trackGoogleAnalyticsEvent("filter_apply", { scope: "events", filter: "onlyUpcoming" });
+    }
+    setFilter(nextFilter);
+  };
+
+  useEffect(() => {
+    if (!filter.search.trim()) return;
+    const timer = window.setTimeout(() => {
+      trackGoogleAnalyticsEvent("search", {
+        scope: "events",
+        result_bucket: getGoogleAnalyticsResultBucket(searchResultCountRef.current),
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [filter.search]);
   const countText =
     events.length === filteredEvents.length
       ? `총 ${events.length.toLocaleString()}개`
@@ -216,7 +236,7 @@ export default function EventsIndex() {
         {
           title: "이벤트 필터",
           Icon: FunnelIcon,
-          children: <EventFilterPanel filter={filter} onFilterChange={setFilter} countText={countText} />,
+          children: <EventFilterPanel filter={filter} onFilterChange={updateFilter} countText={countText} />,
         },
       ]}
     >

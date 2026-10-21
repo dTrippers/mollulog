@@ -1,4 +1,4 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import * as Sentry from "@sentry/cloudflare";
 import { captureServerError, createServerSentryOptions, scrubServerSentryEvent } from "~/lib/observability.server";
 
@@ -109,5 +109,87 @@ describe("server Sentry options", () => {
       },
     });
     expect(event.request).toEqual({ headers: { accept: "*/*" } });
+  });
+
+  it("disables default PII and removes URLs, query data, disallowed headers, and user context", () => {
+    const options = createServerSentryOptions({ STAGE: "test" } as unknown as Env);
+    expect(options.sendDefaultPii).toBe(false);
+    const event = scrubServerSentryEvent({
+      request: {
+        url: "https://mollulog.net/contact/private-ticket?token=secret",
+        query_string: "token=secret",
+        data: { body: "private message" },
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "user-agent": "test-agent",
+          authorization: "Bearer secret",
+          "x-forwarded-for": "192.0.2.1",
+        },
+      },
+      user: { id: "user-123", email: "alice@example.com" },
+      contexts: { user: { username: "alice" }, route: { pattern: "/contact/:uid" } },
+      extra: { searchTerm: "private search" },
+    });
+
+    expect(event.request).toEqual({
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+        "user-agent": "test-agent",
+      },
+    });
+    expect(event.user).toBeUndefined();
+    expect(event.contexts).toEqual({ route: { pattern: "/contact/:uid" } });
+    expect(event.extra).toEqual({});
+    expect(JSON.stringify(event)).not.toMatch(
+      /private-ticket|token=secret|user-123|alice@example|192\.0\.2\.1|private search/,
+    );
+  });
+
+  it("strips Drizzle params and Postgres detail fields from captured server errors", async () => {
+    const postgresError = new Error("duplicate key value violates unique constraint") as Error & { detail: string };
+    postgresError.detail = "Key (email)=(alice@example.com) already exists";
+    const queryError = new Error(
+      'Failed query: insert into account (email) values ($1)\nparams: ["alice@example.com"]',
+      { cause: postgresError },
+    );
+    queryError.name = "DrizzleQueryError";
+
+    const { sent } = await runWithSentry(new Request("https://api.mollulog.net/v1/me/students"), async () => {
+      captureServerError(queryError, { operation: "create-account", userId: 42 });
+      return new Response(null, { status: 500 });
+    });
+
+    const payload = sent.join("\n");
+    expect(payload).toContain("insert into account (email) values ($1)");
+    expect(payload).toContain("duplicate key value violates unique constraint");
+    expect(payload).not.toMatch(/params:|alice@example\.com|userId/);
+  });
+
+  it("drops console breadcrumbs and strips URLs from outbound fetch breadcrumbs", async () => {
+    const outboundFetch = jest.spyOn(globalThis, "fetch").mockResolvedValue(new Response("ok"));
+    try {
+      const { sent } = await runWithSentry(
+        new Request("https://mollulog.net/@secretuser/students?q=secretquery", {
+          headers: {
+            Referer: "https://mollulog.net/@secretuser/students?referrer-secret=yes",
+            "CF-Connecting-IP": "203.0.113.42",
+          },
+        }),
+        async () => {
+          console.log("console breadcrumb for secretuser");
+          await fetch("https://outbound.example/api?outbound-query-secret=yes");
+          captureServerError(new Error("server failure"), { routePattern: "/:username/students" });
+          return new Response(null, { status: 500 });
+        },
+      );
+
+      const payload = sent.join("\n");
+      expect(payload).toContain("server failure");
+      expect(payload).not.toMatch(/secretuser|secretquery|203\.0\.113\.42|referrer-secret|outbound-query-secret/);
+    } finally {
+      outboundFetch.mockRestore();
+    }
   });
 });

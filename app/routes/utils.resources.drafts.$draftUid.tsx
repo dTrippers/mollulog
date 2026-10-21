@@ -3,6 +3,7 @@ import { data, redirect, useActionData, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { routeError } from "~/lib/http-errors";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import {
   applyUserResourceInventoryDraft,
@@ -67,7 +68,14 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   try {
     if (intent === "apply") {
       await applyUserResourceInventoryDraft(env, currentUser.id, draftUid);
-      return redirect("/utils/resources/inventory");
+      const headers = new Headers();
+      headers.append(
+        "Set-Cookie",
+        createAnalyticsEventsCookie(request.url, [
+          { eventName: "resource_inventory_saved", parameters: { source: "draft" } },
+        ]),
+      );
+      return redirect("/utils/resources/inventory", { headers });
     }
     if (intent === "discard") {
       await discardUserResourceInventoryDraft(env, currentUser.id, draftUid);

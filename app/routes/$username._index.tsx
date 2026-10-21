@@ -1,5 +1,5 @@
 import { CheckBadgeIcon, PencilSquareIcon, UserMinusIcon, UserPlusIcon, UsersIcon } from "@heroicons/react/20/solid";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Link, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -8,6 +8,7 @@ import { SenseiAvatar } from "~/components/features/profile";
 import { Callout } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { type AccountLabel, hasAccountLabel } from "~/domain/account-label";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
@@ -117,6 +118,14 @@ export default function UserIndex() {
   }
 
   const fetcher = useFetcher<ActionData>();
+  const trackedFollowResultRef = useRef<unknown>(null);
+  useEffect(() => {
+    if (fetcher.state !== "idle" || fetcher.data?.followed === undefined || fetcher.data === trackedFollowResultRef.current) {
+      return;
+    }
+    trackedFollowResultRef.current = fetcher.data;
+    trackGoogleAnalyticsEvent("follow_toggled", { state: fetcher.data.followed ? "followed" : "unfollowed" });
+  }, [fetcher.data, fetcher.state]);
   const { showSignIn } = useSignIn();
   const [searchParams] = useSearchParams();
   const getPageUrl = useCallback(

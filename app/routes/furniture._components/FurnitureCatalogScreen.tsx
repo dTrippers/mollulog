@@ -11,6 +11,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useFetcher, useRevalidator } from "react-router";
 import { Page } from "~/components/features/layout";
 import {
+  getGoogleAnalyticsResultBucket,
+  trackGoogleAnalyticsEvent,
+  trackGoogleAnalyticsEventOncePerPage,
+} from "~/lib/google-analytics-events.client";
+import {
   type AttributeBadgeColor,
   Button,
   EmptyView,
@@ -171,6 +176,7 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
 
     activeJobRef.current = null;
     if (result.ok) {
+      trackGoogleAnalyticsEventOncePerPage("furniture_inventory_saved");
       const wasClearedWhileUnregisteredSaveWasInFlight = pendingUnregisteredClearUidsRef.current.delete(
         job.furnitureUid,
       );
@@ -271,6 +277,9 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
     rarities: mode === "all" ? selectedRarities : undefined,
     onlyWithInteractionStudents: mode === "all" ? onlyWithInteractionStudents : undefined,
   });
+  const searchResultCount = mode === "themes" && !activeTheme ? visibleThemes.length : visibleItems.length;
+  const searchResultCountRef = useRef(searchResultCount);
+  searchResultCountRef.current = searchResultCount;
   const hasActiveAllFilters =
     query.trim().length > 0 ||
     selectedCategories.length > 0 ||
@@ -335,6 +344,17 @@ export default function FurnitureCatalogScreen({ view, signedIn, loadError }: Fu
   const handleQueryChange = (nextQuery: string) => {
     setQuery(nextQuery);
   };
+
+  useEffect(() => {
+    if (!query.trim()) return;
+    const timer = window.setTimeout(() => {
+      trackGoogleAnalyticsEvent("search", {
+        scope: "furniture",
+        result_bucket: getGoogleAnalyticsResultBucket(searchResultCountRef.current),
+      });
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
 
   const clearAllFilters = () => {
     setQuery("");

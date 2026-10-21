@@ -4,6 +4,7 @@ import { Button, Callout, FilterButtons, Section } from "~/components/primitives
 import type { TreasureHuntConfig } from "~/domain/event-shop";
 import type { TreasureHuntBoardCoordinate, TreasureHuntBoardOrientation } from "~/domain/treasure-hunt";
 import { treasureHuntLocale } from "~/locales/ko";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import {
   loadTreasureHuntBoard,
   MAX_UNDO_SNAPSHOTS,
@@ -67,6 +68,8 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
   const [invalidCell, setInvalidCell] = useState<CellPointer | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const invalidTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCalculationRef = useRef(false);
+  const previousAnalysisStatusRef = useRef("calculating");
   const gridRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -92,6 +95,13 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
   const observation = useMemo(() => createBoardObservation(persisted.board), [persisted.board]);
   const structurallyValid = isObservationStructurallyValid(composition, observation);
   const analysis = useTreasureHuntBoardAnalysis(composition, observation, structurallyValid);
+  useEffect(() => {
+    const completedCalculation = previousAnalysisStatusRef.current === "calculating" && analysis.status === "ok";
+    previousAnalysisStatusRef.current = analysis.status;
+    if (!completedCalculation || !pendingCalculationRef.current) return;
+    pendingCalculationRef.current = false;
+    trackGoogleAnalyticsEvent("minigame_calculated", { game: "treasure_hunt" });
+  }, [analysis.status]);
   const remainingShapes = getRemainingTreasureShapes(roundConfig, persisted.board.foundTreasures);
   const remainingCount = remainingShapes.reduce((total, shape) => total + shape.remaining, 0);
   const allTreasuresRecorded = structurallyValid && remainingCount === 0;
@@ -137,6 +147,7 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
   });
 
   function commitBoard(nextBoard: TreasureHuntBoardSnapshot, nextTreasureId = persisted.nextTreasureId) {
+    pendingCalculationRef.current = true;
     setPersisted((current) => ({
       ...current,
       board: nextBoard,
@@ -212,6 +223,7 @@ function ConfiguredTreasureHuntSimulator({ eventUid, config }: { eventUid: strin
 
   function handleUndo() {
     if (persisted.undoStack.length === 0) return;
+    pendingCalculationRef.current = true;
     const previous = persisted.undoStack[persisted.undoStack.length - 1];
     setPersisted((current) => ({
       ...current,

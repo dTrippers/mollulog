@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher, useRevalidator, useSearchParams } from "react-router";
 import { type Difficulty, parseDifficulty } from "~/domain/raid-score";
 import { parseVideoSort, RAID_VIDEOS_PAGE_SIZE, type RaidVideoItem, type VideoSort } from "~/models/raid-videos";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { RaidVideosData } from "~/routes/raids.data.$raidType.$seasonIndex.videos";
 
 type UseRaidVideosFeedParams = {
@@ -36,6 +37,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
   useEffect(() => {
     if (prevSortRef.current !== sort) {
       prevSortRef.current = sort;
+      trackGoogleAnalyticsEvent("filter_apply", { scope: "raid_videos", filter: "sort" });
       isResettingRef.current = true;
       setAllVideos([]);
       setHasMore(false);
@@ -53,6 +55,7 @@ export function useRaidVideosFeed({ initialData, raidType, seasonIndex, defenseT
   useEffect(() => {
     if (prevDifficultyRef.current !== difficulty) {
       prevDifficultyRef.current = difficulty;
+      trackGoogleAnalyticsEvent("filter_apply", { scope: "raid_videos", filter: "difficulty" });
       isResettingRef.current = true;
       setAllVideos([]);
       setHasMore(false);

@@ -23,7 +23,6 @@ interface Env {
   DISCORD_OAUTH_CLIENT_SECRET: string;
   FRONT_SENTRY_DSN?: string;
   SERVER_SENTRY_DSN?: string;
-  SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
 }
 
 type OcrTaskMessage = import("~/domain/ocr").OcrTaskMessage;

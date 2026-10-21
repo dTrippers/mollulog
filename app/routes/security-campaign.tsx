@@ -25,6 +25,8 @@ import {
   serializeSecurityCampaignIdentity,
 } from "~/auth/security-campaign.server";
 import { getSecurityCampaignVisitCount } from "~/lib/security-campaign-referrals.server";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { studentImageUrl, studentStandingImageUrl } from "~/models/assets";
@@ -225,7 +227,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
       visitCount = summary.count;
       countCapped = summary.capped;
     } catch (error) {
-      console.error("Failed to read security campaign visit count", error);
+      console.error("Failed to read security campaign visit count", sanitizeErrorForLogging(error));
       countError = true;
     }
   }
@@ -278,7 +280,7 @@ export default function SecurityCampaign() {
       body: JSON.stringify({ intent: "record-visit", shareToken: loaderData.incomingShareToken }),
       keepalive: true,
     }).catch((error) => {
-      console.error("Failed to record security campaign visit", error);
+      console.error("Failed to record security campaign visit", sanitizeErrorForLogging(error));
     });
   }, [loaderData.incomingShareToken, loaderData.shareToken]);
 
@@ -336,6 +338,7 @@ export default function SecurityCampaign() {
       const nextShareUrl = new URL(`/letter/${shareToken}`, window.location.origin);
       await copyTextToClipboard(nextShareUrl.toString());
       setShareStatus("copied");
+      trackGoogleAnalyticsEvent("share", { content_type: "security_campaign", method: "copy" });
     } catch {
       setShareStatus("error");
     }

@@ -40,7 +40,6 @@
     ]
   },
   // Secrets configuration
-  // - SERVER_BETTER_STACK_SOURCE_TOKEN
   // - SERVER_SENTRY_DSN
   "env": {
     "staging": {

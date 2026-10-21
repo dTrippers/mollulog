@@ -6,6 +6,7 @@ import { redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Button, Callout, FilterButtons, SubTitle, Textarea } from "~/components/primitives";
 import { type StudentStateExportFormat, serializeStudentStateExport } from "~/domain/student-state-serialization";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getConnectExportData } from "~/views/connect-export.server";
 import ConnectDataPage from "./connect._components/ConnectDataPage";
 
@@ -58,6 +59,7 @@ export default function ConnectExportIndexPage() {
 
     setExportedText(serializeStudentStateExport(exportInput, selectedFormat));
     setCopied(false);
+    trackGoogleAnalyticsEvent("connect_export_requested", { format: selectedFormat });
   };
 
   const handleCopy = async () => {

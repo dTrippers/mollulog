@@ -22,6 +22,7 @@ import { ProfileEditor } from "~/components/features/profile";
 import { Button, Input, SectionCard, Title, Toggle } from "~/components/primitives";
 import RecruitmentOpinionSetting from "~/components/features/account/RecruitmentOpinionSetting";
 import { nowUtcIso } from "~/lib/date-time";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { cn } from "~/lib/utils";
 import { type AuthProvider, getAuthIdentityStatuses } from "~/models/auth-identity";
 import { getDiscordNotificationState, unlinkDiscordConnection } from "~/models/discord-notifications.server";
@@ -139,7 +140,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       await unlinkDiscordConnection(env, sensei.id, { ctx });
       return redirect("/edit?discord_notice=unlinked#discord-notifications");
     } catch (error) {
-      console.error("[edit] failed to unlink Discord notification connection", error);
+      console.error("[edit] failed to unlink Discord notification connection", sanitizeErrorForLogging(error));
       return data<ActionData>({ intent, error: { form: "Discord 알림 연결을 해제하지 못했어요." } }, { status: 500 });
     }
   }

@@ -1,13 +1,16 @@
 import { ClipboardDocumentCheckIcon, ClipboardDocumentIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 
 type CopyFieldProps = {
   text: string;
   label?: string;
   className?: string;
+  codeType?: "coupon" | "member_code";
 };
 
-export default function CopyField({ text, label, className }: CopyFieldProps) {
+export default function CopyField({ text, label, className, codeType }: CopyFieldProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -19,9 +22,10 @@ export default function CopyField({ text, label, className }: CopyFieldProps) {
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
+      if (codeType) trackGoogleAnalyticsEvent("coupon_code_copied", { code_type: codeType });
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      console.error("Failed to copy text to clipboard.", error);
+      console.error("Failed to copy text to clipboard.", sanitizeErrorForLogging(error));
     }
   };
 

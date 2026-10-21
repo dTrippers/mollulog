@@ -1,4 +1,5 @@
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
+import { sanitizeLogContext } from "~/lib/privacy-scrub";
 
 /**
  * Async I/O watchdog for surfacing request hangs before the platform cuts them.
@@ -49,12 +50,12 @@ function getWorkerIsolateStartedAt() {
 }
 
 export function getIoWatchdogContext(context: Record<string, unknown> = {}, watchdogId = ++watchdogSequence) {
-  return {
+  return sanitizeLogContext({
     ...context,
     isolateId: getWorkerIsolateId(),
     isolateAgeMs: Date.now() - getWorkerIsolateStartedAt(),
     watchdogId,
-  };
+  });
 }
 
 /**

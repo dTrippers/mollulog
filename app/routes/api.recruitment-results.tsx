@@ -135,7 +135,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
   const actionData = await request.json<ActionData>();
   if (actionData.action === "delete") {
     await deleteRecruitmentResult(env, currentUser.id, actionData.uid);
-    return data({ success: true });
+    return data({ success: true, analyticsAction: "delete" as const });
   }
 
   if (!actionData.recruitmentGroupUid) {
@@ -146,7 +146,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     const result = await setRecruitmentResultCompletion(env, currentUser.id, actionData.recruitmentGroupUid, false, {
       contentUid: actionData.contentUid ?? null,
     });
-    return data({ success: true, result });
+    return data({ success: true, result, analyticsAction: "cancel" as const });
   }
 
   if (actionData.action === "completeStudent") {
@@ -165,7 +165,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       tier: actionData.tier ?? 3,
       pickup: actionData.pickup ?? true,
     });
-    return data({ success: true, result });
+    return data({ success: true, result, analyticsAction: "complete_student" as const });
   }
 
   if (actionData.action === "uncompleteStudent") {
@@ -179,7 +179,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       actionData.recruitmentGroupUid,
       actionData.studentUid,
     );
-    return data({ success: true, result });
+    return data({ success: true, result, analyticsAction: "uncomplete_student" as const });
   }
 
   if (actionData.action === "complete") {
@@ -192,7 +192,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       comment: actionData.comment ?? undefined,
       subjectStudentUid: actionData.studentUid ?? null,
     });
-    return data({ success: true, result });
+    return data({ success: true, result, analyticsAction: "complete" as const });
   }
 
   const result = await upsertRecruitmentResult(env, currentUser.id, {
@@ -205,5 +205,5 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     rawResult: actionData.rawResult ?? undefined,
     comment: actionData.comment ?? undefined,
   });
-  return data({ success: true, result });
+  return data({ success: true, result, analyticsAction: "upsert" as const });
 };

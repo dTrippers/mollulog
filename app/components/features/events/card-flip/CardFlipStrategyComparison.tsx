@@ -2,6 +2,7 @@ import { Callout, NumberInput, ResourceCard, Section } from "~/components/primit
 import type { CardFlipStrategyResult } from "~/domain/card-flip-strategy";
 import { CARD_FLIP_STRATEGIES, type CardFlipStrategy, type MinigameConfig, type RewardItem } from "~/domain/event-shop";
 import { cardFlipLocale } from "~/locales/ko";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { EventShopPlanContext } from "../shop/ShopCalculatorScreen";
 import { formatCardFlipAmount } from "../shop/card-flip";
 
@@ -45,7 +46,12 @@ export function CardFlipStrategyComparison({
         id="card-flip-detail-play-count"
         minValue={0}
         value={cardCount}
-        onChange={plan.actions.setMinigamePlayCount}
+        onChange={(nextCount) => {
+          if (nextCount !== cardCount && nextCount > 0) {
+            trackGoogleAnalyticsEvent("minigame_calculated", { game: "card_flip" });
+          }
+          plan.actions.setMinigamePlayCount(nextCount);
+        }}
       />
 
       {cardCount === 0 ? (
@@ -84,7 +90,12 @@ export function CardFlipStrategyComparison({
                         name="card-flip-strategy"
                         value={strategy}
                         checked={selected}
-                        onChange={() => plan.actions.setCardFlipStrategy(strategy)}
+                        onChange={() => {
+                          if (strategy !== selectedStrategy && cardCount > 0) {
+                            trackGoogleAnalyticsEvent("minigame_calculated", { game: "card_flip" });
+                          }
+                          plan.actions.setCardFlipStrategy(strategy);
+                        }}
                         aria-labelledby={labelId}
                         aria-describedby={ruleId}
                         className="sr-only"

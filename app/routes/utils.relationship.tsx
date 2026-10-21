@@ -35,6 +35,10 @@ import {
 } from "~/domain/student-state-errors";
 import { ActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
+import {
+  trackGoogleAnalyticsEvent,
+  trackGoogleAnalyticsEventOncePerPage,
+} from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import {
   getRelationshipLevels,
@@ -553,6 +557,9 @@ export default function RelationshipUtil() {
       typeof saveFetcher.data.studentId === "string"
     ) {
       const deletedStudentId = saveFetcher.data.studentId;
+      if (submittedDeleteRef.current) {
+        trackGoogleAnalyticsEvent("relationship_saved", { action: "delete" });
+      }
       submittedDeleteRef.current = null;
       retryOperationRef.current = null;
       setManagedStudents((prev) =>
@@ -584,6 +591,7 @@ export default function RelationshipUtil() {
     submittedRelationshipRef.current = null;
 
     if ("kind" in saveFetcher.data && saveFetcher.data.kind === "relationshipUpdate") {
+      trackGoogleAnalyticsEvent("relationship_saved", { action: "save" });
       setRetryAvailable(false);
       retryOperationRef.current = null;
       const draft = relationshipDraftsRef.current.get(submitted.studentUid);
@@ -752,6 +760,11 @@ export default function RelationshipUtil() {
   };
 
   const isItemScreen = searchParams.get("mode") === "item";
+  useEffect(() => {
+    if (isItemScreen && selectedItemExp > 0) {
+      trackGoogleAnalyticsEventOncePerPage("calculator_used", { tool: "relationship_item" });
+    }
+  }, [isItemScreen, selectedItemExp]);
   const handleSavedGiftPlans = useCallback(
     (savedPlans: Array<{ studentUid: string; items: Record<string, number> }>) => {
       const itemsByStudentUid = new Map(savedPlans.map(({ studentUid, items }) => [studentUid, items]));

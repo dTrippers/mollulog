@@ -60,6 +60,7 @@ import {
 } from "~/models/pyroxene-planner";
 import type { EventShopStateLookupResponse } from "~/routes/api.planner.event-shop-states";
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getPyroxenePlannerContents, type PyroxenePlannerContent } from "~/views/pyroxene";
 import PlannerCalendar, { type PlannerCalendarShopPlan } from "./planner._components/PlannerCalendar";
 import type { PlannerQuickEditEntry } from "./planner._components/PlannerQuickEdit";
@@ -727,6 +728,14 @@ export default function IntegratedPlannerRoute() {
     };
   }, [recruitmentFetcher.data]);
   const recruitmentSaveResult = isSignedIn ? accountRecruitmentSaveResult : guestRecruitmentSaveResult;
+  const trackedRecruitmentSubmissions = useRef(new Set<string>());
+  useEffect(() => {
+    if (!recruitmentSaveResult?.success || trackedRecruitmentSubmissions.current.has(recruitmentSaveResult.submissionId)) {
+      return;
+    }
+    trackedRecruitmentSubmissions.current.add(recruitmentSaveResult.submissionId);
+    trackGoogleAnalyticsEvent("planner_saved", { action: "save_recruitment" });
+  }, [recruitmentSaveResult]);
   const recruitmentIsSaving = isSignedIn ? recruitmentFetcher.state !== "idle" : guestRecruitmentIsSaving;
   const handleSaveRecruitment = useCallback(
     (input: PlannerRecruitmentSaveInput) => {

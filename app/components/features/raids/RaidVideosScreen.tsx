@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { Button, EmptyView, LoadingSkeleton } from "~/components/primitives";
 import { buildExactPartiesPath, compactExactParties } from "~/domain/raid-exact-parties";
 import { getRaidVideoParties, type RaidVideoItem } from "~/models/raid-videos";
+import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import RaidPartyCard from "./RaidPartyCard";
 import { type RaidPartyStudentMap, toRaidPartyRow } from "./toRaidPartyRow";
 
@@ -17,6 +18,7 @@ export type RaidVideosScreenProps = {
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
   ranksPath: string;
+  raidType: string;
   emptyText?: string;
 };
 
@@ -30,6 +32,7 @@ export default function RaidVideosScreen({
   recruitedStudentTiers,
   showUnrecruitedStudents,
   ranksPath,
+  raidType,
   emptyText = "공략 영상을 준비중이에요",
 }: RaidVideosScreenProps) {
   return (
@@ -48,6 +51,7 @@ export default function RaidVideosScreen({
                 recruitedStudentTiers={recruitedStudentTiers}
                 showUnrecruitedStudents={showUnrecruitedStudents}
                 ranksPath={ranksPath}
+                raidType={raidType}
               />
             ))}
           </div>
@@ -83,12 +87,14 @@ function VideoCard({
   recruitedStudentTiers,
   showUnrecruitedStudents,
   ranksPath,
+  raidType,
 }: RaidVideoItem & {
   allStudents: RaidPartyStudentMap;
   maxLevel: number;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents: boolean;
   ranksPath: string;
+  raidType: string;
 }) {
   const parties = getRaidVideoParties({ sourceParties, rankMatch });
   const exactParties = compactExactParties(parties.map((party) => party.slots.map((slot) => slot.studentUid)));
@@ -107,6 +113,7 @@ function VideoCard({
     <article className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
       <Link
         to={`https://www.youtube.com/watch?v=${youtubeId}`}
+        onClick={() => trackGoogleAnalyticsEventIfAllowed("raid_video_opened", { raid_type: raidType })}
         target="_blank"
         rel="noopener noreferrer"
         className="block transition-colors hover:bg-muted/40"

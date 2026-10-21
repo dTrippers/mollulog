@@ -1,12 +1,13 @@
 import { ChatBubbleLeftEllipsisIcon, LockClosedIcon, PlayCircleIcon, UserGroupIcon } from "@heroicons/react/24/outline";
 import { PlayIcon } from "@heroicons/react/24/solid";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentEditor from "~/components/features/contents/ContentCommentEditor";
 import LikeButton from "~/components/features/engagement/LikeButton";
 import { SenseiAvatar } from "~/components/features/profile";
 import { AttributeBadge, MarkdownText, ProfileImage, TagIcon } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { compareInstantDesc } from "~/lib/date-time";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
@@ -125,6 +126,7 @@ function CommunityPostCard({
   const [comments, setComments] = useState(post.comments);
   const [commentEditing, setCommentEditing] = useState(false);
   const commentFetcher = useFetcher<CommunityEngagementActionResult>();
+  const trackedCommentResultRef = useRef<unknown>(null);
   const timestamp = getCommunityPostTimestampMeta(post, displayTimeZone);
   const visibilityLabel = getVisibilityLabel(post.visibility);
   const canComment =
@@ -140,6 +142,13 @@ function CommunityPostCard({
   useEffect(() => {
     if (commentFetcher.data?.kind === "communityPostCommentsChanged") {
       setComments(commentFetcher.data.comments);
+      if (
+        commentFetcher.data.createdComment &&
+        commentFetcher.data !== trackedCommentResultRef.current
+      ) {
+        trackedCommentResultRef.current = commentFetcher.data;
+        trackGoogleAnalyticsEvent("community_comment_created");
+      }
     }
   }, [commentFetcher.data]);
 

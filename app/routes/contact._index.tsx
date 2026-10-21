@@ -11,6 +11,7 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { parseFeedbackAdditional } from "~/domain/feedback";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 
 type ContactActionData = {
@@ -75,7 +76,9 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     const ticketUid = await createFeedbackTicket(env, currentUser.id, trimmedTitle, trimmedContent, null, additional, {
       ctx,
     });
-    return redirect(`/contact/${ticketUid}`);
+    const headers = new Headers();
+    headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "contact_submitted" }]));
+    return redirect(`/contact/${ticketUid}`, { headers });
   } catch (error) {
     logger.error("Error creating feedback ticket", error, {
       currentUserId: currentUser.id,

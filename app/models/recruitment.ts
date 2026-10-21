@@ -4,6 +4,7 @@ import type { RecruitmentGroupsListQuery, RecruitmentPoolStudentsQuery } from "~
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { toUtcIso } from "~/lib/date-time";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 
 const RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "endAfterDays=7");
 const HISTORICAL_RECRUITMENT_GROUPS_CACHE_KEY = cacheKey("source", "recruitment-group", 1, "all");
@@ -87,7 +88,7 @@ export async function getAllRecruitmentGroups(env: Env, forceRefresh = false): P
   try {
     return await fetchAllRecruitmentGroups(env, forceRefresh);
   } catch (error) {
-    console.error("[getAllRecruitmentGroups] Failed", error);
+    console.error("[getAllRecruitmentGroups] Failed", sanitizeErrorForLogging(error));
     return [];
   }
 }
@@ -96,7 +97,7 @@ export async function getAllHistoricalRecruitmentGroups(env: Env, forceRefresh =
   try {
     return await fetchAllHistoricalRecruitmentGroups(env, forceRefresh);
   } catch (error) {
-    console.error("[getAllHistoricalRecruitmentGroups] Failed", error);
+    console.error("[getAllHistoricalRecruitmentGroups] Failed", sanitizeErrorForLogging(error));
     return [];
   }
 }

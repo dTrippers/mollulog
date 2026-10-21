@@ -1,7 +1,9 @@
 import { ArrowTopRightOnSquareIcon, CheckCircleIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as CheckCircleIconSolid } from "@heroicons/react/24/solid";
 import dayjs from "dayjs";
+import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { Coupon } from "~/models/coupon";
 import CopyField from "./CopyField";
 import CouponRewardList from "./CouponRewardList";
@@ -14,14 +16,26 @@ type CouponCardProps = {
 
 export default function CouponCard({ coupon, registered, signedIn }: CouponCardProps) {
   const fetcher = useFetcher();
+  const pendingState = useRef<"used" | "unused" | null>(null);
+  const trackedResult = useRef<unknown>(null);
 
   const isExpired = coupon.expiresAt !== null && dayjs(coupon.expiresAt).isBefore(dayjs());
   const optimisticRegistered = fetcher.state !== "idle" ? fetcher.formMethod === "POST" : registered;
 
   const handleToggle = () => {
     if (fetcher.state !== "idle") return;
+    pendingState.current = optimisticRegistered ? "unused" : "used";
     fetcher.submit({ couponId: coupon.id }, { method: optimisticRegistered ? "DELETE" : "POST" });
   };
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data || fetcher.data === trackedResult.current) return;
+    trackedResult.current = fetcher.data;
+    if (fetcher.data.success && pendingState.current) {
+      trackGoogleAnalyticsEvent("coupon_marked", { state: pendingState.current });
+      pendingState.current = null;
+    }
+  }, [fetcher.data, fetcher.state]);
 
   return (
     <div className="relative overflow-hidden rounded-lg bg-card shadow-sm">
@@ -74,7 +88,7 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
 
         {/* 쿠폰 코드 + 복사 */}
         <div className="px-3 py-2 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-neutral-200 dark:border-neutral-700">
-          <CopyField text={coupon.code} />
+          <CopyField text={coupon.code} codeType="coupon" />
         </div>
 
         {/* 보상 */}

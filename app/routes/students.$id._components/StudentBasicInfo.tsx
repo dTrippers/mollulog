@@ -23,6 +23,7 @@ import {
 } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import {
   type Attack,
   type StudentCatalogStat,
@@ -193,6 +194,9 @@ export default function StudentBasicInfo({
     }
     setSaved(fetcher.data.ok);
     if (fetcher.data.ok) {
+      if (submittedPayloadRef.current) {
+        trackGoogleAnalyticsEvent("student_state_saved", { source: "manual", scope: "single" });
+      }
       submittedPayloadRef.current = null;
       setRetryAvailable(false);
     } else {

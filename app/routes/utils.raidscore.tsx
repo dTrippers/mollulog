@@ -16,6 +16,7 @@ import {
   timeToScore,
 } from "~/domain/raid-score";
 import { canonicalLink } from "~/lib/seo";
+import { trackGoogleAnalyticsEventOncePerPage } from "~/lib/google-analytics-events.client";
 import { difficultyLocale } from "~/locales/ko";
 import { getAllRaidSchedules } from "~/models/raid";
 
@@ -168,6 +169,7 @@ function TimeToScore({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
     const milliseconds = time[3] ? Number.parseInt(time[3].slice(1), 10) : 0;
     try {
       const score = timeToScore(boss, difficulty, minutes * 60000 + seconds * 1000 + milliseconds);
+      trackGoogleAnalyticsEventOncePerPage("calculator_used", { tool: "raidscore" });
       setCalculatedScore(score);
       setError(null);
     } catch (error) {
@@ -286,6 +288,7 @@ function ScoreToTime({ bossOptions }: { bossOptions: RaidScoreBossOption[] }) {
 
     try {
       const { difficulty, clearTimeMillisec } = scoreToDifficultyAndTime(boss, score);
+      trackGoogleAnalyticsEventOncePerPage("calculator_used", { tool: "raidscore" });
 
       const minute = Math.floor(clearTimeMillisec / 60000);
       const second = Math.floor((clearTimeMillisec % 60000) / 1000);

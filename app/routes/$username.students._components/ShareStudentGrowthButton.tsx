@@ -1,6 +1,7 @@
 import { ShareIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { Button } from "~/components/primitives";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 export type ShareStudentGrowthResult = "shared" | "copied" | "cancelled";
 
@@ -65,7 +66,10 @@ export default function ShareStudentGrowthButton({ url, disabled = false }: Shar
     if (disabled || status === "sharing") return;
     setStatus("sharing");
     try {
-      setStatus(await shareStudentGrowthUrl(url));
+      const result = await shareStudentGrowthUrl(url);
+      setStatus(result);
+      if (result === "shared") trackGoogleAnalyticsEvent("share", { content_type: "student_growth", method: "native" });
+      if (result === "copied") trackGoogleAnalyticsEvent("share", { content_type: "student_growth", method: "copy" });
     } catch {
       setStatus("error");
     }

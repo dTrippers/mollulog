@@ -1,4 +1,6 @@
 import * as Sentry from "@sentry/browser";
+import { sanitizeErrorForLogging, sanitizeLogContext } from "~/lib/privacy-scrub";
+import { getRememberedRoutePattern } from "~/lib/route-pattern";
 
 type PublicObservabilityConfig = {
   stage?: string;
@@ -48,6 +50,85 @@ const deniedClientErrorUrls: Array<string | RegExp> = [
   /extensions\//i,
 ];
 
+const ALLOWED_REQUEST_HEADERS = new Set(["accept", "content-type", "user-agent"]);
+
+export function scrubClientSentryEvent<T extends Sentry.Event>(event: T): T {
+  if (event.request) {
+    const request = event.request;
+    if (request.url) {
+      const routePattern = getRememberedRoutePattern(request.url);
+      if (routePattern) {
+        request.url = `${window.location.origin}${routePattern}`;
+      } else {
+        delete request.url;
+      }
+    }
+    if (request.headers) {
+      const headers: Record<string, string> = {};
+      for (const [name, value] of Object.entries(request.headers)) {
+        const lowerName = name.toLowerCase();
+        if (lowerName === "referer" || lowerName === "referrer") {
+          const routePattern = getRememberedRoutePattern(value);
+          if (routePattern) headers[name] = `${window.location.origin}${routePattern}`;
+        } else if (ALLOWED_REQUEST_HEADERS.has(lowerName)) {
+          headers[name] = value;
+        }
+      }
+      request.headers = headers;
+    }
+    delete request.query_string;
+    delete request.data;
+    delete request.cookies;
+    delete request.env;
+  }
+
+  delete event.user;
+  if (event.contexts) {
+    delete event.contexts.user;
+    event.contexts = sanitizeLogContext(event.contexts) as typeof event.contexts;
+  }
+  if (event.extra) event.extra = sanitizeLogContext(event.extra) as typeof event.extra;
+  if (event.tags) event.tags = sanitizeLogContext(event.tags) as typeof event.tags;
+  return event;
+}
+
+export function scrubClientSentryBreadcrumb<
+  T extends { category?: string; data?: Record<string, unknown>; message?: string },
+>(breadcrumb: T): T | null {
+  if (breadcrumb.category === "console" || breadcrumb.category?.startsWith("ui.") || breadcrumb.message !== undefined) {
+    return null;
+  }
+  if (!breadcrumb.data) return breadcrumb;
+
+  const data = { ...breadcrumb.data };
+  let safeRequestUrl: string | undefined;
+  if (breadcrumb.category === "navigation") {
+    for (const key of ["from", "to"]) {
+      const routePattern = getRememberedRoutePattern(typeof data[key] === "string" ? data[key] : undefined);
+      if (routePattern) data[key] = routePattern;
+      else delete data[key];
+    }
+  }
+  if (breadcrumb.category === "fetch" || breadcrumb.category === "xhr") {
+    const routePattern = getRememberedRoutePattern(typeof data.url === "string" ? data.url : undefined);
+    if (routePattern) {
+      data.url = routePattern;
+      safeRequestUrl = routePattern;
+    } else {
+      delete data.url;
+    }
+    delete data.body;
+    delete data.data;
+    delete data.query;
+    delete data.query_string;
+    delete data.response;
+  }
+  const safeData = sanitizeLogContext(data);
+  if (safeRequestUrl) safeData.url = safeRequestUrl;
+  breadcrumb.data = safeData as T["data"];
+  return breadcrumb;
+}
+
 function getConfig(): PublicObservabilityConfig {
   if (typeof window === "undefined") {
     return {};
@@ -79,6 +160,8 @@ export function initializeClientObservability() {
     sendDefaultPii: false,
     ignoreErrors: ignoredClientErrorMessages,
     denyUrls: deniedClientErrorUrls,
+    beforeSend: scrubClientSentryEvent,
+    beforeBreadcrumb: scrubClientSentryBreadcrumb,
   });
 
   initialized = true;
@@ -88,16 +171,18 @@ export function captureClientError(error: unknown, context: Record<string, unkno
   initializeClientObservability();
 
   Sentry.withScope((scope) => {
-    scope.setExtras(context);
-    if (typeof context.source === "string") {
-      scope.setTag("source", context.source);
+    const safeContext = sanitizeLogContext(context);
+    scope.setExtras(safeContext);
+    if (typeof safeContext.source === "string") {
+      scope.setTag("source", safeContext.source);
     }
 
-    if (error instanceof Error) {
-      Sentry.captureException(error);
+    const safeError = sanitizeErrorForLogging(error);
+    if (safeError instanceof Error) {
+      Sentry.captureException(safeError);
       return;
     }
 
-    Sentry.captureMessage(typeof error === "string" ? error : "Non-Error client exception captured", "error");
+    Sentry.captureMessage(typeof safeError === "string" ? safeError : "Non-Error client exception captured", "error");
   });
 }

@@ -22,6 +22,7 @@ import {
 } from "~/components/features/students";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { Button, Callout, FilterButtons, SubTitle, Toggle } from "~/components/primitives";
+import { trackGoogleAnalyticsEvent, useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
@@ -311,6 +312,7 @@ export default function UserPage() {
     () => getFilteredStudentUids(filterStudents, filterState),
     [filterStudents, filterState],
   );
+  useTrackGoogleAnalyticsSearch(filterState.search, me ? "my_students" : "students", filteredUids.length);
   const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
   const [recruitedStudents, unrecruitedStudents] = useMemo(() => {
     const filteredStudents = filteredUids.flatMap((uid) => {
@@ -335,6 +337,7 @@ export default function UserPage() {
   const [batchError, setBatchError] = useState<string | null>(null);
   const batchSubmittingRef = useRef(false);
   const batchDataAtSubmitRef = useRef<BatchActionResult | undefined>(undefined);
+  const trackedSingleActionRef = useRef<unknown>(null);
   const [growthPrivateCalloutDismissed, setGrowthPrivateCalloutDismissed] = useState(false);
   const [growthPrivateCalloutDismissalLoaded, setGrowthPrivateCalloutDismissalLoaded] = useState(false);
 
@@ -370,10 +373,19 @@ export default function UserPage() {
     if (isSuccessfulBatchResult(batchFetcher.data)) {
       setBatchAddStudentUids([]);
       setBatchAddMode(false);
+      trackGoogleAnalyticsEvent("student_state_saved", { source: "manual", scope: "bulk" });
       return;
     }
     setBatchError(getBatchFailureMessage(batchFetcher.data));
   }, [batchFetcher.data, batchFetcher.state]);
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data || fetcher.data === trackedSingleActionRef.current) return;
+    trackedSingleActionRef.current = fetcher.data;
+    if ("success" in fetcher.data && fetcher.data.success === true) {
+      trackGoogleAnalyticsEvent("student_state_saved", { source: "manual", scope: "single" });
+    }
+  }, [fetcher.data, fetcher.state]);
 
   const panels = useMemo<PagePanelProps[]>(
     () => [
@@ -389,11 +401,12 @@ export default function UserPage() {
             useFilter
             useSearch
             sortBy={[...USER_STUDENT_FILTER_SORTS]}
+            searchScope={me ? "my_students" : "students"}
           />
         ),
       },
     ],
-    [filterState, filteredUids.length, filterStudents, setFilterState, students.length],
+    [filterState, filteredUids.length, filterStudents, me, setFilterState, students.length],
   );
 
   useEffect(() => {

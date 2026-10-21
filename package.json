@@ -34,7 +34,6 @@
     "@graphql-typed-document-node/core": "^3.2.0",
     "@headlessui/react": "^2.2.10",
     "@heroicons/react": "^2.2.0",
-    "@logtail/edge": "^0.5.8",
     "@react-router/cloudflare": "^7.18.2",
     "@react-router/fs-routes": "^7.18.2",
     "@sentry/browser": "^10.63.0",
@@ -70,7 +69,8 @@
     "remix-auth-google": "^2.0.0",
     "sanitize-html": "^2.17.5",
     "tailwind-merge": "^3.6.0",
-    "urql": "^5.0.3"
+    "urql": "^5.0.3",
+    "web-vitals": "^6.2.3"
   },
   "devDependencies": {
     "@babel/preset-typescript": "^7.28.5",

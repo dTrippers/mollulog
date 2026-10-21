@@ -7,6 +7,7 @@ import {
 } from "~/auth/session-validation.server";
 import { watchIo } from "~/lib/io-watchdog";
 import { createServerSentryOptions } from "~/lib/observability.server";
+import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { createRequestDiagnostics, type RequestDiagnostics } from "~/lib/request-diagnostics";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
@@ -15,7 +16,6 @@ import { markOcrTaskDeadLetter } from "~/models/ocr-job";
 export { CacheRefreshWorkflow } from "./cache-refresh-workflow";
 
 type ObservabilityEnv = Env & {
-  SERVER_BETTER_STACK_SOURCE_TOKEN?: string;
   SERVER_SENTRY_DSN?: string;
 };
 
@@ -59,7 +59,7 @@ const handler: ExportedHandler<ObservabilityEnv> = {
         await markOcrTaskDeadLetter(env, message.body, { ctx });
         message.ack();
       } catch (error) {
-        console.error("Failed to persist OCR dead letter", error);
+        console.error("Failed to persist OCR dead letter", sanitizeErrorForLogging(error));
         message.retry({ delaySeconds: 60 });
       }
     }
