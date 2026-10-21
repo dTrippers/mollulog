@@ -814,7 +814,7 @@ describe("home feed item links and reference meta", () => {
 });
 
 describe("home event entry row", () => {
-  it("keeps every entry label on one line inside a 44px control on the inset token", () => {
+  it("keeps every entry label on one line in a compact row on the inset token", () => {
     const markup = render(
       <HomeEventSection
         events={{

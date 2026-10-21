@@ -27,11 +27,6 @@ const sizeClassName = {
   sm: "min-h-7 px-2 text-xs",
 } as const;
 
-// The hit area keeps at least min-h-v2-control-min (2.5rem on stacked layouts and coarse pointers) through an invisible
-// pseudo-element, so the visible button stays compact.
-const hitAreaClassName =
-  "relative before:absolute before:inset-x-0 before:inset-y-[min(0px,calc(50%-var(--spacing-v2-control-min)/2))] before:content-['']";
-
 export function v2ButtonClassName({
   variant = "secondary",
   size = "md",
@@ -43,7 +38,6 @@ export function v2ButtonClassName({
 } = {}) {
   return cn(
     "inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:opacity-100",
-    hitAreaClassName,
     sizeClassName[size],
     variantClassName[variant],
     v2FocusRing,

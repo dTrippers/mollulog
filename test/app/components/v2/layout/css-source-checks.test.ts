@@ -236,8 +236,9 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
 
   it("W3: the timeline hint and the sheet tutorial share one one-line hint with no box and no Button primitive", () => {
     const hint = readFileSync(join(process.cwd(), "app/components/v2/features/feature-hint.tsx"), "utf8");
-    expect(hint).toContain("pointer-coarse:min-h-11");
-    expect(hint).toContain("pointer-coarse:before:-inset-y-2");
+    expect(hint).not.toContain("pointer-coarse:");
+    expect(hint).toContain("inline-flex h-6");
+    expect(hint).toContain("inline-flex size-6");
     for (const file of ["features/futures/FeatureBanner.tsx", "features/comments/OpinionTutorial.tsx"]) {
       const source = readFileSync(join(process.cwd(), "app/components/v2", file), "utf8");
       expect(source).toContain("feature-hint");
@@ -283,8 +284,15 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(css).toContain("--v2-live: oklch(0.505 0.213 27.518);");
   });
 
-  it("C15: the pointer-coarse variant used for the touch hit area is defined", () => {
-    expect(css).toContain("@custom-variant pointer-coarse (@media (pointer: coarse));");
+  it("C16: mobile and coarse layouts keep the shared compact density-token values", () => {
+    expect(css).toContain("--spacing-v2-row-min: 2.25rem;");
+    expect(css).toContain("--spacing-v2-control-min: 2rem;");
+    expect(css).toContain("--spacing-v2-input-min: 2rem;");
+    const mobileStart = css.indexOf("@media (max-width: 767px)");
+    const mobileBlock = css.slice(mobileStart, css.indexOf("\n}", mobileStart));
+    expect(mobileBlock).not.toMatch(/--spacing-v2-(?:row|control|input)-min/);
+    expect(css).not.toContain("@media (pointer: coarse)");
+    expect(css).not.toContain("@custom-variant pointer-coarse");
   });
 
   it("C15: PanelAction uses tokens only, with no literal colors", () => {
@@ -344,8 +352,8 @@ describe("corr-2 component values", () => {
     expect(sheetSource).toContain(
       "min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
     );
-    expect(sheetSource).toContain('<XMarkIcon className="size-5" aria-hidden="true" />');
-    expect(sheetSource).toContain("flex size-11 cursor-pointer items-center justify-center rounded-md");
+    expect(sheetSource).toContain('<XMarkIcon className="size-4" aria-hidden="true" />');
+    expect(sheetSource).toContain("flex size-8 cursor-pointer items-center justify-center rounded-md");
     expect(sheetSource).toContain("max-h-[85dvh]");
     expect(sheetSource).toContain("rounded-t-lg bg-v2-surface");
   });

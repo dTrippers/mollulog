@@ -21,7 +21,7 @@ describe("cn with 2.0 token classes", () => {
   it("lets a later min-height or height override replace a v2 spacing token", () => {
     expect(cn("min-h-v2-row-min", "min-h-0")).toBe("min-h-0");
     expect(cn("min-h-v2-row-min", "min-h-12")).toBe("min-h-12");
-    expect(cn("min-h-v2-row-min", "min-h-0 h-8 pointer-coarse:h-11")).toBe("min-h-0 h-8 pointer-coarse:h-11");
+    expect(cn("min-h-v2-row-min", "min-h-0 h-8 lg:h-11")).toBe("min-h-0 h-8 lg:h-11");
     expect(cn("h-v2-row-min", "h-8")).toBe("h-8");
   });
 

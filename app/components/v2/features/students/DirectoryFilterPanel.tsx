@@ -91,7 +91,7 @@ export function DirectoryFilterPanel({
 
   return (
     <div className="space-y-1 sm:space-y-2">
-      <div className="space-y-1 sm:space-y-2">
+      <div className="space-y-2 pb-1 sm:pb-0">
         <StaticGroup title="공격 타입">
           <ChipRow>
             {STUDENT_DIRECTORY_ATTACK_TYPES.map((value) => (
@@ -372,7 +372,7 @@ function StaticGroup({
 }) {
   const titleId = `student-directory-${title.replaceAll(" ", "-")}`;
   return (
-    <section aria-labelledby={titleId} className="space-y-0.5">
+    <section aria-labelledby={titleId} className="space-y-1.5 sm:space-y-0.5">
       <div className="flex min-h-6 items-center justify-between gap-2">
         <h3 id={titleId} className="text-sm font-semibold text-v2-fg-tertiary sm:text-xs">
           {title}
@@ -387,7 +387,7 @@ function StaticGroup({
 }
 
 function ChipRow({ children }: { children: React.ReactNode }) {
-  return <div className="-mx-1 flex flex-wrap gap-x-0 gap-y-0 sm:mx-0 sm:gap-x-0.5 sm:gap-y-1.5">{children}</div>;
+  return <div className="flex flex-wrap gap-x-1.5 gap-y-1.5 sm:gap-x-0.5">{children}</div>;
 }
 
 function DirectoryToggleChip({
@@ -409,7 +409,7 @@ function DirectoryToggleChip({
       onPressedChange={onPressedChange}
       disabled={disabled}
       ariaLabel={ariaLabel}
-      className="group min-h-11 shrink-0 justify-center bg-transparent px-1 hover:bg-transparent active:bg-transparent disabled:bg-transparent disabled:hover:bg-transparent sm:min-h-6 sm:min-w-0 sm:px-0"
+      className="group min-h-8 shrink-0 justify-center bg-transparent px-0 hover:bg-transparent active:bg-transparent disabled:bg-transparent disabled:hover:bg-transparent sm:min-h-6 sm:min-w-0 sm:px-0"
     >
       <span
         className={cn(
@@ -436,7 +436,7 @@ function SignInAction({ onClick }: { onClick: () => void }) {
       type="button"
       aria-label="로그인 후 사용 가능: 로그인하고 내 기록으로 정렬·필터하기"
       onClick={onClick}
-      className="relative min-h-6 cursor-pointer rounded-md px-1 text-xs text-v2-fg-secondary after:absolute after:inset-x-0 after:-bottom-1 after:h-8 after:content-[''] hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg sm:after:hidden"
+      className="min-h-6 cursor-pointer rounded-md px-1 text-xs text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover active:text-v2-fg"
     >
       로그인 후 사용 가능
     </button>

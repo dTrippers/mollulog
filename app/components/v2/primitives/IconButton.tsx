@@ -12,7 +12,7 @@ export type IconButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   ref?: Ref<HTMLButtonElement>;
 };
 
-// Icon-only control. 2rem on desktop and 2.75rem below lg, the touch size on stacked layouts.
+// Compact 2rem icon-only control on every layout.
 export function IconButton({
   icon: Icon,
   label,
@@ -31,7 +31,7 @@ export function IconButton({
       title={label}
       aria-pressed={pressed}
       className={cn(
-        "relative inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary max-lg:size-11",
+        "inline-flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary",
         "hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled disabled:hover:bg-transparent",
         danger && "hover:text-v2-danger",
         pressed && "text-v2-fg",

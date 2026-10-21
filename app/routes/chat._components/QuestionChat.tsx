@@ -841,7 +841,7 @@ export function QuestionChat({
           <span id="question-shortcut-help" className="sr-only">
             Enter로 질문 보내기, Shift+Enter로 줄바꿈
           </span>
-          <div className="flex min-h-8 items-center justify-between gap-3 max-lg:min-h-11">
+          <div className="flex min-h-8 items-center justify-between gap-3">
             <button
               ref={triggerRef}
               type="button"
@@ -852,8 +852,8 @@ export function QuestionChat({
               onClick={() => setOptionsOpen((open) => !open)}
               className={`inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md transition-colors duration-v2-fast ${v2FocusRing} ${
                 personalMode
-                  ? "h-8 gap-1 bg-v2-inset px-2 text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg max-lg:h-11"
-                  : "size-8 bg-transparent text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg max-lg:size-11"
+                  ? "h-8 gap-1 bg-v2-inset px-2 text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg"
+                  : "size-8 bg-transparent text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg"
               }`}
             >
               <PlusIcon className="size-5 lg:size-4" aria-hidden="true" />

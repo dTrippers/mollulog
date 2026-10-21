@@ -143,7 +143,7 @@ export function CommentComposer({
         placeholder={shownPlaceholder}
         disabled={disabled}
         rows={1}
-        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm max-lg:min-h-11 max-lg:py-3 leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary/75 disabled:opacity-60"
+        className="min-h-8 min-w-0 flex-1 resize-none bg-transparent py-1.5 text-sm leading-5 text-v2-fg outline-none placeholder:truncate placeholder:text-v2-fg-tertiary/75 disabled:opacity-60"
       />
       {showVisibility ? (
         <button
@@ -157,7 +157,7 @@ export function CommentComposer({
           aria-label={`공개 범위: ${isPrivate ? "나만 보기" : "전체 공개"}`}
           title={nextVisibilityText}
           className={cn(
-            "inline-flex h-8 shrink-0 cursor-pointer max-lg:h-11 items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
+            "inline-flex h-8 shrink-0 cursor-pointer items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg disabled:cursor-not-allowed disabled:text-v2-fg-disabled",
             v2FocusRing,
           )}
         >

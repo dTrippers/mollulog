@@ -191,7 +191,7 @@ export default function StudentsLayout() {
           disabled={listFailed}
         >
           <div className="space-y-2">
-            <div className="flex min-h-11 items-center justify-between gap-3">
+            <div className="flex min-h-v2-row-min items-center justify-between gap-3">
               <span className="text-sm text-v2-fg-secondary">표시할 정보</span>
               <Select
                 label="학생 카드에 표시할 정보"
@@ -200,7 +200,7 @@ export default function StudentsLayout() {
                 onChange={(displayBy) => setFilterState((current) => ({ ...current, displayBy }))}
               />
             </div>
-            <div className="flex min-h-11 items-center justify-between gap-3">
+            <div className="flex min-h-v2-row-min items-center justify-between gap-3">
               <span className="text-sm text-v2-fg-secondary">묶어보기</span>
               <Select
                 label="학생 묶어보기"

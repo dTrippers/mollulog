@@ -86,7 +86,7 @@ Surface hierarchy:
 
 ## Density tokens
 
-Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets the media overrides reach utilities through `var()`. Do not move them into `@theme inline`.
+Density tokens are spacing tokens in a plain `@theme` block so utilities can read their CSS variables. Do not move them into `@theme inline`.
 
 | Token / utility | Desktop | 767px or narrower | `pointer: coarse` | Use |
 |---|---|---|---|---|
@@ -98,9 +98,9 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 | `p-v2-block-p` / `--spacing-v2-block-p` | 1.25rem | 1rem | same | Block padding |
 | `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
-| `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | 2.75rem | 2.75rem | Minimum row height. List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
-| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Minimum button hit area (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers. The visible button stays 32px (`size="md"`) or 28px (`size="sm"`) on every layout; an invisible pseudo-element extends the hit area. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
-| `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | 2.25rem | 2.25rem | Number and select inputs. 36px on stacked layouts and coarse pointers |
+| `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | same | same | Minimum row height (36px). List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
+| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
+| `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | same | same | Number and select inputs stay 32px on every layout. Keep mobile text inputs at `text-base` to avoid iOS zoom |
 
 ## Button variants
 

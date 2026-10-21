@@ -3,9 +3,8 @@ import type { RefObject } from "react";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
-// One-line hint with one action and a dismiss control. It has no box. The controls are small on fine pointers, and on
-// coarse pointers the row grows to 44px while the visible controls stay 28px with 44px hit areas. The timeline banner and
-// the sheet tutorial both use it. The sheet's version is full width, so its text takes the free space.
+// One-line hint with one action and a dismiss control. It has no box and stays compact on every pointer type. The timeline
+// banner and the sheet tutorial both use it. The sheet's version is full width, so its text takes the free space.
 export function FeatureHint({
   Icon,
   message,
@@ -28,7 +27,7 @@ export function FeatureHint({
   return (
     <div
       className={cn(
-        "flex items-center gap-1.5 text-xs leading-4 text-v2-fg-secondary pointer-coarse:min-h-11",
+        "flex items-center gap-1.5 text-xs leading-4 text-v2-fg-secondary",
         fullWidth ? "w-full" : "w-fit max-w-[40rem]",
       )}
     >
@@ -39,7 +38,7 @@ export function FeatureHint({
           type="button"
           onClick={onAction}
           className={cn(
-            "relative inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover pointer-coarse:h-7 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 before:content-['']",
+            "inline-flex h-6 cursor-pointer items-center rounded-md bg-v2-inset px-2 text-xs font-medium whitespace-nowrap text-v2-fg hover:bg-v2-filled-hover",
             v2FocusRing,
           )}
         >
@@ -51,7 +50,7 @@ export function FeatureHint({
           aria-label={closeLabel}
           onClick={onClose}
           className={cn(
-            "relative inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg pointer-coarse:size-7 pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:-inset-y-2 before:content-['']",
+            "inline-flex size-6 cursor-pointer items-center justify-center rounded-md text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
             v2FocusRing,
           )}
         >
