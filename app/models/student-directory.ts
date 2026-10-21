@@ -2,6 +2,7 @@ import { graphql } from "~/graphql";
 import type { StudentDirectoryQuery, StudentTerrainAdaptationRank } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
+import { toUtcIso } from "~/lib/date-time";
 import type { Student } from "./student";
 
 /**
@@ -22,32 +23,18 @@ export type StudentDirectoryTerrainAdaptations = {
 };
 
 export type StudentDirectoryStudent = Student & {
+  releaseAt: string | null;
+  weaponType: string | null;
+  acquisitionType: string | null;
+  canUseCover: boolean | null;
+  skillEffectTags: string[] | null;
+  club: { uid: string; name: string | null } | null;
+  studentVariant: { primaryStudent: { uid: string } } | null;
   catalog: {
     profile: StudentDirectoryProfile;
     terrainAdaptations: StudentDirectoryTerrainAdaptations;
   } | null;
 };
-
-export type StudentDirectoryGroupBy = "none" | "school" | "attackType" | "defenseType" | "role" | "position";
-
-export type StudentDirectoryDisplayField =
-  | "none"
-  | "school"
-  | "attackType"
-  | "defenseType"
-  | "role"
-  | "tacticRole"
-  | "position"
-  | "equipment1"
-  | "equipment2"
-  | "equipment3"
-  | "initialTier"
-  | "age"
-  | "schoolYear"
-  | "height"
-  | "street"
-  | "outdoor"
-  | "indoor";
 
 const studentDirectoryQuery = graphql(`
   query StudentDirectory {
@@ -59,8 +46,15 @@ const studentDirectoryQuery = graphql(`
       school
       initialTier
       order
+      releaseAt
       attackType
       defenseType
+      weaponType
+      acquisitionType(region: gl)
+      canUseCover
+      skillEffectTags
+      club { uid name }
+      studentVariant { primaryStudent { uid } }
       position
       tacticRole
       birthday
@@ -83,7 +77,7 @@ const studentDirectoryQuery = graphql(`
   }
 `);
 
-const STUDENT_DIRECTORY_CACHE_KEY = cacheKey("source", "student-directory", 1, "all");
+const STUDENT_DIRECTORY_CACHE_KEY = cacheKey("source", "student-directory", 2, "all");
 
 function normalizeStudentDirectoryStudent(student: StudentDirectoryQuery["students"][number]): StudentDirectoryStudent {
   return {
@@ -94,8 +88,17 @@ function normalizeStudentDirectoryStudent(student: StudentDirectoryQuery["studen
     school: student.school,
     initialTier: student.initialTier,
     order: student.order,
+    releaseAt: student.releaseAt === null ? null : toUtcIso(student.releaseAt),
     attackType: student.attackType,
     defenseType: student.defenseType,
+    weaponType: student.weaponType ?? null,
+    acquisitionType: student.acquisitionType ?? null,
+    canUseCover: student.canUseCover ?? null,
+    skillEffectTags: student.skillEffectTags ?? null,
+    club: student.club ? { uid: student.club.uid, name: student.club.name ?? null } : null,
+    studentVariant: student.studentVariant?.primaryStudent
+      ? { primaryStudent: { uid: student.studentVariant.primaryStudent.uid } }
+      : null,
     position: student.position,
     tacticRole: student.tacticRole,
     birthday: student.birthday,

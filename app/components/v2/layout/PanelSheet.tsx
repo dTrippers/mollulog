@@ -12,6 +12,8 @@ export type PanelSheetProps = {
   title: string;
   // A node lets a loading value show a skeleton in place of text.
   description?: ReactNode;
+  // Overrides the Aside description in the stacked Sheet header only.
+  sheetDescription?: ReactNode;
   Icon: ElementType;
   headerAction?: ReactNode;
   collapsible?: boolean;
@@ -26,6 +28,7 @@ export function PanelSheet({
   panelId,
   title,
   description,
+  sheetDescription,
   Icon,
   headerAction,
   collapsible = false,
@@ -122,7 +125,7 @@ export function PanelSheet({
               aria-controls={bodyId}
               onClick={toggle}
               className={cn(
-                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover",
+                "-mx-v2-row-x flex min-h-v2-row-min min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-v2-row-x text-left hover:bg-v2-hover active:bg-v2-filled-hover",
                 v2FocusRing,
               )}
             >
@@ -168,7 +171,7 @@ export function PanelSheet({
         title={title}
         Icon={Icon}
         panelId={panelId}
-        description={description}
+        description={sheetDescription === undefined ? description : sheetDescription}
         headerAction={headerAction}
         onClose={closeSheet}
         onExited={onSheetExited}

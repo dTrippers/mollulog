@@ -70,6 +70,7 @@ import {
   readFutureVisitState,
 } from "./routes/futures._components/futures-navigation";
 import { shouldKeepNewsScrollOnNavigation } from "./routes/news._components/news-scroll-state";
+import { shouldKeepStudentDirectoryScrollOnNavigation } from "./routes/students._components/student-directory-scroll-state";
 import styles from "./tailwind.css?url";
 import type { NavigationBarContents } from "./views/navigation";
 import { getNavigationBarContents } from "./views/navigation";
@@ -441,6 +442,16 @@ export default function App() {
       })
     ) {
       keepCurrentScroll();
+      return;
+    }
+    if (
+      shouldKeepStudentDirectoryScrollOnNavigation({
+        pathname: location.pathname,
+        navigationType,
+        entryKey: routeKey,
+        storage: getBrowserStorage("sessionStorage"),
+      })
+    ) {
       return;
     }
 

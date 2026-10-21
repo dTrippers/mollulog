@@ -181,6 +181,8 @@ describe("MobileActionBar", () => {
     expect(notice.compareDocumentPosition(filter) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(filter.getAttribute("aria-haspopup")).toBe("dialog");
     expect(filter.getAttribute("aria-expanded")).toBe("false");
+    expect(filter.className).toContain("active:bg-v2-filled-hover");
+    expect(calc.className).toContain("active:bg-v2-filled-hover");
   });
 });
 

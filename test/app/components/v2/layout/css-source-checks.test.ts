@@ -38,6 +38,18 @@ describe("corr-2 layout CSS", () => {
     expect(ruleBody(css, "  .v2-toolbar")).toContain("position: sticky;");
   });
 
+  it("T2: pads the stuck student directory toolbar only in the stacked layout", () => {
+    const selector = '.v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar])';
+    const rule = css.indexOf(`${selector} {`);
+    const stackedLayout = css.lastIndexOf("@container page-available (width < 48rem) {", rule);
+    const sideBySideLayout = css.lastIndexOf("@container page-available (width >= 48rem) {", rule);
+
+    expect(rule).toBeGreaterThan(-1);
+    expect(stackedLayout).toBeGreaterThan(sideBySideLayout);
+    expect(css.slice(rule, css.indexOf("}", rule))).toContain("padding-block: var(--spacing-v2-block-gap);");
+    expect(css.indexOf(`${selector} {`, rule + 1)).toBe(-1);
+  });
+
   it("T3: forward and reverse move the content area; crossfade names Main and Toolbar only", () => {
     expect(ruleBody(css, ".v2-main")).not.toContain("view-transition-name");
     expect(css).toContain('html[data-v2-transition="forward"] .mllg-content-area:has([data-v2-layout])');
@@ -132,19 +144,32 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only the sheet, the popover, and the chevron use translate, scale, or rotate utilities, each with a matching transition", () => {
+  it("V2: only sheets, popovers, dropdown chevrons, and select icon alignment use translate, scale, or rotate utilities", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
     );
     const motionUtility = /\b(?:translate|scale|rotate)-/;
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
-    expect(usingFiles.sort()).toEqual(["layout/PanelSheet.tsx", "primitives/Popover.tsx", "primitives/Sheet.tsx"]);
-    // Tailwind v4 transition-transform lists translate, scale, and rotate, so the chevron's rotate animates.
+    expect(usingFiles.sort()).toEqual([
+      "features/students/FilterGroupDisclosure.tsx",
+      "layout/PanelSheet.tsx",
+      "primitives/Popover.tsx",
+      "primitives/Select.tsx",
+      "primitives/Sheet.tsx",
+    ]);
+    // Tailwind v4 transition-transform lists translate, scale, and rotate, so both chevrons rotate safely.
     expect(panelSource).toContain(
       '"size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform duration-v2-base ease-v2-standard"',
     );
     expect(panelSource).toContain('phase === "open" && "rotate-180"');
+    const directoryDisclosureSource = readFileSync(
+      join(componentRoot, "features/students/FilterGroupDisclosure.tsx"),
+      "utf8",
+    );
+    expect(directoryDisclosureSource).toContain("motion-safe:transition-transform");
+    expect(directoryDisclosureSource).toContain('expanded && "rotate-180"');
+    expect(readFileSync(join(componentRoot, "primitives/Select.tsx"), "utf8")).toContain("-translate-y-1/2");
     // The popover's scale and slide run only under motion-safe, so reduced motion gets the opacity fade alone.
     const popoverSource = readFileSync(join(componentRoot, "primitives/Popover.tsx"), "utf8");
     const popoverMotionClasses = popoverSource.match(/\S*(?:translate|scale|rotate)-\S+/g) ?? [];

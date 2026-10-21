@@ -1,6 +1,8 @@
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
+import { Link } from "react-router";
 import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
+import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { FavoriteLabel } from "./FavoriteLabel";
 import StudentPortrait from "./StudentPortrait";
 
@@ -9,10 +11,10 @@ export type StudentThumbProps = {
   studentUid: string | null;
   name: string;
   variant: string | null;
-  recruitmentLabel: string;
+  recruitmentLabel?: string;
   // True for a new (non-rerun) recruitment, which the label marks in the accent color.
-  isNew: boolean;
-  favorite: FavoriteLabelState;
+  isNew?: boolean;
+  favorite?: FavoriteLabelState;
   personalStatePending?: boolean;
   // Clicking opens the quick panel. Hover and focus styling belong to the button. Without it the thumbnail is not interactive:
   // it has no button role and cannot take focus.
@@ -27,6 +29,13 @@ export type StudentThumbProps = {
   // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
+  // Fill the parent grid cell for a directory card.
+  fillWidth?: boolean;
+  // Internal route link for a directory card. Links prefetch on intent and use the forward transition.
+  linkTo?: string;
+  // A directory's sort or display value replaces the recruitment label in the scrim.
+  scrimLabel?: ReactNode;
+  scrimAriaLabel?: string;
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
@@ -46,13 +55,20 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     large = false,
     showCaption = true,
     showRecruitmentLabel = true,
+    fillWidth = false,
+    linkTo,
+    scrimLabel,
+    scrimAriaLabel,
   },
   ref,
 ) {
   // The button's aria-label replaces the names of its children, so the favorite label's count and own state join the
   // button's own name. A hidden label (no count, no own state) adds nothing.
   const detailName = `${name}${variant ? `(${variant})` : ""} 상세`;
-  const accessibleName = favorite.visible ? `${detailName}, ${favorite.accessibleName}` : detailName;
+  const accessibleName = [detailName, scrimAriaLabel, favorite?.visible ? favorite.accessibleName : null]
+    .filter(Boolean)
+    .join(", ");
+  const showBand = scrimLabel != null || (showRecruitmentLabel && !!recruitmentLabel);
   const frameClassName = "relative block aspect-[5/6] w-full overflow-hidden rounded-md bg-v2-inset";
   const frame = (
     <>
@@ -60,33 +76,61 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         uid={studentUid ?? "unlisted"}
         className={
           // The placeholder icon fills the width of the area above the label band (18px tall), centered vertically.
-          studentUid === null && showRecruitmentLabel
+          studentUid === null && showBand
             ? "absolute inset-x-0 top-0 h-[calc(100%-1.125rem)] w-full object-cover"
             : "size-full object-cover"
         }
-        haloAboveBand={showRecruitmentLabel}
+        haloAboveBand={showBand}
         haloScale="72%"
       />
-      {showRecruitmentLabel ? (
+      {showBand ? (
         <span
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
         >
-          <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
+          {scrimLabel ?? <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>}
         </span>
       ) : null}
-      <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
+      {favorite ? <FavoriteLabel state={favorite} personalStatePending={personalStatePending} /> : null}
     </>
   );
+  const caption = showCaption ? (
+    <>
+      <span
+        className={cn(
+          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
+          large ? "mt-0.5 md:mt-1" : "mt-1",
+        )}
+      >
+        {name}
+      </span>
+      {variant ? (
+        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
+          {variant}
+        </span>
+      ) : null}
+    </>
+  ) : null;
 
   return (
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : "w-[3.75rem]",
+        fillWidth ? "w-full" : large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : "w-[3.75rem]",
       )}
     >
-      {onOpen ? (
+      {linkTo ? (
+        <Link
+          to={linkTo}
+          prefetch="intent"
+          aria-label={accessibleName}
+          {...getV2LinkTransitionProps("forward")}
+          className="block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+        >
+          <span className={frameClassName}>{frame}</span>
+          {caption}
+        </Link>
+      ) : onOpen ? (
         <button
           ref={ref}
           type="button"
@@ -104,23 +148,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
       ) : (
         <span className={frameClassName}>{frame}</span>
       )}
-      {showCaption ? (
-        <>
-          <span
-            className={cn(
-              "block w-full truncate text-center text-xs leading-4 text-v2-fg",
-              large ? "mt-0.5 md:mt-1" : "mt-1",
-            )}
-          >
-            {name}
-          </span>
-          {variant ? (
-            <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-              {variant}
-            </span>
-          ) : null}
-        </>
-      ) : null}
+      {!linkTo ? caption : null}
     </div>
   );
 });

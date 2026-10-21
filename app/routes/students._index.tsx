@@ -1,151 +1,116 @@
-import { StarIcon } from "@heroicons/react/16/solid";
-import { useMemo } from "react";
-import { useNavigate, useOutletContext } from "react-router";
-import { StudentCards } from "~/components/features/students";
-import { getStudentDirectoryLabel, groupStudentDirectoryStudents } from "~/components/features/students/StudentFilter";
-import { attackTypeColor, defenseTypeColor } from "~/locales/ko";
-import { terrainAdaptationIconUrl } from "~/models/assets";
-import type { StudentDirectoryDisplayField, StudentDirectoryStudent } from "~/models/student-directory";
+import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { useLocation, useNavigationType, useOutletContext, useRevalidator } from "react-router";
+import { DirectoryCard } from "~/components/v2/features/students/DirectoryCardLabel";
+import { DirectoryGroupHeader } from "~/components/v2/features/students/DirectoryGroupHeader";
+import { DirectoryViewerFailureNotice } from "~/components/v2/features/students/DirectoryViewerFailureNotice";
+import { LoadFailureState } from "~/components/v2/features/students/LoadFailureState";
+import { ResultSummary } from "~/components/v2/features/students/ResultSummary";
+import { PageMain, PageToolbar } from "~/components/v2/layout";
+import { SearchInput } from "~/components/v2/primitives/SearchInput";
+import { SortControl } from "~/components/v2/primitives/SortControl";
+import {
+  groupStudentDirectoryStudents,
+  type StudentDirectorySort,
+  type StudentDirectorySortDirection,
+} from "~/domain/student-directory";
+import {
+  getStudentDirectoryScrollContainer,
+  getStudentDirectorySessionStorage,
+  readStudentDirectoryScrollPosition,
+  saveStudentDirectoryScrollPosition,
+} from "./students._components/student-directory-scroll-state";
 import type { StudentsPageContext } from "./students";
 
-const directoryLabelClassName = "min-w-0 max-w-full overflow-hidden text-ellipsis whitespace-nowrap";
-const directoryLabelTextColorClass = {
-  red: "text-red-300",
-  yellow: "text-yellow-300",
-  green: "text-green-300",
-  blue: "text-blue-300",
-  purple: "text-purple-300",
-  grey: "text-neutral-300",
-} as const;
-const terrainLabelNames = {
-  street: "시가지",
-  outdoor: "야외",
-  indoor: "실내",
-} as const;
-
-type StudentDirectoryCardDisplayField = Exclude<StudentDirectoryDisplayField, "none">;
-
-function StudentDirectoryCardLabel({
-  student,
-  displayBy,
-}: {
-  student: StudentDirectoryStudent;
-  displayBy: StudentDirectoryCardDisplayField;
-}) {
-  const label = getStudentDirectoryLabel(student, displayBy);
-  const commonProps = {
-    title: label.ariaLabel,
-  };
-
-  if (displayBy === "initialTier") {
-    const initialTier = student.initialTier > 0 ? student.initialTier : null;
-    if (initialTier === null) {
-      const accessibleLabel = "초기 성급 정보 없음";
-      return (
-        <span title={accessibleLabel} className={`block ${directoryLabelClassName}`}>
-          <span className="sr-only">{accessibleLabel}</span>
-          <span aria-hidden="true">정보 없음</span>
-        </span>
-      );
-    }
-
-    const accessibleLabel = `초기 성급 ${initialTier}성`;
-    return (
-      <span
-        title={accessibleLabel}
-        aria-label={accessibleLabel}
-        role="img"
-        className={`inline-flex items-center justify-center gap-0.5 ${directoryLabelClassName} text-yellow-300`}
-      >
-        <StarIcon aria-hidden="true" className="size-3 shrink-0" />
-        <span>{initialTier}</span>
-      </span>
-    );
-  }
-
-  if (displayBy === "street" || displayBy === "outdoor" || displayBy === "indoor") {
-    const terrainLabel = terrainLabelNames[displayBy];
-    const rank = student.catalog?.terrainAdaptations?.[displayBy];
-    if (!rank) {
-      const accessibleLabel = `${terrainLabel} 적성 정보 없음`;
-      return (
-        <span title={accessibleLabel} className={`block ${directoryLabelClassName}`}>
-          <span className="sr-only">{accessibleLabel}</span>
-          <span aria-hidden="true">정보 없음</span>
-        </span>
-      );
-    }
-
-    const accessibleLabel = `${terrainLabel} 적성 ${rank}`;
-    return (
-      <span
-        title={accessibleLabel}
-        aria-label={accessibleLabel}
-        role="img"
-        className={`inline-flex items-center justify-center ${directoryLabelClassName}`}
-      >
-        <img
-          src={terrainAdaptationIconUrl(rank)}
-          alt=""
-          aria-hidden="true"
-          className="size-3.5 shrink-0 object-contain"
-        />
-      </span>
-    );
-  }
-
-  const textColorClass =
-    displayBy === "attackType"
-      ? directoryLabelTextColorClass[attackTypeColor[student.attackType]]
-      : displayBy === "defenseType"
-        ? directoryLabelTextColorClass[defenseTypeColor[student.defenseType]]
-        : undefined;
-
-  return (
-    <span {...commonProps} className={`block ${directoryLabelClassName}${textColorClass ? ` ${textColorClass}` : ""}`}>
-      {label.value}
-    </span>
-  );
-}
+const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 export default function Students() {
-  const { students, filterState } = useOutletContext<StudentsPageContext>();
-  const navigate = useNavigate();
+  const { results, students, listStatus, filterState, personalState, setFilterState, onRequestSignIn } =
+    useOutletContext<StudentsPageContext>();
+  const revalidator = useRevalidator();
+  const location = useLocation();
+  const navigationType = useNavigationType();
+  useIsomorphicLayoutEffect(() => {
+    if (navigationType !== "POP") {
+      return;
+    }
+    const scrollTop = readStudentDirectoryScrollPosition(getStudentDirectorySessionStorage(), location.key);
+    const container = getStudentDirectoryScrollContainer();
+    if (scrollTop !== null && container) {
+      container.scrollTop = scrollTop;
+    }
+  }, [location.key, navigationType]);
+  const saveScrollPosition = () => {
+    saveStudentDirectoryScrollPosition(
+      getStudentDirectorySessionStorage(),
+      location.key,
+      getStudentDirectoryScrollContainer()?.scrollTop ?? 0,
+    );
+  };
   const groups = useMemo(
-    () => groupStudentDirectoryStudents(students, filterState.groupBy ?? "none"),
-    [filterState.groupBy, students],
+    () => groupStudentDirectoryStudents(results, filterState.groupBy),
+    [filterState.groupBy, results],
   );
-  const displayBy = filterState.displayBy ?? "none";
+  const updateSearch = useCallback(
+    (search: string) => setFilterState((current) => ({ ...current, search })),
+    [setFilterState],
+  );
+  const updateSort = useCallback(
+    (sort: StudentDirectorySort, direction: StudentDirectorySortDirection) =>
+      setFilterState((current) => ({ ...current, sort, direction })),
+    [setFilterState],
+  );
+  const listFailed = listStatus === "failed";
 
   return (
-    <div className="space-y-6">
-      {groups.map((group) => (
-        <section key={group.key} aria-label={group.label ?? "학생 목록"} className="space-y-2">
-          {group.label && (
-            <div className="flex items-baseline justify-between gap-2">
-              <h2 className="text-sm font-semibold text-foreground">{group.label}</h2>
-              <span className="text-xs text-muted-foreground">{group.students.length}명</span>
+    <>
+      <PageToolbar>
+        <div data-student-directory-toolbar className="flex min-w-0 items-center gap-2 px-4 sm:px-0">
+          <SearchInput
+            value={filterState.search}
+            onChange={updateSearch}
+            disabled={listFailed}
+            className="min-w-0 flex-1 sm:w-72 sm:flex-none"
+          />
+          <div className="ml-auto shrink-0">
+            <SortControl
+              sort={filterState.sort}
+              direction={filterState.direction}
+              personalStatus={personalState.status}
+              onChange={updateSort}
+              onRequestSignIn={onRequestSignIn}
+              disabled={listFailed}
+            />
+          </div>
+        </div>
+      </PageToolbar>
+      <PageMain>
+        <div onClickCapture={saveScrollPosition}>
+          {listFailed ? (
+            <LoadFailureState onRetry={() => revalidator.revalidate()} />
+          ) : (
+            <div className="space-y-4">
+              {personalState.status === "failed" ? (
+                <DirectoryViewerFailureNotice onRetry={() => revalidator.revalidate()} />
+              ) : null}
+              <ResultSummary students={students} state={filterState} count={results.length} onChange={setFilterState} />
+              {results.length === 0 ? (
+                <p className="text-sm text-v2-fg-secondary">조건에 맞는 학생이 없어요</p>
+              ) : (
+                groups.map((group) => (
+                  <section key={group.key} aria-label={group.label ?? "학생 목록"} className="space-y-2">
+                    {group.label ? <DirectoryGroupHeader title={group.label} count={group.students.length} /> : null}
+                    <div className="grid grid-cols-6 gap-x-2 gap-y-4 sm:grid-cols-8 sm:gap-x-3">
+                      {group.students.map((student) => (
+                        <DirectoryCard key={student.uid} student={student} state={filterState} personal={personalState} />
+                      ))}
+                    </div>
+                  </section>
+                ))
+              )}
             </div>
           )}
-          <StudentCards
-            students={group.students.map((student) => {
-              return {
-                uid: student.uid,
-                name: student.name,
-                attackType: student.attackType,
-                defenseType: student.defenseType,
-                role: student.role,
-                ...(displayBy === "none"
-                  ? {}
-                  : { label: <StudentDirectoryCardLabel student={student} displayBy={displayBy} /> }),
-              };
-            })}
-            layout="responsive-wrap"
-            cardSize="lg"
-            onSelect={(uid) => navigate(`/students/${uid}`)}
-          />
-        </section>
-      ))}
-    </div>
+        </div>
+      </PageMain>
+    </>
   );
 }

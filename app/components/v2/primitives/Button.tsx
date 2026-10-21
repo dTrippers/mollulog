@@ -11,13 +11,14 @@ type V2ButtonVariant = NonNullable<V2ButtonProps["variant"]>;
 type V2ButtonSize = NonNullable<V2ButtonProps["size"]>;
 
 const variantClassName = {
-  primary: "bg-v2-fg text-v2-canvas hover:opacity-90",
-  secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
-  text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover",
+  primary: "bg-v2-fg text-v2-canvas hover:opacity-90 active:opacity-80",
+  secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover",
+  text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover active:bg-v2-filled-hover",
   link: "px-0 text-v2-fg-secondary enabled:hover:text-v2-fg",
   danger:
-    "bg-v2-danger-solid text-v2-on-danger enabled:hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled",
-  "danger-subtle": "bg-v2-danger-subtle text-v2-danger enabled:hover:opacity-90",
+    "bg-v2-danger-solid text-v2-on-danger enabled:hover:opacity-90 enabled:active:opacity-80 disabled:bg-v2-inset disabled:text-v2-fg-disabled",
+  // Danger-subtle clears an applied filter state, with a verb label, as PanelAction does.
+  "danger-subtle": "bg-v2-danger-subtle text-v2-danger enabled:hover:opacity-90 enabled:active:opacity-80",
 } as const;
 
 // Visual heights: md 2rem, sm 1.75rem, on every layout.

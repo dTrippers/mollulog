@@ -3,6 +3,16 @@
  */
 import { describe, expect, it, jest } from "@jest/globals";
 import { render, screen } from "@testing-library/react";
+jest.mock("react-router", () => {
+  const React = jest.requireActual<typeof import("react")>("react");
+  return {
+    Link: ({ to, prefetch, children, ...props }: { to: string; prefetch?: string; children: React.ReactNode }) =>
+      React.createElement("a", { ...props, href: to, "data-prefetch": prefetch }, children),
+  };
+});
+jest.mock("~/components/v2/layout/screen-transition", () => ({
+  getV2LinkTransitionProps: () => ({ "data-transition": "forward" }),
+}));
 import { getFavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
 
@@ -76,5 +86,26 @@ describe("StudentThumb while the student data is being prepared", () => {
     );
     expect(screen.queryByText("정보 준비 중")).toBeNull();
     expect(screen.getByText("라나")).toBeTruthy();
+  });
+});
+
+describe("StudentThumb directory links", () => {
+  it("fills its cell, links to the student detail, and exposes the scrim value accessibly", () => {
+    const { container } = renderThumb({
+      onOpen: undefined,
+      linkTo: "/students/42",
+      fillWidth: true,
+      recruitmentLabel: undefined,
+      favorite: undefined,
+      scrimLabel: "2025/03/07 예정",
+      scrimAriaLabel: "2025/03/07 예정",
+    });
+
+    const link = screen.getByRole("link", { name: "키사키(수영복) 상세, 2025/03/07 예정" });
+    expect(link.getAttribute("href")).toBe("/students/42");
+    expect(link.getAttribute("data-prefetch")).toBe("intent");
+    expect(link.getAttribute("data-transition")).toBe("forward");
+    expect(container.firstElementChild?.className).toContain("w-full");
+    expect(screen.queryByRole("button")).toBeNull();
   });
 });

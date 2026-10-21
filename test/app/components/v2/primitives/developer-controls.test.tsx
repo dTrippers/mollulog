@@ -51,6 +51,7 @@ describe("v2 developer controls", () => {
     expect(screen.getByRole("link", { name: "Link" }).className).toBe(
       screen.getByRole("button", { name: "Button" }).className,
     );
+    expect(screen.getByRole("button", { name: "Button" }).className).toContain("active:bg-v2-filled-hover");
   });
 
   it("keeps inline link buttons aligned without horizontal padding or a hover fill", () => {

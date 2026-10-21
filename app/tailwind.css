@@ -1013,6 +1013,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     padding-inline: 0;
   }
 
+  .v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar]) {
+    padding-block: var(--spacing-v2-block-gap);
+  }
+
   /* The toolbar is full-bleed. The list padding keeps the first and last tab at the content edge when at rest. */
   .v2-tabs {
     margin-left: 0;
