@@ -12,7 +12,7 @@ import type {
 } from "~/domain/event-shop";
 import type { RailCounts, RoadPuzzleInteractiveAnalysis, RoadPuzzleSolution } from "~/domain/road-puzzle/solver";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import type { RoadPuzzleStatsCalculation } from "~/components/features/events/shop/hooks/useRoadPuzzleStats";
+import type { RoadPuzzleStatsCalculation } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 import type { RoadPuzzleMapAnalysis } from "~/components/features/events/road-puzzle/useRoadPuzzleMapAnalysis";
 import { roadPuzzleLocale } from "~/locales/ko";
 
@@ -30,7 +30,7 @@ type RoadPuzzleMapAnalysisHook = (
 
 const mockUseRoadPuzzleStats = jest.fn();
 const mockUseRoadPuzzleMapAnalysis = jest.fn<RoadPuzzleMapAnalysisHook>();
-jest.mock("~/components/features/events/shop/hooks/useRoadPuzzleStats", () => ({
+jest.mock("~/lib/event-shop/hooks/useRoadPuzzleStats", () => ({
   useRoadPuzzleStats: (...args: unknown[]) => mockUseRoadPuzzleStats(...args),
 }));
 jest.mock("~/components/features/events/road-puzzle/useRoadPuzzleMapAnalysis", () => ({

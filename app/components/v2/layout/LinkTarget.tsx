@@ -9,6 +9,7 @@ export function isExternalHref(to: string): boolean {
 
 export type LinkTargetProps = {
   to?: string;
+  state?: unknown;
   onClick?: () => void;
   preventScrollReset?: boolean;
   transition?: V2TransitionKind;
@@ -17,7 +18,7 @@ export type LinkTargetProps = {
 };
 
 // One target for every 2.0 link item: an onClick button, an external anchor, or an internal router link.
-export function LinkTarget({ to, onClick, preventScrollReset, transition, className, children }: LinkTargetProps) {
+export function LinkTarget({ to, state, onClick, preventScrollReset, transition, className, children }: LinkTargetProps) {
   if (!to) {
     return (
       <button type="button" onClick={onClick} className={cn("cursor-pointer", className)}>
@@ -37,6 +38,7 @@ export function LinkTarget({ to, onClick, preventScrollReset, transition, classN
   return (
     <Link
       to={to}
+      state={state}
       preventScrollReset={preventScrollReset}
       className={className}
       {...getV2LinkTransitionProps(transition, onClick)}

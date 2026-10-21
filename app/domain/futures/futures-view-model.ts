@@ -112,6 +112,7 @@ export function getFutureContentLink(content: {
   raidInfo?: { raidType: RaidType; seasonIndex?: number } | undefined;
   uid: string;
 }): string {
+  if (content.contentType === "live") return `/lives/${content.uid}`;
   if (content.contentType !== "raid") {
     return `/events/${content.uid}`;
   }

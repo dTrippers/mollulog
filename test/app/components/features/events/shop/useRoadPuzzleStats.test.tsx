@@ -4,8 +4,8 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { useMemo } from "react";
 import type { RoadPuzzleMap } from "~/domain/event-shop";
-import type { RoadPuzzleStatsWorkerRequest, RoadPuzzleStatsWorkerResponse } from "~/components/features/events/shop/road-puzzle-stats-worker.shared";
-import { useRoadPuzzleStats } from "~/components/features/events/shop/hooks/useRoadPuzzleStats";
+import type { RoadPuzzleStatsWorkerRequest, RoadPuzzleStatsWorkerResponse } from "~/lib/event-shop/road-puzzle-stats-worker.shared";
+import { useRoadPuzzleStats } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 
 class MockWorker {
   onmessage: ((event: MessageEvent<RoadPuzzleStatsWorkerResponse>) => void) | null = null;

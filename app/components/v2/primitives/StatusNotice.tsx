@@ -4,12 +4,13 @@ import {
   InformationCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/16/solid";
-import type { ReactNode } from "react";
+import type { ElementType, ReactNode } from "react";
 import { cn } from "~/lib/utils";
 
 export type StatusNoticeProps = {
   tone: "danger" | "warning" | "neutral" | "success";
   children: ReactNode;
+  Icon?: ElementType;
   action?: ReactNode;
   className?: string;
 };
@@ -30,8 +31,8 @@ const Icon = {
 
 // A status line: the icon and the text carry the meaning together, so color is never the only signal.
 // Danger is announced as an alert, and the other tones as a status update.
-export function StatusNotice({ tone, children, action, className }: StatusNoticeProps) {
-  const ToneIcon = Icon[tone];
+export function StatusNotice({ tone, children, Icon: CustomIcon, action, className }: StatusNoticeProps) {
+  const ToneIcon = CustomIcon ?? Icon[tone];
   return (
     <div
       role={tone === "danger" ? "alert" : "status"}

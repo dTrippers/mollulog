@@ -5,7 +5,7 @@ import {
   type PersistedTreasureHuntBoard,
   saveTreasureHuntBoard,
   treasureHuntBoardStorageKey,
-} from "~/components/features/events/treasure-hunt/board-persistence";
+} from "~/lib/treasure-hunt/board-persistence";
 
 function createMemoryStorage() {
   const values = new Map<string, string>();

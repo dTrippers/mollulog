@@ -46,11 +46,11 @@ describe("card flip detail route loader", () => {
   });
 
   it("loads a card-flip event identity for the shared shop plan outlet", async () => {
-    await expect(loader(loaderArgs("event-1"))).resolves.toEqual({ eventName: "이벤트", eventUid: "event-1" });
+    await expect(loader(loaderArgs("event-1"))).resolves.toEqual({ eventName: "이벤트" });
   });
 
   it("uses the event title and card-flip menu label for page metadata", () => {
-    expect(meta({ loaderData: { eventName: "이벤트", eventUid: "event-1" } } as never)).toEqual([
+    expect(meta({ loaderData: { eventName: "이벤트" } } as never)).toEqual([
       { title: "이벤트 - 카드 뒤집기 | 몰루로그" },
     ]);
   });

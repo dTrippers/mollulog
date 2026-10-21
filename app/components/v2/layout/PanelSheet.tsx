@@ -115,7 +115,10 @@ export function PanelSheet({
         ref={sectionRef}
         aria-labelledby={titleId}
         data-v2-panel={panelId}
-        className="relative rounded-lg bg-v2-surface p-v2-block-p"
+        className={cn(
+          "relative rounded-lg bg-v2-surface",
+          togglesBody && phase === "collapsed" ? "px-v2-block-p py-2" : "p-v2-block-p",
+        )}
       >
         <div className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}>
           {togglesBody ? (

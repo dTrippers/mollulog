@@ -10,6 +10,7 @@ export type SwitchProps = {
   disabled?: boolean;
   size?: "sm";
   layout?: "inline";
+  hideLabel?: boolean;
 };
 
 // Switch row. The track has a text label next to it, so the state is readable without its color.
@@ -22,6 +23,7 @@ export function Switch({
   disabled = false,
   size,
   layout,
+  hideLabel = false,
 }: SwitchProps) {
   const descriptionId = `${id}-description`;
   if (layout === "inline") {
@@ -55,7 +57,7 @@ export function Switch({
             )}
           />
         </span>
-        <span id={`${id}-label`} className="text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg">
+        <span id={`${id}-label`} className={cn("text-[0.8125rem] font-medium text-v2-fg-secondary group-hover:text-v2-fg", hideLabel && "sr-only")}>
           {label}
         </span>
         {description ? (

@@ -350,7 +350,7 @@ describe("getEventList", () => {
     );
     expect(mockedFetchSourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-content::v1::list",
+      "source::event-content::v2::list",
       expect.any(Function),
       false,
     );
@@ -451,6 +451,41 @@ describe("getShopAvailableEvents", () => {
       },
     ]);
     expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
+
+  it("includes only event-specific pickup names for shop event search", async () => {
+    mockedGetTimelineContents.mockResolvedValue([
+      createTimelineContent({
+        uid: "shop-event",
+        name: "이벤트 상점",
+        contentType: "event",
+        runType: "first",
+        contentUid: "event-content",
+        shopContentUid: "shop-content",
+        recruitmentGroupUid: "banner-1",
+        recruitmentStudentUids: ["pickup-student"],
+      }),
+    ]);
+    mockedRunQuery.mockResolvedValue(
+      queryResult({
+        recruitmentGroups: [
+          {
+            uid: "banner-1",
+            recruitments: [
+              { pickup: true, studentName: "키사키", student: { uid: "pickup-student", name: "키사키" } },
+              { pickup: false, studentName: "다른 학생", student: { uid: "other-student", name: "다른 학생" } },
+            ],
+          },
+        ],
+      }) as never,
+    );
+
+    await expect(getShopAvailableEvents(env)).resolves.toMatchObject([
+      {
+        uid: "shop-event",
+        recruitments: [{ pickup: true, student: { uid: "pickup-student", name: "키사키" } }],
+      },
+    ]);
   });
 });
 
@@ -644,6 +679,21 @@ describe("getEventShopContent", () => {
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
+    );
+  });
+
+  it("propagates shop lookup errors instead of caching an empty result", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    const failure = new Error("shop query failed");
+    mockedRunQuery.mockResolvedValue(queryResult(undefined, failure) as never);
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow("shop query failed");
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      false,
     );
   });
 
@@ -1094,10 +1144,23 @@ describe("getEventContentSchedule", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-content-schedule::v1::eventUid=10::region=gl::runType=rerun",
+      "source::event-content-schedule::v2::eventUid=10::region=gl::runType=rerun",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
+    );
+  });
+
+  it("propagates schedule lookup errors instead of treating them as a missing schedule", async () => {
+    mockedRunQuery.mockResolvedValue(queryResult(undefined, new Error("schedule query failed")) as never);
+
+    await expect(getEventContentSchedule(env, "10", "rerun")).rejects.toThrow("schedule query failed");
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-content-schedule::v2::eventUid=10::region=gl::runType=rerun",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      false,
     );
   });
 });

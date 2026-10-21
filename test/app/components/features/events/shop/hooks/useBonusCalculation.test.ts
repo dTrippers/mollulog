@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { calculateBonusSummary } from "../../../../../../../app/components/features/events/shop/hooks/useBonusCalculation";
+import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculation";
 import type { EventRewardBonus } from "../../../../../../../app/domain/event-shop";
 
 const eventRewardBonus: EventRewardBonus[] = [

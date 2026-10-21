@@ -233,10 +233,6 @@ export default function EventSelector({
   );
 }
 
-export function PanelEventSelector(props: Omit<EventSelectorProps, "triggerClassName">) {
-  return <EventSelector {...props} triggerClassName="border-border bg-background shadow-none hover:bg-muted/70" />;
-}
-
 export function filterSelectableEvents(
   events: SelectableEvent[],
   searchQuery: string,

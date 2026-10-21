@@ -1,7 +1,7 @@
 import { ArrowPathIcon, FlagIcon, MapPinIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { resourceCountLabel } from "~/components/features/events/shop/utils";
+import { resourceCountLabel } from "~/domain/event-shop/utils";
 import { Button, Callout, FilterButtons, HoverTooltip, ResourceCard, Section } from "~/components/primitives";
 import type {
   MinigamePayment,
@@ -13,7 +13,7 @@ import type {
 import { getRoadPuzzleRoundRows } from "~/domain/road-puzzle/calculator";
 import type { RailCounts } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
-import { useRoadPuzzleStats } from "../shop/hooks/useRoadPuzzleStats";
+import { useRoadPuzzleStats } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 import { RoadPuzzleMapSvg } from "./RoadPuzzleMapSvg";
 import { RoadPuzzleRouteSummary } from "./RoadPuzzleRouteSummary";
 import {

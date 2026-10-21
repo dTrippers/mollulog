@@ -1531,7 +1531,7 @@ function ReviewPanel({
         ref={actionBarRef}
         placement="sticky"
         expandActions
-        className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
+        className="bottom-0 px-0 py-v2-block-gap"
         summary={phase === "applying" ? "반영 중이에요" : null}
       >
         <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>

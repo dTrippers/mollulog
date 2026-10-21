@@ -333,6 +333,7 @@ export const cardFlipLocale = {
   noCardCountTitle: "뒤집을 카드 수를 입력해 주세요",
   noCardCountDescription: "카드 수를 입력하면 전략별 소비 재화와 획득 보상을 비교할 수 있어요",
   averageRewards: "기대 획득 보상",
+  studentNameUnavailable: "학생 이름을 확인할 수 없어요",
   resourceNameUnavailable: "리소스 이름을 불러오지 못했어요",
   amountUnavailable: "계산 불가",
   maximumAmount: "최대 기대량",

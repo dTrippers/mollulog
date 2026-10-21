@@ -1,10 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import Decimal from "decimal.js";
-import {
-  calculateStageInfos,
-  optimizeStageRuns,
-} from "../../../../../../../app/components/features/events/shop/calculations/optimization";
-import { calculateRequiredQuantities } from "../../../../../../../app/components/features/events/shop/calculations/requirements";
+import { calculateStageInfos, optimizeStageRuns } from "~/domain/event-shop/calculations/optimization";
+import { calculateRequiredQuantities } from "~/domain/event-shop/calculations/requirements";
 import type { ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 

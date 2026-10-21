@@ -19,6 +19,7 @@ const SEO_REINDEXED_AT = dayjs("2026-07-12");
 
 const EVENT_CONTENT_TYPES = new Set([
   "event",
+  "live",
   "fes",
   "collab",
   "immortal_event",
@@ -62,6 +63,8 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
       if (schedule) {
         link = `${HOST}/raids/${raidTypeToParam(schedule.raidType)}/${schedule.seasonIndex}`;
       }
+    } else if (content.contentType === "live") {
+      link = `${HOST}/lives/${content.uid}`;
     } else if (EVENT_CONTENT_TYPES.has(content.contentType)) {
       link = `${HOST}/events/${content.uid}`;
     }

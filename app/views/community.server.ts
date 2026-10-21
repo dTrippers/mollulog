@@ -93,6 +93,9 @@ export async function enrichCommunityFeedPosts(
         subjectContentName: post.subjectContentUid
           ? (timelineContentMap.get(post.subjectContentUid)?.name ?? null)
           : null,
+        subjectContentType: post.subjectContentUid
+          ? (timelineContentMap.get(post.subjectContentUid)?.contentType ?? null)
+          : null,
         recruitmentStats: recruitmentStatsByPostUid.get(post.uid) ?? null,
         pickupStudents: post.subjectContentUid
           ? (() => {

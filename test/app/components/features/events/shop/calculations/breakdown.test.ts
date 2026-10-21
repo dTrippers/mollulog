@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import Decimal from "decimal.js";
-import { calculateItemBreakdowns } from "../../../../../../../app/components/features/events/shop/calculations/breakdown";
-import type { ResourceLedger } from "../../../../../../../app/components/features/events/shop/calculations/types";
+import { calculateItemBreakdowns } from "~/domain/event-shop/calculations/breakdown";
+import type { ResourceLedger } from "~/domain/event-shop/calculations/types";
 import type { Stage } from "../../../../../../../app/domain/event-shop";
 
 const resourceLedger: ResourceLedger = {

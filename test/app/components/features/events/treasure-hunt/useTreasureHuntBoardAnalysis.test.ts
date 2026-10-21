@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { useTreasureHuntBoardAnalysis } from "~/components/features/events/treasure-hunt/useTreasureHuntBoardAnalysis";
 import type { TreasureHuntBoardObservation, TreasureHuntComposition } from "~/domain/treasure-hunt";
+import { useTreasureHuntBoardAnalysis } from "~/lib/treasure-hunt/useTreasureHuntBoardAnalysis";
 
 const composition: TreasureHuntComposition = { boardWidth: 1, boardHeight: 1, pieces: [] };
 const observation: TreasureHuntBoardObservation = { knownEmpty: [], foundTreasures: [] };

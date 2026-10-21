@@ -1,20 +1,16 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { useState } from "react";
 import { Link } from "react-router";
 import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
 import { useHaloMode } from "~/contexts/HaloModeContext";
-import { StudentSlot } from "~/components/v2/features/students/StudentSlot";
-import { StudentThumbList } from "~/components/v2/features/students/StudentThumbList";
+import { RecruitmentStudentCard } from "~/components/v2/features/students/RecruitmentStudentCard";
+import { RecruitmentStudentCardRail } from "~/components/v2/features/students/RecruitmentStudentCardRail";
 import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
-import type { FutureStudentEntry } from "~/components/v2/features/students/types";
 import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
 import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
-import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale } from "~/locales/ko";
 import { uploadedImageProps } from "~/models/assets";
-import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { HomeRecruitmentGroup, HomeSourceResult, IndexRecruitment } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
 import type { HomeViewerState } from "./home-viewer-state";
@@ -23,61 +19,6 @@ function groupChip(group: HomeRecruitmentGroup, now: UtcIsoString, timeZone: str
   return new Date(group.since) > new Date(now)
     ? getHomeUpcomingChip(group.since, now, timeZone)
     : getHomeOngoingChip(group.until, now, timeZone);
-}
-
-function completionMetaOf(recruitment: IndexRecruitment): RecruitmentCompletionMeta {
-  // The loader carries no initial tier, so completion records the default tier, as the 1.x timeline did.
-  return {
-    tier: 3,
-    pickup: recruitment.pickup && recruitment.recruitmentType !== "given",
-    recruitmentType: recruitment.recruitmentType,
-  };
-}
-
-function toStudentEntry({
-  group,
-  recruitment,
-  viewer,
-  now,
-}: {
-  group: HomeRecruitmentGroup;
-  recruitment: IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> };
-  viewer: HomeViewerState;
-  now: UtcIsoString;
-}): FutureStudentEntry {
-  const { student, contentUid, favoriteKey } = recruitment;
-  const favorited = viewer.isFavorited(contentUid, favoriteKey);
-  const completed = viewer.isCompleted(group.groupUid, student.uid);
-  // Null while the counts load or when they failed. The count then stays hidden.
-  const favoritedCount = viewer.favoriteCount(contentUid, favoriteKey);
-  return {
-    favoriteKey,
-    studentUid: student.uid,
-    studentName: recruitment.studentName,
-    attackType: student.attackType,
-    defenseType: student.defenseType,
-    role: student.role,
-    recruitmentLabel: recruitmentLabelLocale({
-      recruitmentType: recruitment.recruitmentType,
-      rerun: recruitment.rerun,
-    }),
-    recruitmentType: recruitment.recruitmentType,
-    pickup: recruitment.pickup,
-    rerun: recruitment.rerun,
-    since: recruitment.since,
-    until: recruitment.until,
-    favoritedCount,
-    favorited,
-    completed,
-    canComplete: canCompleteRecruitmentStudent({ recruitmentSince: recruitment.since, favorited, now }),
-    viewerPending: viewer.status === "pending",
-    viewerUnavailable: viewer.status === "failed",
-    completionMeta: completionMetaOf(recruitment),
-    resultEditLink: null,
-    onToggleFavorite: (next) => viewer.toggleFavorite(contentUid, favoriteKey, next),
-    onToggleComplete: (next) =>
-      viewer.toggleComplete(group.groupUid, contentUid, student.uid, next, completionMetaOf(recruitment)),
-  };
 }
 
 // A group without students shows its event banner in their place. The group header already names the event.
@@ -173,8 +114,6 @@ export function HomeRecruitmentSection({
   timeZone: string;
   onRetry: () => void;
 }) {
-  const [openKey, setOpenKey] = useState<string | null>(null);
-
   // The counts are not part of this block's failure: the students show without their counts.
   if (groups.status === "error") {
     return (
@@ -233,25 +172,38 @@ export function HomeRecruitmentSection({
                 {students.length === 0 ? (
                   <GroupBanner group={group} />
                 ) : (
-                  <StudentThumbList size="large">
+                  <RecruitmentStudentCardRail fadeFrom="surface" listClassName="gap-x-3 gap-y-4">
                     {students.map((recruitment) => {
                       const key = `${group.groupUid}:${recruitment.favoriteKey}`;
                       return (
-                        <li
-                          key={key}
-                          className="[&_button]:transition-opacity [&_button]:duration-v2-fast [&_button]:ease-v2-standard [&_button:hover]:opacity-90 motion-reduce:[&_button]:transition-none"
-                        >
-                          <StudentSlot
-                            entry={toStudentEntry({ group, recruitment, viewer, now })}
+                        <li key={key} className="list-none">
+                          <RecruitmentStudentCard
+                            studentUid={recruitment.student.uid}
+                            favoriteKey={recruitment.favoriteKey}
+                            studentName={recruitment.studentName}
+                            label={recruitmentLabelLocale({
+                              recruitmentType: recruitment.recruitmentType,
+                              rerun: recruitment.rerun,
+                            })}
+                            attackType={recruitment.student.attackType}
+                            defenseType={recruitment.student.defenseType}
+                            role={recruitment.student.role}
+                            tone="raised"
+                            favorited={
+                              viewer.status === "ready" &&
+                              viewer.isFavorited(recruitment.contentUid, recruitment.favoriteKey)
+                            }
+                            favoritedCount={viewer.favoriteCount(recruitment.contentUid, recruitment.favoriteKey)}
                             signedIn={viewer.signedIn}
-                            large
-                            open={openKey === key}
-                            onOpenChange={(open) => setOpenKey(open ? key : null)}
+                            favoriteDisabled={viewer.signedIn && viewer.status !== "ready"}
+                            onToggleFavorite={(favoriteKey, favorited) =>
+                              viewer.toggleFavorite(recruitment.contentUid, favoriteKey, favorited)
+                            }
                           />
                         </li>
                       );
                     })}
-                  </StudentThumbList>
+                  </RecruitmentStudentCardRail>
                 )}
               </div>
             );

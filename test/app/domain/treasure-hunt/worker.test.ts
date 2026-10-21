@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@jest/globals";
-import { TreasureHuntStatsWorkerRuntime } from "~/components/features/events/shop/treasure-hunt-stats.worker";
-import type { TreasureHuntStatsWorkerResponse } from "~/components/features/events/shop/treasure-hunt-stats-worker.shared";
 import {
   TREASURE_HUNT_TARGET_GAMES,
   type TreasureHuntComposition,
   type TreasureHuntSimulator,
   treasureHuntCompositionSignature,
 } from "~/domain/treasure-hunt";
+import { TreasureHuntStatsWorkerRuntime } from "~/lib/event-shop/treasure-hunt-stats.worker";
+import type { TreasureHuntStatsWorkerResponse } from "~/lib/event-shop/treasure-hunt-stats-worker.shared";
 
 function composition(boardWidth: number): TreasureHuntComposition {
   return {

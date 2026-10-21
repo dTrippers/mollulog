@@ -9,8 +9,11 @@ export type AsideLinkItem = {
   key: string;
   title: string;
   description?: string;
+  badge?: string;
+  disabledReason?: string;
   Icon: ElementType;
   to?: string;
+  linkState?: unknown;
   onClick?: () => void;
   preventScrollReset?: boolean;
   transition?: V2TransitionKind;
@@ -23,10 +26,46 @@ export function AsideLinks({ items }: { items: AsideLinkItem[] }) {
       {items.map((item) => {
         const { Icon } = item;
         const external = item.to !== undefined && isExternalHref(item.to);
+        const disabled = item.disabledReason !== undefined;
+        const description = item.disabledReason ?? item.description;
+        const content = (
+          <>
+            <Icon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className={cn("block text-sm font-medium", disabled && "text-v2-fg-secondary")}>{item.title}</span>
+              {description ? (
+                <span className="block truncate text-xs text-v2-fg-tertiary">{description}</span>
+              ) : null}
+            </span>
+            {item.badge ? <span className="text-xs text-v2-fg-tertiary">{item.badge}</span> : null}
+            {!disabled ? (
+              external ? (
+                <>
+                  <ArrowTopRightOnSquareIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+                  <span className="sr-only">새 창에서 열림</span>
+                </>
+              ) : (
+                <ArrowRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+              )
+            ) : null}
+          </>
+        );
+        if (disabled) {
+          return (
+            <div
+              key={item.key}
+              aria-disabled="true"
+              className="flex min-h-v2-row-min items-center gap-v2-media-gap rounded-md px-v2-row-x py-v2-row-y text-v2-fg-secondary"
+            >
+              {content}
+            </div>
+          );
+        }
         return (
           <LinkTarget
             key={item.key}
             to={item.to}
+            state={item.linkState}
             onClick={item.onClick}
             preventScrollReset={item.preventScrollReset}
             transition={item.transition}
@@ -35,19 +74,7 @@ export function AsideLinks({ items }: { items: AsideLinkItem[] }) {
               v2FocusRing,
             )}
           >
-            <Icon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-            <span className="min-w-0 flex-1">
-              <span className="block text-sm font-medium">{item.title}</span>
-              {item.description ? <span className="block truncate text-xs text-v2-fg-tertiary">{item.description}</span> : null}
-            </span>
-            {external ? (
-              <>
-                <ArrowTopRightOnSquareIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-                <span className="sr-only">새 창에서 열림</span>
-              </>
-            ) : (
-              <ArrowRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-            )}
+            {content}
           </LinkTarget>
         );
       })}

@@ -4,15 +4,15 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { calculateShopApRequirement } from "~/components/features/events/shop/calculations/calculate-shop-ap";
+import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
 import {
   convertClueSearchCostsToPoints,
   filterClueSearchShopResources,
   resolveClueSearchExchange,
-} from "~/components/features/events/shop/clue-search";
-import { calculateBonusSummary } from "~/components/features/events/shop/hooks/useBonusCalculation";
-import type { ShopState } from "~/components/features/events/shop/hooks/useShopState";
-import { calculateMinigamePaymentCosts } from "~/components/features/events/shop/utils";
+} from "~/domain/event-shop/clue-search";
+import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculation";
+import type { ShopState } from "~/lib/event-shop/hooks/useShopState";
+import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
 import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
 import { resolveCardFlipMinigameInputs } from "~/domain/card-flip-strategy";
 import { useGuestPlanner } from "~/components/features/futures";
@@ -279,9 +279,12 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
         });
       }
       const results = await Promise.allSettled(updates.map(({ run }) => run()));
-      const failedDocuments = results.flatMap((result, index) =>
-        result.status === "rejected" ? [updates[index]!.document] : [],
-      );
+      const failedDocuments = results.flatMap((result, index) => {
+        if (result.status !== "rejected") return [];
+        const update = updates[index];
+        if (!update) throw new Error("Missing AP planner update for settled request");
+        return [update.document];
+      });
       if (failedDocuments.length > 0) {
         const hasRevisionConflict = results.some(
           (result) => result.status === "rejected" && isPlannerStateRevisionConflictError(result.reason),
@@ -608,11 +611,11 @@ function updateCondition(state: ApPlannerState, field: ApConditionField, value: 
 
 function isAccessAtWithinEvent(event: ApDisplayEvent, accessAt: string) {
   const timestamp = Date.parse(accessAt);
+  if (!event.endAt) return false;
   return (
     Number.isFinite(timestamp) &&
-    Boolean(event.endAt) &&
     timestamp >= Date.parse(event.startAt) &&
-    timestamp < Date.parse(event.endAt!)
+    timestamp < Date.parse(event.endAt)
   );
 }
 

@@ -87,7 +87,25 @@ describe("V2Page layout parts", () => {
     const main = container.querySelector(".v2-main");
 
     expect(header?.textContent).toContain("일본 서버를 바탕으로 추정된 일정");
+    expect(container.querySelector(".v2-header h1")?.classList.contains("sr-only")).toBe(false);
     expect(header && main ? header.compareDocumentPosition(main) & Node.DOCUMENT_POSITION_FOLLOWING : 0).toBeTruthy();
+  });
+
+  it("visually hides the title and meta while retaining the title and back link accessibly", () => {
+    const { container } = renderLayout(
+      <V2Page width="reading">
+        <PageHeader title="이벤트 이름" meta="이벤트 · 날짜 · 남은 기간" back={{ title: "이벤트", to: "/events" }} titleHidden />
+      </V2Page>,
+    );
+    const heading = container.querySelector(".v2-header h1");
+    const meta = container.querySelector(".v2-header div.sr-only");
+    const back = screen.getByRole("link", { name: "이벤트" });
+
+    expect(heading?.classList.contains("sr-only")).toBe(true);
+    expect(screen.getByRole("heading", { name: "이벤트 이름" })).toBeTruthy();
+    expect(meta?.textContent).toBe("이벤트 · 날짜 · 남은 기간");
+    expect(back.getAttribute("href")).toBe("/events");
+    expect(back.classList.contains("mb-2")).toBe(false);
   });
 
   it("renders the back link as a router link", () => {

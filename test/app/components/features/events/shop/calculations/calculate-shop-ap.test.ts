@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { calculateShopApRequirement } from "../../../../../../../app/components/features/events/shop/calculations/calculate-shop-ap";
+import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
 import type { Stage } from "../../../../../../../app/domain/event-shop";
 import { createDefaultEventShopState } from "../../../../../../../app/domain/event-shop-state";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";

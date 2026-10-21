@@ -20,6 +20,7 @@ export type EnrichedCommunityFeedPost = Omit<CommunityFeedPost, "blocks"> & {
   blocks: EnrichedCommunityPostBlock[];
   subjectStudentName: string | null;
   subjectContentName: string | null;
+  subjectContentType: string | null;
   tags: StudentGradingTagValue[];
   pickupStudents: { uid: string; name: string }[];
   recruitmentStats: RecruitmentFeedStats | null;

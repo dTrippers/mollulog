@@ -1,10 +1,7 @@
-import { useOutletContext } from "react-router";
-import {
-  type EventShopPlanContext,
-  ShopCalculatorScreen,
-} from "~/components/features/events/shop/ShopCalculatorScreen";
+import EventShopCalculator from "./events.$uid._components/EventShopCalculator";
+
+export const handle = { v2Width: "wide" } as const;
 
 export default function EventShopCalculatorRoute() {
-  const plan = useOutletContext<EventShopPlanContext>();
-  return <ShopCalculatorScreen {...plan} />;
+  return <EventShopCalculator />;
 }

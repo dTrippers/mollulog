@@ -9,12 +9,12 @@ import { ResourceTypeEnum, RunTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCached, fetchSourceCached } from "~/lib/cache";
 import { compareInstantAsc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
-import { getAllRecruitmentGroups, getRecruitmentGroupsByUids } from "~/models/recruitment";
+import { getAllRecruitmentGroups, getRecruitmentGroupsByUids, getRecruitmentGroupsByUidsStrict } from "~/models/recruitment";
 import { eventCardImageUrl } from "./assets";
 import type { RunType } from "./timeline-content";
 import { getTimelineContent, getTimelineContents } from "./timeline-content.server";
 
-const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 1, "list");
+const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 2, "list");
 const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
@@ -48,7 +48,8 @@ export async function getEventMetadata(env: Env, timelineUid: string, ctx?: Exec
   };
 }
 
-type EventMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+export type EventShopMetadata = NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>;
+type EventMetadata = EventShopMetadata;
 
 export type ShopAvailableEvent = {
   uid: string;
@@ -56,6 +57,7 @@ export type ShopAvailableEvent = {
   since: UtcIsoString;
   until: UtcIsoString | null;
   isSpoiler: boolean;
+  recruitments?: { student: { uid: string; name: string } | null; pickup: boolean; recruitmentType?: RecruitmentGroupsListQuery["recruitmentGroups"][number]["recruitments"][number]["recruitmentType"] }[];
 };
 
 const eventContentScheduleQuery = graphql(`
@@ -89,12 +91,12 @@ export async function getEventContentSchedule(
 ): Promise<EventContentSchedule | null> {
   const schedule = await fetchLazySourceCached<CachedEventContentSchedule | null>(
     env,
-    cacheKey("source", "event-content-schedule", 1, cacheQuery({ eventUid, region: "gl", runType })),
+    cacheKey("source", "event-content-schedule", 2, cacheQuery({ eventUid, region: "gl", runType })),
     async () => {
       const { data, error } = await runQuery(eventContentScheduleQuery, { eventUid });
-      if (error || !data?.eventContent) {
-        return null;
-      }
+      if (error) throw error;
+      if (!data) throw new Error("Failed to fetch event content schedule.");
+      if (!data.eventContent) return null;
 
       const schedules = data.eventContent.schedules;
       const schedule = schedules.find((item) => item.region === "gl" && item.runType === runType) ?? null;
@@ -120,19 +122,36 @@ export async function getEventContentSchedule(
 
 export async function getShopAvailableEvents(env: Env, ctx?: ExecutionContext): Promise<ShopAvailableEvent[]> {
   const contents = await getTimelineContents(env, undefined, { ctx });
-  return contents
-    .filter(
-      (content) =>
-        content.shopContentUid != null ||
-        (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
-    )
+  const shopContents = contents.filter(
+    (content) =>
+      content.shopContentUid != null ||
+      (content.contentType === "event" && content.contentUid != null && content.runType !== "permanent"),
+  );
+  const groups = await getRecruitmentGroupsByUidsStrict(
+    env,
+    shopContents.flatMap(({ recruitmentGroupUid }) => recruitmentGroupUid ? [recruitmentGroupUid] : []),
+  );
+  const groupsByUid = new Map(groups.map((group) => [group.uid, group]));
+
+  return shopContents
     .map((content) => {
+      const group = content.recruitmentGroupUid ? groupsByUid.get(content.recruitmentGroupUid) : undefined;
+      const studentUids = content.recruitmentStudentUids;
       return {
         uid: content.uid,
         name: content.name,
         since: content.startAt,
         until: content.endAt,
         isSpoiler: content.isSpoiler,
+        ...(group ? {
+          recruitments: group.recruitments
+            .filter(({ pickup, student }) => pickup && student && (studentUids === null || studentUids.includes(student.uid)))
+            .map(({ pickup, recruitmentType, student, studentName }) => ({
+              pickup,
+              recruitmentType,
+              student: student ? { uid: student.uid, name: student.name || studentName } : null,
+            })),
+        } : {}),
       };
     })
     .sort((a, b) => compareInstantAsc(a.since, b.since));
@@ -907,9 +926,9 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
         eventUid: shopContentUid,
         runType: toRunTypeEnum(runType),
       });
-      if (error || !data?.eventContent) {
-        return null;
-      }
+      if (error) throw error;
+      if (!data) throw new Error("Failed to fetch event shop metadata.");
+      if (!data.eventContent) return null;
 
       const { stages, shopResources, bonuses, minigameConfigs } = data.eventContent;
       return {

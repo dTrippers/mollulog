@@ -16,7 +16,7 @@ export type OpinionSheetProps = {
   contentUid: string | null;
   isLive: boolean;
   contentName: string;
-  commentCount: number;
+  commentCount: number | null;
   comments: NestedComment[] | undefined;
   loading: boolean;
   unavailable: boolean;
@@ -34,6 +34,7 @@ export type OpinionSheetProps = {
   onRequestSignIn: () => void;
   onClose: () => void;
   onExited?: () => void;
+  headerAction?: ReactNode;
   // The editor's textarea, for focus handoff from the tutorial.
   composerRef?: RefObject<HTMLTextAreaElement | null>;
 };
@@ -61,6 +62,7 @@ export function OpinionSheet({
   onRequestSignIn,
   onClose,
   onExited,
+  headerAction,
   composerRef,
 }: OpinionSheetProps) {
   const [inlineComposerOpen, setInlineComposerOpen] = useState(false);
@@ -124,7 +126,8 @@ export function OpinionSheet({
       open={open}
       title={title}
       Icon={ChatBubbleOvalLeftEllipsisIcon}
-      description={`${contentName} · 의견 ${commentCount}`}
+      description={commentCount === null ? contentName : `${contentName} · 의견 ${commentCount}`}
+      headerAction={headerAction}
       onClose={onClose}
       onExited={onExited}
       footer={footer}

@@ -12,10 +12,12 @@ const migratedViewFiles = [
   "app/components/v2/features/futures/FutureTimeline.tsx",
   "app/components/v2/features/futures/FutureList.tsx",
   "app/components/v2/features/futures/FutureSchedule.tsx",
-  "app/components/features/events/EventHeader.tsx",
-  "app/components/features/events/EventList.tsx",
   "app/components/features/events/EventSelector.tsx",
-  "app/components/features/events/Recruitments.tsx",
+  "app/routes/events.$uid.tsx",
+  "app/routes/events.$uid._index.tsx",
+  "app/routes/events.$uid.recruitment-simulator.tsx",
+  "app/routes/events.$uid.treasure-hunt.tsx",
+  "app/routes/lives.$uid.tsx",
   "app/components/features/forms/ContentSelectForm.tsx",
   "app/components/features/raids/RaidSelector.tsx",
   "app/components/features/raids/RaidStatisticsSlotCount.tsx",
@@ -42,7 +44,9 @@ describe("date-time guardrails", () => {
     if (
       file !== "app/components/features/raids/RaidVideosScreen.tsx" &&
       file !== "app/components/features/raids/RaidSelector.tsx" &&
-      file !== "app/components/features/community/CommunityFeed.tsx"
+      file !== "app/components/features/community/CommunityFeed.tsx" &&
+      file !== "app/routes/events.$uid.recruitment-simulator.tsx" &&
+      file !== "app/routes/events.$uid.treasure-hunt.tsx"
     ) {
       expect(source).toContain("formatInstant");
     }

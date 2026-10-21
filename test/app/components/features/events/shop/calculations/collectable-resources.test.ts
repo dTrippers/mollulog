@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildCollectableResources } from "~/components/features/events/shop/calculations/collectable-resources";
-import { calculateResourceLedger } from "~/components/features/events/shop/calculations/ledger";
-import type { ClueSearchExchange } from "~/components/features/events/shop/clue-search";
 import type { MinigameConfig, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
+import { buildCollectableResources } from "~/domain/event-shop/calculations/collectable-resources";
+import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
+import type { ClueSearchExchange } from "~/domain/event-shop/clue-search";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 
 const eventCoin = { type: ResourceTypeEnum.Item, uid: "event-coin", name: "이벤트 재화" };

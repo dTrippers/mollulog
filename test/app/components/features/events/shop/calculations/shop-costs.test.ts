@@ -3,7 +3,7 @@ import {
   calculateEffectiveShopPurchaseCount,
   calculateShopResourcePaymentCosts,
   isDailyResetShopResource,
-} from "../../../../../../../app/components/features/events/shop/calculations/shop-costs";
+} from "~/domain/event-shop/calculations/shop-costs";
 import type { ShopResource } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 

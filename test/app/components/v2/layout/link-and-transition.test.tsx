@@ -32,6 +32,11 @@ function LocationProbe() {
   return <output data-testid="location">{location.pathname}</output>;
 }
 
+function LocationStateProbe() {
+  const location = useLocation();
+  return <output data-testid="location-state">{JSON.stringify(location.state)}</output>;
+}
+
 function setStartViewTransition(value: unknown) {
   Object.defineProperty(document, "startViewTransition", { configurable: true, value });
 }
@@ -128,6 +133,51 @@ describe("AsideLinks", () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it("renders a title-only item at the normal row height when description is absent", () => {
+    render(
+      <MemoryRouter>
+        <AsideLinks items={[{ key: "shop", title: "상점 계산기", Icon, to: "/shop" }]} />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "상점 계산기" });
+    expect(link.className).toContain("min-h-v2-row-min");
+    expect(link.className).toContain("items-center");
+    expect(link.querySelector(".text-xs")).toBeNull();
+  });
+
+  it("renders a badge before the arrow", () => {
+    render(
+      <MemoryRouter>
+        <AsideLinks items={[{ key: "shop", title: "상점 계산기", badge: "종료", Icon, to: "/shop" }]} />
+      </MemoryRouter>,
+    );
+
+    const link = screen.getByRole("link", { name: "상점 계산기 종료" });
+    const badge = screen.getByText("종료");
+    const arrow = link.querySelector("svg");
+    expect(badge.className).toContain("text-v2-fg-tertiary");
+    expect(arrow).not.toBeNull();
+    expect(badge.compareDocumentPosition(arrow!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("renders disabled items without interaction or an arrow", () => {
+    const { container } = render(
+      <MemoryRouter>
+        <AsideLinks
+          items={[{ key: "shop", title: "상점 계산기", disabledReason: "상점이 없거나 정보를 준비 중이에요", Icon }]}
+        />
+      </MemoryRouter>,
+    );
+
+    const row = container.querySelector('[aria-disabled="true"]');
+    expect(row).not.toBeNull();
+    expect(row?.querySelector("a, button, svg")).toBeNull();
+    expect(row?.className).not.toContain("hover:bg-v2-hover");
+    expect(row?.querySelector(".text-v2-fg-secondary")?.textContent).toBe("상점 계산기");
+    expect(row?.querySelector(".text-xs")?.textContent).toBe("상점이 없거나 정보를 준비 중이에요");
+  });
+
   it("navigates an internal link without a transition when the API is missing", () => {
     render(
       <MemoryRouter initialEntries={["/futures"]}>
@@ -142,6 +192,20 @@ describe("AsideLinks", () => {
 
     expect(screen.getByTestId("location").textContent).toBe("/events/1");
     expect(document.documentElement.hasAttribute("data-v2-transition")).toBe(false);
+  });
+
+  it("forwards linkState through an internal AsideLinks link", () => {
+    const state = { __mllg: { source: "futures", contentUid: "event-1" } };
+    render(
+      <MemoryRouter initialEntries={["/events"]}>
+        <AsideLinks items={[{ key: "shop", title: "상점 계산기", Icon, to: "/events/1/shop", linkState: state }]} />
+        <LocationStateProbe />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("link", { name: "상점 계산기" }));
+
+    expect(screen.getByTestId("location-state").textContent).toBe(JSON.stringify(state));
   });
 });
 

@@ -26,11 +26,13 @@ export function AttributeStripes({
   attackType,
   defenseType,
   role,
+  compact = false,
   className,
 }: {
   attackType?: Attack | null;
   defenseType?: Defense | null;
   role?: Role | null;
+  compact?: boolean;
   className?: string;
 }) {
   const items: { key: string; color: AttributeColor; text: string }[] = [];
@@ -47,7 +49,9 @@ export function AttributeStripes({
     return null;
   }
   return (
-    <p className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-secondary ${className ?? ""}`}>
+    <p
+      className={`flex flex-wrap items-center ${compact ? "gap-x-1" : "gap-x-3"} gap-y-1 text-xs text-v2-fg-secondary ${className ?? ""}`}
+    >
       {items.map((item) => (
         <Stripe key={item.key} color={item.color} text={item.text} />
       ))}

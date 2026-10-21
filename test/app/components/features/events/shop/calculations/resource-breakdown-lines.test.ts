@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import { buildResourceBreakdownLines } from "~/components/features/events/shop/calculations/resource-breakdown-lines";
-import type { ItemBreakdownResult } from "~/components/features/events/shop/calculations/types";
+import { buildResourceBreakdownLines } from "~/domain/event-shop/calculations/resource-breakdown-lines";
+import type { ItemBreakdownResult } from "~/domain/event-shop/calculations/types";
 
 const emptyItemBreakdown: ItemBreakdownResult["itemBreakdown"] = {
   existing: {},

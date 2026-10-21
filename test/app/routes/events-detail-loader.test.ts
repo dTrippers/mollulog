@@ -1,15 +1,17 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import type { LoaderFunctionArgs } from "react-router";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
-import { loader } from "~/routes/events.$uid";
+import { getActiveEventDetailTab, loader } from "~/routes/events.$uid";
+import type { getEventShopAvailability } from "~/routes/events.$uid._components/event-shop-availability";
 
 jest.mock("~/models/event-content", () => ({
   getEventMetadata: jest.fn(),
   getEventMinigameType: jest.fn(),
   getShopAvailableEvents: jest.fn(),
 }));
-jest.mock("~/components/features/events", () => ({ PanelEventSelector: () => null }));
-jest.mock("~/components/features/layout", () => ({ Page: () => null }));
+jest.mock("~/routes/events.$uid._components/event-shop-availability", () => ({
+  getEventShopAvailability: jest.fn<typeof getEventShopAvailability>().mockResolvedValue("ready"),
+}));
 
 const mockGetEventMetadata = jest.mocked(getEventMetadata);
 const mockGetEventMinigameType = jest.mocked(getEventMinigameType);
@@ -63,10 +65,30 @@ describe("event detail route loader minigame type", () => {
     expect(mockGetShopAvailableEvents).not.toHaveBeenCalled();
   });
 
-  it("does not query a minigame type for live content", async () => {
+  it("permanently redirects live content and keeps the query string", async () => {
     mockGetEventMetadata.mockResolvedValue(createMetadata({ contentType: "live" }));
 
-    await expect(loader(loaderArgs())).resolves.toMatchObject({ minigameType: null });
+    const response = await loader(loaderArgs("/events/event-1?source=future"));
+
+    expect(response).toBeInstanceOf(Response);
+    expect((response as Response).status).toBe(301);
+    expect((response as Response).headers.get("Location")).toBe("/lives/event-1?source=future");
     expect(mockGetEventMinigameType).not.toHaveBeenCalled();
+  });
+});
+
+describe("event detail tabs", () => {
+  it.each([
+    ["/events/event-1", "overview"],
+    ["/events/event-1/shop", "shop"],
+    ["/events/event-1/recruitment-simulator", "simulator"],
+    ["/events/event-1/shop/card-flip", "card-flip"],
+    ["/events/event-1/treasure-hunt", "treasure-hunt"],
+  ] as const)("marks only the %s screen active", (pathname, expected) => {
+    expect(getActiveEventDetailTab(pathname, "event-1")).toBe(expected);
+  });
+
+  it("does not treat the card flip route as the shop tab", () => {
+    expect(getActiveEventDetailTab("/events/event-1/shop/card-flip", "event-1")).not.toBe("shop");
   });
 });

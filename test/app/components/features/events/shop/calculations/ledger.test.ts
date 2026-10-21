@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
-import { calculateMinigamePaymentCosts } from "~/components/features/events/shop/utils";
-import { calculateResourceLedger } from "../../../../../../../app/components/features/events/shop/calculations/ledger";
+import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
+import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
 import type { MinigameConfig, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
 

@@ -7,11 +7,15 @@ export function SearchInput({
   onChange,
   disabled = false,
   className,
+  "aria-label": ariaLabel = "이름 검색",
+  placeholder = "학생 이름",
 }: {
   value: string;
   onChange: (value: string) => void;
   disabled?: boolean;
   className?: string;
+  "aria-label"?: string;
+  placeholder?: string;
 }) {
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -34,8 +38,8 @@ export function SearchInput({
       <input
         ref={inputRef}
         type="search"
-        aria-label="이름 검색"
-        placeholder="학생 이름"
+        aria-label={ariaLabel}
+        placeholder={placeholder}
         value={draft}
         disabled={disabled}
         onChange={(event) => setDraft(event.currentTarget.value)}

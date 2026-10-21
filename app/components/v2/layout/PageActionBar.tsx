@@ -21,14 +21,14 @@ export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(func
     <div
       ref={ref}
       className={cn(
-        "z-20 flex flex-wrap items-center justify-between gap-v2-block-gap bg-v2-elevated p-v2-block-p shadow-lg",
+        "z-20 flex flex-wrap items-center justify-between gap-v2-block-gap border-v2-control-border bg-v2-surface p-v2-block-p shadow-lg",
         placement === "fixed"
-          ? "fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-30 lg:bottom-0"
-          : "sticky bottom-0 rounded-lg",
+          ? "fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-30 border-x-0 border-t border-b-0 lg:bottom-0"
+          : "sticky bottom-0 rounded-lg border",
         className,
       )}
     >
-      {summary != null ? <div className="min-w-0 text-sm text-v2-fg-secondary tabular-nums">{summary}</div> : null}
+      {summary != null ? <div className="min-w-0 text-sm font-semibold text-v2-fg tabular-nums">{summary}</div> : null}
       <div
         className={cn(
           "flex shrink-0 items-center gap-2",

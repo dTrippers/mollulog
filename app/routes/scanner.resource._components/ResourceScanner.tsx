@@ -160,9 +160,7 @@ function CompletionResourceCard({ item }: { item: ItemCompletionSummary["items"]
         className="w-max max-w-72 p-3"
       >
         <p className="text-sm font-medium break-words text-v2-fg">{name}</p>
-        <p className="mt-1 text-xs text-v2-fg-secondary tabular-nums">
-          반영 후 수량 {item.quantity.toLocaleString()}
-        </p>
+        <p className="mt-1 text-xs text-v2-fg-secondary tabular-nums">반영 후 수량 {item.quantity.toLocaleString()}</p>
       </Popover>
     </>
   );
@@ -682,7 +680,7 @@ export default function ResourceScanner() {
       <PageActionBar
         placement="sticky"
         expandActions
-        className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
+        className="bottom-0 px-0 py-v2-block-gap"
         summary={phase === "applying" ? "반영 중이에요" : isCancelling ? "삭제 중이에요" : null}
       >
         <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
@@ -799,10 +797,7 @@ export default function ResourceScanner() {
       <>
         <ScannerStepHeader states={stepStates} action={headerAction}>
           {job.status === "queued" ? (
-            <ScannerStepTitle
-              title="인식 대기 중"
-              meta={`스크린샷 ${job.images.length}장`}
-            />
+            <ScannerStepTitle title="인식 대기 중" meta={`스크린샷 ${job.images.length}장`} />
           ) : (
             <>
               <ScannerStepTitle

@@ -132,6 +132,22 @@ const migratedRouteFiles: string[] = [
   "routes/students._index.tsx",
   "routes/students._components/student-directory-cookie.ts",
   "routes/students._components/use-student-directory-filter-state.ts",
+  "routes/events.$uid.tsx",
+  "routes/events.$uid._index.tsx",
+  "routes/events.$uid.$.tsx",
+  "routes/events.$uid.shop.tsx",
+  "routes/events.$uid.shop._index.tsx",
+  "routes/events.$uid.shop.card-flip.tsx",
+  "routes/events.$uid.recruitment-simulator.tsx",
+  "routes/events.$uid.treasure-hunt.tsx",
+  "routes/events.$uid._components/CardFlipScreen.tsx",
+  "routes/events.$uid._components/EventOpinions.tsx",
+  "routes/events.$uid._components/EventShopCalculator.tsx",
+  "routes/events.$uid._components/EventShopController.tsx",
+  "routes/events.$uid._components/RoadPuzzleShopSection.tsx",
+  "routes/events.$uid._components/TreasureHuntScreen.tsx",
+  "routes/events.$uid._components/event-shop-availability.ts",
+  "routes/lives.$uid.tsx",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];

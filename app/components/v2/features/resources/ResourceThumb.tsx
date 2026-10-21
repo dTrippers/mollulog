@@ -1,3 +1,4 @@
+import { type ReactNode, useId, useRef, useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import { type ResourceImageType, resourceImageUrl } from "~/models/assets";
@@ -9,6 +10,12 @@ export type ResourceThumbProps = {
   resourceType?: ResourceTypeEnum;
   name?: string;
   size?: ResourceThumbSize;
+  imageUrl?: string;
+  label?: ReactNode;
+  rarity?: number | null;
+  bare?: boolean;
+  tooltip?: boolean;
+  nameTooltip?: boolean;
 };
 
 const sizeClassName = {
@@ -23,29 +30,140 @@ export function ResourceThumb({
   resourceType = ResourceTypeEnum.Item,
   name,
   size = "md",
+  imageUrl,
+  label,
+  rarity,
+  bare = false,
+  tooltip = false,
+  nameTooltip = false,
 }: ResourceThumbProps) {
+  const [nameTooltipOpen, setNameTooltipOpen] = useState(false);
+  const lastPointerType = useRef<string | null>(null);
+  const nameTooltipId = useId();
   const imageType = getResourceImageType(resourceType);
-  const src = imageType ? resourceImageUrl(imageType, itemUid) : null;
-  return (
+  const src = imageUrl ?? (imageType ? resourceImageUrl(imageType, itemUid) : null);
+  const rarityClassName = rarityClass(rarity);
+  const image = src ? (
+    <img alt={name ?? ""} src={src} loading="lazy" className="size-full object-contain" />
+  ) : (
     <span
-      className={cn(
-        "flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-v2-inset",
-        sizeClassName[size],
-      )}
+      role="img"
+      aria-label={`${name ?? "아이템"} 이미지 없음`}
+      className="px-1 text-center text-[8px] leading-tight text-v2-fg-tertiary"
     >
-      {src ? (
-        <img alt={name ?? ""} src={src} loading="lazy" className="size-full object-contain" />
-      ) : (
-        <span
-          role="img"
-          aria-label={`${name ?? "아이템"} 이미지 없음`}
-          className="px-1 text-center text-[8px] leading-tight text-v2-fg-tertiary"
-        >
-          이미지 없음
-        </span>
-      )}
+      이미지 없음
     </span>
   );
+  const labelBadge =
+    label == null ? null : (
+      <span className="absolute -right-1 -bottom-1 flex items-center justify-center rounded border-2 border-v2-surface bg-v2-scrim px-1 text-xs font-medium tabular-nums text-v2-on-media">
+        {label}
+      </span>
+    );
+
+  // Keep existing ResourceThumb callers byte-for-byte equivalent unless an opt-in shop feature is used.
+  if (!bare && label == null && rarity == null && !tooltip && !nameTooltip && imageUrl === undefined) {
+    return (
+      <span
+        className={cn(
+          "flex shrink-0 items-center justify-center overflow-hidden rounded-md bg-v2-inset",
+          sizeClassName[size],
+        )}
+      >
+        {image}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className={cn("relative inline-flex shrink-0", label != null && !bare && (!nameTooltip || !name) && "pr-1 pb-1")}
+    >
+      {nameTooltip && name ? (
+        <button
+          type="button"
+          aria-label={`${name} 이름 표시`}
+          aria-expanded={nameTooltipOpen}
+          aria-describedby={nameTooltipOpen ? nameTooltipId : undefined}
+          title={tooltip ? name : undefined}
+          onClick={() => {
+            lastPointerType.current = null;
+            setNameTooltipOpen((open) => !open);
+          }}
+          onTouchStart={() => {
+            lastPointerType.current = "touch";
+          }}
+          onPointerDown={(event) => {
+            lastPointerType.current = event.pointerType;
+          }}
+          onPointerEnter={(event) => {
+            if (event.pointerType !== "touch") setNameTooltipOpen(true);
+          }}
+          onPointerLeave={(event) => {
+            if (event.pointerType !== "touch") setNameTooltipOpen(false);
+          }}
+          onFocus={() => {
+            if (lastPointerType.current !== "touch") setNameTooltipOpen(true);
+          }}
+          onBlur={() => setNameTooltipOpen(false)}
+          className={cn(
+            "relative flex shrink-0 items-center justify-center border-0 bg-transparent p-0 text-inherit",
+            label != null && !bare && "pr-1 pb-1",
+            "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+          )}
+        >
+          <span
+            className={cn(
+              "flex shrink-0 items-center justify-center overflow-hidden",
+              !bare && "rounded-md",
+              !bare && (rarityClassName ?? "bg-v2-inset"),
+              sizeClassName[size],
+            )}
+          >
+            {image}
+          </span>
+          {labelBadge}
+          {nameTooltipOpen ? (
+            <span
+              id={nameTooltipId}
+              role="tooltip"
+              className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md"
+            >
+              {name}
+            </span>
+          ) : null}
+        </button>
+      ) : (
+        <span
+          title={tooltip ? name : undefined}
+          className={cn(
+            "flex shrink-0 items-center justify-center overflow-hidden",
+            !bare && "rounded-md",
+            !bare && (rarityClassName ?? "bg-v2-inset"),
+            sizeClassName[size],
+          )}
+        >
+          {image}
+        </span>
+      )}
+      {!nameTooltip || !name ? labelBadge : null}
+    </span>
+  );
+}
+
+function rarityClass(rarity: number | null | undefined): string | undefined {
+  switch (rarity) {
+    case 1:
+      return "bg-v2-item-rarity-1";
+    case 2:
+      return "bg-v2-item-rarity-2";
+    case 3:
+      return "bg-v2-item-rarity-3";
+    case 4:
+      return "bg-v2-item-rarity-4";
+    default:
+      return undefined;
+  }
 }
 
 function getResourceImageType(resourceType: ResourceTypeEnum): ResourceImageType | undefined {

@@ -325,7 +325,7 @@ function PostSubjectMeta({
     return (
       <div className={getSubjectMetaClassName(post.postType)}>
         <Link
-          to={`/events/${post.subjectContentUid}`}
+          to={post.subjectContentType === "live" ? `/lives/${post.subjectContentUid}` : `/events/${post.subjectContentUid}`}
           className="inline-flex max-w-full items-center gap-1.5 text-muted-foreground hover:text-foreground hover:underline"
         >
           <UserGroupIcon className="size-3.5 shrink-0 text-muted-foreground/70" />

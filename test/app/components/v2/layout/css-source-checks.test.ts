@@ -180,7 +180,9 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
   });
 
   it("V3: the panel section uses block padding, and only the collapsible header keeps the row minimum", () => {
-    expect(panelSource).toContain('className="relative rounded-lg bg-v2-surface p-v2-block-p"');
+    expect(panelSource).toMatch(
+      /togglesBody && phase === "collapsed"\s*\?\s*"px-v2-block-p py-2"\s*:\s*"p-v2-block-p"/,
+    );
     expect(panelSource).toContain('className={cn("flex gap-2", togglesBody ? "items-center" : "items-start")}');
     expect(panelSource.split("min-h-v2-row-min").length - 1).toBe(1);
   });
@@ -312,6 +314,34 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(docs).toContain("Show the action only when there is something to clear.");
     expect(docs).toContain("- Status: info and neutral.");
     expect(docs).toContain('<PanelAction variant="danger" onClick={clearFilters}>초기화</PanelAction>');
+  });
+});
+
+describe("treasure heatmap tokens", () => {
+  it("uses six blue steps with documented contrast in both themes", () => {
+    const lightStart = css.indexOf("--v2-treasure-heat-0:");
+    const lightBlock = css.slice(lightStart, css.indexOf("}", lightStart));
+    const darkStart = css.indexOf("--v2-treasure-heat-0:", css.lastIndexOf(".dark {"));
+    const darkBlock = css.slice(darkStart, css.indexOf("}", darkStart));
+    const v2ThemeStart = css.lastIndexOf("@theme inline");
+    const themeBlock = css.slice(v2ThemeStart, css.indexOf("}", v2ThemeStart));
+
+    expect(lightBlock).toContain("--v2-treasure-heat-0: oklch(0.96 0.02 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-1: oklch(0.91 0.04 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-2: oklch(0.86 0.07 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-3: oklch(0.80 0.10 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-4: oklch(0.74 0.13 255);");
+    expect(lightBlock).toContain("--v2-treasure-heat-5: oklch(0.68 0.16 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-0: oklch(0.30 0.055 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-1: oklch(0.35 0.075 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-2: oklch(0.40 0.095 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-3: oklch(0.45 0.115 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-4: oklch(0.50 0.135 255);");
+    expect(darkBlock).toContain("--v2-treasure-heat-5: oklch(0.55 0.155 255);");
+    expect(themeBlock).toContain("--color-v2-treasure-heat-5: var(--v2-treasure-heat-5);");
+    expect(readFileSync(join(process.cwd(), "docs/frontend/design-system-v2.md"), "utf8")).toContain(
+      "Percent text contrast is at least 6.19:1 light and 4.90:1 dark",
+    );
   });
 });
 

@@ -22,6 +22,7 @@ export type CommunityFeedStatsRecruitmentGroup = {
 export type CommunityFeedStatsTimelineContent = {
   uid: string;
   name: string;
+  contentType: string;
   recruitmentGroupUid: string | null;
   recruitmentStudentUids: string[] | null;
 };

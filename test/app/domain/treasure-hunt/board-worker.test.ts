@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
-import { TreasureHuntBoardWorkerRuntime } from "~/components/features/events/treasure-hunt/treasure-hunt-board.worker";
-import type { TreasureHuntBoardWorkerResponse } from "~/components/features/events/treasure-hunt/treasure-hunt-board-worker.shared";
 import type { TreasureHuntComposition } from "~/domain/treasure-hunt";
+import { TreasureHuntBoardWorkerRuntime } from "~/lib/treasure-hunt/treasure-hunt-board.worker";
+import type { TreasureHuntBoardWorkerResponse } from "~/lib/treasure-hunt/treasure-hunt-board-worker.shared";
 
 const composition: TreasureHuntComposition = {
   boardWidth: 3,

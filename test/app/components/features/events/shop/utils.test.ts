@@ -3,7 +3,7 @@ import {
   calculateMinigamePaymentCosts,
   calculateMinigameRewards,
   hasVariableMinigamePayment,
-} from "../../../../../../app/components/features/events/shop/utils";
+} from "~/domain/event-shop/utils";
 import type { MinigameConfig } from "../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../app/graphql/graphql";
 

@@ -51,7 +51,12 @@ function Harness({ request = null, closeRequest = null, onCloseHandled, withActi
         <NavigateButton />
       </PageMain>
       <PageAside>
-        <PanelSheet panelId="filter" title="컨텐츠 필터" Icon={Icon} headerAction={<button type="button">초기화</button>}>
+        <PanelSheet
+          panelId="filter"
+          title="컨텐츠 필터"
+          Icon={Icon}
+          headerAction={<button type="button">초기화</button>}
+        >
           <label>
             <input type="checkbox" /> 이벤트
           </label>
@@ -122,16 +127,24 @@ describe("PanelSheet", () => {
   });
 
   it("starts a collapsible panel collapsed and toggles its body with aria-expanded", () => {
-    renderHarness(<Harness />);
+    const { container } = renderHarness(<Harness />);
     const toggle = screen.getByRole("button", { name: "표시 설정" });
+    const collapsiblePanel = container.querySelector<HTMLElement>('[data-v2-panel="display"]') as HTMLElement;
+    const regularPanel = container.querySelector<HTMLElement>('[data-v2-panel="filter"]') as HTMLElement;
 
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(toggle.className).toContain("active:bg-v2-filled-hover");
+    expect(collapsiblePanel.className).toContain("px-v2-block-p py-2");
+    expect(collapsiblePanel.className).not.toContain("p-v2-block-p");
+    expect(regularPanel.className).toContain("p-v2-block-p");
+    expect(regularPanel.className).not.toContain("py-2");
     expect(screen.queryByText("표시 설정 본문")).toBeNull();
 
     fireEvent.click(toggle);
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    expect(collapsiblePanel.className).toContain("p-v2-block-p");
+    expect(collapsiblePanel.className).not.toContain("py-2");
     expect(screen.getByText("표시 설정 본문")).toBeTruthy();
   });
 
@@ -140,13 +153,16 @@ describe("PanelSheet", () => {
     const toggle = screen.getByRole("button", { name: "표시 설정" });
     fireEvent.click(toggle);
     const body = screen.getByText("표시 설정 본문").parentElement as HTMLElement;
+    const panel = body.closest("section") as HTMLElement;
 
     fireEvent.click(toggle);
     expect(body.isConnected).toBe(true);
     expect(body.className).toContain("v2-panel-exit");
+    expect(panel.className).not.toContain("py-2");
 
     fireEvent.animationEnd(body);
     expect(screen.queryByText("표시 설정 본문")).toBeNull();
+    expect(panel.className).toContain("px-v2-block-p py-2");
   });
 
   it("renders the body in the Aside on side-by-side and opens no sheet for a request", () => {

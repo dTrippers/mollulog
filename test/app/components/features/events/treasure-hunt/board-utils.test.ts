@@ -1,4 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
+import type { TreasureHuntRoundConfig } from "~/domain/event-shop";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import {
   createBoardObservation,
   createTreasureHuntComposition,
@@ -6,9 +8,7 @@ import {
   getRemainingTreasureShapes,
   isObservationStructurallyValid,
   placementSize,
-} from "~/components/features/events/treasure-hunt/board-utils";
-import type { TreasureHuntRoundConfig } from "~/domain/event-shop";
-import { ResourceTypeEnum } from "~/graphql/graphql";
+} from "~/lib/treasure-hunt/board-utils";
 
 const round: TreasureHuntRoundConfig = {
   round: 1,

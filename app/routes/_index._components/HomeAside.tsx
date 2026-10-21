@@ -32,7 +32,7 @@ const POST_TYPE_LABELS: Record<string, string> = {
 // student, and a walkthrough opens its timeline. The item has no link when the post has no such target.
 function feedItemHref(post: EnrichedCommunityFeedPost): string | null {
   if (post.postType === "event_opinion" && post.subjectContentUid) {
-    return `/events/${post.subjectContentUid}`;
+    return post.subjectContentType === "live" ? `/lives/${post.subjectContentUid}` : `/events/${post.subjectContentUid}`;
   }
   if (post.postType === "student_review" && post.subjectStudentUid) {
     return `/students/${post.subjectStudentUid}`;
@@ -74,7 +74,7 @@ function feedContext(post: EnrichedCommunityFeedPost): ReactNode {
         {post.subjectContentName ? (
           post.subjectContentUid ? (
             <Link
-              to={`/events/${post.subjectContentUid}`}
+              to={post.subjectContentType === "live" ? `/lives/${post.subjectContentUid}` : `/events/${post.subjectContentUid}`}
               className="inline-flex min-w-0 items-center gap-1.5 transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
             >
               <UserGroupIcon aria-hidden="true" className="size-3.5 shrink-0" />

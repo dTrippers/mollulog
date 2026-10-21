@@ -1,42 +1,34 @@
-import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
-import { useLoaderData, useOutletContext } from "react-router";
-import { CardFlipDetail } from "~/components/features/events/card-flip/CardFlipDetail";
-import type { EventShopPlanContext } from "~/components/features/events/shop/ShopCalculatorScreen";
+import { redirect, type LoaderFunctionArgs, type MetaFunction, type ShouldRevalidateFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import { isEventShopStateSubmission } from "~/lib/revalidation";
+import CardFlipScreen from "./events.$uid._components/CardFlipScreen";
 import { cardFlipLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
 
-export const loader = async ({ params, context }: LoaderFunctionArgs) => {
-  const timelineUid = params.uid;
-  if (!timelineUid) {
-    throw new Response("Not Found", { status: 404 });
-  }
-
+export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
+  const eventUid = params.uid;
+  if (!eventUid) throw new Response("Not Found", { status: 404 });
   const { env, ctx } = context.cloudflare;
-  const metadata = await getEventMetadata(env, timelineUid, ctx);
-  if (!metadata) {
+  const metadata = await getEventMetadata(env, eventUid, ctx);
+  if (metadata?.contentType === "live") return redirect(`/lives/${eventUid}${new URL(request.url).search}`, { status: 301 });
+  if (!metadata || (await getEventMinigameType(env, metadata)) !== "card_flip") {
     throw new Response("Not Found", { status: 404 });
   }
-
-  const minigameType = await getEventMinigameType(env, metadata);
-  if (minigameType !== "card_flip") {
-    throw new Response("Not Found", { status: 404 });
-  }
-
-  return { eventName: metadata.name, eventUid: timelineUid };
+  return { eventName: metadata.name };
 };
 
 // Shop state submissions never change the event metadata this loader reads.
 export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopStateSubmission(args) && args.defaultShouldRevalidate;
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
-  const title = `${loaderData?.eventName ?? "이벤트"} - ${cardFlipLocale.menuTitle}`;
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = `${data?.eventName ?? "이벤트"} - ${cardFlipLocale.menuTitle}`;
   return [{ title: `${title} | 몰루로그` }];
 };
 
+export const handle = { v2Width: "wide" } as const;
+
 export default function EventCardFlipDetailRoute() {
-  const { eventUid } = useLoaderData<typeof loader>();
-  const plan = useOutletContext<EventShopPlanContext>();
-  return <CardFlipDetail eventUid={eventUid} plan={plan} />;
+  useLoaderData<typeof loader>();
+  return <CardFlipScreen />;
 }
