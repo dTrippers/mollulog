@@ -68,7 +68,7 @@
     "remix-auth": "^3.7.0",
     "remix-auth-github": "^2.0.0",
     "remix-auth-google": "^2.0.0",
-    "sanitize-html": "2.17.5",
+    "sanitize-html": "^2.18.1",
     "tailwind-merge": "^3.7.0",
     "urql": "^5.0.4"
   },
@@ -79,7 +79,7 @@
     "@cloudflare/workers-types": "^4.20260702.1",
     "@eslint/eslintrc": "^3.3.7",
     "@eslint/js": "^10.0.1",
-    "@graphql-codegen/cli": "^6.3.1",
+    "@graphql-codegen/cli": "^7.4.6",
     "@jest/globals": "^30.5.2",
     "@react-router/dev": "^7.18.4",
     "@tailwindcss/aspect-ratio": "^0.4.2",
