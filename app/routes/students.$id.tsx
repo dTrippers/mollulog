@@ -1,22 +1,39 @@
 import {
   ChartBarIcon,
-  ChatBubbleLeftRightIcon,
+  ChatBubbleOvalLeftIcon,
   InformationCircleIcon,
+  BookOpenIcon,
   VideoCameraIcon,
 } from "@heroicons/react/24/outline";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation } from "react-router";
-import { createPageErrorBoundary, Page } from "~/components/features/layout";
-import { StudentInfo } from "~/components/features/students";
+import { AttributeStripes } from "~/components/v2/features/students/AttributeStripes";
+import { StudentFormSwitch } from "~/components/v2/features/students/StudentFormSwitch";
+import { StudentProfileFacts } from "~/components/v2/features/students/StudentProfileFacts";
+import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { TerrainRanks } from "~/components/v2/features/students/TerrainRanks";
+import {
+  AsideLinks,
+  MobileActionBar,
+  PageAside,
+  PageHeader,
+  PageMain,
+  PageStackedSummary,
+  PageToolbar,
+  ScreenTabs,
+  V2Page,
+} from "~/components/v2/layout";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
+import { positionLocale, schoolNameLocale, tacticRoleLocale } from "~/locales/ko";
 import { getStudentHeader } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
 import type { TimelineContent } from "~/models/timeline-content";
 import { findEventsForRecruitmentStudent, groupTimelineContentsByRecruitmentGroupUid } from "~/models/timeline-content";
+import { StudentDetailErrorBoundary } from "./students.$id._components/StudentDetailErrorBoundary";
 
 /**
  * Restricts the events shown on a student's page to the ones actually listing that student,
@@ -101,11 +118,7 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   ];
 };
 
-export const ErrorBoundary = createPageErrorBoundary({
-  title: "학생부",
-  description: "학생들의 통계 정보와 선생님들의 평가를 확인해보세요",
-  backward: { title: "학생 목록", to: "/students" },
-});
+export const ErrorBoundary = StudentDetailErrorBoundary;
 
 export type StudentDetailPageContext = Awaited<ReturnType<typeof loader>>;
 
@@ -113,46 +126,86 @@ export default function StudentDetailPage() {
   const loaderData = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const { student } = loaderData;
+  const title = (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-[10px] gap-y-1">
+      <span className="break-words">{student.name}</span>
+      <StudentFormSwitch student={student} />
+    </span>
+  );
+  const fullName = formatStudentFullName(student);
+  const headerMeta = (
+    <div className="flex min-w-0 flex-col gap-1">
+      <p>{[schoolNameLocale[student.school], student.catalog?.profile.schoolYear].filter(Boolean).join(" · ")}</p>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+        <AttributeStripes attackType={student.attackType} defenseType={student.defenseType} role={student.role} />
+        <span className="text-xs text-v2-fg-secondary">
+          {positionLocale[student.position]} · {tacticRoleLocale[student.tacticRole]}
+        </span>
+        {student.catalog?.terrainAdaptations ? <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} /> : null}
+      </div>
+    </div>
+  );
+  const schaleDbLink = student.schaleDbId
+    ? {
+        key: "schale-db",
+        title: "Schale DB",
+        Icon: BookOpenIcon,
+        to: `https://schaledb.com/student/${student.schaleDbId}`,
+      }
+    : null;
+  const videoLink = { key: "scanner", title: "영상 인식기", Icon: VideoCameraIcon, to: "/scanner/student" };
+  const mobileLinks = [...(schaleDbLink ? [{ ...schaleDbLink, shortTitle: "SchaleDB" }] : []), { ...videoLink, shortTitle: "인식기" }];
 
   return (
-    <Page
-      title="학생부"
-      description="학생들의 프로필, 통계 정보와 선생님들의 평가를 확인해보세요"
-      backward={{ title: "학생 목록", to: "/students" }}
-      belowTitle={<StudentInfo student={student} />}
-      links={[
-        {
-          Icon: VideoCameraIcon,
-          title: "영상 인식기",
-          description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
-          to: "/scanner/student",
-        },
-      ]}
-      screens={[
-        {
-          text: "학생 정보",
-          description: "학생 프로필, 스킬, 스탯 확인 및 성장도 관리",
-          Icon: InformationCircleIcon,
-          link: `/students/${student.uid}`,
-          active: pathname === `/students/${student.uid}`,
-        },
-        {
-          text: "편성/통계",
-          description: "총력전/대결전 통계 상세 분석",
-          Icon: ChartBarIcon,
-          link: `/students/${student.uid}/statistics`,
-          active: pathname === `/students/${student.uid}/statistics`,
-        },
-        {
-          text: "평가",
-          description: "선생님들의 평가 의견",
-          Icon: ChatBubbleLeftRightIcon,
-          link: `/students/${student.uid}/gradings`,
-          active: pathname === `/students/${student.uid}/gradings` || pathname === `/students/${student.uid}/grade`,
-        },
-      ]}
-    >
-      <Outlet context={loaderData satisfies StudentDetailPageContext} />
-    </Page>
+    <V2Page width="reading">
+      <div className="contents max-md:[&_.v2-header]:-mt-1.5 md:[&_.v2-header]:-translate-y-6 md:[&_.v2-header]:-mb-[23px] md:[&_.v2-header_h1]:!leading-[1.4]">
+        <PageHeader
+          title={title}
+          back={{ title: "학생 목록", to: "/students" }}
+          media={<StudentThumb studentUid={student.uid} name={fullName} variant={null} showCaption={false} />}
+          meta={headerMeta}
+        />
+      </div>
+      <PageStackedSummary>
+        <StudentProfileFacts student={student} compact />
+      </PageStackedSummary>
+      <PageToolbar>
+        <ScreenTabs
+          items={[
+            {
+              key: "info",
+              text: "학생 정보",
+              Icon: InformationCircleIcon,
+              link: `/students/${student.uid}`,
+              active: pathname === `/students/${student.uid}`,
+            },
+            {
+              key: "stats",
+              text: "편성/통계",
+              Icon: ChartBarIcon,
+              link: `/students/${student.uid}/statistics`,
+              active: pathname === `/students/${student.uid}/statistics`,
+            },
+            {
+              key: "gradings",
+              text: "평가",
+              Icon: ChatBubbleOvalLeftIcon,
+              link: `/students/${student.uid}/gradings`,
+              active: pathname === `/students/${student.uid}/gradings` || pathname === `/students/${student.uid}/grade`,
+            },
+          ]}
+        />
+      </PageToolbar>
+      <PageAside>
+        <StudentProfileFacts student={student} />
+        <AsideLinks items={[...(schaleDbLink ? [schaleDbLink] : []), videoLink]} />
+      </PageAside>
+      <div className="contents [&_.v2-action-bar]:!bottom-[68px]">
+        <MobileActionBar links={pathname.endsWith("/grade") ? [] : mobileLinks} />
+      </div>
+      <PageMain>
+        <Outlet context={loaderData satisfies StudentDetailPageContext} />
+      </PageMain>
+    </V2Page>
   );
 }

@@ -7,7 +7,8 @@ const root = process.cwd();
 const migratedViewFiles = [
   "app/components/features/community/CommunityFeed.tsx",
   "app/components/features/community/community-feed-presentation.ts",
-  "app/components/features/students/StudentGradingTimeline.tsx",
+  "app/components/v2/features/students/StudentGradingTimeline.tsx",
+  "app/components/v2/features/students/RecruitmentHistoryList.tsx",
   "app/components/features/contents/CommentView.tsx",
   "app/components/v2/features/futures/FutureTimeline.tsx",
   "app/components/v2/features/futures/FutureList.tsx",
@@ -20,7 +21,6 @@ const migratedViewFiles = [
   "app/components/features/raids/RaidSelector.tsx",
   "app/components/features/raids/RaidStatisticsSlotCount.tsx",
   "app/components/features/raids/RaidVideosScreen.tsx",
-  "app/components/features/students/RecruitmentHistories.tsx",
   "app/routes/$username.futures._components/FuturePlan.tsx",
   "app/routes/$username.pickups._components/PickupHistoryView.tsx",
 ];

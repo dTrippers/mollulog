@@ -1,99 +1,60 @@
 import { useState } from "react";
-import { Defense } from "~/graphql/graphql";
+import type { Defense } from "~/graphql/graphql";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import { formatUsagePercent } from "./formatUsagePercent";
 import type { StudentBossUsageSummary } from "./StudentDifficultyUsageModel";
 import { UsageBarList, UsageChartCard } from "./UsageBarChart";
 
-type StudentBossUsageChartProps = {
-  summary: StudentBossUsageSummary | null;
-  loading: boolean;
-};
-
-const DEFENSE_BAR_CLASSES: Partial<Record<Defense, string>> = {
-  [Defense.Light]: "bg-red-500",
-  [Defense.Heavy]: "bg-yellow-400",
-  [Defense.Special]: "bg-blue-500",
-  [Defense.Elastic]: "bg-purple-500",
-};
-
-const DEFENSE_GRADIENT_FROM_CLASSES: Partial<Record<Defense, string>> = {
-  [Defense.Light]: "from-red-500",
-  [Defense.Heavy]: "from-yellow-400",
-  [Defense.Special]: "from-blue-500",
-  [Defense.Elastic]: "from-purple-500",
-  [Defense.Composite]: "from-green-600",
-  [Defense.Normal]: "from-neutral-400",
-};
-
-const DEFENSE_GRADIENT_TO_CLASSES: Partial<Record<Defense, string>> = {
-  [Defense.Light]: "to-red-500",
-  [Defense.Heavy]: "to-yellow-400",
-  [Defense.Special]: "to-blue-500",
-  [Defense.Elastic]: "to-purple-500",
-  [Defense.Composite]: "to-green-600",
-  [Defense.Normal]: "to-neutral-400",
+const defenseTypeColor: Record<Defense, string> = {
+  light: "red",
+  heavy: "yellow",
+  special: "blue",
+  elastic: "purple",
+  composite: "green",
+  normal: "grey",
 };
 
 function formatDefenseTypeSetLabel(defenseTypes: Defense[]) {
-  if (defenseTypes.length <= 1) {
-    return defenseTypeLocale[defenseTypes[0]] ?? "";
-  }
-
-  return defenseTypes
-    .map((defenseType, index) => {
-      const label = defenseTypeLocale[defenseType];
-      return index === defenseTypes.length - 1 ? label : label.replace(/장갑$/, "");
-    })
-    .join("/");
+  if (defenseTypes.length <= 1) return defenseTypeLocale[defenseTypes[0]] ?? "";
+  return defenseTypes.map((type, index) => {
+    const label = defenseTypeLocale[type];
+    return index === defenseTypes.length - 1 ? label : label.replace(/장갑$/, "");
+  }).join("/");
 }
 
-function getDefenseBarClassName(defenseTypes: Defense[]) {
-  if (defenseTypes.length <= 1) {
-    return DEFENSE_BAR_CLASSES[defenseTypes[0]] ?? "bg-neutral-400";
-  }
-
-  const firstDefenseType = defenseTypes[0];
-  const lastDefenseType = defenseTypes[defenseTypes.length - 1];
-  const fromClass = DEFENSE_GRADIENT_FROM_CLASSES[firstDefenseType] ?? "from-neutral-400";
-  const toClass = DEFENSE_GRADIENT_TO_CLASSES[lastDefenseType] ?? "to-neutral-400";
-  return `bg-gradient-to-r ${fromClass} from-40% ${toClass} to-60%`;
-}
-
-export default function StudentBossUsageChart({ summary, loading }: StudentBossUsageChartProps) {
+export default function StudentBossUsageChart({
+  summary,
+  loading,
+  failed = false,
+  onRetry,
+}: {
+  summary: StudentBossUsageSummary | null;
+  loading: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
+}) {
   const [expanded, setExpanded] = useState(false);
   const rows = summary?.rows ?? [];
   const visibleRows = expanded ? rows : rows.slice(0, 6);
   const hiddenCount = rows.length - visibleRows.length;
-
   return (
-    <UsageChartCard
-      title="보스별 출전 횟수"
-      description="학생의 활용도를 확인해보세요"
-      loading={loading}
-      empty={!summary || summary.totalScopeCount === 0 || rows.length === 0}
-      emptyText="출전 기록이 부족해요"
-    >
+    <UsageChartCard title="보스별 출전 횟수" loading={loading} failed={failed} onRetry={onRetry} empty={!summary || summary.totalScopeCount === 0 || rows.length === 0} emptyText="출전 기록이 부족해요">
       <UsageBarList
+        variant="boss"
         rows={visibleRows}
         getKey={(row) => row.key}
         getRatio={(row) => row.usageRate}
-        labelClassName="w-20"
         renderLabel={(row) => <span className="truncate">{row.bossName}</span>}
         renderSubLabel={(row) => (
-          <span className="text-neutral-500 dark:text-neutral-400">
+          <>
+            {row.defenseTypes[0] ? <span aria-hidden="true" className={`h-3 w-0.5 rounded-full bg-v2-attr-${defenseTypeColor[row.defenseTypes[0]]}`} /> : null}
             {terrainLocale[row.terrain]} · {formatDefenseTypeSetLabel(row.defenseTypes)}
-          </span>
+          </>
         )}
         renderValue={(row) => `${formatUsagePercent(row.usageRate)} · ${row.usageCount.toLocaleString()}회`}
-        getBarClassName={(row) => getDefenseBarClassName(row.defenseTypes)}
       />
       {hiddenCount > 0 || expanded ? (
-        <button
-          type="button"
-          className="mt-3 self-start text-xs font-semibold text-blue-600 hover:underline dark:text-blue-300"
-          onClick={() => setExpanded((current) => !current)}
-        >
+        <button type="button" className="mt-1.5 inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover" onClick={() => setExpanded((current) => !current)}>
           {expanded ? "접기" : `+${hiddenCount}개 더 보기`}
         </button>
       ) : null}

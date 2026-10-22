@@ -1,11 +1,11 @@
-import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
-import { BarsArrowDownIcon } from "@heroicons/react/24/outline";
-import { useEffect, useMemo, useState } from "react";
+import { InformationCircleIcon } from "@heroicons/react/24/outline";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { RaidStatisticsSlotCount } from "~/components/features/raids";
-import { Callout, EmptyView, FilterButtons, LoadingSkeleton, SubTitle } from "~/components/primitives";
+import { StudentStatisticsState } from "~/components/v2/features/raids/StudentStatisticsState";
+import { IconButton } from "~/components/v2/primitives/IconButton";
+import { Popover } from "~/components/v2/primitives/Popover";
 import type { Defense } from "~/graphql/graphql";
 import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoString } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
@@ -17,16 +17,18 @@ import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudentsMap } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
-import { getMaxTierAt } from "~/models/student-tier";
 import type { StudentDetailPageContext } from "./students.$id";
+import { StudentRaidRecordList } from "./students.$id._components/StudentRaidRecordList";
 import StudentBossUsageChart from "./students.$id._components/StudentBossUsageChart";
 import StudentDifficultyUsageChart from "./students.$id._components/StudentDifficultyUsageChart";
 import {
   aggregateBossUsage,
   aggregateDifficultyUsage,
   buildStudentAnalysisScopeLookup,
+  getStudentAnalysisFailedAreas,
   type StudentBossUsageSummary,
   type StudentDifficultyUsage,
+  type StudentAnalysisFailedAreas,
 } from "./students.$id._components/StudentDifficultyUsageModel";
 import StudentRaidInvestmentChart from "./students.$id._components/StudentRaidInvestmentChart";
 import StudentRaidSummaryCard from "./students.$id._components/StudentRaidSummaryCard";
@@ -114,10 +116,21 @@ export default function StudentStatisticsPage() {
   const [sort, setSort] = useState<"recent" | "old">("recent");
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
-  const [studentAnalysisLoading, setStudentAnalysisLoading] = useState(false);
+  const [statisticsFailed, setStatisticsFailed] = useState(false);
+  const [statisticsAttempt, setStatisticsAttempt] = useState(0);
+  const [studentAnalysisLoading, setStudentAnalysisLoading] = useState(true);
+  const [studentAnalysisAttempt, setStudentAnalysisAttempt] = useState(0);
+  const [analysisFailedAreas, setAnalysisFailedAreas] = useState<StudentAnalysisFailedAreas>({
+    bossUsage: false,
+    difficultyUsage: false,
+    synergy: false,
+  });
   const [bossUsage, setBossUsage] = useState<StudentBossUsageSummary | null>(null);
   const [difficultyUsage, setDifficultyUsage] = useState<StudentDifficultyUsage[]>([]);
   const [synergyPartners, setSynergyPartners] = useState<StudentAnalysisSynergyPartner[]>([]);
+  const [scopeInfoOpen, setScopeInfoOpen] = useState(false);
+  const scopeInfoRef = useRef<HTMLButtonElement>(null);
+  const scopeInfoAnchorRef = useRef<HTMLDivElement>(null);
 
   const enrichRaidStatistics = useMemo(() => {
     return (stats: RaidStatistics[]): EnrichedRaidStatistics[] => {
@@ -157,14 +170,20 @@ export default function StudentStatisticsPage() {
   const analysisScopeLookup = useMemo(() => buildStudentAnalysisScopeLookup({ allRaids }), [allRaids]);
   const myStudentTier = recruitedStudentTiers[student.studentVariant.primaryStudent.uid] ?? null;
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: this state counter is the explicit retry trigger.
   useEffect(() => {
     let cancelled = false;
     const loadStatistics = async () => {
+      setStatisticsLoading(true);
+      setStatisticsFailed(false);
       try {
         const response = await fetchRaidStatisticsByStudent(student.uid);
-        if (!cancelled) setRawStatistics(response);
+        if (!cancelled) {
+          setRawStatistics(response);
+          setStatisticsFailed(false);
+        }
       } catch {
-        // Keep the existing graceful empty-state behavior without alerting.
+        if (!cancelled) setStatisticsFailed(true);
       } finally {
         if (!cancelled) setStatisticsLoading(false);
       }
@@ -173,8 +192,9 @@ export default function StudentStatisticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [student.uid]);
+  }, [student.uid, statisticsAttempt]);
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: this state counter is the explicit retry trigger.
   useEffect(() => {
     let cancelled = false;
     const loadStudentAnalysis = async () => {
@@ -182,11 +202,13 @@ export default function StudentStatisticsPage() {
         setStudentAnalysisLoading(true);
         const response = await fetchStudentAnalysis({ studentUid: student.uid });
         if (cancelled) return;
+        setAnalysisFailedAreas(getStudentAnalysisFailedAreas({ response, scopeLookup: analysisScopeLookup }));
         setBossUsage(aggregateBossUsage({ response, scopeLookup: analysisScopeLookup }));
         setDifficultyUsage(aggregateDifficultyUsage({ response }));
         setSynergyPartners(response.synergy);
       } catch {
         if (cancelled) return;
+        setAnalysisFailedAreas({ bossUsage: true, difficultyUsage: true, synergy: true });
         setBossUsage(null);
         setDifficultyUsage([]);
         setSynergyPartners([]);
@@ -198,7 +220,7 @@ export default function StudentStatisticsPage() {
     return () => {
       cancelled = true;
     };
-  }, [analysisScopeLookup, student.uid]);
+  }, [analysisScopeLookup, student.uid, studentAnalysisAttempt]);
 
   const listedStatistics = useMemo(() => {
     return statistics
@@ -209,91 +231,63 @@ export default function StudentStatisticsPage() {
           : compareInstantAsc(a.raid.startAt, b.raid.startAt),
       );
   }, [statistics, sort]);
-  const filteredStatistics = raidShowMore ? listedStatistics : listedStatistics.slice(0, 5);
   const raidSummary = useMemo(() => buildStudentRaidSummary({ statistics }), [statistics]);
   const raidInvestment = useMemo(
     () => buildStudentRaidInvestment({ statistics, myStudentTier }),
     [statistics, myStudentTier],
   );
 
+  const statsState = statisticsLoading ? "loading" : statisticsFailed ? "failed" : rawStatistics.length === 0 ? "empty" : null;
   return (
-    <section className="mt-6 md:mt-8">
-      <Callout
-        className="mb-3 md:mb-4"
-        tone="warning"
-        title="총력전/대결전 통계만 포함되어 있어요"
-        description="제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요"
-      />
-
-      {statisticsLoading ? (
-        <LoadingSkeleton />
-      ) : rawStatistics.length === 0 ? (
-        <EmptyView text="편성된 총력전/대결전 정보가 없어요" />
+    <section>
+      <div ref={scopeInfoAnchorRef} className="-mt-1.5 mb-3 flex min-h-8 items-center gap-0.5 text-[13px] leading-[1.43] text-v2-fg-secondary">
+        <span>총력전/대결전 통계만 포함되어 있어요</span>
+        <span className="relative -ml-1 inline-flex">
+          <IconButton
+            ref={scopeInfoRef}
+            icon={InformationCircleIcon}
+            label="통계 범위 안내"
+            aria-haspopup="dialog"
+            aria-expanded={scopeInfoOpen}
+            onClick={() => setScopeInfoOpen((open) => !open)}
+          />
+          <Popover open={scopeInfoOpen} label="통계 범위 안내" onClose={() => setScopeInfoOpen(false)} returnFocusRef={scopeInfoRef} anchorRef={scopeInfoAnchorRef} className="w-72 p-5 max-sm:p-4 text-[13px] leading-[1.43] text-v2-fg backdrop-blur-[4px] data-[placement=below]:-mt-2 data-[placement=above]:mt-2">
+            제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요
+          </Popover>
+        </span>
+      </div>
+      {statsState ? (
+        <StudentStatisticsState state={statsState} onRetry={() => setStatisticsAttempt((value) => value + 1)} />
       ) : (
         <>
           <StudentRaidUsageChart releaseAt={student.releaseAt} raids={allRaids} statistics={rawStatistics} />
 
-          <div className="mt-3 grid gap-3 md:mt-4 md:grid-cols-2 md:gap-4">
+          <div className="mt-6 grid gap-y-6 md:grid-cols-2 md:gap-x-4">
             <StudentRaidSummaryCard summary={raidSummary} />
             <StudentRaidInvestmentChart investment={raidInvestment} signedIn={signedIn} />
           </div>
-          <div className="mt-3 grid gap-3 md:mt-4 md:grid-cols-2 md:gap-4">
-            <StudentBossUsageChart summary={bossUsage} loading={studentAnalysisLoading} />
-            <StudentDifficultyUsageChart rows={difficultyUsage} loading={studentAnalysisLoading} />
+          <div className="mt-6 grid gap-y-6 md:grid-cols-2 md:gap-x-4">
+            <StudentBossUsageChart summary={bossUsage} loading={studentAnalysisLoading} failed={analysisFailedAreas.bossUsage} onRetry={() => setStudentAnalysisAttempt((value) => value + 1)} />
+            <StudentDifficultyUsageChart rows={difficultyUsage} loading={studentAnalysisLoading} failed={analysisFailedAreas.difficultyUsage} onRetry={() => setStudentAnalysisAttempt((value) => value + 1)} />
           </div>
           <StudentSynergyPartners
-            className="mt-3 md:mt-4"
+            className="mt-6"
             partners={synergyPartners}
             loading={studentAnalysisLoading}
+            failed={analysisFailedAreas.synergy}
+            onRetry={() => setStudentAnalysisAttempt((value) => value + 1)}
+            signedIn={signedIn}
             allStudents={allStudents}
             recruitedStudentTiers={recruitedStudentTiers}
           />
 
-          <div className="mt-8 md:mt-10">
-            <SubTitle text="총력전/대결전 상세 기록" />
-            <div className="mt-3 md:mt-4">
-              <FilterButtons
-                surface="page"
-                Icon={BarsArrowDownIcon}
-                buttonProps={[
-                  { text: "최신순", onToggle: () => setSort("recent"), active: sort === "recent" },
-                  { text: "과거순", onToggle: () => setSort("old"), active: sort === "old" },
-                ]}
-                exclusive
-                atLeastOne
-              />
-              {listedStatistics.length === 0 ? (
-                <div className="mt-4">
-                  <EmptyView text="100회를 초과해 편성된 총력전/대결전 정보가 없어요" />
-                </div>
-              ) : (
-                filteredStatistics.map((stat) => {
-                  const { raid, slotsByTier, slotsCount, assistsCount, assistsByTier } = stat;
-                  return (
-                    <RaidStatisticsSlotCount
-                      key={`${raid.raidType}-${raid.seasonIndex}-${raid.defenseType}`}
-                      raid={raid}
-                      slotsCount={slotsCount}
-                      slotsByTier={slotsByTier}
-                      assistsCount={assistsCount}
-                      assistsByTier={assistsByTier}
-                      maxTier={getMaxTierAt(raid.startAt)}
-                    />
-                  );
-                })
-              )}
-              {listedStatistics.length > 5 ? (
-                <button
-                  type="button"
-                  className="mb-4 flex w-full items-center justify-center py-2 text-center hover:underline"
-                  onClick={() => setRaidShowMore((expanded) => !expanded)}
-                >
-                  {raidShowMore ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
-                  <span className="ml-1">{raidShowMore ? "접기" : "더 보기"}</span>
-                </button>
-              ) : null}
-            </div>
-          </div>
+          <StudentRaidRecordList
+            records={listedStatistics}
+            showMore={raidShowMore}
+            sortDirection={sort}
+            onSortDirectionChange={setSort}
+            onShowMoreChange={setRaidShowMore}
+          />
         </>
       )}
     </section>

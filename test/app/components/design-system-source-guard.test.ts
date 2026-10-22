@@ -72,8 +72,32 @@ describe("design system source guard", () => {
 });
 
 const v2Root = "components/v2";
-// Migrated route files (relative to app/) join the 2.0 guard here. The list starts empty.
+// Migrated route files and their route-only components (relative to app/) join the 2.0 guard here.
 const migratedRouteFiles: string[] = [
+  "routes/students.$id.tsx",
+  "routes/students.$id._index.tsx",
+  "routes/students.$id.statistics.tsx",
+  "routes/students.$id.gradings.tsx",
+  "routes/students.$id.grade.tsx",
+  "routes/students.$id._components/StudentDetailErrorBoundary.tsx",
+  "routes/students.$id._components/StudentBasicInfo.tsx",
+  "routes/students.$id._components/GrowthEditorSheet.tsx",
+  "routes/students.$id._components/StudentAiSummaryCard.tsx",
+  "routes/students.$id._components/StudentGradingChart.tsx",
+  "routes/students.$id._components/StudentKnowledgeAnnotations.tsx",
+  "routes/students.$id._components/StudentRaidUsageChart.tsx",
+  "routes/students.$id._components/StudentRaidUsageChartModel.ts",
+  "routes/students.$id._components/StudentRaidSummaryCard.tsx",
+  "routes/students.$id._components/StudentRaidSummaryModel.ts",
+  "routes/students.$id._components/StudentRaidInvestmentChart.tsx",
+  "routes/students.$id._components/StudentBossUsageChart.tsx",
+  "routes/students.$id._components/StudentDifficultyUsageChart.tsx",
+  "routes/students.$id._components/StudentDifficultyUsageModel.ts",
+  "routes/students.$id._components/StudentSynergyPartners.tsx",
+  "routes/students.$id._components/StudentRaidRecordList.tsx",
+  "routes/students.$id._components/UsageBarChart.tsx",
+  "routes/students.$id._components/raidTierVisual.ts",
+  "routes/students.$id._components/formatUsagePercent.ts",
   "routes/futures.tsx",
   "routes/futures._components/futures-navigation.ts",
   "routes/futures._components/futures-view-state.ts",

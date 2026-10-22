@@ -1,37 +1,24 @@
-import { ArrowTopRightOnSquareIcon, LockClosedIcon, PencilSquareIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
+import { ExclamationTriangleIcon, LockClosedIcon, PencilSquareIcon, SparklesIcon, XCircleIcon } from "@heroicons/react/24/outline";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
+import { StarIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
-import { StudentSkillIcon, StudentTierLabel } from "~/components/features/students";
-import { Button, Callout, EmptyView, SectionCard, SubTitle, Toggle } from "~/components/primitives";
-import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
-import {
-  calculateStudentStats,
-  getEquipmentMaxLevel,
-  getEquipmentSlotUnlockLevel,
-  renderStudentSkillDescriptionParts,
-  resolveStudentCalculatorState,
-  type StudentCalculatorCatalog,
-  type StudentCalculatorSource,
-  type StudentCalculatorState,
-  selectStudentSkills,
-} from "~/domain/student-calculator";
-import {
-  createStudentGrowthDraftStorageKey,
-  parseStudentGrowthDraft,
-  serializeStudentGrowthDraft,
-} from "~/domain/student-growth-draft";
+import { calculateStudentStats, getEquipmentMaxLevel, getEquipmentSlotUnlockLevel, renderStudentSkillDescriptionParts, resolveStudentCalculatorState, type StudentCalculatorCatalog, type StudentCalculatorSource, type StudentCalculatorState, selectStudentSkills } from "~/domain/student-calculator";
+import { createStudentGrowthDraftStorageKey, parseStudentGrowthDraft, serializeStudentGrowthDraft } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import {
-  type Attack,
-  type StudentCatalogStat,
-  StudentSkillSelectionCondition,
-  type StudentSkillTypeEnum,
-} from "~/graphql/graphql";
+import { StudentSkillSelectionCondition, type Attack, type StudentCatalogStat, type StudentSkillTypeEnum } from "~/graphql/graphql";
 import { equipmentImageUrl } from "~/models/assets";
 import type { PublicKnowledgeEntry } from "~/models/knowledge-entry";
+import { Button } from "~/components/v2/primitives/Button";
+import { RangeSlider } from "~/components/v2/primitives/RangeSlider";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { Switch } from "~/components/v2/primitives/Switch";
+import { StudentSkillIcon } from "~/components/v2/features/students/StudentSkillIcon";
+import { StudentPreparingState } from "~/components/v2/features/students/StudentPreparingState";
+import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
 import GrowthEditorSheet from "./GrowthEditorSheet";
 import { KnowledgeAnnotatedDescription } from "./StudentKnowledgeAnnotations";
 
@@ -48,38 +35,17 @@ type StudentBasicInfoProps = {
   nullableSemantics: boolean;
   knowledgeEntries: PublicKnowledgeEntry[];
   knowledgeLookupStatus: "available" | "failed";
-  aiSummary?: React.ReactNode;
-  gradingSummary?: React.ReactNode;
+  aiSummary?: ReactNode;
+  gradingSummary?: ReactNode;
 };
 
 type SaveResult = { ok: true } | { ok: false; error: string; code?: string; retryable?: boolean };
 type StudentBasicInfoSavePayload = Record<string, number | null | string>;
 
 const nullableCurrentStateFields = [
-  "level",
-  "skillEx",
-  "skillNormal",
-  "skillEnhanced",
-  "skillSub",
-  "equip1",
-  "equip2",
-  "equip3",
-  "equip1Level",
-  "equip2Level",
-  "equip3Level",
-  "equipSpecial",
-  "weaponLevel",
-  "abilityHp",
-  "abilityAtk",
-  "abilityHeal",
+  "level", "skillEx", "skillNormal", "skillEnhanced", "skillSub", "equip1", "equip2", "equip3",
+  "equip1Level", "equip2Level", "equip3Level", "equipSpecial", "weaponLevel", "abilityHp", "abilityAtk", "abilityHeal",
 ] as const satisfies (keyof StudentCalculatorState)[];
-
-export function normalizeNullableStudentBasicInfoField(
-  field: (typeof nullableCurrentStateFields)[number],
-  value: number | null,
-): number | null {
-  return field === "equipSpecial" && value === 0 ? null : value;
-}
 
 const skillSlotLabels: Record<StudentSkillTypeEnum, string> = {
   ex: "EX 스킬",
@@ -93,10 +59,6 @@ const skillSelectionConditionLabels: Record<StudentSkillSelectionCondition, stri
   [StudentSkillSelectionCondition.Self]: "자신에게 사용 시",
 };
 
-export function getSkillSelectionConditionLabel(condition: StudentSkillSelectionCondition): string {
-  return skillSelectionConditionLabels[condition];
-}
-
 const primaryStats = [
   { stat: "MAX_HP" as StudentCatalogStat, label: "최대 체력" },
   { stat: "ATTACK_POWER" as StudentCatalogStat, label: "공격력" },
@@ -104,27 +66,30 @@ const primaryStats = [
   { stat: "HEAL_POWER" as StudentCatalogStat, label: "치유력" },
 ] as const;
 
-const weaponStars = [1, 2, 3, 4] as const;
+export function normalizeNullableStudentBasicInfoField(
+  field: (typeof nullableCurrentStateFields)[number],
+  value: number | null,
+): number | null {
+  return field === "equipSpecial" && value === 0 ? null : value;
+}
+
+export function getSkillSelectionConditionLabel(condition: StudentSkillSelectionCondition): string {
+  return skillSelectionConditionLabels[condition];
+}
 
 export function scrollToStudentBasicInfo() {
   document.getElementById("student-basic-info")?.scrollIntoView({ block: "start" });
 }
 
+export function getAbilityReleaseDisabledReason(tier: number, level = 90): string | null {
+  if (tier <= 5) return "고유무기 1성부터 능력 개방을 설정할 수 있어요";
+  if (level < 90) return "학생 레벨 90부터 능력 개방을 설정할 수 있어요";
+  return null;
+}
+
 export default function StudentBasicInfo({
-  student,
-  schaleDbId,
-  catalog,
-  signedIn,
-  currentUserId,
-  released,
-  recruited,
-  savedState,
-  relatedRelationshipLevels,
-  nullableSemantics,
-  knowledgeEntries,
-  knowledgeLookupStatus,
-  aiSummary,
-  gradingSummary,
+  student, catalog, signedIn, currentUserId, released, recruited, savedState,
+  relatedRelationshipLevels, nullableSemantics, knowledgeEntries, knowledgeLookupStatus, aiSummary, gradingSummary,
 }: StudentBasicInfoProps) {
   const fetcher = useFetcher<SaveResult>();
   const { hash } = useLocation();
@@ -145,18 +110,13 @@ export default function StudentBasicInfo({
     [currentUserId, stateStudentUid],
   );
   const resolved = useMemo(() => resolveStudentCalculatorState(student, state, catalog), [student, state, catalog]);
+  const selectedGearTier = student.catalog?.gear?.tiers.find((tier) => tier.tier === resolved.equipSpecial);
   const relatedFavorStates = useMemo(
-    () =>
-      student.character.studentVariants.flatMap((variant) => {
-        const primary = variant.primaryStudent;
-        if (primary.uid === stateStudentUid || !primary.catalog) return [];
-        return [
-          {
-            favorRewards: primary.catalog.favorRewards,
-            bond: relatedRelationshipLevels[primary.uid] ?? null,
-          },
-        ];
-      }),
+    () => student.character.studentVariants.flatMap((variant) => {
+      const primary = variant.primaryStudent;
+      if (primary.uid === stateStudentUid || !primary.catalog) return [];
+      return [{ favorRewards: primary.catalog.favorRewards, bond: relatedRelationshipLevels[primary.uid] ?? null }];
+    }),
     [student.character.studentVariants, stateStudentUid, relatedRelationshipLevels],
   );
   const includeSkillEffects = skillEffectsState.studentUid === student.uid && skillEffectsState.enabled;
@@ -166,6 +126,11 @@ export default function StudentBasicInfo({
   );
   const selectedSkills = useMemo(() => selectStudentSkills(student, state), [student, state]);
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
+  const primaryStatValues = primaryStats.flatMap(({ stat, label }) => {
+    const value = statValues.get(stat);
+    return value === undefined ? [] : [{ stat, label, value }];
+  });
+  const primaryStatsAvailable = primaryStatValues.length === primaryStats.length;
   const abilityReleaseDisabledReason = getAbilityReleaseDisabledReason(resolved.tier, resolved.level);
   const saveAvailable = signedIn && released;
   const saveDisabled = fetcher.state !== "idle" || (!recruited && !draftReady) || staleWriteBlocked;
@@ -203,11 +168,7 @@ export default function StudentBasicInfo({
       setRetryAvailable(fetcher.data.retryable === true);
     }
     if (fetcher.data.ok && draftStorageKey) {
-      try {
-        localStorage.removeItem(draftStorageKey);
-      } catch {
-        // The server state remains authoritative even if browser storage cannot be cleared.
-      }
+      try { localStorage.removeItem(draftStorageKey); } catch { /* Server state remains authoritative. */ }
     }
   }, [draftStorageKey, fetcher.state, fetcher.data]);
 
@@ -218,7 +179,6 @@ export default function StudentBasicInfo({
       setDraftReady(true);
       return;
     }
-
     try {
       const serializedDraft = localStorage.getItem(draftStorageKey);
       const draft = serializedDraft ? parseStudentGrowthDraft(serializedDraft) : null;
@@ -235,15 +195,12 @@ export default function StudentBasicInfo({
 
   useEffect(() => {
     if (!draftReady || !draftStorageKey || released || recruited) return;
-
     setDraftStatus("saving");
     const timeout = window.setTimeout(() => {
       try {
         localStorage.setItem(draftStorageKey, serializeStudentGrowthDraft(state));
         setDraftStatus("saved");
-      } catch {
-        setDraftStatus("error");
-      }
+      } catch { setDraftStatus("error"); }
     }, 300);
     return () => window.clearTimeout(timeout);
   }, [draftReady, draftStorageKey, recruited, released, state]);
@@ -252,7 +209,6 @@ export default function StudentBasicInfo({
     setSaved(false);
     setState((current) => ({ ...current, [key]: value }));
   };
-
   const updateTier = (tier: number) => {
     const weaponLevelMax = getWeaponLevelMaxByTier(tier);
     setSaved(false);
@@ -265,23 +221,19 @@ export default function StudentBasicInfo({
       abilityHeal: tier <= 5 ? null : current.abilityHeal,
     }));
   };
-
   const submitSave = (payload: StudentBasicInfoSavePayload) => {
     if (staleWriteBlockedRef.current) return;
     submittedPayloadRef.current = payload;
     setRetryAvailable(false);
     fetcher.submit(payload, { method: "post", encType: "application/json" });
   };
-
   const handleSave = () => {
     if (staleWriteBlockedRef.current) return;
     if (nullableSemantics) {
       const payload: StudentBasicInfoSavePayload = { stateFormat: "nullable" };
       if (!recruited || state.tier !== savedState.tier) payload.tier = resolved.tier;
       for (const field of nullableCurrentStateFields) {
-        if (state[field] !== savedState[field]) {
-          payload[field] = normalizeNullableStudentBasicInfoField(field, state[field]);
-        }
+        if (state[field] !== savedState[field]) payload[field] = normalizeNullableStudentBasicInfoField(field, state[field]);
       }
       if (state.bond !== savedState.bond) payload.bond = state.bond;
       if (recruited && Object.keys(payload).length === 1) return;
@@ -289,152 +241,76 @@ export default function StudentBasicInfo({
       return;
     }
     submitSave({
-      tier: resolved.tier,
-      bond: state.bond,
-      level: state.level,
-      skillEx: state.skillEx,
-      skillNormal: state.skillNormal,
-      skillEnhanced: state.skillEnhanced,
-      skillSub: state.skillSub,
-      equip1: state.equip1,
-      equip2: state.equip2,
-      equip3: state.equip3,
-      equip1Level: resolved.equip1Level,
-      equip2Level: resolved.equip2Level,
-      equip3Level: resolved.equip3Level,
-      equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
-      weaponLevel: state.weaponLevel,
-      abilityHp: state.abilityHp,
-      abilityAtk: state.abilityAtk,
-      abilityHeal: state.abilityHeal,
+      tier: resolved.tier, bond: state.bond, level: state.level, skillEx: state.skillEx, skillNormal: state.skillNormal,
+      skillEnhanced: state.skillEnhanced, skillSub: state.skillSub, equip1: state.equip1, equip2: state.equip2,
+      equip3: state.equip3, equip1Level: resolved.equip1Level, equip2Level: resolved.equip2Level,
+      equip3Level: resolved.equip3Level, equipSpecial: state.equipSpecial && state.equipSpecial > 0 ? state.equipSpecial : null,
+      weaponLevel: state.weaponLevel, abilityHp: state.abilityHp, abilityAtk: state.abilityAtk, abilityHeal: state.abilityHeal,
     });
   };
-
   const handleRetry = () => {
     if (staleWriteBlockedRef.current || !retryAvailable || !submittedPayloadRef.current) return;
     submitSave(submittedPayloadRef.current);
   };
+  const refresh = () => window.location.reload();
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <section id="student-basic-info" className="scroll-mt-[calc(var(--mobile-header-height)+3.75rem)] lg:scroll-mt-4">
-        <h2 className="text-lg font-semibold">학생 기본 정보</h2>
-        <SectionCard
-          title="능력치"
-          action={
-            <Toggle
-              key={student.uid}
-              label="스킬 효과 반영"
-              initialState={includeSkillEffects}
-              className="my-0"
-              onChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
-            />
-          }
-          className="mt-3 space-y-3 py-3 md:mt-4 md:py-3 [&>div:first-child]:flex-row [&>div:first-child]:items-center [&>div:first-child]:justify-between"
-        >
-          <div className="grid grid-cols-4 gap-3">
-            {primaryStats.map(({ stat, label }) => (
-              <div key={stat} className="min-w-0 px-2 first:pl-0 last:pr-0 sm:px-4">
-                <span className="block truncate text-xs text-muted-foreground">{label}</span>
-                <strong className="mt-1 block truncate text-sm font-semibold tabular-nums sm:text-base">
-                  {(statValues.get(stat) ?? 0).toLocaleString("ko-KR")}
-                </strong>
-              </div>
-            ))}
-          </div>
-          <div className="flex flex-col gap-y-1.5 md:flex-row md:items-end md:justify-between md:gap-x-3">
-            <div className="min-w-0 md:grow">
-              <span className="sr-only">현재 성장도</span>
-              <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
-                <span className="inline-flex items-center whitespace-nowrap gap-x-1 tabular-nums">
-                  <StudentTierLabel tier={resolved.tier} />
-                  <span aria-hidden="true" className="text-muted-foreground">
-                    ·
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">Lv. </span>
-                    <span className="font-medium text-foreground tabular-nums">{resolved.level}</span>
-                  </span>
-                  <span aria-hidden="true" className="text-muted-foreground">
-                    ·
-                  </span>
-                  <span>
-                    <span className="text-muted-foreground">인연 </span>
-                    <span className="font-medium text-foreground tabular-nums">{resolved.bond}</span>
-                  </span>
-                </span>
-                {abilityReleaseDisabledReason === null ? (
-                  <span className="inline-flex items-center whitespace-nowrap gap-x-1">
-                    <span className="text-muted-foreground">능력 개방</span>
-                    <span>
-                      <span className="text-muted-foreground">체력 </span>
-                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityHp}</span>
-                    </span>
-                    <span aria-hidden="true" className="text-muted-foreground">
-                      ·
-                    </span>
-                    <span>
-                      <span className="text-muted-foreground">공격력 </span>
-                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityAtk}</span>
-                    </span>
-                    <span aria-hidden="true" className="text-muted-foreground">
-                      ·
-                    </span>
-                    <span>
-                      <span className="text-muted-foreground">치유력 </span>
-                      <span className="font-medium text-foreground tabular-nums">{resolved.abilityHeal}</span>
-                    </span>
-                  </span>
-                ) : null}
-              </div>
-            </div>
-            <div className="ml-auto flex shrink-0 items-center gap-2">
-              {saveAvailable && saved ? <span className="text-xs font-medium text-primary">반영됨</span> : null}
-              <Button
-                icon={PencilSquareIcon}
-                text="성장도 편집"
-                variant="secondary"
-                size="xs"
-                className="bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
-                onClick={() => setGrowthSheetOpen(true)}
-              />
+    <>
+    <section id="student-basic-info" className="scroll-mt-4">
+        <SectionHeading title="능력치">
+          <Switch
+            id="student-skill-effects"
+            checked={includeSkillEffects}
+            onCheckedChange={(enabled) => setSkillEffectsState({ studentUid: student.uid, enabled })}
+            label="스킬 효과 반영"
+            size="sm"
+            layout="inline"
+          />
+        </SectionHeading>
+        <div className="rounded-lg bg-v2-surface p-v2-block-p">
+          {primaryStatsAvailable ? (
+            <dl className="grid grid-cols-2 gap-x-3 gap-y-[10px] sm:grid-cols-4 sm:gap-3">
+              {primaryStatValues.map(({ stat, label, value }) => (
+                <div key={stat} className="min-w-0">
+                  <dt className="truncate text-xs leading-[1.43] text-v2-fg-tertiary">{label}</dt>
+                  <dd className="truncate text-lg font-semibold leading-[1.4] text-v2-fg tabular-nums">
+                    {value.toLocaleString("ko-KR")}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <StudentPreparingState compact />
+          )}
+          <div className="mt-3 flex min-w-0 flex-wrap items-center justify-between gap-x-3 gap-y-2 border-t border-v2-divider pt-3">
+            <GrowthSummaryRow growth={resolved} abilityReleaseDisabledReason={abilityReleaseDisabledReason} />
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+              {saved && !growthSheetOpen ? <span className="text-xs leading-[1.43] font-medium text-v2-success">반영됨</span> : null}
+              <Button size="sm" onClick={() => setGrowthSheetOpen(true)}>
+                <PencilSquareIcon className="size-4" aria-hidden="true" />성장도 편집
+              </Button>
               {saveAvailable ? (
-                <Button
-                  variant="secondary"
-                  size="xs"
-                  className="bg-muted text-foreground hover:bg-muted/80 hover:text-foreground"
-                  disabled={saveDisabled}
-                  onClick={handleSave}
-                >
+                <Button size="sm" variant="primary" disabled={saveDisabled} onClick={handleSave}>
                   {saving ? "반영 중" : saveLabel}
                 </Button>
+              ) : released && !signedIn ? (
+                <span className="whitespace-nowrap text-xs leading-[1.43] text-v2-fg-tertiary">로그인 후 사용 가능</span>
               ) : null}
             </div>
           </div>
-        </SectionCard>
-        {schaleDbId ? (
-          <div className="mt-2.5 flex items-center justify-end gap-2">
-            <Button
-              text="Schale DB"
-              icon={ArrowTopRightOnSquareIcon}
-              variant="default"
-              size="xs"
-              href={`https://schaledb.com/student/${schaleDbId}`}
-              target="_blank"
-            />
-          </div>
+        </div>
+        {saveError && !growthSheetOpen ? (
+          <StatusNotice
+            className="mt-[10px] [&>svg]:hidden"
+            tone={staleWriteBlocked ? "warning" : "danger"}
+            action={staleWriteBlocked ? <Button className="-my-1" size="sm" variant="text" onClick={refresh}><ArrowPathIcon className="size-3.5" aria-hidden="true" />새로고침</Button> : retryAvailable ? <Button className="-my-1" size="sm" variant="text" onClick={handleRetry}><ArrowPathIcon className="size-3.5" aria-hidden="true" />다시 시도</Button> : undefined}
+          >
+            <span className="relative block pl-6 leading-[1.43]">
+              {staleWriteBlocked ? <ExclamationTriangleIcon className="absolute top-0.5 left-0 size-4 text-v2-warning" aria-hidden="true" /> : <XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />}
+              {saveError}
+            </span>
+          </StatusNotice>
         ) : null}
-        {saveError ? (
-          <div className="mt-3 flex flex-wrap items-center gap-2" role="alert">
-            <Callout tone="destructive" title={saveError} />
-            {staleWriteBlocked ? (
-              <Button text="새로고침" size="xs" onClick={() => window.location.reload()} />
-            ) : retryAvailable ? (
-              <Button text="다시 시도" size="xs" onClick={handleRetry} />
-            ) : null}
-          </div>
-        ) : null}
-
         <GrowthEditorSheet
           open={growthSheetOpen}
           onClose={() => setGrowthSheetOpen(false)}
@@ -448,6 +324,8 @@ export default function StudentBasicInfo({
           onAbilityAtkChange={(value) => updateState("abilityAtk", value)}
           onAbilityHealChange={(value) => updateState("abilityHeal", value)}
           saveAvailable={saveAvailable}
+          signedIn={signedIn}
+          released={released}
           saved={saved}
           saving={saving}
           saveDisabled={saveDisabled}
@@ -456,343 +334,190 @@ export default function StudentBasicInfo({
           staleWriteBlocked={staleWriteBlocked}
           retryAvailable={retryAvailable}
           onSave={handleSave}
-          onRefresh={() => window.location.reload()}
+          onRefresh={refresh}
           onRetry={handleRetry}
         />
       </section>
 
       {gradingSummary ? (
-        <section>
-          <div className="flex items-end justify-between gap-3">
-            <SubTitle text="학생 평가 요약" />
-            <Link
-              to={`/students/${student.uid}/gradings`}
-              className="mb-3 shrink-0 text-xs font-medium text-primary hover:underline"
-            >
+        <section className="mt-6">
+          <SectionHeading title="학생 평가 요약">
+            <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 items-center rounded-md px-2 text-xs leading-[1.43] font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg">
               전체 평가 보기
             </Link>
-          </div>
+          </SectionHeading>
           {gradingSummary}
           {aiSummary}
         </section>
       ) : null}
 
-      {knowledgeLookupStatus === "failed" ? (
-        <p role="status" className="text-xs text-muted-foreground">
-          용어 설명을 불러오지 못했어요.
-        </p>
-      ) : null}
+      {knowledgeLookupStatus === "failed" ? <StatusNotice className="mt-6 [&>div:first-of-type]:leading-[1.43]" tone="neutral">용어 설명을 불러오지 못했어요.</StatusNotice> : null}
 
-      <section>
-        <h2 className="text-lg font-semibold">스킬</h2>
-        <SectionCard className="mt-3 space-y-0 overflow-hidden p-0 md:mt-4 md:p-0">
+      <section className="mt-6">
+        <SectionHeading title="스킬" />
+        <div className="overflow-hidden rounded-lg bg-v2-surface p-v2-block-p">
           {selectedSkills.length === 0 ? (
-            <EmptyView text="현재 상태에 맞는 스킬 정보를 불러오지 못했어요" />
+            <p className="text-sm leading-[1.43] text-v2-fg-secondary">현재 상태에 맞는 스킬 정보를 불러오지 못했어요</p>
           ) : (
-            selectedSkills.map((skill) => (
+            selectedSkills.map((skill, index) => (
               <SkillRow
                 key={`${skill.slot}-${skill.position}-${skill.uid}`}
                 skill={skill}
                 allSkills={student.skills}
-                knowledgeEntries={knowledgeEntries}
+                entries={knowledgeEntries}
                 attackType={student.attackType}
+                last={index === selectedSkills.length - 1}
                 onLevelChange={(value) => updateState(skillFieldForSlot(skill.slot), value)}
               />
             ))
           )}
-        </SectionCard>
+        </div>
       </section>
 
-      <div className="grid items-stretch gap-6 md:gap-8 lg:grid-cols-2">
+      <div className="mt-6 grid items-stretch gap-y-6 md:grid-cols-2 md:gap-x-4">
         <section className="flex min-w-0 flex-col">
-          <h2 className="text-lg font-semibold">고유무기</h2>
-          <SectionCard className="mt-3 flex flex-1 items-center p-3 md:mt-4 md:p-5">
-            <div className="grid w-full grid-cols-[minmax(7rem,1.25fr)_minmax(7rem,1fr)] items-center gap-3 md:gap-4">
-              <div className="relative flex h-20 min-w-0 items-center justify-center rounded-lg bg-muted/50 px-2">
-                {student.catalog?.weapon.imageUrl ? (
-                  <img
-                    src={student.catalog.weapon.imageUrl}
-                    alt={student.catalog.weapon.name}
-                    className="h-16 w-full object-contain"
-                  />
-                ) : (
-                  <div className="h-16 w-full rounded-lg bg-muted" aria-hidden="true" />
-                )}
-                <div
-                  className="absolute right-1.5 bottom-1 flex items-center drop-shadow-sm"
-                  role="img"
-                  aria-label={`${resolved.weaponStar}성`}
-                >
-                  {resolved.weaponStar > 0 ? (
-                    weaponStars
-                      .slice(0, resolved.weaponStar)
-                      .map((star) => <StarIconSolid key={star} className="size-4 text-cyan-400" aria-hidden="true" />)
-                  ) : (
-                    <span className="rounded bg-neutral-900/65 px-1.5 py-0.5 text-[10px] font-semibold text-white">
-                      미개방
-                    </span>
-                  )}
+          <SectionHeading title="고유무기" />
+                <div className="flex flex-1 items-center rounded-lg bg-v2-surface px-v2-block-p py-3">
+            <div className="grid w-full grid-cols-[9.5rem_minmax(0,1fr)] items-center gap-x-4 gap-y-3 max-[767px]:grid-cols-[8.5rem_minmax(0,1fr)]">
+              <div className="relative flex h-[4.75rem] min-h-0 min-w-0 items-center justify-center rounded-md bg-v2-inset max-[767px]:h-[4.25rem]">
+                {student.catalog?.weapon.imageUrl ? <img src={student.catalog.weapon.imageUrl} alt={student.catalog.weapon.name} className="h-full w-full object-contain" /> : null}
+                <span className="absolute right-2 bottom-1.5 inline-flex items-center gap-px" role="img" aria-label={`${resolved.weaponStar}성`}>
+                  {/* biome-ignore lint/suspicious/noArrayIndexKey: decorative stars have no state and are added or removed as the weapon tier changes. */}
+                  {Array.from({ length: Math.max(0, resolved.weaponStar) }, (_, index) => <StarIcon key={index} className="size-3.5 text-v2-perk" aria-hidden="true" />)}
+                  {resolved.weaponStar === 0 ? <span className="text-xs leading-[1.43] text-v2-fg-secondary">미개방</span> : null}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <strong className="mb-1 block truncate text-sm leading-[1.43] font-semibold text-v2-fg">{student.catalog?.weapon.name}</strong>
+                <div className="w-[129px] max-w-full [&>label]:!gap-0 [&_label_span]:!leading-[1.43]">
+                  <RangeSlider className="!w-full" layout="stacked" label="레벨" value={resolved.weaponLevel} min={resolved.weaponStar > 0 ? 1 : 0} max={getWeaponLevelMaxByTier(resolved.tier)} disabled={resolved.weaponStar === 0} disabledAppearance="track" onChange={(value) => updateState("weaponLevel", value)} />
                 </div>
               </div>
-
-              <div className="min-w-0">
-                <strong className="mb-3 block truncate text-sm">{student.catalog?.weapon.name}</strong>
-                <LevelSlider
-                  label="레벨"
-                  value={resolved.weaponLevel}
-                  min={resolved.weaponStar > 0 ? 1 : 0}
-                  max={getWeaponLevelMaxByTier(resolved.tier)}
-                  disabled={resolved.weaponStar === 0}
-                  onChange={(value) => updateState("weaponLevel", value)}
-                />
-              </div>
             </div>
-          </SectionCard>
+          </div>
         </section>
 
         <section className="flex min-w-0 flex-col">
-          <h2 className="text-lg font-semibold">장비</h2>
-          <SectionCard className="mt-3 grid flex-1 grid-cols-3 gap-3 space-y-0 p-3 md:mt-4 md:p-5">
+          <SectionHeading title="장비" />
+          <div className="grid flex-1 grid-cols-3 gap-y-3 gap-x-4 rounded-lg bg-v2-surface px-v2-block-p py-3 max-[767px]:gap-x-3">
             {student.equipments.map((category, index) => {
               const key = ["equip1", "equip2", "equip3"][index] as "equip1" | "equip2" | "equip3";
               const levelKey = `${key}Level` as "equip1Level" | "equip2Level" | "equip3Level";
-              const maxTier = Math.max(
-                1,
-                ...catalog.equipment
-                  .filter((equipment) => equipment.category === category)
-                  .map((equipment) => equipment.tier),
-              );
-              const selectedEquipment = catalog.equipment.find(
-                (equipment) => equipment.category === category && equipment.tier === resolved[key],
-              );
+              const availableEquipmentTiers = catalog.equipment.filter((equipment) => equipment.category === category);
+              const maxTier = availableEquipmentTiers.length > 0 ? Math.max(...availableEquipmentTiers.map((equipment) => equipment.tier)) : null;
+              const selectedEquipment = availableEquipmentTiers.find((equipment) => equipment.tier === resolved[key]);
               const equipmentLabel = EQUIPMENT_TYPE_LABELS[category] ?? "장비";
               const unlockLevel = getEquipmentSlotUnlockLevel(index);
               const locked = resolved.level < unlockLevel;
               return (
-                <div key={key} className="min-w-0">
-                  <div className="relative mb-2 flex h-16 items-center justify-center overflow-hidden rounded-lg bg-muted/50">
-                    {selectedEquipment ? (
-                      <img
-                        src={equipmentImageUrl(selectedEquipment.uid)}
-                        alt={selectedEquipment.name}
-                        className="size-11 -translate-y-1 object-contain"
-                      />
-                    ) : (
-                      <div className="size-11" aria-hidden="true" />
-                    )}
-                    {locked ? (
-                      <div className="absolute inset-0 z-10 flex items-center justify-center bg-card/50 pb-3 text-foreground/80">
-                        <LockClosedIcon className="size-4" aria-hidden="true" />
-                      </div>
-                    ) : null}
-                    <div className="pointer-events-none absolute bottom-1 left-1.5 z-20">
-                      <span className="shrink-0 whitespace-nowrap rounded-sm bg-card/90 px-1.5 py-0.5 text-[10px] font-medium shadow-sm ring-1 ring-border/40">
-                        {equipmentLabel}
-                      </span>
-                    </div>
-                    {!locked ? (
-                      <strong className="pointer-events-none absolute right-1 bottom-1 z-20 flex shrink-0 flex-col items-center rounded-sm bg-primary px-1 py-0.5 text-[9px] leading-2.5 font-semibold tabular-nums text-primary-foreground shadow-sm">
-                        <span>T{resolved[key]}</span>
-                        <span>Lv.{resolved[levelKey]}</span>
-                      </strong>
-                    ) : null}
+                <div key={key} className="flex min-w-0 flex-col gap-1">
+                  <div className="relative flex aspect-[16/9] items-center justify-center overflow-hidden rounded-md bg-v2-inset">
+                    {selectedEquipment ? <img src={equipmentImageUrl(selectedEquipment.uid)} alt={selectedEquipment.name} className={`size-10 -translate-y-1 object-contain ${locked ? "opacity-40" : ""}`} /> : null}
+                    <span className="absolute bottom-1.5 left-2 text-xs leading-[1.43] text-v2-fg-secondary">{equipmentLabel}</span>
                   </div>
                   {locked ? (
-                    <span className="mt-2 block text-center text-[10px] leading-3 font-medium text-muted-foreground">
-                      학생 Lv.{unlockLevel} 필요
-                    </span>
-                  ) : (
-                    <div className="space-y-1">
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-0.5">
-                        <span className="text-[10px] font-medium text-muted-foreground">티어</span>
-                        <LevelSlider
-                          label={`${equipmentLabel} 티어`}
-                          value={resolved[key]}
-                          min={1}
-                          max={maxTier}
-                          showHeader={false}
-                          onChange={(value) => {
-                            const equipmentLevelMax = getEquipmentMaxLevel(catalog, category, value);
-                            setSaved(false);
-                            setState((current) => ({
-                              ...current,
-                              [key]: value,
-                              [levelKey]: equipmentLevelMax,
-                            }));
-                          }}
-                        />
-                      </div>
-                      <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-0.5">
-                        <span className="text-[10px] font-medium text-muted-foreground">레벨</span>
-                        <LevelSlider
-                          label={`${equipmentLabel} 레벨`}
-                          value={resolved[levelKey]}
-                          min={1}
-                          max={selectedEquipment?.maxLevel ?? 1}
-                          showHeader={false}
-                          disabled={selectedEquipment === undefined}
-                          onChange={(value) => updateState(levelKey, value)}
-                        />
-                      </div>
+                    <p className="flex min-h-12 items-start gap-1 pt-1 text-xs leading-[1.43] text-v2-fg-tertiary"><LockClosedIcon className="mt-px size-3.5 shrink-0" aria-hidden="true" /><span>학생 Lv.{unlockLevel} 필요</span></p>
+                  ) : selectedEquipment && maxTier !== null ? (
+                  <div className="flex flex-col [&>label]:grid-cols-[auto_minmax(0,1fr)_20px] [&_label_span]:!leading-[1.43]">
+                      <RangeSlider label="티어" accessibleLabel={`${equipmentLabel} 티어`} value={resolved[key]} min={1} max={maxTier} showValue onChange={(value) => {
+                        const maxLevel = getEquipmentMaxLevel(catalog, category, value);
+                        setSaved(false);
+                        setState((current) => ({ ...current, [key]: value, [levelKey]: maxLevel }));
+                      }} valueClassName="text-[13px]" />
+                      <RangeSlider label="레벨" accessibleLabel={`${equipmentLabel} 레벨`} value={resolved[levelKey]} min={1} max={selectedEquipment.maxLevel} showValue onChange={(value) => updateState(levelKey, value)} valueClassName="text-[13px]" />
                     </div>
+                  ) : (
+                    <StudentPreparingState compact />
                   )}
                 </div>
               );
             })}
-            {student.catalog?.gear
-              ? (() => {
-                  const selectedGearTier = student.catalog.gear?.tiers.find(
-                    (tier) => tier.tier === resolved.equipSpecial,
-                  );
-                  const gearLocked = selectedGearTier != null && resolved.bond < selectedGearTier.openFavorLevel;
-                  return (
-                    <div className="col-span-3 flex items-center gap-3">
-                      <div className="flex size-11 shrink-0 items-center justify-center rounded-lg bg-muted">
-                        <SparklesIcon className="size-5 text-muted-foreground" aria-hidden="true" />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <LevelSlider
-                          label={student.catalog.gear.name}
-                          value={resolved.equipSpecial}
-                          valuePrefix="T"
-                          min={0}
-                          max={2}
-                          onChange={(value) => updateState("equipSpecial", value)}
-                        />
-                        {gearLocked ? (
-                          <span className="block text-[10px] font-medium text-muted-foreground">
-                            인연 Lv.{selectedGearTier?.openFavorLevel}부터 적용
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  );
-                })()
-              : null}
-          </SectionCard>
+            {student.catalog?.gear ? (
+              <div className="col-span-3 flex items-center gap-2 border-t border-v2-divider pt-2">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-v2-inset"><SparklesIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" /></span>
+                <div className="min-w-0 flex-1 [&>label]:grid-cols-[auto_minmax(0,1fr)_20px] [&_label_span]:!leading-[1.43]">
+                  <RangeSlider label={student.catalog.gear.name} value={resolved.equipSpecial} valuePrefix="T" min={0} max={2} showValue onChange={(value) => updateState("equipSpecial", value)} />
+                  {selectedGearTier && resolved.bond < selectedGearTier.openFavorLevel ? (
+                    <p className="mt-0.5 text-xs leading-[1.43] text-v2-fg-tertiary">인연 Lv.{selectedGearTier.openFavorLevel}부터 적용</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
         </section>
       </div>
+    </>
+  );
+}
+
+function SectionHeading({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+      <h2 className="text-base leading-[1.4] font-semibold text-v2-fg" style={{ fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' }}>{title}</h2>
+      {children}
     </div>
   );
 }
 
-export function getAbilityReleaseDisabledReason(tier: number, level = 90): string | null {
-  if (tier <= 5) {
-    return "고유무기 1성부터 능력 개방을 설정할 수 있어요";
-  }
-  if (level < 90) {
-    return "학생 레벨 90부터 능력 개방을 설정할 수 있어요";
-  }
-  return null;
-}
-
-function LevelSlider({
-  label,
-  value,
-  min,
-  max,
-  valuePrefix,
-  showHeader = true,
-  disabled,
-  onChange,
+export function GrowthSummaryRow({
+  growth,
+  abilityReleaseDisabledReason,
 }: {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  valuePrefix?: string;
-  showHeader?: boolean;
-  disabled?: boolean;
-  onChange: (value: number) => void;
+  growth: ReturnType<typeof resolveStudentCalculatorState>;
+  abilityReleaseDisabledReason: string | null;
 }) {
-  const sliderMax = Math.max(min, max);
-  const clampedValue = Math.min(Math.max(value, min), sliderMax);
-  const progress = sliderMax === min ? 0 : ((clampedValue - min) / (sliderMax - min)) * 100;
-
   return (
-    <label className={disabled ? "block min-w-0 opacity-45" : "block min-w-0"}>
-      {showHeader ? (
-        <span className="flex items-center justify-between gap-3 text-xs">
-          <span className="truncate font-medium">{label}</span>
-          <strong className="shrink-0 tabular-nums text-primary">
-            {valuePrefix}
-            {value}
-          </strong>
-        </span>
-      ) : null}
-      <span className={`relative mx-1.5 block h-4 ${showHeader ? "mt-1.5" : "mt-0.5"}`}>
-        <input
-          type="range"
-          aria-label={`${label} ${valuePrefix ?? ""}${value}`}
-          className="peer absolute -inset-x-1.5 top-0 z-10 h-4 w-[calc(100%+0.75rem)] cursor-pointer opacity-0 disabled:cursor-default"
-          min={min}
-          max={sliderMax}
-          value={clampedValue}
-          disabled={disabled}
-          onChange={(event) => onChange(Number(event.currentTarget.value))}
-        />
-        <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-muted" aria-hidden="true" />
-        <span
-          className="absolute left-0 top-1/2 h-1 -translate-y-1/2 rounded-full bg-primary transition-[width]"
-          style={{ width: `${progress}%` }}
-          aria-hidden="true"
-        />
-        <span
-          className="absolute top-1/2 size-3 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-primary bg-card shadow-sm transition-[left] peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40 peer-focus-visible:ring-offset-2"
-          style={{ left: `${progress}%` }}
-          aria-hidden="true"
-        />
-      </span>
-    </label>
+    <p className="flex min-w-0 flex-auto flex-wrap items-center gap-x-[10px] gap-y-[2px] text-[13px] leading-[1.43] text-v2-fg-secondary tabular-nums">
+      <span className="inline-flex items-center gap-[3px] whitespace-nowrap font-semibold text-v2-fg">{growth.tier <= 5 ? `★${growth.tier}` : <><img src="/icons/exclusive_weapon.png" alt="" className="size-3.5 shrink-0" />{growth.tier - 5}</>}</span>
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">Lv. <strong className="font-semibold text-v2-fg">{growth.level}</strong></span>
+      <span className="inline-flex items-center gap-1.5 whitespace-nowrap">인연 <strong className="font-semibold text-v2-fg">{growth.bond}</strong></span>
+      {abilityReleaseDisabledReason === null ? <span className="inline-flex items-center gap-1.5 whitespace-nowrap">능력 개방 체력 <strong className="font-semibold text-v2-fg">{growth.abilityHp}</strong> · 공격력 <strong className="font-semibold text-v2-fg">{growth.abilityAtk}</strong> · 치유력 <strong className="font-semibold text-v2-fg">{growth.abilityHeal}</strong></span> : null}
+    </p>
   );
 }
 
-function SkillRow({
-  skill,
-  allSkills,
-  knowledgeEntries,
-  attackType,
-  onLevelChange,
-}: {
+function SkillRow({ skill, allSkills, entries, attackType, last, onLevelChange }: {
   skill: ReturnType<typeof selectStudentSkills>[number];
   allSkills: StudentCalculatorSource["skills"];
-  knowledgeEntries: PublicKnowledgeEntry[];
+  entries: PublicKnowledgeEntry[];
   attackType: Attack;
+  last: boolean;
   onLevelChange: (value: number) => void;
 }) {
   const linkedSkills = [
     ...skill.additionalSkillUids.map((uid) => ({ uid, label: "추가" })),
-    ...skill.selectableSkills.map(({ skillUid, condition }) => ({
-      uid: skillUid,
-      label: getSkillSelectionConditionLabel(condition),
-    })),
+    ...skill.selectableSkills.map(({ skillUid, condition }) => ({ uid: skillUid, label: skillSelectionConditionLabels[condition] })),
   ].flatMap(({ uid, label }) => {
     const linked = allSkills.find((candidate) => candidate.uid === uid);
     return linked ? [{ ...linked, label }] : [];
   });
-
   return (
-    <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-start gap-3 p-3 sm:grid-cols-[3rem_minmax(0,1fr)_8rem] md:gap-4 md:p-5">
-      <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} />
+    <div className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-x-[14px] gap-y-1 px-0 pt-[14px] pb-[15px] first:pt-0 last:pb-0 md:grid-cols-[2.5rem_minmax(0,1fr)_9.5rem]">
+      <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} size="sm" />
       <div className="min-w-0">
-        <span className="block text-xs font-medium text-muted-foreground">{skillSlotLabels[skill.slot]}</span>
-        <SkillName name={skill.name} cost={exSkillCost(skill, skill.slot, skill.selectedLevel)} />
-        <SkillDescription skill={{ ...skill, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
+        <span className="block text-xs leading-[1.43] text-v2-fg-tertiary">{skillSlotLabels[skill.slot]}</span>
+        <SkillName
+          name={skill.name}
+          cost={exSkillCost(skill, skill.slot, skill.selectedLevel)}
+          className="text-sm leading-[1.43] font-semibold text-v2-fg"
+        />
+        <SkillDescription skill={skill} entries={entries} />
         {linkedSkills.map((linked) => (
-          <div key={linked.uid} className="mt-3 border-l-2 border-border pl-3">
-            <span className="text-xs font-medium text-muted-foreground">{linked.label}</span>
+          <div key={linked.uid} className="mt-2 border-l-2 border-v2-divider pl-3">
+            <span className="text-xs leading-[1.43] text-v2-fg-tertiary">{linked.label}</span>
             <SkillName
               name={linked.name}
               cost={exSkillCost(linked, skill.slot, skill.selectedLevel)}
-              className="text-sm"
+              className="text-sm leading-[1.43] text-v2-fg"
             />
-            <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
+            <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} entries={entries} />
           </div>
         ))}
       </div>
-      <div className="col-span-2 sm:col-span-1">
-        <LevelSlider label="레벨" value={skill.selectedLevel} min={1} max={skill.maxLevel} onChange={onLevelChange} />
+      <div className="col-span-2 md:col-span-1 [&_label_span]:!leading-[1.43]">
+        <RangeSlider layout="stacked" label="레벨" value={skill.selectedLevel} min={1} max={skill.maxLevel} onChange={onLevelChange} />
       </div>
+      {!last ? <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-v2-divider" /> : null}
     </div>
   );
 }
@@ -811,28 +536,18 @@ function SkillName({ name, cost, className }: { name: string; cost: number | nul
     <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
       <strong className={className}>{name}</strong>
       {cost !== null && (
-        <span className="shrink-0 rounded-sm bg-muted px-1 py-px text-[10px] leading-3.5 font-semibold text-muted-foreground">
-          COST <span className="text-xs font-bold tabular-nums text-foreground">{cost}</span>
+        <span className="shrink-0 rounded-sm bg-v2-inset px-1 py-px text-[10px] leading-3.5 font-semibold text-v2-fg-tertiary">
+          COST <span className="text-xs font-bold tabular-nums text-v2-fg">{cost}</span>
         </span>
       )}
     </div>
   );
 }
 
-function SkillDescription({
-  skill,
-  entries,
-}: {
-  skill: Parameters<typeof renderStudentSkillDescriptionParts>[0];
-  entries: PublicKnowledgeEntry[];
-}) {
+function SkillDescription({ skill, entries }: { skill: Parameters<typeof renderStudentSkillDescriptionParts>[0]; entries: PublicKnowledgeEntry[] }) {
   const parts = renderStudentSkillDescriptionParts(skill);
   if (!parts) return null;
-  return (
-    <p className="mt-1 whitespace-pre-line text-sm text-muted-foreground">
-      <KnowledgeAnnotatedDescription parts={parts} entries={entries} />
-    </p>
-  );
+  return <p className="mt-1 whitespace-pre-line text-sm leading-[1.6] text-v2-fg-secondary"><KnowledgeAnnotatedDescription parts={parts} entries={entries} /></p>;
 }
 
 function skillFieldForSlot(slot: StudentSkillTypeEnum): "skillEx" | "skillNormal" | "skillEnhanced" | "skillSub" {

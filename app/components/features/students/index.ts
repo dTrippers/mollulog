@@ -1,4 +1,3 @@
-export { default as RecruitmentHistories } from "./RecruitmentHistories";
 export type { ResourceCardsProps } from "./ResourceCards";
 export { default as ResourceCards } from "./ResourceCards";
 export { default as StudentCard, StudentCardPopup } from "./StudentCard";
@@ -10,9 +9,6 @@ export {
   default as StudentFilter,
   getFilteredStudentUids,
 } from "./StudentFilter";
-export type { StudentGradingTimelineItem } from "./StudentGradingTimeline";
-export { default as StudentGradingTimeline, formatStudentGradingTimestamp } from "./StudentGradingTimeline";
-export { default as StudentInfo } from "./StudentInfo";
 export { default as StudentSearchInput } from "./StudentSearchInput";
 export type { StudentSkillIconProps } from "./StudentSkillIcon";
 export { default as StudentSkillIcon } from "./StudentSkillIcon";

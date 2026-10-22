@@ -13,6 +13,8 @@ export type PageHeaderProps = {
   description?: string;
   back?: PageHeaderBack;
   meta?: ReactNode;
+  // A compact media block beside the heading, such as a student's thumbnail.
+  media?: ReactNode;
   // Optional block beside the title on wide page-available widths, under the description otherwise.
   trailing?: ReactNode;
 };
@@ -22,42 +24,54 @@ const backClassName = cn(
   v2FocusRing,
 );
 
-function HeaderText({ title, description, back, meta }: Omit<PageHeaderProps, "trailing">) {
+function HeaderBack({ back }: { back: PageHeaderBack }) {
+  return "to" in back ? (
+    <Link to={back.to} className={backClassName} {...getV2LinkTransitionProps("reverse")}>
+      <ArrowLeftIcon className="size-4" aria-hidden="true" />
+      <span>{back.title}</span>
+    </Link>
+  ) : (
+    <button type="button" className={backClassName} onClick={() => runV2BackNavigation(back.onClick)}>
+      <ArrowLeftIcon className="size-4" aria-hidden="true" />
+      <span>{back.title}</span>
+    </button>
+  );
+}
+
+function HeaderText({ title, description, back, meta, compactMeta = false }: Omit<PageHeaderProps, "trailing" | "media"> & { compactMeta?: boolean }) {
   return (
     <>
-      {back ? (
-        "to" in back ? (
-          <Link to={back.to} className={backClassName} {...getV2LinkTransitionProps("reverse")}>
-            <ArrowLeftIcon className="size-4" aria-hidden="true" />
-            <span>{back.title}</span>
-          </Link>
-        ) : (
-          <button type="button" className={backClassName} onClick={() => runV2BackNavigation(back.onClick)}>
-            <ArrowLeftIcon className="size-4" aria-hidden="true" />
-            <span>{back.title}</span>
-          </button>
-        )
-      ) : null}
+      {back ? <HeaderBack back={back} /> : null}
       <h1 className="text-xl font-bold text-v2-fg md:text-2xl">{title}</h1>
       {description ? <p className="mt-2 max-w-prose text-sm text-v2-fg-secondary">{description}</p> : null}
-      {meta ? <div className="mt-2 text-sm text-v2-fg-tertiary">{meta}</div> : null}
+      {meta ? <div className={cn(compactMeta ? "mt-1" : "mt-2", "text-sm text-v2-fg-tertiary")}>{meta}</div> : null}
     </>
   );
 }
 
-export function PageHeader({ title, description, back, meta, trailing }: PageHeaderProps) {
+export function PageHeader({ title, description, back, meta, media, trailing }: PageHeaderProps) {
+  const heading = media ? (
+    <div className="min-w-0">
+      {back ? <HeaderBack back={back} /> : null}
+      <div className="flex min-w-0 items-start gap-v2-media-gap">
+        <div className="w-[3.75rem] shrink-0">{media}</div>
+        <div className="min-w-0 flex-1">
+          <HeaderText title={title} description={description} meta={meta} compactMeta />
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (!trailing) {
     return (
       <div className="v2-header min-w-0 pb-v2-group-gap">
-        <HeaderText title={title} description={description} back={back} meta={meta} />
+        {heading ?? <HeaderText title={title} description={description} back={back} meta={meta} />}
       </div>
     );
   }
   return (
     <div className="v2-header flex min-w-0 flex-col gap-v2-block-gap pb-v2-group-gap @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between">
-      <div className="min-w-0">
-        <HeaderText title={title} description={description} back={back} meta={meta} />
-      </div>
+      {heading ?? <div className="min-w-0"><HeaderText title={title} description={description} back={back} meta={meta} /></div>}
       <div className="min-w-0 @min-[60rem]/page-available:shrink-0">{trailing}</div>
     </div>
   );
