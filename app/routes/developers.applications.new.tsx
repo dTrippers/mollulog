@@ -243,6 +243,7 @@ export default function NewDeveloperApplication() {
               <Button
                 type="button"
                 variant="text"
+                className="-ml-3"
                 disabled={redirectUris.length >= 5 || isSubmitting}
                 onClick={() => setRedirectUris((current) => [...current, { id: crypto.randomUUID(), value: "" }])}
               >

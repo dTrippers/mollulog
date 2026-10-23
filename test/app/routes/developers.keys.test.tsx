@@ -118,6 +118,21 @@ describe("developers API key screen", () => {
     expect(new FormData(form).getAll("profileScope")).toEqual(["true"]);
   });
 
+  it("paints each API key permission cell background instead of the row", () => {
+    renderKeysPage({ keys: [], loadError: false, loadedAt });
+    fireEvent.click(screen.getByRole("button", { name: "새 API 키 발급" }));
+
+    const rows = screen.getByRole("table").querySelectorAll("tbody tr");
+    expect(rows).toHaveLength(2);
+
+    rows.forEach((row) => {
+      expect(row.classList.contains("bg-v2-inset")).toBe(false);
+      const cells = row.querySelectorAll("th, td");
+      expect(cells).toHaveLength(3);
+      cells.forEach((cell) => expect(cell.classList.contains("bg-v2-inset")).toBe(true));
+    });
+  });
+
   it("shows the empty state only after a successful empty load", () => {
     renderKeysPage({ keys: [], loadError: false, loadedAt });
 

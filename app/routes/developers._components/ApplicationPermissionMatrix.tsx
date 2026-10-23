@@ -32,12 +32,12 @@ export function ApplicationPermissionMatrix({
           </tr>
         </thead>
         <tbody>
-          <tr className="bg-v2-inset">
-            <th className="rounded-l-md py-2.5 pl-3 text-left font-medium" scope="row">
+          <tr>
+            <th className="rounded-l-md bg-v2-inset py-2.5 pl-3 text-left font-medium" scope="row">
               프로필
               <span className="block text-xs font-normal text-v2-fg-secondary">닉네임 · 프로필 학생</span>
             </th>
-            <td className="py-2.5 text-center">
+            <td className="bg-v2-inset py-2.5 text-center">
               <div className="flex justify-center">
                 <Checkbox
                   id="application-scope-profile"
@@ -52,16 +52,16 @@ export function ApplicationPermissionMatrix({
                 </Checkbox>
               </div>
             </td>
-            <td className="rounded-r-md py-2.5 text-center text-v2-fg-tertiary" aria-label="쓰기 권한 없음">
+            <td className="rounded-r-md bg-v2-inset py-2.5 text-center text-v2-fg-tertiary" aria-label="쓰기 권한 없음">
               –
             </td>
           </tr>
-          <tr className="bg-v2-inset">
-            <th className="rounded-l-md py-2.5 pl-3 text-left font-medium" scope="row">
+          <tr>
+            <th className="rounded-l-md bg-v2-inset py-2.5 pl-3 text-left font-medium" scope="row">
               모집 학생
               <span className="block text-xs font-normal text-v2-fg-secondary">학생 모집 여부, 성장도, 인연 랭크 등</span>
             </th>
-            <td className="py-2.5 text-center">
+            <td className="bg-v2-inset py-2.5 text-center">
               {write ? <input type="hidden" name="scope" value="students:read" /> : null}
               <div className="flex justify-center">
                 <Checkbox
@@ -80,7 +80,7 @@ export function ApplicationPermissionMatrix({
                 </Checkbox>
               </div>
             </td>
-            <td className="rounded-r-md py-2.5 text-center">
+            <td className="rounded-r-md bg-v2-inset py-2.5 text-center">
               <div className="flex justify-center">
                 <Checkbox
                   id="application-scope-students-write"

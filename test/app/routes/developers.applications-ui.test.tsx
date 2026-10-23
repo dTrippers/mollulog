@@ -159,6 +159,20 @@ describe("developer application screens", () => {
     expect(input.value).toBe("https://tool.example/updated");
   });
 
+  it("paints each application permission cell background instead of the row", () => {
+    renderNewApplication();
+
+    const rows = screen.getByRole("table").querySelectorAll("tbody tr");
+    expect(rows).toHaveLength(2);
+
+    rows.forEach((row) => {
+      expect(row.classList.contains("bg-v2-inset")).toBe(false);
+      const cells = row.querySelectorAll("th, td");
+      expect(cells).toHaveLength(3);
+      cells.forEach((cell) => expect(cell.classList.contains("bg-v2-inset")).toBe(true));
+    });
+  });
+
   it("keeps the applications header and list around the created credentials card", () => {
     renderNewApplication(
       {
