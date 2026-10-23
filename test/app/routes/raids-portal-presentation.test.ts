@@ -2,13 +2,13 @@ import { describe, expect, it } from "@jest/globals";
 import { type ComponentProps, createElement, createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import RaidVideosScreen from "~/components/features/raids/RaidVideosScreen";
 import { TimeZoneProvider } from "~/contexts/TimeZoneProvider";
 import { Defense, Terrain } from "~/graphql/graphql";
 import type { RaidScheduleListItem } from "~/models/raid";
 import type { RaidVideoItem } from "~/models/raid-videos";
-import RaidVideosScreen from "~/components/features/raids/RaidVideosScreen";
-import RaidPortalVideoCard from "~/routes/raids._components/RaidPortalVideoCard";
 import RaidPortalScreen, { getNearestUpcomingRaid } from "~/routes/raids._components/RaidPortalScreen";
+import RaidPortalVideoCard from "~/routes/raids._components/RaidPortalVideoCard";
 import type { RaidPortalData, RaidPortalUpcomingRaid } from "~/views/raid-portal";
 
 function raid({
@@ -214,11 +214,7 @@ describe("RaidPortalScreen upcoming presentation", () => {
       ),
     );
     const portalMarkup = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(RaidPortalVideoCard, { video, allStudents: {}, maxLevel: 90 }),
-      ),
+      createElement(MemoryRouter, null, createElement(RaidPortalVideoCard, { video, allStudents: {}, maxLevel: 90 })),
     );
 
     expect(videosMarkup).toContain("2026/04/21");

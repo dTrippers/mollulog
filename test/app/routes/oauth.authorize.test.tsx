@@ -30,7 +30,12 @@ jest.mock("~/models/mollulog-oauth", () => {
 });
 
 import { getAuthenticator } from "~/auth/authenticator.server";
-import { getActiveOAuthGrant, getOAuthApplicationForClient, issueOAuthAuthorizationCode } from "~/models/mollulog-oauth";
+import {
+  getActiveOAuthGrant,
+  getOAuthApplicationForClient,
+  issueOAuthAuthorizationCode,
+  OAuthInvalidGrantError,
+} from "~/models/mollulog-oauth";
 import { getSenseiById } from "~/models/sensei";
 import { action, headers, loader } from "~/routes/oauth.authorize";
 
@@ -232,7 +237,21 @@ describe("OAuth authorize route", () => {
     expect(location.searchParams.get("state")).toBe("opaque-state");
     expect(issueOAuthAuthorizationCode).toHaveBeenCalledWith(
       env,
-      expect.objectContaining({ applicationId: application.id, userId: 42, scopes: ["profile"] }),
+      expect.objectContaining({ applicationId: application.id, userId: 42, scopes: ["profile"], expectedGrantId: 91 }),
+      expect.objectContaining({ ctx: "ctx" }) as never,
+    );
+  });
+
+  it("shows consent again if the grant disconnects before auto-approved code issuance", async () => {
+    jest.mocked(getActiveOAuthGrant).mockResolvedValue({ id: 91, scopes: ["profile"] } as never);
+    jest.mocked(issueOAuthAuthorizationCode).mockRejectedValue(new OAuthInvalidGrantError("grant disconnected"));
+
+    const result = await loader(createArgs(new Request(authorizeUrl())));
+
+    expect(dataValue(result)).toMatchObject({ kind: "consent", scopes: ["profile"], grantedScopes: [] });
+    expect(issueOAuthAuthorizationCode).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ expectedGrantId: 91 }),
       expect.objectContaining({ ctx: "ctx" }) as never,
     );
   });
@@ -288,6 +307,21 @@ describe("OAuth authorize route", () => {
     const result = await action(createArgs(consentPost(cookie, screen, "allow")));
 
     expect(dataValue(result)).toEqual({ kind: "invalid", reason: "요청을 확인할 수 없어요." });
+    expect(issueOAuthAuthorizationCode).not.toHaveBeenCalled();
+  });
+
+  it("rejects consent if application scopes change after an omitted-scope request was displayed", async () => {
+    const url = new URL(authorizeUrl());
+    url.searchParams.delete("scope");
+    const { screen, cookie } = await consentCookieAndData(url.toString());
+    jest.mocked(getOAuthApplicationForClient).mockResolvedValue({
+      application: { ...application, scopes: ["profile", "students:read", "students:write"] } as never,
+      ownerUsername: "developer",
+    });
+
+    const result = await action(createArgs(consentPost(cookie, screen, "allow")));
+
+    expect(dataValue(result)).toEqual({ kind: "invalid", reason: "요청한 권한이 변경됐어요. 다시 확인해주세요." });
     expect(issueOAuthAuthorizationCode).not.toHaveBeenCalled();
   });
 

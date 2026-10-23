@@ -1,7 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Squares2X2Icon } from "@heroicons/react/24/outline";
 import type { HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Link, redirect, useLoaderData } from "react-router";
+import { data, Link, useLoaderData } from "react-router";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { v2ButtonClassName } from "~/components/v2/primitives/Button";
@@ -59,7 +59,7 @@ export default function DeveloperApplications() {
             애플리케이션 목록을 불러오지 못했어요.
           </p>
         ) : applications.length === 0 ? (
-          <section className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-lg bg-v2-surface p-v2-block-p text-center">
+            <section className="flex flex-col items-center justify-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-8 text-center">
             <Squares2X2Icon aria-hidden="true" className="size-8 text-v2-fg-tertiary" />
             <h3 className="text-base font-semibold">애플리케이션이 없어요</h3>
           </section>

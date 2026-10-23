@@ -132,4 +132,34 @@ describe("server Sentry options", () => {
 
     expect(event.request?.data).toBe(JSON.stringify({ client_id: "public-id" }));
   });
+
+  it("scrubs OAuth credentials from string, object, and pair-array query strings", () => {
+    const event = scrubServerSentryEvent({
+      request: {
+        query_string: "state=state-secret&code=code-secret&client_id=public-id",
+      } as never,
+    });
+    const objectEvent = scrubServerSentryEvent({
+      request: {
+        query_string: { state: "state-secret", code: "code-secret", client_id: "public-id" },
+      } as never,
+    });
+    const arrayEvent = scrubServerSentryEvent({
+      request: {
+        query_string: [
+          ["state", "state-secret"],
+          ["code", "code-secret"],
+          ["client_id", "public-id"],
+        ],
+      } as never,
+    });
+
+    expect((event.request as unknown as { query_string: unknown }).query_string).toBe("client_id=public-id");
+    expect((objectEvent.request as unknown as { query_string: unknown }).query_string).toEqual({
+      client_id: "public-id",
+    });
+    expect((arrayEvent.request as unknown as { query_string: unknown }).query_string).toEqual([
+      ["client_id", "public-id"],
+    ]);
+  });
 });

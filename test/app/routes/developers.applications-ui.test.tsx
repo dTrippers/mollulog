@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createRoutesStub, Outlet } from "react-router";
 import { V2Page } from "~/components/v2/layout/V2Page";
+import { TimeZoneProvider } from "~/contexts/TimeZoneProvider";
 
 jest.mock("~/routes/developers._components/requireOAuthAppManager", () => ({
   requireOAuthAppManager: jest.fn(),
@@ -34,7 +35,12 @@ function DeveloperShell() {
   );
 }
 
-function renderApplicationsList() {
+function renderApplicationsList(
+  applications = [
+    { uid: "one", name: "Roster Tool", scopes: ["profile"] },
+    { uid: "two", name: "Student Viewer", scopes: ["students:read"] },
+  ],
+) {
   const RoutesStub = createRoutesStub([
     {
       id: "developers",
@@ -44,13 +50,7 @@ function renderApplicationsList() {
         {
           id: "applications",
           path: "applications",
-          loader: () => ({
-            applications: [
-              { uid: "one", name: "Roster Tool", scopes: ["profile"] },
-              { uid: "two", name: "Student Viewer", scopes: ["students:read"] },
-            ],
-            loadError: false,
-          }),
+          loader: () => ({ applications, loadError: false }),
           Component: DeveloperApplications,
         },
       ],
@@ -62,10 +62,7 @@ function renderApplicationsList() {
       hydrationData={{
         loaderData: {
           applications: {
-            applications: [
-              { uid: "one", name: "Roster Tool", scopes: ["profile"] },
-              { uid: "two", name: "Student Viewer", scopes: ["students:read"] },
-            ],
+            applications,
             loadError: false,
           },
         },
@@ -104,7 +101,7 @@ function renderNewApplication(
   );
 }
 
-function renderApplicationDetail(actionData?: unknown) {
+function renderApplicationDetail(actionData?: unknown, timeZone = "UTC") {
   const RoutesStub = createRoutesStub([
     {
       id: "developers",
@@ -125,7 +122,9 @@ function renderApplicationDetail(actionData?: unknown) {
     ...(actionData ? { actionData: { "application-detail": actionData } } : {}),
   };
   return render(
-    <RoutesStub initialEntries={["/developers/applications/app-uid"]} hydrationData={hydrationData} />,
+    <TimeZoneProvider timeZone={timeZone}>
+      <RoutesStub initialEntries={["/developers/applications/app-uid"]} hydrationData={hydrationData} />
+    </TimeZoneProvider>,
   );
 }
 
@@ -141,6 +140,14 @@ describe("developer application screens", () => {
 
     expect(list?.className).not.toContain("divide-y");
     expect(within(row).getByText("Roster Tool").className).not.toContain("font-semibold");
+  });
+
+  it("sizes the empty application state by its content and padding", () => {
+    renderApplicationsList([]);
+
+    const emptyState = screen.getByRole("heading", { name: "애플리케이션이 없어요" }).parentElement;
+    expect(emptyState?.className).not.toContain("min-h-48");
+    expect(emptyState?.className).toContain("py-8");
   });
 
   it("allows typing into the new application Redirect URI input", () => {
@@ -204,5 +211,11 @@ describe("developer application screens", () => {
     expect(screen.queryByRole("button", { name: "재발급" })).toBeNull();
     expect((screen.getByLabelText("Client Secret") as HTMLInputElement).className).toContain("bg-v2-surface");
     expect(screen.getByRole("button", { name: "Client Secret 복사하기" }).className).toContain("bg-v2-inset");
+  });
+
+  it("formats the client secret issue date in the display time zone", () => {
+    renderApplicationDetail(undefined, "America/Los_Angeles");
+
+    expect(screen.getByText("2026/10/19 발급")).toBeTruthy();
   });
 });

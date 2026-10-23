@@ -2,7 +2,7 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { PlusIcon, Squares2X2Icon, XMarkIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigate, useNavigation } from "react-router";
+import { data, Form, Link, useActionData, useLoaderData, useNavigate, useNavigation } from "react-router";
 import { type CopyStatus, CopyStatusMessage, CopyTextButton } from "~/components/v2/features/developers/CopyTextButton";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
@@ -97,7 +97,7 @@ export default function NewDeveloperApplication() {
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [name, setName] = useState("");
-  const [redirectUris, setRedirectUris] = useState([""]);
+  const [redirectUris, setRedirectUris] = useState(() => [{ id: crypto.randomUUID(), value: "" }]);
   const [scopes, setScopes] = useState<ApiScope[]>([]);
   const result = actionData?.ok ? actionData : null;
   const error = actionData && !actionData.ok ? actionData : null;
@@ -202,10 +202,10 @@ export default function NewDeveloperApplication() {
               <span className="text-xs font-normal text-v2-fg-tertiary">{redirectUris.length}/5</span>
             </legend>
             <ul className="space-y-2">
-              {redirectUris.map((uri, index) => {
+              {redirectUris.map(({ id, value }, index) => {
                 const uriError = error?.field === "redirectUris" && error.index === index ? error.message : undefined;
                 return (
-                  <li key={index} className="flex min-w-0 items-start gap-2">
+                  <li key={id} className="flex min-w-0 items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <label htmlFor={`application-redirect-uri-${index}`} className="sr-only">
                         Redirect URI {index + 1}
@@ -215,10 +215,10 @@ export default function NewDeveloperApplication() {
                         name="redirectUris"
                         type="url"
                         required
-                        value={uri}
+                        value={value}
                         onChange={(event) => {
                           const value = event.currentTarget.value;
-                          setRedirectUris((current) => current.map((uriValue, currentIndex) => currentIndex === index ? value : uriValue));
+                          setRedirectUris((current) => current.map((row) => row.id === id ? { ...row, value } : row));
                         }}
                         aria-invalid={uriError ? true : undefined}
                         aria-describedby={uriError ? `application-redirect-error-${index}` : undefined}
@@ -230,7 +230,7 @@ export default function NewDeveloperApplication() {
                       icon={XMarkIcon}
                       label={`Redirect URI ${index + 1} 삭제`}
                       disabled={redirectUris.length <= 1 || isSubmitting}
-                      onClick={() => setRedirectUris((current) => current.filter((_, currentIndex) => currentIndex !== index))}
+                      onClick={() => setRedirectUris((current) => current.filter((row) => row.id !== id))}
                     />
                   </li>
                 );
@@ -240,7 +240,12 @@ export default function NewDeveloperApplication() {
               <p id="application-redirect-error" className="text-sm text-v2-danger">{error.message}</p>
             ) : null}
             <div className="flex items-center gap-3">
-              <Button type="button" variant="text" disabled={redirectUris.length >= 5 || isSubmitting} onClick={() => setRedirectUris((current) => [...current, ""])}>
+              <Button
+                type="button"
+                variant="text"
+                disabled={redirectUris.length >= 5 || isSubmitting}
+                onClick={() => setRedirectUris((current) => [...current, { id: crypto.randomUUID(), value: "" }])}
+              >
                 <PlusIcon className="size-4" aria-hidden="true" />
                 주소 추가
               </Button>

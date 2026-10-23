@@ -14,8 +14,8 @@ import {
 } from "~/domain/mollulog-api";
 import {
   API_PUBLIC_ERRORS,
-  API_SCOPES,
   API_ROUTES,
+  API_SCOPES,
   API_STUDENT_STATE_FIELD_SPECS,
   apiScopesInclude,
   normalizeApiScopes,
@@ -52,7 +52,10 @@ describe("mollulog-api domain", () => {
   });
 
   it("checks every route against every registered scope", () => {
-    const expectedScopeByRoute: Record<(typeof API_ROUTES)[number]["id"], "profile" | "students:read" | "students:write"> = {
+    const expectedScopeByRoute: Record<
+      (typeof API_ROUTES)[number]["id"],
+      "profile" | "students:read" | "students:write"
+    > = {
       getMe: "profile",
       findStudents: "students:read",
       listRecruitedStudents: "students:read",

@@ -5,10 +5,10 @@ import { data, Form, redirect, useActionData, useLoaderData, useNavigation } fro
 import { CopyTextButton } from "~/components/v2/features/developers/CopyTextButton";
 import { PageHeader } from "~/components/v2/layout/PageHeader";
 import { PageMain } from "~/components/v2/layout/PageMain";
-import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { Button } from "~/components/v2/primitives/Button";
 import { IconButton } from "~/components/v2/primitives/IconButton";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { normalizeApiScopes, type ApiScope } from "~/domain/mollulog-api-spec";
 import { formatInstant } from "~/lib/date-time";
 import {
@@ -153,25 +153,30 @@ function toApplicationView(application: OAuthApplication): ApplicationView {
   };
 }
 
+function createRedirectUriRows(redirectUris: string[]) {
+  return redirectUris.map((value) => ({ id: crypto.randomUUID(), value }));
+}
+
 export default function DeveloperApplicationDetail() {
   const { application } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
   const [name, setName] = useState(application.name);
-  const [redirectUris, setRedirectUris] = useState(application.redirectUris);
+  const [redirectUris, setRedirectUris] = useState(() => createRedirectUriRows(application.redirectUris));
   const [scopes, setScopes] = useState<ApiScope[]>(application.scopes);
   const [showRotatedSecret, setShowRotatedSecret] = useState(true);
   const [confirmRotate, setConfirmRotate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const rotateConfirmRef = useRef<HTMLFieldSetElement>(null);
   const deleteConfirmRef = useRef<HTMLFieldSetElement>(null);
+  const displayTimeZone = useDisplayTimeZone();
 
   useEffect(() => {
     setName(application.name);
-    setRedirectUris(application.redirectUris);
+    setRedirectUris(createRedirectUriRows(application.redirectUris));
     setScopes(application.scopes);
-  }, [application.uid, application.updatedAt, application.name, application.redirectUris, application.scopes]);
+  }, [application]);
 
   useEffect(() => {
     if (actionData?.ok && actionData.intent === "rotate") {
@@ -189,7 +194,7 @@ export default function DeveloperApplicationDetail() {
   }, [confirmDelete]);
 
   const baseline = JSON.stringify({ name: application.name, redirectUris: application.redirectUris, scopes: normalizeApiScopes(application.scopes) });
-  const current = JSON.stringify({ name, redirectUris, scopes: normalizeApiScopes(scopes) });
+  const current = JSON.stringify({ name, redirectUris: redirectUris.map(({ value }) => value), scopes: normalizeApiScopes(scopes) });
   const isDirty = baseline !== current;
   const updateError = actionData && !actionData.ok && actionData.intent === "update" ? actionData : null;
   const rotateError = actionData && !actionData.ok && actionData.intent === "rotate" ? actionData.message : null;
@@ -257,7 +262,7 @@ export default function DeveloperApplicationDetail() {
               ) : (
                 <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-sm text-v2-fg-secondary tabular-nums">{formatInstant(application.clientSecretIssuedAt)} 발급</span>
+                    <span className="text-sm text-v2-fg-secondary tabular-nums">{formatInstant(application.clientSecretIssuedAt, { timeZone: displayTimeZone })} 발급</span>
                     <Button
                       id="application-rotate-trigger"
                       type="button"
@@ -316,10 +321,10 @@ export default function DeveloperApplicationDetail() {
                 <span className="text-xs font-normal text-v2-fg-tertiary">{redirectUris.length}/5</span>
               </legend>
               <ul className="space-y-2">
-                {redirectUris.map((uri, index) => {
+                {redirectUris.map(({ id, value }, index) => {
                   const uriError = updateError?.field === "redirectUris" && updateError.index === index ? updateError.message : undefined;
                   return (
-                    <li key={index} className="flex min-w-0 items-start gap-2">
+                    <li key={id} className="flex min-w-0 items-start gap-2">
                       <div className="min-w-0 flex-1">
                         <label htmlFor={`application-redirect-uri-${index}`} className="sr-only">Redirect URI {index + 1}</label>
                         <input
@@ -327,10 +332,10 @@ export default function DeveloperApplicationDetail() {
                           name="redirectUris"
                           type="url"
                           required
-                          value={uri}
+                          value={value}
                           onChange={(event) => {
                             const value = event.currentTarget.value;
-                            setRedirectUris((currentUris) => currentUris.map((uriValue, currentIndex) => currentIndex === index ? value : uriValue));
+                            setRedirectUris((currentUris) => currentUris.map((row) => row.id === id ? { ...row, value } : row));
                           }}
                           aria-invalid={uriError ? true : undefined}
                           aria-describedby={uriError ? `application-redirect-error-${index}` : undefined}
@@ -342,7 +347,7 @@ export default function DeveloperApplicationDetail() {
                         icon={XMarkIcon}
                         label={`Redirect URI ${index + 1} 삭제`}
                         disabled={redirectUris.length <= 1 || isSubmitting}
-                        onClick={() => setRedirectUris((currentUris) => currentUris.filter((_, currentIndex) => currentIndex !== index))}
+                        onClick={() => setRedirectUris((currentUris) => currentUris.filter((row) => row.id !== id))}
                       />
                     </li>
                   );
@@ -350,7 +355,12 @@ export default function DeveloperApplicationDetail() {
               </ul>
               {updateError?.field === "redirectUris" && updateError.index === undefined ? <p id="application-redirect-error" className="text-sm text-v2-danger">{updateError.message}</p> : null}
               <div className="flex items-center gap-3">
-                <Button type="button" variant="text" disabled={redirectUris.length >= 5 || isSubmitting} onClick={() => setRedirectUris((currentUris) => [...currentUris, ""])}>
+                <Button
+                  type="button"
+                  variant="text"
+                  disabled={redirectUris.length >= 5 || isSubmitting}
+                  onClick={() => setRedirectUris((currentUris) => [...currentUris, { id: crypto.randomUUID(), value: "" }])}
+                >
                   <PlusIcon className="size-4" aria-hidden="true" />
                   주소 추가
                 </Button>

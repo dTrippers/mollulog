@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { createRoutesStub, Outlet } from "react-router";
 import { V2Page } from "~/components/v2/layout/V2Page";
+import { TimeZoneProvider } from "~/contexts/TimeZoneProvider";
 
 if (typeof globalThis.Response === "undefined") {
   class TestResponse {
@@ -59,7 +60,7 @@ const modelConnection = {
   lastUsedAt: new Date(connection.lastUsedAt!),
 };
 
-function renderPage(loaderData: { connections: typeof connection[]; loadError: boolean }) {
+function renderPage(loaderData: { connections: typeof connection[]; loadError: boolean }, timeZone = "UTC") {
   const RoutesStub = createRoutesStub([
     {
       id: "edit",
@@ -76,10 +77,12 @@ function renderPage(loaderData: { connections: typeof connection[]; loadError: b
     },
   ]);
   return render(
-    <RoutesStub
-      initialEntries={["/edit/connected-apps"]}
-      hydrationData={{ loaderData: { "connected-apps": loaderData } }}
-    />,
+    <TimeZoneProvider timeZone={timeZone}>
+      <RoutesStub
+        initialEntries={["/edit/connected-apps"]}
+        hydrationData={{ loaderData: { "connected-apps": loaderData } }}
+      />
+    </TimeZoneProvider>,
   );
 }
 
@@ -115,11 +118,20 @@ describe("connected applications screen", () => {
   it("shows the specified empty state", () => {
     renderPage({ connections: [], loadError: false });
     expect(screen.getByRole("heading", { name: "연결된 애플리케이션이 없어요" })).toBeTruthy();
+    const emptyState = screen.getByRole("heading", { name: "연결된 애플리케이션이 없어요" }).parentElement;
+    expect(emptyState?.className).not.toContain("min-h-48");
+    expect(emptyState?.className).toContain("py-8");
   });
 
   it("omits the last-use prefix for connections that have not been used", () => {
     renderPage({ connections: [{ ...connection, lastUsedAt: null }], loadError: false });
     expect(screen.getByText("2026/10/20 연결 · 아직 사용하지 않음")).toBeTruthy();
+  });
+
+  it("formats connection timestamps in the display time zone", () => {
+    renderPage({ connections: [connection], loadError: false }, "America/Los_Angeles");
+
+    expect(screen.getByText("2026/10/19 연결 · 마지막 사용 2026/10/21")).toBeTruthy();
   });
 
   it("loads connections for the active account", async () => {

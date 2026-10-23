@@ -391,6 +391,7 @@ export async function issueOAuthAuthorizationCode(
     redirectUri: string;
     scopes: readonly ApiScope[];
     codeChallenge: string | null;
+    expectedGrantId?: number;
   },
   options: OAuthRepositoryOptions = {},
 ): Promise<string> {
@@ -430,10 +431,14 @@ export async function issueOAuthAuthorizationCode(
             eq(pgOAuthGrantsTable.applicationId, input.applicationId),
             eq(pgOAuthGrantsTable.userId, input.userId),
             isNull(pgOAuthGrantsTable.disconnectedAt),
+            ...(input.expectedGrantId !== undefined ? [eq(pgOAuthGrantsTable.id, input.expectedGrantId)] : []),
           ),
         )
         .for("update")
         .limit(1);
+      if (input.expectedGrantId !== undefined && !activeGrant) {
+        throw new OAuthInvalidGrantError("The consented grant is no longer active.");
+      }
       let grantId: number;
       if (activeGrant) {
         grantId = activeGrant.id;

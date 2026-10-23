@@ -18,7 +18,9 @@ describe("OAuth application manager guard", () => {
     setSessionSensei({ id: 42, active: true });
     jest.mocked(getSenseiById).mockResolvedValue({ id: 42, active: true, role: "app_developer" } as never);
 
-    await expect(requireOAuthAppManager({} as Env, new Request("https://mollulog.net"), "ctx" as never)).resolves.toBe(42);
+    await expect(requireOAuthAppManager({} as Env, new Request("https://mollulog.net"), "ctx" as never)).resolves.toBe(
+      42,
+    );
     expect(getSenseiById).toHaveBeenCalledWith({} as never, 42, { ctx: "ctx" } as never);
 
     jest.mocked(getSenseiById).mockResolvedValue({ id: 42, active: true, role: "guest" } as never);

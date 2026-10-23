@@ -91,10 +91,16 @@ const SENSITIVE_OAUTH_PARAMETERS = new Set([
   "refresh_token",
 ]);
 
+function isSensitiveOAuthParameter(value: unknown): value is string {
+  return typeof value === "string" && SENSITIVE_OAUTH_PARAMETERS.has(value.toLowerCase());
+}
+
 function scrubOAuthUrl(value: string): string {
   try {
     const url = new URL(value);
-    for (const parameter of SENSITIVE_OAUTH_PARAMETERS) url.searchParams.delete(parameter);
+    for (const parameter of [...url.searchParams.keys()]) {
+      if (isSensitiveOAuthParameter(parameter)) url.searchParams.delete(parameter);
+    }
     return url.toString();
   } catch {
     return value;
@@ -113,18 +119,30 @@ function scrubOAuthRequestData(data: unknown): unknown {
     }
     const parameters = new URLSearchParams(data);
     let changed = false;
-    for (const parameter of SENSITIVE_OAUTH_PARAMETERS) {
-      if (parameters.has(parameter)) {
+    for (const parameter of [...parameters.keys()]) {
+      if (isSensitiveOAuthParameter(parameter)) {
         parameters.delete(parameter);
         changed = true;
       }
     }
     return changed ? parameters.toString() : data;
   }
-  if (data && typeof data === "object" && !Array.isArray(data)) {
+  if (Array.isArray(data)) {
+    return data
+      .filter((entry) => {
+        if (Array.isArray(entry)) return !isSensitiveOAuthParameter(entry[0]);
+        if (entry && typeof entry === "object") {
+          const fields = entry as Record<string, unknown>;
+          return !isSensitiveOAuthParameter(fields.key ?? fields.name);
+        }
+        return true;
+      })
+      .map((entry) => (Array.isArray(entry) ? entry : scrubOAuthRequestData(entry)));
+  }
+  if (data && typeof data === "object") {
     const sanitized = { ...(data as Record<string, unknown>) };
     for (const key of Object.keys(sanitized)) {
-      if (SENSITIVE_OAUTH_PARAMETERS.has(key.toLowerCase())) delete sanitized[key];
+      if (isSensitiveOAuthParameter(key)) delete sanitized[key];
     }
     return sanitized;
   }
@@ -137,6 +155,10 @@ export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
   if (!request) return event;
   if (request.url) request.url = scrubOAuthUrl(request.url);
   if (request.data !== undefined) request.data = scrubOAuthRequestData(request.data);
+  const queryString = (request as unknown as { query_string?: unknown }).query_string;
+  if (queryString !== undefined) {
+    (request as unknown as { query_string?: unknown }).query_string = scrubOAuthRequestData(queryString);
+  }
   if (request.headers) {
     request.headers = Object.fromEntries(
       Object.entries(request.headers).filter(([name]) => !SENSITIVE_REQUEST_HEADERS.has(name.toLowerCase())),

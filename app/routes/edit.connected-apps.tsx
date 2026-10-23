@@ -6,6 +6,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { getUserScopeSummary } from "~/domain/mollulog-api-spec";
 import { formatInstant } from "~/lib/date-time";
 import { disconnectOAuthGrant, getOAuthConnections, type OAuthConnection } from "~/models/mollulog-oauth";
@@ -101,7 +102,7 @@ export default function ConnectedApps() {
           {loadError ? (
             <StatusNotice tone="danger">연결된 애플리케이션을 불러오지 못했어요.</StatusNotice>
           ) : connections.length === 0 ? (
-            <section className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-lg bg-v2-surface p-v2-block-p text-center">
+            <section className="flex flex-col items-center justify-center gap-3 rounded-lg bg-v2-surface px-v2-block-p py-8 text-center">
               <Squares2X2Icon aria-hidden="true" className="size-8 text-v2-fg-tertiary" />
               <h2 className="text-base font-semibold">연결된 애플리케이션이 없어요</h2>
             </section>
@@ -123,6 +124,7 @@ export default function ConnectedApps() {
 
 function ConnectedAppRow({ connection }: { connection: ConnectionView }) {
   const triggerId = `connected-app-disconnect-${connection.id}`;
+  const displayTimeZone = useDisplayTimeZone();
   const confirmationRef = useRef<HTMLFieldSetElement>(null);
   const restoreTriggerFocusRef = useRef(false);
   const [confirming, setConfirming] = useState(false);
@@ -137,7 +139,7 @@ function ConnectedAppRow({ connection }: { connection: ConnectionView }) {
       document.getElementById(triggerId)?.focus();
       restoreTriggerFocusRef.current = false;
     }
-  }, [confirming]);
+  }, [confirming, triggerId]);
 
   function cancelConfirmation() {
     restoreTriggerFocusRef.current = true;
@@ -153,7 +155,7 @@ function ConnectedAppRow({ connection }: { connection: ConnectionView }) {
             <h2 className="break-words text-base font-semibold">{connection.applicationName}</h2>
             <p className="break-words text-sm text-v2-fg-secondary">{userScopeSummary}</p>
             <p className="break-words text-xs text-v2-fg-tertiary tabular-nums">
-              {formatInstant(connection.connectedAt)} 연결 · {connection.lastUsedAt ? `마지막 사용 ${formatInstant(connection.lastUsedAt)}` : "아직 사용하지 않음"}
+              {formatInstant(connection.connectedAt, { timeZone: displayTimeZone })} 연결 · {connection.lastUsedAt ? `마지막 사용 ${formatInstant(connection.lastUsedAt, { timeZone: displayTimeZone })}` : "아직 사용하지 않음"}
             </p>
           </div>
           <Button

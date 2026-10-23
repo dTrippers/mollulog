@@ -793,7 +793,13 @@ describe("MolluLog v1 API entry", () => {
   it("returns the current state to a key with read and write scope", async () => {
     mockApi.authenticatePersonalApiKey.mockResolvedValue({
       kind: "authenticated",
-      key: { kind: "personal", uid: "key-uid", name: "read and write", userId: 5, scopes: ["students:read", "students:write"] },
+      key: {
+        kind: "personal",
+        uid: "key-uid",
+        name: "read and write",
+        userId: 5,
+        scopes: ["students:read", "students:write"],
+      },
     });
     mockApi.patchApiRecruitedStudent.mockResolvedValue({
       kind: "updated",

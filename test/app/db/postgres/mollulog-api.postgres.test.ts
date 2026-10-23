@@ -579,13 +579,19 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
         ownerUsername: "owner",
         application: { uid: oauth.application.uid },
       });
-      expect(await updateOwnedOAuthApplication(env, 6, oauth.application.uid, {
-        name: "foreign edit",
-        redirectUris: oauth.application.redirectUris,
-        scopes: ["profile"],
-      })).toBeNull();
+      expect(
+        await updateOwnedOAuthApplication(env, 6, oauth.application.uid, {
+          name: "foreign edit",
+          redirectUris: oauth.application.redirectUris,
+          scopes: ["profile"],
+        }),
+      ).toBeNull();
 
-      const issueCode = (scopes: Array<"profile" | "students:read" | "students:write">, codeChallenge: string | null = null) =>
+      const issueCode = (
+        scopes: Array<"profile" | "students:read" | "students:write">,
+        codeChallenge: string | null = null,
+        expectedGrantId?: number,
+      ) =>
         issueOAuthAuthorizationCode(env, {
           applicationId: oauth.application.id,
           applicationUid: oauth.application.uid,
@@ -594,6 +600,7 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
           redirectUri: oauth.application.redirectUris[0],
           scopes,
           codeChallenge,
+          ...(expectedGrantId !== undefined ? { expectedGrantId } : {}),
         });
       const firstCode = await issueCode(["profile"]);
       const firstCodeHash = createHash("sha256").update(firstCode).digest("hex");
@@ -706,6 +713,8 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
       expect(await authenticateOAuthAccessToken(env, expandedToken.accessToken)).toEqual({ kind: "invalid" });
       expect(await authenticateOAuthAccessToken(env, reducedToken.accessToken)).toEqual({ kind: "invalid" });
       expect(await disconnectOAuthGrant(env, 6, oldConnection.id)).toBe(false);
+      expect(await getOAuthConnections(env, 5)).toEqual([]);
+      await expect(issueCode(["profile"], null, oldConnection.id)).rejects.toBeInstanceOf(OAuthInvalidGrantError);
       expect(await getOAuthConnections(env, 5)).toEqual([]);
 
       const reconnectedCode = await issueCode(["profile"]);

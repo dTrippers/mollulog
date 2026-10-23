@@ -13,7 +13,7 @@ function tokenResponse(status: number, body: unknown, headers?: HeadersInit): Re
     Pragma: "no-cache",
     "Content-Type": "application/json; charset=utf-8",
   });
-  new Headers(headers).forEach((value, key) => responseHeaders.set(key, value));
+  for (const [key, value] of new Headers(headers).entries()) responseHeaders.set(key, value);
   return new Response(JSON.stringify(body), { status, headers: responseHeaders });
 }
 

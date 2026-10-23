@@ -33,6 +33,7 @@ import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
 import { initializeGoogleAnalytics, trackCurrentGoogleAnalyticsPageView } from "./lib/google-analytics.client";
+import { getGoogleAnalyticsPagePath } from "./lib/google-analytics-path";
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
@@ -282,11 +283,12 @@ export default function App() {
   }, []);
 
   const location = useLocation();
+  const matches = useMatches();
   const navigationType = useNavigationType();
   const pathname = location.pathname;
-  const isOAuthAuthorizeRoute = pathname === "/oauth/authorize";
+  const isOAuthAuthorizeRoute = matches.some((match) => match.id === "routes/oauth.authorize");
   const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
-  const pagePath = `${location.pathname}${location.search}`;
+  const pagePath = getGoogleAnalyticsPagePath(location.pathname, location.search, isOAuthAuthorizeRoute);
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
   const routeKey = location.key;
   const isContentTransitionRoute =

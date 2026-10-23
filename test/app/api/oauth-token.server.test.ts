@@ -82,10 +82,7 @@ describe("OAuth token endpoint", () => {
   });
 
   it("returns RFC 6749 error responses without CORS headers", async () => {
-    const unsupported = await handleOAuthTokenRequest(
-      tokenRequest("grant_type=client_credentials"),
-      env,
-    );
+    const unsupported = await handleOAuthTokenRequest(tokenRequest("grant_type=client_credentials"), env);
     const missingClient = await handleOAuthTokenRequest(
       tokenRequest("grant_type=authorization_code&code=code&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback"),
       env,

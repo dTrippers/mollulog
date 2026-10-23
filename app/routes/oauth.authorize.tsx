@@ -35,6 +35,7 @@ const oauthHeaders = {
 
 const csrfTokenSessionKey = "oauth:authorize:csrf";
 const requestFingerprintSessionKey = "oauth:authorize:fingerprint";
+const requestScopesSessionKey = "oauth:authorize:scopes";
 const csrfUserIdSessionKey = "oauth:authorize:userId";
 
 type OAuthParameters = {
@@ -118,7 +119,7 @@ function readOAuthParameters(source: URLSearchParams | FormData): OAuthParameter
   };
 }
 
-function fingerprintParameters(parameters: OAuthParameters, userId: number): Promise<string> {
+function fingerprintParameters(parameters: OAuthParameters, userId: number, scopes: readonly ApiScope[]): Promise<string> {
   const value = JSON.stringify({
     responseType: parameters.responseType,
     clientId: parameters.clientId,
@@ -128,6 +129,7 @@ function fingerprintParameters(parameters: OAuthParameters, userId: number): Pro
     codeChallenge: parameters.codeChallenge,
     codeChallengeMethod: parameters.codeChallengeMethod,
     userId,
+    scopes: normalizeApiScopes(scopes),
   });
   return crypto.subtle.digest("SHA-256", new TextEncoder().encode(value)).then((hash) =>
     [...new Uint8Array(hash)].map((byte) => byte.toString(16).padStart(2, "0")).join(""),
@@ -290,7 +292,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   }
 
   const grant = await getActiveOAuthGrant(env, authorization.application.id, sensei.id, { ctx });
-  const grantedScopes = grant?.scopes ?? [];
+  let consentAuthorization = authorization;
+  let grantedScopes = grant?.scopes ?? [];
   if (grant && apiScopesInclude(grantedScopes, authorization.scopes)) {
     try {
       const code = await issueOAuthAuthorizationCode(
@@ -303,6 +306,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           redirectUri: authorization.redirectUri,
           scopes: authorization.scopes,
           codeChallenge: parameters.codeChallenge,
+          expectedGrantId: grant.id,
         },
         { ctx },
       );
@@ -316,10 +320,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
           { headers: oauthHeaders },
         );
       }
-      return data<AuthorizeScreenData>(
-        { kind: "invalid", reason: "앱 정보를 확인할 수 없어요." },
-        { headers: oauthHeaders },
-      );
+      const currentAuthorization = await resolveAuthorizationRequest(env, parameters, ctx);
+      if (currentAuthorization.kind === "invalid") {
+        return data<AuthorizeScreenData>(currentAuthorization, { headers: oauthHeaders });
+      }
+      if (currentAuthorization.kind === "redirect_error") {
+        return redirect(currentAuthorization.redirectTo, { headers: oauthHeaders });
+      }
+      consentAuthorization = currentAuthorization;
+      grantedScopes = [];
     }
   }
 
@@ -327,7 +336,8 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   const session = await storage.getSession(request.headers.get("Cookie"));
   const csrfToken = randomToken();
   session.set(csrfTokenSessionKey, csrfToken);
-  session.set(requestFingerprintSessionKey, await fingerprintParameters(parameters, sensei.id));
+  session.set(requestFingerprintSessionKey, await fingerprintParameters(parameters, sensei.id, consentAuthorization.scopes));
+  session.set(requestScopesSessionKey, consentAuthorization.scopes);
   session.set(csrfUserIdSessionKey, sensei.id);
   const responseHeaders = new Headers(oauthHeaders);
   responseHeaders.set("Set-Cookie", await storage.commitSession(session));
@@ -335,11 +345,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   return data<AuthorizeScreenData>(
     {
       kind: "consent",
-      application: authorization.application,
-      redirectHost: authorization.redirectHost,
-      redirectUri: authorization.redirectUri,
+      application: consentAuthorization.application,
+      redirectHost: consentAuthorization.redirectHost,
+      redirectUri: consentAuthorization.redirectUri,
       parameters,
-      scopes: authorization.scopes,
+      scopes: consentAuthorization.scopes,
       grantedScopes,
       username: sensei.username,
       profileStudentId: sensei.profileStudentId,
@@ -377,26 +387,27 @@ export async function action({ context, request }: ActionFunctionArgs) {
   }
 
   const storage = sessionStorage(env);
-  let session;
-  try {
-    session = await storage.getSession(request.headers.get("Cookie"));
-  } catch {
+  const session = await storage.getSession(request.headers.get("Cookie")).catch(() => null);
+  if (!session) {
     return invalidRequest("요청을 확인할 수 없어요.");
   }
 
   const { sessionUserId, sensei } = await getCurrentSensei(env, request, ctx);
   const expectedCsrf = session.get(csrfTokenSessionKey) as string | undefined;
   const expectedFingerprint = session.get(requestFingerprintSessionKey) as string | undefined;
+  const expectedScopes = session.get(requestScopesSessionKey) as ApiScope[] | undefined;
   const expectedUserId = session.get(csrfUserIdSessionKey) as number | undefined;
   if (
     !csrfField.value ||
     csrfField.duplicate ||
     csrfField.value !== expectedCsrf ||
     !expectedFingerprint ||
+    !Array.isArray(expectedScopes) ||
+    expectedScopes.some((scope) => !API_SCOPES.includes(scope)) ||
     parameters.duplicateFields.length > 0 ||
     !sessionUserId ||
     sessionUserId !== expectedUserId ||
-    expectedFingerprint !== (await fingerprintParameters(parameters, sessionUserId))
+    expectedFingerprint !== (await fingerprintParameters(parameters, sessionUserId, expectedScopes))
   ) {
     return invalidRequest("요청을 확인할 수 없어요.");
   }
@@ -404,6 +415,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
   const authorization = await resolveAuthorizationRequest(env, parameters, ctx);
   if (authorization.kind === "invalid") return data<AuthorizeScreenData>(authorization, { status: 400, headers: oauthHeaders });
   if (authorization.kind === "redirect_error") return redirect(authorization.redirectTo, { headers: oauthHeaders });
+  if (normalizeApiScopes(authorization.scopes).join(" ") !== normalizeApiScopes(expectedScopes).join(" ")) {
+    return invalidRequest("요청한 권한이 변경됐어요. 다시 확인해주세요.");
+  }
   if (!sensei?.active) {
     return data<AuthorizeScreenData>(
       { kind: "inactive", username: sensei?.username ?? null, profileStudentId: sensei?.profileStudentId ?? null },
@@ -430,6 +444,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
     );
     session.unset(csrfTokenSessionKey);
     session.unset(requestFingerprintSessionKey);
+    session.unset(requestScopesSessionKey);
     session.unset(csrfUserIdSessionKey);
     const responseHeaders = new Headers(oauthHeaders);
     responseHeaders.set("Set-Cookie", await storage.commitSession(session));
@@ -507,11 +522,11 @@ function ConsentScreen({ data: screen }: { data: ConsentScreenData }) {
 
           <Form method="post" action="/oauth/authorize" className="mt-4 flex items-center gap-2 md:justify-end">
             <AuthorizationFields parameters={screen.parameters} csrfToken={screen.csrfToken} />
-            <Button name="decision" value="deny" variant="secondary" className="shrink-0">
+            <Button type="submit" name="decision" value="deny" variant="secondary" className="shrink-0">
               취소
             </Button>
             {signedIn ? (
-              <Button name="decision" value="allow" variant="primary" className="min-w-0 flex-1 md:flex-none">
+              <Button type="submit" name="decision" value="allow" variant="primary" className="min-w-0 flex-1 md:flex-none">
                 연결
               </Button>
             ) : (

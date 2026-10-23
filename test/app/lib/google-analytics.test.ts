@@ -5,8 +5,18 @@ import {
   GOOGLE_ANALYTICS_MEASUREMENT_ID,
   trackGoogleAnalyticsPageView,
 } from "../../../app/lib/google-analytics.client";
+import { getGoogleAnalyticsPagePath } from "../../../app/lib/google-analytics-path";
 
 describe("Google Analytics", () => {
+  it("removes OAuth authorization query values from analytics page paths", () => {
+    expect(getGoogleAnalyticsPagePath("/oauth/authorize", "?state=secret&client_id=public", true)).toBe(
+      "/oauth/authorize",
+    );
+    expect(getGoogleAnalyticsPagePath("/oauth/authorize/", "?state=secret", true)).toBe("/oauth/authorize/");
+    expect(getGoogleAnalyticsPagePath("/OAuth/Authorize", "?state=secret", true)).toBe("/OAuth/Authorize");
+    expect(getGoogleAnalyticsPagePath("/futures", "?source=navigation", false)).toBe("/futures?source=navigation");
+  });
+
   it("queues commands using the Arguments object expected by gtag.js", () => {
     const dataLayer: unknown[] = [];
     const gtag = createGoogleAnalyticsCommandQueue(dataLayer);

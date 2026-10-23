@@ -55,7 +55,7 @@ describe("CommunityFeed timestamp meta", () => {
 
     expect(timestamp).toEqual({
       dateTime: "2026-05-01T00:00:00.000Z",
-      text: "2026.05.01",
+      text: "2026/05/01",
       edited: true,
     });
   });
@@ -74,7 +74,7 @@ describe("CommunityFeed timestamp meta", () => {
 
     expect(timestamp).toEqual({
       dateTime: "2026-05-10T00:00:00.000Z",
-      text: "2026.05.10",
+      text: "2026/05/10",
       edited: false,
     });
   });
