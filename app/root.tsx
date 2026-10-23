@@ -368,29 +368,32 @@ export default function App() {
             siteBanner={siteBanner}
           />
           <div
-            className={`mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:min-w-0 lg:flex-1 lg:pt-0 ${
+            className={`mllg-content-area flex min-h-0 w-full flex-1 flex-col overflow-y-scroll pt-[var(--mobile-header-height)] lg:min-w-0 lg:pt-0 ${
               isContentTransitionRoute ? "mllg-view-transition-content" : ""
             }`}
           >
-            <div className="page-available-width-container @container/page-available mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
-              <TimeZoneProvider timeZone={displayTimeZone}>
-                <StudentCardPopupProvider key={pathname}>
-                  {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
-                  <Outlet
-                    context={
-                      {
-                        darkMode,
-                        setDarkMode,
-                        mobileNavigationIds,
-                        setMobileNavigationIds,
-                        currentUsername,
-                        isAdmin,
-                        navigationBarContents,
-                      } satisfies RootOutletContext
-                    }
-                  />
-                </StudentCardPopupProvider>
-              </TimeZoneProvider>
+            <div className="page-available-width-container @container/page-available mx-auto flex w-full max-w-7xl shrink-0 grow flex-col px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:py-6">
+              {/* Grows to fill short pages so the footer stays at the bottom of the viewport. */}
+              <div className="grow">
+                <TimeZoneProvider timeZone={displayTimeZone}>
+                  <StudentCardPopupProvider key={pathname}>
+                    {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
+                    <Outlet
+                      context={
+                        {
+                          darkMode,
+                          setDarkMode,
+                          mobileNavigationIds,
+                          setMobileNavigationIds,
+                          currentUsername,
+                          isAdmin,
+                          navigationBarContents,
+                        } satisfies RootOutletContext
+                      }
+                    />
+                  </StudentCardPopupProvider>
+                </TimeZoneProvider>
+              </div>
               <Footer />
             </div>
           </div>
