@@ -1523,7 +1523,7 @@ function ReviewPanel({
         className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
         summary={phase === "applying" ? "반영 중이에요" : null}
       >
-        <Button variant="danger" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
+        <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={onCancel}>
           {isCancelling ? "삭제 중..." : "결과 삭제"}
         </Button>
         <Button

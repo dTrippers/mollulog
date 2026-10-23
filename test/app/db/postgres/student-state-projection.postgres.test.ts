@@ -411,6 +411,7 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
         "db/postgres/migrations/20260901000200_add_recruited_student_equipment_levels.sql",
         "db/postgres/migrations/20261010000100_create_student_state_projection.sql",
         "db/postgres/migrations/20261010000200_add_personal_api_keys_and_audit.sql",
+        "db/postgres/migrations/20261022000100_add_api_scopes_and_oauth.sql",
       ]) {
         await admin.query(await readFile(path.join(process.cwd(), migration), "utf8"));
       }

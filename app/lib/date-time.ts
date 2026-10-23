@@ -94,7 +94,7 @@ export function formatInstant(
   instant: string | Date,
   {
     timeZone,
-    format = "YYYY.MM.DD",
+    format = "YYYY/MM/DD",
   }: {
     timeZone?: string | null;
     format?: string;

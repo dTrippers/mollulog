@@ -1,0 +1,208 @@
+/**
+ * @jest-environment jsdom
+ */
+import "../components/v2/layout/layout-test-polyfills";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import { createRoutesStub, Outlet } from "react-router";
+import { V2Page } from "~/components/v2/layout/V2Page";
+
+jest.mock("~/routes/developers._components/requireOAuthAppManager", () => ({
+  requireOAuthAppManager: jest.fn(),
+}));
+
+import DeveloperApplications from "~/routes/developers.applications._index";
+import DeveloperApplicationDetail from "~/routes/developers.applications.$uid";
+import NewDeveloperApplication from "~/routes/developers.applications.new";
+import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
+
+const application = {
+  uid: "app-uid",
+  name: "Roster Tool",
+  clientId: "mllg_oc_0123456789abcdef0123456789abcdef",
+  redirectUris: ["https://tool.example/callback"],
+  scopes: ["profile" as const],
+  updatedAt: "2026-10-21T00:00:00.000Z",
+  clientSecretIssuedAt: "2026-10-20T00:00:00.000Z",
+};
+
+function DeveloperShell() {
+  return (
+    <V2Page width="wide">
+      <Outlet />
+    </V2Page>
+  );
+}
+
+function renderApplicationsList() {
+  const RoutesStub = createRoutesStub([
+    {
+      id: "developers",
+      path: "/developers",
+      Component: DeveloperShell,
+      children: [
+        {
+          id: "applications",
+          path: "applications",
+          loader: () => ({
+            applications: [
+              { uid: "one", name: "Roster Tool", scopes: ["profile"] },
+              { uid: "two", name: "Student Viewer", scopes: ["students:read"] },
+            ],
+            loadError: false,
+          }),
+          Component: DeveloperApplications,
+        },
+      ],
+    },
+  ]);
+  return render(
+    <RoutesStub
+      initialEntries={["/developers/applications"]}
+      hydrationData={{
+        loaderData: {
+          applications: {
+            applications: [
+              { uid: "one", name: "Roster Tool", scopes: ["profile"] },
+              { uid: "two", name: "Student Viewer", scopes: ["students:read"] },
+            ],
+            loadError: false,
+          },
+        },
+      }}
+    />,
+  );
+}
+
+function renderNewApplication(
+  actionData?: unknown,
+  existingApplications: { uid: string; name: string; scopes: string[] }[] = [],
+) {
+  const RoutesStub = createRoutesStub([
+    {
+      id: "developers",
+      path: "/developers",
+      Component: DeveloperShell,
+      children: [
+        {
+          id: "new-application",
+          path: "applications/new",
+          loader: () => ({ applications: existingApplications, loadError: false }),
+          Component: NewDeveloperApplication,
+        },
+      ],
+    },
+  ]);
+  return render(
+    <RoutesStub
+      initialEntries={["/developers/applications/new"]}
+      hydrationData={{
+        loaderData: { "new-application": { applications: existingApplications, loadError: false } },
+        ...(actionData ? { actionData: { "new-application": actionData } } : {}),
+      }}
+    />,
+  );
+}
+
+function renderApplicationDetail(actionData?: unknown) {
+  const RoutesStub = createRoutesStub([
+    {
+      id: "developers",
+      path: "/developers",
+      Component: DeveloperShell,
+      children: [
+        {
+          id: "application-detail",
+          path: "applications/:uid",
+          loader: () => ({ application }),
+          Component: DeveloperApplicationDetail,
+        },
+      ],
+    },
+  ]);
+  const hydrationData = {
+    loaderData: { "application-detail": { application } },
+    ...(actionData ? { actionData: { "application-detail": actionData } } : {}),
+  };
+  return render(
+    <RoutesStub initialEntries={["/developers/applications/app-uid"]} hydrationData={hydrationData} />,
+  );
+}
+
+beforeEach(() => {
+  installLayoutTestEnv();
+});
+
+describe("developer application screens", () => {
+  it("renders compact application rows without dividers or bold names", () => {
+    renderApplicationsList();
+    const list = screen.getByRole("navigation", { name: "내 애플리케이션" }).querySelector("ul");
+    const row = screen.getByRole("link", { name: /Roster Tool/ });
+
+    expect(list?.className).not.toContain("divide-y");
+    expect(within(row).getByText("Roster Tool").className).not.toContain("font-semibold");
+  });
+
+  it("allows typing into the new application Redirect URI input", () => {
+    renderNewApplication();
+    const input = screen.getByLabelText("Redirect URI 1") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "https://tool.example/updated" } });
+
+    expect(input.value).toBe("https://tool.example/updated");
+  });
+
+  it("keeps the applications header and list around the created credentials card", () => {
+    renderNewApplication(
+      {
+        ok: true,
+        uid: "created-app",
+        name: "New Tool",
+        clientId: "mllg_oc_created",
+        clientSecret: "mllg_os_created",
+        scopes: ["profile"],
+      },
+      [{ uid: "existing-app", name: "Existing Tool", scopes: ["students:read"] }],
+    );
+
+    expect(screen.getByRole("heading", { name: "애플리케이션", level: 2 })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "새 애플리케이션" }).hasAttribute("disabled")).toBe(true);
+    const createdCard = screen.getByRole("region", { name: "애플리케이션을 만들었어요" });
+    expect(within(createdCard).getByRole("heading", { name: "애플리케이션을 만들었어요", level: 3 })).toBeTruthy();
+    expect(screen.getByRole("navigation", { name: "내 애플리케이션" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /Existing Tool/ })).toBeTruthy();
+    expect(screen.getByRole("link", { name: /New Tool/ })).toBeTruthy();
+
+    for (const label of ["Client ID", "Client Secret"]) {
+      const field = within(createdCard).getByLabelText(label) as HTMLInputElement;
+      expect(field.className).toContain("bg-v2-surface");
+      expect(field.className).toContain("font-mono");
+      expect(within(createdCard).getByRole("button", { name: `${label} 복사하기` }).className).toContain("bg-v2-inset");
+    }
+  });
+
+  it("allows typing into the application detail Redirect URI input", () => {
+    renderApplicationDetail();
+    const input = screen.getByLabelText("Redirect URI 1") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "https://tool.example/updated" } });
+
+    expect(input.value).toBe("https://tool.example/updated");
+  });
+
+  it("shows a regenerated secret in place of the issued date and regenerate button", () => {
+    renderApplicationDetail({
+      ok: true,
+      intent: "rotate",
+      clientSecret: "mllg_os_revealed-once",
+      issuedAt: "2026-10-22T00:00:00.000Z",
+    });
+
+    expect((screen.getByLabelText("Client Secret") as HTMLInputElement).value).toBe("mllg_os_revealed-once");
+    expect(screen.getByText("지금만 확인할 수 있어요.")).toBeTruthy();
+    expect(screen.queryByText("2026/10/22 발급")).toBeNull();
+    expect(screen.queryByRole("button", { name: "재발급" })).toBeNull();
+    expect((screen.getByLabelText("Client Secret") as HTMLInputElement).className).toContain("bg-v2-surface");
+    expect(screen.getByRole("button", { name: "Client Secret 복사하기" }).className).toContain("bg-v2-inset");
+  });
+});

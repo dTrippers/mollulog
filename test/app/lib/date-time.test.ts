@@ -29,6 +29,10 @@ describe("parseUtcTimestamp", () => {
     expect(formatInstant(instant, { timeZone: "Asia/Seoul", format: "YYYY-MM-DD HH:mm" })).toBe("2026-05-02 00:30");
   });
 
+  it("uses slash separators for the default date format", () => {
+    expect(formatInstant("2026-05-01T15:30:00.000Z", { timeZone: "UTC" })).toBe("2026/05/01");
+  });
+
   it("falls back to UTC for invalid timezones", () => {
     expect(isValidTimeZone("Not/AZone")).toBe(false);
     expect(normalizeTimeZone("Not/AZone")).toBe(DEFAULT_TIME_ZONE);

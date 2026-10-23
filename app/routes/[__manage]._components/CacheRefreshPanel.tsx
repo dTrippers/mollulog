@@ -30,7 +30,7 @@ function formatDuration(durationMs: number | null): string | null {
 }
 
 function formatDate(value: string): string {
-  return formatInstant(value, { timeZone: "Asia/Seoul", format: "YYYY. M. D. A h:mm:ss" });
+  return formatInstant(value, { timeZone: "Asia/Seoul", format: "YYYY/M/D A h:mm:ss" });
 }
 
 function getTaskIcon(job: CacheRefreshJob, name: CacheRefreshTaskName, result: CacheRefreshTaskResult) {

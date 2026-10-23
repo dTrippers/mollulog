@@ -1,7 +1,10 @@
-import { describe, expect, it } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createRoutesStub } from "react-router";
+
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+
 import { API_GUIDE_COPY } from "~/domain/mollulog-api-guide";
 import {
   API_PUBLIC_ERRORS,
@@ -18,7 +21,7 @@ const urls = resolveApiDocumentUrls("api.mollulog.net", `${siteHost}/developers/
 function renderDocsPage() {
   const loaderData = loader({
     request: new Request("http://127.0.0.1:8789/developers/docs"),
-    context: { cloudflare: { env: { HOST: "https://dev.example.ts.net" } } },
+        context: { cloudflare: { env: { API_HOST: "api.mollulog.net", HOST: "https://dev.example.ts.net" } } },
   } as never);
   const RoutesStub = createRoutesStub([
     {
@@ -38,7 +41,7 @@ function renderDocsPage() {
   return renderToStaticMarkup(
     createElement(RoutesStub, {
       initialEntries: ["/developers/docs"],
-      hydrationData: { loaderData: { "developers-docs": loaderData } },
+      hydrationData: { loaderData: { developers: { canManageApplications: false }, "developers-docs": loaderData } },
     }),
   );
 }
@@ -69,26 +72,26 @@ function collectStringLeaves(value: unknown, path: string): Array<{ path: string
 }
 
 describe("developers API documentation page", () => {
-  it.each([undefined, "staging-api.example.com"])(
-    "keeps public documentation URLs on production when API_HOST is %s",
-    (apiHost) => {
+  it.each([
+    [undefined, "http://127.0.0.1:8789"],
+    ["staging-api.example.com", "https://staging-api.example.com"],
+  ] as const)("uses the API host or the local request origin when API_HOST is %s", (apiHost, origin) => {
       const result = loader({
         request: new Request("http://127.0.0.1:8789/developers/docs"),
         context: { cloudflare: { env: { API_HOST: apiHost, HOST: "https://dev.example.ts.net" } } },
       } as never);
 
       expect(result).toEqual({
-        siteHost: "https://mollulog.net",
+        siteHost: "https://dev.example.ts.net",
         urls: {
-          origin: "https://api.mollulog.net",
-          baseUrl: "https://api.mollulog.net/v1",
-          llmsUrl: "https://api.mollulog.net/llms.txt",
-          llmsFullUrl: "https://api.mollulog.net/llms-full.txt",
-          openApiUrl: "https://api.mollulog.net/v1/openapi.json",
+          origin,
+          baseUrl: `${origin}/v1`,
+          llmsUrl: `${origin}/llms.txt`,
+          llmsFullUrl: `${origin}/llms-full.txt`,
+          openApiUrl: `${origin}/v1/openapi.json`,
         },
       });
-    },
-  );
+  });
 
   it("renders the agent entry point and links from the shared guide", () => {
     const markup = normalizeMarkup(renderDocsPage());
@@ -106,6 +109,13 @@ describe("developers API documentation page", () => {
     expect(markup).toContain("https://api.mollulog.net/v1");
     expect(markup).not.toContain("브라우저 쿠키로는 인증되지 않아요");
     expect(markup).not.toContain("학생 읽기 · 학생 쓰기");
+    expect(text).toContain("몰루로그 계정으로 로그인");
+    expect(text).toContain("인증 URL");
+    expect(text).toContain("토큰 URL");
+    expect(text).toContain("Redirect URI는 등록한 주소와 정확히 같아야 해요");
+    expect(text).toContain("액세스 토큰은 1년간 유효하고 갱신 토큰은 없어요");
+    expect(text).toContain("프로필 권한");
+    expect(text).toContain("학생 쓰기 권한");
   });
 
   it("renders every endpoint, field, and public error from the shared modules", () => {
@@ -122,7 +132,7 @@ describe("developers API documentation page", () => {
       expect(markup).toContain(error.title);
       expect(markup).toContain(error.description);
     }
-    expect(markup).toContain(`${siteHost}/developers/docs#error-invalid_request`);
+    expect(markup).toContain("https://dev.example.ts.net/developers/docs#error-invalid_request");
     expect(markup).not.toContain("육성 목표·선물 계획을 다루는 엔드포인트는");
   });
 
@@ -243,12 +253,20 @@ describe("developers API documentation page", () => {
     expect(markup).toContain("target:bg-v2-inset");
     expect(markup).toContain("@min-[48rem]/page-available:scroll-mt-4");
     expect(markup).not.toContain("lg:scroll-mt-4");
-    expect(markup.match(/<details\b[^>]*\bopen(?:="")?/g)).toHaveLength(1);
+    expect(markup.match(/<details\b[^>]*\bopen(?:="")?/g) ?? []).toHaveLength(0);
   });
 
   it("keeps the approved URL, response, error table, and copy-button details", () => {
     const markup = renderDocsPage();
     const text = extractText(markup);
+
+    expect(markup).toContain('aria-label="인증 URL 복사하기"');
+    expect(markup).toContain('aria-label="토큰 URL 복사하기"');
+    expect(markup).toContain('aria-label="토큰 응답 200 코드"');
+    expect(text).toContain(
+      '{"access_token":"<ACCESS_TOKEN>","token_type":"Bearer","expires_in":31536000,"scope":"profile students:write"}',
+    );
+    expect(text).not.toContain("내 프로필 확인");
 
     for (const url of [urls.llmsFullUrl, urls.llmsUrl, urls.openApiUrl]) {
       const escapedUrl = url.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

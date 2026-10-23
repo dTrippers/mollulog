@@ -8,16 +8,19 @@ const mockApi = {
   deleteApiRecruitedStudent: jest.fn<AsyncMock>(),
   getApiRecruitedStudent: jest.fn<AsyncMock>(),
   getApiRecruitedStudents: jest.fn<AsyncMock>(),
+  getPersonalApiSubject: jest.fn<AsyncMock>(),
   isApiStudentStateAvailable: jest.fn<AsyncMock>(),
   patchApiRecruitedStudent: jest.fn<AsyncMock>(),
   registerApiRecruitedStudent: jest.fn<AsyncMock>(),
   reserveApiWriteQuota: jest.fn<AsyncMock>(),
 };
+const mockOAuth = { authenticateOAuthAccessToken: jest.fn<AsyncMock>() };
 const mockStudents = {
   getAllStudents: jest.fn<AsyncMock>(),
   getStudentPrimaryUids: jest.fn<AsyncMock>(),
   getStudentOtherFormUids: jest.fn<AsyncMock>(),
 };
+const mockSensei = { getSenseiById: jest.fn<AsyncMock>() };
 const mockLogger = { error: jest.fn<AsyncMock>() };
 const mockObservability = {
   captureServerError: jest.fn<AsyncMock>(),
@@ -27,7 +30,12 @@ const mockObservability = {
 let baqlPrimaryUids: Record<string, string> = {};
 
 jest.mock("~/models/mollulog-api", () => mockApi);
+jest.mock("~/models/mollulog-oauth", () => ({
+  ...jest.requireActual<typeof import("~/models/mollulog-oauth")>("~/models/mollulog-oauth"),
+  ...mockOAuth,
+}));
 jest.mock("~/models/student", () => mockStudents);
+jest.mock("~/models/sensei", () => mockSensei);
 jest.mock("~/lib/observability.server", () => mockObservability);
 
 import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
@@ -79,10 +87,13 @@ describe("MolluLog v1 API entry", () => {
     jest.resetAllMocks();
     mockApi.authenticatePersonalApiKey.mockResolvedValue({
       kind: "authenticated",
-      key: { uid: "key-uid", name: "test", userId: 5, readScope: true, writeScope: true },
+      key: { kind: "personal", uid: "key-uid", name: "test", userId: 5, scopes: ["students:read", "students:write"] },
     });
     mockApi.isApiStudentStateAvailable.mockResolvedValue(true);
     mockApi.reserveApiWriteQuota.mockResolvedValue({ allowed: true, used: 1, resetsAt: new Date() });
+    mockApi.getPersonalApiSubject.mockResolvedValue("mllg_pu_user-subject");
+    mockOAuth.authenticateOAuthAccessToken.mockResolvedValue({ kind: "invalid" });
+    mockSensei.getSenseiById.mockResolvedValue({ username: "sensei", profileStudentId: null });
     mockStudents.getAllStudents.mockResolvedValue([student]);
     mockStudents.getStudentOtherFormUids.mockResolvedValue({});
     baqlPrimaryUids = { "10000": "10000", "10001": "10000", "10002": "10002" };
@@ -119,6 +130,10 @@ describe("MolluLog v1 API entry", () => {
     const env = createEnv(true, "api.mollulog.net");
     const discovery = await handleMolluLogApiRequest(request("/"), env);
     const unknown = await handleMolluLogApiRequest(request("/developers/docs"), env);
+    const tokenEndpoint = await handleMolluLogApiRequest(
+      new Request("https://api.mollulog.net/oauth/token", { method: "POST" }),
+      env,
+    );
 
     expect(discovery?.status).toBe(200);
     expect(await discovery?.json()).toMatchObject({
@@ -130,6 +145,9 @@ describe("MolluLog v1 API entry", () => {
       },
     });
     expect(unknown?.status).toBe(404);
+    expect(tokenEndpoint?.status).toBe(400);
+    expect(tokenEndpoint?.headers.get("Access-Control-Allow-Origin")).toBeNull();
+    expect(await tokenEndpoint?.json()).toMatchObject({ error: "invalid_request" });
     expect(await unknown?.json()).toMatchObject({
       error: { code: "not_found", docs: "https://mollulog.net/developers/docs#error-not_found" },
     });
@@ -160,14 +178,14 @@ describe("MolluLog v1 API entry", () => {
     expect(await response?.json()).toEqual({
       error: {
         code: "unauthorized",
-        message: "Authorization: Bearer 키가 필요해요",
+        message: "Authorization: Bearer API 키 또는 액세스 토큰이 필요해요",
         docs: "https://mollulog.net/developers/docs#error-unauthorized",
       },
     });
     expect(mockApi.authenticatePersonalApiKey).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid and inactive credentials and enforces independent read scope", async () => {
+  it("rejects invalid credentials and applies the scope required by the matched route", async () => {
     mockApi.authenticatePersonalApiKey.mockResolvedValueOnce({ kind: "invalid" });
     const invalid = await handleMolluLogApiRequest(
       request("/v1/students?query=Aru", "GET", { token: "bad" }),
@@ -184,13 +202,71 @@ describe("MolluLog v1 API entry", () => {
 
     mockApi.authenticatePersonalApiKey.mockResolvedValueOnce({
       kind: "authenticated",
-      key: { uid: "key", name: "write only", userId: 5, readScope: false, writeScope: true },
+      key: { kind: "personal", uid: "key", name: "write only", userId: 5, scopes: ["students:write"] },
     });
     const denied = await handleMolluLogApiRequest(
       request("/v1/students?query=Aru", "GET", { token: "bad" }),
       createEnv(),
     );
-    expect(denied?.status).toBe(403);
+    expect(denied?.status).toBe(200);
+    expect(mockApi.isApiStudentStateAvailable).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns profile data with the profile scope without checking student-state availability", async () => {
+    mockApi.authenticatePersonalApiKey.mockResolvedValueOnce({
+      kind: "authenticated",
+      key: { kind: "personal", uid: "profile-key", name: "profile", userId: 5, scopes: ["profile"] },
+    });
+    const response = await handleMolluLogApiRequest(request("/v1/me", "GET", { token: "profile-token" }), createEnv());
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toEqual({
+      id: "mllg_pu_user-subject",
+      username: "sensei",
+      profileStudent: null,
+    });
+    expect(mockApi.isApiStudentStateAvailable).not.toHaveBeenCalled();
+    expect(mockApi.getPersonalApiSubject).toHaveBeenCalledWith(expect.anything(), 5, { ctx: undefined });
+  });
+
+  it("uses the OAuth grant subject for /me", async () => {
+    mockOAuth.authenticateOAuthAccessToken.mockResolvedValueOnce({
+      kind: "authenticated",
+      principal: {
+        kind: "oauth",
+        uid: "app-uid",
+        userId: 5,
+        scopes: ["profile"],
+        subject: "application-specific-subject",
+        applicationUid: "app-uid",
+        applicationName: "Tool",
+      },
+    });
+
+    const response = await handleMolluLogApiRequest(
+      request("/v1/me", "GET", { token: `mllg_ot_${"a".repeat(64)}` }),
+      createEnv(),
+    );
+
+    expect(response?.status).toBe(200);
+    expect(await response?.json()).toEqual({
+      id: "application-specific-subject",
+      username: "sensei",
+      profileStudent: null,
+    });
+    expect(mockApi.getPersonalApiSubject).not.toHaveBeenCalled();
+    expect(mockApi.isApiStudentStateAvailable).not.toHaveBeenCalled();
+  });
+
+  it("denies a profile route when the credential has only student scope", async () => {
+    mockApi.authenticatePersonalApiKey.mockResolvedValueOnce({
+      kind: "authenticated",
+      key: { kind: "personal", uid: "student-key", name: "student", userId: 5, scopes: ["students:read"] },
+    });
+    const response = await handleMolluLogApiRequest(request("/v1/me", "GET", { token: "student-token" }), createEnv());
+
+    expect(response?.status).toBe(403);
+    expect(mockApi.getPersonalApiSubject).not.toHaveBeenCalled();
   });
 
   it("fails closed if the read limiter is missing or denies the account", async () => {
@@ -336,7 +412,7 @@ describe("MolluLog v1 API entry", () => {
   it("denies write requests to a read-only key before reserving quota", async () => {
     mockApi.authenticatePersonalApiKey.mockResolvedValue({
       kind: "authenticated",
-      key: { uid: "read-key", name: "read only", userId: 5, readScope: true, writeScope: false },
+      key: { kind: "personal", uid: "read-key", name: "read only", userId: 5, scopes: ["students:read"] },
     });
 
     const response = await handleMolluLogApiRequest(
@@ -714,10 +790,10 @@ describe("MolluLog v1 API entry", () => {
     expect(logged).not.toContain("Authorization");
   });
 
-  it("does not return the current state to a write-only key", async () => {
+  it("returns the current state to a key with read and write scope", async () => {
     mockApi.authenticatePersonalApiKey.mockResolvedValue({
       kind: "authenticated",
-      key: { uid: "key-uid", name: "write only", userId: 5, readScope: false, writeScope: true },
+      key: { kind: "personal", uid: "key-uid", name: "read and write", userId: 5, scopes: ["students:read", "students:write"] },
     });
     mockApi.patchApiRecruitedStudent.mockResolvedValue({
       kind: "updated",
@@ -731,6 +807,6 @@ describe("MolluLog v1 API entry", () => {
     );
 
     expect(response?.status).toBe(200);
-    expect(await response?.json()).toEqual({ studentUid: "10000" });
+    expect(await response?.json()).toEqual({ studentUid: "10000", tier: 5, weaponTier: 0, level: 81 });
   });
 });

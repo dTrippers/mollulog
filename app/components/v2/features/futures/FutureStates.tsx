@@ -86,7 +86,7 @@ export function FilterEmptyState({
           <p className="mt-1 text-sm text-v2-fg-secondary">선택한 필터: {selectedLabels.join(", ")}</p>
         ) : null}
         {filterActive ? (
-          <Button variant="danger" className="mt-3" onClick={onReset}>
+          <Button variant="danger-subtle" className="mt-3" onClick={onReset}>
             필터 초기화
           </Button>
         ) : null}

@@ -607,7 +607,7 @@ export function getNavigationCatalog({
       group: "personal",
       surfaces: ["desktop", "more", "search"],
       to: "/developers",
-      name: "몰루로그 API",
+      name: "개발자 센터",
       description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
       OutlineIcon: CodeBracketIconOutline,
       SolidIcon: CodeBracketIconSolid,

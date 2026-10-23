@@ -6,10 +6,9 @@ import { PageMain } from "~/components/v2/layout/PageMain";
 import { API_GUIDE_COPY, getApiEndpointGuide } from "~/domain/mollulog-api-guide";
 import {
   API_PUBLIC_ERRORS,
-  API_READ_ROUTE_GROUP,
+  API_ROUTE_GROUPS,
   API_ROUTES,
   API_STUDENT_STATE_FIELD_SPECS,
-  API_WRITE_ROUTE_GROUP,
   type ApiPublicErrorCode,
   type ApiRouteSpec,
   formatApiCurlCommand,
@@ -27,10 +26,11 @@ import {
 
 export const meta: MetaFunction = () => [{ title: "API 문서 | 몰루로그" }];
 
-export function loader({ request }: LoaderFunctionArgs) {
+export function loader({ context, request }: LoaderFunctionArgs) {
+  const { env } = context.cloudflare;
   return {
-    urls: resolveApiDocumentUrls("api.mollulog.net", request.url),
-    siteHost: "https://mollulog.net",
+    urls: resolveApiDocumentUrls(env.API_HOST, request.url),
+    siteHost: env.HOST,
   };
 }
 
@@ -104,17 +104,23 @@ export default function DevelopersDocs() {
           </dl>
         </DocsSection>
 
+        <OAuthGuideSection
+          authorizeUrl={`${siteHost}/oauth/authorize`}
+          tokenUrl={`${urls.origin}/oauth/token`}
+        />
+
         <DocsSection title={API_GUIDE_COPY.sections.endpoints}>
-          <EndpointGroup title={API_READ_ROUTE_GROUP.title}>
-            {API_ROUTES.filter((route) => route.permission === API_READ_ROUTE_GROUP.permission).map((route, index) => (
-              <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} initiallyOpen={index === 0} />
-            ))}
-          </EndpointGroup>
-          <EndpointGroup title={API_WRITE_ROUTE_GROUP.title}>
-            {API_ROUTES.filter((route) => route.permission === API_WRITE_ROUTE_GROUP.permission).map((route) => (
-              <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
-            ))}
-          </EndpointGroup>
+          {API_ROUTE_GROUPS.map((group) => (
+            <EndpointGroup key={group.scope} title={group.title}>
+              {API_ROUTES.filter((route) => route.requiredScopes.some((scope) => scope === group.scope)).map((route) => (
+                <ApiEndpoint
+                  key={route.id}
+                  route={route}
+                  baseUrl={urls.baseUrl}
+                />
+              ))}
+            </EndpointGroup>
+          ))}
         </DocsSection>
 
         <DocsSection title={API_GUIDE_COPY.sections.fields}>
@@ -175,6 +181,72 @@ export default function DevelopersDocs() {
         </DocsSection>
       </div>
     </PageMain>
+  );
+}
+
+function OAuthGuideSection({
+  authorizeUrl,
+  tokenUrl,
+}: {
+  authorizeUrl: string;
+  tokenUrl: string;
+}) {
+  const [authorizeCopyStatus, setAuthorizeCopyStatus] = useState<CopyStatus>("idle");
+  const [tokenCopyStatus, setTokenCopyStatus] = useState<CopyStatus>("idle");
+  const authorizationRequest = `${authorizeUrl}?response_type=code
+&client_id=mllg_oc_<CLIENT_ID>
+&redirect_uri=https%3A%2F%2Fexample.com%2Fcallback
+&scope=profile%20students%3Aread%20students%3Awrite
+&state=<STATE>`;
+  const tokenRequest = `curl -X POST ${tokenUrl} \\
+  -H 'Content-Type: application/x-www-form-urlencoded' \\
+  -d 'grant_type=authorization_code' \\
+  -d 'code=<CODE>' \\
+  -d 'redirect_uri=https://example.com/callback' \\
+  -d 'client_id=mllg_oc_<CLIENT_ID>' \\
+  -d 'client_secret=<CLIENT_SECRET>'`;
+  const tokenResponse = '{"access_token":"<ACCESS_TOKEN>","token_type":"Bearer","expires_in":31536000,"scope":"profile students:write"}';
+
+  return (
+    <div id="oauth">
+      <DocsSection title={API_GUIDE_COPY.sections.oauth}>
+        <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+          <dt className="text-v2-fg-secondary sm:pt-1.5">인증 URL</dt>
+          <dd className="min-w-0">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <code className="min-w-0 break-all font-mono">{authorizeUrl}</code>
+              <CopyTextButton
+                value={authorizeUrl}
+                variant="icon"
+                accessibleContext="인증 URL"
+                onStatusChange={setAuthorizeCopyStatus}
+              />
+            </div>
+            <CopyStatusMessage status={authorizeCopyStatus} />
+          </dd>
+          <dt className="text-v2-fg-secondary sm:pt-1.5">토큰 URL</dt>
+          <dd className="min-w-0">
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <code className="min-w-0 break-all font-mono">{tokenUrl}</code>
+              <CopyTextButton
+                value={tokenUrl}
+                variant="icon"
+                accessibleContext="토큰 URL"
+                onStatusChange={setTokenCopyStatus}
+              />
+            </div>
+            <CopyStatusMessage status={tokenCopyStatus} />
+          </dd>
+        </dl>
+        <CodeBlock label="인증 요청 예시" copyable>{authorizationRequest}</CodeBlock>
+        <CodeBlock label="토큰 요청 예시" copyable>{tokenRequest}</CodeBlock>
+        <CodeBlock label="토큰 응답 200">{tokenResponse}</CodeBlock>
+        <ul className="space-y-1 text-sm text-v2-fg-secondary">
+          <li>Redirect URI는 등록한 주소와 정확히 같아야 해요</li>
+          <li>액세스 토큰은 1년간 유효하고 갱신 토큰은 없어요</li>
+        </ul>
+      </DocsSection>
+    </div>
   );
 }
 
@@ -266,17 +338,15 @@ function SlashBreakUrl({ url }: { url: string }) {
 function ApiEndpoint({
   route,
   baseUrl,
-  initiallyOpen = false,
 }: {
   route: (typeof API_ROUTES)[number];
   baseUrl: string;
-  initiallyOpen?: boolean;
 }) {
   const guide = getApiEndpointGuide(route.id);
   const curl = formatApiCurlCommand(baseUrl, route);
   const responseJson = JSON.stringify(route.responseExample.body);
   return (
-    <EndpointRow method={route.method} path={route.displayPath} summary={route.summary} initiallyOpen={initiallyOpen}>
+    <EndpointRow method={route.method} path={route.displayPath} summary={route.summary}>
       {route.parameters.length > 0 ? <ParameterTable route={route} /> : null}
       {"required" in guide ? <p className="text-sm">{guide.required}</p> : null}
       <CodeBlock label={API_GUIDE_COPY.requestExampleLabel} tone="surface" copyable>

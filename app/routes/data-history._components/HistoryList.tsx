@@ -1,8 +1,9 @@
-import { KeyIcon } from "@heroicons/react/24/outline";
+import { KeyIcon, Squares2X2Icon } from "@heroicons/react/24/outline";
 import { useId, useState } from "react";
 import StudentTierLabel from "~/components/features/students/StudentTierLabel";
 import { ProfileImage } from "~/components/primitives";
 import { API_AUDIT_HISTORY_DIRECT_SOURCES } from "~/domain/api-audit-history";
+import { getDeveloperScopeSummary, getUserScopeSummary, type ApiScope } from "~/domain/mollulog-api-spec";
 import { type Change, getChangedValues } from "~/domain/data-history";
 import type { ApiAuditEvent } from "~/models/mollulog-api";
 
@@ -50,7 +51,7 @@ function formatDate(value: string) {
     day: "2-digit",
   }).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value;
-  return `${part("year")}.${part("month")}.${part("day")}`;
+  return `${part("year")}/${part("month")}/${part("day")}`;
 }
 
 function groupEventsByDate(events: ApiAuditEvent[]) {
@@ -65,8 +66,7 @@ function groupEventsByDate(events: ApiAuditEvent[]) {
 }
 
 type KeyMetadata = {
-  readScope: boolean;
-  writeScope: boolean;
+  scopes: ApiScope[];
   createdAt: string;
   expiresAt: string;
   revokedAt: string | null;
@@ -87,7 +87,15 @@ function HistoryEvent({
   const groups = [...new Set(changes.map(({ group }) => group))];
   const recruitmentChange = changes.find(({ key }) => key === "recruited");
   const subject =
-    event.kind === "key"
+    event.kind === "connection"
+      ? event.action === "connected"
+        ? "연결"
+        : event.action === "scopes_expanded"
+          ? "권한 추가"
+          : event.action === "disconnected"
+            ? "연결 해제"
+            : "동작을 확인할 수 없어요"
+      : event.kind === "key"
       ? event.action === "issued"
         ? "API 키 발급"
         : event.action === "revoked"
@@ -98,6 +106,12 @@ function HistoryEvent({
           ? "모집 등록"
           : "모집 해제"
         : groups.join(" · ");
+  const title =
+    event.kind === "connection"
+      ? (event.oauthApplicationName ?? "애플리케이션 정보를 확인할 수 없어요")
+      : event.kind === "key"
+        ? (event.apiKeyName ?? "키 이름을 확인할 수 없어요")
+        : (studentName ?? "학생 정보를 찾을 수 없어요");
   const time = new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
     minute: "2-digit",
@@ -117,12 +131,21 @@ function HistoryEvent({
         <div className="min-w-0 max-w-40 break-words text-right text-xs text-muted-foreground sm:col-start-4 sm:row-start-1 sm:pt-1">
           <p>{event.kind === "key" ? "API 키 관리" : getHistorySource(event.source)}</p>
           {event.kind === "student" && event.source === "api" ? (
-            <p className="mt-0.5">{event.apiKeyName ?? "키 이름을 확인할 수 없어요"}</p>
+            <p className="mt-0.5 flex items-center justify-end gap-1">
+              {event.oauthApplicationUid ? (
+                <OAuthApplicationIcon />
+              ) : event.apiKeyUid ? (
+                <KeyIcon className="size-3.5" aria-hidden="true" />
+              ) : null}
+              {event.oauthApplicationName ?? event.apiKeyName ?? "주체 정보를 확인할 수 없어요"}
+            </p>
           ) : null}
         </div>
       </div>
       <div className="col-start-1 row-start-2 shrink-0 sm:col-start-2 sm:row-start-1">
-        {event.kind === "key" ? (
+        {event.kind === "connection" ? (
+          <OAuthApplicationIcon />
+        ) : event.kind === "key" ? (
           <span className="flex size-8 items-center justify-center rounded-full bg-muted">
             <KeyIcon className="size-4 text-muted-foreground" aria-hidden="true" />
           </span>
@@ -132,14 +155,12 @@ function HistoryEvent({
       </div>
       <div className="col-start-2 row-start-2 min-w-0 sm:col-start-3 sm:row-start-1">
         <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-          <h3 className="break-words text-sm font-semibold">
-            {event.kind === "key"
-              ? (event.apiKeyName ?? "키 이름을 확인할 수 없어요")
-              : (studentName ?? "학생 정보를 찾을 수 없어요")}
-          </h3>
+          <h3 className="break-words text-sm font-semibold">{title}</h3>
           <span className="text-xs text-muted-foreground">{subject}</span>
         </div>
-        {event.kind === "key" ? (
+        {event.kind === "connection" ? (
+          <ConnectionSummary event={event} />
+        ) : event.kind === "key" ? (
           <KeySummary event={event} metadata={event.apiKeyUid ? apiKeysByUid[event.apiKeyUid] : undefined} />
         ) : (
           <ChangedValues changes={changes} itemNamesByUid={itemNamesByUid} />
@@ -151,6 +172,7 @@ function HistoryEvent({
 
 function getHistorySource(source: string) {
   if (source === "api") return "API";
+  if (source === "oauth_connection") return "연결된 애플리케이션";
   if (source === "sync_draft") return "데이터 반영";
   if (source === "recruitment_result") return "모집 결과 기록";
   if ((API_AUDIT_HISTORY_DIRECT_SOURCES as readonly string[]).includes(source)) return "웹에서 수정";
@@ -158,15 +180,34 @@ function getHistorySource(source: string) {
 }
 
 function KeySummary({ event, metadata }: { event: ApiAuditEvent; metadata?: KeyMetadata }) {
-  const scopes = metadata
-    ? [metadata.readScope ? "읽기" : null, metadata.writeScope ? "쓰기" : null].filter(Boolean).join("/")
-    : null;
+  const scopes = metadata ? getDeveloperScopeSummary(metadata.scopes) : null;
   return (
     <p className="mt-1 break-words text-sm text-muted-foreground">
       {metadata && scopes && (event.action === "issued" || event.action === "revoked")
-        ? `학생 ${scopes} · ${event.action === "issued" ? `${formatDate(metadata.expiresAt)} 만료` : `${formatDate(metadata.createdAt)} 발급`}`
+        ? `${scopes} · ${event.action === "issued" ? `${formatDate(metadata.expiresAt)} 만료` : `${formatDate(metadata.createdAt)} 발급`}`
         : "키 정보를 확인할 수 없어요"}
     </p>
+  );
+}
+
+function ConnectionSummary({ event }: { event: ApiAuditEvent }) {
+  const scopes = event.scopes ? getUserScopeSummary(event.scopes) : null;
+  return (
+    <p className="mt-1 break-words text-sm text-muted-foreground">
+      {scopes || "권한 정보를 확인할 수 없어요"}
+      {event.action === "disconnected" && event.grantCreatedAt ? ` · ${formatDate(event.grantCreatedAt)} 연결` : null}
+      {event.disconnectReason === "application_deleted" ? (
+        <span className="text-muted-foreground"> · 앱 삭제로 해제</span>
+      ) : null}
+    </p>
+  );
+}
+
+function OAuthApplicationIcon() {
+  return (
+    <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-muted">
+      <Squares2X2Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+    </span>
   );
 }
 

@@ -284,6 +284,7 @@ export default function App() {
   const location = useLocation();
   const navigationType = useNavigationType();
   const pathname = location.pathname;
+  const isOAuthAuthorizeRoute = pathname === "/oauth/authorize";
   const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
   const pagePath = `${location.pathname}${location.search}`;
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
@@ -348,31 +349,41 @@ export default function App() {
       <LoadingBar ref={loadingBarRef} color="#3b82f6" height={3} waitingTime={300} />
       <SignInProvider>
         <div className="flex flex-col lg:flex-row h-dvh">
-          <NavigationBar
-            currentUsername={currentUsername}
-            isAdmin={isAdmin}
-            currentProfileStudentId={currentProfileStudentId}
-            favoriteNavigationIds={favoriteNavigationIds}
-            mobileNavigationIds={mobileNavigationIds}
-            desktopNavigationCollapsed={desktopNavigationCollapsed}
-            desktopNavigationExpandedGroups={desktopNavigationExpandedGroups}
-            darkMode={darkMode}
-            setDarkMode={setDarkMode}
-            upcomingEvent={navigationBarContents.upcomingEvent}
-            hasRecentNews={navigationBarContents.hasRecentNews}
-            hasOngoingRaid={navigationBarContents.hasOngoingRaid}
-            hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
-            hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
-            unreadNotificationCount={navigationBarContents.unreadNotificationCount}
-            menuBadgeOverrides={navigationBarContents.menuBadgeOverrides}
-            siteBanner={siteBanner}
-          />
+          {isOAuthAuthorizeRoute ? null : (
+            <NavigationBar
+              currentUsername={currentUsername}
+              isAdmin={isAdmin}
+              currentProfileStudentId={currentProfileStudentId}
+              favoriteNavigationIds={favoriteNavigationIds}
+              mobileNavigationIds={mobileNavigationIds}
+              desktopNavigationCollapsed={desktopNavigationCollapsed}
+              desktopNavigationExpandedGroups={desktopNavigationExpandedGroups}
+              darkMode={darkMode}
+              setDarkMode={setDarkMode}
+              upcomingEvent={navigationBarContents.upcomingEvent}
+              hasRecentNews={navigationBarContents.hasRecentNews}
+              hasOngoingRaid={navigationBarContents.hasOngoingRaid}
+              hasUnconsumedCoupons={navigationBarContents.hasUnconsumedCoupons}
+              hasUnreadFeedbackReplies={navigationBarContents.hasUnreadFeedbackReplies}
+              unreadNotificationCount={navigationBarContents.unreadNotificationCount}
+              menuBadgeOverrides={navigationBarContents.menuBadgeOverrides}
+              siteBanner={siteBanner}
+            />
+          )}
           <div
-            className={`mllg-content-area w-full overflow-y-scroll pt-[var(--mobile-header-height)] lg:min-w-0 lg:flex-1 lg:pt-0 ${
-              isContentTransitionRoute ? "mllg-view-transition-content" : ""
+            className={`mllg-content-area w-full overflow-y-scroll ${
+              isOAuthAuthorizeRoute ? "min-h-dvh flex-1" : "pt-[var(--mobile-header-height)] lg:min-w-0 lg:flex-1 lg:pt-0"
+            } ${
+              isContentTransitionRoute && !isOAuthAuthorizeRoute ? "mllg-view-transition-content" : ""
             }`}
           >
-            <div className="page-available-width-container @container/page-available mx-auto w-full max-w-7xl px-4 pt-2 pb-6 transition-all duration-300 ease-out has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none motion-reduce:transition-none md:px-8 lg:min-h-screen lg:py-6">
+            <div
+              className={`page-available-width-container @container/page-available mx-auto w-full transition-all duration-300 ease-out motion-reduce:transition-none ${
+                isOAuthAuthorizeRoute
+                  ? "min-h-dvh max-w-none p-0"
+                  : "max-w-7xl px-4 pt-2 pb-6 has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none md:px-8 lg:min-h-screen lg:py-6"
+              }`}
+            >
               <TimeZoneProvider timeZone={displayTimeZone}>
                 <StudentCardPopupProvider key={pathname}>
                   {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
@@ -391,7 +402,7 @@ export default function App() {
                   />
                 </StudentCardPopupProvider>
               </TimeZoneProvider>
-              <Footer />
+              {isOAuthAuthorizeRoute ? null : <Footer />}
             </div>
           </div>
         </div>

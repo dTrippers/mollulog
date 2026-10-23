@@ -5,7 +5,7 @@ import { pgSenseisTable } from "~/db/postgres/schema";
 import type { AccountLabel } from "~/domain/account-label";
 import { postgresUniqueConstraintName } from "~/lib/db";
 
-export type SenseiRole = "guest" | "admin";
+export type SenseiRole = "guest" | "app_developer" | "admin";
 export type ProfileVisibility = "public" | "private";
 
 // Kept as the model-facing table export for callers and test fixtures. The

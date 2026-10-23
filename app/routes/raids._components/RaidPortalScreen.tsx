@@ -56,14 +56,14 @@ function getRaidTimelinePath(raid: RaidScheduleListItem) {
 }
 
 function formatRaidDateRange(raid: RaidScheduleListItem, timeZone: string) {
-  const startDate = raid.startAt ? formatInstant(raid.startAt, { timeZone, format: "YYYY.MM.DD" }) : "미정";
+  const startDate = raid.startAt ? formatInstant(raid.startAt, { timeZone, format: "YYYY/MM/DD" }) : "미정";
   if (!raid.endAt) {
     return `${startDate} ~ 미정`;
   }
 
   const startYear = raid.startAt ? formatInstant(raid.startAt, { timeZone, format: "YYYY" }) : null;
   const endYear = formatInstant(raid.endAt, { timeZone, format: "YYYY" });
-  const endFormat = startYear === endYear ? "MM.DD" : "YYYY.MM.DD";
+  const endFormat = startYear === endYear ? "MM/DD" : "YYYY/MM/DD";
   return `${startDate} ~ ${formatInstant(raid.endAt, { timeZone, format: endFormat })}`;
 }
 
@@ -147,7 +147,7 @@ function RaidHeroCard({ raid, status }: { raid: RaidScheduleListItem; status: "c
             {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex} ·{" "}
             {terrainLocale[raid.terrain]}
             {isCurrent && raid.startAt && raid.endAt
-              ? ` · ${formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" })}–${formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "M.D" })}`
+              ? ` · ${formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M/D" })}–${formatInstant(raid.endAt, { timeZone: displayTimeZone, format: "M/D" })}`
               : ""}
           </p>
           {!isCurrent ? (
@@ -290,7 +290,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
                 </p>
                 <h3 className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{raid.raidBoss.name}</h3>
                 <p className="shrink-0 text-xs tabular-nums text-muted-foreground">
-                  {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" }) : "미정"}
+                  {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M/D" }) : "미정"}
                 </p>
               </div>
               <div className="mt-2 flex items-end justify-between gap-2">
@@ -337,7 +337,7 @@ function UpcomingRaids({ upcomingRaids }: { upcomingRaids: RaidPortalUpcomingRai
               return (
                 <tr key={raid.uid} className="border-b border-border/70 last:border-0">
                   <td className="whitespace-nowrap px-3 py-3 tabular-nums">
-                    {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M.D" }) : "미정"}
+                    {raid.startAt ? formatInstant(raid.startAt, { timeZone: displayTimeZone, format: "M/D" }) : "미정"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-3 text-muted-foreground">
                     {raidTypeLocale[raid.raidType as RaidType] ?? raid.raidType} #{raid.seasonIndex}

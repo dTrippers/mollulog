@@ -82,11 +82,61 @@ function captureSentryError(error: unknown, context: LogContext) {
 }
 
 const SENSITIVE_REQUEST_HEADERS = new Set(["authorization", "proxy-authorization", "cookie"]);
+const SENSITIVE_OAUTH_PARAMETERS = new Set([
+  "code",
+  "state",
+  "code_verifier",
+  "client_secret",
+  "access_token",
+  "refresh_token",
+]);
+
+function scrubOAuthUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    for (const parameter of SENSITIVE_OAUTH_PARAMETERS) url.searchParams.delete(parameter);
+    return url.toString();
+  } catch {
+    return value;
+  }
+}
+
+function scrubOAuthRequestData(data: unknown): unknown {
+  if (typeof data === "string") {
+    try {
+      const parsed: unknown = JSON.parse(data);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        return JSON.stringify(scrubOAuthRequestData(parsed));
+      }
+    } catch {
+      // OAuth form bodies are URL-encoded; retain unrelated string bodies as-is.
+    }
+    const parameters = new URLSearchParams(data);
+    let changed = false;
+    for (const parameter of SENSITIVE_OAUTH_PARAMETERS) {
+      if (parameters.has(parameter)) {
+        parameters.delete(parameter);
+        changed = true;
+      }
+    }
+    return changed ? parameters.toString() : data;
+  }
+  if (data && typeof data === "object" && !Array.isArray(data)) {
+    const sanitized = { ...(data as Record<string, unknown>) };
+    for (const key of Object.keys(sanitized)) {
+      if (SENSITIVE_OAUTH_PARAMETERS.has(key.toLowerCase())) delete sanitized[key];
+    }
+    return sanitized;
+  }
+  return data;
+}
 
 /** Drops credentials the SDK copies from the incoming request: API keys, session cookies and parsed cookies. */
 export function scrubServerSentryEvent<T extends Sentry.Event>(event: T): T {
   const request = event.request;
   if (!request) return event;
+  if (request.url) request.url = scrubOAuthUrl(request.url);
+  if (request.data !== undefined) request.data = scrubOAuthRequestData(request.data);
   if (request.headers) {
     request.headers = Object.fromEntries(
       Object.entries(request.headers).filter(([name]) => !SENSITIVE_REQUEST_HEADERS.has(name.toLowerCase())),

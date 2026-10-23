@@ -110,4 +110,26 @@ describe("server Sentry options", () => {
     });
     expect(event.request).toEqual({ headers: { accept: "*/*" } });
   });
+
+  it("scrubs OAuth credentials from query strings and request bodies", () => {
+    const event = scrubServerSentryEvent({
+      request: {
+        url: "https://api.mollulog.net/oauth/callback?state=state-secret&code=code-secret&client_id=public-id",
+        data: "grant_type=authorization_code&code=code-secret&code_verifier=verifier-secret&client_secret=secret&client_id=public-id",
+      },
+    });
+
+    expect(event.request?.url).toBe("https://api.mollulog.net/oauth/callback?client_id=public-id");
+    expect(event.request?.data).toBe("grant_type=authorization_code&client_id=public-id");
+  });
+
+  it("scrubs OAuth fields from JSON request bodies", () => {
+    const event = scrubServerSentryEvent({
+      request: {
+        data: JSON.stringify({ code: "code-secret", access_token: "token-secret", client_id: "public-id" }),
+      },
+    });
+
+    expect(event.request?.data).toBe(JSON.stringify({ client_id: "public-id" }));
+  });
 });

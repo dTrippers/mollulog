@@ -101,7 +101,7 @@ function VideoCard({
       ? `편성 최고 ${rankHint.rank.toLocaleString()}위`
       : null;
   const scoreLabel = typeof score === "number" ? `${score.toLocaleString()}점` : null;
-  const publishedDateLabel = publishedAt ? publishedAt.slice(0, 10).replaceAll("-", ".") : null;
+  const publishedDateLabel = publishedAt ? publishedAt.slice(0, 10).replaceAll("-", "/") : null;
 
   return (
     <article className="flex h-full flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">

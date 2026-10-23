@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
 export type V2ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "text" | "danger";
+  variant?: "primary" | "secondary" | "text" | "danger" | "danger-subtle";
   size?: "md" | "sm";
 };
 
@@ -14,8 +14,9 @@ const variantClassName = {
   primary: "bg-v2-fg text-v2-canvas hover:opacity-90",
   secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
   text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover",
-  // Danger clears an applied filter state, with a verb label, as PanelAction does.
-  danger: "bg-v2-danger-subtle text-v2-danger hover:opacity-90",
+  danger:
+    "bg-v2-danger-solid text-v2-on-danger enabled:hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled",
+  "danger-subtle": "bg-v2-danger-subtle text-v2-danger enabled:hover:opacity-90",
 } as const;
 
 // Visual heights: md 2rem, sm 1.75rem, on every layout.

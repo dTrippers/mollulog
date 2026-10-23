@@ -52,6 +52,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
 | `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5). 4.5:1 or higher on subtle, surface, and canvas |
 | `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction`, and of a failed value in a review table. Text on it: 8.4:1 light, 5.2:1 dark (measured) |
+| `bg-v2-danger-solid`, `text-v2-on-danger` | `oklch(0.54 0.16 25)` / `oklch(1 0 0)` | `oklch(0.52 0.15 25)` / `oklch(1 0 0)` | Filled destructive `Button` (`danger`): tone-down brick red with white text. Estimated contrast is 5.5:1 light and 6.0:1 dark; measure normal and hover states after implementation |
 | `bg-v2-warning-subtle` | `oklch(0.965 0.05 95)` | `oklch(0.33 0.07 75)` | Status: background of a value that needs confirmation (D6). The text on it keeps `text-v2-fg` (16.8:1 light, 18.0:1 dark, measured). The tone is the background only; the label carries the meaning |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
@@ -104,6 +105,7 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 
 - `success` is status. It means confirmed or completed.
 - `danger` is status. Use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
+- The v2 `Button` `danger` variant is for destructive actions that need a strong red fill, such as deleting a key, application, or connection. The `danger-subtle` variant is for reversible reset, cancel, or exclusion actions. Keep `PanelAction` and status notices on `text-v2-danger` and `bg-v2-danger-subtle`.
 - `neutral` `PanelAction` is for helper actions that do not clear state, such as "모두 보기". Do not use `danger` for them.
 - `live`, `favorite`, `new`, and `attr-*` are domain colors. They describe content, not state.
 - Do not use color alone to convey meaning. Pair color with a text label or a distinct icon shape; an icon-only element (for example the favorite heart or the completed check) needs an accessible name.

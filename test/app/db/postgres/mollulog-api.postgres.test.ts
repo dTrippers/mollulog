@@ -1,14 +1,20 @@
 import { spawn } from "node:child_process";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "@jest/globals";
-import { eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client } from "pg";
 import {
   pgApiKeysTable,
+  pgApiUserSubjectsTable,
+  pgOAuthAccessTokensTable,
+  pgOAuthApplicationsTable,
+  pgOAuthAuthorizationCodesTable,
+  pgOAuthConnectionEventsTable,
+  pgOAuthGrantsTable,
   pgStudentStateAuditsTable,
   pgStudentStatesTable,
   pgStudentTargetsTable,
@@ -22,11 +28,27 @@ import {
   deleteApiRecruitedStudent,
   getApiAuditHistory,
   getPersonalApiKeys,
+  getPersonalApiSubject,
   patchApiRecruitedStudent,
   registerApiRecruitedStudent,
   reserveApiWriteQuota,
   revokePersonalApiKey,
 } from "~/models/mollulog-api";
+import {
+  authenticateOAuthAccessToken,
+  createOAuthApplication,
+  deleteOwnedOAuthApplication,
+  disconnectOAuthGrant,
+  exchangeOAuthAuthorizationCode,
+  getOAuthApplicationForClient,
+  getOAuthApplications,
+  getOAuthConnections,
+  issueOAuthAuthorizationCode,
+  OAuthInvalidClientError,
+  OAuthInvalidGrantError,
+  regenerateOAuthClientSecret,
+  updateOwnedOAuthApplication,
+} from "~/models/mollulog-oauth";
 import { getRelationshipLevel, upsertRelationshipLevel } from "~/models/relationship-level";
 
 const enabled = process.env.MOLLOG_API_POSTGRES_VALIDATION === "1";
@@ -103,14 +125,40 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
       ]) {
         await admin.query(await readMigration(migration));
       }
-      await admin.query("CREATE TABLE senseis (id integer PRIMARY KEY, active boolean NOT NULL)");
-      await admin.query("INSERT INTO senseis (id, active) VALUES (5, true), (6, false)");
+      await admin.query(
+        "CREATE TABLE senseis (id integer PRIMARY KEY, active boolean NOT NULL, username text NOT NULL, role text NOT NULL DEFAULT 'guest')",
+      );
+      await admin.query(
+        "INSERT INTO senseis (id, active, username, role) VALUES (5, true, 'owner', 'app_developer'), (6, false, 'inactive', 'guest'), (7, true, 'legacy', 'guest')",
+      );
+      await admin.query(
+        `INSERT INTO api_keys (uid, user_id, name, key_hash, key_prefix, read_scope, write_scope, expires_at)
+         VALUES ('legacy-read', 7, 'legacy read', repeat('a', 64), 'mllg_legacy', true, false, now() + interval '1 year'),
+                ('legacy-write', 7, 'legacy write', repeat('b', 64), 'mllg_legacy', false, true, now() + interval '1 year'),
+                ('legacy-none', 7, 'legacy none', repeat('c', 64), 'mllg_legacy', false, false, now() + interval '1 year')`,
+      );
+      await admin.query(await readMigration("20261022000100_add_api_scopes_and_oauth.sql"));
+      const migratedScopes = await admin.query<{ uid: string; scopes: string[] }>(
+        "SELECT uid, scopes FROM api_keys WHERE uid LIKE 'legacy-%' ORDER BY uid",
+      );
+      expect(migratedScopes.rows).toEqual([
+        { uid: "legacy-none", scopes: [] },
+        { uid: "legacy-read", scopes: ["students:read"] },
+        { uid: "legacy-write", scopes: ["students:read", "students:write"] },
+      ]);
+      await admin.query(
+        `INSERT INTO api_keys (uid, user_id, name, key_hash, key_prefix, read_scope, write_scope, expires_at)
+         VALUES ('predeploy-write', 7, 'predeploy write', repeat('d', 64), 'mllg_legacy', false, true, now() + interval '1 year')`,
+      );
+      const predeployScopes = await admin.query<{ scopes: string[] }>(
+        "SELECT scopes FROM api_keys WHERE uid = 'predeploy-write'",
+      );
+      expect(predeployScopes.rows).toEqual([{ scopes: ["students:read", "students:write"] }]);
       const env = modelEnvForSchema(schema);
       const db = drizzle(admin);
       const issued = await createPersonalApiKey(env, 5, {
         name: "  desktop sync  ",
-        readScope: true,
-        writeScope: true,
+        scopes: ["students:write"],
       });
       expect(issued.key.name).toBe("desktop sync");
       expect(issued.token).toMatch(/^mllg_[a-f0-9]{64}$/);
@@ -140,33 +188,41 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
 
       expect(await authenticatePersonalApiKey(env, issued.token)).toEqual({
         kind: "authenticated",
-        key: expect.objectContaining({ uid: issued.key.uid, userId: 5, readScope: true, writeScope: true }),
+        key: expect.objectContaining({ uid: issued.key.uid, userId: 5, scopes: ["students:read", "students:write"] }),
       });
       const readOnlyKey = await createPersonalApiKey(env, 5, {
         name: "read only",
-        readScope: true,
-        writeScope: false,
+        scopes: ["students:read"],
       });
       expect(await authenticatePersonalApiKey(env, readOnlyKey.token)).toEqual({
         kind: "authenticated",
-        key: expect.objectContaining({ readScope: true, writeScope: false }),
+        key: expect.objectContaining({ scopes: ["students:read"] }),
       });
       const writeKey = await createPersonalApiKey(env, 5, {
         name: "write includes read",
-        readScope: false,
-        writeScope: true,
+        scopes: ["students:write"],
       });
-      expect(writeKey.key).toMatchObject({ readScope: true, writeScope: true });
+      expect(writeKey.key).toMatchObject({ scopes: ["students:read", "students:write"] });
       expect(await authenticatePersonalApiKey(env, writeKey.token)).toEqual({
         kind: "authenticated",
-        key: expect.objectContaining({ readScope: true, writeScope: true }),
+        key: expect.objectContaining({ scopes: ["students:read", "students:write"] }),
       });
       await admin.query("UPDATE api_keys SET expires_at = now() - interval '1 second' WHERE uid = $1", [
         readOnlyKey.key.uid,
       ]);
       expect(await authenticatePersonalApiKey(env, readOnlyKey.token)).toEqual({ kind: "invalid" });
-      const inactiveKey = await createPersonalApiKey(env, 6, { name: "inactive", readScope: true, writeScope: false });
+      const inactiveKey = await createPersonalApiKey(env, 6, { name: "inactive", scopes: ["students:read"] });
       expect(await authenticatePersonalApiKey(env, inactiveKey.token)).toEqual({ kind: "inactive" });
+
+      const profileKey = await createPersonalApiKey(env, 5, { name: "profile", scopes: ["profile"] });
+      expect(profileKey.key.scopes).toEqual(["profile"]);
+      expect(await authenticatePersonalApiKey(env, profileKey.token)).toMatchObject({
+        kind: "authenticated",
+        key: { scopes: ["profile"] },
+      });
+      const [personalSubject] = await db.select().from(pgApiUserSubjectsTable);
+      expect(personalSubject.subject).toMatch(/^mllg_pu_[a-f0-9]{64}$/);
+      expect(await getPersonalApiSubject(env, 5)).toBe(personalSubject.subject);
 
       const firstQuotaTime = new Date("2026-10-10T00:00:00.000Z");
       const firstReservation = await reserveApiWriteQuota(env, 5, {}, firstQuotaTime);
@@ -503,6 +559,217 @@ describePostgres("MolluLog API models against isolated PostgreSQL", () => {
       );
       expect(webAudits).toHaveLength(1);
       expect(webAudits[0]).toEqual(expect.objectContaining({ api_key_uid: null, api_key_name: null }));
+
+      const oauth = await createOAuthApplication(env, 5, {
+        name: "  OAuth tool  ",
+        redirectUris: ["https://tool.example/callback"],
+        scopes: ["profile"],
+      });
+      expect(oauth.application.name).toBe("OAuth tool");
+      expect(oauth.application.clientId).toMatch(/^mllg_oc_[a-f0-9]{32}$/);
+      expect(oauth.clientSecret).toMatch(/^mllg_os_[a-f0-9]{64}$/);
+      const [storedOAuthApplication] = await db
+        .select()
+        .from(pgOAuthApplicationsTable)
+        .where(eq(pgOAuthApplicationsTable.uid, oauth.application.uid));
+      expect(storedOAuthApplication.clientSecretHash).not.toContain(oauth.clientSecret);
+      expect(storedOAuthApplication.clientSecretHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(await getOAuthApplications(env, 6)).toEqual([]);
+      expect(await getOAuthApplicationForClient(env, oauth.application.clientId)).toMatchObject({
+        ownerUsername: "owner",
+        application: { uid: oauth.application.uid },
+      });
+      expect(await updateOwnedOAuthApplication(env, 6, oauth.application.uid, {
+        name: "foreign edit",
+        redirectUris: oauth.application.redirectUris,
+        scopes: ["profile"],
+      })).toBeNull();
+
+      const issueCode = (scopes: Array<"profile" | "students:read" | "students:write">, codeChallenge: string | null = null) =>
+        issueOAuthAuthorizationCode(env, {
+          applicationId: oauth.application.id,
+          applicationUid: oauth.application.uid,
+          applicationName: oauth.application.name,
+          userId: 5,
+          redirectUri: oauth.application.redirectUris[0],
+          scopes,
+          codeChallenge,
+        });
+      const firstCode = await issueCode(["profile"]);
+      const firstCodeHash = createHash("sha256").update(firstCode).digest("hex");
+      const [storedAuthorization] = await db
+        .select()
+        .from(pgOAuthAuthorizationCodesTable)
+        .where(eq(pgOAuthAuthorizationCodesTable.codeHash, firstCodeHash));
+      expect(storedAuthorization.codeHash).not.toContain(firstCode);
+      expect(storedAuthorization.usedAt).toBeNull();
+      expect(storedAuthorization.expiresAt.getTime() - storedAuthorization.createdAt.getTime()).toBe(5 * 60 * 1000);
+      await expect(
+        exchangeOAuthAuthorizationCode(env, {
+          clientId: oauth.application.clientId,
+          clientSecret: oauth.clientSecret,
+          code: firstCode,
+          redirectUri: "https://tool.example/other",
+          codeVerifier: null,
+        }),
+      ).rejects.toBeInstanceOf(OAuthInvalidGrantError);
+      const firstToken = await exchangeOAuthAuthorizationCode(env, {
+        clientId: oauth.application.clientId,
+        clientSecret: oauth.clientSecret,
+        code: firstCode,
+        redirectUri: oauth.application.redirectUris[0],
+        codeVerifier: null,
+      });
+      expect(firstToken.scopes).toEqual(["profile"]);
+      expect(firstToken.accessToken).toMatch(/^mllg_ot_[a-f0-9]{64}$/);
+      const firstTokenHash = createHash("sha256").update(firstToken.accessToken).digest("hex");
+      const [storedToken] = await db
+        .select()
+        .from(pgOAuthAccessTokensTable)
+        .where(eq(pgOAuthAccessTokensTable.tokenHash, firstTokenHash));
+      expect(storedToken.tokenHash).not.toContain(firstToken.accessToken);
+      expect(storedToken.expiresAt.getUTCFullYear()).toBe(storedToken.issuedAt.getUTCFullYear() + 1);
+      expect(await authenticateOAuthAccessToken(env, firstToken.accessToken)).toMatchObject({
+        kind: "authenticated",
+        principal: { scopes: ["profile"], applicationUid: oauth.application.uid },
+      });
+      await expect(
+        exchangeOAuthAuthorizationCode(env, {
+          clientId: oauth.application.clientId,
+          clientSecret: oauth.clientSecret,
+          code: firstCode,
+          redirectUri: oauth.application.redirectUris[0],
+          codeVerifier: null,
+        }),
+      ).rejects.toBeInstanceOf(OAuthInvalidGrantError);
+
+      const expandedApplication = await updateOwnedOAuthApplication(env, 5, oauth.application.uid, {
+        name: oauth.application.name,
+        redirectUris: oauth.application.redirectUris,
+        scopes: ["profile", "students:write"],
+      });
+      expect(expandedApplication?.scopes).toEqual(["profile", "students:read", "students:write"]);
+      const verifier = "v".repeat(43);
+      const challenge = createHash("sha256").update(verifier).digest("base64url");
+      const expandedCode = await issueCode(["profile", "students:read", "students:write"], challenge);
+      const [expandedGrant] = await db
+        .select()
+        .from(pgOAuthGrantsTable)
+        .where(eq(pgOAuthGrantsTable.applicationId, oauth.application.id));
+      expect(expandedGrant.scopes).toEqual(["profile", "students:read", "students:write"]);
+      await expect(
+        exchangeOAuthAuthorizationCode(env, {
+          clientId: oauth.application.clientId,
+          clientSecret: oauth.clientSecret,
+          code: expandedCode,
+          redirectUri: oauth.application.redirectUris[0],
+          codeVerifier: "x".repeat(43),
+        }),
+      ).rejects.toBeInstanceOf(OAuthInvalidGrantError);
+      const expandedToken = await exchangeOAuthAuthorizationCode(env, {
+        clientId: oauth.application.clientId,
+        clientSecret: oauth.clientSecret,
+        code: expandedCode,
+        redirectUri: oauth.application.redirectUris[0],
+        codeVerifier: verifier,
+      });
+      expect(expandedToken.scopes).toEqual(["profile", "students:read", "students:write"]);
+      expect(
+        (await getApiAuditHistory(env, 5, { limit: 50, filter: "direct" })).events.some(
+          (event) => event.kind === "connection" && event.action === "scopes_expanded",
+        ),
+      ).toBe(true);
+
+      await updateOwnedOAuthApplication(env, 5, oauth.application.uid, {
+        name: oauth.application.name,
+        redirectUris: oauth.application.redirectUris,
+        scopes: ["profile"],
+      });
+      expect(await authenticateOAuthAccessToken(env, expandedToken.accessToken)).toMatchObject({
+        kind: "authenticated",
+        principal: { scopes: ["profile", "students:read", "students:write"] },
+      });
+      const reducedCode = await issueCode(["profile"]);
+      const reducedToken = await exchangeOAuthAuthorizationCode(env, {
+        clientId: oauth.application.clientId,
+        clientSecret: oauth.clientSecret,
+        code: reducedCode,
+        redirectUri: oauth.application.redirectUris[0],
+        codeVerifier: null,
+      });
+      expect(reducedToken.scopes).toEqual(["profile"]);
+
+      const oldConnection = (await getOAuthConnections(env, 5))[0];
+      expect(oldConnection.lastUsedAt).toBeInstanceOf(Date);
+      expect(await disconnectOAuthGrant(env, 5, oldConnection.id)).toBe(true);
+      expect(await authenticateOAuthAccessToken(env, firstToken.accessToken)).toEqual({ kind: "invalid" });
+      expect(await authenticateOAuthAccessToken(env, expandedToken.accessToken)).toEqual({ kind: "invalid" });
+      expect(await authenticateOAuthAccessToken(env, reducedToken.accessToken)).toEqual({ kind: "invalid" });
+      expect(await disconnectOAuthGrant(env, 6, oldConnection.id)).toBe(false);
+      expect(await getOAuthConnections(env, 5)).toEqual([]);
+
+      const reconnectedCode = await issueCode(["profile"]);
+      const [reconnectedGrant] = await db
+        .select()
+        .from(pgOAuthGrantsTable)
+        .where(eq(pgOAuthGrantsTable.applicationId, oauth.application.id))
+        .orderBy(desc(pgOAuthGrantsTable.id));
+      expect(reconnectedGrant.subject).not.toBe(expandedGrant.subject);
+      const rotated = await regenerateOAuthClientSecret(env, 5, oauth.application.uid);
+      expect(rotated?.clientSecret).toMatch(/^mllg_os_[a-f0-9]{64}$/);
+      await expect(
+        exchangeOAuthAuthorizationCode(env, {
+          clientId: oauth.application.clientId,
+          clientSecret: oauth.clientSecret,
+          code: reconnectedCode,
+          redirectUri: oauth.application.redirectUris[0],
+          codeVerifier: null,
+        }),
+      ).rejects.toBeInstanceOf(OAuthInvalidClientError);
+      const reconnectedToken = await exchangeOAuthAuthorizationCode(env, {
+        clientId: oauth.application.clientId,
+        clientSecret: rotated?.clientSecret ?? "",
+        code: reconnectedCode,
+        redirectUri: oauth.application.redirectUris[0],
+        codeVerifier: null,
+      });
+      expect(await authenticateOAuthAccessToken(env, reconnectedToken.accessToken)).toMatchObject({
+        kind: "authenticated",
+        principal: { subject: reconnectedGrant.subject },
+      });
+
+      const expiredCode = await issueCode(["profile"]);
+      const expiredCodeHash = createHash("sha256").update(expiredCode).digest("hex");
+      await db
+        .update(pgOAuthAuthorizationCodesTable)
+        .set({ expiresAt: new Date(Date.now() - 1_000) })
+        .where(eq(pgOAuthAuthorizationCodesTable.codeHash, expiredCodeHash));
+      await expect(
+        exchangeOAuthAuthorizationCode(env, {
+          clientId: oauth.application.clientId,
+          clientSecret: rotated?.clientSecret ?? "",
+          code: expiredCode,
+          redirectUri: oauth.application.redirectUris[0],
+          codeVerifier: null,
+        }),
+      ).rejects.toBeInstanceOf(OAuthInvalidGrantError);
+
+      expect(await deleteOwnedOAuthApplication(env, 6, oauth.application.uid)).toBe(false);
+      expect(await deleteOwnedOAuthApplication(env, 5, oauth.application.uid)).toBe(true);
+      expect(await authenticateOAuthAccessToken(env, reconnectedToken.accessToken)).toEqual({ kind: "invalid" });
+      expect(await getOAuthConnections(env, 5)).toEqual([]);
+      const connectionHistory = (await getApiAuditHistory(env, 5, { limit: 50, filter: "direct" })).events.filter(
+        (event) => event.kind === "connection",
+      );
+      expect(connectionHistory.map(({ action }) => action)).toEqual(
+        expect.arrayContaining(["connected", "scopes_expanded", "disconnected"]),
+      );
+      expect(connectionHistory.some((event) => event.disconnectReason === "application_deleted")).toBe(true);
+      expect(connectionHistory.every((event) => event.oauthApplicationName === "OAuth tool")).toBe(true);
+      const connectionSnapshots = await db.select().from(pgOAuthConnectionEventsTable);
+      expect(connectionSnapshots.map(({ action }) => action)).toEqual(
+        expect.arrayContaining(["connected", "scopes_expanded", "disconnected"]),
+      );
     } finally {
       if (created) await admin.query(`DROP SCHEMA "${schema}" CASCADE`);
       await admin.end();

@@ -29,6 +29,73 @@ export const API_WRITE_LIMIT = 500;
 export const API_WRITE_WINDOW_MINUTES = 10;
 export const API_WRITE_WINDOW_MS = API_WRITE_WINDOW_MINUTES * 60 * 1000;
 export const API_KEY_LIFETIME_MONTHS = 12;
+export const OAUTH_ACCESS_TOKEN_LIFETIME_MONTHS = 12;
+export const OAUTH_AUTHORIZATION_CODE_LIFETIME_SECONDS = 5 * 60;
+
+export const API_SCOPE_REGISTRY = {
+  profile: {
+    resource: "profile",
+    operation: "read",
+    developerLabel: "프로필",
+    userLabel: "프로필 보기",
+    description: "닉네임 · 프로필 학생",
+  },
+  "students:read": {
+    resource: "students",
+    operation: "read",
+    developerLabel: "학생 읽기",
+    userLabel: "모집 학생 보기",
+    description: "모집 여부, 성장도, 인연 랭크",
+  },
+  "students:write": {
+    resource: "students",
+    operation: "write",
+    developerLabel: "학생 쓰기",
+    userLabel: "모집 학생 보기·변경",
+    description: "모집 등록·해제, 성장도, 인연 랭크",
+  },
+} as const;
+
+export type ApiScope = keyof typeof API_SCOPE_REGISTRY;
+export const API_SCOPES = Object.keys(API_SCOPE_REGISTRY) as ApiScope[];
+
+export function normalizeApiScopes(scopes: readonly ApiScope[]): ApiScope[] {
+  const normalized = new Set<ApiScope>(scopes);
+  if (normalized.has("students:write")) normalized.add("students:read");
+  return API_SCOPES.filter((scope) => normalized.has(scope));
+}
+
+export function apiScopesInclude(scopes: readonly ApiScope[], requiredScopes: readonly ApiScope[]): boolean {
+  const granted = new Set(normalizeApiScopes(scopes));
+  return requiredScopes.every((scope) => granted.has(scope));
+}
+
+export function getDeveloperScopeLabels(scopes: readonly ApiScope[]): string[] {
+  const normalized = normalizeApiScopes(scopes);
+  const labels: string[] = [];
+  if (normalized.includes("profile")) labels.push(API_SCOPE_REGISTRY.profile.developerLabel);
+  if (normalized.includes("students:read")) {
+    labels.push(
+      normalized.includes("students:write")
+        ? "학생 읽기/쓰기"
+        : API_SCOPE_REGISTRY["students:read"].developerLabel,
+    );
+  }
+  return labels;
+}
+
+export function getDeveloperScopeSummary(scopes: readonly ApiScope[]): string {
+  return getDeveloperScopeLabels(scopes).join(" · ");
+}
+
+export function getUserScopeSummary(scopes: readonly ApiScope[]): string {
+  const normalized = normalizeApiScopes(scopes);
+  const labels: string[] = [];
+  if (normalized.includes("profile")) labels.push(API_SCOPE_REGISTRY.profile.userLabel);
+  if (normalized.includes("students:write")) labels.push(API_SCOPE_REGISTRY["students:write"].userLabel);
+  else if (normalized.includes("students:read")) labels.push(API_SCOPE_REGISTRY["students:read"].userLabel);
+  return labels.join(" · ");
+}
 
 export const API_STUDENT_STATE_FIELD_SPECS = {
   tier: { meaning: "학생 성급", min: 1, max: 5, nullable: false, requiredForRegistration: true },
@@ -113,12 +180,12 @@ export const API_PUBLIC_ERRORS = {
   unauthorized: {
     status: 401,
     title: "인증 실패",
-    description: "API 키가 없거나, 올바르지 않거나, 만료·삭제됐어요",
+    description: "API 키나 액세스 토큰이 없거나, 올바르지 않거나, 만료·삭제됐어요",
   },
   forbidden: {
     status: 403,
     title: "권한 없음",
-    description: "키에 필요한 권한이 없거나 계정이 활성 상태가 아니에요",
+    description: "토큰에 필요한 권한이 없거나 계정이 활성 상태가 아니에요",
   },
   not_found: {
     status: 404,
@@ -172,7 +239,7 @@ export type ApiRouteSpec = {
   method: ApiRouteMethod;
   path: string;
   displayPath: string;
-  permission: "read" | "write";
+  requiredScopes: readonly ApiScope[];
   summary: string;
   parameters: readonly ApiRouteParameter[];
   requestExample: {
@@ -184,6 +251,7 @@ export type ApiRouteSpec = {
   errors: readonly ApiPublicErrorCode[];
   requestSchema?: "StudentRegistration" | "StudentPatch";
   responseSchema:
+    | "MeResponse"
     | "StudentSearchResponse"
     | "RecruitedStudentListResponse"
     | "RecruitedStudentResponse"
@@ -232,11 +300,30 @@ const stateExample = {
 
 export const API_ROUTES = [
   {
+    id: "getMe",
+    method: "GET",
+    path: "/me",
+    displayPath: "/me",
+    requiredScopes: ["profile"],
+    summary: "내 프로필",
+    parameters: [],
+    requestExample: {
+      path: "/me",
+      headers: [{ name: "Accept", value: "application/json" }],
+    },
+    responseExample: {
+      status: 200,
+      body: { id: "<SUBJECT>", username: "sensei", profileStudent: { studentUid: "10000", name: "아루" } },
+    },
+    errors: [...readErrors],
+    responseSchema: "MeResponse",
+  },
+  {
     id: "findStudents",
     method: "GET",
     path: "/students",
     displayPath: "/students?query=",
-    permission: "read",
+    requiredScopes: ["students:read"],
     summary: "학생 찾기",
     parameters: [
       {
@@ -285,7 +372,7 @@ export const API_ROUTES = [
     method: "GET",
     path: "/me/students",
     displayPath: "/me/students",
-    permission: "read",
+    requiredScopes: ["students:read"],
     summary: "모집 학생 목록",
     parameters: [
       {
@@ -324,7 +411,7 @@ export const API_ROUTES = [
     method: "GET",
     path: "/me/students/:studentUid",
     displayPath: "/me/students/:studentUid",
-    permission: "read",
+    requiredScopes: ["students:read"],
     summary: "모집 학생 조회",
     parameters: [
       {
@@ -349,7 +436,7 @@ export const API_ROUTES = [
     method: "POST",
     path: "/me/students",
     displayPath: "/me/students",
-    permission: "write",
+    requiredScopes: ["students:write"],
     summary: "모집 학생 등록",
     parameters: [],
     requestExample: {
@@ -367,7 +454,7 @@ export const API_ROUTES = [
     method: "PATCH",
     path: "/me/students/:studentUid",
     displayPath: "/me/students/:studentUid",
-    permission: "write",
+    requiredScopes: ["students:write"],
     summary: "모집 학생 수정",
     parameters: [
       {
@@ -394,7 +481,7 @@ export const API_ROUTES = [
     method: "DELETE",
     path: "/me/students/:studentUid",
     displayPath: "/me/students/:studentUid",
-    permission: "write",
+    requiredScopes: ["students:write"],
     summary: "모집 학생 삭제",
     parameters: [
       {
@@ -413,14 +500,11 @@ export const API_ROUTES = [
   },
 ] as const satisfies readonly ApiRouteSpec[];
 
-export const API_READ_ROUTE_GROUP = {
-  permission: "read",
-  title: "학생 읽기 권한",
-} as const;
-export const API_WRITE_ROUTE_GROUP = {
-  permission: "write",
-  title: "학생 쓰기 권한",
-} as const;
+export const API_ROUTE_GROUPS = [
+  { scope: "profile", title: "프로필 권한" },
+  { scope: "students:read", title: "학생 읽기 권한" },
+  { scope: "students:write", title: "학생 쓰기 권한" },
+] as const satisfies readonly { scope: ApiScope; title: string }[];
 
 export function routePathToOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, "{$1}");
@@ -441,7 +525,7 @@ export function formatApiCurlCommand(baseUrl: string, route: ApiRouteSpec): stri
   const argumentsList = [
     `--request ${route.method}`,
     `--url '${baseUrl}${route.requestExample.path}'`,
-    "--header 'Authorization: Bearer <API_KEY>'",
+    "--header 'Authorization: Bearer <API 키 또는 액세스 토큰>'",
     ...route.requestExample.headers.map(({ name, value }) => `--header '${name}: ${value}'`),
     ...(route.requestExample.body === undefined ? [] : [`--data '${JSON.stringify(route.requestExample.body)}'`]),
   ];

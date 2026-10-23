@@ -1,7 +1,13 @@
 import { and, desc, eq, gt, isNotNull, isNull } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
-import { pgApiKeyEventsTable, pgApiKeysTable, pgSenseisTable, pgStudentStatesTable } from "~/db/postgres/schema";
+import {
+  pgApiKeyEventsTable,
+  pgApiKeysTable,
+  pgApiUserSubjectsTable,
+  pgSenseisTable,
+  pgStudentStatesTable,
+} from "~/db/postgres/schema";
 import {
   isStudentNullableSemanticsEnabledInTransaction,
   patchCanonicalRelationship,
@@ -26,6 +32,7 @@ import {
 } from "~/domain/mollulog-api";
 import * as mollulogApiSpec from "~/domain/mollulog-api-spec";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
+import type { ApiScope } from "~/domain/mollulog-api-spec";
 
 export {
   API_KEY_LIFETIME_MONTHS,
@@ -40,15 +47,15 @@ export type PersonalApiKey = {
   uid: string;
   name: string;
   keyPrefix: string;
-  readScope: boolean;
-  writeScope: boolean;
+  scopes: ApiScope[];
   createdAt: Date;
   expiresAt: Date;
   lastUsedAt: Date | null;
   revokedAt: Date | null;
 };
 
-export type AuthenticatedApiKey = Pick<PersonalApiKey, "uid" | "name" | "readScope" | "writeScope"> & {
+export type AuthenticatedApiKey = Pick<PersonalApiKey, "uid" | "name" | "scopes"> & {
+  kind: "personal";
   userId: number;
 };
 
@@ -89,6 +96,39 @@ async function hashApiKey(token: string): Promise<string> {
   return toHex(new Uint8Array(digest));
 }
 
+async function ensurePersonalApiSubject(db: ApiDatabase, userId: number): Promise<string> {
+  const [existing] = await db
+    .select({ subject: pgApiUserSubjectsTable.subject })
+    .from(pgApiUserSubjectsTable)
+    .where(eq(pgApiUserSubjectsTable.userId, userId))
+    .limit(1);
+  if (existing) return existing.subject;
+
+  const subject = `mllg_pu_${toHex(crypto.getRandomValues(new Uint8Array(32)))}`;
+  const [created] = await db
+    .insert(pgApiUserSubjectsTable)
+    .values({ userId, subject })
+    .onConflictDoNothing({ target: pgApiUserSubjectsTable.userId })
+    .returning({ subject: pgApiUserSubjectsTable.subject });
+  if (created) return created.subject;
+
+  const [raced] = await db
+    .select({ subject: pgApiUserSubjectsTable.subject })
+    .from(pgApiUserSubjectsTable)
+    .where(eq(pgApiUserSubjectsTable.userId, userId))
+    .limit(1);
+  if (!raced) throw new Error("Personal API subject was not created.");
+  return raced.subject;
+}
+
+export async function getPersonalApiSubject(
+  env: Env,
+  userId: number,
+  options: ApiRepositoryOptions = {},
+): Promise<string> {
+  return withApiDatabase(env, options, (db) => db.transaction((tx) => ensurePersonalApiSubject(tx, userId)));
+}
+
 function addCalendarMonths(value: Date, months: number): Date {
   const target = new Date(value);
   const day = target.getUTCDate();
@@ -102,7 +142,7 @@ function addCalendarMonths(value: Date, months: number): Date {
 export async function createPersonalApiKey(
   env: Env,
   userId: number,
-  input: { name: string; readScope: boolean; writeScope: boolean },
+  input: { name: string; scopes: ApiScope[] },
   options: ApiRepositoryOptions = {},
 ): Promise<{ key: PersonalApiKey; token: string }> {
   const name = input.name.trim();
@@ -111,8 +151,9 @@ export async function createPersonalApiKey(
       { field: "name", message: "키 이름은 1자부터 80자까지 입력해주세요" },
     ]);
   }
-  if (!input.readScope && !input.writeScope) {
-    throw new ApiInputError("읽기 또는 쓰기 권한을 하나 이상 선택해주세요", [
+  const scopes = mollulogApiSpec.normalizeApiScopes(input.scopes);
+  if (scopes.length === 0 || input.scopes.some((scope) => !mollulogApiSpec.API_SCOPES.includes(scope))) {
+    throw new ApiInputError("권한을 하나 이상 선택해주세요", [
       { field: "scopes", message: "권한을 하나 이상 선택해주세요" },
     ]);
   }
@@ -131,8 +172,9 @@ export async function createPersonalApiKey(
           name,
           keyHash: await hashApiKey(token),
           keyPrefix: token.slice(0, 17),
-          readScope: input.readScope || input.writeScope,
-          writeScope: input.writeScope,
+          readScope: scopes.includes("students:read"),
+          writeScope: scopes.includes("students:write"),
+          scopes,
           expiresAt,
         })
         .returning();
@@ -142,6 +184,7 @@ export async function createPersonalApiKey(
         apiKeyName: name,
         action: "issued",
       });
+      if (scopes.includes("profile")) await ensurePersonalApiSubject(tx, userId);
       return [key];
     }),
   );
@@ -153,8 +196,7 @@ function toPersonalApiKey(row: typeof pgApiKeysTable.$inferSelect): PersonalApiK
     uid: row.uid,
     name: row.name,
     keyPrefix: row.keyPrefix,
-    readScope: row.readScope,
-    writeScope: row.writeScope,
+    scopes: mollulogApiSpec.normalizeApiScopes(row.scopes),
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     lastUsedAt: row.lastUsedAt,
@@ -228,8 +270,8 @@ export async function authenticatePersonalApiKey(
           uid: row.key.uid,
           name: row.key.name,
           userId: row.key.userId,
-          readScope: row.key.readScope,
-          writeScope: row.key.writeScope,
+          kind: "personal",
+          scopes: mollulogApiSpec.normalizeApiScopes(row.key.scopes),
         },
       };
     }),
@@ -582,16 +624,21 @@ export async function deleteApiRecruitedStudent(
 
 export type ApiAuditEvent = {
   id: number;
-  kind: "student" | "key";
+  kind: "student" | "key" | "connection";
   createdAt: string;
   studentUid: string | null;
   source: string;
   sourceRef: string | null;
   apiKeyUid: string | null;
   apiKeyName: string | null;
+  oauthApplicationUid: string | null;
+  oauthApplicationName: string | null;
+  scopes: ApiScope[] | null;
+  disconnectReason: "user" | "application_deleted" | null;
+  grantCreatedAt: string | null;
   beforeState: Record<string, unknown> | null;
   afterState: Record<string, unknown> | null;
-  action: "issued" | "revoked" | null;
+  action: "issued" | "revoked" | "connected" | "scopes_expanded" | "disconnected" | null;
 };
 
 function decodeAuditCursor(cursor: string): { createdAt: string; kind: string; id: number } | null {
@@ -601,7 +648,7 @@ function decodeAuditCursor(cursor: string): { createdAt: string; kind: string; i
       parsed.version !== 1 ||
       typeof parsed.createdAt !== "string" ||
       !Number.isSafeInteger(Date.parse(parsed.createdAt)) ||
-      (parsed.kind !== "key" && parsed.kind !== "student") ||
+      (parsed.kind !== "key" && parsed.kind !== "student" && parsed.kind !== "connection") ||
       !Number.isSafeInteger(parsed.id)
     ) {
       return null;
@@ -641,7 +688,7 @@ export async function getApiAuditHistory(
     async (client) => {
       const result = await client.query<{
         id: number;
-        kind: "student" | "key";
+        kind: "student" | "key" | "connection";
         created_at: Date;
         cursor_created_at: string;
         student_uid: string | null;
@@ -649,25 +696,46 @@ export async function getApiAuditHistory(
         source_ref: string | null;
         api_key_uid: string | null;
         api_key_name: string | null;
+        oauth_application_uid: string | null;
+        oauth_application_name: string | null;
         before_state: Record<string, unknown> | null;
         after_state: Record<string, unknown> | null;
-        action: "issued" | "revoked" | null;
+        action: "issued" | "revoked" | "connected" | "scopes_expanded" | "disconnected" | null;
+        scopes: ApiScope[] | null;
+        disconnect_reason: "user" | "application_deleted" | null;
+        grant_created_at: Date | null;
       }>(
         `WITH events AS (
            SELECT id, 'student'::text AS kind, created_at, student_uid, source, source_ref,
-                  api_key_uid, api_key_name, before_state, after_state, NULL::text AS action
+                  api_key_uid, api_key_name, oauth_application_uid, oauth_application_name,
+                  before_state, after_state, NULL::text AS action, NULL::text[] AS scopes,
+                  NULL::text AS disconnect_reason, NULL::timestamptz AS grant_created_at
              FROM student_state_audits
             WHERE user_id = $1 AND created_at >= now() - interval '1 year'
            UNION ALL
            SELECT id, 'key'::text AS kind, created_at, NULL::text AS student_uid, 'api_key'::text AS source,
-                  NULL::text AS source_ref, api_key_uid, api_key_name, NULL::jsonb AS before_state,
-                  NULL::jsonb AS after_state, action
+                  NULL::text AS source_ref, api_key_uid, api_key_name,
+                  NULL::text AS oauth_application_uid, NULL::text AS oauth_application_name,
+                  NULL::jsonb AS before_state, NULL::jsonb AS after_state, action, NULL::text[] AS scopes,
+                  NULL::text AS disconnect_reason, NULL::timestamptz AS grant_created_at
              FROM api_key_events
             WHERE user_id = $1 AND created_at >= now() - interval '1 year'
+           UNION ALL
+           SELECT event.id, 'connection'::text AS kind, event.created_at, NULL::text AS student_uid,
+                  'oauth_connection'::text AS source, NULL::text AS source_ref,
+                  NULL::text AS api_key_uid, NULL::text AS api_key_name,
+                  event.application_uid AS oauth_application_uid,
+                  event.application_name AS oauth_application_name,
+                  NULL::jsonb AS before_state, NULL::jsonb AS after_state, event.action,
+                  event.scopes, event.disconnect_reason, grant_row.created_at AS grant_created_at
+             FROM oauth_connection_events event
+             JOIN oauth_grants grant_row ON grant_row.id = event.grant_id
+            WHERE event.user_id = $1 AND event.created_at >= now() - interval '1 year'
          )
          SELECT id, kind, created_at,
                 to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_created_at,
-                student_uid, source, source_ref, api_key_uid, api_key_name, before_state, after_state, action
+                student_uid, source, source_ref, api_key_uid, api_key_name, oauth_application_uid,
+                oauth_application_name, before_state, after_state, action, scopes, disconnect_reason, grant_created_at
            FROM events
           WHERE (
             $2::timestamptz IS NULL
@@ -679,6 +747,7 @@ export async function getApiAuditHistory(
               $5::text = 'all'
               OR ($5 = 'direct' AND (
                 kind = 'key'
+                OR kind = 'connection'
                 OR (kind = 'student' AND source = ANY($7::text[]))
               ))
               OR ($5 = 'data' AND kind = 'student' AND source = 'sync_draft')
@@ -707,6 +776,11 @@ export async function getApiAuditHistory(
         sourceRef: row.source_ref,
         apiKeyUid: row.api_key_uid,
         apiKeyName: row.api_key_name,
+        oauthApplicationUid: row.oauth_application_uid,
+        oauthApplicationName: row.oauth_application_name,
+        scopes: row.scopes,
+        disconnectReason: row.disconnect_reason,
+        grantCreatedAt: row.grant_created_at?.toISOString() ?? null,
         beforeState: row.before_state,
         afterState: row.after_state,
         action: row.action,

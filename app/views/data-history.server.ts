@@ -3,6 +3,7 @@ import { getItemCatalogResources } from "~/models/item-catalog";
 import type { ApiAuditEvent } from "~/models/mollulog-api";
 import { getApiAuditHistory, getPersonalApiKeys } from "~/models/mollulog-api";
 import { getAllStudents } from "~/models/student";
+import type { ApiScope } from "~/domain/mollulog-api-spec";
 
 export async function getDataHistoryView(
   env: Env,
@@ -16,7 +17,7 @@ export async function getDataHistoryView(
   itemNamesByUid: Record<string, string>;
   apiKeysByUid: Record<
     string,
-    { readScope: boolean; writeScope: boolean; createdAt: string; expiresAt: string; revokedAt: string | null }
+    { scopes: ApiScope[]; createdAt: string; expiresAt: string; revokedAt: string | null }
   >;
 }> {
   const [history, students, itemResources, apiKeys] = await Promise.all([
@@ -33,11 +34,10 @@ export async function getDataHistoryView(
     studentsByUid: Object.fromEntries(students.map(({ uid, name }) => [uid, name])),
     itemNamesByUid: Object.fromEntries(itemResources.map(({ uid, name }) => [uid, name])),
     apiKeysByUid: Object.fromEntries(
-      apiKeys.map(({ uid, readScope, writeScope, createdAt, expiresAt, revokedAt }) => [
+      apiKeys.map(({ uid, scopes, createdAt, expiresAt, revokedAt }) => [
         uid,
         {
-          readScope,
-          writeScope,
+          scopes,
           createdAt: createdAt.toISOString(),
           expiresAt: expiresAt.toISOString(),
           revokedAt: revokedAt?.toISOString() ?? null,

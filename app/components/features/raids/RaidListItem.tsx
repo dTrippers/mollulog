@@ -81,8 +81,8 @@ export default function RaidListItem({
             </p>
             <p className="truncate text-sm font-bold lg:text-base">{raidBoss.name}</p>
             <p className="whitespace-nowrap text-xs text-muted-foreground">
-              {startAt ? formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY.MM.DD" }) : "-"} ~{" "}
-              {endAt ? formatInstant(endAt, { timeZone: displayTimeZone, format: "MM.DD" }) : "-"}
+              {startAt ? formatInstant(startAt, { timeZone: displayTimeZone, format: "YYYY/MM/DD" }) : "-"} ~{" "}
+              {endAt ? formatInstant(endAt, { timeZone: displayTimeZone, format: "MM/DD" }) : "-"}
             </p>
             {actions && actions.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1">

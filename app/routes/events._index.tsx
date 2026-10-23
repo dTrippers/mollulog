@@ -46,7 +46,7 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   return { events: await getEventList(publicReadEnv, now, false, ctx), now };
 };
 
-function formatEventDate(value: string, format = "YY.MM.DD"): string {
+function formatEventDate(value: string, format = "YY/MM/DD"): string {
   return formatInstant(value, { timeZone: GL_TIME_ZONE, format });
 }
 
@@ -57,7 +57,7 @@ function formatScheduleDate(schedule: EventListSchedule): string {
 
   const startYear = formatEventDate(schedule.since, "YY");
   const endYear = formatEventDate(schedule.until, "YY");
-  const endFormat = startYear === endYear ? "MM.DD" : "YY.MM.DD";
+  const endFormat = startYear === endYear ? "MM/DD" : "YY/MM/DD";
   return `${formatEventDate(schedule.since)} ~ ${formatEventDate(schedule.until, endFormat)}`;
 }
 
