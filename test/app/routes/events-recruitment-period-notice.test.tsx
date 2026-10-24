@@ -161,7 +161,6 @@ describe("event recruitment period notice loader", () => {
     });
     expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", null, {
       hideRecruitmentOpinions: false,
-      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
       ctx,
     });
   });
@@ -178,7 +177,6 @@ describe("event recruitment period notice loader", () => {
     });
     expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", currentUser, {
       hideRecruitmentOpinions: true,
-      recruitmentPeriodStartAtByContentId: { "future-event": recruitmentPeriod.startAt },
       ctx,
     });
   });
@@ -208,7 +206,6 @@ describe("event recruitment period notice loader", () => {
     });
     expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", expect.anything(), {
       hideRecruitmentOpinions: false,
-      recruitmentPeriodStartAtByContentId: { "future-event": null },
       ctx,
     });
   });

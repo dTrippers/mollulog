@@ -58,7 +58,6 @@
   "services": [
     { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
   ],
-  "ai": { "binding": "AI" },
   "r2_buckets": [
     { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-dev", "remote": true }
   ],
@@ -83,6 +82,7 @@
     ]
   },
   // Secrets configuration
+  // - ANTHROPIC_API_KEY
   // - SESSION_SECRET
   // - GOOGLE_CLIENT_SECRET
   // - GITHUB_CLIENT_ID
@@ -126,7 +126,6 @@
       "services": [
         { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
       ],
-      "ai": { "binding": "AI" },
       "r2_buckets": [
         { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
       ],
@@ -190,7 +189,6 @@
       "services": [
         { "binding": "AL1S", "service": "mollulog-al1s", "entrypoint": "QuestionService" }
       ],
-      "ai": { "binding": "AI" },
       "r2_buckets": [
         { "binding": "OCR_UPLOADS", "bucket_name": "mollulog-aoi-uploads-prod" }
       ],
