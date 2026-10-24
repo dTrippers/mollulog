@@ -97,12 +97,16 @@ export async function updateComment(
   commentUid: string,
   body: string,
   visibility: ContentCommentVisibility,
-  options: { recruitmentPeriodStartAt?: string | null; ctx?: ExecutionContext } = {},
+  options: { ctx?: ExecutionContext } = {},
 ): Promise<RecruitmentOpinionClassificationJob | null> {
   const post = await getPostgresCommunityPostByUid(env, commentUid, userId);
   if (post?.postType === "event_opinion" && post.author?.id === userId) {
     if (post.subjectContentUid !== contentId) throw new Response("Comment not found", { status: 404 });
-    const job = await updatePostgresContentOpinion(env, userId, contentId, commentUid, body, visibility, options);
+    const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentId, options);
+    const job = await updatePostgresContentOpinion(env, userId, contentId, commentUid, body, visibility, {
+      ...options,
+      recruitmentPeriodStartAt: recruitmentPeriod?.startAt ?? null,
+    });
     return job ?? null;
   }
   await updatePostgresCommunityComment(env, userId, commentUid, body, visibility);

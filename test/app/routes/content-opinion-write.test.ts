@@ -4,10 +4,11 @@ import {
   createPostgresContentComment,
   getPostgresCommunityPostByUid,
   getPostgresContentComments,
+  updatePostgresCommunityComment,
   updatePostgresContentOpinion,
 } from "~/db/postgres/community";
 import { getContentRecruitmentPeriod, updateComment } from "~/models/content.server";
-import { getRecruitmentGroupByUidStrict } from "~/models/recruitment";
+import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
 import { action } from "~/routes/api.contents.$uid.comments";
 
@@ -16,9 +17,13 @@ jest.mock("~/db/postgres/community", () => ({
   createPostgresContentComment: jest.fn(),
   getPostgresCommunityPostByUid: jest.fn(),
   getPostgresContentComments: jest.fn(),
+  updatePostgresCommunityComment: jest.fn(),
   updatePostgresContentOpinion: jest.fn(),
 }));
-jest.mock("~/models/recruitment", () => ({ getRecruitmentGroupByUidStrict: jest.fn() }));
+jest.mock("~/models/recruitment", () => ({
+  getRecruitmentGroupByUidStrict: jest.fn(),
+  normalizeRecruitmentGroupPeriod: jest.fn(),
+}));
 jest.mock("~/models/timeline-content.server", () => ({ getTimelineContent: jest.fn() }));
 jest.mock("~/models/recruitment-opinion-classifier.server", () => ({
   classifyAndPersistRecruitmentOpinion: jest.fn(),
@@ -33,6 +38,11 @@ describe("opinion write classification boundaries", () => {
     jest.resetAllMocks();
     jest.mocked(getActiveSensei).mockResolvedValue({ id: 1 } as never);
     jest.mocked(getPostgresContentComments).mockResolvedValue({});
+    jest.mocked(getPostgresCommunityPostByUid).mockResolvedValue({
+      postType: "event_opinion",
+      subjectContentUid: "content-1",
+      author: { id: 1 },
+    } as never);
   });
 
   it.each(["create", "update"])("rejects %s before writing when recruitment lookup fails", async (intent) => {
@@ -83,16 +93,35 @@ describe("opinion write classification boundaries", () => {
     } as never);
     const job = { postUid: "opinion-1", body: "edited" };
     jest.mocked(updatePostgresContentOpinion).mockResolvedValue(job);
-    const options = { recruitmentPeriodStartAt: "2026-09-01T00:00:00Z" };
-    await expect(updateComment(env, 1, "content-1", "opinion-1", "edited", "public", options)).resolves.toEqual(job);
-    expect(updatePostgresContentOpinion).toHaveBeenCalledWith(
-      env,
-      1,
-      "content-1",
-      "opinion-1",
-      "edited",
-      "public",
-      options,
-    );
+    jest.mocked(getTimelineContent).mockResolvedValue({ recruitmentGroupUid: "group-1" } as never);
+    jest.mocked(getRecruitmentGroupByUidStrict).mockResolvedValue({ uid: "group-1" } as never);
+    const startAt = "2026-09-01T00:00:00Z";
+    jest.mocked(normalizeRecruitmentGroupPeriod).mockReturnValue({ startAt } as never);
+    await expect(updateComment(env, 1, "content-1", "opinion-1", "edited", "public")).resolves.toEqual(job);
+    expect(updatePostgresContentOpinion).toHaveBeenCalledWith(env, 1, "content-1", "opinion-1", "edited", "public", {
+      recruitmentPeriodStartAt: startAt,
+    });
+  });
+
+  it("edits a reply without querying recruitment even when the source is unavailable", async () => {
+    jest.mocked(getPostgresCommunityPostByUid).mockResolvedValue(null);
+    jest.mocked(getRecruitmentGroupByUidStrict).mockRejectedValue(new Error("source unavailable"));
+    const request = new Request("https://mollulog.test/api/contents/content-1/comments", {
+      method: "POST",
+      body: JSON.stringify({ action: "update", commentUid: "reply-1", body: "edited" }),
+    });
+    await expect(
+      action({
+        request,
+        url: new URL(request.url),
+        pattern: "/api/contents/:uid/comments",
+        params: { uid: "content-1" },
+        context: { cloudflare: { env, ctx } },
+      }),
+    ).resolves.toEqual({ comments: [], unavailable: false });
+    expect(updatePostgresCommunityComment).toHaveBeenCalledWith(env, 1, "reply-1", "edited", "private");
+    expect(getTimelineContent).not.toHaveBeenCalled();
+    expect(getRecruitmentGroupByUidStrict).not.toHaveBeenCalled();
+    expect(ctx.waitUntil).not.toHaveBeenCalled();
   });
 });
