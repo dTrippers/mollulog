@@ -426,7 +426,7 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
         underlying: error,
       });
     }
-    return apiJson(200, { id: subject, username: sensei.username, profileStudent });
+    return apiJson(200, { userId: subject, username: sensei.username, profileStudent });
   }
   if (routeId === "findStudents") {
     const query = url.searchParams.get("query") ?? "";

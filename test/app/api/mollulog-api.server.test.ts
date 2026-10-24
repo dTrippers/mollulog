@@ -221,7 +221,7 @@ describe("MolluLog v1 API entry", () => {
 
     expect(response?.status).toBe(200);
     expect(await response?.json()).toEqual({
-      id: "mllg_pu_user-subject",
+      userId: "mllg_pu_user-subject",
       username: "sensei",
       profileStudent: null,
     });
@@ -250,7 +250,7 @@ describe("MolluLog v1 API entry", () => {
 
     expect(response?.status).toBe(200);
     expect(await response?.json()).toEqual({
-      id: "application-specific-subject",
+      userId: "application-specific-subject",
       username: "sensei",
       profileStudent: null,
     });

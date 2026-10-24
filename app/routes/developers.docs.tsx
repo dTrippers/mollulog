@@ -110,18 +110,16 @@ export default function DevelopersDocs() {
           tokenUrl={`${urls.origin}/oauth/token`}
         />
 
-        <DocsSection title={API_GUIDE_COPY.sections.endpoints}>
-          {API_ROUTE_GROUPS.map((group) => (
-            <ModelGroup key={group.id} title={group.title}>
-              <div className="space-y-1">
-                {API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id)).map((route) => (
-                  <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
-                ))}
-              </div>
-              {group.id === "recruited-students" ? <StudentStateFields /> : null}
-            </ModelGroup>
-          ))}
-        </DocsSection>
+        {API_ROUTE_GROUPS.map((group) => (
+          <DocsSection key={group.id} title={group.title}>
+            <div className="space-y-1">
+              {API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id)).map((route) => (
+                <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
+              ))}
+            </div>
+            {group.id === "students" ? <StudentStateFields /> : null}
+          </DocsSection>
+        ))}
 
         <DocsSection title={API_GUIDE_COPY.sections.errors}>
           <ApiErrorTable />
@@ -145,7 +143,7 @@ export default function DevelopersDocs() {
 function StudentStateFields() {
   return (
     <section className="space-y-v2-group-gap" aria-label={API_GUIDE_COPY.sections.fields}>
-      <h5 className="text-sm font-semibold">{API_GUIDE_COPY.sections.fields}</h5>
+      <h4 className="text-sm font-semibold">{API_GUIDE_COPY.sections.fields}</h4>
       <DataTable label={API_GUIDE_COPY.sections.fields}>
         <TableHeader columns={[...API_GUIDE_COPY.fieldTable.columns]} />
         <tbody>
@@ -475,15 +473,6 @@ function renderBreakableCode(code: string) {
       </span>
     );
   });
-}
-
-function ModelGroup({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-v2-group-gap">
-      <h4 className="text-sm font-semibold">{title}</h4>
-      {children}
-    </section>
-  );
 }
 
 function LimitRow({ label, value }: { label: string; value: string }) {

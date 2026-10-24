@@ -313,7 +313,7 @@ export const API_ROUTES = [
     },
     responseExample: {
       status: 200,
-      body: { id: "<SUBJECT>", username: "sensei", profileStudent: { studentUid: "10000", name: "아루" } },
+      body: { userId: "<USER_ID>", username: "sensei", profileStudent: { studentUid: "10000", name: "아루" } },
     },
     errors: [...readErrors],
     responseSchema: "MeResponse",
@@ -502,11 +502,10 @@ export const API_ROUTES = [
 
 export const API_ROUTE_GROUPS = [
   { id: "profile", title: "프로필", routeIds: ["getMe"] },
-  { id: "students", title: "학생 검색", routeIds: ["findStudents"] },
   {
-    id: "recruited-students",
-    title: "모집 학생 상태",
-    routeIds: ["listRecruitedStudents", "getRecruitedStudent", "registerRecruitedStudent", "patchRecruitedStudent", "deleteRecruitedStudent"],
+    id: "students",
+    title: "학생",
+    routeIds: ["findStudents", "listRecruitedStudents", "getRecruitedStudent", "registerRecruitedStudent", "patchRecruitedStudent", "deleteRecruitedStudent"],
   },
 ] as const satisfies readonly { id: string; title: string; routeIds: readonly (typeof API_ROUTES)[number]["id"][] }[];
 

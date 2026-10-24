@@ -234,7 +234,7 @@ export function createOpenApiDocument(baseUrl: string, host: string) {
           type: "object",
           additionalProperties: false,
           properties: {
-            id: { type: "string" },
+            userId: { type: "string", description: "API 키에서는 계정별로, OAuth에서는 앱 연결별로 부여되는 사용자 ID" },
             username: { type: "string" },
             profileStudent: {
               oneOf: [
@@ -248,7 +248,7 @@ export function createOpenApiDocument(baseUrl: string, host: string) {
               ],
             },
           },
-          required: ["id", "username", "profileStudent"],
+          required: ["userId", "username", "profileStudent"],
         },
         RecruitedStudentState: {
           type: "object",
@@ -343,23 +343,21 @@ export function renderLlmsFull(urls: ReturnType<typeof resolveApiDocumentUrls>, 
     "Authorization Code flow: 브라우저에서 인증 URL을 열고, Redirect URI로 받은 `code`를 토큰 URL에 보내 액세스 토큰으로 교환하세요. 이후 `Authorization: Bearer <액세스 토큰>`으로 API를 호출하세요.",
     "인증 요청에는 `response_type=code`, `client_id=mllg_oc_<CLIENT_ID>`, 등록한 `redirect_uri`, `state`를 보내요. scope를 보내면 앱에 등록한 권한과 같아야 해요. PKCE는 선택 사항이고 `S256`만 지원해요.",
     "토큰 요청은 `application/x-www-form-urlencoded`로 `grant_type=authorization_code`, `code`, `redirect_uri`를 보내고 client ID·secret으로 인증해요. 성공 응답에는 `access_token`, `token_type=Bearer`, `expires_in`, `scope`가 들어가요.",
-    "액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요. `GET /v1/me`는 `profile` 권한이 필요하며 사용자별 `id`, `username`, `profileStudent`를 반환해요.",
+    "액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요. `GET /v1/me`는 `profile` 권한이 필요하며 `userId`, `username`, `profileStudent`를 반환해요.",
     "기존 연결이 요청한 scope를 모두 포함하면 동의 화면을 건너뛰고 code를 발급해요. 권한이 늘어나면 사용자가 다시 허용해야 해요.",
     "authorize redirect errors: `unsupported_response_type`, `invalid_scope`, `invalid_request`, `access_denied`. token errors: `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`.",
     "",
     "## 핵심 실행 흐름",
     ...API_GUIDE_FULL.workflow.map((line, index) => `${index + 1}. ${line}`),
-    "",
-    `## ${API_GUIDE_COPY.sections.endpoints}`,
   ];
 
   for (const group of API_ROUTE_GROUPS) {
-    sections.push("", `### ${group.title}`);
+    sections.push("", `## ${group.title}`);
     for (const route of API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id))) {
       const guide = getApiEndpointGuide(route.id);
       sections.push(
         "",
-        `#### ${route.method} ${route.displayPath}`,
+        `### ${route.method} ${route.displayPath}`,
         `필요 scope: ${route.requiredScopes.map((scope) => `\`${scope}\``).join(", ")}`,
         route.summary,
       );
@@ -396,8 +394,8 @@ export function renderLlmsFull(urls: ReturnType<typeof resolveApiDocumentUrls>, 
       sections.push("", `오류: ${route.errors.map(errorLink).join(" · ")}`);
     }
 
-    if (group.id === "recruited-students") {
-      sections.push("", `#### ${API_GUIDE_COPY.sections.fields}`, "");
+    if (group.id === "students") {
+      sections.push("", `### ${API_GUIDE_COPY.sections.fields}`, "");
       sections.push("| 필드 | 의미 | 범위 | null로 비우기 |", "| --- | --- | --- | --- |");
       for (const fieldGroup of API_GUIDE_COPY.fieldGroups) {
         const firstField = API_STUDENT_STATE_FIELD_SPECS[fieldGroup.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
@@ -408,7 +406,7 @@ export function renderLlmsFull(urls: ReturnType<typeof resolveApiDocumentUrls>, 
       }
       sections.push(
         "",
-        "##### 필드 간 제약",
+        "#### 필드 간 제약",
         ...API_GUIDE_FULL.fieldRules.map((line) => `- ${line}`),
         "",
         API_GUIDE_FULL.representativeUid,

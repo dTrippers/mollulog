@@ -18,7 +18,6 @@ export const API_GUIDE_COPY = {
     agent: "코딩 에이전트로 연동하기",
     connection: "연결",
     oauth: "몰루로그 계정으로 로그인",
-    endpoints: "모델과 엔드포인트",
     fields: "학생 상태 필드",
     errors: "오류",
     limits: "제한과 규칙",
@@ -79,7 +78,7 @@ export const API_GUIDE_COPY = {
   ],
   routeGuides: {
     getMe: {
-      response: "내 프로필과 개인 키 또는 애플리케이션 연결 전용 식별자를 반환해요.",
+      response: "닉네임과 프로필 학생 정보를 반환해요.",
     },
     findStudents: {
       response: "students(UID·이름)와 nextCursor",
@@ -128,7 +127,7 @@ export const API_GUIDE_FULL = {
     "OAuth 앱이 `/oauth/authorize`에서 authorization code를 받고, `/oauth/token`에서 액세스 토큰으로 교환해요.",
     "앱이 요청한 권한을 사용자가 허용하면 code가 발급돼요. 이미 허용한 권한에 요청한 권한이 모두 포함되면 동의 화면을 건너뛰어요.",
     "액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.",
-    "액세스 토큰으로 `GET /v1/me`를 호출해 사용자별 식별자와 프로필을 확인할 수 있어요.",
+    "액세스 토큰으로 `GET /v1/me`를 호출해 프로필 정보를 확인할 수 있어요.",
     "학생 찾기로 UID를 확인한 뒤 모집 학생 조회를 요청하세요.",
     "조회 결과가 `student_not_recruited`이면 POST로 등록하세요.",
     "POST가 `student_already_recruited`로 끝나면 PATCH로 필요한 필드만 보내세요.",
