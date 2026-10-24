@@ -15,6 +15,10 @@ import {
 import { getActiveSensei } from "~/auth/authenticator.server";
 import type { CommentVisibility } from "~/components/v2/features/comments/CommentComposer";
 import { OpinionSheet } from "~/components/v2/features/comments/OpinionSheet";
+import {
+  FeaturedContentAsideBlock,
+  FeaturedContentFloatingBanner,
+} from "~/components/v2/features/futures/FeaturedContentBanner";
 import { FutureFilterPanel } from "~/components/v2/features/futures/FutureFilterPanel";
 import { FutureList } from "~/components/v2/features/futures/FutureList";
 import { FutureSchedule } from "~/components/v2/features/futures/FutureSchedule";
@@ -45,6 +49,7 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { type ContentFilterState, defaultContentFilterState } from "~/domain/futures/content-filter-state";
 import { groupFutureContents } from "~/domain/futures/content-timeline-grouping";
+import { selectFeaturedContent } from "~/domain/futures/featured-content";
 import {
   formatThousands,
   getFilterSummary,
@@ -122,6 +127,7 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 const featureBannerDismissalStorageKey = "futures::dismissed-feature-banners";
+const featuredContentDismissalStorageKey = "futures::dismissed-featured-content";
 const featureBannerIds: FutureBannerId[] = ["student-analysis", "pending-student-favorite"];
 const FILTER_PANEL_ID = "content-filter";
 const EMPTY_COMMENT_SUMMARY: ContentCommentSummary = { count: 0, hasRecentComment: false, pinnedPreviewBody: null };
@@ -172,6 +178,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       name: content.name,
       startAt: content.startAt,
       endAt: content.endAt,
+      featuredUntil: content.featuredUntil,
       endless: content.endless,
       contentType: content.contentType,
       runType: content.runType,
@@ -338,6 +345,7 @@ type FutureContentForView = Pick<
   | "name"
   | "startAt"
   | "endAt"
+  | "featuredUntil"
   | "endless"
   | "contentType"
   | "runType"
@@ -421,6 +429,63 @@ function readDismissedFeatureBanners(): FutureBannerId[] {
   } catch {
     return [];
   }
+}
+
+function readDismissedFeaturedContentUid(): string | null {
+  try {
+    return localStorage.getItem(featuredContentDismissalStorageKey);
+  } catch {
+    return null;
+  }
+}
+
+function findFeaturedContentTarget(
+  container: HTMLElement,
+  uid: string,
+  view: "timeline" | "compact" | "table",
+): HTMLElement | null {
+  const isVisible = (element: HTMLElement) =>
+    element.getClientRects().length > 0 && element.getBoundingClientRect().height > 0;
+  const heldTarget = Array.from(container.querySelectorAll<HTMLElement>("[data-futures-content-uid]")).find(
+    (element) => element.dataset.futuresContentUid === uid && isVisible(element),
+  );
+  if (heldTarget || view !== "table") {
+    return heldTarget ?? null;
+  }
+  return (
+    Array.from(container.querySelectorAll<HTMLElement>("[data-futures-schedule-group-uid]")).find(
+      (element) => element.dataset.futuresScheduleGroupUid === uid && isVisible(element),
+    ) ?? null
+  );
+}
+
+function getFeaturedContentScrollMargin(container: HTMLElement, target: HTMLElement): number {
+  const currentMargin = Number.parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+  const toolbar = container.querySelector<HTMLElement>(".v2-toolbar");
+  const containerRect = container.getBoundingClientRect();
+  const header = document.querySelector<HTMLElement>("header.fixed.top-0:not([data-v2-layout] *)");
+  const headerRect = header?.getBoundingClientRect();
+  const visibleHeaderBottom =
+    header && header.getClientRects().length > 0 && headerRect && headerRect.height > 0
+      ? headerRect.bottom
+      : containerRect.top;
+  const toolbarStyle = toolbar ? getComputedStyle(toolbar) : null;
+  const isStickyToolbar = toolbarStyle?.position === "sticky";
+  if (!isStickyToolbar && visibleHeaderBottom <= containerRect.top) {
+    return currentMargin;
+  }
+
+  const containerPaddingTop = Number.parseFloat(getComputedStyle(container).paddingTop) || 0;
+  const toolbarTop = isStickyToolbar
+    ? containerRect.top + containerPaddingTop + (Number.parseFloat(toolbarStyle?.top ?? "0") || 0)
+    : containerRect.top;
+  const stickyToolbarBottom = isStickyToolbar
+    ? toolbarTop + (toolbar?.getBoundingClientRect().height ?? 0)
+    : containerRect.top;
+  const overlayBottom = Math.max(containerRect.top, visibleHeaderBottom, stickyToolbarBottom);
+  const gap = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) * 0.75;
+
+  return Math.max(currentMargin, overlayBottom - containerRect.top + gap);
 }
 
 function describeSelectedFilters(filter: ContentFilterState): string[] {
@@ -573,6 +638,19 @@ function FutureContentsScreen({
   const [isSpoilerHydrated, setIsSpoilerHydrated] = useState(false);
   const [dismissedBanners, setDismissedBanners] = useState<FutureBannerId[]>([]);
   const [isBannerHydrated, setIsBannerHydrated] = useState(false);
+  const [dismissedFeaturedContentUid, setDismissedFeaturedContentUid] = useState<string | null>(null);
+  const [featuredTarget, setFeaturedTarget] = useState<{
+    uid: string;
+    view: "timeline" | "compact" | "table";
+  } | null>(null);
+  const [featuredHighlight, setFeaturedHighlight] = useState<{
+    uid: string;
+    targetKey: string | null;
+    animationKey: number;
+    view: "timeline" | "compact" | "table";
+  } | null>(null);
+  const featuredHighlightSequenceRef = useRef(0);
+  const featuredScrollCleanupRef = useRef<(() => void) | null>(null);
 
   const { showSignIn } = useSignIn();
   const timeZone = useDisplayTimeZone();
@@ -601,6 +679,7 @@ function FutureContentsScreen({
 
   useEffect(() => {
     setDismissedBanners(readDismissedFeatureBanners());
+    setDismissedFeaturedContentUid(readDismissedFeaturedContentUid());
     setIsBannerHydrated(true);
   }, []);
 
@@ -614,6 +693,23 @@ function FutureContentsScreen({
       // Keep the banners usable when local storage is blocked.
     }
   }, [dismissedBanners, isBannerHydrated]);
+
+  useEffect(() => {
+    if (!isBannerHydrated) {
+      return;
+    }
+    try {
+      if (dismissedFeaturedContentUid) {
+        localStorage.setItem(featuredContentDismissalStorageKey, dismissedFeaturedContentUid);
+      } else {
+        localStorage.removeItem(featuredContentDismissalStorageKey);
+      }
+    } catch {
+      // Keep the banner usable when local storage is blocked.
+    }
+  }, [dismissedFeaturedContentUid, isBannerHydrated]);
+
+  useEffect(() => () => featuredScrollCleanupRef.current?.(), []);
 
   const { contents, signedIn, contentsStatus } = loaderData;
   const revalidator = useRevalidator();
@@ -1003,6 +1099,7 @@ function FutureContentsScreen({
     () => contents.filter((content) => matchesContentFilter(content, filter)),
     [contents, filter],
   );
+  const featuredContent = selectFeaturedContent(contents, filter, now);
   const studentAnalysisBannerContentUid = getStudentAnalysisFeatureBannerContentUid(filteredContents, now);
 
   const completedRecruitmentStudents = useMemo<CompletedRecruitmentStudentState[]>(() => {
@@ -1207,6 +1304,39 @@ function FutureContentsScreen({
   });
 
   const groups = groupFutureContents(viewContents, timeZone, now);
+  const featuredViewContent = featuredContent
+    ? viewContents.find((content) => content.uid === featuredContent.uid) ?? null
+    : null;
+
+  // The DOM target can change while the selected featured content object stays the same.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: this DOM query must rerun when rendered-row inputs change
+  useEffect(() => {
+    if (!viewState.isHydrated || !isBannerHydrated || contentsStatus !== "available" || !featuredContent) {
+      setFeaturedTarget(null);
+      return;
+    }
+    const container = document.querySelector<HTMLElement>(".mllg-content-area");
+    const target = container ? findFeaturedContentTarget(container, featuredContent.uid, view) : null;
+    if (!target) {
+      setFeaturedTarget(null);
+      return;
+    }
+    setFeaturedTarget((current) =>
+      current?.uid === featuredContent.uid && current.view === view
+        ? current
+        : { uid: featuredContent.uid, view },
+    );
+  }, [
+    contentsStatus,
+    featuredContent,
+    filter,
+    isBannerHydrated,
+    revealedSpoilerContentUids,
+    timeZone,
+    view,
+    viewState.isHydrated,
+  ]);
+
   const filterActive = isContentFilterActive(filter);
   const summary = getFilterSummary({
     total: contentsStatus === "available" ? contents.length : null,
@@ -1247,6 +1377,76 @@ function FutureContentsScreen({
 
   const emptyFiltered = contentsStatus === "available" && filteredContents.length === 0;
   const revealedSpoilerSet = new Set(revealedSpoilerContentUids);
+  const showFeaturedContent = Boolean(
+    viewState.isHydrated &&
+      isBannerHydrated &&
+      contentsStatus === "available" &&
+      featuredContent &&
+      featuredViewContent &&
+      featuredTarget?.uid === featuredContent.uid &&
+      featuredTarget.view === view,
+  );
+  const highlightedFeaturedUid = featuredHighlight?.view === view ? featuredHighlight.uid : null;
+
+  const jumpToFeaturedContent = useCallback(
+    (uid: string) => {
+      const container = document.querySelector<HTMLElement>(".mllg-content-area");
+      const target = container ? findFeaturedContentTarget(container, uid, view) : null;
+      if (!container || !target) return;
+
+      featuredScrollCleanupRef.current?.();
+      const scrollMarginTop = getFeaturedContentScrollMargin(container, target);
+      const targetTop =
+        container.scrollTop +
+        target.getBoundingClientRect().top -
+        container.getBoundingClientRect().top -
+        scrollMarginTop;
+      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight);
+      const clampedTargetTop = Math.max(0, Math.min(targetTop, maxScrollTop));
+      let timer: number | undefined;
+      let completed = false;
+      const cleanup = () => {
+        if (timer !== undefined) window.clearTimeout(timer);
+        container.removeEventListener("scroll", scheduleFallback);
+        container.removeEventListener("scrollend", complete);
+        if (featuredScrollCleanupRef.current === cleanup) featuredScrollCleanupRef.current = null;
+      };
+      const complete = () => {
+        if (completed) return;
+        completed = true;
+        cleanup();
+        target.focus({ preventScroll: true });
+        featuredHighlightSequenceRef.current += 1;
+        setFeaturedHighlight({
+          uid,
+          targetKey: target.dataset.futuresScheduleGroupKey ?? null,
+          animationKey: featuredHighlightSequenceRef.current,
+          view,
+        });
+      };
+      const scheduleFallback = () => {
+        if (timer !== undefined) window.clearTimeout(timer);
+        timer = window.setTimeout(complete, 180);
+      };
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+      container.addEventListener("scroll", scheduleFallback, { passive: true });
+      container.addEventListener("scrollend", complete, { once: true });
+      featuredScrollCleanupRef.current = cleanup;
+      container.scrollTo({ top: clampedTargetTop, behavior: prefersReducedMotion ? "auto" : "smooth" });
+      if (prefersReducedMotion || Math.abs(container.scrollTop - clampedTargetTop) < 1) {
+        window.requestAnimationFrame(complete);
+      }
+    },
+    [view],
+  );
+
+  const dismissFeaturedContent = useCallback((uid: string) => {
+    setDismissedFeaturedContentUid(uid);
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLButtonElement>('.v2-action-bar button[aria-haspopup="dialog"]')?.focus();
+    });
+  }, []);
 
   return (
     <V2Page
@@ -1281,8 +1481,28 @@ function FutureContentsScreen({
             opinionSettingFocusRequest={opinionSettingFocusRequest}
           />
         </PanelSheet>
+        {showFeaturedContent && featuredViewContent ? (
+          <FeaturedContentAsideBlock
+            content={featuredViewContent}
+            onJump={() => jumpToFeaturedContent(featuredViewContent.uid)}
+          />
+        ) : null}
       </PageAside>
-      <MobileActionBar panels={[{ panelId: FILTER_PANEL_ID, title: "필터", Icon: FunnelIcon }]} />
+      <MobileActionBar
+        panels={[{ panelId: FILTER_PANEL_ID, title: "필터", Icon: FunnelIcon }]}
+        leading={
+          showFeaturedContent &&
+          featuredViewContent &&
+          isMobile &&
+          dismissedFeaturedContentUid !== featuredViewContent.uid ? (
+            <FeaturedContentFloatingBanner
+              content={featuredViewContent}
+              onJump={() => jumpToFeaturedContent(featuredViewContent.uid)}
+              onDismiss={() => dismissFeaturedContent(featuredViewContent.uid)}
+            />
+          ) : undefined
+        }
+      />
       <PageMain>
         {viewerStatus === "failed" ? <ViewerFailureNotice onRetry={() => revalidator.revalidate()} /> : null}
         {contentsStatus === "unavailable" ? (
@@ -1301,6 +1521,8 @@ function FutureContentsScreen({
             signedIn={signedIn}
             revealedSpoilers={revealedSpoilerSet}
             dismissedBanners={isBannerHydrated ? new Set(dismissedBanners) : null}
+            highlightedContentUid={highlightedFeaturedUid}
+            highlightAnimationKey={featuredHighlight?.animationKey ?? 0}
             onRevealSpoiler={revealSpoiler}
             onHideSpoiler={hideSpoiler}
             onDismissBanner={dismissBanner}
@@ -1313,6 +1535,8 @@ function FutureContentsScreen({
             now={now}
             timeZone={timeZone}
             revealedSpoilers={revealedSpoilerSet}
+            highlightedContentUid={highlightedFeaturedUid}
+            highlightAnimationKey={featuredHighlight?.animationKey ?? 0}
             onRevealSpoiler={revealSpoiler}
             onOpenContent={saveBeforeContentNavigation}
           />
@@ -1323,6 +1547,9 @@ function FutureContentsScreen({
             timeZone={timeZone}
             signedIn={signedIn}
             revealedSpoilers={revealedSpoilerSet}
+            highlightedContentUid={highlightedFeaturedUid}
+            highlightedScheduleTargetKey={featuredHighlight?.view === view ? featuredHighlight.targetKey : null}
+            highlightAnimationKey={featuredHighlight?.animationKey ?? 0}
             onRevealSpoiler={revealSpoiler}
             onOpenContent={saveBeforeContentNavigation}
           />

@@ -37,6 +37,7 @@ function content(overrides: Partial<TimelineContent> & Pick<TimelineContent, "ui
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };

@@ -38,6 +38,7 @@ import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { StudentSlot } from "../students/StudentSlot";
 import { ContentMedia } from "./ContentMedia";
+import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { FeatureBanner } from "./FeatureBanner";
 import { getFutureMediaTypeLabel } from "./labels";
 import { OpinionRow } from "./OpinionRow";
@@ -57,6 +58,8 @@ export type FutureTimelineProps = {
   onDismissBanner: (bannerId: FutureBannerId) => void;
   onOpenOpinion: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightAnimationKey?: number;
 };
 
 // Feed of contents by date. Dates are dividers, not cards: the first group is the in-progress group. The items of one
@@ -125,6 +128,8 @@ function TimelineItem({
   onDismissBanner,
   onOpenOpinion,
   onOpenContent,
+  highlightedContentUid,
+  highlightAnimationKey = 0,
 }: { content: FutureViewContent; connectsNext: boolean } & FutureTimelineProps) {
   const [openStudentKey, setOpenStudentKey] = useState<string | null>(null);
   const revealed = revealedSpoilers.has(content.uid);
@@ -178,7 +183,8 @@ function TimelineItem({
   return (
     <article
       data-futures-content-uid={content.uid}
-      className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]"
+      tabIndex={-1}
+      className="v2-featured-target relative grid grid-cols-[2.5rem_minmax(0,1fr)] gap-x-3 pb-7 md:grid-cols-[2.75rem_minmax(0,1fr)] md:gap-x-4 lg:grid-cols-[3rem_minmax(0,1fr)]"
     >
       {connectsNext ? (
         <span
@@ -298,6 +304,9 @@ function TimelineItem({
         )}
         {content.opinion ? <OpinionRow opinion={content.opinion} onOpen={() => onOpenOpinion(content.uid)} /> : null}
       </div>
+      {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+        <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+      ) : null}
     </article>
   );
 }

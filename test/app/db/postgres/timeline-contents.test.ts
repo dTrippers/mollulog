@@ -40,6 +40,7 @@ const defaultTimelineContentRow = {
   shopContentUid: null,
   nameI18n: { ko: "미래 이벤트" },
   recruitmentStudentUids: ["student-a"],
+  featuredUntil: new Date("2026-08-01T00:00:00.000Z"),
   createdAt: new Date("2026-07-13T00:00:00.000Z"),
   updatedAt: new Date("2026-07-13T00:00:00.000Z"),
 } satisfies TimelineContentRow;
@@ -96,6 +97,7 @@ describe("PostgreSQL timeline contents read", () => {
         name: "미래 이벤트",
         startAt: "2099-08-25T02:00:00.000Z",
         endAt: "2099-09-15T02:00:00.000Z",
+        featuredUntil: "2026-08-01T00:00:00.000Z",
         recruitmentStudentUids: ["student-a"],
         confirmed: true,
         tags: ["event"],

@@ -19,6 +19,7 @@ import { Button } from "../../primitives/Button";
 import { StudentSlot } from "../students/StudentSlot";
 import type { FutureStudentEntry } from "../students/types";
 import { ContentMedia } from "./ContentMedia";
+import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { getFutureMediaTypeLabel } from "./labels";
 import type { FutureViewContent } from "./types";
 
@@ -30,6 +31,9 @@ export type FutureScheduleProps = {
   revealedSpoilers: ReadonlySet<string>;
   onRevealSpoiler: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightedScheduleTargetKey?: string | null;
+  highlightAnimationKey?: number;
 };
 
 // Schedule table for desktop. Period, recruited students, and held contents sit in three columns. A hidden spoiler hides
@@ -42,6 +46,9 @@ export function FutureSchedule({
   revealedSpoilers,
   onRevealSpoiler,
   onOpenContent,
+  highlightedContentUid,
+  highlightedScheduleTargetKey,
+  highlightAnimationKey = 0,
 }: FutureScheduleProps) {
   const [openKey, setOpenKey] = useState<string | null>(null);
   const byUid = useMemo(() => new Map(contents.map((content) => [content.uid, content])), [contents]);
@@ -137,6 +144,9 @@ export function FutureSchedule({
               onOpenKeyChange={setOpenKey}
               onRevealSpoiler={onRevealSpoiler}
               onOpenContent={onOpenContent}
+              highlightedContentUid={highlightedContentUid}
+              highlightedScheduleTargetKey={highlightedScheduleTargetKey}
+              highlightAnimationKey={highlightAnimationKey}
             />
           ))}
         </tbody>
@@ -156,6 +166,9 @@ function ScheduleRow({
   onOpenKeyChange,
   onRevealSpoiler,
   onOpenContent,
+  highlightedContentUid,
+  highlightedScheduleTargetKey,
+  highlightAnimationKey,
 }: {
   row: FutureRecruitmentTableRow;
   now: UtcIsoString;
@@ -167,6 +180,9 @@ function ScheduleRow({
   onOpenKeyChange: (key: string | null) => void;
   onRevealSpoiler: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightedScheduleTargetKey?: string | null;
+  highlightAnimationKey: number;
 }) {
   const ongoing = isInstantBefore(row.since, now) && isInstantAfter(row.until, now);
   const heldContents = [...row.events, ...row.raids, ...row.campaigns];
@@ -185,7 +201,13 @@ function ScheduleRow({
             {ongoing ? <p className="text-xs font-semibold text-v2-live">● 진행 중</p> : null}
             <div className="space-y-5">
               {scheduleGroups.map((group) => (
-                <div key={group.uid} className="space-y-2">
+                <div
+                  key={group.uid}
+                  data-futures-schedule-group-uid={group.uid}
+                  data-futures-schedule-group-key={`${group.uid}::${row.since}`}
+                  tabIndex={-1}
+                  className="v2-featured-target relative space-y-2"
+                >
                   {group.showName || group.showPeriod ? (
                     <p className="flex items-baseline gap-1.5 text-xs">
                       {group.showName ? <span className="font-medium whitespace-pre-line text-v2-fg-secondary">{group.name}</span> : null}
@@ -215,6 +237,9 @@ function ScheduleRow({
                       </ul>
                     </div>
                   ))}
+                  {highlightedScheduleTargetKey === `${group.uid}::${row.since}` && highlightAnimationKey > 0 ? (
+                    <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -233,6 +258,8 @@ function ScheduleRow({
               revealed={revealedSpoilers.has(content.uid)}
               onRevealSpoiler={onRevealSpoiler}
               onOpenContent={onOpenContent}
+              highlightedContentUid={highlightedContentUid}
+              highlightAnimationKey={highlightAnimationKey}
             />
           ))}
         </div>
@@ -279,6 +306,8 @@ function HeldContent({
   revealed,
   onRevealSpoiler,
   onOpenContent,
+  highlightedContentUid,
+  highlightAnimationKey = 0,
 }: {
   content: FutureRecruitmentTableContent;
   view: FutureViewContent | undefined;
@@ -287,6 +316,8 @@ function HeldContent({
   revealed: boolean;
   onRevealSpoiler: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightAnimationKey?: number;
 }) {
   if (!view) {
     return null;
@@ -307,11 +338,18 @@ function HeldContent({
 
   if (!visible) {
     return (
-      <div className="flex min-h-v2-row-min items-center gap-2">
+      <div
+        data-futures-content-uid={content.uid}
+        tabIndex={-1}
+        className="v2-featured-target relative flex min-h-v2-row-min items-center gap-2"
+      >
         <span className="text-sm font-semibold text-v2-fg">스포일러가 포함되어 있어요</span>
         <Button variant="secondary" size="sm" onClick={() => onRevealSpoiler(content.uid)}>
           내용 보기
         </Button>
+        {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+          <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+        ) : null}
       </div>
     );
   }
@@ -344,27 +382,35 @@ function HeldContent({
     return (
       <div
         data-futures-content-uid={content.uid}
-        className="grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2"
+        tabIndex={-1}
+        className="v2-featured-target relative grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2"
       >
         {body}
         <span aria-hidden="true" className="size-4" />
+        {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+          <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+        ) : null}
       </div>
     );
   }
   return (
-    <Link
-      to={view.link}
-      state={view.navigationState}
-      prefetch="intent"
-      data-futures-content-uid={content.uid}
-      className={cn(
-        "group grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2 rounded-md hover:bg-v2-hover",
-        v2FocusRing,
-      )}
-      {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
-    >
-      {body}
-      <ChevronRightIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
-    </Link>
+    <div data-futures-content-uid={content.uid} tabIndex={-1} className="v2-featured-target relative">
+      <Link
+        to={view.link}
+        state={view.navigationState}
+        prefetch="intent"
+        className={cn(
+          "group grid min-h-v2-row-min grid-cols-[minmax(0,1fr)_1rem] items-center gap-2 rounded-md hover:bg-v2-hover",
+          v2FocusRing,
+        )}
+        {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
+      >
+        {body}
+        <ChevronRightIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
+      </Link>
+      {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+        <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+      ) : null}
+    </div>
   );
 }

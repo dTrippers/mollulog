@@ -24,7 +24,9 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-fg` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Primary text |
 | `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
 | `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
-| `text-v2-link` | `oklch(0.546 0.215 262.881)` | `oklch(0.809 0.105 251.813)` | Underlined links in news post Markdown |
+| `bg-v2-accent`, `text-v2-on-accent` | `oklch(0.53 0.13 252)` / `oklch(1 0 0)` | `oklch(0.74 0.11 250)` / `oklch(0.205 0 0)` | Accent fill and its foreground |
+| `bg-v2-accent-subtle` | `oklch(0.955 0.03 250)` | `oklch(0.32 0.04 250)` | Subtle accent surface |
+| `text-v2-link` | `var(--v2-accent)` | `var(--v2-accent)` | Underlined links in news post Markdown |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
 | `bg-v2-favorite-neutral-badge` | `rgb(0 0 0 / 85%)` | same | Count badge on a student image when not personally favorited |
 | `text-v2-fg-disabled` | `oklch(0.72 0 0)` | `oklch(0.56 0 0)` | Disabled text and icons (exempt from the 4.5:1 rule) |
@@ -32,8 +34,8 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-popover-surface` | `rgb(255 255 255 / 94%)` | `rgb(24 24 24 / 94%)` | Student quick-view popover surface |
 | `ring-v2-popover-divider`, `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Quick-view outline and action divider |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
-| `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
-| `text-v2-info` | `oklch(0.546 0.215 262.881)` | `oklch(0.809 0.105 251.813)` | Information status text; separate semantic token with the link color |
+| `bg-v2-highlight` | accent at 16% | accent at 20% | Emphasis overlay for programmatic panel and featured-content targets |
+| `text-v2-info` | `var(--v2-accent)` | `var(--v2-accent)` | Information status text; separate semantic token with the link color |
 | `bg-v2-ai-gradient` | `linear-gradient(135deg, oklch(0.623 0.214 259.815), oklch(0.606 0.25 292.717))` | `linear-gradient(135deg, oklch(0.707 0.165 254.624), oklch(0.702 0.183 293.541))` | AI mark, input focus glow, and working halo only |
 | `shadow-v2-ai-glow` | `0 0 1.25rem oklch(0.606 0.25 292.717 / 16%)` | `0 0 1.25rem oklch(0.702 0.183 293.541 / 24%)` | AI input focus glow |
 | `animate-v2-ai-working` | `v2-ai-working 2s ease-in-out infinite` | same | AI working halo; stopped by reduced motion |
@@ -47,7 +49,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `border-v2-control-border` | `oklch(0.968 0 0)` | `oklch(0.388 0 0)` | Idle boundary for text inputs, selects, textareas, and grouped inputs. The value is the former 40% border over `bg-v2-surface`, made opaque; do not add an opacity modifier. Not for cards, buttons, or region separation. |
 | `border-v2-control-border-strong`, `ring-v2-control-border-strong` | `oklch(0.92 0 0)` | `oklch(0.55 0 0)` | Focused input boundary (paired with the focus ring), hover boundary, popover ring, and the upload drop zone. |
 | `bg-v2-switch-off` | `oklch(0.64 0 0)` | `oklch(0.56 0 0)` | Switch off-track fill (3:1 against surface). Not for text or input borders. |
-| `ring-v2-focus`, `outline-v2-focus` | `oklch(0.623 0.214 259.815)` | `oklch(0.707 0.165 254.624)` | Focus ring, 2px with 2px offset (3:1 or higher) |
+| `ring-v2-focus`, `outline-v2-focus` | `var(--v2-accent)` | `var(--v2-accent)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
 | `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5). 4.5:1 or higher on subtle, surface, and canvas |
@@ -243,7 +245,7 @@ Route transitions and state transitions go through the helper in `screen-transit
 - Browser back (POP) gets no 2.0 transition.
 - The Sheet slides up (`slow`, `enter`) with a backdrop fade. It closes with `base`, `exit`.
 - A panel body fades in and slides `translateY(-0.25rem)` (`base`, `enter`). Collapsing fades out (`fast`, `exit`). The chevron rotates. Height is not animated, so the blocks below move at once when a panel collapses.
-- A panel highlight fades an overlay in and out over `slow` times 4.
+- A panel or featured-content target highlight fades an overlay in and out over `slow` times 4.
 - `prefers-reduced-motion: reduce` removes all translation and keeps the fades.
 - Only `transform` and `opacity` animate. Animations use the v2 `duration-v2-*` and `ease-v2-*` tokens.
 

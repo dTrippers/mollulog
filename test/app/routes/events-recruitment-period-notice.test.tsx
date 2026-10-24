@@ -110,6 +110,7 @@ const timelineContent = {
   isSpoiler: false,
   tags: [],
   earnablePyroxene: null,
+  featuredUntil: null,
   syncedAt: "2029-12-01T00:00:00.000Z",
 };
 

@@ -45,6 +45,7 @@ function event(overrides: Partial<TimelineContent> & Pick<TimelineContent, "uid"
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };

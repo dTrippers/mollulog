@@ -46,6 +46,7 @@ export type TimelineContent = {
   isSpoiler: boolean;
   tags: string[];
   earnablePyroxene: number | null;
+  featuredUntil: UtcIsoString | null;
   syncedAt: UtcIsoString | null;
 };
 

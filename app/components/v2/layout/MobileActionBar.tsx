@@ -1,5 +1,5 @@
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/16/solid";
-import type { ElementType } from "react";
+import type { ElementType, ReactNode } from "react";
 import { cn } from "~/lib/utils";
 import { isExternalHref, LinkTarget } from "./LinkTarget";
 import type { V2TransitionKind } from "./screen-transition";
@@ -29,6 +29,7 @@ export type MobileActionPanel = {
 export type MobileActionBarProps = {
   links?: MobileActionLink[];
   panels?: MobileActionPanel[];
+  leading?: ReactNode;
 };
 
 const itemClassName = cn(
@@ -37,14 +38,14 @@ const itemClassName = cn(
 );
 
 // Fixed bottom action bar for stacked layouts. Hidden on side-by-side by the container query in tailwind.css.
-export function MobileActionBar({ links = [], panels = [] }: MobileActionBarProps) {
+export function MobileActionBar({ links = [], panels = [], leading }: MobileActionBarProps) {
   const { sheetPanelId, openSheet } = useV2Page();
-  if (links.length === 0 && panels.length === 0) {
+  if (links.length === 0 && panels.length === 0 && !leading) {
     return null;
   }
 
-  return (
-    <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] z-30 flex rounded-lg bg-v2-elevated p-1 shadow-lg">
+  const actionItems = (
+    <>
       {links.map((link) => {
         const { Icon } = link;
         const external = link.to !== undefined && isExternalHref(link.to);
@@ -83,6 +84,23 @@ export function MobileActionBar({ links = [], panels = [] }: MobileActionBarProp
           </button>
         );
       })}
+    </>
+  );
+
+  if (leading) {
+    return (
+      <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] left-4 z-30 flex items-stretch gap-2">
+        <div className="min-w-0 flex-1">{leading}</div>
+        {links.length > 0 || panels.length > 0 ? (
+          <div className="flex shrink-0 rounded-lg bg-v2-elevated p-1 shadow-lg">{actionItems}</div>
+        ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] z-30 flex rounded-lg bg-v2-elevated p-1 shadow-lg">
+      {actionItems}
     </div>
   );
 }

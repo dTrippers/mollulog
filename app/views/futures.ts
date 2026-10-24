@@ -53,6 +53,7 @@ export function normalizeFutureContentDates(content: FutureContent): FutureConte
     ...content,
     startAt: normalizeInstantValue(content.startAt) ?? normalizeInstant(content.startAt),
     endAt: normalizeInstantValue(content.endAt),
+    featuredUntil: normalizeInstantValue(content.featuredUntil),
     syncedAt: normalizeInstantValue(content.syncedAt),
     recruitmentPeriod: content.recruitmentPeriod
       ? {
@@ -104,7 +105,7 @@ export async function getFutureContents(
   const allEnriched = await fetchRouteCached(
     env,
     ctx,
-    cacheKey("route", "futures", 4, "all"),
+    cacheKey("route", "futures", 5, "all"),
     async () => {
       const [contents, upcomingRaidContents] = await Promise.all([
         getTimelineContents(env, nowUtcIso(), { ctx }),

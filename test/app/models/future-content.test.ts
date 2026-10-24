@@ -46,6 +46,7 @@ describe("normalizeFutureContentDates", () => {
       isSpoiler: false,
       tags: [],
       earnablePyroxene: null,
+      featuredUntil: "2026-04-10T00:00:00.000Z",
       syncedAt: "2026-03-29T09:20:22.385Z",
       recruitments: [
         {
@@ -73,6 +74,7 @@ describe("normalizeFutureContentDates", () => {
 
     expect(normalized.startAt).toBe("2026-03-31T02:00:00.000Z");
     expect(normalized.endAt).toBe("2026-04-06T19:00:00.000Z");
+    expect(normalized.featuredUntil).toBe("2026-04-10T00:00:00.000Z");
     expect(normalized.syncedAt).toBe("2026-03-29T09:20:22.385Z");
     expect(normalized.recruitmentPeriod).toEqual({
       startAt: "2026-03-31T02:00:00.000Z",
@@ -101,6 +103,7 @@ describe("normalizeFutureContentDates", () => {
       isSpoiler: false,
       tags: [],
       earnablePyroxene: null,
+      featuredUntil: null,
       syncedAt: "2026-03-29T09:20:22.385Z",
       recruitments: [],
     } as unknown as FutureContent);

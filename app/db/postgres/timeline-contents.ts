@@ -44,6 +44,7 @@ function toDomain(row: PostgresTimelineContentRow): TimelineContent {
     isSpoiler: row.isSpoiler,
     tags: row.tags,
     earnablePyroxene: row.earnablePyroxene,
+    featuredUntil: row.featuredUntil ? normalizePostgresInstant(row.featuredUntil) : null,
     syncedAt: row.syncedAt ? normalizePostgresInstant(row.syncedAt) : null,
   });
 }

@@ -97,6 +97,7 @@ function createTimelineContent(overrides: Partial<NonNullable<Awaited<ReturnType
     isSpoiler: false,
     tags: ["shop"],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   } as NonNullable<Awaited<ReturnType<typeof getTimelineContent>>>;

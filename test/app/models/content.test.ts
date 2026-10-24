@@ -89,6 +89,7 @@ function event(uid: string, startAt: string, endAt: string | null, runType: "fir
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
   };
 }

@@ -227,6 +227,7 @@ export const pgTimelineContentsTable = pgTable(
     shopContentUid: text("shop_content_uid"),
     nameI18n: jsonb("name_i18n").$type<TimelineContentNameI18n>().notNull().default({}),
     recruitmentStudentUids: text("recruitment_student_uids").array(),
+    featuredUntil: timestamptz("featured_until"),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },

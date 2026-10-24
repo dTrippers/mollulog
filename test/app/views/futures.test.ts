@@ -69,6 +69,7 @@ const timelineContent = {
   isSpoiler: false,
   tags: [],
   earnablePyroxene: null,
+  featuredUntil: "2030-01-18T00:00:00.000Z",
   syncedAt: "2029-12-01T00:00:00.000Z",
 };
 
@@ -98,7 +99,7 @@ describe("getFutureContents recruitment periods", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::futures::v4::all",
+      "route::futures::v5::all",
       expect.any(Function),
       false,
     );
@@ -118,6 +119,24 @@ describe("getFutureContents recruitment periods", () => {
     mockedGetRecruitmentGroupsByUidsStrict.mockRejectedValue(error);
 
     await expect(getFutureContents(env)).rejects.toBe(error);
+  });
+});
+
+describe("getFutureContents featured timestamp normalization", () => {
+  it("normalizes featuredUntil from cached date values", async () => {
+    mockedFetchRouteCached.mockResolvedValue([
+      {
+        ...timelineContent,
+        featuredUntil: new Date("2030-01-18T00:00:00.000Z"),
+        minigameType: null,
+        recruitments: [],
+        recruitmentPeriod: null,
+      },
+    ] as never);
+
+    const [content] = await getFutureContents(env);
+
+    expect(content?.featuredUntil).toBe("2030-01-18T00:00:00.000Z");
   });
 });
 

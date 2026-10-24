@@ -31,6 +31,7 @@ function content(overrides: Partial<TimelineContent> & { uid: string }): Timelin
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: null,
     ...overrides,
   };

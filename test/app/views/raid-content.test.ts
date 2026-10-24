@@ -46,6 +46,7 @@ function createTimelineRaidContent({
     isSpoiler: false,
     tags: [],
     earnablePyroxene: null,
+    featuredUntil: null,
     syncedAt: "2026-06-29T00:00:00.000Z",
     recruitments: [],
   } as unknown as TimelineContent;

@@ -21,6 +21,7 @@ import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { useImageFailure } from "../../primitives/use-image-failure";
 import { ContentMedia } from "./ContentMedia";
+import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { getFutureMediaTypeLabel } from "./labels";
 import { RemainingLabel } from "./RemainingLabel";
 import type { FutureViewContent } from "./types";
@@ -32,6 +33,8 @@ export type FutureListProps = {
   revealedSpoilers: ReadonlySet<string>;
   onRevealSpoiler: (contentUid: string) => void;
   onOpenContent: (contentUid: string) => void;
+  highlightedContentUid?: string | null;
+  highlightAnimationKey?: number;
 };
 
 // Date blocks of fixed-column rows. Desktop rows align every element on one x line, and each row is one line: the name
@@ -44,6 +47,8 @@ export function FutureList({
   revealedSpoilers,
   onRevealSpoiler,
   onOpenContent,
+  highlightedContentUid,
+  highlightAnimationKey = 0,
 }: FutureListProps) {
   return (
     <div className="space-y-5">
@@ -66,7 +71,12 @@ export function FutureList({
             </header>
             <ul className="divide-y divide-v2-inset">
               {group.contents.map((content) => (
-                <li key={content.uid} data-futures-content-uid={content.uid}>
+                <li
+                  key={content.uid}
+                  data-futures-content-uid={content.uid}
+                  tabIndex={-1}
+                  className="v2-featured-target relative"
+                >
                   <ListRow
                     content={content}
                     now={now}
@@ -75,6 +85,9 @@ export function FutureList({
                     onRevealSpoiler={onRevealSpoiler}
                     onOpenContent={onOpenContent}
                   />
+                  {highlightedContentUid === content.uid && highlightAnimationKey > 0 ? (
+                    <ContentHighlightOverlay animationKey={highlightAnimationKey} />
+                  ) : null}
                 </li>
               ))}
             </ul>
@@ -128,6 +141,7 @@ function ListRow({
     now,
     timeZone,
   });
+  const hasLongNotes = specialCases.some((specialCase) => specialCase.kind === "caution-period");
   // A hidden spoiler row shows the same period as any other row.
   const period = formatContentPeriod({
     since: content.since,
@@ -152,10 +166,33 @@ function ListRow({
   );
 
   const notes = hidden ? null : (
-    <span className="flex shrink-0 items-center gap-2 text-xs whitespace-nowrap">
-      {remaining ? <RemainingLabel remaining={remaining} /> : null}
-      {specialCases.map((specialCase) => (
-        <SpecialNote key={specialCase.kind} specialCase={specialCase} />
+    <span
+      className={cn(
+        "flex shrink-0 items-center gap-2 text-xs whitespace-nowrap",
+        hasLongNotes && "lg:min-w-0 lg:flex-initial lg:overflow-hidden",
+      )}
+    >
+      {remaining ? (
+        <span
+          className={
+            hasLongNotes
+              ? cn(
+                  specialCases.length > 0 ? "lg:shrink-0" : "lg:min-w-0 lg:flex-1",
+                  "lg:[&>span]:block lg:[&>span]:truncate",
+                )
+              : undefined
+          }
+        >
+          <RemainingLabel remaining={remaining} />
+        </span>
+      ) : null}
+      {specialCases.map((specialCase, index) => (
+        <SpecialNote
+          key={specialCase.kind}
+          specialCase={specialCase}
+          constrained={hasLongNotes}
+          flexible={hasLongNotes && index === specialCases.length - 1}
+        />
       ))}
     </span>
   );
@@ -178,7 +215,13 @@ function ListRow({
             </Button>
           </div>
         ) : (
-          <p className="min-w-0 truncate text-sm font-semibold text-v2-fg" title={name}>
+          <p
+            className={cn(
+              "min-w-0 truncate text-sm font-semibold text-v2-fg",
+              hasLongNotes && "lg:flex-none lg:max-w-[40%]",
+            )}
+            title={name}
+          >
             {name}
           </p>
         )}
@@ -243,21 +286,31 @@ function FaceImage({ studentUid, overlapped }: { studentUid: string | null; over
   );
 }
 
-function SpecialNote({ specialCase }: { specialCase: FutureSpecialCase }) {
+function SpecialNote({
+  specialCase,
+  constrained = false,
+  flexible = false,
+}: {
+  specialCase: FutureSpecialCase;
+  constrained?: boolean;
+  flexible?: boolean;
+}) {
+  const noteClassName = flexible ? "lg:min-w-0 lg:flex-1" : constrained ? "lg:shrink-0" : undefined;
+  const textClassName = flexible ? "lg:min-w-0 lg:truncate" : undefined;
   if (specialCase.kind === "perk-free-100") {
     return (
-      <span className="inline-flex items-center gap-1 font-semibold text-v2-perk">
-        <StarIcon className="size-3.5" aria-hidden="true" />
-        100회 무료
+      <span className={cn("inline-flex items-center gap-1 font-semibold text-v2-perk", noteClassName)}>
+        <StarIcon className="size-3.5 lg:shrink-0" aria-hidden="true" />
+        <span className={textClassName}>100회 무료</span>
       </span>
     );
   }
   const cautionText = getCautionText(specialCase);
   if (cautionText !== null) {
     return (
-      <span className="inline-flex items-center gap-1 font-semibold text-v2-warning tabular-nums">
-        <ClockIcon className="size-3.5" aria-hidden="true" />
-        {cautionText}
+      <span className={cn("inline-flex items-center gap-1 font-semibold text-v2-warning tabular-nums", noteClassName)}>
+        <ClockIcon className="size-3.5 lg:shrink-0" aria-hidden="true" />
+        <span className={textClassName}>{cautionText}</span>
       </span>
     );
   }
