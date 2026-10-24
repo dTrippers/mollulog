@@ -120,6 +120,16 @@ describe("Google Analytics events", () => {
       page_title: "/test",
       page_referrer: "",
     });
+
+    expect(
+      sanitizeGoogleAnalyticsEventParameters("halo_mode_toggled", { state: "on", source: "settings" }, true),
+    ).toEqual({
+      state: "on",
+      logged_in: true,
+      page_location: "https://mollulog.net/test",
+      page_title: "/test",
+      page_referrer: "",
+    });
   });
 
   it("does not forward runtime-added keys or send when GA is unavailable", () => {

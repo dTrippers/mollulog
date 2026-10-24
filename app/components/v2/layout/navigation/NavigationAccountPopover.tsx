@@ -5,6 +5,7 @@ import { HaloModeIcon } from "~/components/media/HaloModeIcon";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
 import { Switch } from "~/components/v2/primitives/Switch";
 import { useHaloMode } from "~/contexts/HaloModeContext";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { submitPreference } from "~/lib/preference-submission.client";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../styles";
@@ -136,6 +137,7 @@ export function NavigationAccountPopover({
   const toggleHaloMode = (next: boolean) => {
     void submitPreference({ haloMode: next }).catch(() => undefined);
     setHaloMode(next);
+    trackGoogleAnalyticsEvent("halo_mode_toggled", { state: next ? "on" : "off", source: "navigation" });
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
   const profileAction = actions.find((action) => action.group === "account" && action.to.startsWith("/@"));

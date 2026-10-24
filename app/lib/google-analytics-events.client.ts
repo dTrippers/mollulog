@@ -112,6 +112,7 @@ const eventRules = {
   },
   calculator_used: { tool: ["raidscore", "relationship_item", "ap"] },
   futures_spoiler_toggled: { state: ["revealed", "hidden"] },
+  halo_mode_toggled: { state: ["on", "off"], source: ["navigation", "more"] },
   raid_video_opened: { raid_type: ["total_assault", "elimination", "unlimit", "allied", "raid"] },
   coupon_code_copied: { code_type: ["coupon", "member_code"] },
   coupon_marked: { state: ["used", "unused"] },

@@ -15,7 +15,7 @@ import {
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
 import { canonicalLink } from "~/lib/seo";
-import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
+import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
 import { submitPreference } from "~/lib/preference-submission.client";
@@ -97,6 +97,7 @@ export default function MoreIndexPage() {
     const nextHaloMode = !haloMode;
     void submitPreference({ haloMode: nextHaloMode }).catch(() => undefined);
     setHaloMode(nextHaloMode);
+    trackGoogleAnalyticsEvent("halo_mode_toggled", { state: nextHaloMode ? "on" : "off", source: "more" });
   };
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 pt-4 pb-6 lg:pt-2">
