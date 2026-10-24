@@ -14,9 +14,15 @@ import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 
 export const API_GUIDE_COPY = {
   pageTitle: "API 문서",
+  groups: {
+    guide: "API 연동 가이드",
+    oauth: "OAuth 연동",
+    api: "API 목록",
+    common: "공통 사항",
+  },
   sections: {
     agent: "코딩 에이전트로 연동하기",
-    connection: "연결",
+    connection: "연결과 인증",
     oauth: "몰루로그 계정으로 로그인",
     fields: "학생 상태 필드",
     errors: "오류",

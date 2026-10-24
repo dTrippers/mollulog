@@ -115,8 +115,19 @@ describe("developers API documentation page", () => {
     expect(text).toContain("토큰 URL");
     expect(text).toContain("Redirect URI는 등록한 주소와 정확히 같아야 해요");
     expect(text).toContain("액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.");
-    expect(markup).toContain("<h3 class=\"text-base font-semibold\">프로필</h3>");
-    expect(markup).toContain("<h3 class=\"text-base font-semibold\">학생</h3>");
+    const headings = Array.from(markup.matchAll(/<h([345])[^>]*>([^<]+)<\/h\1>/g), ([, level, title]) => `${level}:${title}`);
+    expect(headings).toEqual(expect.arrayContaining([
+      "3:API 연동 가이드", "4:코딩 에이전트로 연동하기", "4:연결과 인증",
+      "3:OAuth 연동", "4:몰루로그 계정으로 로그인",
+      "3:API 목록", "4:프로필", "4:학생", "5:학생 상태 필드",
+      "3:공통 사항", "4:오류", "4:제한과 규칙",
+    ]));
+    expect(headings.filter((heading) => /^(3|4):/.test(heading))).toEqual([
+      "3:API 연동 가이드", "4:코딩 에이전트로 연동하기", "4:연결과 인증",
+      "3:OAuth 연동", "4:몰루로그 계정으로 로그인",
+      "3:API 목록", "4:프로필", "4:학생",
+      "3:공통 사항", "4:오류", "4:제한과 규칙",
+    ]);
   });
 
   it("renders every endpoint, field, and public error from the shared modules", () => {
@@ -124,7 +135,7 @@ describe("developers API documentation page", () => {
     const text = extractText(markup);
 
     expect(API_ROUTE_GROUPS.flatMap((group) => group.routeIds)).toEqual(API_ROUTES.map((route) => route.id));
-    expect(markup).toMatch(/<h3[^>]*>학생<\/h3>[\s\S]*<h4[^>]*>학생 상태 필드<\/h4>/);
+    expect(markup).toMatch(/<h4[^>]*>학생<\/h4>[\s\S]*<h5[^>]*>학생 상태 필드<\/h5>/);
 
     for (const route of API_ROUTES) {
       expect(markup).toContain(route.displayPath);

@@ -60,90 +60,104 @@ export default function DevelopersDocs() {
           <h2 className="mb-v2-group-gap text-lg font-semibold">{API_GUIDE_COPY.pageTitle}</h2>
         </header>
 
-        <DocsSection title={API_GUIDE_COPY.sections.agent}>
-          <AgentPromptBlock label={API_GUIDE_COPY.agentPromptLabel} prompt={prompt} />
-          <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-            {API_GUIDE_COPY.documentLinks.map((documentLink) => (
-              <DocumentUrlRow
-                key={documentLink.key}
-                label={documentLink.label}
-                url={documentUrls[documentLink.key]}
-                copyLabel={documentLink.copyLabel}
-              />
-            ))}
-          </dl>
-        </DocsSection>
-
-        <DocsSection title={API_GUIDE_COPY.sections.connection}>
-          <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-            <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.baseUrl}</dt>
-            <dd className="min-w-0">
-              <div className="flex min-w-0 items-start justify-between gap-2 font-mono text-sm">
-                <code className="min-w-0 break-all pt-1.5">{urls.baseUrl}</code>
-                <CopyTextButton
-                  value={urls.baseUrl}
-                  variant="icon"
-                  label={API_GUIDE_COPY.connection.baseUrlCopyLabel}
-                  onStatusChange={setBaseUrlCopyStatus}
+        <DocsGroup title={API_GUIDE_COPY.groups.guide}>
+          <DocsSection title={API_GUIDE_COPY.sections.agent}>
+            <AgentPromptBlock label={API_GUIDE_COPY.agentPromptLabel} prompt={prompt} />
+            <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+              {API_GUIDE_COPY.documentLinks.map((documentLink) => (
+                <DocumentUrlRow
+                  key={documentLink.key}
+                  label={documentLink.label}
+                  url={documentUrls[documentLink.key]}
+                  copyLabel={documentLink.copyLabel}
                 />
-              </div>
-              <CopyStatusMessage status={baseUrlCopyStatus} />
-            </dd>
-            <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.authorization}</dt>
-            <dd>
-              <div className="flex items-start justify-between gap-2">
-                <code className="break-all pt-1.5">{API_GUIDE_COPY.connection.authorizationValue}</code>
-                <CopyTextButton
-                  value={API_GUIDE_COPY.connection.authorizationValue}
-                  variant="icon"
-                  label={API_GUIDE_COPY.connection.authorizationCopyLabel}
-                  onStatusChange={setAuthCopyStatus}
-                />
-              </div>
-              <CopyStatusMessage status={authCopyStatus} />
-            </dd>
-          </dl>
-        </DocsSection>
-
-        <OAuthGuideSection
-          authorizeUrl={`${siteHost}/oauth/authorize`}
-          tokenUrl={`${urls.origin}/oauth/token`}
-        />
-
-        {API_ROUTE_GROUPS.map((group) => (
-          <DocsSection key={group.id} title={group.title}>
-            <div className="space-y-1">
-              {API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id)).map((route) => (
-                <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
               ))}
-            </div>
-            {group.id === "students" ? <StudentStateFields /> : null}
+            </dl>
           </DocsSection>
-        ))}
 
-        <DocsSection title={API_GUIDE_COPY.sections.errors}>
-          <ApiErrorTable />
-          <CodeBlock label={API_GUIDE_COPY.errorExampleLabel} copyable>
-            {errorExample}
-          </CodeBlock>
-        </DocsSection>
+          <DocsSection title={API_GUIDE_COPY.sections.connection}>
+            <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+              <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.baseUrl}</dt>
+              <dd className="min-w-0">
+                <div className="flex min-w-0 items-start justify-between gap-2 font-mono text-sm">
+                  <code className="min-w-0 break-all pt-1.5">{urls.baseUrl}</code>
+                  <CopyTextButton
+                    value={urls.baseUrl}
+                    variant="icon"
+                    label={API_GUIDE_COPY.connection.baseUrlCopyLabel}
+                    onStatusChange={setBaseUrlCopyStatus}
+                  />
+                </div>
+                <CopyStatusMessage status={baseUrlCopyStatus} />
+              </dd>
+              <dt className="text-v2-fg-secondary sm:pt-1.5">{API_GUIDE_COPY.connection.authorization}</dt>
+              <dd>
+                <div className="flex items-start justify-between gap-2">
+                  <code className="break-all pt-1.5">{API_GUIDE_COPY.connection.authorizationValue}</code>
+                  <CopyTextButton
+                    value={API_GUIDE_COPY.connection.authorizationValue}
+                    variant="icon"
+                    label={API_GUIDE_COPY.connection.authorizationCopyLabel}
+                    onStatusChange={setAuthCopyStatus}
+                  />
+                </div>
+                <CopyStatusMessage status={authCopyStatus} />
+              </dd>
+            </dl>
+          </DocsSection>
+        </DocsGroup>
 
-        <DocsSection title={API_GUIDE_COPY.sections.limits}>
-          <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
-            {API_GUIDE_COPY.pageLimits.map(({ label, value }) => (
-              <LimitRow key={label} label={label} value={value} />
-            ))}
-          </dl>
-        </DocsSection>
+        <DocsGroup title={API_GUIDE_COPY.groups.oauth}>
+          <OAuthGuideSection authorizeUrl={`${siteHost}/oauth/authorize`} tokenUrl={`${urls.origin}/oauth/token`} />
+        </DocsGroup>
+
+        <DocsGroup title={API_GUIDE_COPY.groups.api}>
+          {API_ROUTE_GROUPS.map((group) => (
+            <DocsSection key={group.id} title={group.title}>
+              <div className="space-y-1">
+                {API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id)).map((route) => (
+                  <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
+                ))}
+              </div>
+              {group.id === "students" ? <StudentStateFields /> : null}
+            </DocsSection>
+          ))}
+        </DocsGroup>
+
+        <DocsGroup title={API_GUIDE_COPY.groups.common}>
+          <DocsSection title={API_GUIDE_COPY.sections.errors}>
+            <ApiErrorTable />
+            <CodeBlock label={API_GUIDE_COPY.errorExampleLabel} copyable>
+              {errorExample}
+            </CodeBlock>
+          </DocsSection>
+
+          <DocsSection title={API_GUIDE_COPY.sections.limits}>
+            <dl className="grid grid-cols-1 items-start gap-x-4 gap-y-3 text-sm sm:grid-cols-[7rem_minmax(0,1fr)]">
+              {API_GUIDE_COPY.pageLimits.map(({ label, value }) => (
+                <LimitRow key={label} label={label} value={value} />
+              ))}
+            </dl>
+          </DocsSection>
+        </DocsGroup>
       </div>
     </PageMain>
+  );
+}
+
+function DocsGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-v2-group-gap">
+      <h3 className="text-base font-semibold">{title}</h3>
+      <div className="space-y-v2-group-gap">{children}</div>
+    </section>
   );
 }
 
 function StudentStateFields() {
   return (
     <section className="space-y-v2-group-gap" aria-label={API_GUIDE_COPY.sections.fields}>
-      <h4 className="text-sm font-semibold">{API_GUIDE_COPY.sections.fields}</h4>
+      <h5 className="text-sm font-semibold">{API_GUIDE_COPY.sections.fields}</h5>
       <DataTable label={API_GUIDE_COPY.sections.fields}>
         <TableHeader columns={[...API_GUIDE_COPY.fieldTable.columns]} />
         <tbody>
@@ -161,13 +175,17 @@ function StudentStateFields() {
                 </TableCell>
                 <TableCell>
                   <span className="whitespace-nowrap">{group.meaning}</span>
-                  {"detail" in group ? <span className="block text-xs text-v2-fg-secondary">{group.detail}</span> : null}
+                  {"detail" in group ? (
+                    <span className="block text-xs text-v2-fg-secondary">{group.detail}</span>
+                  ) : null}
                 </TableCell>
                 <TableCell className="whitespace-nowrap tabular-nums">
                   {formatFieldRange(firstField.min, firstField.max)}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-v2-fg-secondary">
-                  {firstField.nullable ? API_GUIDE_COPY.fieldTable.nullAllowed : API_GUIDE_COPY.fieldTable.nullForbidden}
+                  {firstField.nullable
+                    ? API_GUIDE_COPY.fieldTable.nullAllowed
+                    : API_GUIDE_COPY.fieldTable.nullForbidden}
                 </TableCell>
               </tr>
             );
@@ -183,13 +201,7 @@ function StudentStateFields() {
   );
 }
 
-function OAuthGuideSection({
-  authorizeUrl,
-  tokenUrl,
-}: {
-  authorizeUrl: string;
-  tokenUrl: string;
-}) {
+function OAuthGuideSection({ authorizeUrl, tokenUrl }: { authorizeUrl: string; tokenUrl: string }) {
   const [authorizeCopyStatus, setAuthorizeCopyStatus] = useState<CopyStatus>("idle");
   const [tokenCopyStatus, setTokenCopyStatus] = useState<CopyStatus>("idle");
   const authorizationRequest = `${authorizeUrl}?response_type=code
@@ -204,7 +216,8 @@ function OAuthGuideSection({
   -d 'redirect_uri=https://example.com/callback' \\
   -d 'client_id=mllg_oc_<CLIENT_ID>' \\
   -d 'client_secret=<CLIENT_SECRET>'`;
-  const tokenResponse = '{"access_token":"<ACCESS_TOKEN>","token_type":"Bearer","expires_in":31536000,"scope":"profile students:write"}';
+  const tokenResponse =
+    '{"access_token":"<ACCESS_TOKEN>","token_type":"Bearer","expires_in":31536000,"scope":"profile students:write"}';
 
   return (
     <div id="oauth">
@@ -237,12 +250,19 @@ function OAuthGuideSection({
             <CopyStatusMessage status={tokenCopyStatus} />
           </dd>
         </dl>
-        <CodeBlock label="인증 요청 예시" copyable>{authorizationRequest}</CodeBlock>
-        <CodeBlock label="토큰 요청 예시" copyable>{tokenRequest}</CodeBlock>
+        <CodeBlock label="인증 요청 예시" copyable>
+          {authorizationRequest}
+        </CodeBlock>
+        <CodeBlock label="토큰 요청 예시" copyable>
+          {tokenRequest}
+        </CodeBlock>
         <CodeBlock label="토큰 응답 200">{tokenResponse}</CodeBlock>
         <ul className="space-y-1 text-sm text-v2-fg-secondary">
           <li>Redirect URI는 등록한 주소와 정확히 같아야 해요</li>
-          <li>액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.</li>
+          <li>
+            액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시
+            진행해야 해요.
+          </li>
         </ul>
       </DocsSection>
     </div>
@@ -334,13 +354,7 @@ function SlashBreakUrl({ url }: { url: string }) {
   );
 }
 
-function ApiEndpoint({
-  route,
-  baseUrl,
-}: {
-  route: (typeof API_ROUTES)[number];
-  baseUrl: string;
-}) {
+function ApiEndpoint({ route, baseUrl }: { route: (typeof API_ROUTES)[number]; baseUrl: string }) {
   const guide = getApiEndpointGuide(route.id);
   const curl = formatApiCurlCommand(baseUrl, route);
   const responseJson = JSON.stringify(route.responseExample.body);
