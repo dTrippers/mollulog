@@ -373,37 +373,39 @@ export default function App() {
             />
           )}
           <div
-            className={`mllg-content-area w-full overflow-y-scroll ${
-              isOAuthAuthorizeRoute ? "min-h-dvh flex-1" : "pt-[var(--mobile-header-height)] lg:min-w-0 lg:flex-1 lg:pt-0"
+            className={`mllg-content-area flex min-h-0 w-full flex-1 flex-col overflow-y-scroll ${
+              isOAuthAuthorizeRoute ? "" : "pt-[var(--mobile-header-height)] lg:min-w-0 lg:pt-0"
             } ${
               isContentTransitionRoute && !isOAuthAuthorizeRoute ? "mllg-view-transition-content" : ""
             }`}
           >
             <div
-              className={`page-available-width-container @container/page-available mx-auto w-full transition-all duration-300 ease-out motion-reduce:transition-none ${
+              className={`page-available-width-container @container/page-available mx-auto flex w-full shrink-0 grow flex-col transition-all duration-300 ease-out motion-reduce:transition-none ${
                 isOAuthAuthorizeRoute
                   ? "min-h-dvh max-w-none p-0"
-                  : "max-w-7xl px-4 pt-2 pb-6 has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none md:px-8 lg:min-h-screen lg:py-6"
+                  : "max-w-7xl px-4 pt-2 pb-6 has-[[data-page-max-width=wide]]:max-w-screen-2xl has-[[data-page-max-width=full]]:max-w-none md:px-8 lg:py-6"
               }`}
             >
-              <TimeZoneProvider timeZone={displayTimeZone}>
-                <StudentCardPopupProvider key={pathname}>
-                  {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
-                  <Outlet
-                    context={
-                      {
-                        darkMode,
-                        setDarkMode,
-                        mobileNavigationIds,
-                        setMobileNavigationIds,
-                        currentUsername,
-                        isAdmin,
-                        navigationBarContents,
-                      } satisfies RootOutletContext
-                    }
-                  />
-                </StudentCardPopupProvider>
-              </TimeZoneProvider>
+              <div className="grow">
+                <TimeZoneProvider timeZone={displayTimeZone}>
+                  <StudentCardPopupProvider key={pathname}>
+                    {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
+                    <Outlet
+                      context={
+                        {
+                          darkMode,
+                          setDarkMode,
+                          mobileNavigationIds,
+                          setMobileNavigationIds,
+                          currentUsername,
+                          isAdmin,
+                          navigationBarContents,
+                        } satisfies RootOutletContext
+                      }
+                    />
+                  </StudentCardPopupProvider>
+                </TimeZoneProvider>
+              </div>
               {isOAuthAuthorizeRoute ? null : <Footer />}
             </div>
           </div>
