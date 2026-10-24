@@ -21,9 +21,8 @@ import {
   trackEventShopPlanSaved,
   trackGoogleAnalyticsEvent,
   trackGoogleAnalyticsEventIfAllowed,
-  useConsumeGoogleAnalyticsEventCookie,
-  useTrackGoogleAnalyticsSearch,
 } from "~/lib/google-analytics-events.client";
+import { useConsumeGoogleAnalyticsEventCookie, useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import ResourceInventoryFilterPanel, {
   createResourceInventoryFilterState,
 } from "~/routes/utils.resources._components/ResourceInventoryFilterPanel";

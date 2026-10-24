@@ -43,8 +43,8 @@ import {
   consumePendingAuthEvent,
   setGoogleAnalyticsPageKey,
   trackGoogleAnalyticsEvent,
-  useConsumeGoogleAnalyticsEventCookie,
 } from "./lib/google-analytics-events.client";
+import { useConsumeGoogleAnalyticsEventCookie } from "./lib/google-analytics-hooks";
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
@@ -315,10 +315,13 @@ export default function App() {
     [routePage.contentGroup, routePage.contentId, routePage.routePattern],
   );
   const analyticsEnabled = loaderData.publicEnv.STAGE === "prod";
-  setGoogleAnalyticsLoggedIn(loaderData.isLoggedIn);
-  setGoogleAnalyticsPageKey(location.key);
-  if (typeof window !== "undefined") setGoogleAnalyticsPageContext(analyticsPageContext);
-  setGoogleAnalyticsEnabled(analyticsEnabled);
+  // `.client` exports are empty during SSR; set the analytics state before child effects read it.
+  if (typeof window !== "undefined") {
+    setGoogleAnalyticsLoggedIn(loaderData.isLoggedIn);
+    setGoogleAnalyticsPageKey(location.key);
+    setGoogleAnalyticsPageContext(analyticsPageContext);
+    setGoogleAnalyticsEnabled(analyticsEnabled);
+  }
   rememberRoutePattern(location.pathname, routePage.routePattern);
   const pageBannerSlot = getPageSiteBannerSlot(pathname, siteBanner);
   const routeKey = location.key;

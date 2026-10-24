@@ -22,7 +22,8 @@ import {
 } from "~/components/features/students";
 import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
 import { Button, Callout, FilterButtons, SubTitle, Toggle } from "~/components/primitives";
-import { trackGoogleAnalyticsEvent, useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,

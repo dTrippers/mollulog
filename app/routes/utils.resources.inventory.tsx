@@ -11,7 +11,7 @@ import {
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources, parseOcrInventoryResourceUid } from "~/domain/ocr-resource-identity";
 import { ResourceTypeEnum } from "~/graphql/graphql";
-import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
+import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { getLogger } from "~/lib/observability.server";
 import { getGrowthPlannerCatalogResources, getItemCatalogResources } from "~/models/item-catalog";
 import { getRelationshipLevels } from "~/models/relationship-level";

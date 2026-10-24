@@ -1,5 +1,3 @@
-import { useEffect, useRef } from "react";
-import { useLocation } from "react-router";
 import { NAVIGATION_MENU_IDS } from "~/domain/navigation-menu-badges";
 import {
   applyGoogleAnalyticsPageContext,
@@ -166,26 +164,6 @@ export function getGoogleAnalyticsResultBucket(count: number): "0" | "1-5" | "6+
   return count === 0 ? "0" : count <= 5 ? "1-5" : "6+";
 }
 
-export function useTrackGoogleAnalyticsSearch(
-  search: string | undefined,
-  scope: "global" | "students" | "my_students" | "events" | "furniture" | "resources",
-  resultCount: number,
-) {
-  const resultCountRef = useRef(resultCount);
-  resultCountRef.current = resultCount;
-
-  useEffect(() => {
-    if (!search?.trim()) return;
-    const timer = window.setTimeout(() => {
-      trackGoogleAnalyticsEvent("search", {
-        scope,
-        result_bucket: getGoogleAnalyticsResultBucket(resultCountRef.current),
-      });
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [scope, search]);
-}
-
 export function rememberPendingAuthEvent(eventName: PendingAuthEvent["eventName"], method: AnalyticsAuthMethod) {
   if (typeof window === "undefined") return;
   try {
@@ -275,7 +253,7 @@ export function trackGoogleAnalyticsEventIfAllowed(eventName: unknown, parameter
 
 const ANALYTICS_EVENTS_COOKIE_NAME = "__mllg_analytics_events";
 
-function consumeGoogleAnalyticsEventsCookie() {
+export function consumeGoogleAnalyticsEventsCookie() {
   const prefix = `${ANALYTICS_EVENTS_COOKIE_NAME}=`;
   const value = document.cookie
     .split(";")
@@ -296,17 +274,6 @@ function consumeGoogleAnalyticsEventsCookie() {
   } catch {
     // Malformed cookie data is discarded after the cookie is cleared.
   }
-}
-
-export function useConsumeGoogleAnalyticsEventCookie() {
-  const location = useLocation();
-  const lastConsumedLocationKeyRef = useRef<string | undefined>(undefined);
-
-  useEffect(() => {
-    if (lastConsumedLocationKeyRef.current === location.key) return;
-    lastConsumedLocationKeyRef.current = location.key;
-    if (typeof document !== "undefined") consumeGoogleAnalyticsEventsCookie();
-  }, [location.key]);
 }
 
 export function trackGoogleAnalyticsEventOncePerPage(...args: TrackArguments) {

@@ -27,7 +27,7 @@ import { readStudentFilterStateFromCookie } from "~/components/features/students
 import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
 import { Button } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-events.client";
+import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { canonicalLink } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
 import type { RootOutletContext } from "~/root";
