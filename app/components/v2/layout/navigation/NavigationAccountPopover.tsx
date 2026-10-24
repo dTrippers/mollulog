@@ -1,13 +1,7 @@
-import {
-  ChevronDownIcon,
-  ChevronUpIcon,
-  EyeSlashIcon,
-  MoonIcon,
-  SunIcon,
-  UserCircleIcon,
-} from "@heroicons/react/24/outline";
+import { ChevronDownIcon, ChevronUpIcon, MoonIcon, SunIcon, UserCircleIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
+import { HaloModeIcon } from "~/components/media/HaloModeIcon";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
 import { Switch } from "~/components/v2/primitives/Switch";
 import { useHaloMode } from "~/contexts/HaloModeContext";
@@ -308,7 +302,7 @@ export function NavigationAccountPopover({
             </div>
           </div>
           <div className="flex min-h-12 items-center gap-3 rounded-md px-2 py-2">
-            <EyeSlashIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            <HaloModeIcon className="size-4 shrink-0 text-v2-fg-tertiary" />
             <div className="min-w-0 flex-1">
               <Switch
                 id={haloModeSwitchId}
@@ -368,7 +362,7 @@ function HaloModeButton({
         aria-describedby={descriptionId}
         title="학생·이벤트 썸네일을 가려요"
       >
-        <EyeSlashIcon className={variant === "rail" ? "size-5" : "size-4"} aria-hidden="true" />
+        <HaloModeIcon solid={haloMode} className={variant === "rail" ? "size-5" : "size-4"} />
         {variant === "rail" ? <span className="text-[11px] leading-4">헤일로 모드</span> : null}
       </button>
       <span id={descriptionId} className="sr-only">
