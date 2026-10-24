@@ -691,7 +691,7 @@ export default function ResourceScanner() {
         className="bottom-0 rounded-none bg-v2-canvas px-0 py-v2-block-gap shadow-none"
         summary={phase === "applying" ? "반영 중이에요" : isCancelling ? "삭제 중이에요" : null}
       >
-        <Button variant="danger" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
+        <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
           결과 삭제
         </Button>
         {shouldShowScannerResultActions(job.status, job.reviewMode, job.reviewError) ? (

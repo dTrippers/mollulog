@@ -6,8 +6,27 @@ import {
   setGoogleAnalyticsPageContext,
   trackGoogleAnalyticsPageView,
 } from "../../../app/lib/google-analytics.client";
+import { getRoutePageMetadata } from "../../../app/lib/route-pattern";
 
 describe("Google Analytics", () => {
+  it("sends the OAuth authorization page as a route pattern without its query", () => {
+    const gtag = jest.fn();
+    const routePage = getRoutePageMetadata([
+      { id: "root", params: {} },
+      { id: "routes/oauth.authorize", params: {} },
+    ]);
+
+    trackGoogleAnalyticsPageView(gtag, { ...routePage, loggedIn: true });
+
+    expect(routePage).toEqual({ routePattern: "/oauth/authorize", contentGroup: "oauth" });
+    expect(gtag).toHaveBeenNthCalledWith(2, "event", "page_view", {
+      page_location: "https://mollulog.net/oauth/authorize",
+      page_title: "/oauth/authorize",
+      content_group: "oauth",
+      logged_in: true,
+    });
+  });
+
   it("queues commands using the Arguments object expected by gtag.js", () => {
     const dataLayer: unknown[] = [];
     const gtag = createGoogleAnalyticsCommandQueue(dataLayer);

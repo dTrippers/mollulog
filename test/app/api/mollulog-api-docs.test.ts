@@ -62,6 +62,22 @@ describe("MolluLog API machine-readable documentation", () => {
     expect(document.servers).toEqual([{ url: "https://api.mollulog.net/v1" }]);
     expect(actual.sort()).toEqual(expected.sort());
     expect(document.components.securitySchemes.bearerAuth).toMatchObject({ type: "http", scheme: "bearer" });
+    expect(document.paths["/me"].get).toMatchObject({
+      tags: ["Profile"],
+      "x-required-scopes": ["profile"],
+    });
+    expect(document.components.schemas.MeResponse).toMatchObject({
+      required: ["userId", "username", "profileStudent"],
+      properties: {
+        userId: {
+          type: "string",
+          description: "API 키에서는 계정별로, OAuth에서는 앱 연결별로 부여되는 사용자 ID",
+        },
+      },
+    });
+    expect(document.components.schemas.MeResponse.properties).not.toHaveProperty("id");
+    expect(document.paths["/me/students"].get).toMatchObject({ "x-required-scopes": ["students:read"] });
+    expect(document.paths["/me/students"].post).toMatchObject({ "x-required-scopes": ["students:write"] });
   });
 
   it("generates student field schemas from the field spec, including nullability and required registration fields", () => {
@@ -161,7 +177,7 @@ describe("MolluLog API machine-readable documentation", () => {
     expect(index).toContain(`> ${API_GUIDE_FULL.overview}`);
     expect(index).toContain(`[전체 안내](${urls.llmsFullUrl})`);
     expect(index).toContain(`[OpenAPI](${urls.openApiUrl})`);
-    expect(index).toContain(`[사람용 문서](${host}/developers/docs)`);
+    expect(index).toContain(`[API 문서](${host}/developers/docs)`);
   });
 
   it("renders the complete Korean guide from the route, field, error, and guide sources", () => {
@@ -169,12 +185,16 @@ describe("MolluLog API machine-readable documentation", () => {
     const text = renderLlmsFull(urls, host);
 
     expect(text).toContain("## 인증과 키 취급");
+    expect(text).toContain("## OAuth 로그인");
+    expect(text).toContain("client_id=mllg_oc_<CLIENT_ID>");
+    expect(text).toContain("필요 scope: `profile`");
     expect(text).toContain("MOLLULOG_API_KEY");
     expect(text).toContain("코드, 커밋, 로그에 남기지 마세요");
     expect(text).toContain("## 핵심 실행 흐름");
-    expect(text).toContain("## 엔드포인트");
-    expect(text).toContain("## 학생 상태 필드");
-    expect(text).toContain("### 필드 간 제약");
+    expect(text).toContain("## 프로필");
+    expect(text).toContain("## 학생");
+    expect(text).toContain("### 학생 상태 필드");
+    expect(text).toContain("#### 필드 간 제약");
     expect(text).toContain("쓰기 본문은 학생 한 명의 객체여야 해요. 배열은 보낼 수 없어요.");
     expect(text).toContain("모집 등록, 현재 성장도, 인연·경험치를 지워요");
     expect(text).toContain("## 오류 code별 대응");
@@ -218,7 +238,7 @@ describe("MolluLog API machine-readable documentation", () => {
       expect(lines.slice(1).every((line) => line.startsWith("  --"))).toBe(true);
       expect(lines.slice(0, -1).every((line) => line.endsWith(" \\"))).toBe(true);
       expect(lines.at(-1)).not.toMatch(/\\$/);
-      expect(lines.join("\n")).toContain("'Authorization: Bearer <API_KEY>'");
+      expect(lines.join("\n")).toContain("'Authorization: Bearer <API 키 또는 액세스 토큰>'");
     }
   });
 

@@ -192,4 +192,18 @@ describe("server Sentry options", () => {
       outboundFetch.mockRestore();
     }
   });
+
+  it("drops OAuth credentials in callback URLs, query strings, and token request bodies", () => {
+    const event = scrubServerSentryEvent({
+      request: {
+        url: "https://api.mollulog.net/oauth/callback?state=state-secret&code=code-secret&client_id=public-id",
+        query_string: "state=state-secret&code=code-secret&client_id=public-id",
+        data: "grant_type=authorization_code&code=code-secret&code_verifier=verifier-secret&client_secret=secret",
+        headers: { accept: "*/*", authorization: "Basic client-secret" },
+      },
+    });
+
+    expect(event.request).toEqual({ headers: { accept: "*/*" } });
+    expect(JSON.stringify(event)).not.toMatch(/state-secret|code-secret|verifier-secret|client-secret|secret/);
+  });
 });

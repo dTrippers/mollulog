@@ -12,7 +12,14 @@ import {
   parseApiStudentStateRegistration,
   toApiStudentState,
 } from "~/domain/mollulog-api";
-import { API_PUBLIC_ERRORS, API_STUDENT_STATE_FIELD_SPECS } from "~/domain/mollulog-api-spec";
+import {
+  API_PUBLIC_ERRORS,
+  API_ROUTES,
+  API_SCOPES,
+  API_STUDENT_STATE_FIELD_SPECS,
+  apiScopesInclude,
+  normalizeApiScopes,
+} from "~/domain/mollulog-api-spec";
 import { getAccumulatedRelationshipExpForLevel } from "~/domain/relationship-level";
 
 const emptyState: ApiStudentStateValues = {
@@ -38,6 +45,35 @@ const emptyState: ApiStudentStateValues = {
 };
 
 describe("mollulog-api domain", () => {
+  it("normalizes declared scopes and makes student write include student read", () => {
+    expect(normalizeApiScopes(["students:write"])).toEqual(["students:read", "students:write"]);
+    expect(apiScopesInclude(["students:write"], ["students:read"])).toBe(true);
+    expect(apiScopesInclude(["students:read"], ["students:write"])).toBe(false);
+  });
+
+  it("checks every route against every registered scope", () => {
+    const expectedScopeByRoute: Record<
+      (typeof API_ROUTES)[number]["id"],
+      "profile" | "students:read" | "students:write"
+    > = {
+      getMe: "profile",
+      findStudents: "students:read",
+      listRecruitedStudents: "students:read",
+      getRecruitedStudent: "students:read",
+      registerRecruitedStudent: "students:write",
+      patchRecruitedStudent: "students:write",
+      deleteRecruitedStudent: "students:write",
+    };
+
+    for (const route of API_ROUTES) {
+      for (const scope of API_SCOPES) {
+        const required = expectedScopeByRoute[route.id];
+        const allowed = scope === required || (required === "students:read" && scope === "students:write");
+        expect(apiScopesInclude([scope], route.requiredScopes)).toBe(allowed);
+      }
+    }
+  });
+
   it("keeps its public field keys in sync with the single field spec", () => {
     expect(apiStudentStateFields).toEqual(Object.keys(API_STUDENT_STATE_FIELD_SPECS));
   });

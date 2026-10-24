@@ -135,13 +135,13 @@ describe("global navigation catalog", () => {
 
     expect(api).toMatchObject({
       menuId: "mollulog-api",
-      name: "몰루로그 API",
+      name: "개발자 센터",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
       isActive: true,
     });
     expect(getSearchableMenuItems()).toContainEqual(
-      expect.objectContaining({ id: "mollulog-api", name: "몰루로그 API", to: "/developers" }),
+      expect.objectContaining({ id: "mollulog-api", name: "개발자 센터", to: "/developers" }),
     );
   });
 
@@ -162,7 +162,7 @@ describe("global navigation catalog", () => {
     for (const group of [desktop, more]) {
       expect(group?.items.find(({ to }) => to === "/developers")).toMatchObject({
         menuId: "mollulog-api",
-        name: "몰루로그 API",
+        name: "개발자 센터",
         badgeLabel: "베타",
         showRedDot: true,
       });
@@ -340,7 +340,7 @@ describe("global navigation catalog", () => {
       "관심 학생",
       "공략 작성하기",
       "게임 화면 인식기",
-      "몰루로그 API",
+      "개발자 센터",
       "외부 데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([

@@ -6,7 +6,7 @@ import type { AccountLabel } from "~/domain/account-label";
 import { postgresUniqueConstraintName } from "~/lib/db";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 
-export type SenseiRole = "guest" | "admin";
+export type SenseiRole = "guest" | "app_developer" | "admin";
 export type ProfileVisibility = "public" | "private";
 
 // Kept as the model-facing table export for callers and test fixtures. The

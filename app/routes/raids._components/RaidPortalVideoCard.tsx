@@ -27,7 +27,7 @@ export default function RaidPortalVideoCard({
         ? `최대 ${video.rankHint.rank.toLocaleString()}위`
         : null;
   const scoreLabel = typeof video.score === "number" ? `${video.score.toLocaleString()}점` : null;
-  const publishedDateLabel = video.publishedAt ? video.publishedAt.slice(0, 10).replaceAll("-", ".") : null;
+  const publishedDateLabel = video.publishedAt ? video.publishedAt.slice(0, 10).replaceAll("-", "/") : null;
 
   return (
     <article className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-lg bg-card shadow-lg shadow-black/5 transition hover:-translate-y-1 hover:shadow-xl hover:shadow-black/10 dark:shadow-md dark:shadow-black/20 dark:hover:shadow-lg dark:hover:shadow-black/30">

@@ -2,9 +2,12 @@
  * @jest-environment jsdom
  */
 import "../components/v2/layout/layout-test-polyfills";
-import { beforeEach, describe, expect, it } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { render, screen, within } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
+
+jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+
 import DevelopersLayout from "~/routes/developers";
 import { PageMain } from "~/components/v2/layout";
 import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
@@ -25,6 +28,7 @@ const routes = [
   {
     id: "developers",
     path: "/developers",
+    loader: () => ({ canManageApplications: false }),
     Component: DevelopersLayout,
     children: [
       { id: "developers-intro", index: true, Component: IntroScreen },
@@ -45,7 +49,9 @@ describe("developers responsive screen navigation", () => {
     ["/developers/keys", "API 키", "본문: 키"],
   ])("marks %s active and places history before the body", (path, activeName, bodyText) => {
     const RoutesStub = createRoutesStub(routes);
-    const { container } = render(<RoutesStub initialEntries={[path]} />);
+    const { container } = render(
+      <RoutesStub initialEntries={[path]} hydrationData={{ loaderData: { developers: { canManageApplications: false } } }} />,
+    );
     const navigation = screen.getByRole("navigation", { name: "화면 탐색" });
     const activeLinks = within(navigation)
       .getAllByRole("link")
@@ -54,8 +60,13 @@ describe("developers responsive screen navigation", () => {
     const history = aside?.querySelector<HTMLAnchorElement>('a[href*="/data-history"]');
     const main = container.querySelector<HTMLElement>(".v2-main");
 
+    expect(screen.getByRole("heading").textContent).toBe("몰루로그 개발자 센터베타");
     expect(activeLinks).toHaveLength(1);
     expect(activeLinks[0].textContent).toContain(activeName);
+    const disabledApplications = screen.getAllByRole("button", { name: "애플리케이션 준비중" });
+    expect(disabledApplications.length).toBeGreaterThan(0);
+    expect(disabledApplications[0].className).toContain("text-left");
+    expect(screen.queryByRole("button", { name: "애플리케이션 준비중 준비중" })).toBeNull();
     expect(screen.getByText(bodyText)).toBeTruthy();
     expect(aside).not.toBeNull();
     if (!history || !main) {

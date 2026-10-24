@@ -5,7 +5,9 @@ import {
   API_DOC_VERSION,
   API_PUBLIC_ERROR_CODES,
   API_PUBLIC_ERRORS,
+  API_ROUTE_GROUPS,
   API_ROUTES,
+  API_SCOPE_REGISTRY,
   API_STUDENT_STATE_FIELD_SPECS,
   type ApiRouteParameter,
   type ApiRouteSpec,
@@ -133,10 +135,10 @@ export function createOpenApiDocument(baseUrl: string, host: string) {
     const requestExample = route.requestExample as ApiRouteSpec["requestExample"];
     paths[path][route.method.toLowerCase()] = {
       operationId: route.id,
-      tags: ["Students"],
+      tags: route.requiredScopes.some((scope) => scope === "profile") ? ["Profile"] : ["Students"],
       summary: route.summary,
-      description: route.permission === "read" ? "학생 읽기 권한이 필요해요." : "학생 쓰기 권한이 필요해요.",
-      "x-required-permission": route.permission,
+      description: `필요 권한: ${route.requiredScopes.map((scope) => API_SCOPE_REGISTRY[scope].developerLabel).join(", ")}`,
+      "x-required-scopes": route.requiredScopes,
       ...(parameters.length === 0 ? {} : { parameters }),
       ...(requestSchema
         ? {
@@ -183,7 +185,10 @@ export function createOpenApiDocument(baseUrl: string, host: string) {
       description: API_GUIDE_FULL.overview,
     },
     servers: [{ url: baseUrl }],
-    tags: [{ name: "Students", description: "학생 검색과 모집 학생 상태 관리" }],
+    tags: [
+      { name: "Profile", description: "몰루로그 계정 프로필" },
+      { name: "Students", description: "학생 검색과 모집 학생 상태 관리" },
+    ],
     paths,
     components: {
       securitySchemes: {
@@ -224,6 +229,26 @@ export function createOpenApiDocument(baseUrl: string, host: string) {
             nextCursor: { type: ["string", "null"] },
           },
           required: ["students", "nextCursor"],
+        },
+        MeResponse: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            userId: { type: "string", description: "API 키에서는 계정별로, OAuth에서는 앱 연결별로 부여되는 사용자 ID" },
+            username: { type: "string" },
+            profileStudent: {
+              oneOf: [
+                {
+                  type: "object",
+                  additionalProperties: false,
+                  properties: { studentUid: { type: "string" }, name: { type: "string" } },
+                  required: ["studentUid", "name"],
+                },
+                { type: "null" },
+              ],
+            },
+          },
+          required: ["userId", "username", "profileStudent"],
         },
         RecruitedStudentState: {
           type: "object",
@@ -292,9 +317,10 @@ export function renderLlmsIndex(urls: ReturnType<typeof resolveApiDocumentUrls>,
     `> ${API_GUIDE_FULL.overview}`,
     "",
     "## Documentation",
+    `- OAuth: authorization code flow · ${host.replace(/\/+$/, "")}/oauth/authorize · ${urls.origin}/oauth/token`,
     `- [전체 안내](${urls.llmsFullUrl})`,
     `- [OpenAPI](${urls.openApiUrl})`,
-    `- [사람용 문서](${host.replace(/\/+$/, "")}/developers/docs)`,
+    `- [API 문서](${host.replace(/\/+$/, "")}/developers/docs)`,
     "",
   ].join("\n");
 }
@@ -306,75 +332,91 @@ export function renderLlmsFull(urls: ReturnType<typeof resolveApiDocumentUrls>, 
     "",
     `Base URL: ${urls.baseUrl}`,
     `OpenAPI: ${urls.openApiUrl}`,
-    `사람용 문서: ${host.replace(/\/+$/, "")}/developers/docs`,
+    `API 문서: ${host.replace(/\/+$/, "")}/developers/docs`,
     "",
     "## 인증과 키 취급",
     ...API_GUIDE_FULL.authentication.map((line) => `- ${line}`),
     "",
+    "## OAuth 로그인",
+    `인증 URL: ${host.replace(/\/+$/, "")}/oauth/authorize`,
+    `토큰 URL: ${urls.origin}/oauth/token`,
+    "Authorization Code flow: 브라우저에서 인증 URL을 열고, Redirect URI로 받은 `code`를 토큰 URL에 보내 액세스 토큰으로 교환하세요. 이후 `Authorization: Bearer <액세스 토큰>`으로 API를 호출하세요.",
+    "인증 요청에는 `response_type=code`, `client_id=mllg_oc_<CLIENT_ID>`, 등록한 `redirect_uri`, `state`를 보내요. scope를 보내면 앱에 등록한 권한과 같아야 해요. PKCE는 선택 사항이고 `S256`만 지원해요.",
+    "토큰 요청은 `application/x-www-form-urlencoded`로 `grant_type=authorization_code`, `code`, `redirect_uri`를 보내고 client ID·secret으로 인증해요. 성공 응답에는 `access_token`, `token_type=Bearer`, `expires_in`, `scope`가 들어가요.",
+    "액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요. `GET /v1/me`는 `profile` 권한이 필요하며 `userId`, `username`, `profileStudent`를 반환해요.",
+    "기존 연결이 요청한 scope를 모두 포함하면 동의 화면을 건너뛰고 code를 발급해요. 권한이 늘어나면 사용자가 다시 허용해야 해요.",
+    "authorize redirect errors: `unsupported_response_type`, `invalid_scope`, `invalid_request`, `access_denied`. token errors: `invalid_request`, `invalid_client`, `invalid_grant`, `unsupported_grant_type`.",
+    "",
     "## 핵심 실행 흐름",
     ...API_GUIDE_FULL.workflow.map((line, index) => `${index + 1}. ${line}`),
-    "",
-    "## 엔드포인트",
   ];
 
-  for (const route of API_ROUTES) {
-    const guide = getApiEndpointGuide(route.id);
-    sections.push(
-      "",
-      `### ${route.method} ${route.displayPath}`,
-      `권한: 학생 ${route.permission === "read" ? "읽기" : "쓰기"}`,
-      route.summary,
-    );
-    if (route.parameters.length > 0) {
-      sections.push("", "파라미터:");
-      for (const parameter of route.parameters) {
-        sections.push(`- \`${parameter.name}\`: ${parameter.description}`);
-      }
-    }
-    sections.push(
-      "",
-      "요청 예시:",
-      "```bash",
-      formatApiCurlCommand(urls.baseUrl, route),
-      "```",
-      "",
-      "응답 예시:",
-      "```json",
-    );
-    sections.push(JSON.stringify(route.responseExample.body, null, 2), "```");
-    if (guide && "response" in guide) sections.push("", guide.response);
-    if (guide && "required" in guide) {
+  for (const group of API_ROUTE_GROUPS) {
+    sections.push("", `## ${group.title}`);
+    for (const route of API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id))) {
+      const guide = getApiEndpointGuide(route.id);
       sections.push(
         "",
-        guide.required,
-        guide.readPermission,
-        `이미 등록한 학생이면 ${errorLink("student_already_recruited")}`,
+        `### ${route.method} ${route.displayPath}`,
+        `필요 scope: ${route.requiredScopes.map((scope) => `\`${scope}\``).join(", ")}`,
+        route.summary,
+      );
+      if (route.parameters.length > 0) {
+        sections.push("", "파라미터:");
+        for (const parameter of route.parameters) {
+          sections.push(`- \`${parameter.name}\`: ${parameter.description}`);
+        }
+      }
+      sections.push(
+        "",
+        "요청 예시:",
+        "```bash",
+        formatApiCurlCommand(urls.baseUrl, route),
+        "```",
+        "",
+        "응답 예시:",
+        "```json",
+      );
+      sections.push(JSON.stringify(route.responseExample.body, null, 2), "```");
+      if (guide && "response" in guide) sections.push("", guide.response);
+      if (guide && "required" in guide) {
+        sections.push(
+          "",
+          guide.required,
+          guide.readPermission,
+          `이미 등록한 학생이면 ${errorLink("student_already_recruited")}`,
+        );
+      }
+      if (guide && "note" in guide) {
+        const error = "error" in guide ? guide.error : undefined;
+        sections.push("", `${guide.note}${error ? ` ${errorLink(error)}` : ""}`);
+      }
+      sections.push("", `오류: ${route.errors.map(errorLink).join(" · ")}`);
+    }
+
+    if (group.id === "students") {
+      sections.push("", `### ${API_GUIDE_COPY.sections.fields}`, "");
+      sections.push("| 필드 | 의미 | 범위 | null로 비우기 |", "| --- | --- | --- | --- |");
+      for (const fieldGroup of API_GUIDE_COPY.fieldGroups) {
+        const firstField = API_STUDENT_STATE_FIELD_SPECS[fieldGroup.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
+        const range = `${formatNumber(firstField.min)}–${formatNumber(firstField.max)}`;
+        sections.push(
+          `| ${fieldGroup.fields.map((field) => `\`${field}\``).join("<br>")} | ${fieldGroup.meaning}${"detail" in fieldGroup ? `<br>${fieldGroup.detail}` : ""} | ${range} | ${firstField.nullable ? "가능" : "불가"} |`,
+        );
+      }
+      sections.push(
+        "",
+        "#### 필드 간 제약",
+        ...API_GUIDE_FULL.fieldRules.map((line) => `- ${line}`),
+        "",
+        API_GUIDE_FULL.representativeUid,
+        API_GUIDE_FULL.responseScopes,
+        API_GUIDE_FULL.deletion,
       );
     }
-    if (guide && "note" in guide) {
-      const error = "error" in guide ? guide.error : undefined;
-      sections.push("", `${guide.note}${error ? ` ${errorLink(error)}` : ""}`);
-    }
-    sections.push("", `오류: ${route.errors.map(errorLink).join(" · ")}`);
   }
 
-  sections.push("", "## 학생 상태 필드", "");
-  sections.push("| 필드 | 의미 | 범위 | null로 비우기 |", "| --- | --- | --- | --- |");
-  for (const group of API_GUIDE_COPY.fieldGroups) {
-    const firstField = API_STUDENT_STATE_FIELD_SPECS[group.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
-    const range = `${formatNumber(firstField.min)}–${formatNumber(firstField.max)}`;
-    sections.push(
-      `| ${group.fields.map((field) => `\`${field}\``).join("<br>")} | ${group.meaning}${"detail" in group ? `<br>${group.detail}` : ""} | ${range} | ${firstField.nullable ? "가능" : "불가"} |`,
-    );
-  }
   sections.push(
-    "",
-    "### 필드 간 제약",
-    ...API_GUIDE_FULL.fieldRules.map((line) => `- ${line}`),
-    "",
-    API_GUIDE_FULL.representativeUid,
-    API_GUIDE_FULL.responseScopes,
-    API_GUIDE_FULL.deletion,
     "",
     "## 오류 code별 대응",
     "",

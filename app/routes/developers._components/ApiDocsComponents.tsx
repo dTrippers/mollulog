@@ -5,7 +5,7 @@ import { type CopyStatus, CopyStatusMessage, CopyTextButton } from "~/components
 export function DocsSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg bg-v2-surface p-v2-block-p">
-      <h3 className="text-base font-semibold">{title}</h3>
+      <h4 className="text-base font-semibold">{title}</h4>
       <div className="mt-v2-group-gap space-y-v2-group-gap">{children}</div>
     </section>
   );

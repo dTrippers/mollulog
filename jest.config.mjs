@@ -2,8 +2,12 @@
 const config = {
   preset: "ts-jest",
   transform: {
-    "^.+\\.tsx?$": "<rootDir>/test/transformers/import-meta-env.cjs",
+    "^.+\\.[cm]?[jt]sx?$": "<rootDir>/test/transformers/import-meta-env.cjs",
   },
+  transformIgnorePatterns: [
+    "node_modules/.pnpm/(?!(?:htmlparser2|domhandler|domutils|domelementtype|dom-serializer|entities)@)",
+    "node_modules/(?!\\.pnpm/|htmlparser2/|domhandler/|domutils/|domelementtype/|dom-serializer/|entities/)",
+  ],
   moduleNameMapper: {
     "^~/(.*)$": "<rootDir>/app/$1",
   },

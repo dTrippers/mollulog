@@ -307,7 +307,7 @@ export function HomeYoutubeBlock({
                   <div className="flex min-w-0 flex-col gap-1">
                     <p className="text-sm font-semibold text-v2-fg line-clamp-2">{video.title}</p>
                     <p className="text-xs text-v2-fg-tertiary tabular-nums">
-                      {formatInstant(video.publishedAt as UtcIsoString, { timeZone, format: "YYYY.MM.DD" })}
+                      {formatInstant(video.publishedAt as UtcIsoString, { timeZone, format: "YYYY/MM/DD" })}
                       {" · "}
                       {video.channelKey === "jp" ? "일본 서버" : "한국 서버"}
                       {video.isShorts ? " · Shorts" : null}

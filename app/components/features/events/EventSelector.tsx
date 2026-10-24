@@ -313,11 +313,11 @@ function EventSelectorItem({
         </div>
         <p className="mt-1 text-xs text-neutral-500 dark:text-neutral-400">
           {openEndedRecruitment && !event.until ? (
-            `${formatInstant(event.since, { timeZone: "Asia/Seoul", format: "YYYY.MM.DD" })} 이후`
+            `${formatInstant(event.since, { timeZone: "Asia/Seoul", format: "YYYY/MM/DD" })} 이후`
           ) : (
             <>
-              {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY.MM.DD" })} ~{" "}
-              {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM.DD" }) : "미정"}
+              {formatInstant(event.since, { timeZone: displayTimeZone, format: "YYYY/MM/DD" })} ~{" "}
+              {event.until ? formatInstant(event.until, { timeZone: displayTimeZone, format: "MM/DD" }) : "미정"}
             </>
           )}
         </p>

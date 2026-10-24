@@ -61,8 +61,7 @@ describe("developers API key screen", () => {
         {
           uid: "active-uid",
           name: "Personal integration",
-          readScope: true,
-          writeScope: false,
+          scopes: ["students:read"],
           createdAt: "2026-09-02T00:00:00.000Z",
           expiresAt: "2027-09-02T00:00:00.000Z",
           lastUsedAt: "2026-10-17T12:04:00.000Z",
@@ -71,8 +70,7 @@ describe("developers API key screen", () => {
         {
           uid: "inactive-uid",
           name: "Expired integration",
-          readScope: true,
-          writeScope: false,
+          scopes: ["students:read"],
           createdAt: "2025-09-02T00:00:00.000Z",
           expiresAt: "2026-09-02T00:00:00.000Z",
           lastUsedAt: null,
@@ -96,12 +94,14 @@ describe("developers API key screen", () => {
     expect((screen.getByDisplayValue("Personal integration") as HTMLInputElement).name).toBe("keyName");
   });
 
-  it("submits read permission when write permission is selected", () => {
+  it("shows profile permissions and includes read when write permission is selected", () => {
     renderKeysPage({ keys: [], loadError: false, loadedAt });
 
     fireEvent.click(screen.getByRole("button", { name: "새 API 키 발급" }));
     const read = screen.getByRole("checkbox", { name: "학생 읽기" }) as HTMLInputElement;
     const write = screen.getByRole("checkbox", { name: "학생 쓰기" }) as HTMLInputElement;
+    const profile = screen.getByRole("checkbox", { name: "프로필 보기" }) as HTMLInputElement;
+    expect(profile.checked).toBe(false);
     expect(read.checked).toBe(true);
     expect(write.checked).toBe(false);
 
@@ -114,6 +114,23 @@ describe("developers API key screen", () => {
     const formData = new FormData(form);
     expect(formData.getAll("readScope")).toEqual(["true"]);
     expect(formData.getAll("writeScope")).toEqual(["true"]);
+    fireEvent.click(profile);
+    expect(new FormData(form).getAll("profileScope")).toEqual(["true"]);
+  });
+
+  it("paints each API key permission cell background instead of the row", () => {
+    renderKeysPage({ keys: [], loadError: false, loadedAt });
+    fireEvent.click(screen.getByRole("button", { name: "새 API 키 발급" }));
+
+    const rows = screen.getByRole("table").querySelectorAll("tbody tr");
+    expect(rows).toHaveLength(2);
+
+    rows.forEach((row) => {
+      expect(row.classList.contains("bg-v2-inset")).toBe(false);
+      const cells = row.querySelectorAll("th, td");
+      expect(cells).toHaveLength(3);
+      cells.forEach((cell) => expect(cell.classList.contains("bg-v2-inset")).toBe(true));
+    });
   });
 
   it("shows the empty state only after a successful empty load", () => {

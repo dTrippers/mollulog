@@ -1,11 +1,14 @@
 import { describe, expect, it } from "@jest/globals";
-import { type ComponentProps, createElement } from "react";
+import { type ComponentProps, createElement, createRef } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import RaidVideosScreen from "~/components/features/raids/RaidVideosScreen";
 import { TimeZoneProvider } from "~/contexts/TimeZoneProvider";
 import { Defense, Terrain } from "~/graphql/graphql";
 import type { RaidScheduleListItem } from "~/models/raid";
+import type { RaidVideoItem } from "~/models/raid-videos";
 import RaidPortalScreen, { getNearestUpcomingRaid } from "~/routes/raids._components/RaidPortalScreen";
+import RaidPortalVideoCard from "~/routes/raids._components/RaidPortalVideoCard";
 import type { RaidPortalData, RaidPortalUpcomingRaid } from "~/views/raid-portal";
 
 function raid({
@@ -101,8 +104,8 @@ describe("RaidPortalScreen upcoming presentation", () => {
     expect(markup).toContain("가장 가까운 보스");
     expect(markup.match(/가장 가까운 보스/g)).toHaveLength(1);
     expect(markup.match(/먼 미래 보스/g)).toHaveLength(2);
-    expect(markup).toContain("2026.08.12");
-    expect(markup).toContain("08.20");
+    expect(markup).toContain("2026/08/12");
+    expect(markup).toContain("08/20");
     expect(markup).toContain("중장갑");
     expect(markup).toContain('href="/raids/total-assault/90"');
     expect(markup).toContain('href="/raids/total-assault/90/ranks"');
@@ -125,7 +128,7 @@ describe("RaidPortalScreen upcoming presentation", () => {
       upcomingRaids: [upcoming(crossYear)],
     });
 
-    expect(markup).toContain("2026.12.28 ~ 2027.01.06");
+    expect(markup).toContain("2026/12/28 ~ 2027/01/06");
   });
 
   it("omits the promoted item from the lower season section but keeps it in student usage", () => {
@@ -183,5 +186,43 @@ describe("RaidPortalScreen upcoming presentation", () => {
     expect(emptyMarkup).toContain("현재 진행 중이거나 예정된 총력전/대결전이 없어요");
     expect(emptyMarkup).not.toContain("다가오는 시즌");
     expect(emptyMarkup).not.toContain("앞으로의 학생 출전률");
+  });
+
+  it("uses slash dates for published videos in the raid and portal screens", () => {
+    const video: RaidVideoItem = {
+      title: "공략 영상",
+      channelTitle: "채널",
+      youtubeId: "video-id",
+      thumbnailUrl: "https://example.com/thumbnail.jpg",
+      publishedAt: "2026-04-21T00:00:00.000Z",
+    };
+    const videosMarkup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(RaidVideosScreen, {
+          videos: [video],
+          hasMore: false,
+          isLoading: false,
+          loadingRef: createRef<HTMLDivElement>(),
+          allStudents: {},
+          maxLevel: 90,
+          recruitedStudentTiers: {},
+          showUnrecruitedStudents: false,
+          ranksPath: "/raids/total-assault/90/ranks",
+          raidType: "total_assault",
+        }),
+      ),
+    );
+    const portalMarkup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        null,
+        createElement(RaidPortalVideoCard, { video, allStudents: {}, maxLevel: 90, raidType: "total_assault" }),
+      ),
+    );
+
+    expect(videosMarkup).toContain("2026/04/21");
+    expect(portalMarkup).toContain("2026/04/21");
   });
 });

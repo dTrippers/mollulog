@@ -7,6 +7,7 @@ import { Button, EmptyView, FilterButtons, SectionCard } from "~/components/prim
 import { API_AUDIT_HISTORY_FILTERS, type ApiAuditHistoryFilter } from "~/domain/api-audit-history";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import type { ApiAuditEvent } from "~/models/mollulog-api";
+import type { ApiScope } from "~/domain/mollulog-api-spec";
 import { getDataHistoryView } from "~/views/data-history.server";
 
 import HistoryList from "./data-history._components/HistoryList";
@@ -57,7 +58,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         itemNamesByUid: {} as Record<string, string>,
         apiKeysByUid: {} as Record<
           string,
-          { readScope: boolean; writeScope: boolean; createdAt: string; expiresAt: string; revokedAt: string | null }
+          { scopes: ApiScope[]; createdAt: string; expiresAt: string; revokedAt: string | null }
         >,
         loadError: true,
       },

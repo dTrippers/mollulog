@@ -15,7 +15,7 @@ import {
 } from "./ask._components/QuestionChat";
 import { mapAskActionErrorCode, postAskAction } from "./ask._components/ask-client";
 
-type AskSensei = { id: number; username: string; role: "guest" | "admin" };
+type AskSensei = { id: number; username: string; role: "guest" | "app_developer" | "admin" };
 type AskPageData = { isSignedIn: boolean; initialConsent: boolean; consentUnavailable: boolean };
 
 export const meta: MetaFunction = () => [{ title: "AI 질문 | 몰루로그" }];

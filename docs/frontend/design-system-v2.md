@@ -52,6 +52,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
 | `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5). 4.5:1 or higher on subtle, surface, and canvas |
 | `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction`, and of a failed value in a review table. Text on it: 8.4:1 light, 5.2:1 dark (measured) |
+| `bg-v2-danger-solid`, `text-v2-on-danger` | `oklch(0.552 0.205 24.53)` / `oklch(1 0 0)` | `oklch(0.586 0.201 26.79)` / `oklch(1 0 0)` | Filled destructive `Button` (`danger`): GitHub Primer `bgColor-danger-emphasis` (#cf222e light / #da3633 dark) with white text. Measured contrast: rest 5.36:1 light and 4.61:1 dark; hover at 90% opacity 4.73:1 on the light surface (#fff) and 5.25:1 on the dark surface (`oklch(0.27 0 0)`), blended in sRGB gamma space |
 | `bg-v2-warning-subtle` | `oklch(0.965 0.05 95)` | `oklch(0.33 0.07 75)` | Status: background of a value that needs confirmation (D6). The text on it keeps `text-v2-fg` (16.8:1 light, 18.0:1 dark, measured). The tone is the background only; the label carries the meaning |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
@@ -91,6 +92,10 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 | `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Minimum button hit area (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers. The visible button stays 32px (`size="md"`) or 28px (`size="sm"`) on every layout; an invisible pseudo-element extends the hit area. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
 | `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | 2.25rem | 2.25rem | Number and select inputs. 36px on stacked layouts and coarse pointers |
 
+## Button variants
+
+- `text` is a secondary action with a hover background. `link` is an inline add or secondary action aligned to a field edge: it has no horizontal padding or hover background, and hover changes only the text color.
+
 ## Numeric and date formats
 
 - Use Tailwind's `tabular-nums` for every number, date, time, count, and remaining duration. Do not add a numeric-only utility.
@@ -104,6 +109,7 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 
 - `success` is status. It means confirmed or completed.
 - `danger` is status. Use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
+- The v2 `Button` `danger` variant is for destructive actions that need a strong red fill, such as deleting a key, application, or connection. The `danger-subtle` variant is for reversible reset, cancel, or exclusion actions. Keep `PanelAction` and status notices on `text-v2-danger` and `bg-v2-danger-subtle`.
 - `neutral` `PanelAction` is for helper actions that do not clear state, such as "모두 보기". Do not use `danger` for them.
 - `live`, `favorite`, `new`, and `attr-*` are domain colors. They describe content, not state.
 - Do not use color alone to convey meaning. Pair color with a text label or a distinct icon shape; an icon-only element (for example the favorite heart or the completed check) needs an accessible name.

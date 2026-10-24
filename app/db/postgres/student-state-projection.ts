@@ -47,7 +47,9 @@ export type StudentStateWriteContext = {
   requestMode: StudentStateRequestMode | null;
 };
 
-export type StudentStateApiActor = { apiKeyUid: string; apiKeyName: string };
+export type StudentStateApiActor =
+  | { apiKeyUid: string; apiKeyName: string; oauthApplicationUid?: never; oauthApplicationName?: never }
+  | { apiKeyUid?: never; apiKeyName?: never; oauthApplicationUid: string; oauthApplicationName: string };
 
 type RecruitedState = {
   uid: string;
@@ -764,6 +766,8 @@ export async function withStudentStateProjection<T>(
         actorUserId: userId,
         apiKeyUid: apiActor?.apiKeyUid ?? null,
         apiKeyName: apiActor?.apiKeyName ?? null,
+        oauthApplicationUid: apiActor?.oauthApplicationUid ?? null,
+        oauthApplicationName: apiActor?.oauthApplicationName ?? null,
         source,
         sourceRef,
         beforeState: canonicalAuditSnapshot(prior.state, prior.target),
@@ -787,6 +791,8 @@ export async function withStudentStateProjection<T>(
       actorUserId: userId,
       apiKeyUid: apiActor?.apiKeyUid ?? null,
       apiKeyName: apiActor?.apiKeyName ?? null,
+      oauthApplicationUid: apiActor?.oauthApplicationUid ?? null,
+      oauthApplicationName: apiActor?.oauthApplicationName ?? null,
       source,
       sourceRef,
       beforeState: auditSnapshot(prior),

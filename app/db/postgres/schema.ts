@@ -24,6 +24,7 @@ import type {
 } from "~/domain/navigation-menu-badges";
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
+import type { ApiScope } from "~/domain/mollulog-api-spec";
 import type {
   WalkthroughTimelineDefenseType,
   WalkthroughTimelineDifficulty,
@@ -975,6 +976,8 @@ export const pgStudentStateAuditsTable = pgTable(
     actorUserId: integer("actor_user_id").notNull(),
     apiKeyUid: text("api_key_uid"),
     apiKeyName: text("api_key_name"),
+    oauthApplicationUid: text("oauth_application_uid"),
+    oauthApplicationName: text("oauth_application_name"),
     source: text().notNull(),
     sourceRef: text("source_ref"),
     beforeState: jsonb("before_state").$type<Record<string, unknown>>().notNull(),
@@ -998,6 +1001,7 @@ export const pgApiKeysTable = pgTable(
     keyPrefix: text("key_prefix").notNull(),
     readScope: boolean("read_scope").notNull().default(false),
     writeScope: boolean("write_scope").notNull().default(false),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
     expiresAt: timestamptz("expires_at").notNull(),
     lastUsedAt: timestamptz("last_used_at"),
     revokedAt: timestamptz("revoked_at"),
@@ -1008,6 +1012,119 @@ export const pgApiKeysTable = pgTable(
     uniqueIndex("api_keys_key_hash_uidx").on(table.keyHash),
     index("api_keys_user_id_idx").on(table.userId, table.createdAt.desc()),
   ],
+);
+
+export const pgApiUserSubjectsTable = pgTable(
+  "api_user_subjects",
+  {
+    userId: integer("user_id").primaryKey(),
+    subject: text().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("api_user_subjects_subject_uidx").on(table.subject)],
+);
+
+export const pgOAuthApplicationsTable = pgTable(
+  "oauth_applications",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    ownerUserId: integer("owner_user_id").notNull(),
+    uid: text().notNull(),
+    name: text().notNull(),
+    clientId: text("client_id").notNull(),
+    clientSecretHash: text("client_secret_hash").notNull(),
+    clientSecretPrefix: text("client_secret_prefix").notNull(),
+    redirectUris: text("redirect_uris").array().notNull(),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    clientSecretIssuedAt: timestamptz("client_secret_issued_at").notNull().defaultNow(),
+    deletedAt: timestamptz("deleted_at"),
+  },
+  (table) => [
+    uniqueIndex("oauth_applications_uid_uidx").on(table.uid),
+    uniqueIndex("oauth_applications_client_id_uidx").on(table.clientId),
+    index("oauth_applications_owner_created_idx").on(table.ownerUserId, table.createdAt.desc()),
+  ],
+);
+
+export const pgOAuthGrantsTable = pgTable(
+  "oauth_grants",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    applicationId: integer("application_id").notNull(),
+    userId: integer("user_id").notNull(),
+    subject: text().notNull(),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    disconnectedAt: timestamptz("disconnected_at"),
+  },
+  (table) => [
+    uniqueIndex("oauth_grants_subject_uidx").on(table.subject),
+    uniqueIndex("oauth_grants_active_user_application_uidx")
+      .on(table.userId, table.applicationId)
+      .where(sql`${table.disconnectedAt} IS NULL`),
+    index("oauth_grants_user_idx").on(table.userId, table.createdAt.desc()),
+  ],
+);
+
+export const pgOAuthAuthorizationCodesTable = pgTable(
+  "oauth_authorization_codes",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    codeHash: text("code_hash").notNull(),
+    applicationId: integer("application_id").notNull(),
+    userId: integer("user_id").notNull(),
+    grantId: integer("grant_id").notNull(),
+    redirectUri: text("redirect_uri").notNull(),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
+    codeChallenge: text("code_challenge"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    usedAt: timestamptz("used_at"),
+  },
+  (table) => [
+    uniqueIndex("oauth_authorization_codes_hash_uidx").on(table.codeHash),
+    index("oauth_authorization_codes_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const pgOAuthAccessTokensTable = pgTable(
+  "oauth_access_tokens",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    tokenHash: text("token_hash").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    applicationId: integer("application_id").notNull(),
+    userId: integer("user_id").notNull(),
+    grantId: integer("grant_id").notNull(),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
+    issuedAt: timestamptz("issued_at").notNull().defaultNow(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    revokedAt: timestamptz("revoked_at"),
+    lastUsedAt: timestamptz("last_used_at"),
+  },
+  (table) => [
+    uniqueIndex("oauth_access_tokens_hash_uidx").on(table.tokenHash),
+    index("oauth_access_tokens_grant_idx").on(table.grantId, table.lastUsedAt.desc()),
+  ],
+);
+
+export const pgOAuthConnectionEventsTable = pgTable(
+  "oauth_connection_events",
+  {
+    id: integer().primaryKey().generatedByDefaultAsIdentity(),
+    userId: integer("user_id").notNull(),
+    grantId: integer("grant_id").notNull(),
+    applicationUid: text("application_uid").notNull(),
+    applicationName: text("application_name").notNull(),
+    action: text().notNull(),
+    scopes: text().array().$type<ApiScope[]>().notNull(),
+    disconnectReason: text("disconnect_reason"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("oauth_connection_events_user_created_idx").on(table.userId, table.createdAt.desc())],
 );
 
 /** Key issuance and revocation are separate visible events with a key-name snapshot. */

@@ -642,7 +642,7 @@ function CellCandidatePopover({
       {defaultDetails || error ? (
         <div className="flex justify-end pt-1">
           <Button
-            variant="danger"
+            variant="danger-subtle"
             onClick={() => {
               onExclude();
               close();

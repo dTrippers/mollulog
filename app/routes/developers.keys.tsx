@@ -1,5 +1,5 @@
 import { ChevronDownIcon, KeyIcon } from "@heroicons/react/24/outline";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ActionFunctionArgs, HeadersFunction, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Form, Link, redirect, useActionData, useLoaderData, useNavigation, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -12,6 +12,7 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { type ApiFieldError, ApiInputError } from "~/domain/mollulog-api";
+import { getDeveloperScopeLabels } from "~/domain/mollulog-api-spec";
 import {
   createPersonalApiKey,
   getPersonalApiKeys,
@@ -91,8 +92,11 @@ export async function action({ context, request }: ActionFunctionArgs) {
         sensei.id,
         {
           name,
-          readScope: form.get("readScope") === "true",
-          writeScope: form.get("writeScope") === "true",
+          scopes: [
+            ...(form.get("profileScope") === "true" ? (["profile"] as const) : []),
+            ...(form.get("readScope") === "true" ? (["students:read"] as const) : []),
+            ...(form.get("writeScope") === "true" ? (["students:write"] as const) : []),
+          ],
         },
         { ctx },
       );
@@ -165,11 +169,6 @@ function toPersonalApiKeyView(key: PersonalApiKey): PersonalApiKeyView {
   };
 }
 
-function getKeyScopes(readScope: boolean, writeScope: boolean) {
-  const scopes = [readScope ? "읽기" : null, writeScope ? "쓰기" : null].filter(Boolean).join("/");
-  return scopes ? `학생 ${scopes}` : "권한 없음";
-}
-
 export default function DevelopersKeys() {
   const { keys, loadError, loadedAt } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -179,6 +178,7 @@ export default function DevelopersKeys() {
   const [isRevealVisible, setIsRevealVisible] = useState(true);
   const [issueResponseDismissed, setIssueResponseDismissed] = useState(false);
   const [name, setName] = useState("");
+  const [profileScope, setProfileScope] = useState(false);
   const [readScope, setReadScope] = useState(true);
   const [writeScope, setWriteScope] = useState(false);
   const [confirmingUid, setConfirmingUid] = useState<string | null>(null);
@@ -205,6 +205,7 @@ export default function DevelopersKeys() {
       setIsIssueOpen(false);
       setIssueResponseDismissed(false);
       setName("");
+      setProfileScope(false);
       setReadScope(true);
       setWriteScope(false);
     } else if (actionData && actionData.intent === "issue") {
@@ -224,6 +225,7 @@ export default function DevelopersKeys() {
 
   function resetIssueForm() {
     setName("");
+    setProfileScope(false);
     setReadScope(true);
     setWriteScope(false);
     setIssueResponseDismissed(true);
@@ -305,14 +307,38 @@ export default function DevelopersKeys() {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="bg-v2-inset">
-                      <th className="rounded-l-md py-2.5 pl-3 text-left font-medium" scope="row">
+                    <tr>
+                      <th className="rounded-l-md bg-v2-inset py-2.5 pl-3 text-left font-medium" scope="row">
+                        프로필
+                        <span className="block text-xs font-normal text-v2-fg-secondary">닉네임 · 프로필 학생</span>
+                      </th>
+                      <td className="bg-v2-inset py-2.5 text-center">
+                        <div className="flex justify-center">
+                          <Checkbox
+                            id="api-key-profile-scope"
+                            name="profileScope"
+                            value="true"
+                            checked={profileScope}
+                            onCheckedChange={setProfileScope}
+                            aria-describedby={scopeError ? "api-key-scopes-error" : undefined}
+                            aria-invalid={scopeError ? true : undefined}
+                          >
+                            <span className="sr-only">프로필 보기</span>
+                          </Checkbox>
+                        </div>
+                      </td>
+                      <td className="rounded-r-md bg-v2-inset py-2.5 text-center text-v2-fg-tertiary" aria-label="쓰기 권한 없음">
+                        –
+                      </td>
+                    </tr>
+                    <tr>
+                      <th className="rounded-l-md bg-v2-inset py-2.5 pl-3 text-left font-medium" scope="row">
                         학생
                         <span className="block text-xs font-normal text-v2-fg-secondary">
                           학생 모집 여부, 성장도, 인연 랭크 등
                         </span>
                       </th>
-                      <td className="py-2.5 text-center">
+                      <td className="bg-v2-inset py-2.5 text-center">
                         {writeScope ? <input type="hidden" name="readScope" value="true" /> : null}
                         <div className="flex justify-center">
                           <Checkbox
@@ -329,7 +355,7 @@ export default function DevelopersKeys() {
                           </Checkbox>
                         </div>
                       </td>
-                      <td className="rounded-r-md py-2.5 text-center">
+                      <td className="rounded-r-md bg-v2-inset py-2.5 text-center">
                         <div className="flex justify-center">
                           <Checkbox
                             id="api-key-write-scope"
@@ -501,8 +527,17 @@ function KeyRow({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const triggerId = useId();
+  const confirmationRef = useRef<HTMLFieldSetElement>(null);
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    if (confirming) confirmationRef.current?.focus();
+    else if (wasConfirming.current) document.getElementById(triggerId)?.focus();
+    wasConfirming.current = confirming;
+  }, [confirming, triggerId]);
+
   const isActive = keyRecord.revokedAt === null && new Date(keyRecord.expiresAt).getTime() > now;
-  const scopeText = getKeyScopes(keyRecord.readScope, keyRecord.writeScope);
+  const scopeLabels = getDeveloperScopeLabels(keyRecord.scopes);
   const status = keyRecord.revokedAt ? "삭제됨" : isActive ? "사용 가능" : "만료";
   const lastUsedTime = keyRecord.lastUsedAt
     ? new Intl.DateTimeFormat("ko-KR", {
@@ -528,7 +563,13 @@ function KeyRow({
               <h3 className={isActive ? "break-words font-semibold" : "break-words font-semibold text-v2-fg-tertiary"}>
                 {keyRecord.name}
               </h3>
-              <span className="inline-flex rounded-md bg-v2-inset px-2.5 py-1 text-xs font-medium">{scopeText}</span>
+              <ul className="flex flex-wrap gap-1.5" aria-label="API 권한">
+                {scopeLabels.map((label) => (
+                  <li key={label} className="rounded-md bg-v2-inset px-2.5 py-1 text-xs font-medium">
+                    {label}
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
           <span
@@ -573,14 +614,20 @@ function KeyRow({
             데이터 변경 이력
           </Link>
           {isActive ? (
-            <Button type="button" variant="danger" disabled={isSubmitting || confirming} onClick={onConfirm}>
+            <Button
+              id={triggerId}
+              type="button"
+              variant="danger"
+              disabled={isSubmitting || confirming}
+              onClick={onConfirm}
+            >
               <span className="sr-only">{keyRecord.name} API 키 </span>
               삭제
             </Button>
           ) : null}
         </footer>
         {confirming ? (
-          <fieldset className="space-y-4 rounded-md bg-v2-inset p-4">
+          <fieldset ref={confirmationRef} tabIndex={-1} className="space-y-4 rounded-md bg-v2-inset p-4">
             <legend className="sr-only">{`${keyRecord.name} API 키 삭제 확인`}</legend>
             <p className="break-keep text-sm">삭제하면 이 키로 연결한 도구에서 더 이상 API를 사용할 수 없어요.</p>
             <div className="flex flex-wrap justify-end gap-2">
@@ -646,5 +693,5 @@ function formatDate(value: string) {
     timeZone: "Asia/Seoul",
   }).formatToParts(new Date(value));
   const part = (type: Intl.DateTimeFormatPartTypes) => parts.find((entry) => entry.type === type)?.value ?? "";
-  return `${part("year")}.${part("month")}.${part("day")}`;
+  return `${part("year")}/${part("month")}/${part("day")}`;
 }

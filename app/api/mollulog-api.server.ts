@@ -1,4 +1,5 @@
 import { createApiDocsResponse, createApiErrorBody } from "~/api/mollulog-api-docs.server";
+import { handleOAuthTokenRequest } from "~/api/oauth-token.server";
 import {
   API_MAX_REQUEST_BYTES,
   API_STUDENT_PAGE_SIZE,
@@ -11,31 +12,43 @@ import {
   API_MAX_REQUEST_SIZE_TEXT,
   API_PUBLIC_ERRORS,
   API_READ_WINDOW_SECONDS,
+  API_SCOPE_REGISTRY,
   API_STUDENT_PAGE_SIZE_MIN,
   API_STUDENT_QUERY_MAX_LENGTH,
   API_STUDENT_QUERY_MIN_LENGTH,
   type ApiPublicErrorCode,
+  apiScopesInclude,
   findApiRoute,
   isKnownApiRoutePath,
 } from "~/domain/mollulog-api-spec";
 import { isStaleStudentStateRequestError } from "~/domain/student-state-errors";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
-  type ApiKeyAuthentication,
+  type AuthenticatedApiKey,
   type ApiWriteQuotaResult,
   authenticatePersonalApiKey,
   deleteApiRecruitedStudent,
   getApiRecruitedStudent,
   getApiRecruitedStudents,
+  getPersonalApiSubject,
   isApiStudentStateAvailable,
   patchApiRecruitedStudent,
   registerApiRecruitedStudent,
   reserveApiWriteQuota,
 } from "~/models/mollulog-api";
+import { authenticateOAuthAccessToken, type AuthenticatedOAuthToken } from "~/models/mollulog-oauth";
 import type { Student } from "~/models/student";
 import { getAllStudents, getStudentOtherFormUids, getStudentPrimaryUids } from "~/models/student";
+import { getSenseiById } from "~/models/sensei";
 
 type StudentApiEnvironment = Pick<Env, "HYPERDRIVE" | "API_READ_RATE_LIMITER">;
+type ApiPrincipal = AuthenticatedApiKey | AuthenticatedOAuthToken;
+
+function apiActor(principal: ApiPrincipal) {
+  return principal.kind === "personal"
+    ? { apiKeyUid: principal.uid, apiKeyName: principal.name }
+    : { oauthApplicationUid: principal.applicationUid, oauthApplicationName: principal.applicationName };
+}
 
 class ApiHttpError extends Error {
   readonly status: number;
@@ -249,14 +262,6 @@ async function findCanonicalStudent(env: Env, uid: string, students: Map<string,
   return students.get(canonicalUid) ?? null;
 }
 
-function requireReadScope(key: { readScope: boolean }) {
-  if (!key.readScope) throw new ApiHttpError("forbidden", "이 키에는 학생 읽기 권한이 없어요");
-}
-
-function requireWriteScope(key: { writeScope: boolean }) {
-  if (!key.writeScope) throw new ApiHttpError("forbidden", "이 키에는 학생 쓰기 권한이 없어요");
-}
-
 async function enforceReadLimit(env: StudentApiEnvironment, accountId: number): Promise<void> {
   if (!env.API_READ_RATE_LIMITER) {
     throw new ApiHttpError("unavailable", "요청 제한 기능을 사용할 수 없어요. 잠시 후 다시 시도해주세요", {
@@ -294,39 +299,64 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
   const url = new URL(request.url);
   const pathname = url.pathname;
   const bearerToken = parseBearerToken(request);
-  if (!bearerToken) throw new ApiHttpError("unauthorized", "Authorization: Bearer 키가 필요해요");
+  if (!bearerToken) throw new ApiHttpError("unauthorized", "Authorization: Bearer API 키 또는 액세스 토큰이 필요해요");
 
-  let authentication: ApiKeyAuthentication;
+  let key: ApiPrincipal;
   try {
-    authentication = await authenticatePersonalApiKey(env, bearerToken, { ctx });
+    if (bearerToken.startsWith("mllg_ot_")) {
+      const authentication = await authenticateOAuthAccessToken(env, bearerToken, { ctx });
+      if (authentication.kind !== "authenticated") {
+        throw authentication.kind === "invalid"
+          ? new ApiHttpError("unauthorized", "액세스 토큰이 유효하지 않아요")
+          : new ApiHttpError("forbidden", "활성 계정에서만 API를 사용할 수 있어요");
+      }
+      key = authentication.principal;
+    } else {
+      const authentication = await authenticatePersonalApiKey(env, bearerToken, { ctx });
+      if (authentication.kind === "invalid") throw new ApiHttpError("unauthorized", "API 키가 유효하지 않아요");
+      if (authentication.kind === "inactive") throw new ApiHttpError("forbidden", "활성 계정에서만 API를 사용할 수 있어요");
+      key = authentication.key;
+    }
   } catch (error) {
+    if (error instanceof ApiHttpError) throw error;
     throw new ApiHttpError("unavailable", "인증을 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
       internalReason: "authentication_unavailable",
       underlying: error,
     });
   }
-  if (authentication.kind === "invalid") throw new ApiHttpError("unauthorized", "API 키가 유효하지 않아요");
-  if (authentication.kind === "inactive") throw new ApiHttpError("forbidden", "활성 계정에서만 API를 사용할 수 있어요");
-  const key = authentication.key;
+  const apiPath = pathname === "/v1" ? "/" : pathname.slice("/v1".length);
+  const routeMatch = findApiRoute(request.method, apiPath);
+  const route = routeMatch?.route;
+  if (route && !apiScopesInclude(key.scopes, route.requiredScopes)) {
+    const permissionLabels = route.requiredScopes
+      .map((scope) => API_SCOPE_REGISTRY[scope].developerLabel)
+      .join(", ");
+    throw new ApiHttpError("forbidden", `이 토큰에는 ${permissionLabels} 권한이 없어요`);
+  }
+
+  const studentRoute = Boolean(route?.requiredScopes.some((scope) => API_SCOPE_REGISTRY[scope].resource === "students"));
+  const studentWriteRoute = Boolean(route?.requiredScopes.some((scope) => scope === "students:write"));
 
   if (request.method === "GET") {
-    requireReadScope(key);
     await enforceReadLimit(env, key.userId);
-    let available: boolean;
-    try {
-      available = await isApiStudentStateAvailable(env, { ctx });
-    } catch (error) {
-      throw new ApiHttpError("unavailable", "학생 상태를 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
-        internalReason: "student_state_unavailable",
-        underlying: error,
-      });
+    if (studentRoute) {
+      let available: boolean;
+      try {
+        available = await isApiStudentStateAvailable(env, { ctx });
+      } catch (error) {
+        throw new ApiHttpError("unavailable", "학생 상태를 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
+          internalReason: "student_state_unavailable",
+          underlying: error,
+        });
+      }
+      if (!available)
+        throw new ApiHttpError("unavailable", "학생 API가 아직 준비되지 않았어요", {
+          internalReason: "student_state_unavailable",
+        });
     }
-    if (!available)
-      throw new ApiHttpError("unavailable", "학생 API가 아직 준비되지 않았어요", {
-        internalReason: "student_state_unavailable",
-      });
-  } else {
-    requireWriteScope(key);
+  }
+
+  if (studentWriteRoute) {
     let quota: ApiWriteQuotaResult;
     try {
       quota = await reserveApiWriteQuota(env, key.userId, { ctx });
@@ -357,10 +387,47 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
       });
   }
 
-  const method = request.method;
-  const apiPath = pathname === "/v1" ? "/" : pathname.slice("/v1".length);
-  const routeMatch = findApiRoute(method, apiPath);
   const routeId = routeMatch?.route.id;
+  if (routeId === "getMe") {
+    let sensei: Awaited<ReturnType<typeof getSenseiById>>;
+    try {
+      sensei = await getSenseiById(env, key.userId, { ctx });
+    } catch (error) {
+      throw new ApiHttpError("unavailable", "프로필을 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
+        internalReason: "profile_unavailable",
+        underlying: error,
+      });
+    }
+    if (!sensei) throw new ApiHttpError("unavailable", "프로필을 확인할 수 없어요. 잠시 후 다시 시도해주세요");
+    let profileStudent: { studentUid: string; name: string } | null = null;
+    if (sensei.profileStudentId) {
+      try {
+        const students = await getAllStudents(env, true);
+        const resolved = await findCanonicalStudent(
+          env,
+          sensei.profileStudentId,
+          new Map(students.map((student) => [student.uid, student])),
+        );
+        if (!resolved) throw new Error("Configured profile student is not available in the catalog.");
+        profileStudent = catalogStudentResponse(resolved);
+      } catch (error) {
+        throw new ApiHttpError("unavailable", "프로필 학생을 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
+          internalReason: "profile_student_unavailable",
+          underlying: error,
+        });
+      }
+    }
+    let subject: string;
+    try {
+      subject = key.kind === "oauth" ? key.subject : await getPersonalApiSubject(env, key.userId, { ctx });
+    } catch (error) {
+      throw new ApiHttpError("unavailable", "프로필 식별자를 확인할 수 없어요. 잠시 후 다시 시도해주세요", {
+        internalReason: "profile_subject_unavailable",
+        underlying: error,
+      });
+    }
+    return apiJson(200, { userId: subject, username: sensei.username, profileStudent });
+  }
   if (routeId === "findStudents") {
     const query = url.searchParams.get("query") ?? "";
     if (query.trim().length < API_STUDENT_QUERY_MIN_LENGTH || query.length > API_STUDENT_QUERY_MAX_LENGTH) {
@@ -467,12 +534,12 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
       key.userId,
       canonical.uid,
       input.state,
-      { apiKeyUid: key.uid, apiKeyName: key.name },
+      apiActor(key),
       { ctx },
     );
     if (result.kind === "already_recruited")
       throw new ApiHttpError("student_already_recruited", "이미 모집한 학생이에요");
-    return apiJson(201, stateResponse(canonical.uid, key.readScope ? result.state : {}));
+    return apiJson(201, stateResponse(canonical.uid, key.scopes.includes("students:read") ? result.state : {}));
   }
 
   const studentPath = routeMatch?.params.studentUid;
@@ -505,12 +572,12 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
         key.userId,
         canonical.uid,
         patch,
-        { apiKeyUid: key.uid, apiKeyName: key.name },
+        apiActor(key),
         { ctx },
       );
       if (result.kind === "not_recruited")
         throw new ApiHttpError("student_not_recruited", "모집한 학생을 찾을 수 없어요");
-      return apiJson(200, stateResponse(canonical.uid, key.readScope ? result.state : {}));
+      return apiJson(200, stateResponse(canonical.uid, key.scopes.includes("students:read") ? result.state : {}));
     }
     if (routeId === "deleteRecruitedStudent") {
       await ensureEmptyBody(request);
@@ -518,7 +585,7 @@ async function dispatchApiRequest(request: Request, env: Env, ctx?: ExecutionCon
         env,
         key.userId,
         canonical.uid,
-        { apiKeyUid: key.uid, apiKeyName: key.name },
+        apiActor(key),
         { ctx },
       );
       if (result.kind === "not_recruited")
@@ -542,12 +609,14 @@ export async function handleMolluLogApiRequest(
   const url = new URL(request.url);
   const pathname = url.pathname;
   const isVersionedApiPath = pathname === "/v1" || pathname.startsWith("/v1/");
+  const isOAuthTokenPath = pathname === "/oauth/token";
 
   if (env.API_HOST) {
     const isApiHost = url.hostname.toLowerCase() === env.API_HOST.toLowerCase();
     if (isApiHost) {
       const docsResponse = createApiDocsResponse(pathname, request.url, env);
       if (docsResponse) return docsResponse;
+      if (isOAuthTokenPath) return handleOAuthTokenRequest(request, env, ctx);
       if (!isVersionedApiPath) return apiError(env, "not_found", "API 경로를 찾을 수 없어요");
     } else if (isVersionedApiPath) {
       return apiError(env, "not_found", `몰루로그 API는 https://${env.API_HOST}/v1 주소로 요청해주세요`);
@@ -557,6 +626,7 @@ export async function handleMolluLogApiRequest(
   } else {
     const docsResponse = createApiDocsResponse(pathname, request.url, env);
     if (docsResponse) return docsResponse;
+    if (isOAuthTokenPath) return handleOAuthTokenRequest(request, env, ctx);
     if (!isVersionedApiPath) return null;
   }
 

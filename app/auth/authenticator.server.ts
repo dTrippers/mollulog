@@ -30,11 +30,26 @@ export function redirectTo(request: Request): string | null {
     .find((row) => row.startsWith("redirectTo="))
     ?.split("=")[1];
   if (redirectTo) {
-    const decodedURIComponent = decodeURIComponent(redirectTo);
-    if (decodedURIComponent.startsWith("/unauthorized")) {
+    let decodedURIComponent: string;
+    try {
+      decodedURIComponent = decodeURIComponent(redirectTo);
+    } catch {
       return null;
     }
-    return decodedURIComponent;
+    try {
+      const target = new URL(decodedURIComponent, "https://mollulog.invalid");
+      if (
+        !decodedURIComponent.startsWith("/") ||
+        decodedURIComponent.startsWith("//") ||
+        target.origin !== "https://mollulog.invalid" ||
+        target.pathname.startsWith("/unauthorized")
+      ) {
+        return null;
+      }
+      return `${target.pathname}${target.search}${target.hash}`;
+    } catch {
+      return null;
+    }
   }
   return null;
 }

@@ -31,8 +31,7 @@ describe("getDataHistoryView", () => {
     const apiKeys = [
       {
         uid: "key-1",
-        readScope: true,
-        writeScope: false,
+        scopes: ["students:read"],
         createdAt: new Date("2026-10-01T00:00:00.000Z"),
         expiresAt: new Date("2027-01-01T00:00:00.000Z"),
         revokedAt: null,
@@ -51,8 +50,7 @@ describe("getDataHistoryView", () => {
       itemNamesByUid: { "gift-1": "선물 1", "gift-2": "선물 2" },
       apiKeysByUid: {
         "key-1": {
-          readScope: true,
-          writeScope: false,
+          scopes: ["students:read"],
           createdAt: "2026-10-01T00:00:00.000Z",
           expiresAt: "2027-01-01T00:00:00.000Z",
           revokedAt: null,
