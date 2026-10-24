@@ -101,8 +101,8 @@ Each classification execution logs its model, prompt version, verdict when
 available, whether it updated the current opinion, duration, and success/failure.
 The existing Workers Observability `axiom-logs` destination receives these logs
 at the configured sampling rate of 1. Opinion text, author information, and API
-credentials are excluded. PR #9 removes the duplicate Better Stack transport;
-classification uses `getLogger` and does not add a second logging client.
+credentials are excluded. Classification uses the existing `getLogger` transport
+and does not add a second logging client.
 Axiom retention is an account/dataset setting, not guaranteed by Worker config.
 Confirm the actual dataset retention and export policy before calling this a
 long-term archive. [Axiom retention settings](https://axiom.co/docs/reference/datasets#specify-data-retention-period)

@@ -1133,6 +1133,7 @@ export async function createPostgresContentSubcomment(
 export async function updatePostgresContentOpinion(
   env: Env,
   userId: number,
+  contentId: string,
   postUid: string,
   body: string,
   visibility: CommunityCommentVisibility,
@@ -1159,6 +1160,7 @@ export async function updatePostgresContentOpinion(
           and(
             eq(pgCommunityPostsTable.uid, postUid),
             eq(pgCommunityPostsTable.userId, userId),
+            eq(pgCommunityPostsTable.subjectContentUid, contentId),
             eq(pgCommunityPostsTable.postType, "event_opinion"),
           ),
         )

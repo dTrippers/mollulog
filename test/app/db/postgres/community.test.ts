@@ -479,7 +479,7 @@ describe("PostgreSQL community repository", () => {
   ])("returns a job only for an eligible edited root opinion (%s)", async (_label, state) => {
     const { client, query } = createClient((text) => (text.includes('update "community_posts"') ? [[state]] : []));
     const recruitmentPeriodStartAt = "2026-09-01T00:00:00.000Z";
-    const result = await updatePostgresContentOpinion(env, 10, "opinion-1", "edited", "public", {
+    const result = await updatePostgresContentOpinion(env, 10, "content-1", "opinion-1", "edited", "public", {
       recruitmentPeriodStartAt,
       createClient: () => client,
     });

@@ -78,7 +78,10 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
   }
 
   const actionData = await request.json<ActionData>();
-  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
+  const recruitmentPeriod =
+    actionData.action === "create" || actionData.action === "update"
+      ? await getContentRecruitmentPeriod(env, contentUid, { ctx })
+      : null;
   const commentOptions = { recruitmentPeriodStartAt: recruitmentPeriod?.startAt ?? null, ctx };
   if (actionData.action === "create") {
     if (!actionData.body) {
@@ -115,6 +118,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     const classificationJob = await updateComment(
       env,
       currentUser.id,
+      contentUid,
       actionData.commentUid,
       actionData.body,
       actionData.visibility ?? "private",

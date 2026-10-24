@@ -14,7 +14,7 @@ import {
   updatePostgresContentOpinion,
 } from "~/db/postgres/community";
 import type { ConcurrencyGate } from "~/lib/concurrency";
-import { getRecruitmentGroupByUid, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
+import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
 import type { ContentCommentSummary, ContentCommentWithSensei, NestedComment } from "./content";
 import { nestComments } from "./content";
@@ -35,8 +35,8 @@ export async function getContentRecruitmentPeriod(
 ) {
   const content = await getTimelineContent(env, contentId, options);
   if (!content?.recruitmentGroupUid) return null;
-  const recruitmentGroup = await getRecruitmentGroupByUid(env, content.recruitmentGroupUid);
-  return recruitmentGroup ? normalizeRecruitmentGroupPeriod(recruitmentGroup) : null;
+  const recruitmentGroup = await getRecruitmentGroupByUidStrict(env, content.recruitmentGroupUid);
+  return normalizeRecruitmentGroupPeriod(recruitmentGroup);
 }
 
 export async function getContentComments(
@@ -93,6 +93,7 @@ export async function createSubcomment(
 export async function updateComment(
   env: Env,
   userId: number,
+  contentId: string,
   commentUid: string,
   body: string,
   visibility: ContentCommentVisibility,
@@ -100,7 +101,8 @@ export async function updateComment(
 ): Promise<RecruitmentOpinionClassificationJob | null> {
   const post = await getPostgresCommunityPostByUid(env, commentUid, userId);
   if (post?.postType === "event_opinion" && post.author?.id === userId) {
-    const job = await updatePostgresContentOpinion(env, userId, commentUid, body, visibility, options);
+    if (post.subjectContentUid !== contentId) throw new Response("Comment not found", { status: 404 });
+    const job = await updatePostgresContentOpinion(env, userId, contentId, commentUid, body, visibility, options);
     return job ?? null;
   }
   await updatePostgresCommunityComment(env, userId, commentUid, body, visibility);
