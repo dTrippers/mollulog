@@ -1,9 +1,10 @@
 import { StarIcon as StarOutlineIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarSolidIcon } from "@heroicons/react/24/solid";
 import { Link } from "react-router";
-import type { NavigationItem } from "./navigation-menu";
-import { cn } from "~/lib/utils";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { cn } from "~/lib/utils";
+import { v2FocusRing } from "../styles";
+import type { NavigationItem } from "./navigation-menu";
 
 type NavigationMenuRowProps = NavigationItem & {
   isFavorite?: boolean;
@@ -31,8 +32,10 @@ export function NavigationMenuRow({
   const hasFavoriteStar = favoriteAction !== null;
   const accessibleName = [name, badgeLabel, showRedDot ? "새 항목 있음" : null].filter(Boolean).join(", ");
   const rowClassName = cn(
-    "group relative flex min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors",
-    isActive ? "bg-background font-semibold text-foreground" : "font-normal text-foreground/75 hover:bg-background hover:text-foreground",
+    "group relative flex min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors duration-v2-fast ease-v2-standard",
+    isActive
+      ? "bg-v2-nav-active font-semibold text-v2-fg"
+      : "font-normal text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg",
     compact && "min-h-9",
     disabled && "cursor-default opacity-50",
   );
@@ -44,11 +47,21 @@ export function NavigationMenuRow({
       <span
         className={cn(
           "flex shrink-0 items-center gap-1.5",
-          hasFavoriteStar && "transition-opacity group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
+          hasFavoriteStar &&
+            "transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-0 group-has-[button:focus-visible]:opacity-0",
         )}
       >
-        {badgeLabel ? <span className="whitespace-nowrap text-[10px] leading-4 font-normal text-muted-foreground">{badgeLabel}</span> : null}
-        {showRedDot ? <span className="size-1.5 rounded-full bg-destructive" aria-hidden="true" /> : null}
+        {badgeLabel ? (
+          <span
+            className={cn(
+              "whitespace-nowrap text-[10px] leading-4 font-normal",
+              isActive ? "text-v2-fg-secondary" : "text-v2-fg-tertiary",
+            )}
+          >
+            {badgeLabel}
+          </span>
+        ) : null}
+        {showRedDot ? <span className="size-1.5 rounded-full bg-v2-unread" aria-hidden="true" /> : null}
       </span>
     </span>
   );
@@ -63,7 +76,7 @@ export function NavigationMenuRow({
         to={to}
         aria-current={isActive ? "page" : undefined}
         aria-label={accessibleName}
-        className="absolute inset-0 z-0 rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className={cn("absolute inset-0 z-0 rounded-md", v2FocusRing)}
         onClick={() => {
           if (menuId) trackGoogleAnalyticsEvent("nav_menu_click", { menu_id: menuId });
         }}
@@ -73,8 +86,9 @@ export function NavigationMenuRow({
         <button
           type="button"
           className={cn(
-            "absolute right-1 top-1/2 z-10 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-            isFavorite ? "text-yellow-600 dark:text-yellow-400" : "text-muted-foreground hover:text-foreground",
+            "absolute top-0 right-1 bottom-0 z-10 my-auto inline-flex size-6 items-center justify-center rounded-md text-v2-fg-secondary opacity-0 transition-opacity duration-v2-fast ease-v2-standard group-hover:opacity-100 focus-visible:opacity-100",
+            "hover:bg-v2-hover hover:text-v2-fg",
+            v2FocusRing,
           )}
           onClick={(event) => {
             event.preventDefault();
@@ -85,7 +99,11 @@ export function NavigationMenuRow({
           aria-pressed={isFavorite}
           title={isFavorite ? "즐겨찾기에서 제거" : "즐겨찾기에 추가"}
         >
-          {isFavorite ? <StarSolidIcon className="size-4" aria-hidden="true" /> : <StarOutlineIcon className="size-4" aria-hidden="true" />}
+          {isFavorite ? (
+            <StarSolidIcon className="size-4" aria-hidden="true" />
+          ) : (
+            <StarOutlineIcon className="size-4" aria-hidden="true" />
+          )}
         </button>
       ) : null}
     </div>

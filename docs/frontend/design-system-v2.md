@@ -2,7 +2,7 @@
 
 Design system 2.0 (v2) is the shared visual language for screens migrated from the 1.x UI. It covers color, density, and motion tokens, the `app/components/v2/` layout, and the guard that keeps 2.0 code on its own rules.
 
-The 2.0 foundation adds tokens and rules only. It does not change any 1.x token, 1.x component, or existing screen. Components and screens that use 2.0 come in later steps.
+The 2.0 foundation defines the tokens and rules. Migrated screens and shared components use those rules without changing the 1.x tokens or components that remain in use.
 
 ## Naming
 
@@ -31,6 +31,14 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-elevated` | `oklch(1 0 0)` | `oklch(0.36 0 0)` | Floating action bars and dialogs. Brighter than surface in dark mode |
 | `bg-v2-popover-surface` | `rgb(255 255 255 / 94%)` | `rgb(24 24 24 / 94%)` | Student quick-view popover surface |
 | `ring-v2-popover-divider`, `border-v2-popover-divider` | `rgb(0 0 0 / 18%)` | `rgb(255 255 255 / 22%)` | Quick-view outline and action divider |
+| `bg-v2-nav` | `oklch(0.945 0 0)` | `oklch(0.205 0 0)` | Shared navigation shell surface. Tertiary-label contrast: 4.69:1 light, 8.95:1 dark; offset focus-ring contrast: 3.20:1 light, 6.79:1 dark (measured) |
+| `bg-v2-nav-active` | `oklch(0.89 0 0)` | `oklch(0.30 0 0)` | Selected navigation row and collapsed active group |
+| `bg-v2-unread`, `text-v2-on-unread` | `oklch(0.577 0.245 27.325)` / `oklch(1 0 0)` | `oklch(0.704 0.191 22.216)` / `oklch(0.205 0 0)` | Navigation unread dots and count pills. Pill text contrast: 4.76:1 light, 6.19:1 dark (measured) |
+| `bg-v2-banner-red`, `text-v2-banner-red-fg` | `oklch(0.95 0.025 25)` / `oklch(0.39 0.14 25)` | `oklch(0.30 0.06 25)` / `oklch(0.86 0.10 25)` | Red SiteBanner fill and text; contrast 8.83:1 light, 8.45:1 dark (measured) |
+| `bg-v2-banner-green`, `text-v2-banner-green-fg` | `oklch(0.95 0.025 150)` / `oklch(0.4 0.11 150)` | `oklch(0.30 0.05 150)` / `oklch(0.86 0.09 150)` | Green SiteBanner fill and text; contrast 7.64:1 light, 9.03:1 dark (measured) |
+| `bg-v2-banner-blue`, `text-v2-banner-blue-fg` | `oklch(0.97 0.018 237)` / `oklch(0.48 0.12 240)` | `oklch(0.30 0.05 240)` / `oklch(0.86 0.08 235)` | Blue SiteBanner fill and text; contrast 5.86:1 light, 8.98:1 dark (measured; light values follow the approved mockup) |
+| `bg-v2-banner-pink`, `text-v2-banner-pink-fg` | `oklch(0.95 0.025 340)` / `oklch(0.4 0.12 340)` | `oklch(0.30 0.05 340)` / `oklch(0.86 0.08 340)` | Pink SiteBanner fill and text; contrast 8.42:1 light, 8.82:1 dark (measured) |
+| `bg-v2-banner-black`, `text-v2-banner-black-fg` | `oklch(0.89 0 0)` / `oklch(0.35 0 0)` | `oklch(0.30 0 0)` / `oklch(0.90 0 0)` | Neutral SiteBanner fill and text; contrast 8.13:1 light, 10.12:1 dark (measured) |
 | `bg-v2-backdrop` | `oklch(0 0 0 / 30%)` | `oklch(0 0 0 / 55%)` | Sheet backdrop |
 | `bg-v2-highlight` | `oklch(0.623 0.214 259.815 / 10%)` | `oklch(0.707 0.165 254.624 / 16%)` | Panel highlight after a program request (focus hue, low alpha) |
 | `text-v2-info` | `oklch(0.546 0.215 262.881)` | `oklch(0.809 0.105 251.813)` | Information status text; separate semantic token with the link color |
@@ -137,9 +145,20 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 
 - `app/components/v2/primitives/`: shared low-level pieces.
 - `app/components/v2/layout/`: shared layout pieces.
+- `app/components/v2/layout/navigation/`: the shared 2.0 navigation shell and its menu catalog, icons, tutorial key, and banner.
 - `app/components/v2/features/<domain>/`: domain UI reused across screens.
 - 2.0 files must not import 1.x components (`~/components/primitives`, `~/components/features`, or the same locations through relative paths).
 - Do not modify 1.x components to make them work with 2.0.
+
+## Shared navigation shell
+
+The root shell imports `NavigationBar` and `SiteBanner` from `app/components/v2/layout/navigation/`. The folder contains the expanded sidebar, rail, flyout, menu rows, account and notification popovers, search popup, mobile brand bar and bottom navigation, tutorial, and SiteBanner. The expanded sidebar hides the native scrollbar and overlays a draggable thumb without reserving layout width; the thumb updates on scroll, resize, and content changes and fades instantly for reduced-motion users. `navigation-menu.ts` remains the catalog used by the shell, `/more`, and the search API; moving it does not change its data or behavior.
+
+The sidebar, rail, mobile brand bar, and bottom navigation use `bg-v2-nav`. Active navigation rows use `bg-v2-nav-active`; unread dots and count pills use `bg-v2-unread` with `text-v2-on-unread` for pill text. These navigation surfaces are flat, with no decorative border, shadow, blur, or sidebar width transition. The existing `--mobile-*` values and root content container remain unchanged.
+
+SiteBanner uses a flat preset fill in every slot. Its red, green, blue, pink, and black pairs are the `bg-v2-banner-{preset}` and `text-v2-banner-{preset}-fg` tokens above. Their text contrast was measured in both themes and is at least 5.86:1. The shell uses `SenseiAvatar`, v2 `StudentPortrait`, `Switch`, `Skeleton`, `StatusNotice`, and `FeatureHint`; rail flyouts keep their side placement in the shell and use the v2 popover surface.
+
+Two shell actions intentionally use the existing semantic text colors: account logout uses `text-v2-danger` without a filled background, and notification action links use underlined `text-v2-link`. On the popover surface, logout contrast measures 6.36:1 light and 6.12:1 dark; notification-link contrast measures 5.12:1 light and 9.77:1 dark. Route changes close the shell overlays; Escape closes them and returns focus to the trigger.
 
 ## Guard
 

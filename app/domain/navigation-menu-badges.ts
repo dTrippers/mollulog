@@ -1,7 +1,7 @@
 export const MENU_BADGE_MAX_LABEL_LENGTH = 12;
 
 // Keep these stable IDs aligned with the menu catalog. Admin mirrors both the
-// IDs and Korean display names from app/components/features/layout/navigation-menu.ts.
+// IDs and Korean display names from app/components/v2/layout/navigation/navigation-menu.ts.
 export const NAVIGATION_MENU_IDS = [
   "home",
   "futures",

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, Outlet, RouterProvider, useMatches } from "react-router";
-import NavigationBar, { NavigationFavoriteEmptyHint } from "~/components/features/layout/NavigationBar";
+import NavigationBar, { NavigationFavoriteEmptyHint } from "~/components/v2/layout/navigation/NavigationBar";
 import type { DesktopNavigationExpandedGroups } from "~/domain/desktop-navigation-preference";
 
 function renderNavigation(
@@ -112,6 +112,14 @@ describe("desktop navigation shell rendering", () => {
     expect(html).toContain('data-desktop-navigation-mode="collapsed"');
   });
 
+  it("hides the native scrollbar on the expanded desktop menu", () => {
+    const html = renderNavigation("/students");
+    const expandedNav = html.match(/<nav aria-label="데스크톱 주요 메뉴"[\s\S]*?<\/nav>/)?.[0] ?? "";
+
+    expect(expandedNav).toContain('class="no-scrollbar h-full min-h-0 overflow-y-auto px-3 py-2"');
+    expect(expandedNav).not.toContain("navigation-scrollbar");
+  });
+
   it("starts all collapsible groups expanded and excludes favorites from group controls", () => {
     const html = renderNavigation("/@sensei/students", false, "sensei");
 
@@ -169,7 +177,7 @@ describe("desktop navigation shell rendering", () => {
   it("keeps the exact favorites-empty copy and row classes in the rail flyout", () => {
     const html = renderToStaticMarkup(<NavigationFavoriteEmptyHint />);
 
-    expect(html).toBe('<p class="px-2 py-2 text-xs text-muted-foreground">☆를 눌러 즐겨찾기에 추가</p>');
+    expect(html).toBe('<p class="px-v2-row-x py-v2-row-y text-xs text-v2-fg-secondary">☆를 눌러 즐겨찾기에 추가</p>');
   });
 
   it("respects saved collapse choices for non-favorites groups", () => {
@@ -202,7 +210,7 @@ describe("desktop navigation shell rendering", () => {
     expect(html).toContain("px-2 text-xs transition-colors");
     expect(html).toContain("px-2 text-left text-xs font-semibold");
     expect(desktopSearchInput).toContain("text-xs");
-    expect(desktopSearchInput).toContain("placeholder:text-muted-foreground/70");
+    expect(desktopSearchInput).toContain("placeholder:text-v2-fg-tertiary");
   });
 
   it("uses the rectangular brand mark in the rail while leaving the expanded logo intact", () => {
@@ -232,7 +240,7 @@ describe("desktop navigation shell rendering", () => {
     expect(html).toContain('aria-label="게임 정보, 새 항목 있음"');
     expect(html).toContain('class="relative flex size-5 items-center justify-center"');
     expect(html).toContain(
-      'class="absolute top-0 right-0 size-1.5 translate-x-1/2 -translate-y-1/2 rounded-full bg-destructive"',
+      'class="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-v2-unread"',
     );
   });
 
@@ -254,13 +262,13 @@ describe("desktop navigation shell rendering", () => {
         ([trigger]) => trigger,
       );
       const activeProfileRows = [...html.matchAll(/<a(?=[^>]*href="\/@hellodhlyn")(?=[^>]*aria-current="page")[^>]*aria-label="프로필"[^>]*>/g)];
-      const activeRailGroupNames = [...html.matchAll(/<button(?=[^>]*bg-background font-bold text-foreground)(?=[^>]*aria-label="([^"]+)")[^>]*>/g)].map(
+      const activeRailGroupNames = [...html.matchAll(/<button(?=[^>]*bg-v2-nav-active font-semibold text-v2-fg)(?=[^>]*aria-label="([^"]+)")[^>]*>/g)].map(
         ([, accessibleName]) => accessibleName,
       );
 
       expect(matchedPathname).toBe("/@hellodhlyn/");
       expect(accountTriggers).toHaveLength(2);
-      expect(accountTriggers.every((trigger) => !trigger.includes("bg-muted text-foreground"))).toBe(true);
+      expect(accountTriggers.every((trigger) => !trigger.includes("bg-v2-nav-active text-v2-fg"))).toBe(true);
       expect(activeProfileRows).toHaveLength(1);
       expect(activeRailGroupNames).toEqual(["나의 데이터"]);
       expect(html).toContain('aria-label="프로필"');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { getInitialNavigationFlyoutPosition } from "~/components/features/layout/NavigationFlyout";
+import { getInitialNavigationFlyoutPosition } from "~/components/v2/layout/navigation/NavigationFlyout";
 
 describe("rail flyout initial position", () => {
   it("places the first rendered position next to the anchor without a top-of-window fallback", () => {

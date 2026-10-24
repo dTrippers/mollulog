@@ -1,9 +1,12 @@
-import { BellAlertIcon, Cog6ToothIcon, ExclamationTriangleIcon } from "@heroicons/react/24/outline";
+import { BellAlertIcon, Cog6ToothIcon } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation } from "react-router";
-import { Button } from "~/components/primitives";
+import { Button } from "~/components/v2/primitives/Button";
+import { Skeleton } from "~/components/v2/primitives/Skeleton";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import type { NotificationHistoryItem, NotificationHistoryResponse } from "~/domain/notification-history";
 import { cn } from "~/lib/utils";
+import { v2FocusRing } from "../styles";
 
 type NotificationHistoryPopoverProps = {
   placement: "desktop" | "rail" | "mobile";
@@ -26,7 +29,7 @@ type ReadResponse = {
 };
 
 const LOAD_ERROR_MESSAGE = "알림을 불러오지 못했어요";
-const READ_ERROR_MESSAGE = "읽음 처리하지 못했어요. 새 알림 표시를 유지하고 있어요.";
+const READ_ERROR_MESSAGE = "읽음 처리하지 못했어요";
 
 export function shouldCloseNotificationPopoverOnFocusOut(
   root: Pick<Node, "contains">,
@@ -233,9 +236,9 @@ export default function NotificationHistoryPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative inline-flex items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          placement === "rail" ? "size-11 bg-transparent" : "size-9 bg-background",
-          placement === "desktop" ? "text-muted-foreground" : "text-foreground/75",
+          "relative inline-flex items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          placement === "rail" ? "size-11 bg-transparent" : "size-9 bg-transparent",
+          v2FocusRing,
         )}
         onClick={() => setIsOpen(!isOpen)}
         aria-label={triggerLabel}
@@ -250,7 +253,7 @@ export default function NotificationHistoryPopover({
         />
         {unreadCount > 0 ? (
           <span
-            className="absolute -top-1 -right-1 min-w-4 rounded-full bg-primary px-1 text-[10px] font-bold leading-4 text-primary-foreground"
+            className="absolute -top-1 -right-1 min-w-4 rounded-full bg-v2-unread px-1 text-[10px] font-bold leading-4 text-v2-on-unread"
             aria-hidden="true"
           >
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -264,7 +267,7 @@ export default function NotificationHistoryPopover({
           role="dialog"
           aria-label="알림"
           className={cn(
-            "fixed z-layer-navigation-menu flex flex-col overflow-hidden popover-surface",
+            "fixed z-layer-navigation-menu flex flex-col overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",
             position ? "opacity-100" : "pointer-events-none opacity-0",
           )}
           style={
@@ -279,11 +282,14 @@ export default function NotificationHistoryPopover({
           }
         >
           <div className="flex shrink-0 items-center justify-between gap-2 px-4 py-3">
-            <h2 className="text-base font-semibold text-foreground">알림</h2>
+            <h2 className="text-base font-semibold text-v2-fg">알림</h2>
             <Link
               to="/notifications"
               aria-label="알림 설정"
-              className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className={cn(
+                "inline-flex size-9 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                v2FocusRing,
+              )}
               onClick={() => setIsOpen(false)}
             >
               <Cog6ToothIcon className="size-5" strokeWidth={2} aria-hidden="true" />
@@ -293,20 +299,20 @@ export default function NotificationHistoryPopover({
           <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">
             {loadState === "loading" ? <NotificationHistoryLoading /> : null}
             {loadState === "error" ? (
-              <div className="px-2 py-6 text-center" role="alert">
-                <ExclamationTriangleIcon className="mx-auto size-6 text-destructive" aria-hidden="true" />
-                <p className="mt-2 text-sm font-medium text-foreground">{loadError ?? LOAD_ERROR_MESSAGE}</p>
-                <button
-                  type="button"
-                  className="mt-3 min-h-10 rounded-md bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-                  onClick={() => void loadNotifications()}
-                >
-                  다시 시도
-                </button>
-              </div>
+              <StatusNotice
+                tone="danger"
+                className="m-3 items-center"
+                action={
+                  <Button size="sm" variant="text" onClick={() => void loadNotifications()}>
+                    다시 시도
+                  </Button>
+                }
+              >
+                {loadError ?? LOAD_ERROR_MESSAGE}
+              </StatusNotice>
             ) : null}
             {loadState === "loaded" && notifications.length === 0 ? (
-              <p className="px-2 py-8 text-center text-sm text-muted-foreground">도착한 알림이 없어요</p>
+              <p className="px-2 py-8 text-center text-sm text-v2-fg-secondary">도착한 알림이 없어요</p>
             ) : null}
             {loadState === "loaded" && notifications.length > 0 ? (
               <ul className="space-y-1" aria-label="최근 알림">
@@ -320,9 +326,9 @@ export default function NotificationHistoryPopover({
               </ul>
             ) : null}
             {readError ? (
-              <p className="px-2 py-2 text-xs text-destructive" role="status">
+              <StatusNotice tone="warning" className="px-2 py-2 text-xs">
                 {readError}
-              </p>
+              </StatusNotice>
             ) : null}
           </div>
         </div>
@@ -336,15 +342,15 @@ export default function NotificationHistoryPopover({
 
 function NotificationHistoryLoading() {
   return (
-    <div className="space-y-1" role="status" aria-label="알림 불러오는 중">
+    <div className="space-y-v2-list-gap" role="status" aria-label="알림 불러오는 중">
       {["first", "second", "third", "fourth"].map((key) => (
-        <div key={key} className="animate-pulse rounded-lg px-3 py-3" aria-hidden="true">
+        <div key={key} className="rounded-md px-3 py-3" aria-hidden="true">
           <div className="flex items-center justify-between gap-3">
-            <div className="h-3 w-24 rounded bg-muted" />
-            <div className="h-3 w-12 rounded bg-muted" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-12" />
           </div>
-          <div className="mt-2 h-3 w-full rounded bg-muted" />
-          <div className="mt-1 h-3 w-2/3 rounded bg-muted" />
+          <Skeleton className="mt-2 h-3 w-full" />
+          <Skeleton className="mt-1 h-3 w-2/3" />
         </div>
       ))}
     </div>
@@ -359,25 +365,20 @@ function NotificationHistoryRow({
   onAction: () => void;
 }) {
   return (
-    <li
-      className={cn(
-        "rounded-lg px-3 py-3 text-sm transition-colors",
-        notification.isUnread ? "bg-primary/10 text-foreground" : "text-foreground/85",
-      )}
-    >
+    <li className="rounded-md px-3 py-3 text-sm text-v2-fg">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-1.5">
           {notification.isUnread ? (
-            <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+            <span className="size-1.5 shrink-0 rounded-full bg-v2-unread" aria-hidden="true" />
           ) : null}
-          <span className={cn("truncate text-foreground", notification.isUnread ? "font-semibold" : "font-medium")}>
+          <span className={cn("truncate", notification.isUnread ? "font-semibold" : "font-medium")}>
             {notification.typeLabel}
           </span>
           {notification.isUnread ? <span className="sr-only">읽지 않음</span> : null}
         </div>
         <time
           dateTime={notification.deliveredAt}
-          className="shrink-0 text-xs text-muted-foreground"
+          className="shrink-0 text-xs text-v2-fg-tertiary"
           title={notification.deliveredAt}
         >
           {notification.relativeTime}
@@ -385,24 +386,26 @@ function NotificationHistoryRow({
       </div>
 
       {notification.message.state === "available" ? (
-        <p className="mt-2 whitespace-pre-line break-words text-foreground/75 leading-relaxed">
+        <p className="mt-2 whitespace-pre-line break-words text-v2-fg-secondary leading-relaxed">
           {notification.message.text}
         </p>
       ) : (
-        <p className="mt-2 text-sm text-muted-foreground">{notification.message.text}</p>
+        <p className="mt-2 text-sm text-v2-fg-secondary">{notification.message.text}</p>
       )}
 
       {notification.action?.state === "available" ? (
-        <Button
+        <Link
           to={notification.action.to}
-          size="sm"
-          className="-ml-3 mt-2 border-transparent bg-transparent text-primary shadow-none hover:bg-primary/10 hover:text-primary"
+          className={cn(
+            "mt-2 inline-flex text-sm font-medium text-v2-link underline decoration-v2-link underline-offset-4",
+            v2FocusRing,
+          )}
           onClick={onAction}
         >
           {notification.action.label}
-        </Button>
+        </Link>
       ) : notification.action?.state === "unavailable" ? (
-        <p className="mt-2 text-xs text-muted-foreground">{notification.action.text}</p>
+        <p className="mt-2 text-xs text-v2-fg-tertiary">{notification.action.text}</p>
       ) : null}
     </li>
   );

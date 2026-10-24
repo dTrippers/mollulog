@@ -866,9 +866,7 @@ export function getSearchableMenuItems({
   })
     .filter(
       (item) =>
-        item.surfaces.includes("search") &&
-        (isSignedIn || !item.requiresSignIn) &&
-        (isAdmin || !item.requiresAdmin),
+        item.surfaces.includes("search") && (isSignedIn || !item.requiresSignIn) && (isAdmin || !item.requiresAdmin),
     )
     .sort(
       (left, right) =>

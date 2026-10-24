@@ -1,7 +1,7 @@
 import hangul from "hangul-js";
 import type { LoaderFunctionArgs } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getSearchableMenuItems } from "~/components/features/layout/navigation-menu";
+import { getSearchableMenuItems } from "~/components/v2/layout/navigation/navigation-menu";
 import { formatStudentFullName, getAllStudents } from "~/models/student";
 import type { TimelineContent } from "~/models/timeline-content";
 import { getAllTimelineContentsMeta } from "~/models/timeline-content.server";
