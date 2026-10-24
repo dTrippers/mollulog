@@ -29,7 +29,6 @@ import {
   toUtcIso,
 } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
-import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { type PickupHistory } from "~/models/pickup-history";
 import { getPickupHistory } from "~/models/pickup-history.server";
 import { getAllHistoricalRecruitmentGroups, getRecruitmentGroupByUid } from "~/models/recruitment";
@@ -365,14 +364,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     rawResult: data.rawResult ?? null,
     comment: data.comment ?? null,
   });
-  const headers = new Headers();
-  headers.append(
-    "Set-Cookie",
-    createAnalyticsEventsCookie(request.url, [
-      { eventName: "recruitment_result_submitted", parameters: { action: "upsert" } },
-    ]),
-  );
-  return redirect("/my?path=pickups", { headers });
+  return redirect("/my?path=pickups");
 };
 
 export default function EditPickup() {

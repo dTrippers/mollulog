@@ -23,16 +23,8 @@ describe("Google Analytics event catalog", () => {
       if (eventName === "login" || eventName === "sign_up") {
         return !sources.some(({ path, source }) => path === "root.tsx" && source.includes("consumePendingAuthEvent"));
       }
-      if (eventName === "recruitment_result_submitted") {
-        return !sources.some(
-          ({ path, source }) => path.startsWith("routes/") && source.includes("trackRecruitmentResultSubmitted("),
-        );
-      }
       const helperCallSites: Partial<Record<(typeof GOOGLE_ANALYTICS_EVENT_NAMES)[number], string>> = {
-        ocr_job_applied: "trackOcrJobApplied(",
         event_shop_plan_saved: "trackEventShopPlanSaved(",
-        community_post_liked: "trackLikeAdded(",
-        timeline_liked: "trackLikeAdded(",
       };
       const helper = helperCallSites[eventName];
       if (helper) return !sources.some(({ source }) => source.includes(helper));

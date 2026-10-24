@@ -1,5 +1,5 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import ContentCommentView from "~/components/features/contents/ContentCommentView";
 import { ResourceCards, StudentCard } from "~/components/features/students";
@@ -7,7 +7,6 @@ import { AttributeBadge, MultilineText } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { formatInstant, nowUtcIso, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import {
   attackTypeColor,
   attackTypeLocale,
@@ -68,16 +67,11 @@ export default function FuturePlan({ event, favoritedStudents, comments }: Futur
   const displayTimeZone = useDisplayTimeZone();
   const [allComments, setAllComments] = useState(comments ?? []);
   const fetcher = useFetcher<CommentResponse>();
-  const trackedCreateResultRef = useRef<unknown>(null);
 
   // Update comments when fetcher returns data
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data && Array.isArray(fetcher.data.comments)) {
       setAllComments(fetcher.data.comments);
-      if (fetcher.data.createdComment && fetcher.data !== trackedCreateResultRef.current) {
-        trackedCreateResultRef.current = fetcher.data;
-        trackGoogleAnalyticsEvent("content_comment_created", { content_type: "future" });
-      }
     }
   }, [fetcher.state, fetcher.data]);
 

@@ -63,11 +63,7 @@ import {
 } from "~/domain/recruitment-result";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
-import {
-  trackGoogleAnalyticsEvent,
-  trackRecruitmentResultSubmitted,
-  useTrackCreatedCommentAnalyticsEvent,
-} from "~/lib/google-analytics-events.client";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { captureClientError } from "~/lib/observability.client";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
@@ -386,11 +382,7 @@ type AllCommentsState = Record<string, NestedComment[]>;
 type FutureRecruitment = FutureContent["recruitments"][number];
 type CompletedRecruitmentStudentState = { recruitmentGroupUid: string; studentUid: string };
 type RecruitmentResultEditLinkState = { recruitmentGroupUid: string; link: string };
-type RecruitmentResultFetcherData = {
-  success?: boolean;
-  result?: RecruitmentResultState | null;
-  analyticsAction?: string;
-};
+type RecruitmentResultFetcherData = { success?: boolean; result?: RecruitmentResultState | null };
 
 function getEarliestUpcomingPickupAt(content: FutureContentsLoaderContent, now: string): string | null {
   const upcomingPickup = content.recruitments
@@ -697,7 +689,6 @@ function FutureContentsScreen({
   }, [resolvedViewer]);
 
   const commentFetcher = useFetcher<CommentResponse>();
-  useTrackCreatedCommentAnalyticsEvent(commentFetcher.state, commentFetcher.data, "future");
   const submitComment = (contentUid: string, data: CommentActionData) =>
     commentFetcher.submit(data, {
       action: `/api/contents/${contentUid}/comments`,
@@ -752,7 +743,6 @@ function FutureContentsScreen({
   const [pendingContentUid, setPendingContentUid] = useState<string | null>(null);
 
   const recruitmentResultFetcher = useFetcher<RecruitmentResultFetcherData>();
-  const trackedRecruitmentResultRef = useRef<unknown>(null);
   const submitRecruitmentResult = (data: RecruitmentResultActionData) =>
     recruitmentResultFetcher.submit(data, {
       action: "/api/recruitment-results",
@@ -764,14 +754,9 @@ function FutureContentsScreen({
     const response = recruitmentResultFetcher.data;
     if (recruitmentResultFetcher.state !== "idle" || !response) return;
 
-    if (!response.success) return;
-
-    if (response !== trackedRecruitmentResultRef.current) {
-      trackedRecruitmentResultRef.current = response;
-      trackRecruitmentResultSubmitted(response.analyticsAction);
+    if (!response.success || !response.result) {
+      return;
     }
-
-    if (!response.result) return;
 
     const nextResult = response.result;
     setRecruitmentResults((prev) => {

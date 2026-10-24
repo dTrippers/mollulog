@@ -5,7 +5,6 @@ export type CommunityPostCommentsChangedActionResult = {
   kind: "communityPostCommentsChanged";
   postUid: string;
   comments: NestedCommunityComment[];
-  createdComment?: boolean;
 };
 
 export type CommunityEngagementActionResult = CommunityPostCommentsChangedActionResult | LikeChangedActionResult;

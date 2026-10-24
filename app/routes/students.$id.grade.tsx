@@ -7,7 +7,6 @@ import { Button, Field, SectionCard, TagIcon, Textarea } from "~/components/prim
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading.server";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
@@ -74,9 +73,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   if (intent === "delete") {
     try {
       await deleteStudentGrading(env, currentUser.id, studentUid);
-      const headers = new Headers();
-      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "student_grading_deleted" }]));
-      return redirect(`/students/${studentUid}`, { headers });
+      return redirect(`/students/${studentUid}`);
     } catch (error) {
       logger.error("Error deleting grading", error, {
         currentUserId: currentUser.id,
@@ -93,9 +90,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
   try {
     await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
-    const headers = new Headers();
-    headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "student_grading_submitted" }]));
-    return redirect(`/students/${studentUid}`, { headers });
+    return redirect(`/students/${studentUid}`);
   } catch (error) {
     logger.error("Error saving grading", error, {
       currentUserId: currentUser.id,

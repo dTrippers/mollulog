@@ -119,23 +119,20 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
         studentStateMetadataByKey: metadataByKey,
         studentStateRequestMode: draft.type === "student_state" ? parseStudentStateRequestMode(formData) : null,
       });
-      const events =
-        draft.type === "student_state"
-          ? [
-              { eventName: "connect_import_applied" },
-              { eventName: "student_state_saved", parameters: { source: "connect_import", scope: "bulk" } },
-            ]
-          : [{ eventName: "connect_import_applied" }];
+      if (draft.type !== "student_state") return redirect("/connect/import");
       const headers = new Headers();
-      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, events));
+      headers.append(
+        "Set-Cookie",
+        createAnalyticsEventsCookie(request.url, [
+          { eventName: "student_state_saved", parameters: { source: "connect_import", scope: "bulk" } },
+        ]),
+      );
       return redirect("/connect/import", { headers });
     }
 
     if (intent === "discard") {
       await discardSyncDraft(env, currentUser.id, draftUid);
-      const headers = new Headers();
-      headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "connect_import_discarded" }]));
-      return redirect("/connect/import", { headers });
+      return redirect("/connect/import");
     }
 
     return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });

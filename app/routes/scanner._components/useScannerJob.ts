@@ -9,13 +9,11 @@ import {
   type ScannerPhase,
 } from "./scanner-client";
 import { getScannerCancelConfirmation, getScannerNewUploadConfirmation } from "./scanner-messages";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 export type ScannerJobLike = {
   uid: string;
   status: string;
   updatedAt: string;
-  jobKind?: "item_inventory_images_v1" | "student_detail_images_v1" | "student_detail_video_v1";
   application?: { status?: string } | null;
 };
 
@@ -42,12 +40,10 @@ export function shouldConfirmScannerReset(job: Pick<ScannerJobLike, "status" | "
 }
 
 export function useScannerJob<T extends ScannerJobLike>({
-  analyticsKind,
   getTransition,
   onJob,
   onReset,
 }: {
-  analyticsKind?: "student" | "resource";
   getTransition: (job: T) => ScannerJobTransition;
   onJob?: (job: T) => void;
   onReset?: () => void;
@@ -238,12 +234,6 @@ export function useScannerJob<T extends ScannerJobLike>({
         `/api/ocr/jobs/${encodeURIComponent(job.uid)}/cancel`,
         { method: "POST" },
       );
-      const kind = job.jobKind === "item_inventory_images_v1" ? "resource" : job.jobKind ? "student" : analyticsKind;
-      if (kind) {
-        trackGoogleAnalyticsEvent("ocr_job_cancelled", {
-          kind,
-        });
-      }
       resetForNewUpload(false);
       notifyScannerJobsChanged();
       return true;
@@ -253,7 +243,7 @@ export function useScannerJob<T extends ScannerJobLike>({
     } finally {
       setIsCancelling(false);
     }
-  }, [analyticsKind, isCancelling, job, resetForNewUpload]);
+  }, [isCancelling, job, resetForNewUpload]);
 
   return {
     job,

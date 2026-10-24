@@ -42,7 +42,6 @@ import type { WalkthroughTimelineRecord } from "~/domain/walkthrough-timeline";
 import { compareInstantDesc, formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import { getAllRaidSchedules } from "~/models/raid";
@@ -144,9 +143,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     }
     const cloned = await clonePostgresWalkthroughTimeline(env, params.uid, currentUser.id, { ctx });
     if (!cloned) throw routeError(404, "timeline.not_found", "복제할 타임라인을 찾을 수 없어요.");
-    const headers = new Headers();
-    headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "timeline_cloned" }]));
-    return redirect(`/timelines/${cloned.uid}/edit`, { headers });
+    return redirect(`/timelines/${cloned.uid}/edit`);
   }
   if (intent === "delete") {
     try {

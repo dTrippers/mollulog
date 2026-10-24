@@ -10,7 +10,6 @@ import { Button } from "~/components/v2/primitives/Button";
 import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { type ApiFieldError, ApiInputError } from "~/domain/mollulog-api";
 import { getDeveloperScopeLabels } from "~/domain/mollulog-api-spec";
 import {
@@ -183,15 +182,7 @@ export default function DevelopersKeys() {
   const [writeScope, setWriteScope] = useState(false);
   const [confirmingUid, setConfirmingUid] = useState<string | null>(null);
   const [now, setNow] = useState(loadedAt);
-  const trackedActionData = useRef(actionData);
   const isSubmitting = navigation.state === "submitting";
-
-  useEffect(() => {
-    if (actionData === trackedActionData.current) return;
-    trackedActionData.current = actionData;
-    if (actionData?.ok && actionData.intent === "issue") trackGoogleAnalyticsEvent("api_key_issued");
-    if (actionData?.ok && actionData.intent === "revoke") trackGoogleAnalyticsEvent("api_key_revoked");
-  }, [actionData]);
 
   useEffect(() => {
     setNow(loadedAt);

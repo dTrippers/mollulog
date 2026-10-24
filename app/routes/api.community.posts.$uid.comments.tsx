@@ -78,6 +78,5 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
     kind: "communityPostCommentsChanged",
     postUid,
     comments: await getNestedCommunityComments(env, postUid, currentUser.id),
-    createdComment: actionData.action === "create" || actionData.action === "createSubcomment",
   } satisfies CommunityPostCommentsChangedActionResult;
 };

@@ -21,7 +21,6 @@ import {
 } from "~/domain/walkthrough-timeline";
 import { ActionValidationError, isActionValidationError } from "~/lib/action-errors";
 import { getLogger } from "~/lib/observability.server";
-import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import { loadTimelineEditorOptions } from "./timelines._components/timeline-route-data.server";
 
 type ActionData = { error: string };
@@ -94,9 +93,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
       },
       { ctx },
     );
-    const headers = new Headers();
-    headers.append("Set-Cookie", createAnalyticsEventsCookie(request.url, [{ eventName: "timeline_created" }]));
-    return redirect(`/timelines/${timeline.uid}`, { headers });
+    return redirect(`/timelines/${timeline.uid}`);
   } catch (error) {
     if (isActionValidationError(error)) {
       return data<ActionData>({ error: error.message }, { status: 400 });

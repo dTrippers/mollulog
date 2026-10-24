@@ -6,7 +6,6 @@ import ContentCommentEditor from "~/components/features/contents/ContentCommentE
 import { BottomSheet } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { cn } from "~/lib/utils";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import type { NestedComment } from "~/models/content";
 import type { ActionData as CommentActionData, CommentResponse } from "~/routes/api.contents.$uid.comments";
 
@@ -34,7 +33,6 @@ export default function EventComment({
   const [commentsUnavailable, setCommentsUnavailable] = useState(initialCommentsUnavailable);
   const [hideRecruitmentOpinions, setHideRecruitmentOpinions] = useState(me !== null && initialHideRecruitmentOpinions);
   const justUpdatedRef = useRef(false);
-  const trackedCreateResultRef = useRef<unknown>(null);
 
   const fetcher = useFetcher<CommentResponse>();
   const commentsRefreshFetcher = useFetcher<CommentResponse>();
@@ -53,10 +51,6 @@ export default function EventComment({
     ) {
       setAllComments(fetcher.data.comments);
       setCommentsUnavailable(fetcher.data.unavailable === true);
-      if (fetcher.data.createdComment && fetcher.data !== trackedCreateResultRef.current) {
-        trackedCreateResultRef.current = fetcher.data;
-        trackGoogleAnalyticsEvent("content_comment_created", { content_type: "event" });
-      }
       justUpdatedRef.current = true;
       setHasPendingUpdate(false);
     }

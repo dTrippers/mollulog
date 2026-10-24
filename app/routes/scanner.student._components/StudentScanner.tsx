@@ -82,7 +82,7 @@ import {
 import { sha256FileInWorker } from "../scanner._components/sha256-client";
 import type { ScannerUploadQuota } from "../scanner._components/UploadQuotaMeter";
 import { useScannerJob } from "../scanner._components/useScannerJob";
-import { trackGoogleAnalyticsEvent, trackOcrJobApplied } from "~/lib/google-analytics-events.client";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 type ApplyFieldName =
   | "tier"
@@ -431,16 +431,13 @@ export async function submitStudentUploadSelection(
             trainingConsent: allowsTrainingDataUse,
           }),
         });
-        trackGoogleAnalyticsEvent("ocr_job_created", { kind: "student", input: "image" });
         options.onImageQuota?.(created.quota);
         for (const [index, { file, contentType }] of imageFiles.entries()) {
           await uploadFileWithProgress(created.images[index].uploadUrl, file, contentType);
         }
-        const submitted = await requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
+        return requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
           method: "POST",
         });
-        trackGoogleAnalyticsEvent("ocr_job_submitted", { kind: "student", input: "image" });
-        return submitted;
       })(),
     });
   }
@@ -467,14 +464,11 @@ export async function submitStudentUploadSelection(
             trainingConsent: allowsTrainingDataUse,
           }),
         });
-        trackGoogleAnalyticsEvent("ocr_job_created", { kind: "student", input: "video" });
         options.onVideoQuota?.(created.quota);
         await uploadFileWithProgress(created.video.uploadUrl, videoFile.file, videoFile.contentType);
-        const submitted = await requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
+        return requestJson<StudentVideoJob>(`/api/ocr/jobs/${created.jobUid}/submit`, {
           method: "POST",
         });
-        trackGoogleAnalyticsEvent("ocr_job_submitted", { kind: "student", input: "video" });
-        return submitted;
       })(),
     });
   }
@@ -570,7 +564,6 @@ export default function StudentScanner() {
   }, []);
 
   const lifecycle = useScannerJob<StudentVideoJob>({
-    analyticsKind: "student",
     getTransition: getStudentJobTransition,
     onJob: handleJob,
     onReset: handleReset,
@@ -688,7 +681,6 @@ export default function StudentScanner() {
         `/api/ocr/jobs/${job.uid}/apply`,
         { method: "POST", body: JSON.stringify({ students }) },
       );
-      trackOcrJobApplied("student_state", response.alreadyApplied === true);
       if (response.alreadyApplied !== true) {
         trackGoogleAnalyticsEvent("student_state_saved", {
           source: "ocr",

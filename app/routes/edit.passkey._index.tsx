@@ -6,7 +6,6 @@ import { type LoaderFunctionArgs, redirect, useLoaderData, useRevalidator } from
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { ButtonForm, FormGroup, LinkForm } from "~/components/features/forms";
 import { getPasskeysBySensei } from "~/models/passkey";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -53,7 +52,6 @@ export default function EditPasskeyIndex() {
         return;
       }
 
-      trackGoogleAnalyticsEvent("passkey_registered");
       revalidator.revalidate();
     } catch {
       setError("Passkey를 추가하는 중 오류가 발생했어요.");

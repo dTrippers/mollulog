@@ -63,7 +63,7 @@ function expectDataResult<T>(result: unknown): DataResult<T> {
 function requestWithForm(values: Record<string, string> = {}) {
   const formData = new FormData();
   for (const [key, value] of Object.entries(values)) formData.set(key, value);
-  return { url: "https://mollulog.net/contact", formData: async () => formData } as unknown as Request;
+  return { formData: async () => formData } as unknown as Request;
 }
 
 function routeArgs(request = requestWithForm(), params: Record<string, string> = {}) {
@@ -164,7 +164,6 @@ describe("contact index loader and action", () => {
 
     expect(result).toHaveProperty("status", 302);
     expect((result as { headers: Headers }).headers.get("Location")).toBe("/contact/ticket-new");
-    expect((result as { headers: Headers }).headers.getSetCookie().join("\n")).toContain("__mllg_analytics_events=");
     expect(mockCreateFeedbackTicket).toHaveBeenCalledWith(
       env,
       sensei.id,

@@ -9,7 +9,6 @@ import {
 } from "~/auth/authenticator.server";
 import { linkAuthIdentity } from "~/models/auth-identity";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
-import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
 import {
   DiscordIdentityAlreadyLinkedError,
   type PendingDiscordConnection,
@@ -269,25 +268,17 @@ export async function handleDiscordOAuthCallback(
       if (!result.ok) {
         return redirectWithCookies(errorLocation("link", "identity_in_use"), [await storage.commitSession(session)]);
       }
-      return redirectWithCookies(
-        "/edit?discord_auth=linked#connected-services",
-        [
-          await storage.commitSession(session),
-          createAnalyticsEventsCookie(request.url, [{ eventName: "account_linked", parameters: { provider: "discord" } }]),
-        ],
-      );
+      return redirectWithCookies("/edit?discord_auth=linked#connected-services", [
+        await storage.commitSession(session),
+      ]);
     }
 
     if (value.intent === "notification-connect") {
       const connection = await upsertPendingDiscordConnection(env, value.userId as number, discordUserId, { ctx });
       queueDiscordConnectionVerification(env, connection, ctx);
-      return redirectWithCookies(
-        "/edit?discord_notice=pending#discord-notifications",
-        [
-          await storage.commitSession(session),
-          createAnalyticsEventsCookie(request.url, [{ eventName: "discord_notification_connected" }]),
-        ],
-      );
+      return redirectWithCookies("/edit?discord_notice=pending#discord-notifications", [
+        await storage.commitSession(session),
+      ]);
     }
 
     const resolution = await resolveProviderAuthentication(env, "discord", discordUserId, ctx);

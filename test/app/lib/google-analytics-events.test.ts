@@ -21,11 +21,7 @@ import {
   trackEventShopPlanSaved,
   trackGoogleAnalyticsEvent,
   trackGoogleAnalyticsEventIfAllowed,
-  trackLikeAdded,
-  trackOcrJobApplied,
-  trackRecruitmentResultSubmitted,
   useConsumeGoogleAnalyticsEventCookie,
-  useTrackCreatedCommentAnalyticsEvent,
   useTrackGoogleAnalyticsSearch,
 } from "~/lib/google-analytics-events.client";
 import ResourceInventoryFilterPanel, {
@@ -48,11 +44,6 @@ function AnalyticsErrorRootProbe() {
   setGoogleAnalyticsPageContext({ routePattern: "/students/:id", contentGroup: "students" });
   useEffect(() => initializeGoogleAnalytics(), []);
   return createElement(Outlet);
-}
-
-function CommentCreationProbe({ response, revision }: { response: unknown; revision: number }) {
-  useTrackCreatedCommentAnalyticsEvent("idle", response, "future");
-  return createElement("output", null, revision);
 }
 
 function AnalyticsEventCookieProbe() {
@@ -179,7 +170,7 @@ describe("Google Analytics events", () => {
     expect(consumePendingAuthEvent()).toEqual({ eventName: "login", method: "discord" });
   });
 
-  it("deduplicates first-per-page events and only counts newly applied OCR results", () => {
+  it("deduplicates first-per-page events", () => {
     const gtag = jest.fn();
     Object.defineProperty(window, "gtag", { configurable: true, value: gtag });
     setGoogleAnalyticsPageKey("page-one");
@@ -187,8 +178,6 @@ describe("Google Analytics events", () => {
     trackEventShopPlanSaved(false);
     trackEventShopPlanSaved(true);
     trackEventShopPlanSaved(true);
-    trackOcrJobApplied("student_state", true);
-    trackOcrJobApplied("item_inventory", false);
 
     expect(gtag.mock.calls.filter(([command]) => command === "event")).toEqual([
       [
@@ -201,31 +190,6 @@ describe("Google Analytics events", () => {
           page_referrer: "",
         },
       ],
-      [
-        "event",
-        "ocr_job_applied",
-        {
-          target: "item_inventory",
-          logged_in: false,
-          page_location: "https://mollulog.net/test",
-          page_title: "/test",
-          page_referrer: "",
-        },
-      ],
-    ]);
-  });
-
-  it("counts likes only when they are added", () => {
-    const gtag = jest.fn();
-    Object.defineProperty(window, "gtag", { configurable: true, value: gtag });
-
-    trackLikeAdded("community_post", false);
-    trackLikeAdded("community_post", true);
-    trackLikeAdded("timeline", true);
-
-    expect(gtag.mock.calls.filter(([command]) => command === "event").map(([, eventName]) => eventName)).toEqual([
-      "community_post_liked",
-      "timeline_liked",
     ]);
   });
 
@@ -300,15 +264,13 @@ describe("Google Analytics events", () => {
     ).toHaveLength(1);
 
     trackGoogleAnalyticsEventIfAllowed("not_a_catalog_event", { userId: "private" });
-    trackRecruitmentResultSubmitted("unknown-action");
-    trackRecruitmentResultSubmitted("complete");
+    trackGoogleAnalyticsEventIfAllowed("planner_saved", { action: "unknown-action" });
+    trackGoogleAnalyticsEventIfAllowed("planner_saved", { action: "update" });
     expect(
-      gtag.mock.calls.filter(
-        ([command, eventName]) => command === "event" && eventName === "recruitment_result_submitted",
-      ),
-    ).toHaveLength(1);
-    expect(gtag).toHaveBeenLastCalledWith("event", "recruitment_result_submitted", {
-      action: "complete",
+      gtag.mock.calls.filter(([command, eventName]) => command === "event" && eventName === "planner_saved"),
+    ).toHaveLength(2);
+    expect(gtag).toHaveBeenLastCalledWith("event", "planner_saved", {
+      action: "update",
       logged_in: false,
       page_location: "https://mollulog.net/students/:id",
       page_title: "/students/:id",
@@ -394,23 +356,6 @@ describe("Google Analytics events", () => {
     }
   });
 
-  it("counts a created future comment response once across rerenders", () => {
-    const gtag = jest.fn();
-    Object.defineProperty(window, "gtag", { configurable: true, value: gtag });
-    const response = { createdComment: true, comments: [], unavailable: false };
-    const view = render(createElement(CommentCreationProbe, { response, revision: 0 }));
-
-    view.rerender(createElement(CommentCreationProbe, { response, revision: 1 }));
-
-    expect(
-      gtag.mock.calls.filter(([command, eventName]) => command === "event" && eventName === "content_comment_created"),
-    ).toHaveLength(1);
-    view.rerender(createElement(CommentCreationProbe, { response: { createdComment: false }, revision: 2 }));
-    expect(
-      gtag.mock.calls.filter(([command, eventName]) => command === "event" && eventName === "content_comment_created"),
-    ).toHaveLength(1);
-  });
-
   it("sets sanitized page context before sending regular events", () => {
     const gtag = jest.fn();
     Object.defineProperty(window, "gtag", { configurable: true, value: gtag });
@@ -420,14 +365,14 @@ describe("Google Analytics events", () => {
       referrer: "https://external.example/private-path?token=secret",
     });
 
-    trackGoogleAnalyticsEvent("contact_submitted");
+    trackGoogleAnalyticsEvent("account_deleted");
 
     expect(gtag).toHaveBeenNthCalledWith(1, "set", {
       page_location: "https://mollulog.net/contact/:uid",
       page_title: "/contact/:uid",
       page_referrer: "https://external.example",
     });
-    expect(gtag).toHaveBeenCalledWith("event", "contact_submitted", {
+    expect(gtag).toHaveBeenCalledWith("event", "account_deleted", {
       logged_in: false,
       page_location: "https://mollulog.net/contact/:uid",
       page_title: "/contact/:uid",

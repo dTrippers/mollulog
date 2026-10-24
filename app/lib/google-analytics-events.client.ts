@@ -74,9 +74,6 @@ const eventRules = {
   web_vitals: { metric: ["LCP", "INP", "CLS"], value: "number", rating: ["good", "needs-improvement", "poor"] },
   login: { method: ["google", "github", "discord", "passkey"] },
   sign_up: { method: ["google", "github", "discord", "passkey"] },
-  account_linked: { provider: ["google", "github", "discord"] },
-  passkey_registered: {},
-  discord_notification_connected: {},
   notification_preference_saved: {},
   account_deleted: {},
   student_state_saved: { source: ["manual", "ocr", "connect_import"], scope: ["single", "bulk"] },
@@ -84,15 +81,6 @@ const eventRules = {
   relationship_saved: { action: ["save", "delete"] },
   resource_inventory_saved: { source: ["manual", "draft"] },
   furniture_inventory_saved: {},
-  student_grading_submitted: {},
-  student_grading_deleted: {},
-  ocr_job_created: { kind: ["student", "resource"], input: ["image", "video"] },
-  ocr_job_submitted: { kind: ["student", "resource"], input: ["image", "video"] },
-  ocr_job_cancelled: { kind: ["student", "resource"] },
-  ocr_job_applied: { target: ["student_state", "item_inventory"] },
-  connect_import_submitted: {},
-  connect_import_applied: {},
-  connect_import_discarded: {},
   connect_export_requested: { format: ["schaledb", "justin163"] },
   event_shop_plan_saved: {},
   recruitment_simulated: { mode: ["ten_pull", "until_target"] },
@@ -129,19 +117,6 @@ const eventRules = {
   raid_video_opened: { raid_type: ["total_assault", "elimination", "unlimit", "allied", "raid"] },
   coupon_code_copied: { code_type: ["coupon", "member_code"] },
   coupon_marked: { state: ["used", "unused"] },
-  community_comment_created: {},
-  community_post_liked: {},
-  timeline_liked: {},
-  content_comment_created: { content_type: ["event", "future"] },
-  timeline_created: {},
-  timeline_cloned: {},
-  contact_submitted: {},
-  follow_toggled: { state: ["followed", "unfollowed"] },
-  recruitment_result_submitted: {
-    action: ["complete", "complete_student", "uncomplete_student", "cancel", "upsert", "delete"],
-  },
-  api_key_issued: {},
-  api_key_revoked: {},
 } as const satisfies Record<string, Record<string, readonly string[] | "number" | "boolean">>;
 
 export const GOOGLE_ANALYTICS_EVENT_NAMES = Object.keys(eventRules) as (keyof typeof eventRules)[];
@@ -338,54 +313,6 @@ export function trackGoogleAnalyticsEventOncePerPage(...args: TrackArguments) {
   const [eventName] = args;
   if (pageEventsSent.has(eventName)) return;
   if (trackGoogleAnalyticsEvent(...args)) pageEventsSent.add(eventName);
-}
-
-export function useTrackCreatedCommentAnalyticsEvent(
-  fetcherState: string,
-  response: unknown,
-  contentType: "event" | "future",
-) {
-  const trackedResponseRef = useRef<unknown>(null);
-
-  useEffect(() => {
-    if (
-      fetcherState !== "idle" ||
-      typeof response !== "object" ||
-      response === null ||
-      !("createdComment" in response) ||
-      !response.createdComment ||
-      response === trackedResponseRef.current
-    ) {
-      return;
-    }
-
-    if (trackGoogleAnalyticsEvent("content_comment_created", { content_type: contentType })) {
-      trackedResponseRef.current = response;
-    }
-  }, [contentType, fetcherState, response]);
-}
-
-export function trackRecruitmentResultSubmitted(action: unknown) {
-  if (
-    action === "complete" ||
-    action === "complete_student" ||
-    action === "uncomplete_student" ||
-    action === "cancel" ||
-    action === "upsert" ||
-    action === "delete"
-  ) {
-    trackGoogleAnalyticsEvent("recruitment_result_submitted", { action });
-  }
-}
-
-export function trackOcrJobApplied(target: "student_state" | "item_inventory", alreadyApplied: boolean) {
-  if (!alreadyApplied) trackGoogleAnalyticsEvent("ocr_job_applied", { target });
-}
-
-export function trackLikeAdded(target: "community_post" | "timeline", liked: boolean) {
-  if (!liked) return;
-  if (target === "community_post") trackGoogleAnalyticsEvent("community_post_liked");
-  else trackGoogleAnalyticsEvent("timeline_liked");
 }
 
 export function trackEventShopPlanSaved(success: boolean) {

@@ -123,7 +123,6 @@ describe("connect import action", () => {
     const response = result as Response;
     expect(response.status).toBe(302);
     expect(response.headers.get("Location")).toBe("/connect/import/draft-abc-123");
-    expect(response.headers.getSetCookie().join("\n")).toContain("__mllg_analytics_events=");
 
     expect(mockedCreateSyncDraft).toHaveBeenCalledTimes(1);
     const [calledEnv, calledUserId, input] = mockedCreateSyncDraft.mock.calls[0];
