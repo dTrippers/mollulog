@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { MAX_NAVIGATION_FAVORITE_IDS } from "~/domain/navigation-favorites";
 import { getPreference, serializePreference } from "../../../app/auth/preference.server";
-import { action } from "../../../app/routes/api.preference";
 import { submitPreference } from "../../../app/lib/preference-submission.client";
+import { action } from "../../../app/routes/api.preference";
 
 const env = { SESSION_SECRET: "test-secret" } as Env;
 

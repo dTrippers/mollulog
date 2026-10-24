@@ -34,39 +34,46 @@ export default function StudentPortrait({
     return <img src={presentation.src} alt={alt} className={className} loading={loading} onError={onError} />;
   }
 
+  const frameContent =
+    presentation.kind === "concealed" ? (
+      <>
+        {!portraitImage.failed ? (
+          <img
+            key={presentation.src}
+            ref={portraitImage.ref}
+            src={presentation.src}
+            alt=""
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 size-full object-cover transition-opacity duration-v2-fast",
+              portraitImage.loaded ? "opacity-100" : "opacity-0",
+            )}
+            loading={loading}
+            draggable={false}
+            onLoad={portraitImage.onLoad}
+            onError={portraitImage.onError}
+          />
+        ) : null}
+        <StudentHalo src={presentation.haloSrc} aboveBand={haloAboveBand} scale={haloScale} />
+      </>
+    ) : null;
+  const frameClassName = cn(
+    "relative isolate aspect-[200/226] items-center justify-center overflow-hidden bg-muted",
+    className,
+    "flex",
+  );
+
+  if (alt) {
+    return (
+      <span className={frameClassName} role="img" aria-label={alt}>
+        {frameContent}
+      </span>
+    );
+  }
+
   return (
-    <span
-      className={cn(
-        "relative isolate aspect-[200/226] items-center justify-center overflow-hidden bg-muted",
-        className,
-        "flex",
-      )}
-      role={alt ? "img" : undefined}
-      aria-label={alt || undefined}
-      aria-hidden={alt ? undefined : true}
-    >
-      {presentation.kind === "concealed" ? (
-        <>
-          {!portraitImage.failed ? (
-            <img
-              key={presentation.src}
-              ref={portraitImage.ref}
-              src={presentation.src}
-              alt=""
-              aria-hidden="true"
-              className={cn(
-                "absolute inset-0 size-full object-cover transition-opacity duration-v2-fast",
-                portraitImage.loaded ? "opacity-100" : "opacity-0",
-              )}
-              loading={loading}
-              draggable={false}
-              onLoad={portraitImage.onLoad}
-              onError={portraitImage.onError}
-            />
-          ) : null}
-          <StudentHalo src={presentation.haloSrc} aboveBand={haloAboveBand} scale={haloScale} />
-        </>
-      ) : null}
+    <span className={frameClassName} aria-hidden="true">
+      {frameContent}
     </span>
   );
 }

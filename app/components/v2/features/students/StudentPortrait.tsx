@@ -43,40 +43,47 @@ export default function StudentPortrait({
     );
   }
 
+  const frameContent =
+    presentation.kind === "concealed" ? (
+      <>
+        {!image.failed ? (
+          <img
+            key={presentation.src}
+            ref={image.ref}
+            src={presentation.src}
+            alt=""
+            aria-hidden="true"
+            className={cn(
+              "absolute inset-0 size-full object-cover transition-opacity duration-v2-fast",
+              image.loaded ? "opacity-100" : "opacity-0",
+            )}
+            loading={loading}
+            decoding="async"
+            draggable={false}
+            onLoad={image.onLoad}
+            onError={image.onError}
+          />
+        ) : null}
+        <StudentHalo src={presentation.haloSrc} aboveBand={haloAboveBand} scale={haloScale} />
+      </>
+    ) : null;
+  const frameClassName = cn(
+    "relative isolate aspect-[200/226] items-center justify-center overflow-hidden bg-v2-inset",
+    className,
+    "flex",
+  );
+
+  if (alt) {
+    return (
+      <span className={frameClassName} role="img" aria-label={alt}>
+        {frameContent}
+      </span>
+    );
+  }
+
   return (
-    <span
-      className={cn(
-        "relative isolate aspect-[200/226] items-center justify-center overflow-hidden bg-v2-inset",
-        className,
-        "flex",
-      )}
-      role={alt ? "img" : undefined}
-      aria-label={alt || undefined}
-      aria-hidden={alt ? undefined : true}
-    >
-      {presentation.kind === "concealed" ? (
-        <>
-          {!image.failed ? (
-            <img
-              key={presentation.src}
-              ref={image.ref}
-              src={presentation.src}
-              alt=""
-              aria-hidden="true"
-              className={cn(
-                "absolute inset-0 size-full object-cover transition-opacity duration-v2-fast",
-                image.loaded ? "opacity-100" : "opacity-0",
-              )}
-              loading={loading}
-              decoding="async"
-              draggable={false}
-              onLoad={image.onLoad}
-              onError={image.onError}
-            />
-          ) : null}
-          <StudentHalo src={presentation.haloSrc} aboveBand={haloAboveBand} scale={haloScale} />
-        </>
-      ) : null}
+    <span className={frameClassName} aria-hidden="true">
+      {frameContent}
     </span>
   );
 }
