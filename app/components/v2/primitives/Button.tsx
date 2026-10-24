@@ -3,7 +3,7 @@ import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
 export type V2ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary" | "text" | "danger" | "danger-subtle";
+  variant?: "primary" | "secondary" | "text" | "link" | "danger" | "danger-subtle";
   size?: "md" | "sm";
 };
 
@@ -14,6 +14,7 @@ const variantClassName = {
   primary: "bg-v2-fg text-v2-canvas hover:opacity-90",
   secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
   text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover",
+  link: "px-0 text-v2-fg-secondary enabled:hover:text-v2-fg",
   danger:
     "bg-v2-danger-solid text-v2-on-danger enabled:hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled",
   "danger-subtle": "bg-v2-danger-subtle text-v2-danger enabled:hover:opacity-90",

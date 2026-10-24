@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { Link, MemoryRouter } from "react-router";
+import { ApiName, DeveloperCenterName } from "~/components/v2/features/developers/ApiName";
 import { type CopyStatus, CopyStatusMessage, CopyTextButton } from "~/components/v2/features/developers/CopyTextButton";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { Checkbox } from "~/components/v2/primitives/Checkbox";
@@ -50,6 +51,30 @@ describe("v2 developer controls", () => {
     expect(screen.getByRole("link", { name: "Link" }).className).toBe(
       screen.getByRole("button", { name: "Button" }).className,
     );
+  });
+
+  it("keeps inline link buttons aligned without horizontal padding or a hover fill", () => {
+    render(<Button variant="link">주소 추가</Button>);
+
+    const button = screen.getByRole("button", { name: "주소 추가" });
+    expect(button.className).toContain("px-0");
+    expect(button.className).not.toContain("px-3");
+    expect(button.className).not.toContain("hover:bg-v2-hover");
+    expect(button.className).toContain("text-v2-fg-secondary");
+    expect(button.className).toContain("enabled:hover:text-v2-fg");
+    expect(button.className).toContain("disabled:text-v2-fg-disabled");
+    expect(button.className).toContain("disabled:cursor-not-allowed");
+  });
+
+  it("keeps the API and developer center names distinct with the beta badge", () => {
+    const { container } = render(
+      <>
+        <ApiName />
+        <DeveloperCenterName />
+      </>,
+    );
+
+    expect(container.textContent).toBe("몰루로그 API베타몰루로그 개발자 센터베타");
   });
 
   it("forwards native form and ARIA attributes to the checkbox input", () => {

@@ -60,6 +60,7 @@ describe("developers responsive screen navigation", () => {
     const history = aside?.querySelector<HTMLAnchorElement>('a[href*="/data-history"]');
     const main = container.querySelector<HTMLElement>(".v2-main");
 
+    expect(screen.getByRole("heading").textContent).toBe("몰루로그 개발자 센터베타");
     expect(activeLinks).toHaveLength(1);
     expect(activeLinks[0].textContent).toContain(activeName);
     const disabledApplications = screen.getAllByRole("button", { name: "애플리케이션 준비중" });

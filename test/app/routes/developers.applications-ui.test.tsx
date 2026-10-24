@@ -153,10 +153,13 @@ describe("developer application screens", () => {
   it("allows typing into the new application Redirect URI input", () => {
     renderNewApplication();
     const input = screen.getByLabelText("Redirect URI 1") as HTMLInputElement;
+    const addButton = screen.getByRole("button", { name: "주소 추가" });
 
     fireEvent.change(input, { target: { value: "https://tool.example/updated" } });
 
     expect(input.value).toBe("https://tool.example/updated");
+    expect(addButton.className).toContain("px-0");
+    expect(addButton.className).not.toContain("px-3");
   });
 
   it("paints each application permission cell background instead of the row", () => {
@@ -205,10 +208,13 @@ describe("developer application screens", () => {
   it("allows typing into the application detail Redirect URI input", () => {
     renderApplicationDetail();
     const input = screen.getByLabelText("Redirect URI 1") as HTMLInputElement;
+    const addButton = screen.getByRole("button", { name: "주소 추가" });
 
     fireEvent.change(input, { target: { value: "https://tool.example/updated" } });
 
     expect(input.value).toBe("https://tool.example/updated");
+    expect(addButton.className).toContain("px-0");
+    expect(addButton.className).not.toContain("px-3");
   });
 
   it("shows a regenerated secret in place of the issued date and regenerate button", () => {

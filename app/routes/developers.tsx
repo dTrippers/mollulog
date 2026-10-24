@@ -3,7 +3,7 @@ import { Outlet, useLocation } from "react-router";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ApiName } from "~/components/v2/features/developers/ApiName";
+import { DeveloperCenterName } from "~/components/v2/features/developers/ApiName";
 import {
   AsideLinks,
   MobileActionBar,
@@ -51,7 +51,7 @@ export default function DevelopersLayout() {
 
   return (
     <V2Page width="wide">
-      <PageHeader title={<ApiName />} />
+      <PageHeader title={<DeveloperCenterName />} />
       <ScreenNavigationFocusScope>
         <ScreenNavigationToolbar items={items} />
         <PageAside>

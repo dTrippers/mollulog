@@ -357,8 +357,7 @@ export default function DeveloperApplicationDetail() {
               <div className="flex items-center gap-3">
                 <Button
                   type="button"
-                  variant="text"
-                  className="-ml-3"
+                  variant="link"
                   disabled={redirectUris.length >= 5 || isSubmitting}
                   onClick={() => setRedirectUris((currentUris) => [...currentUris, { id: crypto.randomUUID(), value: "" }])}
                 >

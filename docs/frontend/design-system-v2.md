@@ -92,6 +92,10 @@ Density tokens are spacing tokens in a plain `@theme` block. Plain `@theme` lets
 | `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | 2.5rem | 2.5rem | Minimum button hit area (`Button`). 32px on desktop, 40px on stacked layouts and coarse pointers. The visible button stays 32px (`size="md"`) or 28px (`size="sm"`) on every layout; an invisible pseudo-element extends the hit area. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
 | `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | 2.25rem | 2.25rem | Number and select inputs. 36px on stacked layouts and coarse pointers |
 
+## Button variants
+
+- `text` is a secondary action with a hover background. `link` is an inline add or secondary action aligned to a field edge: it has no horizontal padding or hover background, and hover changes only the text color.
+
 ## Numeric and date formats
 
 - Use Tailwind's `tabular-nums` for every number, date, time, count, and remaining duration. Do not add a numeric-only utility.
