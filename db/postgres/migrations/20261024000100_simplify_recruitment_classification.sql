@@ -1,5 +1,5 @@
 -- Drain old classifier jobs and pause opinion writes before this migration.
--- Deploy the new application before resuming writes; cleanup is a separate operation.
+-- Deploy the new application before resuming writes. The legacy table is retained.
 DO $$
 BEGIN
   IF EXISTS (
