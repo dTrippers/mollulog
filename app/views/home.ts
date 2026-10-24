@@ -98,6 +98,7 @@ export type HomeRecruitmentGroup = {
   eventUid: string | null;
   eventName: string | null;
   eventImageUrl: string | null;
+  eventImageBlurhash: string | null;
   kindLabel: string;
   since: UtcIsoString;
   until: UtcIsoString;
@@ -158,6 +159,7 @@ function buildRecruitmentGroups(
         eventUid: event?.uid ?? null,
         eventName: event?.name ?? null,
         eventImageUrl: event?.imageUrl ?? null,
+        eventImageBlurhash: event?.imageBlurhash ?? null,
         kindLabel: getHomeRecruitmentKindLabel(recruitments),
         since: sinces[0],
         until: untils[untils.length - 1],
@@ -356,7 +358,7 @@ export async function getIndexContents(
     return await fetchRouteCached<HomeIndexContents>(
       env,
       ctx,
-      cacheKey("route", "index", 6, "all"),
+      cacheKey("route", "index", 7, "all"),
       async () => {
         const contents = await loadHomeIndexContents(env, forceRefresh, ctx);
         if (!isCompleteHomeIndexContents(contents)) {

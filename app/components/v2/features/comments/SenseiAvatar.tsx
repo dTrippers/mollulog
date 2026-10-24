@@ -1,7 +1,9 @@
 import { CheckBadgeIcon, UserIcon } from "@heroicons/react/16/solid";
 import { ACCOUNT_LABEL_PRESENTATIONS, type AccountLabel, getPrimaryAccountLabel } from "~/domain/account-label";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
+import { useHaloMode } from "~/contexts/HaloModeContext";
+import { getStudentPortraitPresentation } from "~/models/student-image-policy";
+import StudentPortrait from "../students/StudentPortrait";
 import { useImageFailure } from "../../primitives/use-image-failure";
 
 // The account's profile image: the profile student's image, or the account label's own mark. An official account
@@ -17,7 +19,9 @@ export function SenseiAvatar({
 }) {
   const primary = getPrimaryAccountLabel(labels);
   const presentation = primary ? ACCOUNT_LABEL_PRESENTATIONS[primary] : null;
-  const imageSrc = presentation?.profileImageUrl ?? (profileStudentId ? studentImageUrl(profileStudentId) : null);
+  const { haloMode } = useHaloMode();
+  const fallbackPresentation = getStudentPortraitPresentation(profileStudentId, haloMode);
+  const imageSrc = presentation?.profileImageUrl ?? (fallbackPresentation.kind === "collection" ? fallbackPresentation.src : null);
   const image = useImageFailure(imageSrc);
   const showImage = imageSrc !== null && !image.failed;
 
@@ -29,7 +33,7 @@ export function SenseiAvatar({
           size === "compact" ? "size-6" : "size-8",
         )}
       >
-        {showImage ? (
+        {presentation?.profileImageUrl && showImage ? (
           <img
             ref={image.ref}
             src={imageSrc}
@@ -38,6 +42,17 @@ export function SenseiAvatar({
             onError={image.onError}
             className="size-full object-cover"
           />
+        ) : !presentation?.profileImageUrl && fallbackPresentation.kind === "collection" && showImage ? (
+          <img
+            ref={image.ref}
+            src={imageSrc ?? undefined}
+            alt=""
+            loading="lazy"
+            onError={image.onError}
+            className="size-full object-cover"
+          />
+        ) : !presentation?.profileImageUrl && fallbackPresentation.kind === "concealed" ? (
+          <StudentPortrait uid={profileStudentId} className="size-full rounded-full object-cover" />
         ) : (
           <UserIcon className={size === "compact" ? "size-3.5" : "size-4"} aria-hidden="true" />
         )}

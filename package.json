@@ -41,6 +41,7 @@
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.3",
     "@urql/core": "^6.0.3",
+    "blurhash": "^2.0.5",
     "clsx": "^2.1.1",
     "dayjs": "^1.11.23",
     "decimal.js": "^10.6.0",

@@ -1,14 +1,20 @@
 import {
+  ChevronDownIcon,
+  ChevronUpIcon,
+  EyeSlashIcon,
   MoonIcon,
   SunIcon,
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Link, useLocation, useSubmit } from "react-router";
-import { ProfileImage, Toggle } from "~/components/primitives";
-import type { NavigationItem } from "./navigation-menu";
-import { submitPreference } from "~/routes/api.preference";
+import { Link, useLocation } from "react-router";
+import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
+import { Switch } from "~/components/v2/primitives/Switch";
+import { useHaloMode } from "~/contexts/HaloModeContext";
+import { submitPreference } from "~/lib/preference-submission.client";
 import { cn } from "~/lib/utils";
+import { v2FocusRing } from "../styles";
+import type { NavigationItem } from "./navigation-menu";
 
 type NavigationAccountPopoverProps = {
   variant: "expanded" | "rail";
@@ -43,9 +49,12 @@ export function NavigationAccountPopover({
   const [uncontrolledIsOpen, setUncontrolledIsOpen] = useState(false);
   const isOpen = controlledIsOpen ?? uncontrolledIsOpen;
   const [position, setPosition] = useState<PopoverPosition | null>(null);
-  const popoverId = `navigation-account-${useId().replaceAll(":", "")}`;
+  const idPrefix = useId().replaceAll(":", "");
+  const popoverId = `navigation-account-${idPrefix}`;
+  const darkModeSwitchId = `navigation-dark-mode-${idPrefix}`;
+  const haloModeSwitchId = `navigation-halo-mode-${idPrefix}`;
   const location = useLocation();
-  const submit = useSubmit();
+  const { haloMode, setHaloMode } = useHaloMode();
   const locationKey = `${location.pathname}\n${location.search}\n${location.hash}`;
   const previousLocationKeyRef = useRef(locationKey);
 
@@ -58,10 +67,13 @@ export function NavigationAccountPopover({
     [controlledIsOpen, onOpenChange],
   );
 
-  const close = useCallback((returnFocus = false) => {
-    setIsOpen(false);
-    if (returnFocus) triggerRef.current?.focus();
-  }, [setIsOpen]);
+  const close = useCallback(
+    (returnFocus = false) => {
+      setIsOpen(false);
+      if (returnFocus) triggerRef.current?.focus();
+    },
+    [setIsOpen],
+  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -72,7 +84,7 @@ export function NavigationAccountPopover({
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportPadding = 12;
-      const width = 224;
+      const width = 264;
       const height = Math.min(popoverRef.current?.offsetHeight ?? 240, window.innerHeight - viewportPadding * 2);
       const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
       const maxTop = Math.max(viewportPadding, window.innerHeight - height - viewportPadding);
@@ -124,8 +136,12 @@ export function NavigationAccountPopover({
   }, [close, locationKey]);
 
   const toggleDarkMode = (next: boolean) => {
-    submitPreference(submit, { darkMode: next });
+    void submitPreference({ darkMode: next }).catch(() => undefined);
     onDarkModeChange(next);
+  };
+  const toggleHaloMode = (next: boolean) => {
+    void submitPreference({ haloMode: next }).catch(() => undefined);
+    setHaloMode(next);
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
   const profileAction = actions.find((action) => action.group === "account" && action.to.startsWith("/@"));
@@ -137,16 +153,23 @@ export function NavigationAccountPopover({
       <div className="flex flex-col items-center gap-1">
         <button
           type="button"
-          className="flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className={cn(
+            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            v2FocusRing,
+          )}
           onClick={onShowSignIn}
           aria-label="로그인"
         >
           <UserCircleIcon className="size-5" aria-hidden="true" />
           <span className="text-[11px] leading-4">로그인</span>
         </button>
+        <HaloModeButton variant="rail" haloMode={haloMode} onToggle={() => toggleHaloMode(!haloMode)} />
         <button
           type="button"
-          className="flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className={cn(
+            "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            v2FocusRing,
+          )}
           onClick={() => toggleDarkMode(!darkMode)}
           aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
         >
@@ -158,15 +181,22 @@ export function NavigationAccountPopover({
       <div className="flex items-center gap-2">
         <button
           type="button"
-          className="flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md bg-background px-2 py-1.5 text-left text-sm font-medium text-foreground/75 transition-colors hover:bg-muted hover:text-foreground"
+          className={cn(
+            "flex min-h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            v2FocusRing,
+          )}
           onClick={onShowSignIn}
         >
           <UserCircleIcon className="size-4 shrink-0" aria-hidden="true" />
           <span className="truncate">로그인</span>
         </button>
+        <HaloModeButton variant="expanded" haloMode={haloMode} onToggle={() => toggleHaloMode(!haloMode)} />
         <button
           type="button"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className={cn(
+            "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+            v2FocusRing,
+          )}
           onClick={() => toggleDarkMode(!darkMode)}
           aria-label={darkMode ? "라이트 모드로 전환" : "다크 모드로 전환"}
           title={darkMode ? "라이트 모드" : "다크 모드"}
@@ -183,9 +213,12 @@ export function NavigationAccountPopover({
         ref={triggerRef}
         type="button"
         className={cn(
-          "relative flex min-h-10 w-full items-center rounded-md transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          variant === "expanded" ? "gap-2 bg-background px-2 py-1.5 text-left text-sm font-medium" : "flex-col justify-center gap-0.5 px-1 text-foreground/70",
-          (isActive || isOpen) && "bg-muted text-foreground",
+          "relative flex min-h-10 w-full items-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          variant === "expanded"
+            ? "gap-2 px-2 py-1.5 text-left text-sm font-medium"
+            : "flex-col justify-center gap-0.5 px-1",
+          (isActive || isOpen) && "bg-v2-nav-active text-v2-fg",
+          v2FocusRing,
         )}
         aria-label={`계정 ${username}`}
         aria-expanded={isOpen}
@@ -194,27 +227,18 @@ export function NavigationAccountPopover({
         onClick={() => setIsOpen(!isOpen)}
       >
         {profileStudentId ? (
-          variant === "expanded" ? (
-            <ProfileImage studentUid={profileStudentId} imageSize={6} />
-          ) : (
-            <span className="flex size-7 items-center justify-center [&>img]:!size-7">
-              <ProfileImage studentUid={profileStudentId} imageSize={8} />
-            </span>
-          )
+          <SenseiAvatar profileStudentId={profileStudentId} size={variant === "expanded" ? "compact" : "default"} />
         ) : (
           <UserCircleIcon className={variant === "expanded" ? "size-5 shrink-0" : "size-6"} aria-hidden="true" />
         )}
         {variant === "expanded" ? (
           <>
             <span className="min-w-0 flex-1 truncate">{username}</span>
-            <svg
-              viewBox="0 0 16 16"
-              fill="currentColor"
-              className={cn("size-4 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none", isOpen && "rotate-180")}
-              aria-hidden="true"
-            >
-              <path d="M4 10 8 6l4 4H4Z" />
-            </svg>
+            {isOpen ? (
+              <ChevronUpIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            ) : (
+              <ChevronDownIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            )}
           </>
         ) : (
           <span className="max-w-full truncate text-[11px] leading-4">계정</span>
@@ -229,7 +253,7 @@ export function NavigationAccountPopover({
           aria-label="계정 메뉴"
           aria-hidden={!position}
           className={cn(
-            "fixed z-layer-navigation-menu w-56 popover-surface p-2",
+            "fixed z-layer-navigation-menu w-66 overflow-y-auto rounded-lg bg-v2-popover-surface p-1.5 shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",
             !position && "pointer-events-none invisible opacity-0",
           )}
           style={{
@@ -242,12 +266,15 @@ export function NavigationAccountPopover({
             <Link
               to={profileAction.to}
               aria-current={profileAction.isActive ? "page" : undefined}
-              className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className={cn(
+                "flex items-center gap-2 rounded-md px-2 py-2 text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                v2FocusRing,
+              )}
             >
-              {profileStudentId ? <ProfileImage studentUid={profileStudentId} imageSize={8} /> : <UserCircleIcon className="size-8 text-muted-foreground" aria-hidden="true" />}
+              <SenseiAvatar profileStudentId={profileStudentId} />
               <span className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-semibold">@{username}</span>
-                <span className="text-xs text-muted-foreground">{profileAction.name}</span>
+                <span className="text-xs text-v2-fg-tertiary">{profileAction.name}</span>
               </span>
             </Link>
           ) : null}
@@ -258,27 +285,48 @@ export function NavigationAccountPopover({
                 key={action.to}
                 to={action.to}
                 aria-current={action.isActive ? "page" : undefined}
-                className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+                className={cn(
+                  "flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                  v2FocusRing,
+                )}
               >
-                <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+                <Icon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
                 {action.name}
               </Link>
             );
           })}
-          <div className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal">
-            <ModeIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-            <span className="min-w-0 flex-1">다크 모드</span>
-            <Toggle
-              initialState={darkMode}
-              aria-label="다크 모드"
-              className="my-0"
-              onChange={(enabled) => toggleDarkMode(enabled)}
-            />
+          <div className="flex min-h-10 items-center gap-3 rounded-md px-2 py-2">
+            <ModeIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <Switch
+                id={darkModeSwitchId}
+                checked={darkMode}
+                onCheckedChange={toggleDarkMode}
+                label="다크 모드"
+                size="sm"
+              />
+            </div>
+          </div>
+          <div className="flex min-h-12 items-center gap-3 rounded-md px-2 py-2">
+            <EyeSlashIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <Switch
+                id={haloModeSwitchId}
+                checked={haloMode}
+                onCheckedChange={toggleHaloMode}
+                label="헤일로 모드"
+                description="학생·이벤트 썸네일을 가려요"
+                size="sm"
+              />
+            </div>
           </div>
           {signOutAction ? (
             <Link
               to={signOutAction.to}
-              className="flex min-h-10 items-center rounded-md px-2 py-2 text-sm font-normal hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+              className={cn(
+                "flex min-h-10 items-center rounded-md px-2 py-2 text-sm font-normal text-v2-danger transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+                v2FocusRing,
+              )}
             >
               {signOutAction.name}
             </Link>
@@ -286,5 +334,46 @@ export function NavigationAccountPopover({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function HaloModeButton({
+  variant,
+  haloMode,
+  onToggle,
+}: {
+  variant: "expanded" | "rail";
+  haloMode: boolean;
+  onToggle: () => void;
+}) {
+  const descriptionId = `halo-button-description-${useId().replaceAll(":", "")}`;
+  return (
+    <>
+      <button
+        type="button"
+        className={
+          variant === "rail"
+            ? cn(
+                "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                v2FocusRing,
+              )
+            : cn(
+                "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+                v2FocusRing,
+              )
+        }
+        onClick={onToggle}
+        aria-label="헤일로 모드"
+        aria-pressed={haloMode}
+        aria-describedby={descriptionId}
+        title="학생·이벤트 썸네일을 가려요"
+      >
+        <EyeSlashIcon className={variant === "rail" ? "size-5" : "size-4"} aria-hidden="true" />
+        {variant === "rail" ? <span className="text-[11px] leading-4">헤일로 모드</span> : null}
+      </button>
+      <span id={descriptionId} className="sr-only">
+        학생·이벤트 썸네일을 가려요
+      </span>
+    </>
   );
 }

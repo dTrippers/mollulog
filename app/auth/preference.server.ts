@@ -14,6 +14,7 @@ let _preferenceCookie: Cookie;
 
 export type Preference = {
   darkMode?: boolean;
+  haloMode?: boolean;
   timeZone?: string;
   favoriteNavigationIds?: string[];
   mobileNavigationIds?: MobileNavigationPair;
@@ -23,6 +24,7 @@ export type Preference = {
 
 const defaultPreference = {
   darkMode: true,
+  haloMode: false,
   timeZone: undefined,
   favoriteNavigationIds: [],
   mobileNavigationIds: DEFAULT_MOBILE_NAVIGATION_IDS,
@@ -44,6 +46,7 @@ function normalizePreference(value: unknown): Preference {
 
   return {
     darkMode: typeof parsed.darkMode === "boolean" ? parsed.darkMode : defaultPreference.darkMode,
+    haloMode: typeof parsed.haloMode === "boolean" ? parsed.haloMode : defaultPreference.haloMode,
     timeZone: typeof parsed.timeZone === "string" ? parsed.timeZone : defaultPreference.timeZone,
     favoriteNavigationIds: normalizeNavigationFavoriteIds(parsed.favoriteNavigationIds),
     mobileNavigationIds: normalizeMobileNavigationIds(parsed.mobileNavigationIds),

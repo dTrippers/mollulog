@@ -3,9 +3,9 @@ import { ArrowTopRightOnSquareIcon, UserGroupIcon } from "@heroicons/react/24/ou
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
+import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { defenseTypeLocale, difficultyLocale, terrainLocale } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
 import type { HomeYoutubeChannelSection, YoutubeChannelKey } from "~/models/youtube";
 import type { EnrichedCommunityFeedPost } from "~/views/community";
@@ -52,7 +52,7 @@ function FeedStudentImage({ uid, name, showName = false }: { uid: string; name: 
       title={name}
       className="inline-flex min-w-0 items-center gap-1.5 rounded-sm transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
     >
-      <img src={studentImageUrl(uid)} alt="" loading="lazy" className="size-6 rounded-full bg-v2-inset object-cover" />
+      <StudentPortrait uid={uid} className="size-6 rounded-full object-cover" />
       {showName ? <span className="truncate">{name}</span> : null}
     </Link>
   );

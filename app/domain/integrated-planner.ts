@@ -44,6 +44,8 @@ export type PlannerPeriod = {
   href?: string;
   startAt?: string | null;
   imageUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageIsTimeline?: boolean;
   fallbackImageUrl?: string | null;
   contentType?: TimelineContentType;
   contentUid?: string | null;
@@ -193,6 +195,8 @@ export type PlannerRecruitmentCandidatePeriod = {
   startAt: string | null;
   endAt: string | null;
   imageUrl: string | null;
+  imageBlurhash?: string | null;
+  imageIsTimeline?: boolean;
   fallbackImageUrl?: string | null;
   runType?: RunType;
   students: PlannerPeriodStudent[];
@@ -203,6 +207,8 @@ export type PlannerScheduleContentInput = {
   uid: string;
   name: string;
   imageUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageIsTimeline?: boolean;
   fallbackImageUrl?: string | null;
   contentType?: TimelineContentType;
   contentUid?: string | null;
@@ -1220,6 +1226,8 @@ export function buildPlannerPeriods({
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
+      ...(content.imageBlurhash !== undefined ? { imageBlurhash: content.imageBlurhash } : {}),
+      ...(content.imageIsTimeline !== undefined ? { imageIsTimeline: content.imageIsTimeline } : {}),
       ...(content.fallbackImageUrl !== undefined ? { fallbackImageUrl: content.fallbackImageUrl } : {}),
       ...(content.contentType ? { contentType: content.contentType } : {}),
       ...(content.contentUid !== undefined ? { contentUid: content.contentUid } : {}),
@@ -1333,6 +1341,8 @@ export function buildPublicPlannerPeriods({
       href: `/events/${encodeURIComponent(content.uid)}`,
       startAt: content.since,
       imageUrl: content.imageUrl ?? null,
+      ...(content.imageBlurhash !== undefined ? { imageBlurhash: content.imageBlurhash } : {}),
+      ...(content.imageIsTimeline !== undefined ? { imageIsTimeline: content.imageIsTimeline } : {}),
       ...(content.fallbackImageUrl !== undefined ? { fallbackImageUrl: content.fallbackImageUrl } : {}),
       ...(content.contentType ? { contentType: content.contentType } : {}),
       ...(content.contentUid !== undefined ? { contentUid: content.contentUid } : {}),
@@ -1829,6 +1839,8 @@ export function buildPlannerRecruitmentCandidatesForDate(
         startAt: period.startAt ?? null,
         endAt: period.endAt ?? null,
         imageUrl: eventPeriod?.imageUrl ?? null,
+        ...(eventPeriod?.imageBlurhash !== undefined ? { imageBlurhash: eventPeriod.imageBlurhash } : {}),
+        ...(eventPeriod?.imageIsTimeline !== undefined ? { imageIsTimeline: eventPeriod.imageIsTimeline } : {}),
         ...(eventPeriod?.fallbackImageUrl !== undefined ? { fallbackImageUrl: eventPeriod.fallbackImageUrl } : {}),
         ...(eventPeriod?.runType ? { runType: eventPeriod.runType } : {}),
         students: [],

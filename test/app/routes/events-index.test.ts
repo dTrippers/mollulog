@@ -25,6 +25,8 @@ function event(uid: string, name: string, schedules: EventListItem["schedules"])
     name,
     imageUrl: null,
     fallbackImageUrl: null,
+    timelineImageUrl: null,
+    timelineImageBlurhash: null,
     latestTimelineUid: `event-${uid}`,
     schedules,
   };

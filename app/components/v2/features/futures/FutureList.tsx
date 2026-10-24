@@ -15,14 +15,13 @@ import {
 } from "~/domain/futures/futures-view-model";
 import { formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
-import { useImageFailure } from "../../primitives/use-image-failure";
 import { ContentMedia } from "./ContentMedia";
 import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { getFutureMediaTypeLabel } from "./labels";
+import StudentPortrait from "../students/StudentPortrait";
 import { RemainingLabel } from "./RemainingLabel";
 import type { FutureViewContent } from "./types";
 
@@ -263,26 +262,14 @@ function ListRow({
 }
 
 function FaceImage({ studentUid, overlapped }: { studentUid: string | null; overlapped: boolean }) {
-  const src = studentUid ? studentImageUrl(studentUid) : null;
-  const image = useImageFailure(src);
   return (
-    <span
+    <StudentPortrait
+      uid={studentUid}
       className={cn(
-        "size-6 overflow-hidden rounded-full border border-v2-surface bg-v2-inset",
+        "size-6 overflow-hidden rounded-full border border-v2-surface object-cover",
         overlapped && "-ml-1.5",
       )}
-    >
-      {src && !image.failed ? (
-        <img
-          ref={image.ref}
-          src={src}
-          alt=""
-          loading="lazy"
-          onError={image.onError}
-          className="size-full object-cover"
-        />
-      ) : null}
-    </span>
+    />
   );
 }
 

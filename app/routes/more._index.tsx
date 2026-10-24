@@ -1,12 +1,13 @@
 import { ChevronRightIcon, HeartIcon, MoonIcon, SunIcon } from "@heroicons/react/16/solid";
 import { PlusIcon, StarIcon as StarIconOutline, UserCircleIcon } from "@heroicons/react/24/outline";
 import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useOutletContext, useSubmit } from "react-router";
+import { Link, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMoreNavigationSections, type NavigationItem } from "~/components/features/layout/navigation-menu";
-import { BottomSheet, ProfileImage, SubTitle } from "~/components/primitives";
+import { getMoreNavigationSections, type NavigationItem } from "~/components/v2/layout/navigation/navigation-menu";
+import { BottomSheet, HaloModeIcon, ProfileImage, SubTitle, Toggle } from "~/components/primitives";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
   type MobileNavigationId,
@@ -17,7 +18,7 @@ import { canonicalLink } from "~/lib/seo";
 import { trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
-import { submitPreference } from "~/routes/api.preference";
+import { submitPreference } from "~/lib/preference-submission.client";
 import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
@@ -65,7 +66,7 @@ export default function MoreIndexPage() {
     navigationBarContents,
     isAdmin,
   } = useOutletContext<RootOutletContext>();
-  const submit = useSubmit();
+  const { haloMode, setHaloMode } = useHaloMode();
   const { showSignIn } = useSignIn();
   const hasUnconsumedCoupons = currentUser
     ? currentUser.availableCouponCount > 0
@@ -89,8 +90,13 @@ export default function MoreIndexPage() {
   }));
   const toggleDarkMode = () => {
     const nextDarkMode = !darkMode;
-    submitPreference(submit, { darkMode: nextDarkMode });
+    void submitPreference({ darkMode: nextDarkMode }).catch(() => undefined);
     setDarkMode(() => nextDarkMode);
+  };
+  const toggleHaloMode = () => {
+    const nextHaloMode = !haloMode;
+    void submitPreference({ haloMode: nextHaloMode }).catch(() => undefined);
+    setHaloMode(nextHaloMode);
   };
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 pt-4 pb-6 lg:pt-2">
@@ -108,6 +114,8 @@ export default function MoreIndexPage() {
           onApply={setMobileNavigationIds}
           darkMode={darkMode}
           onToggleDarkMode={toggleDarkMode}
+          haloMode={haloMode}
+          onToggleHaloMode={toggleHaloMode}
         />
       )}
     </div>
@@ -380,12 +388,16 @@ function MoreMenuSections({
   onApply,
   darkMode,
   onToggleDarkMode,
+  haloMode,
+  onToggleHaloMode,
 }: {
   sections: { name: string; items: MoreActionItem[] }[];
   mobileNavigationIds: MobileNavigationPair;
   onApply: (ids: MobileNavigationPair) => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  haloMode: boolean;
+  onToggleHaloMode: () => void;
 }) {
   const [pendingItem, setPendingItem] = useState<MoreActionItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -415,15 +427,7 @@ function MoreMenuSections({
     setSaveError(null);
 
     try {
-      const response = await fetch("/api/preference", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mobileNavigationIds: nextIds }),
-      });
-      if (!response.ok) {
-        throw new Error(`preference status=${response.status}`);
-      }
+      const response = await submitPreference({ mobileNavigationIds: nextIds });
       const result: unknown = await response.json();
       if (!result || typeof result !== "object" || (result as { ok?: unknown }).ok !== true) {
         throw new Error("preference response was not successful");
@@ -456,7 +460,10 @@ function MoreMenuSections({
                   />
                 ))}
                 {section.name === "설정" ? (
-                  <MoreThemeMenuItem darkMode={darkMode} onToggle={onToggleDarkMode} />
+                  <Fragment key="mode-settings">
+                    <MoreThemeMenuItem darkMode={darkMode} onToggle={onToggleDarkMode} />
+                    <MoreHaloMenuItem haloMode={haloMode} onToggle={onToggleHaloMode} />
+                  </Fragment>
                 ) : null}
               </div>
             </div>
@@ -630,6 +637,32 @@ function MoreThemeMenuItem({ darkMode, onToggle }: { darkMode: boolean; onToggle
       </span>
       <span className="min-w-0 break-keep text-left">다크 모드</span>
     </button>
+  );
+}
+
+function MoreHaloMenuItem({ haloMode, onToggle }: { haloMode: boolean; onToggle: () => void }) {
+  const descriptionId = "more-halo-mode-description";
+  return (
+    <div className="relative flex min-h-12 w-full items-center gap-3 rounded-md px-2.5 py-2 text-base font-normal text-foreground/85 transition-colors hover:bg-neutral-200 hover:text-foreground dark:hover:bg-neutral-700">
+      <span className="flex size-6 shrink-0 items-center justify-center text-foreground/60">
+        <HaloModeIcon className="size-5" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col text-left">
+        <span className="break-keep">헤일로 모드</span>
+        <span id={descriptionId} className="text-xs leading-4 text-neutral-600 dark:text-muted-foreground">
+          학생·이벤트 썸네일을 가려요
+        </span>
+      </span>
+      <span className="-mr-2.5 flex w-11 shrink-0 justify-center">
+        <Toggle
+          initialState={haloMode}
+          aria-label="헤일로 모드"
+          aria-describedby={descriptionId}
+          className="my-0"
+          onChange={onToggle}
+        />
+      </span>
+    </div>
   );
 }
 

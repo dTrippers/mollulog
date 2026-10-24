@@ -2,10 +2,10 @@ import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { v2FocusRing } from "~/components/v2/layout/styles";
+import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
 import { HOME_BIRTHDAY_LIMIT, type HomeBirthday } from "~/domain/home-portal";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
 import type { Post } from "~/models/post";
 import type { HomeSourceResult } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile } from "./HomePrimitives";
@@ -53,12 +53,7 @@ export function HomeBirthdaysBlock({
               spread ? "w-full min-w-0" : "w-20",
             )}
           >
-            <img
-              src={studentImageUrl(birthday.uid)}
-              alt=""
-              loading="lazy"
-              className="size-14 rounded-full bg-v2-inset object-cover md:size-16"
-            />
+            <StudentPortrait uid={birthday.uid} className="size-14 rounded-full object-cover md:size-16" />
             <span className="w-full truncate text-xs text-v2-fg md:text-sm">
               {birthday.name.replace(/\(.*\)$/, "")}
             </span>

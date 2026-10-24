@@ -648,8 +648,14 @@ export default function IntegratedPlannerRoute() {
         ? {
             imageUrl: eventIconImageUrl(event.contentUid, "kr"),
             fallbackImageUrl: eventIconImageUrl(event.contentUid, "jp"),
+            imageIsTimeline: false,
           }
-        : { imageUrl: event.imageUrl, fallbackImageUrl: null };
+        : {
+            imageUrl: event.imageUrl,
+            fallbackImageUrl: null,
+            imageBlurhash: event.imageBlurhash,
+            imageIsTimeline: Boolean(event.imageUrl),
+          };
     const scheduleEventUids = new Set(
       loaderData.pyroxeneSchedules.flatMap((content) =>
         content.kind === "event" && !content.uid.startsWith("group:") && !content.tags.includes("main_story_reward")

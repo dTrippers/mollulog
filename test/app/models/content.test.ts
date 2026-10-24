@@ -77,6 +77,7 @@ function event(uid: string, startAt: string, endAt: string | null, runType: "fir
     endAt,
     endless: false,
     imageUrl: null,
+    imageBlurhash: null,
     videos: [],
     contentType: "event" as const,
     runType,

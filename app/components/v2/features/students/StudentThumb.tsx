@@ -1,9 +1,8 @@
 import { forwardRef } from "react";
 import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
-import { useImageFailure } from "../../primitives/use-image-failure";
 import { FavoriteLabel } from "./FavoriteLabel";
+import StudentPortrait from "./StudentPortrait";
 
 export type StudentThumbProps = {
   // Null while the student data is still being prepared. The thumbnail then shows a neutral placeholder.
@@ -50,8 +49,6 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   },
   ref,
 ) {
-  const imageSrc = studentUid ? studentImageUrl(studentUid) : null;
-  const image = useImageFailure(imageSrc);
   // The button's aria-label replaces the names of its children, so the favorite label's count and own state join the
   // button's own name. A hidden label (no count, no own state) adds nothing.
   const detailName = `${name}${variant ? `(${variant})` : ""} 상세`;
@@ -59,17 +56,12 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   const frameClassName = "relative block aspect-[5/6] w-full overflow-hidden rounded-md bg-v2-inset";
   const frame = (
     <>
-      {imageSrc && !image.failed ? (
-        <img
-          ref={image.ref}
-          src={imageSrc}
-          alt=""
-          loading="lazy"
-          decoding="async"
-          onError={image.onError}
-          className="size-full object-cover"
-        />
-      ) : null}
+      <StudentPortrait
+        uid={studentUid}
+        className="size-full object-cover"
+        haloAboveBand={showRecruitmentLabel}
+        haloScale="72%"
+      />
       {showRecruitmentLabel ? (
         <span
           aria-hidden="true"

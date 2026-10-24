@@ -32,6 +32,8 @@ export type EventListItem = {
   name: string;
   imageUrl: string | null;
   fallbackImageUrl: string | null;
+  timelineImageUrl: string | null;
+  timelineImageBlurhash: string | null;
   latestTimelineUid: string;
   schedules: Partial<Record<RunType, EventListSchedule>>;
 };
@@ -123,7 +125,7 @@ async function getEventListCachedItems(
   return fetchRouteCached<CachedEventListItem[]>(
     env,
     ctx,
-    cacheKey("route", "events", 3, "list"),
+    cacheKey("route", "events", 4, "list"),
     async () => {
       const [eventContents, timelineContents] = await Promise.all([
         getEventContentsList(env, forceRefresh),
@@ -135,6 +137,7 @@ async function getEventListCachedItems(
         {
           first: { name: string; startAt: UtcIsoString };
           latest: { uid: string; startAt: UtcIsoString };
+          timelineImage: { imageUrl: string; imageBlurhash: string | null; startAt: UtcIsoString } | null;
         }
       >();
       for (const content of timelineContents) {
@@ -145,6 +148,9 @@ async function getEventListCachedItems(
           timelineContentByContentUid.set(content.contentUid, {
             first: { name: content.name, startAt: content.startAt },
             latest: { uid: content.uid, startAt: content.startAt },
+            timelineImage: content.imageUrl
+              ? { imageUrl: content.imageUrl, imageBlurhash: content.imageBlurhash, startAt: content.startAt }
+              : null,
           });
           continue;
         }
@@ -155,6 +161,17 @@ async function getEventListCachedItems(
 
         if (compareInstantDesc(content.startAt, existing.latest.startAt) < 0) {
           existing.latest = { uid: content.uid, startAt: content.startAt };
+        }
+
+        if (
+          content.imageUrl &&
+          (!existing.timelineImage || compareInstantDesc(content.startAt, existing.timelineImage.startAt) < 0)
+        ) {
+          existing.timelineImage = {
+            imageUrl: content.imageUrl,
+            imageBlurhash: content.imageBlurhash,
+            startAt: content.startAt,
+          };
         }
       }
 
@@ -170,6 +187,8 @@ async function getEventListCachedItems(
             name: timelineContent.first.name || eventContent.name,
             imageUrl: getEventLogoImageUrl(eventContent.uid, "kr"),
             fallbackImageUrl: getEventLogoImageUrl(eventContent.uid, "jp"),
+            timelineImageUrl: timelineContent.timelineImage?.imageUrl ?? null,
+            timelineImageBlurhash: timelineContent.timelineImage?.imageBlurhash ?? null,
             latestTimelineUid: timelineContent.latest.uid,
             schedules: groupEventListSchedules(eventContent.schedules),
           };

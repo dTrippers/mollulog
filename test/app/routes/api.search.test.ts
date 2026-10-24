@@ -7,7 +7,7 @@ jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(() => Promise.resolve(null)),
 }));
 
-jest.mock("~/components/features/layout/navigation-menu", () => ({
+jest.mock("~/components/v2/layout/navigation/navigation-menu", () => ({
   getSearchableMenuItems: ({
     currentUsername,
     isSignedIn,

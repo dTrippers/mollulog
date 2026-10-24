@@ -263,6 +263,8 @@ describe("getEventList", () => {
         name: "열 번째 이벤트",
         imageUrl: "https://assets.baql.net/images/events/logo/10_kr.webp",
         fallbackImageUrl: "https://assets.baql.net/images/events/logo/10_jp.webp",
+        timelineImageUrl: "https://assets.example/events/10-rerun.webp",
+        timelineImageBlurhash: null,
         latestTimelineUid: "event-10-rerun",
         schedules: {
           first: {
@@ -289,7 +291,7 @@ describe("getEventList", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::events::v3::list",
+      "route::events::v4::list",
       expect.any(Function),
       false,
     );
@@ -308,6 +310,8 @@ describe("getEventList", () => {
         name: "스무 번째 이벤트",
         imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
         fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        timelineImageUrl: null,
+        timelineImageBlurhash: null,
         latestTimelineUid: "event-20",
         schedules: {
           first: {
@@ -326,6 +330,8 @@ describe("getEventList", () => {
         name: "스무 번째 이벤트",
         imageUrl: "https://assets.baql.net/images/events/logo/20_kr.webp",
         fallbackImageUrl: "https://assets.baql.net/images/events/logo/20_jp.webp",
+        timelineImageUrl: null,
+        timelineImageBlurhash: null,
         latestTimelineUid: "event-20",
         schedules: {
           first: {
@@ -340,7 +346,7 @@ describe("getEventList", () => {
     expect(mockedFetchRouteCached).toHaveBeenCalledWith(
       env,
       undefined,
-      "route::events::v3::list",
+      "route::events::v4::list",
       expect.any(Function),
       true,
     );

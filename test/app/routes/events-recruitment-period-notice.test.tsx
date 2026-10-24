@@ -98,6 +98,7 @@ const timelineContent = {
   endAt: "2030-01-20T00:00:00.000Z",
   endless: false,
   imageUrl: null,
+  imageBlurhash: null,
   videos: [],
   contentType: "event",
   runType: "first",

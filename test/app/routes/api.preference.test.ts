@@ -1,7 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { MAX_NAVIGATION_FAVORITE_IDS } from "~/domain/navigation-favorites";
 import { getPreference, serializePreference } from "../../../app/auth/preference.server";
-import { action, submitPreference } from "../../../app/routes/api.preference";
+import { submitPreference } from "../../../app/lib/preference-submission.client";
+import { action } from "../../../app/routes/api.preference";
 
 const env = { SESSION_SECRET: "test-secret" } as Env;
 
@@ -21,24 +22,49 @@ async function callAction(body: Record<string, unknown>, cookie?: string) {
 }
 
 describe("api.preference", () => {
-  it("submits preference updates without navigating to the JSON endpoint", async () => {
-    const calls: unknown[][] = [];
-    const submit = (...args: unknown[]) => calls.push(args);
+  it("serializes same-tab preference requests", async () => {
+    const originalFetch = globalThis.fetch;
+    let activeRequests = 0;
+    let maxActiveRequests = 0;
+    const bodies: string[] = [];
+    globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      activeRequests += 1;
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests);
+      bodies.push(String(init?.body));
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      activeRequests -= 1;
+      return new Response(null, { status: 204 });
+    }) as typeof fetch;
 
-    await submitPreference(submit as never, { darkMode: false });
+    try {
+      await Promise.all([submitPreference({ darkMode: false }), submitPreference({ haloMode: true })]);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
 
-    expect(calls).toEqual([
-      [
-        { darkMode: false },
-        { method: "post", action: "/api/preference", encType: "application/json", navigate: false },
-      ],
-    ]);
+    expect(maxActiveRequests).toBe(1);
+    expect(bodies).toEqual(['{"darkMode":false}', '{"haloMode":true}']);
   });
 
   it("uses dark mode by default when no preference cookie exists", async () => {
     const preference = await getPreference(env, new Request("https://mollulog.net"));
 
     expect(preference.darkMode).toBe(true);
+    expect(preference.haloMode).toBe(false);
+  });
+
+  it("persists halo mode and merges later preference updates", async () => {
+    const firstResponse = await callAction({ haloMode: true });
+    const firstCookie = firstResponse.headers.get("Set-Cookie");
+    const secondResponse = await callAction({ darkMode: false }, firstCookie ?? undefined);
+    const secondCookie = secondResponse.headers.get("Set-Cookie");
+    const preference = await getPreference(
+      env,
+      new Request("https://mollulog.net", { headers: secondCookie ? { Cookie: secondCookie } : {} }),
+    );
+
+    expect(preference.haloMode).toBe(true);
+    expect(preference.darkMode).toBe(false);
   });
 
   it("keeps an explicit light mode preference", async () => {

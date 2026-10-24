@@ -29,36 +29,37 @@ import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
-import { studentImageUrl, studentStandingImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
+import { studentStandingImageUrl } from "~/models/assets";
 
 const OFFICIAL_NOTICE_URL = "https://forum.nexon.com/bluearchive/board_view?board=1018&thread=3123030";
 const NAMU_WIKI_URL =
   "https://namu.wiki/w/2025%EB%85%84%20%EB%B8%94%EB%A3%A8%20%EC%95%84%EC%B9%B4%EC%9D%B4%EB%B8%8C%20%EC%84%9C%EB%B2%84%20%ED%95%B4%ED%82%B9%20%EC%82%AC%EA%B1%B4";
 const KOYUKI_IMAGE_URL = studentStandingImageUrl("10063");
-const KOYUKI_AVATAR_URL = studentImageUrl("10063");
-const YUUKA_AVATAR_URL = studentImageUrl("13010");
-const KAYOKO_AVATAR_URL = studentImageUrl("13005");
-const MIYAKO_AVATAR_URL = studentImageUrl("10038");
+const KOYUKI_UID = "10063";
+const YUUKA_UID = "13010";
+const KAYOKO_UID = "13005";
+const MIYAKO_UID = "10038";
 
 const MOMO_TALK_CONTACTS = [
   {
     name: "코유키",
-    avatarUrl: KOYUKI_AVATAR_URL,
+    avatarUid: KOYUKI_UID,
     preview: "선생님! 이번에 오디세이아 학원 이벤트가 공개된대요!",
   },
   {
     name: "유우카",
-    avatarUrl: YUUKA_AVATAR_URL,
+    avatarUid: YUUKA_UID,
     preview: "선생님, 이번에 청휘석을 받을 수 있는 이벤트에 당첨되셨어요.",
   },
   {
     name: "카요코",
-    avatarUrl: KAYOKO_AVATAR_URL,
+    avatarUid: KAYOKO_UID,
     preview: "선생, 샬레 앞에서 못 보던 고양이를 발견했어.",
   },
   {
     name: "미야코",
-    avatarUrl: MIYAKO_AVATAR_URL,
+    avatarUid: MIYAKO_UID,
     preview: "이 정도의 공간이라면, 저 혼자서도 제압할 수 있겠군요⋯⋯.",
   },
 ] as const;
@@ -144,7 +145,7 @@ const QUIZ_SCENARIOS = [
   {
     category: "정보 요구",
     speaker: "유우카",
-    avatarUrl: YUUKA_AVATAR_URL,
+    avatarUid: YUUKA_UID,
     messages: [
       { kind: "text", text: "선생님, 이번에 청휘석을 받을 수 있는 이벤트에 당첨되셨어요." },
       {
@@ -163,7 +164,7 @@ const QUIZ_SCENARIOS = [
   {
     category: "파일 다운로드",
     speaker: "카요코",
-    avatarUrl: KAYOKO_AVATAR_URL,
+    avatarUid: KAYOKO_UID,
     messages: [
       { kind: "text", text: "선생, 샬레 앞에서 못 보던 고양이를 발견했어." },
       { kind: "file", name: "IMG_0317.jpg" },
@@ -179,7 +180,7 @@ const QUIZ_SCENARIOS = [
   {
     category: "주소 확인",
     speaker: "코유키",
-    avatarUrl: KOYUKI_AVATAR_URL,
+    avatarUid: KOYUKI_UID,
     messages: [
       { kind: "text", text: "선생님! 이번에 오디세이아 학원 이벤트가 공개된대요! 니하하!" },
       { kind: "link", text: "https://m\u043Ellulog.net/futures" },
@@ -532,7 +533,7 @@ export default function SecurityCampaign() {
                 <MomoTalk
                   messages={currentScenario.messages}
                   speaker={currentScenario.speaker}
-                  avatarUrl={currentScenario.avatarUrl}
+                  avatarUid={currentScenario.avatarUid}
                   question={currentScenario.question}
                   choices={currentScenario.choices}
                   selectedChoiceId={selectedChoiceId}
@@ -703,7 +704,7 @@ export default function SecurityCampaign() {
 function MomoTalk({
   messages,
   speaker,
-  avatarUrl,
+  avatarUid,
   question,
   choices,
   selectedChoiceId,
@@ -711,7 +712,7 @@ function MomoTalk({
 }: {
   messages: readonly QuizMessage[];
   speaker: string;
-  avatarUrl: string;
+  avatarUid: string;
   question: string;
   choices: readonly { id: string; label: string; correct: boolean }[];
   selectedChoiceId: string | null;
@@ -745,8 +746,8 @@ function MomoTalk({
               <span className="rounded bg-white px-2 py-1 text-xs text-slate-500 shadow-xs">안 읽음</span>
             </div>
             <div className="flex gap-3 bg-sky-100 px-3 py-3">
-              <img
-                src={avatarUrl}
+              <StudentPortrait
+                uid={avatarUid}
                 alt=""
                 className="aspect-square size-10 shrink-0 rounded-full bg-white object-cover"
               />
@@ -759,8 +760,8 @@ function MomoTalk({
             </div>
             {secondaryContacts.map((contact) => (
               <div key={contact.name} className="flex gap-3 border-b border-slate-200 bg-white px-3 py-3">
-                <img
-                  src={contact.avatarUrl}
+                <StudentPortrait
+                  uid={contact.avatarUid}
                   alt=""
                   className="aspect-square size-10 shrink-0 rounded-full bg-slate-100 object-cover"
                 />
@@ -787,8 +788,8 @@ function MomoTalk({
                     }
                     className="flex items-start gap-2"
                   >
-                    <img
-                      src={avatarUrl}
+                    <StudentPortrait
+                      uid={avatarUid}
                       alt={speaker}
                       className="aspect-square size-9 shrink-0 rounded-full bg-slate-100 object-cover"
                     />

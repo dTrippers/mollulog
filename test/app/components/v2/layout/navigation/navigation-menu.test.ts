@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { NAVIGATION_ICONS } from "~/components/features/layout/navigation-icons";
+import { NAVIGATION_ICONS } from "~/components/v2/layout/navigation/navigation-icons";
 import {
   getDesktopNavigation,
   getMobileNavigationItems,
@@ -9,7 +9,7 @@ import {
   getNavigationFavoriteItems,
   getSearchableMenuItems,
   isAccountNavigationActive,
-} from "~/components/features/layout/navigation-menu";
+} from "~/components/v2/layout/navigation/navigation-menu";
 import { getAvailableNavigationFavorites } from "~/domain/navigation-favorites";
 import { NAVIGATION_MENU_IDS, resolveMenuBadgeOverrides } from "~/domain/navigation-menu-badges";
 

@@ -33,6 +33,7 @@ export type TimelineContent = {
   endAt: UtcIsoString | null;
   endless: boolean;
   imageUrl: string | null;
+  imageBlurhash: string | null;
   videos: TimelineContentVideo[];
   contentType: TimelineContentType;
   runType: RunType;

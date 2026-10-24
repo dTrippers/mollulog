@@ -16,7 +16,8 @@ import {
 } from "~/domain/integrated-planner";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import { formatInstant, getInstantTime } from "~/lib/date-time";
-import { resourceImageUrl, studentImageUrl } from "~/models/assets";
+import { resourceImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import {
   hasPlannerPlanMark,
   type PlannerPlanMarkState,
@@ -185,8 +186,9 @@ function PlannerRecruitmentAvatars({ students }: { students: ReturnType<typeof u
           content={student.name}
           className={`inline-flex shrink-0 ${index > 0 ? "-ml-1.5" : ""}`}
         >
-          <img
-            src={studentImageUrl(student.imageUid ?? student.uid)}
+          <StudentPortrait
+            uid={student.uid}
+            imageUid={student.imageUid}
             alt={student.name}
             className="size-5 shrink-0 rounded-full bg-muted object-contain object-top ring-1 ring-card"
             loading="lazy"

@@ -1,42 +1,47 @@
-import { XMarkIcon } from "@heroicons/react/16/solid";
+import { InformationCircleIcon } from "@heroicons/react/16/solid";
 import {
   CalendarIcon as CalendarIconOutline,
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   ChevronDownIcon,
+  ChevronRightIcon,
   MagnifyingGlassIcon,
   RectangleGroupIcon as RectangleGroupIconOutline,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
-import { ProfileImage } from "~/components/primitives";
+import { Link, useLocation, useMatches, useNavigate } from "react-router";
+import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
+import { FeatureHint } from "~/components/v2/features/feature-hint";
+import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
+import { Skeleton } from "~/components/v2/primitives/Skeleton";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useSignIn } from "~/contexts/SignInProvider";
-import { DEFAULT_MOBILE_NAVIGATION_IDS, type MobileNavigationPair } from "~/domain/mobile-navigation";
 import {
-  normalizeDesktopNavigationExpandedGroups,
   type DesktopNavigationExpandedGroups,
   type DesktopNavigationPreferenceGroupId,
+  normalizeDesktopNavigationExpandedGroups,
 } from "~/domain/desktop-navigation-preference";
-import type { NavigationMenuId, ResolvedMenuBadgeOverride } from "~/domain/navigation-menu-badges";
+import { DEFAULT_MOBILE_NAVIGATION_IDS, type MobileNavigationPair } from "~/domain/mobile-navigation";
 import {
   getAvailableNavigationFavorites,
   normalizeNavigationFavoriteIds,
   toggleNavigationFavoriteId,
 } from "~/domain/navigation-favorites";
+import type { NavigationMenuId, ResolvedMenuBadgeOverride } from "~/domain/navigation-menu-badges";
 import type { SiteBanner as SiteBannerData } from "~/domain/site-banner";
 import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
-import { cn } from "~/lib/utils";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { submitPreference } from "~/lib/preference-submission.client";
+import { cn } from "~/lib/utils";
 import { timelineContentTypeLocale } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
-import { submitPreference } from "~/routes/api.preference";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
+import { v2FocusRing } from "../styles";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
-import NotificationHistoryPopover from "./NotificationHistoryPopover";
 import { NavigationAccountPopover } from "./NavigationAccountPopover";
 import { NavigationFlyout } from "./NavigationFlyout";
 import { NavigationFavoriteMenuRow, NavigationMenuRow } from "./NavigationMenuRow";
 import { NavigationRail, type NavigationRailGroup } from "./NavigationRail";
+import NotificationHistoryPopover from "./NotificationHistoryPopover";
 import {
   getAccountNavigationActions,
   getDesktopNavigation,
@@ -47,6 +52,7 @@ import {
   NAVIGATION_GROUPS,
   type NavigationItem,
 } from "./navigation-menu";
+import { OverlayScrollArea } from "./OverlayScrollArea";
 import { SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
 
 type NavigationBarProps = {
@@ -74,20 +80,21 @@ type NavigationSearchVariant = "desktop" | "mobile" | "rail";
 const FAVORITES_EMPTY_HINT = "☆를 눌러 즐겨찾기에 추가";
 
 export function NavigationFavoriteEmptyHint() {
-  return <p className="px-2 py-2 text-xs text-muted-foreground">{FAVORITES_EMPTY_HINT}</p>;
+  return <p className="px-v2-row-x py-v2-row-y text-xs text-v2-fg-secondary">{FAVORITES_EMPTY_HINT}</p>;
 }
 
-function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
+export function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const fetcher = useFetcher<SearchResponse>();
-  const fetcherLoad = fetcher.load;
+  const requestIdRef = useRef(0);
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isPopupOpen, setIsPopupOpen] = useState(false);
-  const previousFetcherStateRef = useRef(fetcher.state);
-  const pendingSearchSequenceRef = useRef(0);
-  const reportedSearchSequenceRef = useRef(0);
+  const [searchResult, setSearchResult] = useState<{
+    query: string;
+    state: "loading" | "loaded" | "error";
+    results: SearchResult[];
+  } | null>(null);
 
   useEffect(() => {
     if (variant === "mobile" || variant === "rail") {
@@ -105,30 +112,37 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
 
   useEffect(() => {
     if (!debouncedQuery) {
+      setSearchResult(null);
       return;
     }
 
-    fetcherLoad(`/api/search?q=${encodeURIComponent(debouncedQuery)}`);
-    pendingSearchSequenceRef.current += 1;
-    setIsPopupOpen(true);
-  }, [debouncedQuery, fetcherLoad]);
+    const requestId = requestIdRef.current + 1;
+    requestIdRef.current = requestId;
+    const controller = new AbortController();
+    setSearchResult({ query: debouncedQuery, state: "loading", results: [] });
 
-  useEffect(() => {
-    const completed = previousFetcherStateRef.current !== "idle" && fetcher.state === "idle";
-    previousFetcherStateRef.current = fetcher.state;
-    if (
-      !completed ||
-      reportedSearchSequenceRef.current === pendingSearchSequenceRef.current ||
-      !fetcher.data ||
-      !Array.isArray(fetcher.data.results)
-    ) {
-      return;
-    }
-    reportedSearchSequenceRef.current = pendingSearchSequenceRef.current;
-    const resultCount = fetcher.data?.results.length ?? 0;
-    const resultBucket = resultCount === 0 ? "0" : resultCount <= 5 ? "1-5" : "6+";
-    trackGoogleAnalyticsEvent("search", { scope: "global", result_bucket: resultBucket });
-  }, [fetcher.data, fetcher.state]);
+    void fetch(`/api/search?q=${encodeURIComponent(debouncedQuery)}`, { signal: controller.signal })
+      .then(async (response) => {
+        const body: unknown = await response.json().catch(() => null);
+        if (!response.ok || !isSearchResponse(body)) {
+          throw new Error("Search request failed");
+        }
+        return body;
+      })
+      .then((response) => {
+        if (requestIdRef.current !== requestId) return;
+        setSearchResult({ query: debouncedQuery, state: "loaded", results: response.results });
+        const resultCount = response.results.length;
+        const resultBucket = resultCount === 0 ? "0" : resultCount <= 5 ? "1-5" : "6+";
+        trackGoogleAnalyticsEvent("search", { scope: "global", result_bucket: resultBucket });
+      })
+      .catch(() => {
+        if (controller.signal.aborted || requestIdRef.current !== requestId) return;
+        setSearchResult({ query: debouncedQuery, state: "error", results: [] });
+      });
+
+    return () => controller.abort();
+  }, [debouncedQuery]);
 
   useEffect(() => {
     if (!isPopupOpen) {
@@ -157,27 +171,19 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
     };
   }, [isPopupOpen, variant]);
 
-  const results = fetcher.data?.results ?? [];
   const hasQuery = Boolean(query.trim());
-  const showPopup = Boolean(isPopupOpen && (!hasQuery || fetcher.data));
-  const isLoading = fetcher.state !== "idle";
+  const matchingSearchResult = searchResult?.query === query.trim() ? searchResult : null;
 
   const inputClassName = cn(
-    "w-full rounded-md bg-background py-2 pr-3 pl-9 text-foreground outline-none placeholder:text-muted-foreground/70 focus:ring-2 focus:ring-ring/30",
+    "w-full rounded-md bg-v2-surface py-2 pr-3 pl-9 text-v2-fg placeholder:text-v2-fg-tertiary",
     variant === "desktop" ? "text-xs" : "text-sm",
+    v2FocusRing,
   );
 
   return (
     <div ref={rootRef} className={variant === "mobile" ? "relative w-full" : "relative"}>
-      <div className="pointer-events-none absolute left-2.5 top-1/2 flex size-4 -translate-y-1/2 items-center justify-center text-muted-foreground">
-        {isLoading ? (
-          <span
-            className="inline-block size-4 animate-spin rounded-full border-2 border-current border-t-transparent"
-            aria-hidden="true"
-          />
-        ) : (
-          <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
-        )}
+      <div className="pointer-events-none absolute inset-y-0 left-2.5 my-auto flex size-4 items-center justify-center text-v2-fg-tertiary">
+        <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
       </div>
       <input
         ref={inputRef}
@@ -195,17 +201,17 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
         aria-label="전역 검색"
       />
 
-      {showPopup && (
+      {isPopupOpen && hasQuery && matchingSearchResult && (
         <SearchResultPopup
-          results={results}
-          isEmpty={!hasQuery}
+          results={matchingSearchResult.results}
+          state={matchingSearchResult.state}
           onResultClick={() => setIsPopupOpen(false)}
           className={
             variant === "rail"
               ? "relative -mx-2 mt-2 max-h-[calc(100dvh-8rem)] w-96 overflow-y-auto"
               : variant === "desktop"
-                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden popover-surface"
-                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden popover-surface"
+                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm"
+                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm"
           }
         />
       )}
@@ -215,49 +221,55 @@ function NavigationSearch({ variant }: { variant: NavigationSearchVariant }) {
 
 function SearchResultPopup({
   results,
-  isEmpty,
+  state,
   onResultClick,
   className,
 }: {
   results: SearchResult[];
-  isEmpty: boolean;
+  state: "loading" | "loaded" | "error";
   onResultClick: () => void;
   className: string;
 }) {
   return (
     <div className={className}>
-      {isEmpty ? (
-        <SearchEmptyView />
+      {state === "loading" ? (
+        <SearchLoadingView />
+      ) : state === "error" ? (
+        <StatusNotice tone="danger" className="p-v2-row-y px-v2-block-p">
+          검색하지 못했어요
+        </StatusNotice>
       ) : results.length > 0 ? (
         results.map((result) => (
           <Link
             key={`${result.type}:${result.to}`}
             to={result.to}
-            className="flex items-center gap-2 px-3 py-2 text-sm text-foreground transition-colors hover:bg-muted"
+            className={cn(
+              "flex items-center gap-2 px-v2-row-x py-v2-row-y text-sm text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+              v2FocusRing,
+            )}
             onClick={onResultClick}
           >
             <SearchResultBadge result={result} />
             <div className="min-w-0 flex-1">
-              <div className="text-xs text-muted-foreground">{getSearchResultLabel(result)}</div>
+              {result.type === "event" ? (
+                <div className="text-xs text-v2-fg-tertiary">{getSearchResultLabel(result)}</div>
+              ) : null}
               <div className="whitespace-pre-line">{result.name}</div>
             </div>
           </Link>
         ))
       ) : (
-        <p className="px-3 py-3 text-sm text-muted-foreground">결과가 없어요</p>
+        <p className="px-v2-block-p py-v2-row-y text-sm text-v2-fg-secondary">결과가 없어요</p>
       )}
     </div>
   );
 }
 
-function SearchEmptyView() {
+function SearchLoadingView() {
   return (
-    <div className="px-4 py-4 text-center text-sm">
-      <div className="mx-auto flex size-8 items-center justify-center rounded-md bg-muted text-muted-foreground">
-        <MagnifyingGlassIcon className="size-4" strokeWidth={2} />
-      </div>
-      <p className="mt-2 font-medium text-foreground">학생, 이벤트, 기능을 검색할 수 있어요</p>
-      <p className="mt-1 text-xs text-muted-foreground">검색어를 입력해 원하는 항목을 찾아보세요</p>
+    <div className="space-y-v2-list-gap p-v2-row-x" role="status" aria-label="검색 중">
+      <Skeleton className="h-4 w-4/5" />
+      <Skeleton className="h-3 w-2/5" />
     </div>
   );
 }
@@ -265,11 +277,12 @@ function SearchEmptyView() {
 function SearchResultBadge({ result }: { result: SearchResult }) {
   if (result.type === "student") {
     return (
-      <img
-        src={studentImageUrl(result.uid)}
+      <StudentPortrait
+        uid={result.uid}
         alt=""
-        className="size-6 shrink-0 rounded-md bg-muted object-cover object-center dark:opacity-90"
+        className="size-6 shrink-0 rounded-md bg-v2-inset object-cover object-center"
         loading="lazy"
+        haloScale="72%"
       />
     );
   }
@@ -277,22 +290,23 @@ function SearchResultBadge({ result }: { result: SearchResult }) {
   const Icon = result.type === "menu" ? RectangleGroupIconOutline : CalendarIconOutline;
 
   return (
-    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+    <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-v2-inset text-v2-fg-tertiary">
       <Icon className="size-4" strokeWidth={2} />
     </span>
   );
 }
 
-function getSearchResultLabel(result: SearchResult): string {
-  if (result.type === "menu") {
-    return "기능";
-  }
-
-  if (result.type === "student") {
-    return "학생";
-  }
-
+function getSearchResultLabel(result: Extract<SearchResult, { type: "event" }>): string {
   return `${timelineContentTypeLocale[result.contentType]} · ${parseUtcTimestamp(result.startAt).format("YYYY-MM-DD")}`;
+}
+
+function isSearchResponse(value: unknown): value is SearchResponse {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value) &&
+    Array.isArray((value as SearchResponse).results)
+  );
 }
 
 function useNavigationFavorites(initialFavoriteIds: string[]) {
@@ -310,12 +324,7 @@ function useNavigationFavorites(initialFavoriteIds: string[]) {
     pendingFavoriteIdsRef.current = null;
     isPersistingRef.current = true;
 
-    void fetch("/api/preference", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favoriteNavigationIds }),
-    })
+    void submitPreference({ favoriteNavigationIds })
       .catch(() => undefined)
       .finally(() => {
         isPersistingRef.current = false;
@@ -358,7 +367,6 @@ export default function NavigationBar({
   const pathname = matches[matches.length - 1]?.pathname ?? location.pathname;
   const searchResetKey = `${location.pathname}\n${location.search}`;
   const { showSignIn } = useSignIn();
-  const submit = useSubmit();
   const navigationOptions = {
     pathname,
     upcomingEvent,
@@ -389,6 +397,7 @@ export default function NavigationBar({
   } | null>(null);
   const [railNotificationOpen, setRailNotificationOpen] = useState(false);
   const [expandedAccountOpen, setExpandedAccountOpen] = useState(false);
+  const [expandedNotificationOpen, setExpandedNotificationOpen] = useState(false);
   const [railAccountOpen, setRailAccountOpen] = useState(false);
 
   useEffect(() => {
@@ -408,15 +417,13 @@ export default function NavigationBar({
   const desktopBannerVisible =
     siteBanner !== null && shouldRenderGlobalSiteBanner(siteBanner, "desktop_navigation", pathname);
 
-  const openFlyout = useCallback(
-    (flyout: NonNullable<typeof activeFlyout>) => {
-      setRailNotificationOpen(false);
-      setRailAccountOpen(false);
-      setExpandedAccountOpen(false);
-      setActiveFlyout((current) => (current?.id === flyout.id ? null : flyout));
-    },
-    [],
-  );
+  const openFlyout = useCallback((flyout: NonNullable<typeof activeFlyout>) => {
+    setRailNotificationOpen(false);
+    setRailAccountOpen(false);
+    setExpandedAccountOpen(false);
+    setExpandedNotificationOpen(false);
+    setActiveFlyout((current) => (current?.id === flyout.id ? null : flyout));
+  }, []);
   const closeFlyout = useCallback(
     (returnFocus = false) => {
       const anchorEl = activeFlyout?.anchorEl;
@@ -435,8 +442,7 @@ export default function NavigationBar({
     [openFlyout],
   );
   const handleOpenBanner = useCallback(
-    (anchorEl: HTMLButtonElement) =>
-      openFlyout({ id: "site-banner", title: "사이트 배너", kind: "banner", anchorEl }),
+    (anchorEl: HTMLButtonElement) => openFlyout({ id: "site-banner", title: "사이트 배너", kind: "banner", anchorEl }),
     [openFlyout],
   );
   const handleRailNotificationChange = useCallback((isOpen: boolean) => {
@@ -445,6 +451,16 @@ export default function NavigationBar({
       setActiveFlyout(null);
       setRailAccountOpen(false);
       setExpandedAccountOpen(false);
+      setExpandedNotificationOpen(false);
+    }
+  }, []);
+  const handleExpandedNotificationChange = useCallback((isOpen: boolean) => {
+    setExpandedNotificationOpen(isOpen);
+    if (isOpen) {
+      setRailNotificationOpen(false);
+      setRailAccountOpen(false);
+      setExpandedAccountOpen(false);
+      setActiveFlyout(null);
     }
   }, []);
   const handleRailAccountChange = useCallback((isOpen: boolean) => {
@@ -453,6 +469,7 @@ export default function NavigationBar({
       setActiveFlyout(null);
       setRailNotificationOpen(false);
       setExpandedAccountOpen(false);
+      setExpandedNotificationOpen(false);
     }
   }, []);
   const handleExpandedAccountChange = useCallback((isOpen: boolean) => {
@@ -460,6 +477,7 @@ export default function NavigationBar({
     if (isOpen) {
       setRailNotificationOpen(false);
       setRailAccountOpen(false);
+      setExpandedNotificationOpen(false);
       setActiveFlyout(null);
     }
   }, []);
@@ -474,13 +492,14 @@ export default function NavigationBar({
     setRailNotificationOpen(false);
     setRailAccountOpen(false);
     setExpandedAccountOpen(false);
-    submitPreference(submit, { desktopNavigationCollapsed: nextCollapsed });
+    setExpandedNotificationOpen(false);
+    void submitPreference({ desktopNavigationCollapsed: nextCollapsed }).catch(() => undefined);
   };
 
   const setGroupExpanded = (groupId: DesktopNavigationPreferenceGroupId, expanded: boolean) => {
     const nextExpandedGroups = { ...expandedGroups, [groupId]: expanded };
     setExpandedGroups(nextExpandedGroups);
-    submitPreference(submit, { desktopNavigationExpandedGroups: nextExpandedGroups });
+    void submitPreference({ desktopNavigationExpandedGroups: nextExpandedGroups }).catch(() => undefined);
   };
 
   const groupIsExpanded = (groupId: DesktopNavigationPreferenceGroupId) => expandedGroups[groupId] ?? true;
@@ -506,14 +525,21 @@ export default function NavigationBar({
       </div>
       <button
         type="button"
-        className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className={cn(
+          "inline-flex size-8 shrink-0 items-center justify-center rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          v2FocusRing,
+        )}
         aria-label="메뉴 접기/펼치기"
         aria-expanded={!expandedToggleCollapsed}
         title={expandedToggleCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
         data-navigation-toggle-variant="expanded"
         onClick={() => handleCollapseToggle(expandedToggleCollapsed)}
       >
-        {expandedToggleCollapsed ? <ChevronDoubleRightIcon className="size-4" aria-hidden="true" /> : <ChevronDoubleLeftIcon className="size-4" aria-hidden="true" />}
+        {expandedToggleCollapsed ? (
+          <ChevronDoubleRightIcon className="size-4" aria-hidden="true" />
+        ) : (
+          <ChevronDoubleLeftIcon className="size-4" aria-hidden="true" />
+        )}
       </button>
     </>
   );
@@ -534,14 +560,21 @@ export default function NavigationBar({
       />
       <button
         type="button"
-        className="flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        className={cn(
+          "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          v2FocusRing,
+        )}
         aria-label="메뉴 접기/펼치기"
         aria-expanded={!railToggleCollapsed}
         title={railToggleCollapsed ? "메뉴 펼치기" : "메뉴 접기"}
         data-navigation-toggle-variant="rail"
         onClick={() => handleCollapseToggle(railToggleCollapsed)}
       >
-        {railToggleCollapsed ? <ChevronDoubleRightIcon className="size-5" aria-hidden="true" /> : <ChevronDoubleLeftIcon className="size-5" aria-hidden="true" />}
+        {railToggleCollapsed ? (
+          <ChevronDoubleRightIcon className="size-5" aria-hidden="true" />
+        ) : (
+          <ChevronDoubleLeftIcon className="size-5" aria-hidden="true" />
+        )}
       </button>
     </>
   );
@@ -550,12 +583,18 @@ export default function NavigationBar({
     <>
       <aside
         data-desktop-navigation-mode={navigationMode}
-        className="mllg-navigation-shell hidden h-screen shrink-0 flex-col overflow-visible bg-sidebar shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20 lg:relative lg:z-layer-navigation lg:flex transition-[width] duration-200 motion-reduce:transition-none"
+        className="mllg-navigation-shell hidden h-screen shrink-0 flex-col overflow-visible bg-v2-nav lg:relative lg:z-layer-navigation lg:flex"
       >
-        <div data-navigation-variant="expanded" className="mllg-navigation-expanded flex h-full min-h-0 min-w-0 flex-col">
+        <div
+          data-navigation-variant="expanded"
+          className="mllg-navigation-expanded flex h-full min-h-0 min-w-0 flex-col"
+        >
           <Link
             to="/"
-            className="flex h-14 shrink-0 items-center gap-1 px-3 transition-opacity duration-150 hover:opacity-80 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/30 motion-reduce:transition-none"
+            className={cn(
+              "flex h-14 shrink-0 items-center gap-1 px-3 transition-opacity duration-v2-fast ease-v2-standard hover:opacity-80",
+              v2FocusRing,
+            )}
             aria-label="몰루로그 홈으로 이동"
           >
             <img
@@ -563,7 +602,7 @@ export default function NavigationBar({
               alt="몰루로그 로고"
               className="h-9 object-cover"
             />
-            <span className="pt-1 font-ingame text-sm font-light text-foreground">몰루로그</span>
+            <span className="pt-1 font-ingame text-sm font-light text-v2-fg">몰루로그</span>
           </Link>
 
           <div className="flex shrink-0 items-center gap-2 px-3 pt-3 pb-2">
@@ -575,6 +614,8 @@ export default function NavigationBar({
                 placement="desktop"
                 unreadCount={localUnreadNotificationCount}
                 onUnreadCountChange={setLocalUnreadNotificationCount}
+                isOpen={expandedNotificationOpen}
+                onOpenChange={handleExpandedNotificationChange}
               />
             ) : null}
           </div>
@@ -585,7 +626,7 @@ export default function NavigationBar({
             </div>
           ) : null}
 
-          <nav aria-label="데스크톱 주요 메뉴" className="navigation-scrollbar min-h-0 flex-1 overflow-y-auto px-3 py-2">
+          <OverlayScrollArea aria-label="데스크톱 주요 메뉴" className="flex-1" contentClassName="px-3 py-2">
             <div className="space-y-0.5">
               <NavigationMenuRow {...desktopNavigation.homeItem} />
               {favoriteRows.length > 0 ? (
@@ -618,11 +659,9 @@ export default function NavigationBar({
                 onToggle={(next) => setGroupExpanded(section.id as DesktopNavigationPreferenceGroupId, next)}
               />
             ))}
-          </nav>
+          </OverlayScrollArea>
 
-          <div className="flex shrink-0 items-center gap-2 px-3 py-2">
-            {accountFooter}
-          </div>
+          <div className="flex shrink-0 items-center gap-2 px-3 py-2">{accountFooter}</div>
         </div>
 
         <div className="mllg-navigation-rail h-full min-h-0 min-w-0 flex-1">
@@ -662,7 +701,9 @@ export default function NavigationBar({
               {activeFlyout.kind === "search" ? (
                 <NavigationSearch key={`rail:${searchResetKey}`} variant="rail" />
               ) : activeFlyout.kind === "banner" ? (
-                siteBanner ? <SiteBanner banner={siteBanner} slot="desktop_navigation" /> : null
+                siteBanner ? (
+                  <SiteBanner banner={siteBanner} slot="desktop_navigation" />
+                ) : null
               ) : activeFlyout.group ? (
                 activeFlyout.group.items.length === 0 && activeFlyout.group.id === "favorites" ? (
                   <NavigationFavoriteEmptyHint />
@@ -671,7 +712,9 @@ export default function NavigationBar({
                     <FlyoutNavigationRow
                       key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`}
                       {...item}
-                      isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) => Boolean(id && favoriteIdSet.has(id)))}
+                      isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) =>
+                        Boolean(id && favoriteIdSet.has(id)),
+                      )}
                       onFavoriteToggle={onFavoriteToggle}
                     />
                   ))
@@ -735,8 +778,9 @@ function DesktopNavigationGroup({
       <button
         type="button"
         className={cn(
-          "flex min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-foreground/80 transition-colors hover:bg-background hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-          active && !expanded && "bg-background text-foreground",
+          "flex min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs font-semibold text-v2-fg-tertiary transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg",
+          active && !expanded && "bg-v2-nav-active text-v2-fg",
+          v2FocusRing,
         )}
         aria-expanded={expanded}
         aria-controls={controlsId}
@@ -744,19 +788,22 @@ function DesktopNavigationGroup({
       >
         <span className="min-w-0 flex-1 truncate">{title}</span>
         {!expanded && hasRedDot ? (
-          <span className="size-1.5 shrink-0 rounded-full bg-red-500" aria-hidden="true" />
+          <span className="size-1.5 shrink-0 rounded-full bg-v2-unread" aria-hidden="true" />
         ) : null}
-        <ChevronDownIcon
-          className={cn("size-3 shrink-0 transition-transform", !expanded && "-rotate-90")}
-          aria-hidden="true"
-        />
+        {expanded ? (
+          <ChevronDownIcon className="size-3 shrink-0" aria-hidden="true" />
+        ) : (
+          <ChevronRightIcon className="size-3 shrink-0" aria-hidden="true" />
+        )}
       </button>
       <div id={controlsId} hidden={!expanded} className="mt-1 space-y-0.5">
         {items.map((item) => (
           <NavigationMenuRow
             key={`${item.menuId ?? item.to}:${item.favoriteId ?? ""}`}
             {...item}
-            isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) => Boolean(id && favoriteIdSet.has(id)))}
+            isFavorite={[item.favoriteId, ...(item.legacyFavoriteIds ?? [])].some((id) =>
+              Boolean(id && favoriteIdSet.has(id)),
+            )}
             onFavoriteToggle={onFavoriteToggle}
           />
         ))}
@@ -773,6 +820,7 @@ function MobileNavigationPersonalizationTutorial({
   isSignedIn: boolean;
 }) {
   const [isVisible, setIsVisible] = useState(false);
+  const navigate = useNavigate();
   const usesDefaultTabs = mobileNavigationIds.every((id, index) => id === DEFAULT_MOBILE_NAVIGATION_IDS[index]);
 
   useEffect(() => {
@@ -837,25 +885,21 @@ function MobileNavigationPersonalizationTutorial({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--mobile-nav-height)+0.5rem)] z-layer-navigation-menu px-3 lg:hidden">
-      <div className="pointer-events-auto mx-auto flex max-w-sm items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-card-foreground shadow-lg shadow-black/5 dark:shadow-md dark:shadow-black/20">
-        <button
-          type="button"
-          className="inline-flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          onClick={close}
-          aria-label="탭 설정 안내 닫기"
-        >
-          <XMarkIcon className="size-4" aria-hidden="true" />
-        </button>
-        <p className="min-w-0 flex-1 text-sm font-medium leading-snug" role="status" aria-live="polite">
-          하단 탭을 자주 쓰는 메뉴로 변경할 수 있어요
-        </p>
-        <Link
-          to="/more#mobile-navigation-settings"
-          className="shrink-0 rounded-md bg-primary px-2.5 py-1.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-          onClick={close}
-        >
-          바꾸기
-        </Link>
+      <div className="pointer-events-auto mx-auto max-w-sm rounded-lg bg-v2-elevated p-2 shadow-lg">
+        <div role="status" aria-live="polite">
+          <FeatureHint
+            Icon={InformationCircleIcon}
+            message="하단 탭을 자주 쓰는 메뉴로 변경할 수 있어요"
+            actionLabel="바꾸기"
+            onAction={() => {
+              close();
+              navigate("/more#mobile-navigation-settings");
+            }}
+            closeLabel="탭 설정 안내 닫기"
+            onClose={close}
+            fullWidth
+          />
+        </div>
       </div>
     </div>
   );
@@ -930,16 +974,11 @@ function MobileBrandHeader({
   }, [searchResetKey]);
 
   return (
-    <header
-      className="
-        lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col
-        border-border border-b bg-background
-      "
-    >
+    <header className="lg:hidden fixed inset-x-0 top-0 z-layer-navigation flex flex-col bg-v2-nav">
       <div className="flex h-[var(--mobile-header-row-height)] w-full items-center justify-between px-4 pt-[env(safe-area-inset-top)]">
         <Link
           to="/"
-          className="-ml-1 flex w-fit items-center rounded-md px-1 py-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+          className={cn("-ml-1 flex w-fit items-center rounded-md px-1 py-1", v2FocusRing)}
           aria-label="몰루로그 홈으로 이동"
         >
           <img src="/mollulog-full-light.png" alt="몰루로그 로고" className="mr-1 h-7 dark:hidden" />
@@ -949,10 +988,10 @@ function MobileBrandHeader({
         <div className="-mr-1 flex items-center gap-1">
           <button
             type="button"
-            className="
-              inline-flex size-9 items-center justify-center rounded-md bg-transparent text-foreground
-              transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-            "
+            className={cn(
+              "inline-flex size-9 items-center justify-center rounded-md bg-transparent text-v2-fg transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover",
+              v2FocusRing,
+            )}
             onClick={() => {
               setIsSearchOpen((prev) => !prev);
               setIsNotificationOpen(false);
@@ -1019,25 +1058,22 @@ function MobileBottomNavigation({
 
   return (
     <nav
-      className="
-        lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)]
-        bg-card/95 pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1 shadow-t-lg backdrop-blur-sm
-      "
+      className="lg:hidden fixed inset-x-0 bottom-0 z-layer-navigation h-[var(--mobile-nav-height)] bg-v2-nav pb-[max(env(safe-area-inset-bottom),0.375rem)] pt-1"
       aria-label="주요 메뉴"
     >
       <div className="mx-auto grid h-12 max-w-xl grid-cols-5">
         {items.map((item) => {
           const Icon = item.isActive ? item.SolidIcon : item.OutlineIcon;
-          const className = cn(`
-            relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium transition-colors
-            focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30
-            ${item.isActive ? "font-bold text-foreground" : "text-foreground/70 hover:text-foreground"}
-          `);
+          const className = cn(
+            "relative flex min-w-0 flex-col items-center justify-center gap-0.5 rounded-md px-0 text-xs font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg",
+            item.isActive && "font-semibold text-v2-fg",
+            v2FocusRing,
+          );
           const content = (
             <>
               <span className="flex h-6 shrink-0 items-center justify-center">
-                {currentUsername && item.name === "더보기" && currentProfileStudentId ? (
-                  <ProfileImage studentUid={currentProfileStudentId} imageSize={6} />
+                {currentUsername && item.name === "더보기" ? (
+                  <SenseiAvatar profileStudentId={currentProfileStudentId} size="compact" />
                 ) : (
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
                 )}

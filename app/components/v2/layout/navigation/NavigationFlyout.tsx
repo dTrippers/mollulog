@@ -34,11 +34,10 @@ export function getInitialNavigationFlyoutPosition(
 
 function getInitialFlyoutPosition(anchorEl: HTMLElement | null, width: "menu" | "search"): FlyoutPosition {
   if (!anchorEl || typeof window === "undefined") return { top: 12, left: 84 };
-  return getInitialNavigationFlyoutPosition(
-    anchorEl.getBoundingClientRect(),
-    width,
-    { width: window.innerWidth, height: window.innerHeight },
-  );
+  return getInitialNavigationFlyoutPosition(anchorEl.getBoundingClientRect(), width, {
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
 }
 
 type NavigationFlyoutProps = {
@@ -138,7 +137,12 @@ export function NavigationFlyout({
     event.preventDefault();
     const currentIndex = links.indexOf(document.activeElement as HTMLElement);
     const direction = event.key === "ArrowDown" ? 1 : -1;
-    const nextIndex = currentIndex < 0 ? (direction === 1 ? 0 : links.length - 1) : (currentIndex + direction + links.length) % links.length;
+    const nextIndex =
+      currentIndex < 0
+        ? direction === 1
+          ? 0
+          : links.length - 1
+        : (currentIndex + direction + links.length) % links.length;
     links[nextIndex]?.focus();
   };
 
@@ -147,17 +151,17 @@ export function NavigationFlyout({
       id={id}
       ref={panelRef}
       className={cn(
-        "fixed z-layer-navigation-menu flex flex-col overflow-hidden popover-surface",
+        "fixed z-layer-navigation-menu flex flex-col overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",
         width === "search" ? "w-96" : "w-56",
         className,
       )}
       style={{ top: position.top, left: position.left, maxHeight: "calc(100dvh - 1.5rem)" }}
-      aria-labelledby={`${id}-title`}
+      aria-label={title}
       onKeyDown={onKeyDown}
     >
-      <div id={`${id}-title`} className="shrink-0 px-3 pt-3 pb-2 text-xs font-medium text-muted-foreground">
-        {title}
-      </div>
+      {width === "menu" ? (
+        <div className="shrink-0 px-3 pt-3 pb-2 text-xs font-medium text-v2-fg-tertiary">{title}</div>
+      ) : null}
       <div className="no-scrollbar min-h-0 flex-1 overflow-y-auto px-2 pb-2">{children}</div>
     </section>
   );

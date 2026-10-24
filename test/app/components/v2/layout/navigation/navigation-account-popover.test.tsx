@@ -1,8 +1,8 @@
 import { describe, expect, it } from "@jest/globals";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { NavigationAccountPopover } from "~/components/features/layout/NavigationAccountPopover";
-import { getAccountNavigationActions } from "~/components/features/layout/navigation-menu";
+import { NavigationAccountPopover } from "~/components/v2/layout/navigation/NavigationAccountPopover";
+import { getAccountNavigationActions } from "~/components/v2/layout/navigation/navigation-menu";
 
 function renderAccountPopover(isActive = false): string {
   const actions = getAccountNavigationActions({
@@ -54,7 +54,7 @@ describe("navigation account popover", () => {
     const html = renderAccountPopover();
     const logout = html.match(/<a[^>]*href="\/signout"[^>]*>(.*?)<\/a>/)?.[1] ?? "";
 
-    expect(html).toContain("text-sm font-normal");
+    expect(html).toContain("text-sm font-normal text-v2-danger");
     expect(logout).toContain("로그아웃");
     expect(logout).not.toContain("<svg");
   });
@@ -63,6 +63,6 @@ describe("navigation account popover", () => {
     const html = renderAccountPopover(true);
     const trigger = html.match(/<button(?=[^>]*aria-label="계정 lyn")[^>]*>/)?.[0] ?? "";
 
-    expect(trigger).toContain("bg-muted text-foreground");
+    expect(trigger).toContain("bg-v2-nav-active text-v2-fg");
   });
 });

@@ -1,4 +1,27 @@
 @import "tailwindcss";
+
+.halo-mode-notice-container {
+  container-type: inline-size;
+}
+
+.halo-mode-notice-label {
+  display: none;
+}
+
+@utility halo-contrast-scrim {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.32) 0%,
+    rgba(0, 0, 0, 0.16) 58%,
+    rgba(0, 0, 0, 0.08) 100%
+  );
+}
+
+@container (min-width: 12rem) {
+  .halo-mode-notice-label {
+    display: inline;
+  }
+}
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));
@@ -64,24 +87,6 @@
   }
   html {
     @apply font-sans;
-  }
-}
-
-@utility navigation-scrollbar {
-  scrollbar-width: thin;
-  scrollbar-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent) transparent;
-
-  &::-webkit-scrollbar {
-    width: 6px;
-  }
-
-  &::-webkit-scrollbar-thumb {
-    border-radius: 999px;
-    background-color: color-mix(in oklch, var(--muted-foreground) 30%, transparent);
-  }
-
-  &::-webkit-scrollbar-track {
-    background-color: transparent;
   }
 }
 
@@ -499,6 +504,20 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-dev-shadow: var(--v2-dev-shadow);
   --shadow-v2-marker: inset 0 0 0 1px var(--v2-marker-shade), 0 0 0 1px var(--v2-marker-light);
   --color-v2-info: var(--v2-info);
+  --color-v2-nav: var(--v2-nav);
+  --color-v2-nav-active: var(--v2-nav-active);
+  --color-v2-unread: var(--v2-unread);
+  --color-v2-on-unread: var(--v2-on-unread);
+  --color-v2-banner-red: var(--v2-banner-red);
+  --color-v2-banner-red-fg: var(--v2-banner-red-fg);
+  --color-v2-banner-green: var(--v2-banner-green);
+  --color-v2-banner-green-fg: var(--v2-banner-green-fg);
+  --color-v2-banner-blue: var(--v2-banner-blue);
+  --color-v2-banner-blue-fg: var(--v2-banner-blue-fg);
+  --color-v2-banner-pink: var(--v2-banner-pink);
+  --color-v2-banner-pink-fg: var(--v2-banner-pink-fg);
+  --color-v2-banner-black: var(--v2-banner-black);
+  --color-v2-banner-black-fg: var(--v2-banner-black-fg);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
   --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
   --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
@@ -562,6 +581,20 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-ai-to: oklch(0.606 0.25 292.717);
   --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.606 0.25 292.717 / 16%);
+  --v2-nav: oklch(0.945 0 0);
+  --v2-nav-active: oklch(0.89 0 0);
+  --v2-unread: oklch(0.577 0.245 27.325);
+  --v2-on-unread: oklch(1 0 0);
+  --v2-banner-red: oklch(0.95 0.025 25);
+  --v2-banner-red-fg: oklch(0.39 0.14 25);
+  --v2-banner-green: oklch(0.95 0.025 150);
+  --v2-banner-green-fg: oklch(0.4 0.11 150);
+  --v2-banner-blue: oklch(0.97 0.018 237);
+  --v2-banner-blue-fg: oklch(0.48 0.12 240);
+  --v2-banner-pink: oklch(0.95 0.025 340);
+  --v2-banner-pink-fg: oklch(0.4 0.12 340);
+  --v2-banner-black: oklch(0.89 0 0);
+  --v2-banner-black-fg: oklch(0.35 0 0);
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
   --v2-marker-shade: oklch(0.2 0 0 / 80%);
   --v2-marker-light: oklch(1 0 0 / 90%);
@@ -625,6 +658,20 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-ai-to: oklch(0.702 0.183 293.541);
   --v2-info: var(--v2-accent);
   --v2-ai-glow: oklch(0.702 0.183 293.541 / 24%);
+  --v2-nav: oklch(0.205 0 0);
+  --v2-nav-active: oklch(0.30 0 0);
+  --v2-unread: oklch(0.704 0.191 22.216);
+  --v2-on-unread: oklch(0.205 0 0);
+  --v2-banner-red: oklch(0.30 0.06 25);
+  --v2-banner-red-fg: oklch(0.86 0.10 25);
+  --v2-banner-green: oklch(0.30 0.05 150);
+  --v2-banner-green-fg: oklch(0.86 0.09 150);
+  --v2-banner-blue: oklch(0.30 0.05 240);
+  --v2-banner-blue-fg: oklch(0.86 0.08 235);
+  --v2-banner-pink: oklch(0.30 0.05 340);
+  --v2-banner-pink-fg: oklch(0.86 0.08 340);
+  --v2-banner-black: oklch(0.30 0 0);
+  --v2-banner-black-fg: oklch(0.90 0 0);
   --v2-dev-accent: oklch(0.623 0.214 259.815);
   --v2-dev-accent-strong: oklch(0.515 0.215 263.6);
   --v2-dev-on-accent: oklch(0.985 0 0);
@@ -1133,9 +1180,8 @@ html[data-v2-transition]::view-transition-new(v2-action-bar) {
   animation: v2-fade-in var(--transition-duration-v2-base) var(--ease-v2-enter) both;
 }
 
-/* Temporary coupling until the shell migration (MLLG-121): the 1.x mobile header and bottom nav are named here because
-   NavigationBar is outside 2.0. The names apply only on a v2 page during a v2 transition, and only below lg. Each gets a
-   non-animated group above the v2 snapshots, so the shell stays put while the content moves under it. */
+/* Keep the shared mobile navigation shell stationary during v2 screen transitions. These selectors target the shell
+   outside [data-v2-layout] only below lg. Non-animated groups keep the shell above the content snapshots. */
 @media (max-width: 63.999rem) {
   html[data-v2-transition]:has([data-v2-layout]) header.fixed.top-0:not([data-v2-layout] *) {
     view-transition-name: v2-shell-header;
