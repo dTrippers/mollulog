@@ -1,13 +1,9 @@
-import type { ActionFunctionArgs, SubmitFunction } from "react-router";
-import { getPreference, type Preference, serializePreference } from "~/auth/preference.server";
+import type { ActionFunctionArgs } from "react-router";
+import { getPreference, serializePreference, type Preference } from "~/auth/preference.server";
 import { normalizeMobileNavigationIds } from "~/domain/mobile-navigation";
 import { normalizeNavigationFavoriteIds } from "~/domain/navigation-favorites";
 import { normalizeDesktopNavigationExpandedGroups } from "~/domain/desktop-navigation-preference";
 import { normalizeTimeZone } from "~/lib/date-time";
-
-export async function submitPreference(fn: SubmitFunction, preference: Preference) {
-  fn(preference, { method: "post", action: "/api/preference", encType: "application/json", navigate: false });
-}
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.cloudflare.env;
@@ -30,6 +26,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     ...currentPreference,
     darkMode:
       typeof submittedPreference.darkMode === "boolean" ? submittedPreference.darkMode : currentPreference.darkMode,
+    haloMode:
+      typeof submittedPreference.haloMode === "boolean" ? submittedPreference.haloMode : currentPreference.haloMode,
     favoriteNavigationIds: Array.isArray(submittedFavoriteIds)
       ? normalizeNavigationFavoriteIds(submittedFavoriteIds)
       : currentPreference.favoriteNavigationIds,

@@ -7,6 +7,9 @@ import {
   Squares2X2Icon,
 } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
+import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
+import HaloModeNotice from "~/components/media/HaloModeNotice";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
 import { getHomeEntryPoints, getHomeOngoingChip, getHomeUpcomingChip, type HomeEntryPoint } from "~/domain/home-portal";
 import type { UtcIsoString } from "~/lib/date-time";
@@ -93,6 +96,7 @@ function EventHero({
   now: UtcIsoString;
   timeZone: string;
 }) {
+  const { haloMode } = useHaloMode();
   const chip = eventChip(content, now, timeZone, ongoing);
   const points = getHomeEntryPoints(content, minigameType);
   // On mobile one card holds the banner and the entry buttons. The banner runs to the card's top and side edges, and the
@@ -100,7 +104,9 @@ function EventHero({
   return (
     <article className="relative overflow-hidden rounded-lg bg-v2-surface md:overflow-visible md:rounded-none md:bg-transparent">
       <div className="relative aspect-[2/1] overflow-hidden bg-v2-inset md:rounded-lg">
-        {content.imageUrl ? (
+        {content.imageUrl && haloMode ? (
+          <BlurhashPlaceholder blurhash={content.imageBlurhash} />
+        ) : content.imageUrl ? (
           <img src={content.imageUrl} alt="" className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center">
@@ -111,6 +117,9 @@ function EventHero({
           aria-hidden="true"
           className="absolute inset-0 bg-linear-to-t from-v2-scrim via-v2-scrim/30 to-transparent"
         />
+        {content.imageUrl && haloMode ? (
+          <HaloModeNotice />
+        ) : null}
         <div className="absolute top-2.5 right-2.5 md:top-3 md:right-3">
           <HomeTimeChip chip={chip} />
         </div>
@@ -139,14 +148,20 @@ function EventHero({
 }
 
 function TogetherTile({ content, now, timeZone }: { content: TimelineContent; now: UtcIsoString; timeZone: string }) {
+  const { haloMode } = useHaloMode();
   const chip = eventChip(content, now, timeZone, true);
   return (
     <Link
       to={`/events/${content.uid}`}
       className="flex min-w-0 gap-v2-media-gap rounded-lg bg-v2-surface p-2 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none md:p-2.5"
     >
-      <div className="aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-md bg-v2-inset md:w-24">
-        {content.imageUrl ? (
+      <div className="relative aspect-[3/2] w-20 shrink-0 overflow-hidden rounded-md bg-v2-inset md:w-24">
+        {content.imageUrl && haloMode ? (
+          <>
+            <BlurhashPlaceholder blurhash={content.imageBlurhash} />
+            <HaloModeNotice />
+          </>
+        ) : content.imageUrl ? (
           <img src={content.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center">

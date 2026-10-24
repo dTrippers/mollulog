@@ -19,7 +19,7 @@ import { nowUtcIso, type UtcIsoString } from "~/lib/date-time";
 export type { RunType, TimelineContent, TimelineContentType, TimelineContentVideo } from "~/domain/timeline-content";
 export { findEventsForRecruitmentStudent, groupTimelineContentsByRecruitmentGroupUid } from "~/models/timeline-content";
 
-const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 3, "all");
+const ALL_TIMELINE_CONTENTS_META_CACHE_KEY = cacheKey("source", "timeline-content", 4, "all");
 
 export type TimelineContentReadOptions = {
   ctx?: ExecutionContext;

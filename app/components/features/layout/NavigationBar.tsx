@@ -8,7 +8,7 @@ import {
   RectangleGroupIcon as RectangleGroupIconOutline,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useFetcher, useLocation, useMatches, useSubmit } from "react-router";
+import { Link, useFetcher, useLocation, useMatches } from "react-router";
 import { ProfileImage } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { DEFAULT_MOBILE_NAVIGATION_IDS, type MobileNavigationPair } from "~/domain/mobile-navigation";
@@ -28,8 +28,8 @@ import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { timelineContentTypeLocale } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
-import { submitPreference } from "~/routes/api.preference";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
+import { submitPreference } from "~/lib/preference-submission.client";
 import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
 import NotificationHistoryPopover from "./NotificationHistoryPopover";
@@ -265,11 +265,12 @@ function SearchEmptyView() {
 function SearchResultBadge({ result }: { result: SearchResult }) {
   if (result.type === "student") {
     return (
-      <img
-        src={studentImageUrl(result.uid)}
+      <StudentPortrait
+        uid={result.uid}
         alt=""
         className="size-6 shrink-0 rounded-md bg-muted object-cover object-center dark:opacity-90"
         loading="lazy"
+        haloScale="72%"
       />
     );
   }
@@ -310,12 +311,7 @@ function useNavigationFavorites(initialFavoriteIds: string[]) {
     pendingFavoriteIdsRef.current = null;
     isPersistingRef.current = true;
 
-    void fetch("/api/preference", {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ favoriteNavigationIds }),
-    })
+    void submitPreference({ favoriteNavigationIds })
       .catch(() => undefined)
       .finally(() => {
         isPersistingRef.current = false;
@@ -358,7 +354,6 @@ export default function NavigationBar({
   const pathname = matches[matches.length - 1]?.pathname ?? location.pathname;
   const searchResetKey = `${location.pathname}\n${location.search}`;
   const { showSignIn } = useSignIn();
-  const submit = useSubmit();
   const navigationOptions = {
     pathname,
     upcomingEvent,
@@ -474,13 +469,13 @@ export default function NavigationBar({
     setRailNotificationOpen(false);
     setRailAccountOpen(false);
     setExpandedAccountOpen(false);
-    submitPreference(submit, { desktopNavigationCollapsed: nextCollapsed });
+    void submitPreference({ desktopNavigationCollapsed: nextCollapsed }).catch(() => undefined);
   };
 
   const setGroupExpanded = (groupId: DesktopNavigationPreferenceGroupId, expanded: boolean) => {
     const nextExpandedGroups = { ...expandedGroups, [groupId]: expanded };
     setExpandedGroups(nextExpandedGroups);
-    submitPreference(submit, { desktopNavigationExpandedGroups: nextExpandedGroups });
+    void submitPreference({ desktopNavigationExpandedGroups: nextExpandedGroups }).catch(() => undefined);
   };
 
   const groupIsExpanded = (groupId: DesktopNavigationPreferenceGroupId) => expandedGroups[groupId] ?? true;

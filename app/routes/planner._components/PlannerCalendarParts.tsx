@@ -8,12 +8,14 @@ import type {
   PlannerPeriodRangeParts,
   PlannerPeriodStudent,
 } from "~/domain/integrated-planner";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 
 export function PlannerEventThumbnail({ period }: { period?: PlannerPeriod }) {
   return (
     <SharedPlannerEventThumbnail
       imageUrl={period?.imageUrl}
+      imageBlurhash={period?.imageBlurhash}
+      imageIsTimeline={period?.imageIsTimeline}
       fallbackImageUrl={period?.fallbackImageUrl}
       showSurfaceUntilLoaded
     />
@@ -60,8 +62,9 @@ function PlannerRecruitmentAvatar({ student }: { student: PlannerPeriodStudent }
       focusable
     >
       {!imageFailed ? (
-        <img
-          src={studentImageUrl(student.imageUid ?? student.uid)}
+        <StudentPortrait
+          uid={student.uid}
+          imageUid={student.imageUid}
           alt={student.name}
           className="size-full object-cover object-top"
           loading="lazy"

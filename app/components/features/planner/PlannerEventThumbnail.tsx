@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import BlurhashPlaceholder from "~/components/primitives/BlurhashPlaceholder";
+import HaloModeNotice from "~/components/primitives/HaloModeNotice";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 
 type Props = {
   imageUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageIsTimeline?: boolean;
   fallbackImageUrl?: string | null;
   recoverPreloadedFailure?: boolean;
   showSurfaceUntilLoaded?: boolean;
@@ -10,11 +15,14 @@ type Props = {
 
 export default function PlannerEventThumbnail({
   imageUrl,
+  imageBlurhash,
+  imageIsTimeline = false,
   fallbackImageUrl,
   recoverPreloadedFailure = false,
   showSurfaceUntilLoaded = false,
   className,
 }: Props) {
+  const { haloMode } = useHaloMode();
   const imageKey = JSON.stringify([imageUrl, fallbackImageUrl]);
   const [loadedImageKey, setLoadedImageKey] = useState<string | null>(null);
   const imageLoaded = loadedImageKey === imageKey;
@@ -22,12 +30,17 @@ export default function PlannerEventThumbnail({
 
   return (
     <div
-      className={["relative size-10", className, "shrink-0 overflow-hidden rounded-md"].filter(Boolean).join(" ")}
+      className={["relative size-10", className, "@container shrink-0 overflow-hidden rounded-md"].filter(Boolean).join(" ")}
     >
       {!showSurfaceUntilLoaded || !imageLoaded ? (
         <div aria-hidden="true" className="absolute inset-0 rounded-md bg-muted ring-1 ring-border" />
       ) : null}
-      {imageUrl ? (
+      {haloMode && imageIsTimeline && imageUrl ? (
+        <>
+          <BlurhashPlaceholder blurhash={imageBlurhash} />
+          <HaloModeNotice className="p-0" />
+        </>
+      ) : imageUrl ? (
         <PlannerEventThumbnailImage
           key={imageKey}
           imageUrl={imageUrl}

@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { Link } from "react-router";
 import { AttributeBadge } from "~/components/primitives";
 import { useStudentCardPopup } from "~/contexts/StudentCardPopupProvider";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import type { Attack, Defense } from "~/graphql/graphql";
 import { cn } from "~/lib/utils";
 import {
@@ -15,7 +16,7 @@ import {
   roleColor,
   roleLocale,
 } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { Role } from "~/models/content.d";
 import { parseVisibleNames } from "~/models/student";
 
@@ -109,7 +110,7 @@ function StudentCardFrame({
   children: ReactNode;
 }) {
   const className = interactive
-    ? "block w-full hover:scale-105 transition text-left cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    ? "block w-full [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105 transition text-left cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     : "";
 
   if (!interactive) {
@@ -152,6 +153,7 @@ export default function StudentCard({
   popupId = uid,
 }: StudentCardProps) {
   const { activePopupId, setActivePopupId } = useStudentCardPopup();
+  const { haloMode } = useHaloMode();
   const showPopup = popupId === activePopupId;
   const rootRef = useRef<HTMLDivElement>(null);
   const [canUsePopupPortal, setCanUsePopupPortal] = useState(false);
@@ -279,11 +281,16 @@ export default function StudentCard({
             <div
               className={`relative ${circular ? "rounded-full" : "rounded-lg"} overflow-hidden ${cardAspectClassName} ${selectionRingClass}`}
             >
-              <img
-                className={`w-full h-full object-cover ${grayscale ? "grayscale opacity-75" : ""} transition`}
-                src={studentImageUrl(uid ?? "unlisted")}
+              <StudentPortrait
+                uid={uid}
                 alt={name ?? undefined}
-                loading="lazy"
+                className={cn(
+                  "w-full h-full object-cover",
+                  grayscale && "grayscale opacity-75",
+                  !haloMode && "transition",
+                )}
+                haloAboveBand
+                haloScale={circular ? "80%" : "72%"}
               />
               <div className="absolute top-0.5 right-0.5 flex items-start gap-0.5">
                 <div className="flex shrink-0 origin-top-right scale-80 flex-col items-end gap-0.5 text-xs font-bold">

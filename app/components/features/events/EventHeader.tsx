@@ -1,12 +1,16 @@
 import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
+  PlayIcon,
   SpeakerWaveIcon,
   SpeakerXMarkIcon,
 } from "@heroicons/react/16/solid";
 import { Suspense, useEffect, useRef, useState } from "react";
 import YouTube from "react-youtube";
 import { MultilineText } from "~/components/primitives";
+import BlurhashPlaceholder from "~/components/primitives/BlurhashPlaceholder";
+import HaloModeNotice from "~/components/primitives/HaloModeNotice";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
   formatInstant,
@@ -31,6 +35,7 @@ type YouTubePlayer = {
   unMute: () => void;
   setVolume: (volume: number) => void;
   getDuration: () => number;
+  stopVideo: () => void;
 };
 
 type YouTubeEvent = {
@@ -39,6 +44,7 @@ type YouTubeEvent = {
 
 type EventHeaderProps = {
   imageUrl: string | null;
+  imageBlurhash?: string | null;
   name: string;
   type: TimelineContentType;
   runType: "first" | "rerun" | "permanent";
@@ -49,8 +55,23 @@ type EventHeaderProps = {
   videos?: Video[];
 };
 
+function EventHeaderPlayButton({ onPlay }: { onPlay: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label="영상 재생"
+      title="영상 재생"
+      className="p-2 rounded-full bg-neutral-900/75 hover:bg-neutral-700/75 transition backdrop-blur-sm text-white"
+      onClick={onPlay}
+    >
+      <PlayIcon className="size-4" />
+    </button>
+  );
+}
+
 export default function EventHeader({
   imageUrl,
+  imageBlurhash,
   name,
   type,
   runType,
@@ -59,6 +80,7 @@ export default function EventHeader({
   endless,
   videos,
 }: EventHeaderProps) {
+  const { haloMode } = useHaloMode();
   const displayTimeZone = useDisplayTimeZone();
   const now = nowUtcIso();
 
@@ -72,19 +94,16 @@ export default function EventHeader({
 
   // States about videos
   const [currentVideo, setCurrentVideo] = useState<Video | null>(videos?.[0] ?? null);
+  const [playRequested, setPlayRequested] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
-  const [videoEndTimer, setVideoEndTimer] = useState<NodeJS.Timeout | null>(null);
+  const videoEndTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playerRef = useRef<YouTubePlayer | null>(null);
   const [muted, setMuted] = useState(true);
   useEffect(() => {
-    if (!playerRef?.current) {
-      return;
-    }
-
-    if (muted) {
-      playerRef.current.mute();
-    } else {
+    if (!playerRef.current) return;
+    if (muted) playerRef.current.mute();
+    else {
       playerRef.current.unMute();
       playerRef.current.setVolume(30);
     }
@@ -92,11 +111,22 @@ export default function EventHeader({
 
   useEffect(() => {
     return () => {
-      if (videoEndTimer) {
-        clearTimeout(videoEndTimer);
-      }
+      if (videoEndTimer.current) clearTimeout(videoEndTimer.current);
     };
-  }, [videoEndTimer]);
+  }, []);
+
+  const previousHaloMode = useRef(haloMode);
+  useEffect(() => {
+    const wasEnabled = previousHaloMode.current;
+    previousHaloMode.current = haloMode;
+    if (!haloMode || wasEnabled) return;
+    if (videoEndTimer.current) clearTimeout(videoEndTimer.current);
+    videoEndTimer.current = null;
+    playerRef.current?.stopVideo();
+    playerRef.current = null;
+    setVideoPlaying(false);
+    setPlayRequested(false);
+  }, [haloMode]);
 
   useEffect(() => {
     setCurrentVideo(videos?.[0] ?? null);
@@ -115,7 +145,7 @@ export default function EventHeader({
     <>
       <div className={`relative overflow-hidden rounded-lg ${aspectRatioClass}`}>
         {/* Videos */}
-        {currentVideo && (
+        {playRequested && currentVideo && (
           <Suspense>
             <div className="absolute top-0 left-0 h-full w-full overflow-hidden md:rounded-lg">
               <YouTube
@@ -131,46 +161,59 @@ export default function EventHeader({
                   ytEvent.target.setVolume(30);
                 }}
                 onPlay={(ytEvent: YouTubeEvent) => {
-                  if (videoEndTimer) {
-                    clearTimeout(videoEndTimer);
-                  }
-
+                  if (videoEndTimer.current) clearTimeout(videoEndTimer.current);
                   setVideoPlaying(true);
-                  setVideoEndTimer(
-                    setTimeout(
-                      () => {
-                        setVideoPlaying(false);
-                      },
-                      (ytEvent.target.getDuration() - (currentVideo.start ?? 0) - 1.0) * 1000,
-                    ),
+                  videoEndTimer.current = setTimeout(
+                    () => setVideoPlaying(false),
+                    Math.max(0, ytEvent.target.getDuration() - (currentVideo.start ?? 0) - 1) * 1000,
                   );
                 }}
-                onEnd={() => setVideoPlaying(false)}
+                onEnd={() => {
+                  if (videoEndTimer.current) clearTimeout(videoEndTimer.current);
+                  videoEndTimer.current = null;
+                  setVideoPlaying(false);
+                  setPlayRequested(false);
+                  playerRef.current = null;
+                }}
               />
             </div>
           </Suspense>
         )}
 
         {/* Background Image */}
-        {imageUrl && (
+        {imageUrl && haloMode ? (
+          <BlurhashPlaceholder
+            blurhash={imageBlurhash}
+            className={cn("transition-opacity duration-500", videoPlaying ? "opacity-0" : "opacity-100")}
+          />
+        ) : imageUrl ? (
           <img
             src={imageUrl}
             alt={name}
             className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-500 ${videoPlaying ? "opacity-0" : "opacity-100"}`}
           />
-        )}
+        ) : null}
+
+        {haloMode && imageUrl && !videoPlaying ? (
+          <HaloModeNotice />
+        ) : null}
 
         {/* Action Buttons */}
-        <div className="absolute top-0 right-0 p-4 flex items-center gap-2">
-          {videos && videos.length > 0 && (
-            <button
-              type="button"
-              className="p-2 rounded-full bg-neutral-900/75 hover:bg-neutral-700/75 transition backdrop-blur-sm text-white"
-              onClick={() => setMuted((prev) => !prev)}
-            >
-              {muted ? <SpeakerXMarkIcon className="size-4" /> : <SpeakerWaveIcon className="size-4" />}
-            </button>
-          )}
+        <div className="absolute top-0 right-0 z-20 p-4 flex items-center gap-2">
+          {videos && videos.length > 0 ? (
+            playRequested ? (
+              <button
+                type="button"
+                aria-label={muted ? "음소거 해제" : "음소거"}
+                className="p-2 rounded-full bg-neutral-900/75 hover:bg-neutral-700/75 transition backdrop-blur-sm text-white"
+                onClick={() => setMuted((prev) => !prev)}
+              >
+                {muted ? <SpeakerXMarkIcon className="size-4" /> : <SpeakerWaveIcon className="size-4" />}
+              </button>
+            ) : (
+              <EventHeaderPlayButton onPlay={() => setPlayRequested(true)} />
+            )
+          ) : null}
         </div>
 
         {/* Content Info */}
@@ -202,7 +245,17 @@ export default function EventHeader({
       </div>
 
       {videos && videos.length > 0 && (
-        <VideoList videos={videos} currentVideo={currentVideo} onVideoSelect={setCurrentVideo} />
+        <VideoList
+          videos={videos}
+          currentVideo={currentVideo}
+          onVideoSelect={(video) => {
+            if (videoEndTimer.current) clearTimeout(videoEndTimer.current);
+            videoEndTimer.current = null;
+            setCurrentVideo(video);
+            setVideoPlaying(false);
+            setPlayRequested(true);
+          }}
+        />
       )}
     </>
   );

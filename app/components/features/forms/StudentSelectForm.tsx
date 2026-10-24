@@ -3,7 +3,7 @@ import hangul from "hangul-js";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { Field } from "~/components/primitives";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import { useFormGroup } from "./FormGroup";
 
 type Student = {
@@ -13,11 +13,10 @@ type Student = {
 
 function StudentImage({ student, size }: { student: Student; size: string }) {
   return (
-    <img
-      src={studentImageUrl(student.uid)}
+    <StudentPortrait
+      uid={student.uid}
       alt={student.name}
       className={cn(size, "rounded-full bg-muted object-cover")}
-      loading="lazy"
     />
   );
 }

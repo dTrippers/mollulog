@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, jest } from "@jest/globals";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
+import { HaloModeProvider } from "~/contexts/HaloModeContext";
 import { V2Page } from "~/components/v2/layout/V2Page";
 import type { TimelineContent } from "~/domain/timeline-content";
 import { Defense, Terrain } from "~/graphql/graphql";
@@ -23,6 +24,7 @@ afterEach(() => {
 
 const NOW = "2026-10-16T03:00:00.000Z";
 const TZ = "Asia/Seoul";
+const TIMELINE_IMAGE_BLURHASH = "YEB:Ny3VWp-pA==|A==|@BEla|rxSMrxN]w5dxeqfQeqfQeqfQeq_LF_a|t7SMt7N]xa";
 const noop = () => {};
 
 function event(overrides: Partial<TimelineContent> & Pick<TimelineContent, "uid">): TimelineContent {
@@ -33,6 +35,7 @@ function event(overrides: Partial<TimelineContent> & Pick<TimelineContent, "uid"
     endAt: "2026-10-27T02:00:00.000Z",
     endless: false,
     imageUrl: null,
+    imageBlurhash: null,
     videos: [],
     contentType: "event",
     runType: "first",
@@ -50,10 +53,12 @@ function event(overrides: Partial<TimelineContent> & Pick<TimelineContent, "uid"
   };
 }
 
-function render(node: React.ReactNode) {
+function render(node: React.ReactNode, haloMode = false) {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <V2Page width="full">{node}</V2Page>
+      <HaloModeProvider value={{ haloMode, setHaloMode: noop }}>
+        <V2Page width="full">{node}</V2Page>
+      </HaloModeProvider>
     </MemoryRouter>,
   );
 }
@@ -103,6 +108,38 @@ describe("home event section", () => {
     expect(markup).toContain('href="/events/ev-1"');
   });
 
+  it("omits timeline image URLs from SSR in halo mode and shows the notice", () => {
+    const imageUrl = "https://cdn.example.test/halo-mode-event.webp";
+    const togetherImageUrl = "https://cdn.example.test/halo-mode-together.webp";
+    const markup = render(
+      <HomeEventSection
+        events={{
+          status: "success",
+          data: {
+            main: event({ uid: "ev-halo", imageUrl, imageBlurhash: TIMELINE_IMAGE_BLURHASH }),
+            together: [event({ uid: "ev-together", imageUrl: togetherImageUrl, imageBlurhash: TIMELINE_IMAGE_BLURHASH })],
+            upcoming: null,
+            minigameType: null,
+          },
+        }}
+        now={NOW}
+        timeZone={TZ}
+        onRetry={noop}
+      />,
+      true,
+    );
+
+    expect(markup).not.toContain(imageUrl);
+    expect(markup).not.toContain(togetherImageUrl);
+    expect(markup).toContain("헤일로 모드가 켜져있어요");
+    expect(markup).toContain("absolute inset-0 z-10 flex items-center justify-center p-1");
+    expect(markup).not.toContain("bottom-[40%]");
+    expect(markup).toContain("items-center");
+    expect(markup.indexOf('class="halo-mode-notice-container')).toBeLessThan(
+      markup.indexOf('class="absolute inset-x-0 bottom-0'),
+    );
+  });
+
   it("shows the next event as upcoming, and the explicit empty copy when nothing exists", () => {
     const upcoming = render(
       <HomeEventSection
@@ -119,6 +156,37 @@ describe("home event section", () => {
       <HomeEventSection events={{ status: "success", data: { main: null, together: [], upcoming: null, minigameType: null } }} now={NOW} timeZone={TZ} onRetry={noop} />,
     );
     expect(empty).toContain("현재 진행중인 이벤트가 없어요");
+  });
+});
+
+describe("home recruitment image halo mode", () => {
+  it("omits a timeline group banner URL from halo-mode SSR", () => {
+    const imageUrl = "https://cdn.example.test/group-event.webp";
+    const group: HomeRecruitmentGroup = {
+      groupUid: "group-1",
+      eventUid: "event-1",
+      eventName: "Group event",
+      eventImageUrl: imageUrl,
+      eventImageBlurhash: TIMELINE_IMAGE_BLURHASH,
+      kindLabel: "픽업",
+      since: NOW,
+      until: "2026-10-30T03:00:00.000Z",
+      recruitments: [],
+    };
+    const markup = render(
+      <HomeRecruitmentSection
+        groups={{ status: "success", data: [group] }}
+        upcomingGroups={[]}
+        viewer={viewer}
+        now={NOW}
+        timeZone={TZ}
+        onRetry={noop}
+      />,
+      true,
+    );
+
+    expect(markup).not.toContain(imageUrl);
+    expect(markup).toContain("헤일로 모드가 켜져있어요");
   });
 });
 
@@ -438,6 +506,7 @@ describe("home recruitment section", () => {
     eventUid: "ev-1",
     eventName: "하이랜더 철도 폭주 사건",
     eventImageUrl: null,
+    eventImageBlurhash: null,
     kindLabel: "복각 픽업 모집",
     since: "2026-10-16T00:00:00.000Z",
     until: "2026-10-27T00:00:00.000Z",

@@ -3,7 +3,7 @@ import { type FormEvent, useEffect, useRef, useState } from "react";
 import { StudentCards } from "~/components/features/students";
 import { Button } from "~/components/primitives";
 import { formatInstant } from "~/lib/date-time";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { RunType } from "~/models/timeline-content";
 
 export type PlannerRecruitmentCandidate = {
@@ -240,8 +240,9 @@ function RecruitmentStudentPortraits({ students }: { students: readonly PlannerR
           key={student.uid}
           className={`relative size-7 overflow-hidden rounded-full bg-muted ring-2 ring-popover ${index > 0 ? "-ml-2" : ""}`}
         >
-          <img
-            src={studentImageUrl(student.imageUid ?? student.uid)}
+          <StudentPortrait
+            uid={student.uid}
+            imageUid={student.imageUid}
             alt=""
             className="size-full object-cover"
             loading="lazy"

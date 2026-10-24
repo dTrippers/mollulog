@@ -18,7 +18,7 @@ import {
   roleColor,
   roleLocale,
 } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { Role } from "~/models/content.d";
 import EventInfoCard from "./EventInfoCard";
 
@@ -280,11 +280,11 @@ function RecruitmentCard({
       )}
     >
       <div className="relative w-full overflow-hidden aspect-200/226">
-        <img
-          src={studentImageUrl(studentUid ?? "unlisted")}
+        <StudentPortrait
+          uid={studentUid}
           alt={recruitment.studentName}
           className="w-full h-full object-cover object-top"
-          loading="lazy"
+          haloScale="72%"
         />
 
         <div className="absolute top-0.5 right-0.5">

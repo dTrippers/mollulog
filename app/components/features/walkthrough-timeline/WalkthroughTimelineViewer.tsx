@@ -11,7 +11,7 @@ import { Link } from "react-router";
 import Button from "~/components/primitives/Button";
 import type { TimelineAction, TimelineStep, WalkthroughParty } from "~/domain/walkthrough-timeline";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 
 export type TimelineViewerStudent = { name: string; equipments?: string[] };
 
@@ -62,8 +62,8 @@ export function TimelineStudentImage({ uid, name, className }: { uid: string; na
   }
 
   return (
-    <img
-      src={studentImageUrl(uid)}
+    <StudentPortrait
+      uid={uid}
       alt={name}
       className={cn("size-20 rounded-full bg-muted object-cover", className)}
       onError={() => setFailed(true)}
@@ -96,8 +96,8 @@ function TimelineActionImage({
   }
 
   return (
-    <img
-      src={studentImageUrl(uid)}
+    <StudentPortrait
+      uid={uid}
       alt={name}
       className={cn("shrink-0 rounded-full bg-muted object-cover", sizeClassName)}
       onError={() => setFailed(true)}

@@ -1,4 +1,27 @@
 @import "tailwindcss";
+
+.halo-mode-notice-container {
+  container-type: inline-size;
+}
+
+.halo-mode-notice-label {
+  display: none;
+}
+
+@utility halo-contrast-scrim {
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0.32) 0%,
+    rgba(0, 0, 0, 0.16) 58%,
+    rgba(0, 0, 0, 0.08) 100%
+  );
+}
+
+@container (min-width: 12rem) {
+  .halo-mode-notice-label {
+    display: inline;
+  }
+}
 @plugin "@tailwindcss/typography";
 
 @custom-variant dark (&:where(.dark, .dark *));

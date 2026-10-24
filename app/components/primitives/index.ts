@@ -13,6 +13,7 @@ export { default as FilterButtons } from "./FilterButtons";
 export { default as FloatingActionBar } from "./FloatingActionBar";
 export { default as HorizontalScroll } from "./HorizontalScroll";
 export { default as HoverTooltip } from "./HoverTooltip";
+export { HaloModeIcon } from "./HaloModeIcon";
 export { default as Input } from "./Input";
 export { default as LoadingSkeleton } from "./LoadingSkeleton";
 export { default as MarkdownText } from "./MarkdownText";

@@ -32,6 +32,7 @@ function toDomain(row: PostgresTimelineContentRow): TimelineContent {
     endAt: row.endAt ? normalizePostgresInstant(row.endAt) : null,
     endless: row.endless,
     imageUrl: row.imageUrl,
+    imageBlurhash: row.imageBlurhash,
     videos: row.videos,
     contentType: row.contentType as TimelineContentType,
     runType: row.runType as RunType,

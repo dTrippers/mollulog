@@ -6,7 +6,6 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
-  useFetcher,
   useLoaderData,
   useLocation,
   useMatches,
@@ -28,6 +27,7 @@ import {
   shouldRenderGlobalSiteBanner,
 } from "./components/features/layout";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
+import { HaloModeProvider } from "./contexts/HaloModeContext";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
@@ -63,6 +63,7 @@ import styles from "./tailwind.css?url";
 import type { NavigationBarContents } from "./views/navigation";
 import { getNavigationBarContents } from "./views/navigation";
 import { getSiteBanner } from "./views/site-banner";
+import { submitPreference } from "./lib/preference-submission.client";
 
 const SignInBottomSheet = lazy(() => import("./components/features/auth/SignInBottomSheet"));
 const useIsomorphicLayoutEffect = typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -114,6 +115,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       isAdmin: sensei?.role === "admin",
       currentProfileStudentId: sensei?.profileStudentId ?? null,
       darkMode: preference.darkMode ?? true,
+      haloMode: preference.haloMode ?? false,
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
       favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
       mobileNavigationIds: preference.mobileNavigationIds ?? normalizeMobileNavigationIds(undefined),
@@ -247,13 +249,13 @@ export default function App() {
   } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
+  const [haloMode, setHaloMode] = useState(loaderData.haloMode);
   const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
   const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
     normalizeMobileNavigationIds(initialMobileNavigationIds),
   );
   const loadingBarRef = useRef<LoadingBarRef>(null);
   const submittedTimeZoneRef = useRef<string | null>(null);
-  const preferenceFetcher = useFetcher();
 
   const navigate = useNavigation();
   useEffect(() => {
@@ -280,11 +282,8 @@ export default function App() {
 
     setDisplayTimeZone(browserTimeZone);
     submittedTimeZoneRef.current = browserTimeZone;
-    preferenceFetcher.submit(
-      { darkMode, timeZone: browserTimeZone },
-      { method: "post", action: "/api/preference", encType: "application/json" },
-    );
-  }, [darkMode, loaderData.displayTimeZone, preferenceFetcher]);
+    void submitPreference({ timeZone: browserTimeZone }).catch(() => undefined);
+  }, [loaderData.displayTimeZone]);
 
   useEffect(() => {
     const onPageShow = (event: PageTransitionEvent) => {
@@ -405,6 +404,7 @@ export default function App() {
   return (
     <div className="min-h-dvh bg-background text-foreground transition-colors">
       <LoadingBar ref={loadingBarRef} color="#3b82f6" height={3} waitingTime={300} />
+      <HaloModeProvider value={{ haloMode, setHaloMode }}>
       <SignInProvider>
         <div className="flex flex-col lg:flex-row h-dvh">
           {isOAuthAuthorizeRoute ? null : (
@@ -468,6 +468,7 @@ export default function App() {
         </div>
         <SignInBottomSheetHost />
       </SignInProvider>
+      </HaloModeProvider>
     </div>
   );
 }

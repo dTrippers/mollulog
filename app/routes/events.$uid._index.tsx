@@ -52,6 +52,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     since: content.startAt,
     until: content.endAt,
     imageUrl: content.imageUrl,
+    imageBlurhash: content.imageBlurhash,
     type: content.contentType,
     runType: content.runType,
     endless: content.endless,
@@ -218,6 +219,7 @@ export default function EventIndex() {
       <div className="my-2 lg:my-8">
         <EventHeader
           imageUrl={eventContent.imageUrl}
+          imageBlurhash={eventContent.imageBlurhash}
           name={eventContent.name}
           type={eventContent.type}
           runType={eventContent.runType}

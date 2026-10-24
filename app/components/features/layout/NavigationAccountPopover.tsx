@@ -4,10 +4,11 @@ import {
   UserCircleIcon,
 } from "@heroicons/react/24/outline";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
-import { Link, useLocation, useSubmit } from "react-router";
-import { ProfileImage, Toggle } from "~/components/primitives";
+import { Link, useLocation } from "react-router";
+import { HaloModeIcon, ProfileImage, Toggle } from "~/components/primitives";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import type { NavigationItem } from "./navigation-menu";
-import { submitPreference } from "~/routes/api.preference";
+import { submitPreference } from "~/lib/preference-submission.client";
 import { cn } from "~/lib/utils";
 
 type NavigationAccountPopoverProps = {
@@ -44,8 +45,9 @@ export function NavigationAccountPopover({
   const isOpen = controlledIsOpen ?? uncontrolledIsOpen;
   const [position, setPosition] = useState<PopoverPosition | null>(null);
   const popoverId = `navigation-account-${useId().replaceAll(":", "")}`;
+  const haloModeDescriptionId = `halo-description-${useId().replaceAll(":", "")}`;
   const location = useLocation();
-  const submit = useSubmit();
+  const { haloMode, setHaloMode } = useHaloMode();
   const locationKey = `${location.pathname}\n${location.search}\n${location.hash}`;
   const previousLocationKeyRef = useRef(locationKey);
 
@@ -72,7 +74,7 @@ export function NavigationAccountPopover({
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportPadding = 12;
-      const width = 224;
+      const width = 264;
       const height = Math.min(popoverRef.current?.offsetHeight ?? 240, window.innerHeight - viewportPadding * 2);
       const maxLeft = Math.max(viewportPadding, window.innerWidth - width - viewportPadding);
       const maxTop = Math.max(viewportPadding, window.innerHeight - height - viewportPadding);
@@ -124,8 +126,12 @@ export function NavigationAccountPopover({
   }, [close, locationKey]);
 
   const toggleDarkMode = (next: boolean) => {
-    submitPreference(submit, { darkMode: next });
+    void submitPreference({ darkMode: next }).catch(() => undefined);
     onDarkModeChange(next);
+  };
+  const toggleHaloMode = (next: boolean) => {
+    void submitPreference({ haloMode: next }).catch(() => undefined);
+    setHaloMode(next);
   };
   const ModeIcon = darkMode ? SunIcon : MoonIcon;
   const profileAction = actions.find((action) => action.group === "account" && action.to.startsWith("/@"));
@@ -144,6 +150,7 @@ export function NavigationAccountPopover({
           <UserCircleIcon className="size-5" aria-hidden="true" />
           <span className="text-[11px] leading-4">로그인</span>
         </button>
+        <HaloModeButton variant="rail" haloMode={haloMode} onToggle={() => toggleHaloMode(!haloMode)} />
         <button
           type="button"
           className="flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
@@ -164,6 +171,7 @@ export function NavigationAccountPopover({
           <UserCircleIcon className="size-4 shrink-0" aria-hidden="true" />
           <span className="truncate">로그인</span>
         </button>
+        <HaloModeButton variant="expanded" haloMode={haloMode} onToggle={() => toggleHaloMode(!haloMode)} />
         <button
           type="button"
           className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
@@ -229,7 +237,7 @@ export function NavigationAccountPopover({
           aria-label="계정 메뉴"
           aria-hidden={!position}
           className={cn(
-            "fixed z-layer-navigation-menu w-56 popover-surface p-2",
+            "fixed z-layer-navigation-menu w-66 popover-surface p-2",
             !position && "pointer-events-none invisible opacity-0",
           )}
           style={{
@@ -275,6 +283,22 @@ export function NavigationAccountPopover({
               onChange={(enabled) => toggleDarkMode(enabled)}
             />
           </div>
+          <div className="flex min-h-12 items-center gap-3 rounded-md px-2 py-2 text-sm font-normal">
+            <HaloModeIcon className="size-4 shrink-0 text-muted-foreground" />
+            <span className="flex min-w-0 flex-1 flex-col">
+              <span>헤일로 모드</span>
+              <span id={haloModeDescriptionId} className="text-xs leading-4 text-muted-foreground">
+                학생·이벤트 썸네일을 가려요
+              </span>
+            </span>
+            <Toggle
+              initialState={haloMode}
+              aria-label="헤일로 모드"
+              aria-describedby={haloModeDescriptionId}
+              className="my-0"
+              onChange={toggleHaloMode}
+            />
+          </div>
           {signOutAction ? (
             <Link
               to={signOutAction.to}
@@ -286,5 +310,38 @@ export function NavigationAccountPopover({
         </div>
       ) : null}
     </div>
+  );
+}
+
+function HaloModeButton({
+  variant,
+  haloMode,
+  onToggle,
+}: {
+  variant: "expanded" | "rail";
+  haloMode: boolean;
+  onToggle: () => void;
+}) {
+  const descriptionId = `halo-button-description-${useId().replaceAll(":", "")}`;
+  return (
+    <>
+      <button
+        type="button"
+        className={
+          variant === "rail"
+            ? "flex min-h-11 w-[60px] flex-col items-center justify-center gap-0.5 rounded-md text-foreground/70 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+            : "inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-background text-foreground/75 transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+        }
+        onClick={onToggle}
+        aria-label="헤일로 모드"
+        aria-pressed={haloMode}
+        aria-describedby={descriptionId}
+        title="학생·이벤트 썸네일을 가려요"
+      >
+        <HaloModeIcon solid={haloMode} className={variant === "rail" ? "size-5" : "size-4"} />
+        {variant === "rail" ? <span className="text-[11px] leading-4">헤일로 모드</span> : null}
+      </button>
+      <span id={descriptionId} className="sr-only">학생·이벤트 썸네일을 가려요</span>
+    </>
   );
 }

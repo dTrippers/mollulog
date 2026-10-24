@@ -9,7 +9,8 @@ import { raidTypeToParam } from "~/domain/raid";
 import { compareInstantAsc, formatInstant } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { defenseTypeColor, defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
-import { bossImageUrl, studentImageUrl } from "~/models/assets";
+import { bossImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { RaidType } from "~/models/content.d";
 import type { RaidScheduleListItem } from "~/models/raid";
 import type { RaidVideoItem } from "~/models/raid-videos";
@@ -416,8 +417,8 @@ function RecurringStudents({
                       to={`/students/${student.studentUid}`}
                       className="flex min-w-0 flex-1 items-center gap-2 hover:text-primary"
                     >
-                      <img
-                        src={studentImageUrl(student.studentUid)}
+                      <StudentPortrait
+                        uid={student.studentUid}
                         alt=""
                         className="size-9 shrink-0 rounded-full bg-muted object-cover"
                         loading="lazy"
@@ -501,8 +502,8 @@ function RecurringStudents({
                           to={`/students/${student.studentUid}`}
                           className="flex items-center gap-3 hover:text-primary"
                         >
-                          <img
-                            src={studentImageUrl(student.studentUid)}
+                          <StudentPortrait
+                            uid={student.studentUid}
                             alt=""
                             className="size-10 rounded-full bg-muted object-cover"
                             loading="lazy"

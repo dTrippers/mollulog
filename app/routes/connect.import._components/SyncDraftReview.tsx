@@ -4,7 +4,7 @@ import { Form, useNavigation } from "react-router";
 import { EmptyView, ResourceCard } from "~/components/primitives";
 import { getEquipmentResourceTierLabel } from "~/domain/growth-resource";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { SyncDraft, SyncDraftType } from "~/models/sync-draft";
 import DraftReviewView, {
   DraftReviewActions,
@@ -146,11 +146,11 @@ function DraftEntryIcon({
 }) {
   if (type === "student_tier") {
     return (
-      <img
-        src={studentImageUrl(metadata?.studentUid ?? entryKey)}
+      <StudentPortrait
+        uid={metadata?.studentUid ?? entryKey}
         alt="학생 이미지"
         className="size-10 shrink-0 rounded-md bg-muted object-cover"
-        loading="lazy"
+        haloScale="72%"
       />
     );
   }

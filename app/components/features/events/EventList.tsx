@@ -1,6 +1,9 @@
 import { ArrowRightIcon } from "@heroicons/react/16/solid";
 import { useMemo } from "react";
 import { Link } from "react-router";
+import BlurhashPlaceholder from "~/components/primitives/BlurhashPlaceholder";
+import HaloModeNotice from "~/components/primitives/HaloModeNotice";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
@@ -14,6 +17,10 @@ type EventListItem = {
   since: UtcIsoString;
   until: UtcIsoString;
   imageUrl?: string | null;
+  imageBlurhash?: string | null;
+  imageSource?: "timeline" | "catalog";
+  timelineImageUrl?: string | null;
+  timelineImageBlurhash?: string | null;
 };
 
 type EventListProps = {
@@ -24,6 +31,7 @@ type EventListProps = {
 
 export default function EventList({ events, showArrow = true, className = "" }: EventListProps) {
   const displayTimeZone = useDisplayTimeZone();
+  const { haloMode } = useHaloMode();
 
   const sortedEvents = useMemo(() => {
     return [...events].sort((a, b) => CONTENT_ORDER.indexOf(a.type) - CONTENT_ORDER.indexOf(b.type));
@@ -48,7 +56,7 @@ export default function EventList({ events, showArrow = true, className = "" }: 
       {sortedEvents.map((event) => (
         <Link to={`/events/${event.uid}`} key={event.uid} className="block group">
           <div className="p-3 flex items-center gap-3 hover:bg-neutral-100 dark:hover:bg-neutral-900 transition-colors">
-            <div className={`flex-1 ${event.imageUrl ? "min-w-0" : ""}`}>
+            <div className={`flex-1 ${event.timelineImageUrl || event.imageUrl ? "min-w-0" : ""}`}>
               <p className="text-xs text-neutral-500 dark:text-neutral-400 mb-1">
                 {timelineContentTypeLocale[event.type]}
               </p>
@@ -58,12 +66,21 @@ export default function EventList({ events, showArrow = true, className = "" }: 
                 {formatInstant(event.until, { timeZone: displayTimeZone, format: "YYYY-MM-DD" })}
               </p>
             </div>
-            {event.imageUrl && (
-              <img
-                src={event.imageUrl}
-                alt={event.name}
-                className="h-12 md:h-16 aspect-4/3 object-cover rounded-lg flex-shrink-0"
-              />
+            {(event.timelineImageUrl || event.imageUrl) && (
+              <div className="relative h-12 aspect-4/3 shrink-0 overflow-hidden rounded-lg md:h-16">
+                {haloMode && (event.timelineImageUrl || event.imageSource === "timeline") ? (
+                  <>
+                    <BlurhashPlaceholder blurhash={event.timelineImageBlurhash ?? event.imageBlurhash} />
+                    <HaloModeNotice />
+                  </>
+                ) : (
+                  <img
+                    src={event.timelineImageUrl ?? event.imageUrl ?? ""}
+                    alt={event.name}
+                    className="size-full object-cover"
+                  />
+                )}
+              </div>
             )}
             {shouldShowArrow(event) && (
               <ArrowRightIcon

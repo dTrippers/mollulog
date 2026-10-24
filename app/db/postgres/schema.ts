@@ -213,6 +213,7 @@ export const pgTimelineContentsTable = pgTable(
     rewardExchangeEndAt: timestamptz("reward_exchange_end_at"),
     endless: boolean().notNull().default(false),
     imageUrl: text("image_url"),
+    imageBlurhash: text("image_blurhash"),
     videos: jsonb().$type<TimelineContentVideo[]>().notNull().default([]),
     contentType: text("content_type").notNull(),
     runType: text("run_type").notNull().default("first"),

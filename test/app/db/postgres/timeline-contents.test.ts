@@ -26,6 +26,7 @@ const defaultTimelineContentRow = {
   rewardExchangeEndAt: null,
   endless: false,
   imageUrl: null,
+  imageBlurhash: null,
   videos: [],
   contentType: "event",
   runType: "first",

@@ -1,6 +1,6 @@
 import { UserIcon } from "@heroicons/react/24/outline";
 import { cn } from "~/lib/utils";
-import { studentImageUrl } from "~/models/assets";
+import StudentPortrait from "./StudentPortrait";
 
 type ProfileImageProps = {
   studentUid: string | null;
@@ -39,10 +39,10 @@ export default function ProfileImage({ studentUid, imageUrl, alt, imageSize }: P
   }
 
   return studentUid ? (
-    <img
-      className={cn(imageSizeClass, "inline rounded-full bg-muted object-cover dark:opacity-90")}
-      src={studentImageUrl(studentUid)}
+    <StudentPortrait
+      uid={studentUid}
       alt="학생 프로필"
+      className={cn(imageSizeClass, "inline rounded-full bg-muted object-cover dark:opacity-90")}
     />
   ) : (
     <div className={cn(imageSizeClass, "flex items-center justify-center rounded-full bg-muted text-muted-foreground")}>

@@ -1,13 +1,16 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { useState } from "react";
 import { Link } from "react-router";
+import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
+import HaloModeNotice from "~/components/media/HaloModeNotice";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { StudentSlot } from "~/components/v2/features/students/StudentSlot";
+import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
 import type { FutureStudentEntry } from "~/components/v2/features/students/types";
 import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale } from "~/locales/ko";
-import { studentImageUrl } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { HomeRecruitmentGroup, HomeSourceResult, IndexRecruitment } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
@@ -75,16 +78,21 @@ function toStudentEntry({
 }
 
 function GroupBanner({ group }: { group: HomeRecruitmentGroup }) {
+  const { haloMode } = useHaloMode();
   const name = group.eventName ?? group.kindLabel;
   return (
     <div className="flex items-center gap-3">
       {group.eventImageUrl ? (
-        <img
-          src={group.eventImageUrl}
-          alt=""
-          loading="lazy"
-          className="aspect-[16/9] w-32 shrink-0 rounded-md object-cover"
-        />
+        <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md bg-v2-inset">
+          {haloMode ? (
+            <>
+              <BlurhashPlaceholder blurhash={group.eventImageBlurhash} />
+              <HaloModeNotice />
+            </>
+          ) : (
+            <img src={group.eventImageUrl} alt="" loading="lazy" className="size-full object-cover" />
+          )}
+        </div>
       ) : null}
       <p className="min-w-0 text-lg font-semibold break-keep text-v2-fg">{name}</p>
     </div>
@@ -120,12 +128,11 @@ function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentG
                 {students.length > 0 ? (
                   <div className="flex shrink-0 items-center -space-x-2">
                     {students.map((recruitment) => (
-                      <img
+                      <StudentPortrait
                         key={recruitment.favoriteKey}
-                        src={studentImageUrl(recruitment.student.uid)}
+                        uid={recruitment.student.uid}
                         alt={recruitment.studentName}
-                        loading="lazy"
-                        className="size-8 rounded-full border-2 border-v2-surface bg-v2-inset object-cover"
+                        className="size-8 rounded-full border-2 border-v2-surface object-cover"
                       />
                     ))}
                   </div>

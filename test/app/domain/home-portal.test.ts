@@ -25,6 +25,7 @@ function content(overrides: Partial<TimelineContent> & Pick<TimelineContent, "ui
     endAt: "2026-10-27T02:00:00.000Z",
     endless: false,
     imageUrl: null,
+    imageBlurhash: null,
     videos: [],
     contentType: "event",
     runType: "first",
