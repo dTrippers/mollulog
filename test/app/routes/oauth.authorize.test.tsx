@@ -179,7 +179,7 @@ describe("OAuth authorize route", () => {
   it("shows an inline error and does not redirect for an unregistered redirect URI", async () => {
     const result = await loader(createArgs(new Request(authorizeUrl({ redirect_uri: "https://attacker.example/callback" }))));
 
-    expect(dataValue(result)).toEqual({ kind: "invalid", reason: "등록되지 않은 돌아갈 주소예요." });
+    expect(dataValue(result)).toEqual({ kind: "invalid", reason: "앱에 등록되지 않은 이동 주소예요." });
     expect(result).not.toBeInstanceOf(Response);
   });
 

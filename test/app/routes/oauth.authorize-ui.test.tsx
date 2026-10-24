@@ -58,6 +58,6 @@ describe("OAuth consent form buttons", () => {
     );
 
     expect((screen.getByRole("button", { name: "취소" }) as HTMLButtonElement).type).toBe("submit");
-    expect((screen.getByRole("button", { name: "연결" }) as HTMLButtonElement).type).toBe("submit");
+    expect((screen.getByRole("button", { name: "허용하고 연결" }) as HTMLButtonElement).type).toBe("submit");
   });
 });

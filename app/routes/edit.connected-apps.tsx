@@ -173,7 +173,7 @@ function ConnectedAppRow({ connection }: { connection: ConnectionView }) {
         {confirming ? (
           <fieldset ref={confirmationRef} tabIndex={-1} className="mt-v2-group-gap space-y-4 rounded-md bg-v2-inset p-4">
             <legend className="sr-only">{`${connection.applicationName} 연결 해제 확인`}</legend>
-            <p className="break-keep text-sm">{connection.applicationName}에서 더 이상 내 데이터를 쓸 수 없어요.</p>
+            <p className="break-keep text-sm">{connection.applicationName}에서 내 데이터에 더 이상 접근할 수 없어요.</p>
             <div className="flex flex-wrap justify-end gap-2">
               <Button type="button" variant="text" disabled={isSubmitting} onClick={cancelConfirmation}>
                 취소

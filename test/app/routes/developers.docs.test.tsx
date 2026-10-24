@@ -113,7 +113,7 @@ describe("developers API documentation page", () => {
     expect(text).toContain("인증 URL");
     expect(text).toContain("토큰 URL");
     expect(text).toContain("Redirect URI는 등록한 주소와 정확히 같아야 해요");
-    expect(text).toContain("액세스 토큰은 1년간 유효하고 갱신 토큰은 없어요");
+    expect(text).toContain("액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.");
     expect(text).toContain("프로필 권한");
     expect(text).toContain("학생 쓰기 권한");
   });

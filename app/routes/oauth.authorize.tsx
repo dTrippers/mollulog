@@ -190,7 +190,7 @@ async function resolveAuthorizationRequest(
     parameters.duplicateFields.includes("redirect_uri") ||
     !applicationRedirectUriIsRegistered(client.application.redirectUris, redirectUri)
   ) {
-    return { kind: "invalid", reason: "등록되지 않은 돌아갈 주소예요." };
+    return { kind: "invalid", reason: "앱에 등록되지 않은 이동 주소예요." };
   }
 
   if (parameters.duplicateFields.length > 0) {
@@ -490,7 +490,7 @@ function ConsentScreen({ data: screen }: { data: ConsentScreenData }) {
           <dl className="mt-3 grid grid-cols-[5.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
             <dt className="text-v2-fg-tertiary">개발자</dt>
             <dd className="min-w-0 break-words">{screen.application.ownerUsername}</dd>
-            <dt className="text-v2-fg-tertiary">돌아갈 주소</dt>
+            <dt className="text-v2-fg-tertiary">이동할 사이트</dt>
             <dd className="min-w-0 break-all">{screen.redirectHost}</dd>
           </dl>
 
@@ -527,7 +527,7 @@ function ConsentScreen({ data: screen }: { data: ConsentScreenData }) {
             </Button>
             {signedIn ? (
               <Button type="submit" name="decision" value="allow" variant="primary" className="min-w-0 flex-1 md:flex-none">
-                연결
+                허용하고 연결
               </Button>
             ) : (
               <Button

@@ -167,7 +167,7 @@ describe("MolluLog API machine-readable documentation", () => {
     expect(index).toContain(`> ${API_GUIDE_FULL.overview}`);
     expect(index).toContain(`[전체 안내](${urls.llmsFullUrl})`);
     expect(index).toContain(`[OpenAPI](${urls.openApiUrl})`);
-    expect(index).toContain(`[사람용 문서](${host}/developers/docs)`);
+    expect(index).toContain(`[API 문서](${host}/developers/docs)`);
   });
 
   it("renders the complete Korean guide from the route, field, error, and guide sources", () => {

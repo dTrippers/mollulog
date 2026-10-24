@@ -243,7 +243,7 @@ function OAuthGuideSection({
         <CodeBlock label="토큰 응답 200">{tokenResponse}</CodeBlock>
         <ul className="space-y-1 text-sm text-v2-fg-secondary">
           <li>Redirect URI는 등록한 주소와 정확히 같아야 해요</li>
-          <li>액세스 토큰은 1년간 유효하고 갱신 토큰은 없어요</li>
+          <li>액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.</li>
         </ul>
       </DocsSection>
     </div>

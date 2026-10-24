@@ -107,7 +107,7 @@ describe("connected applications screen", () => {
     expect(trigger.className).toContain("min-h-7");
     expect(trigger.className).not.toContain("w-full");
     fireEvent.click(trigger);
-    expect(screen.getByText("Roster Tool에서 더 이상 내 데이터를 쓸 수 없어요.")).toBeTruthy();
+    expect(screen.getByText("Roster Tool에서 내 데이터에 더 이상 접근할 수 없어요.")).toBeTruthy();
     expect((trigger as HTMLButtonElement).disabled).toBe(true);
     await waitFor(() => expect(document.activeElement?.tagName).toBe("FIELDSET"));
 
