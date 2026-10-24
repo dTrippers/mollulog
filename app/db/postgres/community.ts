@@ -5,7 +5,6 @@ import { communityAuthorVisiblePredicate } from "~/db/postgres/community-moderat
 import {
   pgCommunityCommentsTable,
   pgCommunityPostLikesTable,
-  pgCommunityPostRecruitmentOpinionsTable,
   pgCommunityPostsTable,
   pgCommunityPostTagsTable,
   pgSenseisTable,
@@ -25,7 +24,6 @@ import type {
   CommunityVisibility,
   NestedCommunityComment,
   RecruitmentOpinionClassification,
-  RecruitmentOpinionClassificationStatus,
   YoutubeVideoCommunityPostInput,
 } from "~/models/community";
 import type { ContentCommentSummary, ContentCommentWithSensei } from "~/models/content-comment";
@@ -38,31 +36,15 @@ export type PostgresCommunityOptions = {
   createClient?: PostgresClientFactory;
   hideRecruitmentOpinions?: boolean;
   recruitmentPeriodStartAt?: Date | string | null;
-  recruitmentPeriodStartAtByContentId?: Readonly<Record<string, string | null>>;
 };
 
 export type RecruitmentOpinionClassificationJob = {
   postUid: string;
   body: string;
-  revision: number;
-};
-
-export type RecruitmentOpinionClassificationUpdate = {
-  classification: RecruitmentOpinionClassification;
-  model: string;
-  promptVersion: string;
 };
 
 type CommunityDb = NodePgDatabase;
 type CommunityPostRow = typeof pgCommunityPostsTable.$inferSelect;
-type CommunityPostRecruitmentOpinionRow = typeof pgCommunityPostRecruitmentOpinionsTable.$inferSelect;
-
-/** A post row joined with its optional recruitment-opinion extension fields. */
-type CommunityPostWithOpinionRow = CommunityPostRow &
-  Pick<
-    CommunityPostRecruitmentOpinionRow,
-    "recruitmentPeriodStartAt" | "recruitmentOpinionClassificationStatus" | "recruitmentOpinionClassification"
-  >;
 type CommunityCommentRow = typeof pgCommunityCommentsTable.$inferSelect;
 type CommunityDbExecutor = Pick<CommunityDb, "select" | "insert" | "update" | "delete">;
 
@@ -137,77 +119,31 @@ function communityCommentVisibleTo(row: Pick<CommunityCommentRow, "visibility" |
 
 type RecruitmentOpinionPostColumns = {
   userId: SQLWrapper;
-  subjectContentUid: SQLWrapper;
-  createdAt: SQLWrapper;
-  recruitmentPeriodStartAt: SQLWrapper;
-  classificationStatus: SQLWrapper;
   classification: SQLWrapper;
 };
 
-function recruitmentPeriodStartExpression(
-  columns: Pick<RecruitmentOpinionPostColumns, "subjectContentUid" | "recruitmentPeriodStartAt">,
-  options: PostgresCommunityOptions,
-): SQLWrapper {
-  const fallbackEntries = Object.entries(options.recruitmentPeriodStartAtByContentId ?? {}).filter(
-    ([, value]) => value != null,
-  );
-  if (!fallbackEntries.length) return columns.recruitmentPeriodStartAt;
-  const fallback = sql`CASE ${sql.join(
-    fallbackEntries.map(
-      ([contentId, startAt]) => sql`WHEN ${columns.subjectContentUid} = ${contentId} THEN ${startAt}::timestamptz`,
-    ),
-    sql` `,
-  )} ELSE NULL END`;
-  return sql`COALESCE(${columns.recruitmentPeriodStartAt}, ${fallback})`;
-}
-
-/**
- * Returns the server-side visibility rule for the optional recruitment-opinion filter.
- * Only a completed RESULT_RELATED classification hides another user's post. Missing,
- * pending, failed, and otherwise unknown classification states remain visible.
- */
 function recruitmentOpinionVisiblePredicate(
   columns: RecruitmentOpinionPostColumns,
   viewerUserId: number | undefined,
   options: PostgresCommunityOptions,
 ): SQL {
   if (!options.hideRecruitmentOpinions || viewerUserId == null) return sql`TRUE`;
-  const recruitmentPeriodStartAt = recruitmentPeriodStartExpression(columns, options);
-
   return sql`NOT (
     ${columns.userId} <> ${viewerUserId}
-    AND ${recruitmentPeriodStartAt} IS NOT NULL
-    AND ${columns.createdAt} >= ${recruitmentPeriodStartAt}
-    AND ${columns.classificationStatus} IS NOT DISTINCT FROM 'completed'
-    AND ${columns.classification} IS NOT DISTINCT FROM 'RESULT_RELATED'
+    AND ${columns.classification} IS NOT DISTINCT FROM 'result'
   )`;
 }
 
 export function recruitmentOpinionVisibleForRow(
-  row: Pick<
-    CommunityPostWithOpinionRow,
-    | "userId"
-    | "subjectContentUid"
-    | "createdAt"
-    | "recruitmentPeriodStartAt"
-    | "recruitmentOpinionClassificationStatus"
-    | "recruitmentOpinionClassification"
-  >,
+  row: Pick<CommunityPostRow, "userId" | "recruitmentClassification">,
   viewerUserId: number | undefined,
   options: PostgresCommunityOptions,
 ): boolean {
-  if (!options.hideRecruitmentOpinions || viewerUserId == null) return true;
-  if (row.userId === viewerUserId) return true;
-  const recruitmentPeriodStartAt =
-    row.recruitmentPeriodStartAt ??
-    (row.subjectContentUid ? options.recruitmentPeriodStartAtByContentId?.[row.subjectContentUid] : null);
-  if (recruitmentPeriodStartAt == null) return true;
-  const createdAt = row.createdAt instanceof Date ? row.createdAt.getTime() : new Date(row.createdAt).getTime();
-  const startAt = new Date(recruitmentPeriodStartAt).getTime();
-  if (createdAt < startAt) return true;
-  return !(
-    row.recruitmentOpinionClassificationStatus === "completed" &&
-    row.recruitmentOpinionClassification === "RESULT_RELATED"
+  return (
+    !options.hideRecruitmentOpinions ||
+    viewerUserId == null ||
+    row.userId === viewerUserId ||
+    row.recruitmentClassification !== "result"
   );
 }
 
@@ -860,9 +796,6 @@ export async function deletePostgresCommunityPostByUidInTransaction(
   await db.delete(pgCommunityCommentsTable).where(eq(pgCommunityCommentsTable.postUid, postUid));
   await db.delete(pgCommunityPostLikesTable).where(eq(pgCommunityPostLikesTable.postUid, postUid));
   await db.delete(pgCommunityPostTagsTable).where(eq(pgCommunityPostTagsTable.postUid, postUid));
-  await db
-    .delete(pgCommunityPostRecruitmentOpinionsTable)
-    .where(eq(pgCommunityPostRecruitmentOpinionsTable.postUid, postUid));
   await db.delete(pgCommunityPostsTable).where(eq(pgCommunityPostsTable.uid, postUid));
 }
 
@@ -1034,10 +967,6 @@ export async function getPostgresContentComments(
       db
         .select()
         .from(pgCommunityPostsTable)
-        .leftJoin(
-          pgCommunityPostRecruitmentOpinionsTable,
-          eq(pgCommunityPostRecruitmentOpinionsTable.postUid, pgCommunityPostsTable.uid),
-        )
         .where(
           and(
             eq(pgCommunityPostsTable.postType, "event_opinion"),
@@ -1049,11 +978,7 @@ export async function getPostgresContentComments(
             recruitmentOpinionVisiblePredicate(
               {
                 userId: pgCommunityPostsTable.userId,
-                subjectContentUid: pgCommunityPostsTable.subjectContentUid,
-                createdAt: pgCommunityPostsTable.createdAt,
-                recruitmentPeriodStartAt: pgCommunityPostRecruitmentOpinionsTable.recruitmentPeriodStartAt,
-                classificationStatus: pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationStatus,
-                classification: pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassification,
+                classification: pgCommunityPostsTable.recruitmentClassification,
               },
               userId,
               options,
@@ -1062,14 +987,7 @@ export async function getPostgresContentComments(
         ),
     options,
   );
-  const posts: CommunityPostWithOpinionRow[] = postRows.map(
-    ({ community_posts: post, community_post_recruitment_opinions: opinion }) => ({
-      ...post,
-      recruitmentPeriodStartAt: opinion?.recruitmentPeriodStartAt ?? null,
-      recruitmentOpinionClassificationStatus: opinion?.recruitmentOpinionClassificationStatus ?? null,
-      recruitmentOpinionClassification: opinion?.recruitmentOpinionClassification ?? null,
-    }),
-  );
+  const posts = postRows;
   const authors = await loadAuthors(env, posts, options);
   const visiblePosts = posts.filter(
     (post) => authorVisible(authors.get(post.userId), userId) && recruitmentOpinionVisibleForRow(post, userId, options),
@@ -1165,29 +1083,19 @@ export async function createPostgresContentComment(
           ),
         )
         .limit(1);
-      await db.transaction(async (tx) => {
-        await tx.insert(pgCommunityPostsTable).values({
-          uid,
-          userId,
-          postType: "event_opinion",
-          origin: "user",
-          visibility: visibility === "private" ? "private" : "public",
-          pinned: !existing,
-          subjectContentUid: contentId,
-          blocks: [{ type: "plaintext", text: body }],
-          displayAt: now,
-          createdAt: now,
-          updatedAt: now,
-        });
-        await tx.insert(pgCommunityPostRecruitmentOpinionsTable).values({
-          postUid: uid,
-          recruitmentPeriodStartAt,
-          recruitmentOpinionClassificationStatus: classificationPending ? "pending" : null,
-          recruitmentOpinionClassification: null,
-          recruitmentOpinionClassificationRevision: 0,
-          createdAt: now,
-          updatedAt: now,
-        });
+      await db.insert(pgCommunityPostsTable).values({
+        uid,
+        userId,
+        postType: "event_opinion",
+        origin: "user",
+        visibility: visibility === "private" ? "private" : "public",
+        pinned: !existing,
+        subjectContentUid: contentId,
+        recruitmentClassification: classificationPending ? "pending" : null,
+        blocks: [{ type: "plaintext", text: body }],
+        displayAt: now,
+        createdAt: now,
+        updatedAt: now,
       });
     },
     options,
@@ -1229,26 +1137,24 @@ export async function updatePostgresContentOpinion(
   body: string,
   visibility: CommunityCommentVisibility,
   options: PostgresCommunityOptions = {},
-): Promise<RecruitmentOpinionClassificationJob | null | undefined> {
-  const now = new Date();
-  const hasRecruitmentPeriodStartAt = Object.hasOwn(options, "recruitmentPeriodStartAt");
-  const requestedRecruitmentPeriodStartAt = options.recruitmentPeriodStartAt
-    ? new Date(options.recruitmentPeriodStartAt)
-    : null;
-  return withCommunityDatabase(
+): Promise<RecruitmentOpinionClassificationJob | null> {
+  const startAt = options.recruitmentPeriodStartAt;
+  const eligible =
+    startAt != null
+      ? sql`${pgCommunityPostsTable.createdAt} >= ${new Date(startAt).toISOString()}::timestamptz`
+      : sql`FALSE`;
+  const [updated] = await withCommunityDatabase(
     env,
     "update_content_opinion",
-    async (db) => {
-      const [existing] = await db
-        .select({
-          createdAt: pgCommunityPostsTable.createdAt,
-          recruitmentPeriodStartAt: pgCommunityPostRecruitmentOpinionsTable.recruitmentPeriodStartAt,
+    (db) =>
+      db
+        .update(pgCommunityPostsTable)
+        .set({
+          visibility: visibility === "private" ? "private" : "public",
+          blocks: [{ type: "plaintext", text: body }],
+          recruitmentClassification: sql`CASE WHEN ${eligible} THEN 'pending' ELSE NULL END`,
+          updatedAt: new Date(),
         })
-        .from(pgCommunityPostsTable)
-        .leftJoin(
-          pgCommunityPostRecruitmentOpinionsTable,
-          eq(pgCommunityPostRecruitmentOpinionsTable.postUid, pgCommunityPostsTable.uid),
-        )
         .where(
           and(
             eq(pgCommunityPostsTable.uid, postUid),
@@ -1256,78 +1162,16 @@ export async function updatePostgresContentOpinion(
             eq(pgCommunityPostsTable.postType, "event_opinion"),
           ),
         )
-        .limit(1);
-      if (!existing) return undefined;
-
-      const recruitmentPeriodStartAt = hasRecruitmentPeriodStartAt
-        ? requestedRecruitmentPeriodStartAt
-        : existing.recruitmentPeriodStartAt;
-      const classificationPending =
-        recruitmentPeriodStartAt !== null && existing.createdAt.getTime() >= recruitmentPeriodStartAt.getTime();
-      return db.transaction(async (tx) => {
-        const [updated] = await tx
-          .update(pgCommunityPostsTable)
-          .set({
-            visibility: visibility === "private" ? "private" : "public",
-            blocks: [{ type: "plaintext", text: body }],
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(pgCommunityPostsTable.uid, postUid),
-              eq(pgCommunityPostsTable.userId, userId),
-              eq(pgCommunityPostsTable.postType, "event_opinion"),
-            ),
-          )
-          .returning({ uid: pgCommunityPostsTable.uid });
-        if (!updated) return undefined;
-
-        const [opinion] = await tx
-          .insert(pgCommunityPostRecruitmentOpinionsTable)
-          .values({
-            postUid: postUid,
-            recruitmentPeriodStartAt,
-            recruitmentOpinionClassificationStatus: classificationPending ? "pending" : null,
-            recruitmentOpinionClassification: null,
-            recruitmentOpinionClassificationModel: null,
-            recruitmentOpinionClassificationPromptVersion: null,
-            recruitmentOpinionClassifiedAt: null,
-            recruitmentOpinionClassificationRevision: 1,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .onConflictDoUpdate({
-            target: pgCommunityPostRecruitmentOpinionsTable.postUid,
-            set: {
-              recruitmentPeriodStartAt,
-              recruitmentOpinionClassificationStatus: classificationPending ? "pending" : null,
-              recruitmentOpinionClassification: null,
-              recruitmentOpinionClassificationModel: null,
-              recruitmentOpinionClassificationPromptVersion: null,
-              recruitmentOpinionClassifiedAt: null,
-              recruitmentOpinionClassificationRevision:
-                sql`${pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationRevision} + 1`,
-              updatedAt: now,
-            },
-          })
-          .returning({ revision: pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationRevision });
-        if (!opinion) return undefined;
-        if (!classificationPending) return null;
-        return {
-          postUid,
-          body,
-          revision: Number(opinion.revision ?? 1),
-        };
-      });
-    },
+        .returning({ classification: pgCommunityPostsTable.recruitmentClassification }),
     options,
   );
+  return updated?.classification === "pending" ? { postUid, body } : null;
 }
 
 export async function completePostgresContentOpinionClassification(
   env: Env,
-  job: Pick<RecruitmentOpinionClassificationJob, "postUid" | "revision">,
-  result: RecruitmentOpinionClassificationUpdate,
+  job: RecruitmentOpinionClassificationJob,
+  classification: RecruitmentOpinionClassification,
   options: PostgresCommunityOptions = {},
 ): Promise<boolean> {
   const [updated] = await withCommunityDatabase(
@@ -1335,23 +1179,18 @@ export async function completePostgresContentOpinionClassification(
     "complete_content_opinion_classification",
     (db) =>
       db
-        .update(pgCommunityPostRecruitmentOpinionsTable)
-        .set({
-          recruitmentOpinionClassificationStatus: "completed" satisfies RecruitmentOpinionClassificationStatus,
-          recruitmentOpinionClassification: result.classification,
-          recruitmentOpinionClassificationModel: result.model,
-          recruitmentOpinionClassificationPromptVersion: result.promptVersion,
-          recruitmentOpinionClassifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .update(pgCommunityPostsTable)
+        .set({ recruitmentClassification: classification })
         .where(
           and(
-            eq(pgCommunityPostRecruitmentOpinionsTable.postUid, job.postUid),
-            eq(pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationRevision, job.revision),
-            eq(pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationStatus, "pending"),
+            eq(pgCommunityPostsTable.uid, job.postUid),
+            eq(pgCommunityPostsTable.postType, "event_opinion"),
+            eq(pgCommunityPostsTable.blocks, [{ type: "plaintext", text: job.body }]),
+            // A late success for the same body can recover a failed attempt; a settled result wins.
+            inArray(pgCommunityPostsTable.recruitmentClassification, ["pending", "failed"]),
           ),
         )
-        .returning({ postUid: pgCommunityPostRecruitmentOpinionsTable.postUid }),
+        .returning({ uid: pgCommunityPostsTable.uid }),
     options,
   );
   return Boolean(updated);
@@ -1359,8 +1198,7 @@ export async function completePostgresContentOpinionClassification(
 
 export async function failPostgresContentOpinionClassification(
   env: Env,
-  job: Pick<RecruitmentOpinionClassificationJob, "postUid" | "revision">,
-  result: Pick<RecruitmentOpinionClassificationUpdate, "model" | "promptVersion">,
+  job: RecruitmentOpinionClassificationJob,
   options: PostgresCommunityOptions = {},
 ): Promise<boolean> {
   const [updated] = await withCommunityDatabase(
@@ -1368,23 +1206,17 @@ export async function failPostgresContentOpinionClassification(
     "fail_content_opinion_classification",
     (db) =>
       db
-        .update(pgCommunityPostRecruitmentOpinionsTable)
-        .set({
-          recruitmentOpinionClassificationStatus: "failed" satisfies RecruitmentOpinionClassificationStatus,
-          recruitmentOpinionClassification: null,
-          recruitmentOpinionClassificationModel: result.model,
-          recruitmentOpinionClassificationPromptVersion: result.promptVersion,
-          recruitmentOpinionClassifiedAt: new Date(),
-          updatedAt: new Date(),
-        })
+        .update(pgCommunityPostsTable)
+        .set({ recruitmentClassification: "failed" })
         .where(
           and(
-            eq(pgCommunityPostRecruitmentOpinionsTable.postUid, job.postUid),
-            eq(pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationRevision, job.revision),
-            eq(pgCommunityPostRecruitmentOpinionsTable.recruitmentOpinionClassificationStatus, "pending"),
+            eq(pgCommunityPostsTable.uid, job.postUid),
+            eq(pgCommunityPostsTable.postType, "event_opinion"),
+            eq(pgCommunityPostsTable.blocks, [{ type: "plaintext", text: job.body }]),
+            eq(pgCommunityPostsTable.recruitmentClassification, "pending"),
           ),
         )
-        .returning({ postUid: pgCommunityPostRecruitmentOpinionsTable.postUid }),
+        .returning({ uid: pgCommunityPostsTable.uid }),
     options,
   );
   return Boolean(updated);
@@ -1533,11 +1365,7 @@ export async function getPostgresContentCommentSummaries(
       const postRecruitmentOpinionVisibility = recruitmentOpinionVisiblePredicate(
         {
           userId: sql.raw("p.user_id"),
-          subjectContentUid: sql.raw("p.subject_content_uid"),
-          createdAt: sql.raw("p.created_at"),
-          recruitmentPeriodStartAt: sql.raw("r.recruitment_period_start_at"),
-          classificationStatus: sql.raw("r.recruitment_opinion_classification_status"),
-          classification: sql.raw("r.recruitment_opinion_classification"),
+          classification: sql.raw("p.recruitment_classification"),
         },
         userId,
         options,
@@ -1546,7 +1374,6 @@ export async function getPostgresContentCommentSummaries(
         WITH visible_posts AS (
           SELECT p.uid, p.subject_content_uid AS content_uid, p.created_at
           FROM community_posts p
-          LEFT JOIN community_post_recruitment_opinions r ON r.post_uid = p.uid
           WHERE p.post_type = 'event_opinion'
             AND p.subject_content_uid IN (${contentValues})
             AND ${postVisibility}

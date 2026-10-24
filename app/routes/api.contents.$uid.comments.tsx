@@ -27,10 +27,8 @@ async function getCommentsResponse(
 ): Promise<CommentResponse> {
   const logger = getLogger(env, ctx, { route: "api.contents.comments", contentUid });
   const hideRecruitmentOpinions = currentUser?.hideRecruitmentOpinions === true;
-  const recruitmentPeriod = await getContentRecruitmentPeriod(env, contentUid, { ctx });
   const options = {
     hideRecruitmentOpinions,
-    recruitmentPeriodStartAtByContentId: { [contentUid]: recruitmentPeriod?.startAt ?? null },
     ctx,
   };
   try {
@@ -95,9 +93,7 @@ export const action = async ({ request, params, context }: ActionFunctionArgs) =
       commentOptions,
     );
     if (recruitmentPeriod && Date.now() >= new Date(recruitmentPeriod.startAt).getTime()) {
-      ctx.waitUntil(
-        classifyAndPersistRecruitmentOpinion(env, { postUid: commentUid, body: actionData.body, revision: 0 }, ctx),
-      );
+      ctx.waitUntil(classifyAndPersistRecruitmentOpinion(env, { postUid: commentUid, body: actionData.body }, ctx));
     }
   } else if (actionData.action === "createSubcomment") {
     if (!actionData.body || !actionData.parentCommentUid) {

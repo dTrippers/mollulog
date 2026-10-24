@@ -148,7 +148,6 @@ describe("futures loader data source routing", () => {
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], undefined, undefined, {
       hideRecruitmentOpinions: false,
-      recruitmentPeriodStartAtByContentId: {},
       ctx,
     });
     expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
@@ -169,7 +168,6 @@ describe("futures loader data source routing", () => {
     });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, undefined, {
       hideRecruitmentOpinions: false,
-      recruitmentPeriodStartAtByContentId: {},
       ctx,
     });
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);

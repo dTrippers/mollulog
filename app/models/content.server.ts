@@ -25,7 +25,6 @@ export { nestComments } from "./content";
 
 export type ContentCommentReadOptions = {
   hideRecruitmentOpinions?: boolean;
-  recruitmentPeriodStartAtByContentId?: Readonly<Record<string, string | null>>;
   ctx?: ExecutionContext;
 };
 

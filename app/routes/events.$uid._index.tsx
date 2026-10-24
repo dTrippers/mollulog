@@ -65,9 +65,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const canFilterRecruitmentOpinions = content.contentType !== "live" && eventContent.recruitmentPeriod !== null;
   const commentReadOptions = {
     hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
-    recruitmentPeriodStartAtByContentId: {
-      [timelineUid]: canFilterRecruitmentOpinions ? (eventContent.recruitmentPeriod?.startAt ?? null) : null,
-    },
     ctx,
   };
 

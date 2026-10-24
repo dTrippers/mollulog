@@ -206,9 +206,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
           undefined,
           {
             hideRecruitmentOpinions: currentUser?.hideRecruitmentOpinions === true,
-            recruitmentPeriodStartAtByContentId: Object.fromEntries(
-              contents.map((content) => [content.uid, content.recruitmentPeriod?.startAt ?? null]),
-            ),
             ctx,
           },
         ),
