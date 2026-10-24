@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { shouldCloseNotificationPopoverOnFocusOut } from "~/components/features/layout/NotificationHistoryPopover";
+import { shouldCloseNotificationPopoverOnFocusOut } from "~/components/v2/layout/navigation/NotificationHistoryPopover";
 
 describe("notification history focus boundary", () => {
   it("keeps focus within the trigger/panel root and closes for outside focus", () => {

@@ -20,12 +20,14 @@ import { getDiscordSignInFeedback } from "./components/features/auth/discord-sig
 import {
   ErrorPage,
   Footer,
-  getPageSiteBannerSlot,
-  NavigationBar,
   ServerErrorPage,
-  SiteBanner,
-  shouldRenderGlobalSiteBanner,
 } from "./components/features/layout";
+import {
+  NavigationBar,
+  getPageSiteBannerSlot,
+  shouldRenderGlobalSiteBanner,
+  SiteBanner,
+} from "./components/v2/layout/navigation";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { HaloModeProvider } from "./contexts/HaloModeContext";
 import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";

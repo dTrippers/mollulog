@@ -5,7 +5,7 @@ import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMoreNavigationSections, type NavigationItem } from "~/components/features/layout/navigation-menu";
+import { getMoreNavigationSections, type NavigationItem } from "~/components/v2/layout/navigation/navigation-menu";
 import { BottomSheet, HaloModeIcon, ProfileImage, SubTitle, Toggle } from "~/components/primitives";
 import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useSignIn } from "~/contexts/SignInProvider";
