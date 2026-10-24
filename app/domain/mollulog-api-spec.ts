@@ -501,10 +501,14 @@ export const API_ROUTES = [
 ] as const satisfies readonly ApiRouteSpec[];
 
 export const API_ROUTE_GROUPS = [
-  { scope: "profile", title: "프로필 권한" },
-  { scope: "students:read", title: "학생 읽기 권한" },
-  { scope: "students:write", title: "학생 쓰기 권한" },
-] as const satisfies readonly { scope: ApiScope; title: string }[];
+  { id: "profile", title: "프로필", routeIds: ["getMe"] },
+  { id: "students", title: "학생 검색", routeIds: ["findStudents"] },
+  {
+    id: "recruited-students",
+    title: "모집 학생 상태",
+    routeIds: ["listRecruitedStudents", "getRecruitedStudent", "registerRecruitedStudent", "patchRecruitedStudent", "deleteRecruitedStudent"],
+  },
+] as const satisfies readonly { id: string; title: string; routeIds: readonly (typeof API_ROUTES)[number]["id"][] }[];
 
 export function routePathToOpenApiPath(path: string): string {
   return path.replace(/:([A-Za-z][A-Za-z0-9_]*)/g, "{$1}");

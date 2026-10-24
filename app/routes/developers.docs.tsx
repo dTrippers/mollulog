@@ -8,6 +8,7 @@ import {
   API_PUBLIC_ERRORS,
   API_ROUTE_GROUPS,
   API_ROUTES,
+  API_SCOPE_REGISTRY,
   API_STUDENT_STATE_FIELD_SPECS,
   type ApiPublicErrorCode,
   type ApiRouteSpec,
@@ -111,58 +112,15 @@ export default function DevelopersDocs() {
 
         <DocsSection title={API_GUIDE_COPY.sections.endpoints}>
           {API_ROUTE_GROUPS.map((group) => (
-            <EndpointGroup key={group.scope} title={group.title}>
-              {API_ROUTES.filter((route) => route.requiredScopes.some((scope) => scope === group.scope)).map((route) => (
-                <ApiEndpoint
-                  key={route.id}
-                  route={route}
-                  baseUrl={urls.baseUrl}
-                />
-              ))}
-            </EndpointGroup>
+            <ModelGroup key={group.id} title={group.title}>
+              <div className="space-y-1">
+                {API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id)).map((route) => (
+                  <ApiEndpoint key={route.id} route={route} baseUrl={urls.baseUrl} />
+                ))}
+              </div>
+              {group.id === "recruited-students" ? <StudentStateFields /> : null}
+            </ModelGroup>
           ))}
-        </DocsSection>
-
-        <DocsSection title={API_GUIDE_COPY.sections.fields}>
-          <DataTable label={API_GUIDE_COPY.sections.fields}>
-            <TableHeader columns={[...API_GUIDE_COPY.fieldTable.columns]} />
-            <tbody>
-              {API_GUIDE_COPY.fieldGroups.map((group) => {
-                const firstField =
-                  API_STUDENT_STATE_FIELD_SPECS[group.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
-                return (
-                  <tr className="border-t border-v2-divider" key={group.fields[0]}>
-                    <TableCell firstColumn>
-                      {group.fields.map((field) => (
-                        <code className="block whitespace-nowrap font-mono text-sm" key={field}>
-                          {field}
-                        </code>
-                      ))}
-                    </TableCell>
-                    <TableCell>
-                      <span className="whitespace-nowrap">{group.meaning}</span>
-                      {"detail" in group ? (
-                        <span className="block text-xs text-v2-fg-secondary">{group.detail}</span>
-                      ) : null}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap tabular-nums">
-                      {formatFieldRange(firstField.min, firstField.max)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-v2-fg-secondary">
-                      {firstField.nullable
-                        ? API_GUIDE_COPY.fieldTable.nullAllowed
-                        : API_GUIDE_COPY.fieldTable.nullForbidden}
-                    </TableCell>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </DataTable>
-          <ul className="space-y-2 text-sm">
-            {API_GUIDE_COPY.pageFieldRules.map((rule) => (
-              <RuleItem key={rule}>{rule}</RuleItem>
-            ))}
-          </ul>
         </DocsSection>
 
         <DocsSection title={API_GUIDE_COPY.sections.errors}>
@@ -181,6 +139,49 @@ export default function DevelopersDocs() {
         </DocsSection>
       </div>
     </PageMain>
+  );
+}
+
+function StudentStateFields() {
+  return (
+    <section className="space-y-v2-group-gap" aria-label={API_GUIDE_COPY.sections.fields}>
+      <h5 className="text-sm font-semibold">{API_GUIDE_COPY.sections.fields}</h5>
+      <DataTable label={API_GUIDE_COPY.sections.fields}>
+        <TableHeader columns={[...API_GUIDE_COPY.fieldTable.columns]} />
+        <tbody>
+          {API_GUIDE_COPY.fieldGroups.map((group) => {
+            const firstField =
+              API_STUDENT_STATE_FIELD_SPECS[group.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
+            return (
+              <tr className="border-t border-v2-divider" key={group.fields[0]}>
+                <TableCell firstColumn>
+                  {group.fields.map((field) => (
+                    <code className="block whitespace-nowrap font-mono text-sm" key={field}>
+                      {field}
+                    </code>
+                  ))}
+                </TableCell>
+                <TableCell>
+                  <span className="whitespace-nowrap">{group.meaning}</span>
+                  {"detail" in group ? <span className="block text-xs text-v2-fg-secondary">{group.detail}</span> : null}
+                </TableCell>
+                <TableCell className="whitespace-nowrap tabular-nums">
+                  {formatFieldRange(firstField.min, firstField.max)}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-v2-fg-secondary">
+                  {firstField.nullable ? API_GUIDE_COPY.fieldTable.nullAllowed : API_GUIDE_COPY.fieldTable.nullForbidden}
+                </TableCell>
+              </tr>
+            );
+          })}
+        </tbody>
+      </DataTable>
+      <ul className="space-y-2 text-sm">
+        {API_GUIDE_COPY.pageFieldRules.map((rule) => (
+          <RuleItem key={rule}>{rule}</RuleItem>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -347,6 +348,9 @@ function ApiEndpoint({
   const responseJson = JSON.stringify(route.responseExample.body);
   return (
     <EndpointRow method={route.method} path={route.displayPath} summary={route.summary}>
+      <p className="text-sm text-v2-fg-secondary">
+        필요 권한: {route.requiredScopes.map((scope) => API_SCOPE_REGISTRY[scope].developerLabel).join(", ")}
+      </p>
       {route.parameters.length > 0 ? <ParameterTable route={route} /> : null}
       {"required" in guide ? <p className="text-sm">{guide.required}</p> : null}
       <CodeBlock label={API_GUIDE_COPY.requestExampleLabel} tone="surface" copyable>
@@ -356,11 +360,10 @@ function ApiEndpoint({
         <p className="text-sm text-v2-fg-secondary">
           {API_GUIDE_COPY.responseLabel}: {guide.response}
         </p>
-      ) : (
-        <CodeBlock label={`${API_GUIDE_COPY.responseLabel} ${route.responseExample.status}`} tone="surface">
-          {responseJson}
-        </CodeBlock>
-      )}
+      ) : null}
+      <CodeBlock label={`${API_GUIDE_COPY.responseLabel} ${route.responseExample.status}`} tone="surface">
+        {responseJson}
+      </CodeBlock>
       {"note" in guide && "error" in guide ? (
         <p className="text-sm text-v2-fg-secondary">
           {guide.note} <EndpointErrorLink code={guide.error} />
@@ -474,11 +477,11 @@ function renderBreakableCode(code: string) {
   });
 }
 
-function EndpointGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function ModelGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-1">
-      <h3 className="mb-1 text-xs font-semibold text-v2-fg-tertiary">{title}</h3>
-      <div className="space-y-1">{children}</div>
+    <section className="space-y-v2-group-gap">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      {children}
     </section>
   );
 }

@@ -5,6 +5,7 @@ import {
   API_DOC_VERSION,
   API_PUBLIC_ERROR_CODES,
   API_PUBLIC_ERRORS,
+  API_ROUTE_GROUPS,
   API_ROUTES,
   API_SCOPE_REGISTRY,
   API_STUDENT_STATE_FIELD_SPECS,
@@ -349,67 +350,75 @@ export function renderLlmsFull(urls: ReturnType<typeof resolveApiDocumentUrls>, 
     "## 핵심 실행 흐름",
     ...API_GUIDE_FULL.workflow.map((line, index) => `${index + 1}. ${line}`),
     "",
-    "## 엔드포인트",
+    `## ${API_GUIDE_COPY.sections.endpoints}`,
   ];
 
-  for (const route of API_ROUTES) {
-    const guide = getApiEndpointGuide(route.id);
-    sections.push(
-      "",
-      `### ${route.method} ${route.displayPath}`,
-      `필요 scope: ${route.requiredScopes.map((scope) => `\`${scope}\``).join(", ")}`,
-      route.summary,
-    );
-    if (route.parameters.length > 0) {
-      sections.push("", "파라미터:");
-      for (const parameter of route.parameters) {
-        sections.push(`- \`${parameter.name}\`: ${parameter.description}`);
-      }
-    }
-    sections.push(
-      "",
-      "요청 예시:",
-      "```bash",
-      formatApiCurlCommand(urls.baseUrl, route),
-      "```",
-      "",
-      "응답 예시:",
-      "```json",
-    );
-    sections.push(JSON.stringify(route.responseExample.body, null, 2), "```");
-    if (guide && "response" in guide) sections.push("", guide.response);
-    if (guide && "required" in guide) {
+  for (const group of API_ROUTE_GROUPS) {
+    sections.push("", `### ${group.title}`);
+    for (const route of API_ROUTES.filter((route) => group.routeIds.some((id) => id === route.id))) {
+      const guide = getApiEndpointGuide(route.id);
       sections.push(
         "",
-        guide.required,
-        guide.readPermission,
-        `이미 등록한 학생이면 ${errorLink("student_already_recruited")}`,
+        `#### ${route.method} ${route.displayPath}`,
+        `필요 scope: ${route.requiredScopes.map((scope) => `\`${scope}\``).join(", ")}`,
+        route.summary,
+      );
+      if (route.parameters.length > 0) {
+        sections.push("", "파라미터:");
+        for (const parameter of route.parameters) {
+          sections.push(`- \`${parameter.name}\`: ${parameter.description}`);
+        }
+      }
+      sections.push(
+        "",
+        "요청 예시:",
+        "```bash",
+        formatApiCurlCommand(urls.baseUrl, route),
+        "```",
+        "",
+        "응답 예시:",
+        "```json",
+      );
+      sections.push(JSON.stringify(route.responseExample.body, null, 2), "```");
+      if (guide && "response" in guide) sections.push("", guide.response);
+      if (guide && "required" in guide) {
+        sections.push(
+          "",
+          guide.required,
+          guide.readPermission,
+          `이미 등록한 학생이면 ${errorLink("student_already_recruited")}`,
+        );
+      }
+      if (guide && "note" in guide) {
+        const error = "error" in guide ? guide.error : undefined;
+        sections.push("", `${guide.note}${error ? ` ${errorLink(error)}` : ""}`);
+      }
+      sections.push("", `오류: ${route.errors.map(errorLink).join(" · ")}`);
+    }
+
+    if (group.id === "recruited-students") {
+      sections.push("", `#### ${API_GUIDE_COPY.sections.fields}`, "");
+      sections.push("| 필드 | 의미 | 범위 | null로 비우기 |", "| --- | --- | --- | --- |");
+      for (const fieldGroup of API_GUIDE_COPY.fieldGroups) {
+        const firstField = API_STUDENT_STATE_FIELD_SPECS[fieldGroup.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
+        const range = `${formatNumber(firstField.min)}–${formatNumber(firstField.max)}`;
+        sections.push(
+          `| ${fieldGroup.fields.map((field) => `\`${field}\``).join("<br>")} | ${fieldGroup.meaning}${"detail" in fieldGroup ? `<br>${fieldGroup.detail}` : ""} | ${range} | ${firstField.nullable ? "가능" : "불가"} |`,
+        );
+      }
+      sections.push(
+        "",
+        "##### 필드 간 제약",
+        ...API_GUIDE_FULL.fieldRules.map((line) => `- ${line}`),
+        "",
+        API_GUIDE_FULL.representativeUid,
+        API_GUIDE_FULL.responseScopes,
+        API_GUIDE_FULL.deletion,
       );
     }
-    if (guide && "note" in guide) {
-      const error = "error" in guide ? guide.error : undefined;
-      sections.push("", `${guide.note}${error ? ` ${errorLink(error)}` : ""}`);
-    }
-    sections.push("", `오류: ${route.errors.map(errorLink).join(" · ")}`);
   }
 
-  sections.push("", "## 학생 상태 필드", "");
-  sections.push("| 필드 | 의미 | 범위 | null로 비우기 |", "| --- | --- | --- | --- |");
-  for (const group of API_GUIDE_COPY.fieldGroups) {
-    const firstField = API_STUDENT_STATE_FIELD_SPECS[group.fields[0] as keyof typeof API_STUDENT_STATE_FIELD_SPECS];
-    const range = `${formatNumber(firstField.min)}–${formatNumber(firstField.max)}`;
-    sections.push(
-      `| ${group.fields.map((field) => `\`${field}\``).join("<br>")} | ${group.meaning}${"detail" in group ? `<br>${group.detail}` : ""} | ${range} | ${firstField.nullable ? "가능" : "불가"} |`,
-    );
-  }
   sections.push(
-    "",
-    "### 필드 간 제약",
-    ...API_GUIDE_FULL.fieldRules.map((line) => `- ${line}`),
-    "",
-    API_GUIDE_FULL.representativeUid,
-    API_GUIDE_FULL.responseScopes,
-    API_GUIDE_FULL.deletion,
     "",
     "## 오류 code별 대응",
     "",

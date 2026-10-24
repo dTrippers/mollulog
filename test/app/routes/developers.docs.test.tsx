@@ -8,6 +8,7 @@ jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }))
 import { API_GUIDE_COPY } from "~/domain/mollulog-api-guide";
 import {
   API_PUBLIC_ERRORS,
+  API_ROUTE_GROUPS,
   API_ROUTES,
   API_STUDENT_STATE_FIELD_SPECS,
   resolveApiDocumentUrls,
@@ -114,16 +115,21 @@ describe("developers API documentation page", () => {
     expect(text).toContain("토큰 URL");
     expect(text).toContain("Redirect URI는 등록한 주소와 정확히 같아야 해요");
     expect(text).toContain("액세스 토큰은 발급 후 1년 동안 사용할 수 있어요. 갱신 토큰을 발급하지 않으므로 만료되면 인증 절차를 다시 진행해야 해요.");
-    expect(text).toContain("프로필 권한");
-    expect(text).toContain("학생 쓰기 권한");
+    expect(text).toContain("모델과 엔드포인트");
+    expect(text).toContain("모집 학생 상태");
   });
 
   it("renders every endpoint, field, and public error from the shared modules", () => {
     const markup = normalizeMarkup(renderDocsPage());
+    const text = extractText(markup);
+
+    expect(API_ROUTE_GROUPS.flatMap((group) => group.routeIds)).toEqual(API_ROUTES.map((route) => route.id));
+    expect(markup).toMatch(/<h4[^>]*>모집 학생 상태<\/h4>[\s\S]*<h5[^>]*>학생 상태 필드<\/h5>/);
 
     for (const route of API_ROUTES) {
       expect(markup).toContain(route.displayPath);
       expect(markup).toContain(route.summary);
+      expect(text).toContain(JSON.stringify(route.responseExample.body));
     }
     for (const field of Object.keys(API_STUDENT_STATE_FIELD_SPECS)) expect(markup).toContain(field);
     for (const [code, error] of Object.entries(API_PUBLIC_ERRORS)) {

@@ -181,9 +181,10 @@ describe("MolluLog API machine-readable documentation", () => {
     expect(text).toContain("MOLLULOG_API_KEY");
     expect(text).toContain("코드, 커밋, 로그에 남기지 마세요");
     expect(text).toContain("## 핵심 실행 흐름");
-    expect(text).toContain("## 엔드포인트");
-    expect(text).toContain("## 학생 상태 필드");
-    expect(text).toContain("### 필드 간 제약");
+    expect(text).toContain("## 모델과 엔드포인트");
+    expect(text).toContain("### 모집 학생 상태");
+    expect(text).toContain("#### 학생 상태 필드");
+    expect(text).toContain("##### 필드 간 제약");
     expect(text).toContain("쓰기 본문은 학생 한 명의 객체여야 해요. 배열은 보낼 수 없어요.");
     expect(text).toContain("모집 등록, 현재 성장도, 인연·경험치를 지워요");
     expect(text).toContain("## 오류 code별 대응");

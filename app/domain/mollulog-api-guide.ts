@@ -18,7 +18,7 @@ export const API_GUIDE_COPY = {
     agent: "코딩 에이전트로 연동하기",
     connection: "연결",
     oauth: "몰루로그 계정으로 로그인",
-    endpoints: "엔드포인트",
+    endpoints: "모델과 엔드포인트",
     fields: "학생 상태 필드",
     errors: "오류",
     limits: "제한과 규칙",
