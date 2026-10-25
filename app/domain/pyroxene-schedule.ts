@@ -24,7 +24,7 @@ export type PyroxeneScheduleContent =
         pickup: boolean;
         rerun: boolean;
         until: UtcIsoString | null;
-        student: { uid: string; imageUid?: string | null; name: string; initialTier: number } | null;
+        student: { uid: string; imageUid?: string | null; name: string; initialTier: number | null } | null;
         // Set when this content merges recruitments from multiple events sharing one
         // recruitment group; identifies which event this particular recruitment belongs to,
         // since favorites are stored per-event rather than per-group.
@@ -67,7 +67,7 @@ export type PyroxeneScheduleItem = {
       pickup: boolean;
       rerun: boolean;
       until: UtcIsoString | null;
-      student: { uid: string; imageUid?: string | null; name: string; initialTier: number } | null;
+      student: { uid: string; imageUid?: string | null; name: string; initialTier: number | null } | null;
       favorited: boolean;
       sourceContentUid?: string;
     }[];

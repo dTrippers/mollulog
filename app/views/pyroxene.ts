@@ -50,7 +50,7 @@ export type PyroxenePlannerContent =
         pickup: boolean;
         rerun: boolean;
         until: UtcIsoString | null;
-        student: { uid: string; imageUid: string | null; name: string; initialTier: number } | null;
+        student: { uid: string; imageUid: string | null; name: string; initialTier: number | null } | null;
         // Which event this recruitment "belongs to" when its group is shared by multiple
         // events. Only set on the merged recruitment entry (see buildGroupRecruitmentContent);
         // absent elsewhere, where recruitment.uid === content.uid already disambiguates.
@@ -154,9 +154,10 @@ function toRecruitmentDetail(
           uid: getRecruitmentFavoriteKey(recruitment),
           imageUid: recruitment.student?.uid ?? null,
           name: recruitment.student?.name ?? recruitment.studentName,
+          // A pickup whose student is not in the catalog yet has no confirmed tier.
           initialTier: recruitment.student
-            ? (studentsMap[recruitment.student.uid]?.initialTier ?? recruitment.student.initialTier ?? 3)
-            : 3,
+            ? (studentsMap[recruitment.student.uid]?.initialTier ?? recruitment.student.initialTier ?? null)
+            : null,
         }
       : null,
     ...(sourceContentUid ? { sourceContentUid } : {}),

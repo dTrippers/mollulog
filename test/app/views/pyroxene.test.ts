@@ -401,7 +401,7 @@ describe("getPyroxenePlannerContents raid season identity", () => {
 });
 
 describe("getPyroxenePlannerContents with an unregistered pickup student", () => {
-  it("keeps the target as a provisional three-star and switches rules at the anchor event", async () => {
+  it("leaves the tier unconfirmed, keeps the provisional three-star pool, and switches rules at the anchor event", async () => {
     const { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } =
       jest.requireMock<typeof import("~/models/recruitment")>("~/models/recruitment");
     const { getAllStudentsMap } = jest.requireMock<typeof import("~/models/student")>("~/models/student");
@@ -462,7 +462,7 @@ describe("getPyroxenePlannerContents with an unregistered pickup student", () =>
             uid: expect.stringMatching(/^provisional:/),
             imageUid: null,
             name: "미등록 학생",
-            initialTier: 3,
+            initialTier: null,
           },
         },
       ],
