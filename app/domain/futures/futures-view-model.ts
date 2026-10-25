@@ -70,12 +70,12 @@ export function getFavoriteLabelState({
   };
 }
 
-// The recruitment types whose label reads "신규" without a rerun, as recruitmentLabelLocale reads them. A test keeps the
-// two in step.
-const NEW_RECRUITMENT_TYPES = ["usual", "limited", "fes"];
+// The recruitment types that bring back students already released, so their label is never accented, even without the
+// rerun flag. Every other first-time recruitment, including a given or premium one, is accented as new.
+const RETURNING_RECRUITMENT_TYPES = ["archive", "recollect", "encore"];
 
 export function isNewRecruitment({ recruitmentType, rerun }: { recruitmentType: string; rerun: boolean }): boolean {
-  return !rerun && NEW_RECRUITMENT_TYPES.includes(recruitmentType);
+  return !rerun && !RETURNING_RECRUITMENT_TYPES.includes(recruitmentType);
 }
 
 export type FutureMediaSource =

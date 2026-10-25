@@ -281,7 +281,7 @@ function RecruitmentCard({
     >
       <div className="relative w-full overflow-hidden aspect-200/226">
         <StudentPortrait
-          uid={studentUid}
+          uid={studentUid ?? "unlisted"}
           alt={recruitment.studentName}
           className="w-full h-full object-cover object-top"
           haloScale="72%"

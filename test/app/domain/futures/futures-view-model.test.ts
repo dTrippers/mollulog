@@ -23,7 +23,6 @@ import {
   selectFutureMediaSource,
 } from "~/domain/futures/futures-view-model";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
-import { recruitmentLabelLocale } from "~/locales/ko";
 
 const timeZone = "Asia/Seoul";
 // 2026-10-15 12:00 KST
@@ -287,17 +286,23 @@ describe("dates and remaining time", () => {
 describe("isNewRecruitment", () => {
   const types = Object.values(RecruitmentTypeEnum);
 
-  it("agrees with the recruitment label for every type and rerun flag", () => {
+  it("accents every first-time recruitment except the returning types", () => {
+    const returning: string[] = [
+      RecruitmentTypeEnum.Archive,
+      RecruitmentTypeEnum.Recollect,
+      RecruitmentTypeEnum.Encore,
+    ];
     for (const recruitmentType of types) {
-      for (const rerun of [false, true]) {
-        const label = recruitmentLabelLocale({ recruitmentType, rerun });
-        expect([recruitmentType, rerun, isNewRecruitment({ recruitmentType, rerun })]).toEqual([
-          recruitmentType,
-          rerun,
-          label.includes("신규"),
-        ]);
-      }
+      expect([recruitmentType, isNewRecruitment({ recruitmentType, rerun: false })]).toEqual([
+        recruitmentType,
+        !returning.includes(recruitmentType),
+      ]);
+      expect([recruitmentType, isNewRecruitment({ recruitmentType, rerun: true })]).toEqual([recruitmentType, false]);
     }
+  });
+
+  it("accents a given recruitment such as an event reward student", () => {
+    expect(isNewRecruitment({ recruitmentType: RecruitmentTypeEnum.Given, rerun: false })).toBe(true);
   });
 });
 

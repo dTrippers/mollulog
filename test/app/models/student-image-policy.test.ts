@@ -16,8 +16,10 @@ function sourceFiles(directory: string): string[] {
 }
 
 describe("student portrait policy", () => {
-  it("keeps unlisted and null students neutral without requesting a collection image", () => {
-    expect(getStudentPortraitPresentation("unlisted", true)).toEqual({ kind: "neutral" });
+  it("shows the in-game placeholder for unlisted students in both modes and keeps null students neutral", () => {
+    const placeholder = { kind: "collection", src: "https://assets.mollulog.net/assets/images/students/-1" };
+    expect(getStudentPortraitPresentation("unlisted", false)).toEqual(placeholder);
+    expect(getStudentPortraitPresentation("unlisted", true)).toEqual(placeholder);
     expect(getStudentPortraitPresentation(null, true)).toEqual({ kind: "neutral" });
   });
 

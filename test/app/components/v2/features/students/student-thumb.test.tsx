@@ -66,3 +66,15 @@ describe("StudentThumb without onOpen", () => {
     expect(screen.getByRole("button")).toBeTruthy();
   });
 });
+
+describe("StudentThumb while the student data is being prepared", () => {
+  it("shows the in-game placeholder icon and only the name below it", () => {
+    const { container } = renderThumb({ studentUid: null, name: "라나", variant: null, recruitmentLabel: "배포" });
+
+    expect(container.querySelector("img")?.getAttribute("src")).toBe(
+      "https://assets.mollulog.net/assets/images/students/-1",
+    );
+    expect(screen.queryByText("정보 준비 중")).toBeNull();
+    expect(screen.getByText("라나")).toBeTruthy();
+  });
+});

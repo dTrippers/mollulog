@@ -5,7 +5,7 @@ import { FavoriteLabel } from "./FavoriteLabel";
 import StudentPortrait from "./StudentPortrait";
 
 export type StudentThumbProps = {
-  // Null while the student data is still being prepared. The thumbnail then shows a neutral placeholder.
+  // Null while the student data is still being prepared. The thumbnail then shows the in-game placeholder icon.
   studentUid: string | null;
   name: string;
   variant: string | null;
@@ -24,7 +24,7 @@ export type StudentThumbProps = {
   small?: boolean;
   // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default keeps the 60px thumbnail.
   large?: boolean;
-  // False hides the name, variant, and preparing line below the image, for layouts that show the name beside the portrait.
+  // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
 };
@@ -57,8 +57,13 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
   const frame = (
     <>
       <StudentPortrait
-        uid={studentUid}
-        className="size-full object-cover"
+        uid={studentUid ?? "unlisted"}
+        className={
+          // The placeholder icon fills the width of the area above the label band (18px tall), centered vertically.
+          studentUid === null && showRecruitmentLabel
+            ? "absolute inset-x-0 top-0 h-[calc(100%-1.125rem)] w-full object-cover"
+            : "size-full object-cover"
+        }
         haloAboveBand={showRecruitmentLabel}
         haloScale="72%"
       />
@@ -112,10 +117,6 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           {variant ? (
             <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
               {variant}
-            </span>
-          ) : studentUid === null ? (
-            <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-              정보 준비 중
             </span>
           ) : null}
         </>
