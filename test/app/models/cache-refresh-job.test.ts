@@ -111,7 +111,6 @@ describe("cache refresh PostgreSQL model", () => {
       uid: "job-uid",
       requestedBy: 7,
       status: "running",
-      currentTask: "warmRaidCache",
       completedCount: 3,
       totalCount: CACHE_REFRESH_TASK_NAMES.length,
       taskResults: taskResults(),
@@ -152,7 +151,6 @@ describe("cache refresh PostgreSQL model", () => {
     ).resolves.toMatchObject({
       uid: "job-uid",
       status: "queued",
-      currentTask: null,
       completedCount: 0,
     });
 
@@ -183,34 +181,49 @@ describe("cache refresh PostgreSQL model", () => {
     expect(queryConfig(latestClient.query, 0).text).toContain('order by "cache_refresh_jobs"."created_at" desc');
   });
 
-  it("records task progress on the same operation-scoped PostgreSQL client", async () => {
+  it("merges a task result and recounts completed tasks in one atomic update", async () => {
     const result = { status: "succeeded" as const, durationMs: 42, error: null };
     const { client, query } = createClient([
-      { rows: [cacheRefreshRow()], rowCount: 1 },
-      { rows: [], rowCount: 1 },
+      { rows: [{ task_results: taskResults({ warmRaidCache: result }) }] as never, rowCount: 1 },
     ]);
 
     await expect(
       recordCacheRefreshTaskResult(env, "job-uid", "warmRaidCache", result, options(client)),
     ).resolves.toEqual(taskResults({ warmRaidCache: result }));
-    expect(query).toHaveBeenCalledTimes(2);
-    expect(queryConfig(query, 1).text).toContain('update "cache_refresh_jobs"');
-    expect(queryConfig(query, 1).values).toContain(JSON.stringify(taskResults({ warmRaidCache: result })));
+
+    expect(query).toHaveBeenCalledTimes(1);
+    const config = queryConfig(query, 0);
+    expect(config.text).toContain("task_results = task_results || $2::jsonb");
+    expect(config.text).toContain("jsonb_each(task_results || $2::jsonb)");
+    expect(config.text).toContain("NOT IN ('pending', 'running')");
+    expect(config.values).toEqual(["job-uid", JSON.stringify({ warmRaidCache: result })]);
     expect(client.connect).toHaveBeenCalledTimes(1);
     expect(client.end).toHaveBeenCalledTimes(1);
   });
 
+  it("fails when the job to update does not exist", async () => {
+    const { client } = createClient([{ rows: [], rowCount: 0 }]);
+
+    await expect(
+      recordCacheRefreshTaskResult(
+        env,
+        "missing-uid",
+        "warmRaidCache",
+        { status: "succeeded", durationMs: 1, error: null },
+        options(client),
+      ),
+    ).rejects.toThrow("Cache refresh job not found: missing-uid");
+  });
+
   it("records skipped tasks and clears active state on completion/failure", async () => {
+    const skippedResult = { status: "skipped" as const, durationMs: null, error: null };
     const skipped = createClient([
-      { rows: [cacheRefreshRow()], rowCount: 1 },
-      { rows: [], rowCount: 1 },
+      { rows: [{ task_results: taskResults({ getEventList: skippedResult }) }] as never, rowCount: 1 },
     ]);
     await expect(
       recordSkippedCacheRefreshTasks(env, "job-uid", ["getEventList"], options(skipped.client)),
-    ).resolves.toEqual(taskResults({ getEventList: { status: "skipped", durationMs: null, error: null } }));
-    expect(queryConfig(skipped.query, 1).values).toContain(
-      JSON.stringify(taskResults({ getEventList: { status: "skipped", durationMs: null, error: null } })),
-    );
+    ).resolves.toEqual(taskResults({ getEventList: skippedResult }));
+    expect(queryConfig(skipped.query, 0).values).toEqual(["job-uid", JSON.stringify({ getEventList: skippedResult })]);
 
     const completed = createClient([{ rows: [], rowCount: 1 }]);
     await completeCacheRefreshJob(env, "job-uid", "completed", taskResults(), options(completed.client));
@@ -227,9 +240,12 @@ describe("cache refresh PostgreSQL model", () => {
     expect(queryConfig(jobClient.query, 0).text).toContain("coalesce");
     expect(queryConfig(jobClient.query, 0).text).toContain("now()");
 
-    const taskClient = createClient([{ rows: [], rowCount: 1 }]);
+    const running = { status: "running" as const, durationMs: null, error: null };
+    const taskClient = createClient([
+      { rows: [{ task_results: taskResults({ warmRaidCache: running }) }] as never, rowCount: 1 },
+    ]);
     await markCacheRefreshTaskRunning(env, "job-uid", "warmRaidCache", options(taskClient.client));
-    expect(queryConfig(taskClient.query, 0).values).toEqual(["warmRaidCache", "job-uid"]);
+    expect(queryConfig(taskClient.query, 0).values).toEqual(["job-uid", JSON.stringify({ warmRaidCache: running })]);
   });
 
   it("releases stale jobs with one atomic PostgreSQL conditional update", async () => {

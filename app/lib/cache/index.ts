@@ -3,6 +3,7 @@ import { getIoWatchdogContext, watchIo } from "~/lib/io-watchdog";
 import { serializeErrorForLogging } from "~/lib/privacy-scrub";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { isTimeoutError, withTimeout } from "~/lib/with-timeout";
+import { getCacheRefreshScope, shareScopedForcedRefresh } from "./refresh-scope";
 
 /**
  * Cache ownership tiers:
@@ -58,6 +59,11 @@ const kvCircuitStates = new WeakMap<object, KvCircuitState>();
  * stale fallback instead of holding the SSR response open.
  */
 const CACHE_FN_TIMEOUT_MS = RUNTIME_TIMEOUTS.cache.generate;
+
+/** Regeneration deadline for the current call; the admin cache refresh job extends it. */
+function getCacheFnTimeoutMs(): number {
+  return getCacheRefreshScope()?.generateTimeoutMs ?? CACHE_FN_TIMEOUT_MS;
+}
 
 /**
  * Safety deadline for the in-flight dedup entry. Even if a generation never
@@ -534,7 +540,7 @@ async function fetchCachedInternal<T>(
       return data;
     } catch (error) {
       if (isTimeoutError(error)) {
-        warnIoFailure("cache.fn", dataKey, error, CACHE_FN_TIMEOUT_MS);
+        warnIoFailure("cache.fn", dataKey, error, getCacheFnTimeoutMs());
       }
 
       if (cached && !(forceRefresh && options.rejectOnForcedRefresh)) {
@@ -552,7 +558,9 @@ async function refreshCacheValue<T>(
   fn: () => Promise<T>,
   expirationTtl: number,
 ): Promise<T> {
-  const data = await watchIo("cache.fn", withTimeout(fn(), CACHE_FN_TIMEOUT_MS, "cache.fn"), { dataKey: cacheKey });
+  const data = await watchIo("cache.fn", withTimeout(fn(), getCacheFnTimeoutMs(), "cache.fn"), {
+    dataKey: cacheKey,
+  });
   const envelope: CacheEnvelope<T> = {
     _ver: 2,
     data,
@@ -734,18 +742,20 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
   }
 
   const missingKeys = missingEntries.map((entry) => entry.key);
+  const timeoutMs = getCacheFnTimeoutMs();
   let loadedValues: Map<K, T>;
   try {
-    loadedValues = await watchIo("cache.fn", withTimeout(loadMissing(missingKeys), CACHE_FN_TIMEOUT_MS, "cache.fn"), {
+    loadedValues = await watchIo("cache.fn", withTimeout(loadMissing(missingKeys), timeoutMs, "cache.fn"), {
       dataKey: missingEntries.map((entry) => entry.dataKey).join(","),
     });
   } catch (error) {
     if (isTimeoutError(error)) {
-      warnIoFailure("cache.fn", missingKeys.join(","), error, CACHE_FN_TIMEOUT_MS);
+      warnIoFailure("cache.fn", missingKeys.join(","), error, timeoutMs);
     }
 
+    // The admin cache refresh job must not report stale values as a successful refresh.
     const missingWithoutStale = missingKeys.filter((key) => !staleValues.has(key));
-    if (missingWithoutStale.length > 0) {
+    if (missingWithoutStale.length > 0 || (forceRefresh && getCacheRefreshScope())) {
       throw error;
     }
 
@@ -804,6 +814,24 @@ export async function fetchCached<T>(
     return fn();
   }
 
+  const scope = forceRefresh ? getCacheRefreshScope() : undefined;
+  if (scope) {
+    return shareScopedForcedRefresh(scope, dataKey, () =>
+      fetchCachedCoalesced(env, dataKey, fn, ttl, true, { ...options, rejectOnForcedRefresh: true }),
+    );
+  }
+
+  return fetchCachedCoalesced(env, dataKey, fn, ttl, forceRefresh, options);
+}
+
+function fetchCachedCoalesced<T>(
+  env: Env,
+  dataKey: string,
+  fn: () => Promise<T>,
+  ttl: number | ((data: T) => number) | undefined,
+  forceRefresh: boolean,
+  options: FetchCachedOptions<T>,
+): Promise<T> {
   const cacheKey = dataKey;
   const inflightMap = getNamespaceInflightRequests(env);
 

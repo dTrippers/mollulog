@@ -39,12 +39,12 @@ function makeJob(): CacheRefreshJob {
     uid: "job-uid",
     requestedBy: ADMIN_CACHE_REFRESH_REQUESTER_ID,
     status: "running",
-    currentTask: "syncRawStudents",
     completedCount: 1,
     totalCount: CACHE_REFRESH_TASK_NAMES.length,
     taskResults: {
       ...taskResults,
       syncYoutubeCommunityPosts: { status: "failed", durationMs: 1200, error: "internal task detail" },
+      syncRawStudents: { status: "running", durationMs: null, error: null },
     },
     startedAt: "2026-10-26T00:00:01.000Z",
     finishedAt: null,
@@ -81,7 +81,8 @@ describe("cache refresh service", () => {
     const result = await getAdminCacheRefreshStatus(env, ctx, "job-uid");
 
     expect(mockedGetCacheRefreshStatus).toHaveBeenCalledWith(env, ctx, "job-uid");
-    expect(result).toMatchObject({ uid: "job-uid", status: "running", currentTask: "syncRawStudents" });
+    expect(result).toMatchObject({ uid: "job-uid", status: "running" });
+    expect(result?.tasks[1]).toMatchObject({ name: "syncRawStudents", status: "running" });
   });
 
   it("returns null when no job exists", async () => {

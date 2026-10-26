@@ -27,9 +27,10 @@ export const CACHE_REFRESH_TASK_NAMES = [
   ...ROUTE_CACHE_REFRESH_TASK_NAMES,
 ] as const;
 
+export type SourceCacheRefreshTaskName = (typeof SOURCE_CACHE_REFRESH_TASK_NAMES)[number];
 export type CacheRefreshTaskName = (typeof CACHE_REFRESH_TASK_NAMES)[number];
 export type CacheRefreshJobStatus = "queued" | "running" | "completed" | "partial_failure" | "failed";
-export type CacheRefreshTaskStatus = "pending" | "succeeded" | "failed" | "skipped";
+export type CacheRefreshTaskStatus = "pending" | "running" | "succeeded" | "failed" | "skipped";
 
 export type CacheRefreshTaskResult = {
   status: CacheRefreshTaskStatus;
@@ -43,7 +44,6 @@ export type CacheRefreshJob = {
   uid: string;
   requestedBy: number;
   status: CacheRefreshJobStatus;
-  currentTask: CacheRefreshTaskName | null;
   completedCount: number;
   totalCount: number;
   taskResults: CacheRefreshTaskResults;
@@ -98,5 +98,9 @@ export function isCacheRefreshTaskName(value: string): value is CacheRefreshTask
 }
 
 export function countCompletedCacheRefreshTasks(results: CacheRefreshTaskResults): number {
-  return CACHE_REFRESH_TASK_NAMES.filter((name) => results[name].status !== "pending").length;
+  return CACHE_REFRESH_TASK_NAMES.filter((name) => isCacheRefreshTaskSettled(results[name].status)).length;
+}
+
+export function isCacheRefreshTaskSettled(status: CacheRefreshTaskStatus): boolean {
+  return status !== "pending" && status !== "running";
 }

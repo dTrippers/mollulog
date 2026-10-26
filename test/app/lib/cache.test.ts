@@ -8,6 +8,7 @@ import {
   SOURCE_CACHE_EXPIRATION_TTL,
   SOURCE_CACHE_MAX_STALE_TTL,
 } from "../../../app/lib/cache";
+import { createCacheRefreshScope, runInCacheRefreshScope } from "../../../app/lib/cache/refresh-scope";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 
@@ -1171,5 +1172,101 @@ describe("fetchLazySourceCachedBatch", () => {
     expect(kv.get).not.toHaveBeenCalled();
     expect(kv.put).not.toHaveBeenCalled();
     expect(loadMissing).toHaveBeenCalledWith(["a", "b"]);
+  });
+});
+
+describe("admin cache refresh scope", () => {
+  const routeKey = "route::events::v4::list";
+
+  function staleEnvelope(data: unknown, now: number) {
+    return JSON.stringify({ _ver: 2, data, cachedAt: now - 1_900_000 });
+  }
+
+  it("rejects a failed forced refresh instead of serving the stale value", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const { env, kv } = createEnv(staleEnvelope(["stale-event"], now));
+    const fn = async (): Promise<string[]> => {
+      throw new Error("upstream unavailable");
+    };
+
+    await expect(fetchRouteCached(env, undefined, routeKey, fn, true)).resolves.toEqual(["stale-event"]);
+    await expect(
+      runInCacheRefreshScope(createCacheRefreshScope(), () => fetchRouteCached(env, undefined, routeKey, fn, true)),
+    ).rejects.toThrow("upstream unavailable");
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("regenerates a key once per scope and shares it with later forced requests", async () => {
+    const { env, kv } = createEnv(null);
+    const scope = createCacheRefreshScope();
+    const fn = jest.fn(async () => ["fresh-event"]);
+
+    const first = await runInCacheRefreshScope(scope, () => fetchRouteCached(env, undefined, routeKey, fn, true));
+    const second = await runInCacheRefreshScope(scope, () => fetchRouteCached(env, undefined, routeKey, fn, true));
+
+    expect(first).toEqual(["fresh-event"]);
+    expect(second).toBe(first);
+    expect(fn).toHaveBeenCalledTimes(1);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+
+    await runInCacheRefreshScope(createCacheRefreshScope(), () => fetchRouteCached(env, undefined, routeKey, fn, true));
+    expect(fn).toHaveBeenCalledTimes(2);
+  });
+
+  it("retries a key whose earlier forced refresh failed in the same scope", async () => {
+    const { env } = createEnv(null);
+    const scope = createCacheRefreshScope();
+    const fn = jest
+      .fn<() => Promise<string[]>>()
+      .mockRejectedValueOnce(new Error("upstream unavailable"))
+      .mockResolvedValueOnce(["fresh-event"]);
+
+    await expect(
+      runInCacheRefreshScope(scope, () => fetchRouteCached(env, undefined, routeKey, fn, true)),
+    ).rejects.toThrow("upstream unavailable");
+    await expect(
+      runInCacheRefreshScope(scope, () => fetchRouteCached(env, undefined, routeKey, fn, true)),
+    ).resolves.toEqual(["fresh-event"]);
+  });
+
+  it("gives regenerations inside the scope the job deadline", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, kv } = createEnv(null);
+    const fn = jest.fn(
+      () =>
+        new Promise<string[]>((resolve) => {
+          setTimeout(() => resolve(["slow-future"]), 10_000);
+        }),
+    );
+
+    const result = runInCacheRefreshScope(createCacheRefreshScope(), () =>
+      fetchRouteCached(env, undefined, "route::futures::v5::all", fn, true),
+    );
+    await jest.advanceTimersByTimeAsync(10_000);
+
+    await expect(result).resolves.toEqual(["slow-future"]);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a failed forced batch load instead of serving stale values", async () => {
+    const now = 1_800_000_000_000;
+    jest.spyOn(Date, "now").mockReturnValue(now);
+    const entry = { key: "a", dataKey: "source::thing::v1::uid=a" };
+    const { env } = createKeyedEnv(new Map([[entry.dataKey, staleEnvelope("stale-a", now)]]));
+    const loadMissing = async (): Promise<Map<string, string>> => {
+      throw new Error("loader failed");
+    };
+
+    await expect(fetchLazySourceCachedBatch(env, [entry], loadMissing, 60, true)).resolves.toEqual(
+      new Map([["a", "stale-a"]]),
+    );
+    await expect(
+      runInCacheRefreshScope(createCacheRefreshScope(), () =>
+        fetchLazySourceCachedBatch(env, [entry], loadMissing, 60, true),
+      ),
+    ).rejects.toThrow("loader failed");
   });
 });

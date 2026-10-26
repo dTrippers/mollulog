@@ -49,7 +49,6 @@ function makeJob(status: CacheRefreshJob["status"], uid = "job-uid"): CacheRefre
     uid,
     requestedBy: 1,
     status,
-    currentTask: null,
     completedCount: 0,
     totalCount: CACHE_REFRESH_TASK_NAMES.length,
     taskResults: createPendingCacheRefreshTaskResults(),

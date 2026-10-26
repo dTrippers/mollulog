@@ -16,11 +16,12 @@ describe("cache refresh domain", () => {
     expect(CACHE_REFRESH_TASK_LABELS.getFurnitureCatalogSource).toBe("가구 카탈로그");
   });
 
-  it("counts succeeded, failed, and skipped tasks as completed", () => {
+  it("counts succeeded, failed, and skipped tasks as completed but not running ones", () => {
     const results = createPendingCacheRefreshTaskResults();
     results.syncYoutubeCommunityPosts = { status: "succeeded", durationMs: 10, error: null };
     results.syncRawStudents = { status: "failed", durationMs: 20, error: "failed" };
     results.warmRecruitmentCache = { status: "skipped", durationMs: null, error: null };
+    results.warmRaidCache = { status: "running", durationMs: null, error: null };
 
     expect(countCompletedCacheRefreshTasks(results)).toBe(3);
   });

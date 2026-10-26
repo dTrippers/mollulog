@@ -8,8 +8,10 @@ import {
   type CacheRefreshWorkflowParams,
   createPendingCacheRefreshTaskResults,
   ROUTE_CACHE_REFRESH_TASK_NAMES,
-  SOURCE_CACHE_REFRESH_TASK_NAMES,
+  type SourceCacheRefreshTaskName,
 } from "~/domain/cache-refresh";
+import { type CacheRefreshScope, createCacheRefreshScope } from "~/lib/cache/refresh-scope";
+import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { getLogger } from "~/lib/observability.server";
 import {
   completeCacheRefreshJob,
@@ -31,6 +33,30 @@ const TASK_STEP_CONFIG: WorkflowStepConfig = {
 };
 
 const SAFE_TASK_ERROR = "작업을 완료하지 못했어요. 로그에서 job ID를 확인해주세요.";
+
+/** Tasks running at once within a phase; bounds the concurrent load on BAQL and PostgreSQL. */
+const TASK_CONCURRENCY = 4;
+
+/**
+ * Source tasks grouped into phases that run one after another. Tasks in a phase are independent;
+ * the second phase reads the student roster and the event/timeline sources refreshed by the first.
+ */
+export const SOURCE_CACHE_REFRESH_TASK_PHASES: readonly (readonly SourceCacheRefreshTaskName[])[] = [
+  [
+    "syncYoutubeCommunityPosts",
+    "syncRawStudents",
+    "warmRecruitmentCache",
+    "warmRaidCache",
+    "getMainStories",
+    "getAllStudentsFavoriteItems",
+    "syncAllTimelineContentsMeta",
+    "syncEventContentsList",
+    "getItemCatalogResources",
+    "getFurnitureCatalogSource",
+    "getCampaignFarmingStages",
+  ],
+  ["warmStudentSkillItems", "warmStudentGearData", "warmActiveUpcomingEventContent"],
+];
 
 async function runStatusStep(
   step: WorkflowStep,
@@ -54,6 +80,7 @@ async function runTaskStep(
   step: WorkflowStep,
   jobUid: string,
   taskName: CacheRefreshTaskName,
+  scope: CacheRefreshScope,
   logger: ReturnType<typeof getLogger>,
 ): Promise<CacheRefreshTaskResult> {
   await runStatusStep(step, `status running ${taskName}`, logger, () =>
@@ -63,7 +90,7 @@ async function runTaskStep(
   let result: CacheRefreshTaskResult;
   try {
     result = await step.do(`refresh ${taskName}`, TASK_STEP_CONFIG, () =>
-      runCacheRefreshTask(env, ctx, jobUid, taskName),
+      runCacheRefreshTask(env, ctx, jobUid, taskName, scope),
     );
   } catch (error) {
     logger.error("Cache refresh workflow task step failed", error, { taskName });
@@ -76,6 +103,21 @@ async function runTaskStep(
   return result;
 }
 
+async function runTaskSteps(
+  env: Env,
+  ctx: ExecutionContext,
+  step: WorkflowStep,
+  jobUid: string,
+  taskNames: readonly CacheRefreshTaskName[],
+  scope: CacheRefreshScope,
+  logger: ReturnType<typeof getLogger>,
+): Promise<Partial<CacheRefreshTaskResults>> {
+  const results = await mapWithConcurrencyLimit(taskNames, TASK_CONCURRENCY, (taskName) =>
+    runTaskStep(env, ctx, step, jobUid, taskName, scope, logger),
+  );
+  return Object.fromEntries(taskNames.map((taskName, index) => [taskName, results[index]]));
+}
+
 export async function runCacheRefreshWorkflow(
   env: Env,
   ctx: ExecutionContext,
@@ -84,16 +126,16 @@ export async function runCacheRefreshWorkflow(
 ): Promise<CacheRefreshWorkflowOutput> {
   const jobUid = event.instanceId;
   const logger = getLogger(env, ctx, { job: "cache-refresh", jobUid, requestedBy: event.payload.requestedBy });
+  // Shared by every task of this run; a restarted run starts a fresh scope and only re-runs unfinished steps.
+  const scope = createCacheRefreshScope();
   let taskResults: CacheRefreshTaskResults = createPendingCacheRefreshTaskResults();
 
   await runStatusStep(step, "status job running", logger, () => markCacheRefreshJobRunning(env, jobUid));
 
-  let sourceFailed = false;
-  for (const taskName of SOURCE_CACHE_REFRESH_TASK_NAMES) {
-    const result = await runTaskStep(env, ctx, step, jobUid, taskName, logger);
-    taskResults = { ...taskResults, [taskName]: result };
-    sourceFailed ||= result.status === "failed";
+  for (const phase of SOURCE_CACHE_REFRESH_TASK_PHASES) {
+    taskResults = { ...taskResults, ...(await runTaskSteps(env, ctx, step, jobUid, phase, scope, logger)) };
   }
+  const sourceFailed = Object.values(taskResults).some((result) => result.status === "failed");
 
   if (sourceFailed) {
     for (const taskName of ROUTE_CACHE_REFRESH_TASK_NAMES) {
@@ -106,10 +148,10 @@ export async function runCacheRefreshWorkflow(
       recordSkippedCacheRefreshTasks(env, jobUid, ROUTE_CACHE_REFRESH_TASK_NAMES).then(() => undefined),
     );
   } else {
-    for (const taskName of ROUTE_CACHE_REFRESH_TASK_NAMES) {
-      const result = await runTaskStep(env, ctx, step, jobUid, taskName, logger);
-      taskResults = { ...taskResults, [taskName]: result };
-    }
+    taskResults = {
+      ...taskResults,
+      ...(await runTaskSteps(env, ctx, step, jobUid, ROUTE_CACHE_REFRESH_TASK_NAMES, scope, logger)),
+    };
   }
 
   const status: Extract<CacheRefreshJobStatus, "completed" | "partial_failure"> = Object.values(taskResults).some(

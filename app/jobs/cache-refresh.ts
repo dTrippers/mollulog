@@ -1,4 +1,5 @@
 import type { CacheRefreshTaskName, CacheRefreshTaskResult } from "~/domain/cache-refresh";
+import { type CacheRefreshScope, runInCacheRefreshScope } from "~/lib/cache/refresh-scope";
 import { getLogger } from "~/lib/observability.server";
 import { syncEventContentsList } from "~/models/event-content";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
@@ -89,12 +90,13 @@ export async function runCacheRefreshTask(
   ctx: ExecutionContext,
   jobUid: string,
   name: CacheRefreshTaskName,
+  scope: CacheRefreshScope,
 ): Promise<CacheRefreshTaskResult> {
   const startedAt = Date.now();
   const logger = getLogger(env, ctx, { job: "cache-refresh", jobUid, taskName: name });
 
   try {
-    await executeCacheRefreshTask(env, ctx, name);
+    await runInCacheRefreshScope(scope, () => executeCacheRefreshTask(env, ctx, name));
     const durationMs = Date.now() - startedAt;
     logger.info("Cache refresh task completed", { durationMs });
     return { status: "succeeded", durationMs, error: null };

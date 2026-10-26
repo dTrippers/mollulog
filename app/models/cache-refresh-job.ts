@@ -11,7 +11,6 @@ import {
   type CacheRefreshTaskResults,
   countCompletedCacheRefreshTasks,
   createPendingCacheRefreshTaskResults,
-  isCacheRefreshTaskName,
 } from "~/domain/cache-refresh";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -26,7 +25,7 @@ export type CacheRefreshJobOptions = {
 };
 
 const JOB_STATUSES = ["queued", "running", "completed", "partial_failure", "failed"] as const;
-const TASK_STATUSES = ["pending", "succeeded", "failed", "skipped"] as const;
+const TASK_STATUSES = ["pending", "running", "succeeded", "failed", "skipped"] as const;
 
 function parseJobStatus(value: string): CacheRefreshJobStatus {
   if (JOB_STATUSES.includes(value as CacheRefreshJobStatus)) {
@@ -84,15 +83,10 @@ function requirePostgresInstant(value: Date | string | null, field: string): Utc
 }
 
 export function toCacheRefreshJob(row: CacheRefreshJobRow): CacheRefreshJob {
-  if (row.currentTask !== null && !isCacheRefreshTaskName(row.currentTask)) {
-    throw new Error(`Invalid current cache refresh task: ${row.currentTask}`);
-  }
-
   return {
     uid: row.uid,
     requestedBy: row.requestedBy,
     status: parseJobStatus(row.status),
-    currentTask: row.currentTask,
     completedCount: row.completedCount,
     totalCount: row.totalCount,
     taskResults: parseCacheRefreshTaskResults(row.taskResults),
@@ -238,21 +232,56 @@ export async function markCacheRefreshJobRunning(
   );
 }
 
+/**
+ * Merges task results into the job in one statement. Tasks run concurrently, so the JSONB merge and the
+ * completed count must be computed from the row the UPDATE locks, not from a value read beforehand.
+ */
+async function mergeCacheRefreshTaskResults(
+  env: CacheRefreshEnvironment,
+  uid: string,
+  queryName: string,
+  results: Partial<CacheRefreshTaskResults>,
+  options: CacheRefreshJobOptions,
+): Promise<CacheRefreshTaskResults> {
+  return withCacheRefreshDatabase(
+    env,
+    queryName,
+    async (_db, client) => {
+      const result = await client.query<{ task_results: unknown }>({
+        text: `
+          UPDATE cache_refresh_jobs
+             SET task_results = task_results || $2::jsonb,
+                 completed_count = (
+                   SELECT count(*)::integer
+                     FROM jsonb_each(task_results || $2::jsonb) AS task(name, result)
+                    WHERE task.result->>'status' NOT IN ('pending', 'running')
+                 ),
+                 updated_at = now()
+           WHERE uid = $1
+       RETURNING task_results`,
+        values: [uid, JSON.stringify(results)],
+      });
+      const [row] = result.rows;
+      if (!row) {
+        throw new Error(`Cache refresh job not found: ${uid}`);
+      }
+      return parseCacheRefreshTaskResults(row.task_results);
+    },
+    options,
+  );
+}
+
 export async function markCacheRefreshTaskRunning(
   env: CacheRefreshEnvironment,
   uid: string,
   taskName: CacheRefreshTaskName,
   options: CacheRefreshJobOptions = {},
 ): Promise<void> {
-  await withCacheRefreshDatabase(
+  await mergeCacheRefreshTaskResults(
     env,
+    uid,
     "mark_task_running",
-    async (db) => {
-      await db
-        .update(pgCacheRefreshJobsTable)
-        .set({ currentTask: taskName, updatedAt: sql`now()` })
-        .where(eq(pgCacheRefreshJobsTable.uid, uid));
-    },
+    { [taskName]: { status: "running", durationMs: null, error: null } },
     options,
   );
 }
@@ -264,29 +293,7 @@ export async function recordCacheRefreshTaskResult(
   result: CacheRefreshTaskResult,
   options: CacheRefreshJobOptions = {},
 ): Promise<CacheRefreshTaskResults> {
-  return withCacheRefreshDatabase(
-    env,
-    "record_task_result",
-    async (db) => {
-      const row = await getCacheRefreshJobRow(db, uid);
-      if (!row) {
-        throw new Error(`Cache refresh job not found: ${uid}`);
-      }
-
-      const job = toCacheRefreshJob(row);
-      const taskResults = { ...job.taskResults, [taskName]: result };
-      await db
-        .update(pgCacheRefreshJobsTable)
-        .set({
-          taskResults,
-          completedCount: countCompletedCacheRefreshTasks(taskResults),
-          updatedAt: sql`now()`,
-        })
-        .where(eq(pgCacheRefreshJobsTable.uid, uid));
-      return taskResults;
-    },
-    options,
-  );
+  return mergeCacheRefreshTaskResults(env, uid, "record_task_result", { [taskName]: result }, options);
 }
 
 export async function recordSkippedCacheRefreshTasks(
@@ -295,31 +302,11 @@ export async function recordSkippedCacheRefreshTasks(
   taskNames: readonly CacheRefreshTaskName[],
   options: CacheRefreshJobOptions = {},
 ): Promise<CacheRefreshTaskResults> {
-  return withCacheRefreshDatabase(
+  return mergeCacheRefreshTaskResults(
     env,
+    uid,
     "record_skipped_tasks",
-    async (db) => {
-      const row = await getCacheRefreshJobRow(db, uid);
-      if (!row) {
-        throw new Error(`Cache refresh job not found: ${uid}`);
-      }
-
-      const job = toCacheRefreshJob(row);
-      const taskResults = { ...job.taskResults };
-      for (const taskName of taskNames) {
-        taskResults[taskName] = { status: "skipped", durationMs: null, error: null };
-      }
-
-      await db
-        .update(pgCacheRefreshJobsTable)
-        .set({
-          taskResults,
-          completedCount: countCompletedCacheRefreshTasks(taskResults),
-          updatedAt: sql`now()`,
-        })
-        .where(eq(pgCacheRefreshJobsTable.uid, uid));
-      return taskResults;
-    },
+    Object.fromEntries(taskNames.map((taskName) => [taskName, { status: "skipped", durationMs: null, error: null }])),
     options,
   );
 }
@@ -340,7 +327,6 @@ export async function completeCacheRefreshJob(
         .set({
           status,
           activeSlot: null,
-          currentTask: null,
           completedCount: countCompletedCacheRefreshTasks(taskResults),
           taskResults,
           finishedAt: sql`now()`,
@@ -366,7 +352,6 @@ export async function failCacheRefreshJob(
         .set({
           status: "failed",
           activeSlot: null,
-          currentTask: null,
           finishedAt: sql`now()`,
           updatedAt: sql`now()`,
         })
@@ -391,7 +376,6 @@ export async function failStaleCacheRefreshJob(
           UPDATE cache_refresh_jobs
              SET status = 'failed',
                  active_slot = NULL,
-                 current_task = NULL,
                  finished_at = now(),
                  updated_at = now()
            WHERE uid = $1

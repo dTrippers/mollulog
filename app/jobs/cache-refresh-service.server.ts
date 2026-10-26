@@ -18,7 +18,6 @@ const SAFE_SERVICE_ERROR = "Cache refresh service request failed";
 export type CacheRefreshJobSnapshot = {
   uid: string;
   status: CacheRefreshJobStatus;
-  currentTask: CacheRefreshTaskName | null;
   completedCount: number;
   totalCount: number;
   tasks: Array<{
@@ -41,7 +40,6 @@ export function toCacheRefreshJobSnapshot(job: CacheRefreshJob): CacheRefreshJob
   return {
     uid: job.uid,
     status: job.status,
-    currentTask: job.currentTask,
     completedCount: job.completedCount,
     totalCount: job.totalCount,
     tasks: CACHE_REFRESH_TASK_NAMES.map((name) => ({

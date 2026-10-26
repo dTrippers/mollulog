@@ -18,6 +18,7 @@ jest.mock("~/lib/observability.server", () => ({
 }));
 
 import { runCacheRefreshTask } from "~/jobs/cache-refresh";
+import { createCacheRefreshScope } from "~/lib/cache/refresh-scope";
 
 const mockedSyncYoutubeCommunityPosts = syncYoutubeCommunityPosts as jest.MockedFunction<
   typeof syncYoutubeCommunityPosts
@@ -37,7 +38,13 @@ describe("runCacheRefreshTask", () => {
     const env = {} as Env;
     const ctx = {} as ExecutionContext;
 
-    const result = await runCacheRefreshTask(env, ctx, "job-uid", "syncYoutubeCommunityPosts");
+    const result = await runCacheRefreshTask(
+      env,
+      ctx,
+      "job-uid",
+      "syncYoutubeCommunityPosts",
+      createCacheRefreshScope(),
+    );
 
     expect(result).toEqual({ status: "succeeded", durationMs: expect.any(Number), error: null });
     expect(mockedSyncYoutubeCommunityPosts).toHaveBeenCalledWith(env, ctx);
@@ -47,7 +54,13 @@ describe("runCacheRefreshTask", () => {
     const env = {} as Env;
     const ctx = {} as ExecutionContext;
 
-    const result = await runCacheRefreshTask(env, ctx, "job-uid", "getFurnitureCatalogSource");
+    const result = await runCacheRefreshTask(
+      env,
+      ctx,
+      "job-uid",
+      "getFurnitureCatalogSource",
+      createCacheRefreshScope(),
+    );
 
     expect(result).toEqual({ status: "succeeded", durationMs: expect.any(Number), error: null });
     expect(mockedGetFurnitureCatalogSource).toHaveBeenCalledWith(env, true);
