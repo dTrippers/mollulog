@@ -8,7 +8,8 @@ import {
   SOURCE_CACHE_EXPIRATION_TTL,
   SOURCE_CACHE_MAX_STALE_TTL,
 } from "../../../app/lib/cache";
-import { createCacheRefreshScope, runInCacheRefreshScope } from "../../../app/lib/cache/refresh-scope";
+import { createCacheRefreshScope } from "../../../app/lib/cache/refresh-scope";
+import { runInCacheRefreshScope } from "../../../app/lib/cache/refresh-scope.server";
 
 type CacheEnv = Parameters<typeof fetchCached>[0];
 

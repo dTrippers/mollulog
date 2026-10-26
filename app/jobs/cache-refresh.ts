@@ -1,5 +1,6 @@
 import type { CacheRefreshTaskName, CacheRefreshTaskResult } from "~/domain/cache-refresh";
-import { type CacheRefreshScope, runInCacheRefreshScope } from "~/lib/cache/refresh-scope";
+import type { CacheRefreshScope } from "~/lib/cache/refresh-scope";
+import { runInCacheRefreshScope } from "~/lib/cache/refresh-scope.server";
 import { getLogger } from "~/lib/observability.server";
 import { syncEventContentsList } from "~/models/event-content";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";

@@ -1,4 +1,3 @@
-import { AsyncLocalStorage } from "node:async_hooks";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 
 /**
@@ -19,7 +18,13 @@ export type CacheRefreshScope = {
   forcedRefreshes: Map<string, Promise<unknown>>;
 };
 
-const cacheRefreshScopeStorage = new AsyncLocalStorage<CacheRefreshScope>();
+// The scope lives in AsyncLocalStorage, which only the Worker runtime has. Client bundles reach this module through
+// models, so the storage stays in refresh-scope.server.ts and installs its reader here when it loads.
+let readCacheRefreshScope: () => CacheRefreshScope | undefined = () => undefined;
+
+export function setCacheRefreshScopeReader(reader: () => CacheRefreshScope | undefined) {
+  readCacheRefreshScope = reader;
+}
 
 export function createCacheRefreshScope(): CacheRefreshScope {
   return {
@@ -28,12 +33,8 @@ export function createCacheRefreshScope(): CacheRefreshScope {
   };
 }
 
-export function runInCacheRefreshScope<T>(scope: CacheRefreshScope, fn: () => Promise<T>): Promise<T> {
-  return cacheRefreshScopeStorage.run(scope, fn);
-}
-
 export function getCacheRefreshScope(): CacheRefreshScope | undefined {
-  return cacheRefreshScopeStorage.getStore();
+  return readCacheRefreshScope();
 }
 
 /** Shares one successful forced refresh per key across the scope; a failed one is retried by the next caller. */
