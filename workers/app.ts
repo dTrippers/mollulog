@@ -13,6 +13,7 @@ import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 import { handleMolluLogApiRequest } from "~/api/mollulog-api.server";
 import { markOcrTaskDeadLetter } from "~/models/ocr-job";
 
+export { CacheRefreshService } from "./cache-refresh-service";
 export { CacheRefreshWorkflow } from "./cache-refresh-workflow";
 
 type ObservabilityEnv = Env & {

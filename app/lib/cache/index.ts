@@ -512,7 +512,7 @@ async function fetchCachedInternal<T>(
   }
 
   if (!forceRefresh && options.warnOnRequestRefresh) {
-    // Source snapshots should be warmed by scheduled jobs or __manage. Reaching
+    // Source snapshots should be warmed by scheduled jobs or the admin cache refresh. Reaching
     // this branch on user traffic means warmup failed or the new key is missing.
     console.error(
       "[cache] source_request_refresh",
