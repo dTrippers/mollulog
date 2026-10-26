@@ -9,9 +9,45 @@ export type RaidPartyStudentInfo = {
   attackType: Attack;
   defenseType: Defense;
   role: Role;
+  /** Set for records of a student with several forms. Ownership and statistics belong to the representative. */
+  primaryUid?: string;
+  formIndex?: number;
 };
 
 export type RaidPartyStudentMap = Record<string, RaidPartyStudentInfo>;
+
+type RaidPartyStudentSource = Pick<RaidPartyStudentInfo, "name" | "attackType" | "defenseType" | "role">;
+
+/**
+ * Builds the student lookup for party slots. Party records name the exact form that was deployed, so every form
+ * record is included with its representative and form number.
+ */
+export function buildRaidPartyStudentMap(
+  students: Record<string, RaidPartyStudentSource>,
+  forms: Record<string, RaidPartyStudentSource & { primaryUid: string; formIndex: number }>,
+): RaidPartyStudentMap {
+  const studentMap: RaidPartyStudentMap = {};
+  for (const [uid, { name, attackType, defenseType, role }] of Object.entries(students)) {
+    studentMap[uid] = { name, attackType, defenseType, role };
+  }
+  for (const [uid, { name, attackType, defenseType, role, primaryUid, formIndex }] of Object.entries(forms)) {
+    studentMap[uid] = { name, attackType, defenseType, role, primaryUid, formIndex };
+  }
+  return studentMap;
+}
+
+/** Whether statistics keyed by this UID belong to a listed student rather than to one of its other forms. */
+export function isRepresentativeStudent(uid: string, student: RaidPartyStudentInfo | undefined): boolean {
+  return student !== undefined && (student.primaryUid === undefined || student.primaryUid === uid);
+}
+
+export function isRecruitedStudent(
+  uid: string,
+  student: RaidPartyStudentInfo | undefined,
+  recruitedStudentTiers: Record<string, number>,
+): boolean {
+  return recruitedStudentTiers[student?.primaryUid ?? uid] !== undefined;
+}
 
 const maximumLevels: Record<string, number> = {
   "2021-11-09": 70,
@@ -67,7 +103,7 @@ export function toRaidPartyRow({
       const isUnrecruited =
         showUnrecruitedStudents &&
         recruitedStudentTiers !== undefined &&
-        recruitedStudentTiers[studentUid] === undefined;
+        !isRecruitedStudent(studentUid, student, recruitedStudentTiers);
 
       return {
         uid: studentUid,
@@ -78,6 +114,7 @@ export function toRaidPartyRow({
         tier,
         level: showLevel && level && level < maxLevel ? level : undefined,
         startingSkillOrder,
+        formIndex: student.formIndex,
         isAssist,
         grayscale: isUnrecruited,
         unrecruited: isUnrecruited,

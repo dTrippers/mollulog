@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { RaidListItem } from "~/components/features/raids";
+import { buildRaidPartyStudentMap, RaidListItem } from "~/components/features/raids";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, SubTitle } from "~/components/primitives";
 import { raidTypeToParam } from "~/domain/raid";
 import { getSameOccurrenceRaids } from "~/domain/raid-group";
@@ -9,25 +9,19 @@ import { fetchRaidOverview } from "~/lib/ranks/overview";
 import type { RaidType } from "~/models/content.d";
 import { getRaidDefenseTypeSetKey } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
+import { getAllStudentsMap, getStudentForms } from "~/models/student";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidScoreHistogram from "./raids.$raidType.$seasonIndex._components/RaidScoreHistogram";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env } = context.cloudflare;
-  const [rawAllStudents, sensei] = await Promise.all([getAllStudentsMap(env, true), getActiveSensei(env, request)]);
-  const allStudents = Object.fromEntries(
-    Object.entries(rawAllStudents).map(([uid, student]) => [
-      uid,
-      {
-        name: student.name,
-        role: student.role,
-        attackType: student.attackType,
-        defenseType: student.defenseType,
-      },
-    ]),
-  );
+  const [rawAllStudents, studentForms, sensei] = await Promise.all([
+    getAllStudentsMap(env, true),
+    getStudentForms(env),
+    getActiveSensei(env, request),
+  ]);
+  const allStudents = buildRaidPartyStudentMap(rawAllStudents, studentForms);
   const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
 
   return {

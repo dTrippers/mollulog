@@ -5,6 +5,7 @@ const config: CodegenConfig = {
   documents: ["app/**/*.{ts,tsx}"],
   config: {
     scalars: {
+      ISO8601Date: "string",
       ISO8601DateTime: "Date",
     },
   },
@@ -15,6 +16,7 @@ const config: CodegenConfig = {
       config: {
         useTypeImports: true,
         avoidOptionals: true,
+        enumType: "native",
       },
     },
   },

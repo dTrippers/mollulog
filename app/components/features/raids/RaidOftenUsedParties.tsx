@@ -1,9 +1,8 @@
 import { IdentificationIcon, TrophyIcon } from "@heroicons/react/24/outline";
 import { Button } from "~/components/primitives";
 import { buildExactPartiesPath, compactExactParties } from "~/domain/raid-exact-parties";
-import type { Attack, Defense } from "~/graphql/graphql";
-import type { Role } from "~/models/content.d";
 import RaidPartyCard, { type RaidPartyRow, type RaidPartySlot } from "./RaidPartyCard";
+import { isRecruitedStudent, type RaidPartyStudentMap } from "./toRaidPartyRow";
 
 type ServerStudent = {
   uid: string;
@@ -32,7 +31,7 @@ type RaidOftenUsedParty = {
 
 type RaidOftenUsedPartiesProps = {
   oftenUsedParties: RaidOftenUsedParty[];
-  allStudents: Record<string, { name: string; attackType: Attack; defenseType: Defense; role: Role }>;
+  allStudents: RaidPartyStudentMap;
   recruitedStudentTiers: Record<string, number>;
   showUnrecruitedStudents?: boolean;
   cardClassName?: string;
@@ -192,7 +191,8 @@ function toRaidPartySlot({
   }
 
   const student = allStudents[slot.student.uid];
-  const isUnrecruited = showUnrecruitedStudents && recruitedStudentTiers[slot.student.uid] === undefined;
+  const isUnrecruited =
+    showUnrecruitedStudents && !isRecruitedStudent(slot.student.uid, student, recruitedStudentTiers);
 
   return {
     uid: slot.student.uid,
@@ -202,6 +202,7 @@ function toRaidPartySlot({
     role: student?.role,
     tier: slot.student.tier,
     isAssist: slot.student.isAssist,
+    formIndex: student?.formIndex,
     grayscale: isUnrecruited,
     unrecruited: isUnrecruited,
   };

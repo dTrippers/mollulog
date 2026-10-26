@@ -32,6 +32,8 @@ type StudentCardProps = {
   label?: ReactNode;
   labelPlacement?: "default" | "top-right";
   isAssist?: boolean;
+  /** In-game form number of a student with several forms. */
+  formIndex?: number;
   attackType?: Attack;
   defenseType?: Defense;
   role?: Role;
@@ -135,6 +137,7 @@ export default function StudentCard({
   label,
   labelPlacement = "default",
   isAssist,
+  formIndex,
   attackType,
   defenseType,
   role,
@@ -233,6 +236,8 @@ export default function StudentCard({
           : ""
       : "";
   const showTier = typeof tier === "number" && tier > 0;
+  const showsBottomBand =
+    !showsOverlayName && Boolean(isAssist || (label && labelPlacement === "default") || (!label && showTier));
   const overlaySubName = visibleNames.length === 2 ? visibleNames[1] : "";
   const overlayMainName = visibleNames[0] ?? name;
   const cardAspectClassName = circular ? "aspect-square" : showsOverlayName ? "aspect-5/6" : "";
@@ -358,7 +363,7 @@ export default function StudentCard({
                     {overlayMainName}
                   </p>
                 </div>
-              ) : isAssist || (label && labelPlacement === "default") || (!label && showTier) ? (
+              ) : showsBottomBand ? (
                 <div className="absolute bottom-0 w-full flex justify-center text-xs font-bold bg-black/90">
                   {isAssist && (
                     <div className="px-1 md:px-1.5 text-xs font-bold bg-linear-to-br from-cyan-300 to-sky-500 dark:from-cyan-400 dark:to-sky-600 text-white text-center">
@@ -384,6 +389,20 @@ export default function StudentCard({
                   )}
                 </div>
               ) : null}
+
+              {formIndex !== undefined && (
+                <span
+                  role="img"
+                  aria-label={`폼 ${formIndex}`}
+                  title={`폼 ${formIndex}`}
+                  className={cn(
+                    "pointer-events-none absolute right-0.5 flex size-3 items-center justify-center rounded-xs bg-white text-[10px] leading-none font-bold tabular-nums text-neutral-900 shadow-sm ring-1 ring-black/10",
+                    showsBottomBand ? "bottom-[18px]" : "bottom-0.5",
+                  )}
+                >
+                  {formIndex}
+                </span>
+              )}
             </div>
             {showName && namePlacement === "below" && (
               <div

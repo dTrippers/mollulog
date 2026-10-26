@@ -1,25 +1,9 @@
 /* eslint-disable */
-import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
-export type Maybe<T> = T | null;
-export type InputMaybe<T> = T | null | undefined;
-export type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
-export type MakeOptional<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]?: Maybe<T[SubKey]> };
-export type MakeMaybe<T, K extends keyof T> = Omit<T, K> & { [SubKey in K]: Maybe<T[SubKey]> };
-export type MakeEmpty<T extends { [key: string]: unknown }, K extends keyof T> = { [_ in K]?: never };
+/** Internal type. DO NOT USE DIRECTLY. */
+type Exact<T extends { [key: string]: unknown }> = { [K in keyof T]: T[K] };
+/** Internal type. DO NOT USE DIRECTLY. */
 export type Incremental<T> = T | { [P in keyof T]?: P extends ' $fragmentName' | '__typename' ? T[P] : never };
-/** All built-in and custom scalars, mapped to their actual values */
-export type Scalars = {
-  ID: { input: string; output: string; }
-  String: { input: string; output: string; }
-  Boolean: { input: boolean; output: boolean; }
-  Int: { input: number; output: number; }
-  Float: { input: number; output: number; }
-  /** An ISO 8601-encoded date */
-  ISO8601Date: { input: any; output: any; }
-  /** An ISO 8601-encoded datetime */
-  ISO8601DateTime: { input: Date; output: Date; }
-};
-
+import type { TypedDocumentNode as DocumentNode } from '@graphql-typed-document-node/core';
 export enum Attack {
   Chemical = 'chemical',
   Explosive = 'explosive',
@@ -28,16 +12,6 @@ export enum Attack {
   Piercing = 'piercing',
   Sonic = 'sonic'
 }
-
-export type Campaign = {
-  __typename?: 'Campaign';
-  category: Array<CategoryEnum>;
-  endAt: Scalars['ISO8601DateTime']['output'];
-  multiplier: Scalars['Int']['output'];
-  region: Scalars['String']['output'];
-  startAt: Scalars['ISO8601DateTime']['output'];
-  uid: Scalars['String']['output'];
-};
 
 export enum CategoryEnum {
   BountyHunt = 'bounty_hunt',
@@ -49,25 +23,6 @@ export enum CategoryEnum {
   Scrimmage = 'scrimmage'
 }
 
-export type Currency = ResourceInterface & {
-  __typename?: 'Currency';
-  description: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type CurrencyDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type CurrencyNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
 export enum Defense {
   Composite = 'composite',
   Elastic = 'elastic',
@@ -76,18 +31,6 @@ export enum Defense {
   Normal = 'normal',
   Special = 'special'
 }
-
-export type DefenseTypeAndDifficulty = {
-  __typename?: 'DefenseTypeAndDifficulty';
-  defenseType: Defense;
-  difficulty: Maybe<Difficulty>;
-};
-
-export type DefenseTypeSet = {
-  __typename?: 'DefenseTypeSet';
-  defenseTypes: Array<Defense>;
-  difficulty: Maybe<Difficulty>;
-};
 
 export enum Difficulty {
   Extreme = 'extreme',
@@ -107,979 +50,11 @@ export enum DrillTypeEnum {
   Shooting = 'shooting'
 }
 
-export type Emblem = ResourceInterface & {
-  __typename?: 'Emblem';
-  category: Scalars['String']['output'];
-  description: Maybe<Scalars['String']['output']>;
-  imageUrl: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type EmblemDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type EmblemImageUrlArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type EmblemNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type Equipment = ResourceInterface & {
-  __typename?: 'Equipment';
-  category: Scalars['String']['output'];
-  description: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  subCategory: Maybe<Scalars['String']['output']>;
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type EquipmentDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type EquipmentNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type EventContent = {
-  __typename?: 'EventContent';
-  bonuses: Array<EventContentBonus>;
-  minigameConfigs: Array<EventMinigameConfig>;
-  missions: Array<EventContentMission>;
-  name: Scalars['String']['output'];
-  scenarios: Array<EventContentScenario>;
-  schedules: Array<EventContentSchedule>;
-  shopResources: Array<EventContentShopResource>;
-  stageTotalRewards: Array<EventContentStageTotalReward>;
-  stages: Array<EventContentStage>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type EventContentBonusesArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentMinigameConfigsArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentMissionsArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentScenariosArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentShopResourcesArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentStageTotalRewardsArgs = {
-  runType: RunTypeEnum;
-};
-
-
-export type EventContentStagesArgs = {
-  runType: RunTypeEnum;
-};
-
-export type EventContentBonus = {
-  __typename?: 'EventContentBonus';
-  percentage: Scalars['String']['output'];
-  resource: Maybe<ResourceInterface>;
-  student: Maybe<EventContentBonusStudent>;
-};
-
-export type EventContentBonusStudent = {
-  __typename?: 'EventContentBonusStudent';
-  name: Scalars['String']['output'];
-  role: RoleEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type EventContentBonusStudentNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type EventContentMission = {
-  __typename?: 'EventContentMission';
-  category: EventContentMissionCategoryEnum;
-  completionExtension: Scalars['Boolean']['output'];
-  completionReferenceMissionUid: Maybe<Scalars['String']['output']>;
-  completionReferenceRequiredCount: Scalars['Int']['output'];
-  condition: EventContentMissionCondition;
-  conditionReward: Maybe<EventContentMissionReward>;
-  description: EventContentMissionDescription;
-  displayOrder: Scalars['Int']['output'];
-  preMissionUid: Maybe<Scalars['String']['output']>;
-  resetType: EventContentMissionResetTypeEnum;
-  reward: EventContentMissionReward;
-  uid: Scalars['String']['output'];
-};
-
-
-export type EventContentMissionDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export enum EventContentMissionCategoryEnum {
-  Daily = 'daily',
-  EventAchievement = 'eventAchievement',
-  EventFixed = 'eventFixed',
-  MinigameEvent = 'minigameEvent'
-}
-
-export type EventContentMissionCondition = {
-  __typename?: 'EventContentMissionCondition';
-  count: Scalars['Int']['output'];
-  parameterTags: Array<Scalars['String']['output']>;
-  parameters: Array<Scalars['String']['output']>;
-  type: Scalars['String']['output'];
-};
-
-export type EventContentMissionDescription = {
-  __typename?: 'EventContentMissionDescription';
-  parameters: Array<EventContentMissionDescriptionParameter>;
-  template: Scalars['String']['output'];
-};
-
-export type EventContentMissionDescriptionParameter = {
-  __typename?: 'EventContentMissionDescriptionParameter';
-  emphasized: Scalars['Boolean']['output'];
-  id: Scalars['Int']['output'];
-  text: Scalars['String']['output'];
-};
-
-export enum EventContentMissionResetTypeEnum {
-  Daily = 'daily',
-  None = 'none'
-}
-
-export type EventContentMissionReward = {
-  __typename?: 'EventContentMissionReward';
-  amount: Scalars['Int']['output'];
-  resource: ResourceInterface;
-};
-
-export type EventContentScenario = {
-  __typename?: 'EventContentScenario';
-  conditionAmount: Scalars['Int']['output'];
-  conditionType: EventContentScenarioConditionTypeEnum;
-  isMeetup: Scalars['Boolean']['output'];
-  isOmnibus: Scalars['Boolean']['output'];
-  isRecollection: Scalars['Boolean']['output'];
-  order: Scalars['Int']['output'];
-  recollectionNumber: Scalars['Int']['output'];
-  rewards: Array<EventContentScenarioReward>;
-  uid: Scalars['String']['output'];
-};
-
-export enum EventContentScenarioConditionTypeEnum {
-  DayAfter = 'dayAfter',
-  EventPoint = 'eventPoint',
-  None = 'none'
-}
-
-export type EventContentScenarioReward = {
-  __typename?: 'EventContentScenarioReward';
-  amount: Scalars['Int']['output'];
-  resource: Maybe<ResourceInterface>;
-};
-
-export type EventContentSchedule = {
-  __typename?: 'EventContentSchedule';
-  endAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  region: Scalars['String']['output'];
-  runType: Scalars['String']['output'];
-  startAt: Scalars['ISO8601DateTime']['output'];
-};
-
-export type EventContentShopResource = {
-  __typename?: 'EventContentShopResource';
-  paymentResource: Maybe<ResourceInterface>;
-  /** @deprecated Use `purchaseTiers.unitPrice` instead. */
-  paymentResourceAmount: Scalars['Int']['output'];
-  purchaseTiers: Array<EventContentShopResourcePurchaseTier>;
-  resource: Maybe<ResourceInterface>;
-  resourceAmount: Scalars['Int']['output'];
-  shopAmount: Maybe<Scalars['Int']['output']>;
-  uid: Scalars['String']['output'];
-};
-
-export type EventContentShopResourcePurchaseTier = {
-  __typename?: 'EventContentShopResourcePurchaseTier';
-  paymentResource: Maybe<ResourceInterface>;
-  quantity: Maybe<Scalars['Int']['output']>;
-  startQuantity: Scalars['Int']['output'];
-  tierIndex: Scalars['Int']['output'];
-  unitPrice: Scalars['Int']['output'];
-};
-
-export type EventContentStage = {
-  __typename?: 'EventContentStage';
-  enterCostAmount: Scalars['Int']['output'];
-  enterCostResource: Maybe<ResourceInterface>;
-  rewards: Array<EventContentStageReward>;
-  stageIndex: Scalars['Int']['output'];
-  stageNumber: Scalars['String']['output'];
-  stageType: Scalars['String']['output'];
-  uid: Scalars['String']['output'];
-};
-
-export type EventContentStageReward = {
-  __typename?: 'EventContentStageReward';
-  amount: Scalars['Int']['output'];
-  probability: Scalars['String']['output'];
-  resource: Maybe<ResourceInterface>;
-  tag: Scalars['String']['output'];
-};
-
-export type EventContentStageTotalReward = {
-  __typename?: 'EventContentStageTotalReward';
-  items: Array<EventContentStageTotalRewardItem>;
-  requiredAmount: Scalars['Int']['output'];
-  uid: Scalars['String']['output'];
-};
-
-export type EventContentStageTotalRewardItem = {
-  __typename?: 'EventContentStageTotalRewardItem';
-  amount: Scalars['Int']['output'];
-  resource: Maybe<ResourceInterface>;
-};
-
-export type EventMinigameCardFlip = {
-  __typename?: 'EventMinigameCardFlip';
-  /**
-   * Legacy representative card cost; it does not describe later flips in a round.
-   * @deprecated Use `flipCosts` for the cost of each flip within a round.
-   */
-  cardCost: EventMinigamePayment;
-  cards: Array<EventMinigameCardFlipCard>;
-  /** Adopted calculation rules, not a guarantee of game behavior. Null until a format-6 snapshot is applied. */
-  drawRules: Maybe<EventMinigameCardFlipDrawRules>;
-  /** Complete costs by flip order within a round. Null until a format-6 snapshot is applied; never inferred from cardCost. */
-  flipCosts: Maybe<Array<EventMinigameCardFlipCost>>;
-  slotCount: Scalars['Int']['output'];
-};
-
-export type EventMinigameCardFlipCard = {
-  __typename?: 'EventMinigameCardFlipCard';
-  /** Original card group and image identifier: images/events/cards/{cardGroupUid}.webp. Multiple reward variants can share the same group. */
-  cardGroupUid: Maybe<Scalars['String']['output']>;
-  /** Source card label, which may be in Latin letters even in localized game data. */
-  name: Maybe<Scalars['String']['output']>;
-  /** N=1, R=2, SR=3, SSR=4. */
-  rarity: Maybe<Scalars['Int']['output']>;
-  /** Rewards for one card. */
-  rewards: Array<EventMinigameRewardItem>;
-  slots: Array<EventMinigameCardFlipSlot>;
-  /** Representative source shop row for this card's reward variant. Use cardGroupUid to group variants of the same card. */
-  uid: Scalars['String']['output'];
-};
-
-
-export type EventMinigameCardFlipCardNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type EventMinigameCardFlipCost = {
-  __typename?: 'EventMinigameCardFlipCost';
-  /** One-based flip order within the current round, independent of generation group. */
-  flip: Scalars['Int']['output'];
-  payments: Array<EventMinigamePayment>;
-};
-
-export type EventMinigameCardFlipDrawRules = {
-  __typename?: 'EventMinigameCardFlipDrawRules';
-  /** Acquiring these BAQL rarities advances the generation group by one; other rarities leave it unchanged. */
-  advanceOnRarities: Array<Scalars['Int']['output']>;
-  /** True when the model is an adopted assumption rather than a verified game rule. */
-  assumed: Scalars['Boolean']['output'];
-  initialGroup: Scalars['Int']['output'];
-  maxDrawCount: Scalars['Int']['output'];
-  /** Versioned calculation model, currently `low_rarity_count_v1`. */
-  model: Scalars['String']['output'];
-  /** Shuffle resets the generation group to initialGroup and flip order to one. */
-  resetOnShuffle: Scalars['Boolean']['output'];
-  /** Previously acquired reward variants retain their weight in subsequent draws. */
-  withReplacement: Scalars['Boolean']['output'];
-};
-
-export type EventMinigameCardFlipSlot = {
-  __typename?: 'EventMinigameCardFlipSlot';
-  /** Share of the original weight within this slot; it does not guarantee actual acquisition. */
-  probability: Scalars['Float']['output'];
-  /** Original generation slot (`RefreshGroup`), not the order in which cards are flipped. */
-  slot: Scalars['Int']['output'];
-  weight: Scalars['Int']['output'];
-};
-
-export type EventMinigameConfig = {
-  __typename?: 'EventMinigameConfig';
-  /** Per-card source rewards and slot weights for `card_flip` minigames. Slot numbers identify original generation slots, not flip order. */
-  cardFlip: Maybe<EventMinigameCardFlip>;
-  minigameType: Scalars['String']['output'];
-  /** @deprecated Use `payments` or `rewardGroups.payments` instead. This field is a legacy representative payment and may not describe min/expected/max semantics for variable-cost minigames. */
-  payment: EventMinigamePayment;
-  payments: Array<EventMinigamePayment>;
-  rewardGroups: Array<EventMinigameRewardGroup>;
-  /** Source board data for `treasure_hunt` minigames. */
-  treasureHunt: Maybe<EventMinigameTreasureHunt>;
-};
-
-export type EventMinigamePayment = {
-  __typename?: 'EventMinigamePayment';
-  quantity: Scalars['Int']['output'];
-  resource: Maybe<ResourceInterface>;
-};
-
-export type EventMinigamePaymentRange = {
-  __typename?: 'EventMinigamePaymentRange';
-  quantityExpected: Scalars['Int']['output'];
-  quantityMax: Scalars['Int']['output'];
-  quantityMin: Scalars['Int']['output'];
-  quantityVariable: Scalars['Boolean']['output'];
-  resource: Maybe<ResourceInterface>;
-};
-
-export type EventMinigameRewardGroup = {
-  __typename?: 'EventMinigameRewardGroup';
-  condition: EventMinigameSlotCondition;
-  /** @deprecated Use `payments` instead. This field is a legacy representative range. */
-  payment: EventMinigamePaymentRange;
-  payments: Array<EventMinigamePaymentRange>;
-  rewards: Array<EventMinigameRewardItem>;
-};
-
-export type EventMinigameRewardItem = {
-  __typename?: 'EventMinigameRewardItem';
-  quantity: Scalars['Float']['output'];
-  resource: Maybe<ResourceInterface>;
-};
-
-export type EventMinigameSlotCondition = {
-  __typename?: 'EventMinigameSlotCondition';
-  divisor: Maybe<Scalars['Int']['output']>;
-  remainders: Maybe<Array<Scalars['Int']['output']>>;
-  type: Scalars['String']['output'];
-  value: Maybe<Scalars['Int']['output']>;
-  values: Maybe<Array<Scalars['Int']['output']>>;
-};
-
-export type EventMinigameTreasure = {
-  __typename?: 'EventMinigameTreasure';
-  count: Scalars['Int']['output'];
-  height: Scalars['Int']['output'];
-  /** Rewards for one fully revealed treasure. */
-  rewards: Array<EventMinigameRewardItem>;
-  uid: Scalars['String']['output'];
-  width: Scalars['Int']['output'];
-};
-
-export type EventMinigameTreasureHunt = {
-  __typename?: 'EventMinigameTreasureHunt';
-  /** Rounds at or after this number repeat this round's board. */
-  loopRound: Scalars['Int']['output'];
-  rounds: Array<EventMinigameTreasureHuntRound>;
-};
-
-export type EventMinigameTreasureHuntRound = {
-  __typename?: 'EventMinigameTreasureHuntRound';
-  boardHeight: Scalars['Int']['output'];
-  boardWidth: Scalars['Int']['output'];
-  /** Cost of revealing one cell. */
-  cellCost: EventMinigamePayment;
-  /** Rewards paid for every opened cell, including cells containing treasure. */
-  openCellRewards: Array<EventMinigameRewardItem>;
-  round: Scalars['Int']['output'];
-  treasures: Array<EventMinigameTreasure>;
-};
-
-export type FavoriteItem = {
-  __typename?: 'FavoriteItem';
-  exp: Scalars['Int']['output'];
-  favoriteLevel: Scalars['Int']['output'];
-  favorited: Scalars['Boolean']['output'];
-  item: Item;
-  student: Student;
-};
-
-export type Furniture = ResourceInterface & {
-  __typename?: 'Furniture';
-  category: Scalars['String']['output'];
-  description: Maybe<Scalars['String']['output']>;
-  imageUrl: Scalars['String']['output'];
-  interactionStudents: Array<Student>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  subCategory: Maybe<Scalars['String']['output']>;
-  tags: Array<Scalars['String']['output']>;
-  theme: Maybe<FurnitureTheme>;
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type FurnitureDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type FurnitureNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type FurnitureTemplatePreview = {
-  __typename?: 'FurnitureTemplatePreview';
-  imageUrl: Scalars['String']['output'];
-  thumbnailUrl: Scalars['String']['output'];
-  title: Scalars['String']['output'];
-  uid: Scalars['String']['output'];
-};
-
-
-export type FurnitureTemplatePreviewTitleArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type FurnitureTheme = {
-  __typename?: 'FurnitureTheme';
-  description: Maybe<Scalars['String']['output']>;
-  furnitures: Array<Furniture>;
-  name: Scalars['String']['output'];
-  previews: Array<FurnitureTemplatePreview>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type FurnitureThemeDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type FurnitureThemeNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type GachaGroup = {
-  __typename?: 'GachaGroup';
-  items: Array<GachaGroupItem>;
-  recursive: Scalars['Boolean']['output'];
-  rewardAll: Scalars['Boolean']['output'];
-  uid: Scalars['String']['output'];
-};
-
-
-export type GachaGroupItemsArgs = {
-  region?: InputMaybe<RegionEnum>;
-};
-
-export type GachaGroupItem = {
-  __typename?: 'GachaGroupItem';
-  amountMax: Maybe<Scalars['Int']['output']>;
-  amountMin: Maybe<Scalars['Int']['output']>;
-  chance: Maybe<Scalars['Float']['output']>;
-  resource: Maybe<ResourceInterface>;
-};
-
-export type Gear = {
-  __typename?: 'Gear';
-  growthItems: Array<GearGrowthItem>;
-  name: Scalars['String']['output'];
-};
-
-export type GearGrowthItem = {
-  __typename?: 'GearGrowthItem';
-  amount: Scalars['Int']['output'];
-  gearTier: Scalars['Int']['output'];
-  item: Item;
-};
-
-export type Item = ResourceInterface & {
-  __typename?: 'Item';
-  category: Scalars['String']['output'];
-  clientRegions: Array<ItemRegion>;
-  description: Maybe<Scalars['String']['output']>;
-  imageUrl: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  regionalDescription: Maybe<Scalars['String']['output']>;
-  regionalName: Maybe<Scalars['String']['output']>;
-  subCategory: Maybe<Scalars['String']['output']>;
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type ItemDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type ItemImageUrlArgs = {
-  region: ItemRegion;
-};
-
-
-export type ItemNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type ItemRegionalDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-  region: ItemRegion;
-};
-
-
-export type ItemRegionalNameArgs = {
-  lang?: InputMaybe<Language>;
-  region: ItemRegion;
-};
-
-export enum ItemRegion {
-  Gl = 'gl',
-  Jp = 'jp'
-}
-
-export type JointFiringDrill = {
-  __typename?: 'JointFiringDrill';
-  /** @deprecated Legacy field. No longer maintained; not an authoritative confirmation status. */
-  confirmed: Scalars['Boolean']['output'];
-  defenseType: Defense;
-  drillType: DrillTypeEnum;
-  schedules: Array<JointFiringDrillSchedule>;
-  season: Scalars['Int']['output'];
-  terrain: Terrain;
-  uid: Scalars['String']['output'];
-};
-
-export type JointFiringDrillSchedule = {
-  __typename?: 'JointFiringDrillSchedule';
-  endAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  region: Scalars['String']['output'];
-  startAt: Scalars['ISO8601DateTime']['output'];
-};
-
-export enum Language {
-  En = 'en',
-  Ja = 'ja',
-  Ko = 'ko'
-}
-
-export type MainStoryChapter = {
-  __typename?: 'MainStoryChapter';
-  chapterNumber: Scalars['Int']['output'];
-  name: Maybe<Scalars['String']['output']>;
-  parts: Array<MainStoryPart>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type MainStoryChapterNameArgs = {
-  language?: InputMaybe<Language>;
-};
-
-export type MainStoryPart = {
-  __typename?: 'MainStoryPart';
-  episodeEnd: Maybe<Scalars['Int']['output']>;
-  episodeStart: Maybe<Scalars['Int']['output']>;
-  name: Maybe<Scalars['String']['output']>;
-  schedules: Array<MainStoryPartSchedule>;
-  sortOrder: Scalars['Int']['output'];
-  uid: Scalars['String']['output'];
-};
-
-
-export type MainStoryPartNameArgs = {
-  language?: InputMaybe<Language>;
-};
-
-export type MainStoryPartSchedule = {
-  __typename?: 'MainStoryPartSchedule';
-  /** @deprecated Legacy field. No longer maintained; not an authoritative confirmation status. */
-  confirmed: Scalars['Boolean']['output'];
-  region: Scalars['String']['output'];
-  releasedAt: Scalars['ISO8601DateTime']['output'];
-};
-
-export type MainStoryVolume = {
-  __typename?: 'MainStoryVolume';
-  chapters: Array<MainStoryChapter>;
-  label: Scalars['String']['output'];
-  name: Maybe<Scalars['String']['output']>;
-  season: Scalars['Int']['output'];
-  sortOrder: Scalars['Int']['output'];
-  uid: Scalars['String']['output'];
-};
-
-
-export type MainStoryVolumeNameArgs = {
-  language?: InputMaybe<Language>;
-};
-
-export type MiniEventContent = {
-  __typename?: 'MiniEventContent';
-  name: Scalars['String']['output'];
-  schedules: Array<MiniEventContentSchedule>;
-  uid: Scalars['String']['output'];
-};
-
-export type MiniEventContentSchedule = {
-  __typename?: 'MiniEventContentSchedule';
-  endAt: Scalars['ISO8601DateTime']['output'];
-  occurrence: Scalars['Int']['output'];
-  region: Scalars['String']['output'];
-  startAt: Scalars['ISO8601DateTime']['output'];
-};
-
-export type MiniStory = {
-  __typename?: 'MiniStory';
-  episodeCount: Scalars['Int']['output'];
-  schedules: Array<MiniStorySchedule>;
-  title: Maybe<Scalars['String']['output']>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type MiniStoryTitleArgs = {
-  language?: InputMaybe<Language>;
-};
-
-export type MiniStorySchedule = {
-  __typename?: 'MiniStorySchedule';
-  region: Scalars['String']['output'];
-  releasedAt: Scalars['ISO8601DateTime']['output'];
-};
-
-/** An object with an ID. */
-export type Node = {
-  /** ID of the object. */
-  id: Scalars['ID']['output'];
-};
-
-/** Information about pagination in a connection. */
-export type PageInfo = {
-  __typename?: 'PageInfo';
-  /** When paginating forwards, the cursor to continue. */
-  endCursor: Maybe<Scalars['String']['output']>;
-  /** When paginating forwards, are there more items? */
-  hasNextPage: Scalars['Boolean']['output'];
-  /** When paginating backwards, are there more items? */
-  hasPreviousPage: Scalars['Boolean']['output'];
-  /** When paginating backwards, the cursor to continue. */
-  startCursor: Maybe<Scalars['String']['output']>;
-};
-
 export enum Position {
   Back = 'back',
   Front = 'front',
   Middle = 'middle'
 }
-
-export type Query = {
-  __typename?: 'Query';
-  campaign: Maybe<Campaign>;
-  campaigns: Array<Campaign>;
-  equipments: Array<Equipment>;
-  eventContent: Maybe<EventContent>;
-  eventContents: Array<EventContent>;
-  furnitureTheme: Maybe<FurnitureTheme>;
-  furnitureThemes: Array<FurnitureTheme>;
-  furnitures: Array<Furniture>;
-  gachaGroup: Maybe<GachaGroup>;
-  items: Array<Item>;
-  jointFiringDrill: Maybe<JointFiringDrill>;
-  jointFiringDrills: Array<JointFiringDrill>;
-  mainStories: Array<MainStoryVolume>;
-  miniEventContent: Maybe<MiniEventContent>;
-  miniEventContents: Array<MiniEventContent>;
-  miniStories: Array<MiniStory>;
-  miniStory: Maybe<MiniStory>;
-  raidBoss: Maybe<RaidBoss>;
-  raidBosses: RaidBossConnection;
-  raidSchedule: Maybe<RaidSchedule>;
-  raidScheduleBySeasonIndex: Maybe<RaidSchedule>;
-  raidSchedules: RaidScheduleConnection;
-  recruitmentGroup: Maybe<RecruitmentGroup>;
-  recruitmentGroups: Array<RecruitmentGroup>;
-  stage: Maybe<Stage>;
-  stages: Array<Stage>;
-  student: Maybe<Student>;
-  studentCatalog: Maybe<StudentCatalog>;
-  students: Array<Student>;
-};
-
-
-export type QueryCampaignArgs = {
-  region: InputMaybe<Scalars['String']['input']>;
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryCampaignsArgs = {
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  region: Scalars['String']['input'];
-};
-
-
-export type QueryEquipmentsArgs = {
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryEventContentArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryEventContentsArgs = {
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryFurnitureThemeArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryFurnituresArgs = {
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryGachaGroupArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryItemsArgs = {
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryJointFiringDrillArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryJointFiringDrillsArgs = {
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  startBefore: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-};
-
-
-export type QueryMiniEventContentArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryMiniEventContentsArgs = {
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  region: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryMiniStoriesArgs = {
-  region: InputMaybe<Region>;
-  releasedAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-};
-
-
-export type QueryMiniStoryArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryRaidBossArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryRaidBossesArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  before: InputMaybe<Scalars['String']['input']>;
-  first: InputMaybe<Scalars['Int']['input']>;
-  last: InputMaybe<Scalars['Int']['input']>;
-  raidType: InputMaybe<Scalars['String']['input']>;
-};
-
-
-export type QueryRaidScheduleArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryRaidScheduleBySeasonIndexArgs = {
-  region: Scalars['String']['input'];
-  seasonIndex: Scalars['Int']['input'];
-};
-
-
-export type QueryRaidSchedulesArgs = {
-  after: InputMaybe<Scalars['String']['input']>;
-  before: InputMaybe<Scalars['String']['input']>;
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  first: InputMaybe<Scalars['Int']['input']>;
-  last: InputMaybe<Scalars['Int']['input']>;
-  raidType: InputMaybe<Scalars['String']['input']>;
-  region: Scalars['String']['input'];
-  startBefore: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryRecruitmentGroupArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryRecruitmentGroupsArgs = {
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  startBefore: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryStageArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryStagesArgs = {
-  category: InputMaybe<Scalars['String']['input']>;
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-
-export type QueryStudentArgs = {
-  uid: Scalars['String']['input'];
-};
-
-
-export type QueryStudentsArgs = {
-  uids: InputMaybe<Array<Scalars['String']['input']>>;
-};
-
-export type RaidBoss = Node & {
-  __typename?: 'RaidBoss';
-  eventContent: Maybe<EventContent>;
-  /** ID of the object. */
-  id: Scalars['ID']['output'];
-  name: Scalars['String']['output'];
-  raidType: Scalars['String']['output'];
-  schedules: Array<RaidSchedule>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type RaidBossNameArgs = {
-  lang?: InputMaybe<Scalars['String']['input']>;
-};
-
-/** The connection type for RaidBoss. */
-export type RaidBossConnection = {
-  __typename?: 'RaidBossConnection';
-  /** A list of edges. */
-  edges: Array<RaidBossEdge>;
-  /** A list of nodes. */
-  nodes: Array<RaidBoss>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-};
-
-/** An edge in a connection. */
-export type RaidBossEdge = {
-  __typename?: 'RaidBossEdge';
-  /** A cursor for use in pagination. */
-  cursor: Scalars['String']['output'];
-  /** The item at the end of the edge. */
-  node: Maybe<RaidBoss>;
-};
-
-export type RaidSchedule = {
-  __typename?: 'RaidSchedule';
-  attackType: Maybe<Attack>;
-  defenseTypeSets: Array<DefenseTypeSet>;
-  /** @deprecated Use `defense_type_sets` instead */
-  defenseTypes: Array<DefenseTypeAndDifficulty>;
-  endAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  jpSchedule: Maybe<RaidSchedule>;
-  raidBoss: RaidBoss;
-  raidType: Scalars['String']['output'];
-  region: Scalars['String']['output'];
-  seasonIndex: Scalars['Int']['output'];
-  startAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  terrain: Terrain;
-  uid: Scalars['String']['output'];
-};
-
-/** The connection type for RaidSchedule. */
-export type RaidScheduleConnection = {
-  __typename?: 'RaidScheduleConnection';
-  /** A list of edges. */
-  edges: Array<RaidScheduleEdge>;
-  /** A list of nodes. */
-  nodes: Array<RaidSchedule>;
-  /** Information to aid in pagination. */
-  pageInfo: PageInfo;
-};
-
-/** An edge in a connection. */
-export type RaidScheduleEdge = {
-  __typename?: 'RaidScheduleEdge';
-  /** A cursor for use in pagination. */
-  cursor: Scalars['String']['output'];
-  /** The item at the end of the edge. */
-  node: Maybe<RaidSchedule>;
-};
-
-export type Recruitment = {
-  __typename?: 'Recruitment';
-  endAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  pickup: Scalars['Boolean']['output'];
-  recruitmentGroup: RecruitmentGroup;
-  recruitmentType: RecruitmentTypeEnum;
-  rerun: Scalars['Boolean']['output'];
-  since: Scalars['ISO8601DateTime']['output'];
-  startAt: Scalars['ISO8601DateTime']['output'];
-  student: Maybe<Student>;
-  studentName: Scalars['String']['output'];
-  uid: Scalars['String']['output'];
-  until: Maybe<Scalars['ISO8601DateTime']['output']>;
-};
-
-export type RecruitmentGroup = {
-  __typename?: 'RecruitmentGroup';
-  contentType: Maybe<Scalars['String']['output']>;
-  contentUid: Maybe<Scalars['String']['output']>;
-  endAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  recruitmentType: RecruitmentTypeEnum;
-  recruitments: Array<Recruitment>;
-  startAt: Scalars['ISO8601DateTime']['output'];
-  uid: Scalars['String']['output'];
-};
 
 export enum RecruitmentTypeEnum {
   Archive = 'archive',
@@ -1091,36 +66,6 @@ export enum RecruitmentTypeEnum {
   Recollect = 'recollect',
   Usual = 'usual'
 }
-
-export enum Region {
-  Cn = 'cn',
-  Gl = 'gl',
-  Jp = 'jp'
-}
-
-export enum RegionEnum {
-  Cn = 'cn',
-  Gl = 'gl',
-  Jp = 'jp'
-}
-
-export type ResourceInterface = {
-  description: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  rarity: Scalars['Int']['output'];
-  type: ResourceTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type ResourceInterfaceDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type ResourceInterfaceNameArgs = {
-  lang?: InputMaybe<Language>;
-};
 
 export enum ResourceTypeEnum {
   Currency = 'currency',
@@ -1140,315 +85,6 @@ export enum RunTypeEnum {
   Permanent = 'permanent',
   Rerun = 'rerun'
 }
-
-export type Skill = {
-  __typename?: 'Skill';
-  additionalSkillUids: Array<Scalars['String']['output']>;
-  description: Maybe<StudentSkillDescription>;
-  iconUrl: Maybe<Scalars['String']['output']>;
-  levels: Array<StudentSkillLevel>;
-  maxLevel: Scalars['Int']['output'];
-  name: Scalars['String']['output'];
-  selectableSkills: Array<StudentSelectableSkill>;
-  skillType: StudentSkillTypeEnum;
-  uid: Scalars['String']['output'];
-};
-
-
-export type SkillDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type SkillNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type SkillItem = {
-  __typename?: 'SkillItem';
-  amount: Scalars['Int']['output'];
-  item: Item;
-  skillLevel: Scalars['Int']['output'];
-  skillType: StudentSkillItemTypeEnum;
-  student: Student;
-};
-
-export type Stage = {
-  __typename?: 'Stage';
-  area: Maybe<Scalars['Int']['output']>;
-  category: Scalars['String']['output'];
-  challengeConditions: Array<StageCondition>;
-  defenseTypes: Array<Scalars['String']['output']>;
-  difficulty: Maybe<Scalars['Int']['output']>;
-  entryCosts: Array<StageEntryCost>;
-  level: Maybe<Scalars['Int']['output']>;
-  name: Maybe<Scalars['String']['output']>;
-  rewards: Array<StageReward>;
-  stageNumber: Maybe<Scalars['String']['output']>;
-  stageType: Maybe<Scalars['String']['output']>;
-  starCondition: Maybe<StageCondition>;
-  terrain: Maybe<Scalars['String']['output']>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type StageRewardsArgs = {
-  region?: InputMaybe<RegionEnum>;
-};
-
-export type StageCondition = {
-  __typename?: 'StageCondition';
-  type: Scalars['String']['output'];
-  value: Scalars['Int']['output'];
-};
-
-export type StageEntryCost = {
-  __typename?: 'StageEntryCost';
-  amount: Scalars['Int']['output'];
-  resource: ResourceInterface;
-};
-
-export type StageReward = {
-  __typename?: 'StageReward';
-  amount: Maybe<Scalars['Int']['output']>;
-  amountMax: Maybe<Scalars['Int']['output']>;
-  amountMin: Maybe<Scalars['Int']['output']>;
-  gachaGroup: Maybe<GachaGroup>;
-  probability: Maybe<Scalars['Float']['output']>;
-  resource: Maybe<ResourceInterface>;
-  rewardTag: Maybe<Scalars['String']['output']>;
-  rewardType: Scalars['String']['output'];
-};
-
-export type Student = {
-  __typename?: 'Student';
-  altNames: Array<Scalars['String']['output']>;
-  archiveAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  attackType: Attack;
-  birthday: Maybe<Scalars['ISO8601Date']['output']>;
-  catalog: Maybe<StudentCatalogData>;
-  character: StudentCharacter;
-  club: Maybe<StudentClub>;
-  defenseType: Defense;
-  equipments: Array<Scalars['String']['output']>;
-  familyName: Maybe<Scalars['String']['output']>;
-  favoriteItems: Array<FavoriteItem>;
-  gear: Maybe<Gear>;
-  initialTier: Scalars['Int']['output'];
-  interactionFurnitures: Array<Furniture>;
-  name: Scalars['String']['output'];
-  order: Scalars['Int']['output'];
-  personalName: Maybe<Scalars['String']['output']>;
-  position: Position;
-  recruitments: Array<Recruitment>;
-  releaseAt: Maybe<Scalars['ISO8601DateTime']['output']>;
-  released: Scalars['Boolean']['output'];
-  role: RoleEnum;
-  schaleDbId: Maybe<Scalars['String']['output']>;
-  school: Scalars['String']['output'];
-  skillItems: Array<SkillItem>;
-  skills: Array<Skill>;
-  studentVariant: StudentVariant;
-  tacticRole: TacticRole;
-  uid: Scalars['String']['output'];
-};
-
-
-export type StudentFavoriteItemsArgs = {
-  favorited: InputMaybe<Scalars['Boolean']['input']>;
-};
-
-
-export type StudentNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type StudentReleaseAtArgs = {
-  region?: InputMaybe<Region>;
-};
-
-
-export type StudentReleasedArgs = {
-  region?: InputMaybe<Region>;
-};
-
-
-export type StudentSkillItemsArgs = {
-  skillLevel: InputMaybe<Scalars['Int']['input']>;
-  skillType: InputMaybe<StudentSkillItemTypeEnum>;
-};
-
-
-export type StudentSkillsArgs = {
-  includeVariants?: InputMaybe<Scalars['Boolean']['input']>;
-  skillType: InputMaybe<StudentSkillTypeEnum>;
-};
-
-export type StudentCatalog = {
-  __typename?: 'StudentCatalog';
-  assetsVersion: Maybe<Scalars['String']['output']>;
-  clientVersion: Maybe<Scalars['String']['output']>;
-  databaseSha256: Scalars['String']['output'];
-  equipment: Array<StudentCatalogEquipment>;
-  statLevelInterpolationEndLevel: Scalars['Int']['output'];
-  statLevelInterpolations: Array<StudentCatalogStatLevelInterpolation>;
-  terrainAdaptationFactors: Array<StudentCatalogTerrainAdaptationFactor>;
-  version: Scalars['String']['output'];
-};
-
-export type StudentCatalogData = {
-  __typename?: 'StudentCatalogData';
-  favorRewards: Array<StudentCatalogFavorReward>;
-  gear: Maybe<StudentCatalogGear>;
-  potentialBonuses: Array<StudentCatalogPotentialBonus>;
-  profile: StudentCatalogProfile;
-  skillConfigurations: Array<StudentCatalogSkillConfiguration>;
-  starBonuses: Array<StudentCatalogStarBonus>;
-  statProfile: StudentCatalogStatProfile;
-  terrainAdaptations: StudentCatalogTerrainAdaptations;
-  weapon: StudentCatalogWeapon;
-};
-
-
-export type StudentCatalogDataProfileArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type StudentCatalogEquipment = {
-  __typename?: 'StudentCatalogEquipment';
-  category: Scalars['String']['output'];
-  description: Maybe<Scalars['String']['output']>;
-  growthType: StudentCatalogStatGrowthType;
-  maxLevel: Scalars['Int']['output'];
-  modifiers: Array<StudentCatalogEquipmentModifier>;
-  name: Scalars['String']['output'];
-  tier: Scalars['Int']['output'];
-  uid: Scalars['String']['output'];
-};
-
-
-export type StudentCatalogEquipmentDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type StudentCatalogEquipmentNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type StudentCatalogEquipmentModifier = {
-  __typename?: 'StudentCatalogEquipmentModifier';
-  kind: StudentCatalogStatModifierKind;
-  level1: Scalars['Int']['output'];
-  levelMax: Scalars['Int']['output'];
-  stat: StudentCatalogStat;
-};
-
-export type StudentCatalogFavorReward = {
-  __typename?: 'StudentCatalogFavorReward';
-  level: Scalars['Int']['output'];
-  modifiers: Array<StudentCatalogStatModifier>;
-};
-
-export type StudentCatalogFixedStat = {
-  __typename?: 'StudentCatalogFixedStat';
-  stat: StudentCatalogStat;
-  value: Scalars['Int']['output'];
-};
-
-export type StudentCatalogGear = {
-  __typename?: 'StudentCatalogGear';
-  description: Maybe<Scalars['String']['output']>;
-  name: Scalars['String']['output'];
-  tiers: Array<StudentCatalogGearTier>;
-};
-
-
-export type StudentCatalogGearDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type StudentCatalogGearNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type StudentCatalogGearTier = {
-  __typename?: 'StudentCatalogGearTier';
-  growthType: StudentCatalogStatGrowthType;
-  learnSkillPosition: Maybe<Scalars['Int']['output']>;
-  learnSkillSlot: Maybe<StudentSkillTypeEnum>;
-  maxLevel: Scalars['Int']['output'];
-  modifiers: Array<StudentCatalogEquipmentModifier>;
-  openFavorLevel: Scalars['Int']['output'];
-  tier: Scalars['Int']['output'];
-};
-
-export type StudentCatalogGrowthRatio = {
-  __typename?: 'StudentCatalogGrowthRatio';
-  growthType: StudentCatalogStatGrowthType;
-  value: Scalars['Int']['output'];
-};
-
-export type StudentCatalogLevelStat = {
-  __typename?: 'StudentCatalogLevelStat';
-  level1: Scalars['Int']['output'];
-  level100: Scalars['Int']['output'];
-  stat: StudentCatalogStat;
-};
-
-export type StudentCatalogPotentialBonus = {
-  __typename?: 'StudentCatalogPotentialBonus';
-  levels: Array<StudentCatalogPotentialLevel>;
-  stat: StudentCatalogStat;
-  unnecessary: Scalars['Boolean']['output'];
-};
-
-export type StudentCatalogPotentialLevel = {
-  __typename?: 'StudentCatalogPotentialLevel';
-  level: Scalars['Int']['output'];
-  rate: Scalars['Int']['output'];
-};
-
-export type StudentCatalogProfile = {
-  __typename?: 'StudentCatalogProfile';
-  age: Maybe<Scalars['String']['output']>;
-  familyName: Maybe<Scalars['String']['output']>;
-  height: Maybe<Scalars['String']['output']>;
-  hobby: Maybe<Scalars['String']['output']>;
-  introduction: Maybe<Scalars['String']['output']>;
-  personalName: Maybe<Scalars['String']['output']>;
-  schoolYear: Maybe<Scalars['String']['output']>;
-  weaponName: Maybe<Scalars['String']['output']>;
-};
-
-export type StudentCatalogSkillConfiguration = {
-  __typename?: 'StudentCatalogSkillConfiguration';
-  formIndex: Scalars['Int']['output'];
-  minimumGearTier: Scalars['Int']['output'];
-  minimumWeaponStar: Scalars['Int']['output'];
-  selectExSkillActionSlot: Maybe<Scalars['Int']['output']>;
-  slots: Array<StudentCatalogSkillConfigurationSlot>;
-};
-
-export type StudentCatalogSkillConfigurationSlot = {
-  __typename?: 'StudentCatalogSkillConfigurationSlot';
-  skills: Array<StudentCatalogSkillReference>;
-  slot: StudentSkillTypeEnum;
-};
-
-export type StudentCatalogSkillReference = {
-  __typename?: 'StudentCatalogSkillReference';
-  position: Scalars['Int']['output'];
-  skillUid: Maybe<Scalars['String']['output']>;
-};
-
-export type StudentCatalogStarBonus = {
-  __typename?: 'StudentCatalogStarBonus';
-  modifiers: Array<StudentCatalogStatModifier>;
-  star: Scalars['Int']['output'];
-};
 
 export enum StudentCatalogStat {
   AccuracyPoint = 'ACCURACY_POINT',
@@ -1524,132 +160,11 @@ export enum StudentCatalogStatGrowthType {
   TimeAttack = 'TIME_ATTACK'
 }
 
-export type StudentCatalogStatLevelInterpolation = {
-  __typename?: 'StudentCatalogStatLevelInterpolation';
-  level: Scalars['Int']['output'];
-  ratios: Array<StudentCatalogGrowthRatio>;
-};
-
-export type StudentCatalogStatModifier = {
-  __typename?: 'StudentCatalogStatModifier';
-  kind: StudentCatalogStatModifierKind;
-  stat: StudentCatalogStat;
-  value: Scalars['Int']['output'];
-};
-
 export enum StudentCatalogStatModifierKind {
   Base = 'BASE',
   Coefficient = 'COEFFICIENT',
   Special = 'SPECIAL'
 }
-
-export type StudentCatalogStatProfile = {
-  __typename?: 'StudentCatalogStatProfile';
-  fixedStats: Array<StudentCatalogFixedStat>;
-  growthType: StudentCatalogStatGrowthType;
-  levelStats: Array<StudentCatalogLevelStat>;
-};
-
-export type StudentCatalogTerrainAdaptationFactor = {
-  __typename?: 'StudentCatalogTerrainAdaptationFactor';
-  accuracyFactor: Scalars['Int']['output'];
-  attackPowerFactor: Scalars['Int']['output'];
-  blockFactor: Scalars['Int']['output'];
-  dodgeFactor: Scalars['Int']['output'];
-  rank: StudentTerrainAdaptationRank;
-  shotFactor: Scalars['Int']['output'];
-};
-
-export type StudentCatalogTerrainAdaptations = {
-  __typename?: 'StudentCatalogTerrainAdaptations';
-  indoor: StudentTerrainAdaptationRank;
-  outdoor: StudentTerrainAdaptationRank;
-  street: StudentTerrainAdaptationRank;
-};
-
-export type StudentCatalogWeapon = {
-  __typename?: 'StudentCatalogWeapon';
-  description: Maybe<Scalars['String']['output']>;
-  growthType: StudentCatalogStatGrowthType;
-  imageUrl: Maybe<Scalars['String']['output']>;
-  levelStats: Array<StudentCatalogLevelStat>;
-  name: Scalars['String']['output'];
-  stages: Array<StudentCatalogWeaponStage>;
-};
-
-
-export type StudentCatalogWeaponDescriptionArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-
-export type StudentCatalogWeaponNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type StudentCatalogWeaponStage = {
-  __typename?: 'StudentCatalogWeaponStage';
-  learnSkillPosition: Maybe<Scalars['Int']['output']>;
-  learnSkillSlot: Maybe<StudentSkillTypeEnum>;
-  maxLevel: Scalars['Int']['output'];
-  modifiers: Array<StudentCatalogStatModifier>;
-  stage: Scalars['Int']['output'];
-  unlocked: Scalars['Boolean']['output'];
-};
-
-export type StudentCharacter = {
-  __typename?: 'StudentCharacter';
-  studentVariants: Array<StudentVariant>;
-  uid: Scalars['String']['output'];
-};
-
-export type StudentClub = {
-  __typename?: 'StudentClub';
-  name: Maybe<Scalars['String']['output']>;
-  uid: Scalars['String']['output'];
-};
-
-
-export type StudentClubNameArgs = {
-  lang?: InputMaybe<Language>;
-};
-
-export type StudentSelectableSkill = {
-  __typename?: 'StudentSelectableSkill';
-  condition: StudentSkillSelectionCondition;
-  skillUid: Scalars['String']['output'];
-};
-
-export type StudentSkillDescription = {
-  __typename?: 'StudentSkillDescription';
-  parameters: Array<StudentSkillDescriptionParameter>;
-  template: Scalars['String']['output'];
-};
-
-export type StudentSkillDescriptionParameter = {
-  __typename?: 'StudentSkillDescriptionParameter';
-  emphasized: Scalars['Boolean']['output'];
-  id: Scalars['Int']['output'];
-  values: Array<StudentSkillDescriptionParameterValue>;
-};
-
-export type StudentSkillDescriptionParameterValue = {
-  __typename?: 'StudentSkillDescriptionParameterValue';
-  level: Scalars['Int']['output'];
-  text: Scalars['String']['output'];
-};
-
-export enum StudentSkillItemTypeEnum {
-  Ex = 'ex',
-  Normal = 'normal'
-}
-
-export type StudentSkillLevel = {
-  __typename?: 'StudentSkillLevel';
-  cost: Maybe<Scalars['Int']['output']>;
-  level: Scalars['Int']['output'];
-  statModifiers: Array<StudentSkillStatModifier>;
-};
 
 export enum StudentSkillModifierActivation {
   Conditional = 'CONDITIONAL',
@@ -1665,15 +180,6 @@ export enum StudentSkillSelectionCondition {
   Enemy = 'ENEMY',
   Self = 'SELF'
 }
-
-export type StudentSkillStatModifier = {
-  __typename?: 'StudentSkillStatModifier';
-  activation: StudentSkillModifierActivation;
-  kind: StudentCatalogStatModifierKind;
-  persistence: StudentSkillModifierPersistence;
-  stat: StudentCatalogStat;
-  value: Scalars['Int']['output'];
-};
 
 export enum StudentSkillTypeEnum {
   Ex = 'ex',
@@ -1691,14 +197,6 @@ export enum StudentTerrainAdaptationRank {
   Ss = 'SS'
 }
 
-export type StudentVariant = {
-  __typename?: 'StudentVariant';
-  isMulticlass: Scalars['Boolean']['output'];
-  primaryStudent: Student;
-  students: Array<Student>;
-  uid: Scalars['String']['output'];
-};
-
 export enum TacticRole {
   Attacker = 'attacker',
   Healer = 'healer',
@@ -1714,228 +212,228 @@ export enum Terrain {
 }
 
 export type EventContentScheduleQueryVariables = Exact<{
-  eventUid: Scalars['String']['input'];
+  eventUid: string;
 }>;
 
 
-export type EventContentScheduleQuery = { __typename?: 'Query', eventContent: { __typename?: 'EventContent', schedules: Array<{ __typename?: 'EventContentSchedule', region: string, runType: string, startAt: Date, endAt: Date | null }> } | null };
+export type EventContentScheduleQuery = { eventContent: { schedules: Array<{ region: string, runType: string, startAt: Date, endAt: Date | null }> } | null };
 
 export type EventContentsListQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type EventContentsListQuery = { __typename?: 'Query', eventContents: Array<{ __typename?: 'EventContent', uid: string, name: string, schedules: Array<{ __typename?: 'EventContentSchedule', region: string, runType: string, startAt: Date, endAt: Date | null }> }> };
+export type EventContentsListQuery = { eventContents: Array<{ uid: string, name: string, schedules: Array<{ region: string, runType: string, startAt: Date, endAt: Date | null }> }> };
 
 export type EventContentShopContentQueryVariables = Exact<{
-  eventUid: Scalars['String']['input'];
+  eventUid: string;
   runType: RunTypeEnum;
 }>;
 
 
-export type EventContentShopContentQuery = { __typename?: 'Query', eventContent: { __typename?: 'EventContent', stages: Array<{ __typename?: 'EventContentStage', uid: string, stageNumber: string, stageIndex: number, stageType: string, enterCostAmount: number, rewards: Array<{ __typename?: 'EventContentStageReward', amount: number, probability: string, tag: string, resource:
+export type EventContentShopContentQuery = { eventContent: { stages: Array<{ uid: string, stageNumber: string, stageIndex: number, stageType: string, enterCostAmount: number, rewards: Array<{ amount: number, probability: string, tag: string, resource:
           | { __typename: 'Currency', uid: string, name: string, rarity: number }
           | { __typename: 'Emblem', imageUrl: string | null, uid: string, name: string, rarity: number }
           | { __typename: 'Equipment', uid: string, name: string, rarity: number }
           | { __typename: 'Furniture', uid: string, name: string, rarity: number }
           | { __typename: 'Item', category: string, uid: string, name: string, rarity: number }
-         | null }> }>, shopResources: Array<{ __typename?: 'EventContentShopResource', uid: string, resourceAmount: number, shopAmount: number | null, resource:
-        | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-        | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-        | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-        | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number, interactionStudents: Array<{ __typename?: 'Student', uid: string, name: string }> }
-        | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+         | null }> }>, shopResources: Array<{ uid: string, resourceAmount: number, shopAmount: number | null, resource:
+        | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+        | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+        | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+        | { type: ResourceTypeEnum, uid: string, name: string, rarity: number, interactionStudents: Array<{ uid: string, name: string }> }
+        | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
        | null, paymentResource:
-        | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-        | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-        | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-        | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-        | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-       | null, purchaseTiers: Array<{ __typename?: 'EventContentShopResourcePurchaseTier', tierIndex: number, startQuantity: number, quantity: number | null, unitPrice: number, paymentResource:
-          | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-         | null }> }>, bonuses: Array<{ __typename?: 'EventContentBonus', percentage: string, resource:
-        | { __typename?: 'Currency', uid: string, name: string }
-        | { __typename?: 'Emblem', uid: string, name: string }
-        | { __typename?: 'Equipment', uid: string, name: string }
-        | { __typename?: 'Furniture', uid: string, name: string }
-        | { __typename?: 'Item', uid: string, name: string }
-       | null, student: { __typename?: 'EventContentBonusStudent', uid: string, name: string, role: RoleEnum } | null }>, minigameConfigs: Array<{ __typename?: 'EventMinigameConfig', minigameType: string, payment: { __typename?: 'EventMinigamePayment', quantity: number, resource:
-          | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-         | null }, payments: Array<{ __typename?: 'EventMinigamePayment', quantity: number, resource:
-          | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-          | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-         | null }>, treasureHunt: { __typename?: 'EventMinigameTreasureHunt', loopRound: number, rounds: Array<{ __typename?: 'EventMinigameTreasureHuntRound', round: number, boardWidth: number, boardHeight: number, cellCost: { __typename?: 'EventMinigamePayment', quantity: number, resource:
-              | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-             | null }, openCellRewards: Array<{ __typename?: 'EventMinigameRewardItem', quantity: number, resource:
-              | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-             | null }>, treasures: Array<{ __typename?: 'EventMinigameTreasure', uid: string, width: number, height: number, count: number, rewards: Array<{ __typename?: 'EventMinigameRewardItem', quantity: number, resource:
-                | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-                | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-                | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-                | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-                | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-               | null }> }> }> } | null, cardFlip: { __typename?: 'EventMinigameCardFlip', slotCount: number, flipCosts: Array<{ __typename?: 'EventMinigameCardFlipCost', flip: number, payments: Array<{ __typename?: 'EventMinigamePayment', quantity: number, resource:
-              | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-              | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-             | null }> }> | null, drawRules: { __typename?: 'EventMinigameCardFlipDrawRules', model: string, initialGroup: number, maxDrawCount: number, advanceOnRarities: Array<number>, resetOnShuffle: boolean, withReplacement: boolean } | null, cards: Array<{ __typename?: 'EventMinigameCardFlipCard', uid: string, cardGroupUid: string | null, name: string | null, rarity: number | null, slots: Array<{ __typename?: 'EventMinigameCardFlipSlot', slot: number, weight: number }>, rewards: Array<{ __typename?: 'EventMinigameRewardItem', quantity: number, resource:
-              | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-              | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-             | null }> }> } | null, rewardGroups: Array<{ __typename?: 'EventMinigameRewardGroup', condition: { __typename?: 'EventMinigameSlotCondition', type: string, value: number | null, values: Array<number> | null, divisor: number | null, remainders: Array<number> | null }, payments: Array<{ __typename?: 'EventMinigamePaymentRange', quantityMin: number, quantityExpected: number, quantityMax: number, quantityVariable: boolean, resource:
-            | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string }
-            | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
-            | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string }
-            | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string }
-            | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string }
-           | null }>, rewards: Array<{ __typename?: 'EventMinigameRewardItem', quantity: number, resource:
-            | { __typename?: 'Currency', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-            | { __typename?: 'Emblem', imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-            | { __typename?: 'Equipment', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-            | { __typename?: 'Furniture', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
-            | { __typename?: 'Item', type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+        | { type: ResourceTypeEnum, uid: string, name: string }
+        | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+        | { type: ResourceTypeEnum, uid: string, name: string }
+        | { type: ResourceTypeEnum, uid: string, name: string }
+        | { type: ResourceTypeEnum, uid: string, name: string }
+       | null, purchaseTiers: Array<{ tierIndex: number, startQuantity: number, quantity: number | null, unitPrice: number, paymentResource:
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+         | null }> }>, bonuses: Array<{ percentage: string, resource:
+        | { uid: string, name: string }
+        | { uid: string, name: string }
+        | { uid: string, name: string }
+        | { uid: string, name: string }
+        | { uid: string, name: string }
+       | null, student: { uid: string, name: string, role: RoleEnum } | null }>, minigameConfigs: Array<{ minigameType: string, payment: { quantity: number, resource:
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+         | null }, payments: Array<{ quantity: number, resource:
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+          | { type: ResourceTypeEnum, uid: string, name: string }
+         | null }>, treasureHunt: { loopRound: number, rounds: Array<{ round: number, boardWidth: number, boardHeight: number, cellCost: { quantity: number, resource:
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+             | null }, openCellRewards: Array<{ quantity: number, resource:
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+             | null }>, treasures: Array<{ uid: string, width: number, height: number, count: number, rewards: Array<{ quantity: number, resource:
+                | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+                | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+                | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+                | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+                | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+               | null }> }> }> } | null, cardFlip: { slotCount: number, flipCosts: Array<{ flip: number, payments: Array<{ quantity: number, resource:
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+              | { type: ResourceTypeEnum, uid: string, name: string }
+             | null }> }> | null, drawRules: { model: string, initialGroup: number, maxDrawCount: number, advanceOnRarities: Array<number>, resetOnShuffle: boolean, withReplacement: boolean } | null, cards: Array<{ uid: string, cardGroupUid: string | null, name: string | null, rarity: number | null, slots: Array<{ slot: number, weight: number }>, rewards: Array<{ quantity: number, resource:
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+              | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+             | null }> }> } | null, rewardGroups: Array<{ condition: { type: string, value: number | null, values: Array<number> | null, divisor: number | null, remainders: Array<number> | null }, payments: Array<{ quantityMin: number, quantityExpected: number, quantityMax: number, quantityVariable: boolean, resource:
+            | { type: ResourceTypeEnum, uid: string, name: string }
+            | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string }
+            | { type: ResourceTypeEnum, uid: string, name: string }
+            | { type: ResourceTypeEnum, uid: string, name: string }
+            | { type: ResourceTypeEnum, uid: string, name: string }
+           | null }>, rewards: Array<{ quantity: number, resource:
+            | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+            | { imageUrl: string | null, type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+            | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+            | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
+            | { type: ResourceTypeEnum, uid: string, name: string, rarity: number }
            | null }> }> }> } | null };
 
 export type EventContentMinigameTypeQueryVariables = Exact<{
-  eventUid: Scalars['String']['input'];
+  eventUid: string;
   runType: RunTypeEnum;
 }>;
 
 
-export type EventContentMinigameTypeQuery = { __typename?: 'Query', eventContent: { __typename?: 'EventContent', minigameConfigs: Array<{ __typename?: 'EventMinigameConfig', minigameType: string }> } | null };
+export type EventContentMinigameTypeQuery = { eventContent: { minigameConfigs: Array<{ minigameType: string }> } | null };
 
 export type FurnitureCatalogSourceQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type FurnitureCatalogSourceQuery = { __typename?: 'Query', furnitures: Array<{ __typename?: 'Furniture', uid: string, name: string, imageUrl: string, rarity: number, category: string, subCategory: string | null, tags: Array<string>, interactionStudents: Array<{ __typename?: 'Student', uid: string, name: string }> }>, furnitureThemes: Array<{ __typename?: 'FurnitureTheme', uid: string, name: string, description: string | null, previews: Array<{ __typename?: 'FurnitureTemplatePreview', uid: string, title: string, imageUrl: string, thumbnailUrl: string }>, furnitures: Array<{ __typename?: 'Furniture', uid: string }> }> };
+export type FurnitureCatalogSourceQuery = { furnitures: Array<{ uid: string, name: string, imageUrl: string, rarity: number, category: string, subCategory: string | null, tags: Array<string>, interactionStudents: Array<{ uid: string, name: string }> }>, furnitureThemes: Array<{ uid: string, name: string, description: string | null, previews: Array<{ uid: string, title: string, imageUrl: string, thumbnailUrl: string }>, furnitures: Array<{ uid: string }> }> };
 
 export type GrowthSkillCostsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type GrowthSkillCostsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, ex2: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, ex3: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, ex4: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, ex5: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal2: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal3: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal4: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal5: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal6: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal7: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal8: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }>, normal9: Array<{ __typename?: 'SkillItem', amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, rarity: number } }> }> };
+export type GrowthSkillCostsQuery = { students: Array<{ uid: string, ex2: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, ex3: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, ex4: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, ex5: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal2: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal3: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal4: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal5: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal6: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal7: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal8: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }>, normal9: Array<{ amount: number, item: { category: string, subCategory: string | null, uid: string, rarity: number } }> }> };
 
 export type GrowthStudentGearsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type GrowthStudentGearsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, gear: { __typename?: 'Gear', name: string, growthItems: Array<{ __typename?: 'GearGrowthItem', gearTier: number, amount: number, item: { __typename?: 'Item', category: string, subCategory: string | null, uid: string, name: string, rarity: number, type: ResourceTypeEnum } }> } | null }> };
+export type GrowthStudentGearsQuery = { students: Array<{ uid: string, gear: { name: string, growthItems: Array<{ gearTier: number, amount: number, item: { category: string, subCategory: string | null, uid: string, name: string, rarity: number, type: ResourceTypeEnum } }> } | null }> };
 
 export type HomeCampaignsQueryVariables = Exact<{
-  region: Scalars['String']['input'];
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
+  region: string;
+  endAfter: Date | null | undefined;
 }>;
 
 
-export type HomeCampaignsQuery = { __typename?: 'Query', campaigns: Array<{ __typename?: 'Campaign', uid: string, category: Array<CategoryEnum>, multiplier: number, startAt: Date, endAt: Date }> };
+export type HomeCampaignsQuery = { campaigns: Array<{ uid: string, category: Array<CategoryEnum>, multiplier: number, startAt: Date, endAt: Date }> };
 
 export type HomeJointFiringDrillsQueryVariables = Exact<{
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  startBefore: InputMaybe<Scalars['ISO8601DateTime']['input']>;
+  endAfter: Date | null | undefined;
+  startBefore: Date | null | undefined;
 }>;
 
 
-export type HomeJointFiringDrillsQuery = { __typename?: 'Query', jointFiringDrills: Array<{ __typename?: 'JointFiringDrill', season: number, drillType: DrillTypeEnum, terrain: Terrain, defenseType: Defense, schedules: Array<{ __typename?: 'JointFiringDrillSchedule', region: string, startAt: Date, endAt: Date | null }> }> };
+export type HomeJointFiringDrillsQuery = { jointFiringDrills: Array<{ season: number, drillType: DrillTypeEnum, terrain: Terrain, defenseType: Defense, schedules: Array<{ region: string, startAt: Date, endAt: Date | null }> }> };
 
 export type UserResourceInventoryCatalogQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type UserResourceInventoryCatalogQuery = { __typename?: 'Query', items: Array<{ __typename?: 'Item', category: string, subCategory: string | null, uid: string, name: string, rarity: number, type: ResourceTypeEnum }>, equipments: Array<{ __typename?: 'Equipment', uid: string, name: string, rarity: number, type: ResourceTypeEnum, category: string }> };
+export type UserResourceInventoryCatalogQuery = { items: Array<{ category: string, subCategory: string | null, uid: string, name: string, rarity: number, type: ResourceTypeEnum }>, equipments: Array<{ uid: string, name: string, rarity: number, type: ResourceTypeEnum, category: string }> };
 
 export type ItemCatalogResourceDescriptionsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type ItemCatalogResourceDescriptionsQuery = { __typename?: 'Query', items: Array<{ __typename?: 'Item', uid: string, description: string | null }>, equipments: Array<{ __typename?: 'Equipment', uid: string, description: string | null }> };
+export type ItemCatalogResourceDescriptionsQuery = { items: Array<{ uid: string, description: string | null }>, equipments: Array<{ uid: string, description: string | null }> };
 
 export type MainStoriesQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type MainStoriesQuery = { __typename?: 'Query', mainStories: Array<{ __typename?: 'MainStoryVolume', uid: string, name: string | null, label: string, season: number, sortOrder: number, chapters: Array<{ __typename?: 'MainStoryChapter', uid: string, name: string | null, chapterNumber: number, parts: Array<{ __typename?: 'MainStoryPart', uid: string, name: string | null, episodeStart: number | null, episodeEnd: number | null, sortOrder: number, schedules: Array<{ __typename?: 'MainStoryPartSchedule', region: string, releasedAt: Date, confirmed: boolean }> }> }> }> };
+export type MainStoriesQuery = { mainStories: Array<{ uid: string, name: string | null, label: string, season: number, sortOrder: number, chapters: Array<{ uid: string, name: string | null, chapterNumber: number, parts: Array<{ uid: string, name: string | null, episodeStart: number | null, episodeEnd: number | null, sortOrder: number, schedules: Array<{ region: string, releasedAt: Date, confirmed: boolean }> }> }> }> };
 
 export type RaidScheduleDetailQueryVariables = Exact<{
-  uid: Scalars['String']['input'];
+  uid: string;
 }>;
 
 
-export type RaidScheduleDetailQuery = { __typename?: 'Query', raidSchedule: { __typename?: 'RaidSchedule', uid: string, raidType: string, seasonIndex: number, region: string, terrain: Terrain, startAt: Date | null, endAt: Date | null, attackType: Attack | null, raidBoss: { __typename?: 'RaidBoss', uid: string, name: string, nameJa: string }, defenseTypeSets: Array<{ __typename?: 'DefenseTypeSet', difficulty: Difficulty | null, defenseTypes: Array<Defense> }>, jpSchedule: { __typename?: 'RaidSchedule', uid: string, seasonIndex: number, startAt: Date | null } | null } | null };
+export type RaidScheduleDetailQuery = { raidSchedule: { uid: string, raidType: string, seasonIndex: number, region: string, terrain: Terrain, startAt: Date | null, endAt: Date | null, attackType: Attack | null, raidBoss: { uid: string, name: string, nameJa: string }, defenseTypeSets: Array<{ difficulty: Difficulty | null, defenseTypes: Array<Defense> }>, jpSchedule: { uid: string, seasonIndex: number, startAt: Date | null } | null } | null };
 
 export type AllRaidSchedulesQueryVariables = Exact<{
-  region: Scalars['String']['input'];
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  raidType: InputMaybe<Scalars['String']['input']>;
+  region: string;
+  endAfter: Date | null | undefined;
+  raidType: string | null | undefined;
 }>;
 
 
-export type AllRaidSchedulesQuery = { __typename?: 'Query', raidSchedules: { __typename?: 'RaidScheduleConnection', nodes: Array<{ __typename?: 'RaidSchedule', uid: string, raidType: string, seasonIndex: number, region: string, terrain: Terrain, startAt: Date | null, endAt: Date | null, attackType: Attack | null, raidBoss: { __typename?: 'RaidBoss', uid: string, name: string }, defenseTypeSets: Array<{ __typename?: 'DefenseTypeSet', difficulty: Difficulty | null, defenseTypes: Array<Defense> }>, jpSchedule: { __typename?: 'RaidSchedule', uid: string, seasonIndex: number, startAt: Date | null } | null }> } };
+export type AllRaidSchedulesQuery = { raidSchedules: { nodes: Array<{ uid: string, raidType: string, seasonIndex: number, region: string, terrain: Terrain, startAt: Date | null, endAt: Date | null, attackType: Attack | null, raidBoss: { uid: string, name: string }, defenseTypeSets: Array<{ difficulty: Difficulty | null, defenseTypes: Array<Defense> }>, jpSchedule: { uid: string, seasonIndex: number, startAt: Date | null } | null }> } };
 
 export type RecruitmentGroupsListQueryVariables = Exact<{
-  endAfter: InputMaybe<Scalars['ISO8601DateTime']['input']>;
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  endAfter: Date | null | undefined;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type RecruitmentGroupsListQuery = { __typename?: 'Query', recruitmentGroups: Array<{ __typename?: 'RecruitmentGroup', uid: string, contentType: string | null, contentUid: string | null, startAt: Date, endAt: Date | null, recruitmentType: RecruitmentTypeEnum, recruitments: Array<{ __typename?: 'Recruitment', recruitmentType: RecruitmentTypeEnum, pickup: boolean, rerun: boolean, since: Date, until: Date | null, studentName: string, student: { __typename?: 'Student', uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, name: string, schaleDbId: string | null, initialTier: number, releaseAt: Date | null, archiveAt: Date | null } | null }> }> };
+export type RecruitmentGroupsListQuery = { recruitmentGroups: Array<{ uid: string, contentType: string | null, contentUid: string | null, startAt: Date, endAt: Date | null, recruitmentType: RecruitmentTypeEnum, recruitments: Array<{ recruitmentType: RecruitmentTypeEnum, pickup: boolean, rerun: boolean, since: Date, until: Date | null, studentName: string, student: { uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, name: string, schaleDbId: string | null, initialTier: number, releaseAt: Date | null, archiveAt: Date | null } | null }> }> };
 
 export type RecruitmentPoolStudentsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type RecruitmentPoolStudentsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, name: string, initialTier: number, attackType: Attack, defenseType: Defense, role: RoleEnum, releaseAt: Date | null, archiveAt: Date | null, recruitments: Array<{ __typename?: 'Recruitment', recruitmentType: RecruitmentTypeEnum }> }> };
+export type RecruitmentPoolStudentsQuery = { students: Array<{ uid: string, name: string, initialTier: number, attackType: Attack, defenseType: Defense, role: RoleEnum, releaseAt: Date | null, archiveAt: Date | null, recruitments: Array<{ recruitmentType: RecruitmentTypeEnum }> }> };
 
 export type AllStudentsFavoriteItemsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type AllStudentsFavoriteItemsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, name: string, favoriteItems: Array<{ __typename?: 'FavoriteItem', favorited: boolean, favoriteLevel: number, exp: number, item: { __typename?: 'Item', uid: string, name: string, rarity: number } }> }> };
+export type AllStudentsFavoriteItemsQuery = { students: Array<{ uid: string, name: string, favoriteItems: Array<{ favorited: boolean, favoriteLevel: number, exp: number, item: { uid: string, name: string, rarity: number } }> }> };
 
 export type StudentFavoriteItemQueryVariables = Exact<{
-  uid: Scalars['String']['input'];
+  uid: string;
 }>;
 
 
-export type StudentFavoriteItemQuery = { __typename?: 'Query', student: { __typename?: 'Student', uid: string, name: string, favoriteItems: Array<{ __typename?: 'FavoriteItem', favorited: boolean, favoriteLevel: number, exp: number, item: { __typename?: 'Item', uid: string, name: string, rarity: number } }> } | null };
+export type StudentFavoriteItemQuery = { student: { uid: string, name: string, favoriteItems: Array<{ favorited: boolean, favoriteLevel: number, exp: number, item: { uid: string, name: string, rarity: number } }> } | null };
 
 export type FarmingStagesQueryVariables = Exact<{
-  category: InputMaybe<Scalars['String']['input']>;
+  category: string | null | undefined;
 }>;
 
 
-export type FarmingStagesQuery = { __typename?: 'Query', stages: Array<{ __typename?: 'Stage', uid: string, name: string | null, stageNumber: string | null, area: number | null, difficulty: number | null, terrain: string | null, entryCosts: Array<{ __typename?: 'StageEntryCost', amount: number, resource:
-        | { __typename?: 'Currency', uid: string, name: string, type: ResourceTypeEnum }
-        | { __typename?: 'Emblem', uid: string, name: string, type: ResourceTypeEnum }
-        | { __typename?: 'Equipment', uid: string, name: string, type: ResourceTypeEnum }
-        | { __typename?: 'Furniture', uid: string, name: string, type: ResourceTypeEnum }
-        | { __typename?: 'Item', uid: string, name: string, type: ResourceTypeEnum }
-       }>, rewards: Array<{ __typename?: 'StageReward', rewardType: string, rewardTag: string | null, probability: number | null, resource:
+export type FarmingStagesQuery = { stages: Array<{ uid: string, name: string | null, stageNumber: string | null, area: number | null, difficulty: number | null, terrain: string | null, entryCosts: Array<{ amount: number, resource:
+        | { uid: string, name: string, type: ResourceTypeEnum }
+        | { uid: string, name: string, type: ResourceTypeEnum }
+        | { uid: string, name: string, type: ResourceTypeEnum }
+        | { uid: string, name: string, type: ResourceTypeEnum }
+        | { uid: string, name: string, type: ResourceTypeEnum }
+       }>, rewards: Array<{ rewardType: string, rewardTag: string | null, probability: number | null, resource:
         | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Emblem', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Furniture', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
         | { __typename: 'Item', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
-       | null, gachaGroup: { __typename?: 'GachaGroup', items: Array<{ __typename?: 'GachaGroupItem', chance: number | null, resource:
+       | null, gachaGroup: { items: Array<{ chance: number | null, resource:
             | { __typename: 'Currency', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
             | { __typename: 'Emblem', uid: string, name: string, type: ResourceTypeEnum, rarity: number }
             | { __typename: 'Equipment', category: string, uid: string, name: string, type: ResourceTypeEnum, rarity: number }
@@ -1946,78 +444,83 @@ export type FarmingStagesQuery = { __typename?: 'Query', stages: Array<{ __typen
 export type StudentDirectoryQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type StudentDirectoryQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, name: string, familyName: string | null, altNames: Array<string>, school: string, initialTier: number, order: number, attackType: Attack, defenseType: Defense, position: Position, tacticRole: TacticRole, birthday: any | null, role: RoleEnum, equipments: Array<string>, released: boolean, catalog: { __typename?: 'StudentCatalogData', profile: { __typename?: 'StudentCatalogProfile', age: string | null, schoolYear: string | null, height: string | null }, terrainAdaptations: { __typename?: 'StudentCatalogTerrainAdaptations', street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank } } | null }> };
+export type StudentDirectoryQuery = { students: Array<{ uid: string, name: string, familyName: string | null, altNames: Array<string>, school: string, initialTier: number, order: number, attackType: Attack, defenseType: Defense, position: Position, tacticRole: TacticRole, birthday: string | null, role: RoleEnum, equipments: Array<string>, released: boolean, catalog: { profile: { age: string | null, schoolYear: string | null, height: string | null }, terrainAdaptations: { street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank } } | null }> };
 
 export type AllStudentsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type AllStudentsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, name: string, familyName: string | null, altNames: Array<string>, school: string, initialTier: number, order: number, attackType: Attack, defenseType: Defense, position: Position, tacticRole: TacticRole, birthday: any | null, role: RoleEnum, equipments: Array<string>, released: boolean }> };
+export type AllStudentsQuery = { students: Array<{ uid: string, name: string, familyName: string | null, altNames: Array<string>, school: string, initialTier: number, order: number, attackType: Attack, defenseType: Defense, position: Position, tacticRole: TacticRole, birthday: string | null, role: RoleEnum, equipments: Array<string>, released: boolean }> };
 
 export type StudentDetailQueryVariables = Exact<{
-  uid: Scalars['String']['input'];
+  uid: string;
 }>;
 
 
-export type StudentDetailQuery = { __typename?: 'Query', studentCatalog: { __typename?: 'StudentCatalog', version: string, statLevelInterpolationEndLevel: number, statLevelInterpolations: Array<{ __typename?: 'StudentCatalogStatLevelInterpolation', level: number, ratios: Array<{ __typename?: 'StudentCatalogGrowthRatio', growthType: StudentCatalogStatGrowthType, value: number }> }>, equipment: Array<{ __typename?: 'StudentCatalogEquipment', uid: string, category: string, tier: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, name: string, modifiers: Array<{ __typename?: 'StudentCatalogEquipmentModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, released: boolean, initialTier: number, position: Position, tacticRole: TacticRole, equipments: Array<string>, character: { __typename?: 'StudentCharacter', uid: string, studentVariants: Array<{ __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole, catalog: { __typename?: 'StudentCatalogData', favorRewards: Array<{ __typename?: 'StudentCatalogFavorReward', level: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> } | null }, students: Array<{ __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole }> }> }, studentVariant: { __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string }, students: Array<{ __typename?: 'Student', uid: string, name: string, position: Position, tacticRole: TacticRole }> }, recruitments: Array<{ __typename?: 'Recruitment', since: Date, rerun: boolean, recruitmentGroup: { __typename?: 'RecruitmentGroup', uid: string, startAt: Date, endAt: Date | null } }>, catalog: { __typename?: 'StudentCatalogData', profile: { __typename?: 'StudentCatalogProfile', familyName: string | null, personalName: string | null, introduction: string | null, hobby: string | null, age: string | null, schoolYear: string | null, height: string | null, weaponName: string | null }, statProfile: { __typename?: 'StudentCatalogStatProfile', growthType: StudentCatalogStatGrowthType, levelStats: Array<{ __typename?: 'StudentCatalogLevelStat', stat: StudentCatalogStat, level1: number, level100: number }>, fixedStats: Array<{ __typename?: 'StudentCatalogFixedStat', stat: StudentCatalogStat, value: number }> }, terrainAdaptations: { __typename?: 'StudentCatalogTerrainAdaptations', street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank }, starBonuses: Array<{ __typename?: 'StudentCatalogStarBonus', star: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, potentialBonuses: Array<{ __typename?: 'StudentCatalogPotentialBonus', stat: StudentCatalogStat, levels: Array<{ __typename?: 'StudentCatalogPotentialLevel', level: number, rate: number }> }>, favorRewards: Array<{ __typename?: 'StudentCatalogFavorReward', level: number, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, weapon: { __typename?: 'StudentCatalogWeapon', name: string, description: string | null, imageUrl: string | null, growthType: StudentCatalogStatGrowthType, levelStats: Array<{ __typename?: 'StudentCatalogLevelStat', stat: StudentCatalogStat, level1: number, level100: number }>, stages: Array<{ __typename?: 'StudentCatalogWeaponStage', stage: number, unlocked: boolean, maxLevel: number, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ __typename?: 'StudentCatalogStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> }, gear: { __typename?: 'StudentCatalogGear', name: string, description: string | null, tiers: Array<{ __typename?: 'StudentCatalogGearTier', tier: number, openFavorLevel: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ __typename?: 'StudentCatalogEquipmentModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, skillConfigurations: Array<{ __typename?: 'StudentCatalogSkillConfiguration', formIndex: number, minimumWeaponStar: number, minimumGearTier: number, selectExSkillActionSlot: number | null, slots: Array<{ __typename?: 'StudentCatalogSkillConfigurationSlot', slot: StudentSkillTypeEnum, skills: Array<{ __typename?: 'StudentCatalogSkillReference', position: number, skillUid: string | null }> }> }> } | null, skills: Array<{ __typename?: 'Skill', uid: string, skillType: StudentSkillTypeEnum, name: string, iconUrl: string | null, maxLevel: number, additionalSkillUids: Array<string>, levels: Array<{ __typename?: 'StudentSkillLevel', level: number, cost: number | null, statModifiers: Array<{ __typename?: 'StudentSkillStatModifier', stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number, activation: StudentSkillModifierActivation, persistence: StudentSkillModifierPersistence }> }>, description: { __typename?: 'StudentSkillDescription', template: string, parameters: Array<{ __typename?: 'StudentSkillDescriptionParameter', id: number, emphasized: boolean, values: Array<{ __typename?: 'StudentSkillDescriptionParameterValue', level: number, text: string }> }> } | null, selectableSkills: Array<{ __typename?: 'StudentSelectableSkill', condition: StudentSkillSelectionCondition, skillUid: string }> }> } | null };
+export type StudentDetailQuery = { studentCatalog: { version: string, statLevelInterpolationEndLevel: number, statLevelInterpolations: Array<{ level: number, ratios: Array<{ growthType: StudentCatalogStatGrowthType, value: number }> }>, equipment: Array<{ uid: string, category: string, tier: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, name: string, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, student: { name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, released: boolean, initialTier: number, position: Position, tacticRole: TacticRole, equipments: Array<string>, character: { uid: string, studentVariants: Array<{ uid: string, isMulticlass: boolean, primaryStudent: { uid: string, name: string, position: Position, tacticRole: TacticRole, catalog: { favorRewards: Array<{ level: number, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> } | null }, students: Array<{ uid: string, name: string, position: Position, tacticRole: TacticRole }> }> }, studentVariant: { uid: string, isMulticlass: boolean, primaryStudent: { uid: string, name: string }, students: Array<{ uid: string, name: string, position: Position, tacticRole: TacticRole }> }, recruitments: Array<{ since: Date, rerun: boolean, recruitmentGroup: { uid: string, startAt: Date, endAt: Date | null } }>, catalog: { profile: { familyName: string | null, personalName: string | null, introduction: string | null, hobby: string | null, age: string | null, schoolYear: string | null, height: string | null, weaponName: string | null }, statProfile: { growthType: StudentCatalogStatGrowthType, levelStats: Array<{ stat: StudentCatalogStat, level1: number, level100: number }>, fixedStats: Array<{ stat: StudentCatalogStat, value: number }> }, terrainAdaptations: { street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank }, starBonuses: Array<{ star: number, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, potentialBonuses: Array<{ stat: StudentCatalogStat, levels: Array<{ level: number, rate: number }> }>, favorRewards: Array<{ level: number, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }>, weapon: { name: string, description: string | null, imageUrl: string | null, growthType: StudentCatalogStatGrowthType, levelStats: Array<{ stat: StudentCatalogStat, level1: number, level100: number }>, stages: Array<{ stage: number, unlocked: boolean, maxLevel: number, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number }> }> }, gear: { name: string, description: string | null, tiers: Array<{ tier: number, openFavorLevel: number, maxLevel: number, growthType: StudentCatalogStatGrowthType, learnSkillSlot: StudentSkillTypeEnum | null, learnSkillPosition: number | null, modifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, level1: number, levelMax: number }> }> } | null, skillConfigurations: Array<{ formIndex: number, minimumWeaponStar: number, minimumGearTier: number, selectExSkillActionSlot: number | null, slots: Array<{ slot: StudentSkillTypeEnum, skills: Array<{ position: number, skillUid: string | null }> }> }> } | null, skills: Array<{ uid: string, skillType: StudentSkillTypeEnum, name: string, iconUrl: string | null, maxLevel: number, additionalSkillUids: Array<string>, levels: Array<{ level: number, cost: number | null, statModifiers: Array<{ stat: StudentCatalogStat, kind: StudentCatalogStatModifierKind, value: number, activation: StudentSkillModifierActivation, persistence: StudentSkillModifierPersistence }> }>, description: { template: string, parameters: Array<{ id: number, emphasized: boolean, values: Array<{ level: number, text: string }> }> } | null, selectableSkills: Array<{ condition: StudentSkillSelectionCondition, skillUid: string }> }> } | null };
 
 export type StudentGrowthVisualsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type StudentGrowthVisualsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, catalog: { __typename?: 'StudentCatalogData', gear: { __typename?: 'StudentCatalogGear', name: string } | null, skillConfigurations: Array<{ __typename?: 'StudentCatalogSkillConfiguration', formIndex: number, minimumWeaponStar: number, minimumGearTier: number, slots: Array<{ __typename?: 'StudentCatalogSkillConfigurationSlot', slot: StudentSkillTypeEnum, skills: Array<{ __typename?: 'StudentCatalogSkillReference', position: number, skillUid: string | null }> }> }> } | null, skills: Array<{ __typename?: 'Skill', uid: string, skillType: StudentSkillTypeEnum, iconUrl: string | null, maxLevel: number }> }> };
+export type StudentGrowthVisualsQuery = { students: Array<{ uid: string, catalog: { gear: { name: string } | null, skillConfigurations: Array<{ formIndex: number, minimumWeaponStar: number, minimumGearTier: number, slots: Array<{ slot: StudentSkillTypeEnum, skills: Array<{ position: number, skillUid: string | null }> }> }> } | null, skills: Array<{ uid: string, skillType: StudentSkillTypeEnum, iconUrl: string | null, maxLevel: number }> }> };
 
 export type StudentGrowthEquipmentQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type StudentGrowthEquipmentQuery = { __typename?: 'Query', studentCatalog: { __typename?: 'StudentCatalog', equipment: Array<{ __typename?: 'StudentCatalogEquipment', uid: string, category: string, tier: number }> } | null };
+export type StudentGrowthEquipmentQuery = { studentCatalog: { equipment: Array<{ uid: string, category: string, tier: number }> } | null };
 
 export type StudentHeaderQueryVariables = Exact<{
-  uid: Scalars['String']['input'];
+  uid: string;
 }>;
 
 
-export type StudentHeaderQuery = { __typename?: 'Query', student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, position: Position, tacticRole: TacticRole, club: { __typename?: 'StudentClub', name: string | null } | null, interactionFurnitures: Array<{ __typename?: 'Furniture', uid: string, name: string, imageUrl: string, rarity: number }>, catalog: { __typename?: 'StudentCatalogData', profile: { __typename?: 'StudentCatalogProfile', schoolYear: string | null, age: string | null, height: string | null, hobby: string | null }, terrainAdaptations: { __typename?: 'StudentCatalogTerrainAdaptations', street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank } } | null, character: { __typename?: 'StudentCharacter', uid: string, studentVariants: Array<{ __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string } }> }, studentVariant: { __typename?: 'StudentVariant', uid: string, isMulticlass: boolean, primaryStudent: { __typename?: 'Student', uid: string, name: string }, students: Array<{ __typename?: 'Student', uid: string, name: string }> } } | null };
+export type StudentHeaderQuery = { student: { name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null, releaseAt: Date | null, position: Position, tacticRole: TacticRole, club: { name: string | null } | null, interactionFurnitures: Array<{ uid: string, name: string, imageUrl: string, rarity: number }>, catalog: { profile: { schoolYear: string | null, age: string | null, height: string | null, hobby: string | null }, terrainAdaptations: { street: StudentTerrainAdaptationRank, outdoor: StudentTerrainAdaptationRank, indoor: StudentTerrainAdaptationRank } } | null, character: { uid: string, studentVariants: Array<{ uid: string, isMulticlass: boolean, primaryStudent: { uid: string, name: string } }> }, studentVariant: { uid: string, isMulticlass: boolean, primaryStudent: { uid: string, name: string }, students: Array<{ uid: string, name: string }> } } | null };
 
 export type StudentPrimaryUidsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type StudentPrimaryUidsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, studentVariant: { __typename?: 'StudentVariant', primaryStudent: { __typename?: 'Student', uid: string } } }> };
+export type StudentPrimaryUidsQuery = { students: Array<{ uid: string, studentVariant: { primaryStudent: { uid: string } } }> };
 
 export type HomeStudentCharactersQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type HomeStudentCharactersQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, character: { __typename?: 'StudentCharacter', uid: string } }> };
+export type HomeStudentCharactersQuery = { students: Array<{ uid: string, character: { uid: string } }> };
 
 export type StudentFormUidsQueryVariables = Exact<{ [key: string]: never; }>;
 
 
-export type StudentFormUidsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, studentVariant: { __typename?: 'StudentVariant', students: Array<{ __typename?: 'Student', uid: string }> } }> };
+export type StudentFormUidsQuery = { students: Array<{ uid: string, studentVariant: { students: Array<{ uid: string }> } }> };
+
+export type StudentFormsQueryVariables = Exact<{ [key: string]: never; }>;
+
+
+export type StudentFormsQuery = { students: Array<{ studentVariant: { isMulticlass: boolean, primaryStudent: { uid: string }, students: Array<{ uid: string, name: string, attackType: Attack, defenseType: Defense, role: RoleEnum }> } }> };
 
 export type StudentGradeDetailQueryVariables = Exact<{
-  uid: Scalars['String']['input'];
+  uid: string;
 }>;
 
 
-export type StudentGradeDetailQuery = { __typename?: 'Query', student: { __typename?: 'Student', name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null } | null };
+export type StudentGradeDetailQuery = { student: { name: string, familyName: string | null, uid: string, attackType: Attack, defenseType: Defense, role: RoleEnum, school: string, schaleDbId: string | null } | null };
 
 export type StudentSkillItemsQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type StudentSkillItemsQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, schaleDbId: string | null, skillItems: Array<{ __typename?: 'SkillItem', item: { __typename?: 'Item', uid: string, subCategory: string | null, rarity: number } }> }> };
+export type StudentSkillItemsQuery = { students: Array<{ uid: string, schaleDbId: string | null, skillItems: Array<{ item: { uid: string, subCategory: string | null, rarity: number } }> }> };
 
 export type StudentWeaponAvailabilityQueryVariables = Exact<{
-  uids: InputMaybe<Array<Scalars['String']['input']> | Scalars['String']['input']>;
+  uids: Array<string> | string | null | undefined;
 }>;
 
 
-export type StudentWeaponAvailabilityQuery = { __typename?: 'Query', students: Array<{ __typename?: 'Student', uid: string, catalog: { __typename?: 'StudentCatalogData', weapon: { __typename?: 'StudentCatalogWeapon', name: string } } | null }> };
+export type StudentWeaponAvailabilityQuery = { students: Array<{ uid: string, catalog: { weapon: { name: string } } | null }> };
 
 
 export const EventContentScheduleDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"EventContentSchedule"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"eventContent"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"eventUid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schedules"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"region"}},{"kind":"Field","name":{"kind":"Name","value":"runType"}},{"kind":"Field","name":{"kind":"Name","value":"startAt"}},{"kind":"Field","name":{"kind":"Name","value":"endAt"}}]}}]}}]}}]} as unknown as DocumentNode<EventContentScheduleQuery, EventContentScheduleQueryVariables>;
@@ -2047,7 +550,8 @@ export const StudentGrowthEquipmentDocument = {"kind":"Document","definitions":[
 export const StudentHeaderDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentHeader"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"releaseAt"}},{"kind":"Field","name":{"kind":"Name","value":"position"}},{"kind":"Field","name":{"kind":"Name","value":"tacticRole"}},{"kind":"Field","name":{"kind":"Name","value":"club"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"interactionFurnitures"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"imageUrl"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}},{"kind":"Field","name":{"kind":"Name","value":"catalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"profile"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"schoolYear"}},{"kind":"Field","name":{"kind":"Name","value":"age"}},{"kind":"Field","name":{"kind":"Name","value":"height"}},{"kind":"Field","name":{"kind":"Name","value":"hobby"}}]}},{"kind":"Field","name":{"kind":"Name","value":"terrainAdaptations"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"street"}},{"kind":"Field","name":{"kind":"Name","value":"outdoor"}},{"kind":"Field","name":{"kind":"Name","value":"indoor"}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"character"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariants"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}},{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentHeaderQuery, StudentHeaderQueryVariables>;
 export const StudentPrimaryUidsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentPrimaryUids"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentPrimaryUidsQuery, StudentPrimaryUidsQueryVariables>;
 export const HomeStudentCharactersDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomeStudentCharacters"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"character"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]} as unknown as DocumentNode<HomeStudentCharactersQuery, HomeStudentCharactersQueryVariables>;
-export const StudentFormUidsDocument ={"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentFormUids"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentFormUidsQuery, StudentFormUidsQueryVariables>;
+export const StudentFormUidsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentFormUids"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentFormUidsQuery, StudentFormUidsQueryVariables>;
+export const StudentFormsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentForms"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"studentVariant"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"isMulticlass"}},{"kind":"Field","name":{"kind":"Name","value":"primaryStudent"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}}]}},{"kind":"Field","name":{"kind":"Name","value":"students"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentFormsQuery, StudentFormsQueryVariables>;
 export const StudentGradeDetailDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentGradeDetail"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uid"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"student"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uid"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uid"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"familyName"}},{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"attackType"}},{"kind":"Field","name":{"kind":"Name","value":"defenseType"}},{"kind":"Field","name":{"kind":"Name","value":"role"}},{"kind":"Field","name":{"kind":"Name","value":"school"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}}]}}]}}]} as unknown as DocumentNode<StudentGradeDetailQuery, StudentGradeDetailQueryVariables>;
 export const StudentSkillItemsDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentSkillItems"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"schaleDbId"}},{"kind":"Field","name":{"kind":"Name","value":"skillItems"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"skillType"},"value":{"kind":"EnumValue","value":"ex"}},{"kind":"Argument","name":{"kind":"Name","value":"skillLevel"},"value":{"kind":"IntValue","value":"5"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"item"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"subCategory"}},{"kind":"Field","name":{"kind":"Name","value":"rarity"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentSkillItemsQuery, StudentSkillItemsQueryVariables>;
 export const StudentWeaponAvailabilityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"StudentWeaponAvailability"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"uids"}},"type":{"kind":"ListType","type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"students"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"uids"},"value":{"kind":"Variable","name":{"kind":"Name","value":"uids"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"uid"}},{"kind":"Field","name":{"kind":"Name","value":"catalog"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"weapon"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"name"}}]}}]}}]}}]}}]} as unknown as DocumentNode<StudentWeaponAvailabilityQuery, StudentWeaponAvailabilityQueryVariables>;

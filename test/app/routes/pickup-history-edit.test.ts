@@ -425,7 +425,7 @@ describe("pickup history editor loader", () => {
         defenseType: Defense.Light,
         position: "front",
         tacticRole: "attacker",
-        birthday: new Date("2026-01-01T00:00:00.000Z"),
+        birthday: "0000-01-01",
         role: "striker",
         equipments: [],
         released: true,

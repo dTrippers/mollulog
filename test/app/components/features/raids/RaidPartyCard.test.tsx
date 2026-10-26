@@ -107,3 +107,37 @@ describe("rank party card student overlays", () => {
     expect(markup).not.toContain("개시 스킬");
   });
 });
+
+describe("party card form numbers", () => {
+  const formSlot = (overrides: Partial<RaidPartyRow["slots"][number]>) => ({
+    key: "party-0",
+    label: "1편성",
+    slots: [{ uid: "10144", name: "슈에링(수영복)", formIndex: 2, ...overrides }],
+  });
+  const formBadge = (markup: string) =>
+    markup.match(/<span role="img" aria-label="폼 2" title="폼 2" class="([^"]*)">2<\/span>/)?.[1];
+
+  it("places a white form number above the tier band", () => {
+    const badgeClass = formBadge(renderCard({ rows: [formSlot({ tier: 8 })] }));
+
+    expect(badgeClass).toContain("bg-white");
+    expect(badgeClass).toContain("text-neutral-900");
+    expect(badgeClass).toContain("right-0.5");
+    expect(badgeClass).toContain("bottom-[18px]");
+  });
+
+  it("drops to the image corner when no bottom band is shown", () => {
+    const markup = renderToStaticMarkup(
+      <RaidPartyCard rows={[formSlot({ tier: 8 })]} summaryItems={[]} popupIdPrefix="form-test" tierPlacement="below" />,
+    );
+
+    expect(formBadge(markup)).toContain("bottom-0.5");
+  });
+
+  it("omits the form number for students with a single form", () => {
+    const markup = renderCard({ rows: [formSlot({ formIndex: undefined, tier: 5 })] });
+
+    expect(markup).not.toContain('aria-label="폼');
+  });
+});
+

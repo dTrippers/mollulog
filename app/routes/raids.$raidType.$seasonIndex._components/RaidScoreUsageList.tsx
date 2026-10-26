@@ -1,19 +1,12 @@
 import { ChevronDownIcon, ChevronRightIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { isRepresentativeStudent, type RaidPartyStudentInfo } from "~/components/features/raids";
 import { StudentCard } from "~/components/features/students";
 import { FilterButtons } from "~/components/primitives";
-import type { Attack, Defense } from "~/graphql/graphql";
 import type { RangeStatsStudentUsage } from "~/lib/ranks/range-stats";
 import { cn } from "~/lib/utils";
 import type { Role } from "~/models/content.d";
-
-type StudentInfo = {
-  name: string;
-  role: Role;
-  attackType: Attack;
-  defenseType: Defense;
-};
 
 type UsageRow = RangeStatsStudentUsage & {
   name: string;
@@ -31,7 +24,7 @@ type TierBucket = {
 type RaidScoreUsageListProps = {
   usage: RangeStatsStudentUsage[];
   sampleSize: number;
-  allStudents: Record<string, StudentInfo>;
+  allStudents: Record<string, RaidPartyStudentInfo>;
   recruitedStudentTiers: Record<string, number>;
 };
 
@@ -61,7 +54,8 @@ export default function RaidScoreUsageList({
           return [];
         }
         const student = allStudents[item.studentUid];
-        if (!student) {
+        // Usage of other forms stays out until statistics are aggregated by representative student (MLLG-159).
+        if (!student || !isRepresentativeStudent(item.studentUid, student)) {
           return [];
         }
         return [{ ...item, name: student.name, role: student.role }];

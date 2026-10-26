@@ -23,7 +23,7 @@ export type Student = {
   defenseType: Defense;
   position: Position;
   tacticRole: TacticRole;
-  birthday: Date;
+  birthday: string | null;
   role: Role;
   equipments: string[];
   released: boolean;
@@ -268,6 +268,18 @@ const studentFormUidsQuery = graphql(`
   }
 `);
 
+const studentFormsQuery = graphql(`
+  query StudentForms {
+    students {
+      studentVariant {
+        isMulticlass
+        primaryStudent { uid }
+        students { uid name attackType defenseType role }
+      }
+    }
+  }
+`);
+
 const studentGradeDetailQuery = graphql(`
   query StudentGradeDetail($uid: String!) {
     student(uid: $uid) {
@@ -473,6 +485,48 @@ async function fetchStudentFormUidsFromBaql(): Promise<Record<string, string[]>>
  */
 export async function getStudentOtherFormUids(env: Env): Promise<Record<string, string[]>> {
   return fetchLazySourceCached(env, studentFormUidsKey, fetchStudentFormUidsFromBaql, STUDENT_FORM_UIDS_TTL);
+}
+
+export type StudentForm = {
+  uid: string;
+  name: string;
+  attackType: Attack;
+  defenseType: Defense;
+  role: Role;
+  primaryUid: string;
+  /** 1-based position within the student variant, matching the in-game form number. */
+  formIndex: number;
+};
+
+const studentFormsKey = cacheKey("source", "student-forms", 1, "all");
+
+async function fetchStudentFormsFromBaql(): Promise<Record<string, StudentForm>> {
+  const { data, error } = await runQuery(studentFormsQuery, {});
+  if (error) {
+    throw error;
+  }
+  if (!data || !Array.isArray(data.students)) {
+    throw new Error("BAQL student form response is missing students");
+  }
+  // The catalog lists only representatives, so each multiclass variant appears once.
+  return Object.fromEntries(
+    data.students.flatMap(({ studentVariant }) =>
+      studentVariant.isMulticlass
+        ? studentVariant.students.map((form, index): [string, StudentForm] => [
+            form.uid,
+            { ...form, primaryUid: studentVariant.primaryStudent.uid, formIndex: index + 1 },
+          ])
+        : [],
+    ),
+  );
+}
+
+/**
+ * Maps every record of a multiclass student variant, including the records the student catalog omits, to its
+ * representative and in-game form number. Students without another form are absent.
+ */
+export async function getStudentForms(env: Env): Promise<Record<string, StudentForm>> {
+  return fetchLazySourceCached(env, studentFormsKey, fetchStudentFormsFromBaql, STUDENT_FORM_UIDS_TTL);
 }
 
 export async function getStudentGradeDetail(_env: Env, uid: string) {

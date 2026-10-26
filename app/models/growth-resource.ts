@@ -95,10 +95,7 @@ async function fetchStudentSkillCostsFromBaql(studentUids: string[]): Promise<Ma
 
   const students = data?.students ?? [];
   const skillCosts = new Map<string, SkillCostStudent>(
-    students.map((student) => {
-      const { __typename: _typename, ...skillCost } = student;
-      return [student.uid, skillCost satisfies SkillCostStudent];
-    }),
+    students.map((student) => [student.uid, student satisfies SkillCostStudent]),
   );
 
   for (const uid of studentUids) {

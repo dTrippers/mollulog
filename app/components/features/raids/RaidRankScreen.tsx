@@ -61,7 +61,9 @@ export function buildRaidRankApiFilter({
   const excludeStudents = filterState.excludeStudents.map(toApiStudentFilter);
 
   if (signedIn && filterState.filterNotOwned) {
-    const unownedStudentUids = Object.keys(allStudents).filter((uid) => !recruitedStudentTiers[uid]);
+    const unownedStudentUids = Object.entries(allStudents)
+      .filter(([uid, student]) => !recruitedStudentTiers[student.primaryUid ?? uid])
+      .map(([uid]) => uid);
     const existingExcludeUids = new Set(excludeStudents.map((student) => student.uid));
     const allTierExcludeUids = new Set(
       excludeStudents.filter((student) => student.tiers.length === 0).map((student) => student.uid),

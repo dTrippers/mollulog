@@ -62,7 +62,7 @@ const student = {
   familyName: null,
   altNames: [],
   school: "게헨나",
-  birthday: new Date("2000-01-01T00:00:00.000Z"),
+  birthday: "0000-01-01",
 };
 
 const recruitedStudent = {

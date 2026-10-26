@@ -7,7 +7,7 @@ import { fetchRaidVideos } from "~/lib/ranks/videos";
 import type { RaidType } from "~/models/content.d";
 import { getAllRaidSchedules, type RaidScheduleListItem } from "~/models/raid";
 import { getRaidVideoParties, getVideoDateRange, type RaidVideoItem } from "~/models/raid-videos";
-import { getAllStudentsMap, type Student } from "~/models/student";
+import { getAllStudentsMap, getStudentForms, type Student, type StudentForm } from "~/models/student";
 
 const SUPPORTED_RAID_TYPES = new Set(["total_assault", "elimination"]);
 const RECENT_VIDEO_LIMIT = 4;
@@ -19,7 +19,11 @@ export type RaidPortalCurrentRaid = {
   raid: RaidScheduleListItem;
   videos: RaidVideoItem[];
   videoStatus: LoadStatus;
-  partyStudents: Record<string, Pick<Student, "name" | "attackType" | "defenseType" | "role">>;
+  partyStudents: Record<
+    string,
+    Pick<Student, "name" | "attackType" | "defenseType" | "role"> &
+      Partial<Pick<StudentForm, "primaryUid" | "formIndex">>
+  >;
 };
 
 export type RaidPortalUpcomingRaid = {
@@ -162,9 +166,10 @@ export async function getRaidPortalData(
   forceRefresh = false,
 ): Promise<RaidPortalData> {
   const now = nowUtcIso();
-  const [allSchedules, rawAllStudents] = await Promise.all([
+  const [allSchedules, rawAllStudents, studentForms] = await Promise.all([
     getAllRaidSchedules(env, forceRefresh),
     getAllStudentsMap(env, forceRefresh),
+    getStudentForms(env),
   ]);
   const schedules = allSchedules.filter(({ raidType }) => SUPPORTED_RAID_TYPES.has(raidType));
   const current = schedules
@@ -188,7 +193,9 @@ export async function getRaidPortalData(
     );
     const partyStudents = Object.fromEntries(
       [...partyStudentUids].flatMap((studentUid) => {
-        const student = rawAllStudents[studentUid];
+        // Party records name the deployed form, which the student catalog omits for non-representative forms.
+        const form = studentForms[studentUid];
+        const student = form ?? rawAllStudents[studentUid];
         return student
           ? [
               [
@@ -198,6 +205,7 @@ export async function getRaidPortalData(
                   attackType: student.attackType,
                   defenseType: student.defenseType,
                   role: student.role,
+                  ...(form ? { primaryUid: form.primaryUid, formIndex: form.formIndex } : {}),
                 },
               ] as const,
             ]

@@ -42,6 +42,7 @@ type Documents = {
     "\n  query StudentPrimaryUids($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      studentVariant { primaryStudent { uid } }\n    }\n  }\n": typeof types.StudentPrimaryUidsDocument,
     "\n  query HomeStudentCharacters($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      character { uid }\n    }\n  }\n": typeof types.HomeStudentCharactersDocument,
     "\n  query StudentFormUids {\n    students {\n      uid\n      studentVariant { students { uid } }\n    }\n  }\n": typeof types.StudentFormUidsDocument,
+    "\n  query StudentForms {\n    students {\n      studentVariant {\n        isMulticlass\n        primaryStudent { uid }\n        students { uid name attackType defenseType role }\n      }\n    }\n  }\n": typeof types.StudentFormsDocument,
     "\n  query StudentGradeDetail($uid: String!) {\n    student(uid: $uid) {\n      name familyName uid attackType defenseType role school schaleDbId\n    }\n  }\n": typeof types.StudentGradeDetailDocument,
     "\n  query StudentSkillItems($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      schaleDbId\n      skillItems(skillType: ex, skillLevel: 5) {\n        item { uid subCategory rarity }\n      }\n    }\n  }\n": typeof types.StudentSkillItemsDocument,
     "\n  query StudentWeaponAvailability($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      catalog {\n        weapon { name }\n      }\n    }\n  }\n": typeof types.StudentWeaponAvailabilityDocument,
@@ -75,6 +76,7 @@ const documents: Documents = {
     "\n  query StudentPrimaryUids($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      studentVariant { primaryStudent { uid } }\n    }\n  }\n": types.StudentPrimaryUidsDocument,
     "\n  query HomeStudentCharacters($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      character { uid }\n    }\n  }\n": types.HomeStudentCharactersDocument,
     "\n  query StudentFormUids {\n    students {\n      uid\n      studentVariant { students { uid } }\n    }\n  }\n": types.StudentFormUidsDocument,
+    "\n  query StudentForms {\n    students {\n      studentVariant {\n        isMulticlass\n        primaryStudent { uid }\n        students { uid name attackType defenseType role }\n      }\n    }\n  }\n": types.StudentFormsDocument,
     "\n  query StudentGradeDetail($uid: String!) {\n    student(uid: $uid) {\n      name familyName uid attackType defenseType role school schaleDbId\n    }\n  }\n": types.StudentGradeDetailDocument,
     "\n  query StudentSkillItems($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      schaleDbId\n      skillItems(skillType: ex, skillLevel: 5) {\n        item { uid subCategory rarity }\n      }\n    }\n  }\n": types.StudentSkillItemsDocument,
     "\n  query StudentWeaponAvailability($uids: [String!]) {\n    students(uids: $uids) {\n      uid\n      catalog {\n        weapon { name }\n      }\n    }\n  }\n": types.StudentWeaponAvailabilityDocument,
@@ -206,6 +208,10 @@ export function graphql(source: "\n  query HomeStudentCharacters($uids: [String!
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */
 export function graphql(source: "\n  query StudentFormUids {\n    students {\n      uid\n      studentVariant { students { uid } }\n    }\n  }\n"): (typeof documents)["\n  query StudentFormUids {\n    students {\n      uid\n      studentVariant { students { uid } }\n    }\n  }\n"];
+/**
+ * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
+ */
+export function graphql(source: "\n  query StudentForms {\n    students {\n      studentVariant {\n        isMulticlass\n        primaryStudent { uid }\n        students { uid name attackType defenseType role }\n      }\n    }\n  }\n"): (typeof documents)["\n  query StudentForms {\n    students {\n      studentVariant {\n        isMulticlass\n        primaryStudent { uid }\n        students { uid name attackType defenseType role }\n      }\n    }\n  }\n"];
 /**
  * The graphql function is used to parse GraphQL queries into a document that can be used by GraphQL clients.
  */

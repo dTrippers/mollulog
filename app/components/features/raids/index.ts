@@ -14,5 +14,5 @@ export { default as RaidStatisticsScreen } from "./RaidStatisticsScreen";
 export { default as RaidStatisticsSlotCount } from "./RaidStatisticsSlotCount";
 export { default as RaidStudentComparison } from "./RaidStudentComparison";
 export { default as RaidVideosScreen } from "./RaidVideosScreen";
-export type { RaidPartyStudentMap } from "./toRaidPartyRow";
-export { getMaxLevelAt } from "./toRaidPartyRow";
+export type { RaidPartyStudentInfo, RaidPartyStudentMap } from "./toRaidPartyRow";
+export { buildRaidPartyStudentMap, getMaxLevelAt, isRepresentativeStudent } from "./toRaidPartyRow";
