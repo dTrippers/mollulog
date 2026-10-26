@@ -70,7 +70,7 @@ task.
 When the local PostgreSQL intentionally lives on a non-loopback host, such as a
 Tailscale machine, set `LOCAL_DB_ALLOWED_HOSTS` to a comma-separated hostname
 list in an environment file you own, for example
-`~/Workspace/mollulog/.config/local.env`. Entries are DNS hostnames or IPv4
+`~/Workspace/mollulog-kivotos/.config/local.env`. Entries are DNS hostnames or IPv4
 addresses, trimmed and compared without case sensitivity; an empty or invalid
 entry, including an empty or whitespace-only value, fails explicitly. IPv6
 addresses, bracketed or not, cannot be allowlisted and fail explicitly.
