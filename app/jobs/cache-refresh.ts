@@ -15,7 +15,7 @@ import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { getEventList, warmActiveUpcomingEventContent } from "~/views/events";
 import { getFutureContents } from "~/views/futures";
-import { getIndexContents } from "~/views/home";
+import { refreshIndexContents } from "~/views/home";
 import { getNavigationBarContentsRaw } from "~/views/navigation";
 
 const SAFE_TASK_ERROR = "작업을 완료하지 못했어요. 로그에서 job ID를 확인해주세요.";
@@ -72,7 +72,7 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
       await getEventList(env, undefined, true, ctx);
       return;
     case "getIndexContents":
-      await getIndexContents(env, true, ctx);
+      await refreshIndexContents(env, ctx);
       return;
     case "getFutureContents":
       await getFutureContents(env, true, ctx);

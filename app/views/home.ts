@@ -349,25 +349,34 @@ export class HomeIndexIncompleteError extends Error {
   }
 }
 
+function fetchIndexContents(env: Env, forceRefresh: boolean, ctx?: ExecutionContext): Promise<HomeIndexContents> {
+  return fetchRouteCached<HomeIndexContents>(
+    env,
+    ctx,
+    cacheKey("route", "index", 7, "all"),
+    async () => {
+      const contents = await loadHomeIndexContents(env, forceRefresh, ctx);
+      if (!isCompleteHomeIndexContents(contents)) {
+        throw new HomeIndexIncompleteError(contents);
+      }
+      return contents;
+    },
+    forceRefresh,
+  );
+}
+
+// For the cache refresh job: rejects with HomeIndexIncompleteError when a source failed, because the snapshot was not cached.
+export function refreshIndexContents(env: Env, ctx?: ExecutionContext): Promise<HomeIndexContents> {
+  return fetchIndexContents(env, true, ctx);
+}
+
 export async function getIndexContents(
   env: Env,
   forceRefresh = false,
   ctx?: ExecutionContext,
 ): Promise<HomeIndexContents> {
   try {
-    return await fetchRouteCached<HomeIndexContents>(
-      env,
-      ctx,
-      cacheKey("route", "index", 7, "all"),
-      async () => {
-        const contents = await loadHomeIndexContents(env, forceRefresh, ctx);
-        if (!isCompleteHomeIndexContents(contents)) {
-          throw new HomeIndexIncompleteError(contents);
-        }
-        return contents;
-      },
-      forceRefresh,
-    );
+    return await fetchIndexContents(env, forceRefresh, ctx);
   } catch (error) {
     if (error instanceof HomeIndexIncompleteError) {
       return error.contents;
