@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import type { RoadPuzzleMap } from "~/domain/event-shop";
-import { calculateExpectedDraws, solveRoadPuzzleMap } from "~/domain/road-puzzle/solver";
+import { analyzeRoadPuzzleMap, calculateExpectedDraws, solveRoadPuzzleMap } from "~/domain/road-puzzle/solver";
 import fixture from "../../../fixtures/road-puzzle-10846-maps.json";
 
 const maps = fixture.maps.map((map) => ({
@@ -21,6 +21,28 @@ const maps = fixture.maps.map((map) => ({
     rotation: rail.rotation,
   })),
 })) as RoadPuzzleMap[];
+
+const smallMap: RoadPuzzleMap = {
+  uid: "small-map",
+  name: "Small map",
+  deck: { straight: 2, longCurve: 1, shortCurve: 1 },
+  tiles: [
+    { x: 0, y: 0, z: 0, type: 1, rotation: 0 },
+    { x: 1, y: -1, z: 0, type: 5, rotation: 0 },
+    { x: 2, y: -2, z: 0, type: 5, rotation: 0 },
+    { x: 3, y: -3, z: 0, type: 2, rotation: 0 },
+    { x: 5, y: -5, z: 0, type: 5, rotation: 0 },
+  ],
+  fixedRails: [
+    { x: 0, y: 0, z: 0, entranceIndex: 1, exitIndex: 0, rotation: 0 },
+    { x: 3, y: -3, z: 0, entranceIndex: 3, exitIndex: 0, rotation: 0 },
+  ],
+};
+
+const markedReferenceCells = [
+  { x: -4, y: 1, z: 3 },
+  { x: -5, y: 2, z: 3 },
+];
 
 const expectedByMap: readonly [string, number, number, number][] = [
   ["roadpuzzlemapname_start2", 1_950, 1_950, 1_950],
@@ -137,5 +159,96 @@ describe("road puzzle solver", () => {
     visit(cards, []);
 
     expect(calculateExpectedDraws(deck, paretoVectors)).toBeCloseTo(stoppingDrawTotal / permutationCount, 10);
+  });
+
+  it("filters small-map routes through every marked empty tile", () => {
+    const shortest = solveRoadPuzzleMap(smallMap)!;
+    const marked = analyzeRoadPuzzleMap(smallMap, [{ x: 1, y: -1, z: 0 }], null);
+
+    expect(shortest.paretoVectors).toEqual([{ straight: 2, longCurve: 0, shortCurve: 0 }]);
+    expect(marked.status).toBe("planned");
+    expect(marked.witness?.some((step) => step.x === 1 && step.y === -1 && step.z === 0)).toBe(true);
+    expect(marked.minimumStickers).toBe(shortest.minimumStickers);
+    expect(marked.delta).toEqual({ minimumStickers: 0, expectedStickers: 0 });
+  });
+
+  it("returns an explicit no-route result when a valid empty tile is disconnected", () => {
+    const result = analyzeRoadPuzzleMap(smallMap, [{ x: 5, y: -5, z: 0 }], null);
+
+    expect(result).toEqual({
+      status: "no-route",
+      witness: null,
+      requiredVector: null,
+      drawnVector: null,
+      minimumStickers: null,
+      expectedStickers: null,
+      maximumStickers: null,
+      delta: null,
+    });
+  });
+
+  it("matches the constrained plan reference values for uid 10702", () => {
+    const map = maps.find((item) => item.name === "roadpuzzle_2")!;
+    const analysis = analyzeRoadPuzzleMap(map, markedReferenceCells, null);
+
+    expect(analysis.status).toBe("planned");
+    expect(analysis.requiredVector).toEqual({ straight: 4, longCurve: 10, shortCurve: 3 });
+    expect(analysis.minimumStickers).toBe(2_550);
+    expect(Math.round(analysis.expectedStickers!)).toBe(2_899);
+    expect(analysis.maximumStickers).toBe(4_500);
+    expect(analysis.delta).toEqual({ minimumStickers: 300, expectedStickers: 217 });
+  });
+
+  it("uses the drawn and remaining counts for incomplete and completable routes", () => {
+    const map = maps.find((item) => item.name === "roadpuzzle_2")!;
+    const incomplete = analyzeRoadPuzzleMap(map, markedReferenceCells, {
+      straight: 3,
+      longCurve: 7,
+      shortCurve: 8,
+    });
+    const complete = analyzeRoadPuzzleMap(map, markedReferenceCells, {
+      straight: 0,
+      longCurve: 5,
+      shortCurve: 6,
+    });
+
+    expect(incomplete.status).toBe("incomplete");
+    expect(incomplete.requiredVector).toEqual({ straight: 4, longCurve: 10, shortCurve: 3 });
+    expect(incomplete.drawnVector).toEqual({ straight: 4, longCurve: 5, shortCurve: 3 });
+    expect(incomplete.minimumStickers).toBe(750);
+    expect(Math.round(incomplete.expectedStickers!)).toBe(995);
+    expect(incomplete.maximumStickers).toBe(2_700);
+    expect(incomplete.delta).toEqual({ minimumStickers: 300, expectedStickers: 258 });
+
+    expect(complete.status).toBe("completable");
+    expect(complete.drawnVector).toEqual({ straight: 7, longCurve: 7, shortCurve: 5 });
+    const witnessKeys = new Set(complete.witness?.map(({ x, y, z }) => `${x},${y},${z}`));
+    expect(markedReferenceCells.every(({ x, y, z }) => witnessKeys.has(`${x},${y},${z}`))).toBe(true);
+    expect(complete.requiredVector?.straight).toBeLessThanOrEqual(complete.drawnVector!.straight);
+    expect(complete.requiredVector?.longCurve).toBeLessThanOrEqual(complete.drawnVector!.longCurve);
+    expect(complete.requiredVector?.shortCurve).toBeLessThanOrEqual(complete.drawnVector!.shortCurve);
+  });
+
+  it("matches exhaustive conditional draws on a small remaining deck", () => {
+    const analysis = analyzeRoadPuzzleMap(smallMap, [{ x: 1, y: -1, z: 0 }], {
+      straight: 1,
+      longCurve: 1,
+      shortCurve: 1,
+    });
+    const orders = [
+      ["straight", "longCurve", "shortCurve"],
+      ["straight", "shortCurve", "longCurve"],
+      ["longCurve", "straight", "shortCurve"],
+      ["longCurve", "shortCurve", "straight"],
+      ["shortCurve", "straight", "longCurve"],
+      ["shortCurve", "longCurve", "straight"],
+    ];
+    const expectedDraws =
+      orders.reduce((total, order) => total + order.findIndex((kind) => kind === "straight") + 1, 0) / orders.length;
+
+    expect(analysis.status).toBe("incomplete");
+    expect(analysis.minimumStickers).toBe(150);
+    expect(analysis.expectedStickers).toBeCloseTo(expectedDraws * 150, 10);
+    expect(analysis.maximumStickers).toBe(450);
   });
 });

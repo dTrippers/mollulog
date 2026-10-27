@@ -1,6 +1,6 @@
-import { FlagIcon, PlayIcon } from "@heroicons/react/24/solid";
-import { useId } from "react";
-import type { RoadPuzzleMap } from "~/domain/event-shop";
+import { FlagIcon, MapPinIcon, PlayIcon } from "@heroicons/react/24/solid";
+import { type KeyboardEvent, useEffect, useId, useRef } from "react";
+import type { RoadPuzzleCoordinate, RoadPuzzleMap } from "~/domain/event-shop";
 import type { RoadPuzzlePathStep, RoadPuzzleSolution } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
 
@@ -78,16 +78,58 @@ function getRailLabel(step: RoadPuzzlePathStep): string {
 
 type RoadPuzzleMapSvgProps = {
   map: RoadPuzzleMap;
-  solution: RoadPuzzleSolution | null;
+  solution: Pick<RoadPuzzleSolution, "witness" | "minimumVector"> | null;
   round: number;
   mapNumber: number;
   highlightedRailKind: RailKind | null;
+  marks: readonly RoadPuzzleCoordinate[];
+  focusedCell: RoadPuzzleCoordinate | null;
+  onToggleMark: (cell: RoadPuzzleCoordinate) => void;
+  onFocusCell: (cell: RoadPuzzleCoordinate) => void;
+  noRoute?: boolean;
+  isStale?: boolean;
 };
 
-export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedRailKind }: RoadPuzzleMapSvgProps) {
+export function RoadPuzzleMapSvg({
+  map,
+  solution,
+  round,
+  mapNumber,
+  highlightedRailKind,
+  marks,
+  focusedCell,
+  onToggleMark,
+  onFocusCell,
+  noRoute = false,
+  isStale = false,
+}: RoadPuzzleMapSvgProps) {
   const titleId = useId();
+  const cellRefs = useRef(new Map<string, SVGPolygonElement>());
   const playableTiles = map.tiles.filter(({ type }) => type !== 4);
   const centers = new Map(playableTiles.map((tile) => [key(tile), centerFor(tile)]));
+  const markableTiles = playableTiles.filter(({ type }) => type === 5);
+  const firstMarkableTile = [...markableTiles].sort((left, right) => {
+    const leftCenter = centerFor(left);
+    const rightCenter = centerFor(right);
+    return leftCenter.y - rightCenter.y || leftCenter.x - rightCenter.x;
+  })[0];
+  const focusedKey =
+    focusedCell && markableTiles.some((tile) => key(tile) === key(focusedCell))
+      ? key(focusedCell)
+      : firstMarkableTile
+        ? key(firstMarkableTile)
+        : null;
+  const rows = [...new Set(playableTiles.map(({ z }) => z))].sort((left, right) => left - right);
+  const rowByZ = new Map(rows.map((z, index) => [z, index + 1]));
+  const columnByKey = new Map<string, number>();
+  for (const z of rows) {
+    playableTiles
+      .filter((tile) => tile.z === z)
+      .sort((left, right) => left.x - right.x)
+      .forEach((tile, index) => {
+        columnByKey.set(key(tile), index + 1);
+      });
+  }
   const xValues = [...centers.values()].map(({ x }) => x);
   const yValues = [...centers.values()].map(({ y }) => y);
   const padding = HEX_RADIUS * 1.08;
@@ -98,24 +140,54 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
   const witnessByCoordinate = new Map(
     (solution?.witness ?? []).filter(({ tile }) => tile === "empty").map((step) => [key(step), step]),
   );
-  const fixedRailByCoordinate = new Map(map.fixedRails.map((rail) => [key(rail), rail]));
+  const markKeys = new Set(marks.map(key));
+
+  useEffect(() => {
+    if (!focusedCell) return;
+    cellRefs.current.get(key(focusedCell))?.focus();
+  }, [focusedCell]);
+
+  const moveFocus = (current: RoadPuzzleMap["tiles"][number], direction: string) => {
+    const currentCenter = centerFor(current);
+    let closest: RoadPuzzleMap["tiles"][number] | undefined;
+    let closestScore = Number.POSITIVE_INFINITY;
+    for (const candidate of markableTiles) {
+      if (key(candidate) === key(current)) continue;
+      const candidateCenter = centerFor(candidate);
+      let score: number;
+      if (direction === "ArrowLeft" || direction === "ArrowRight") {
+        if (candidate.z !== current.z) continue;
+        if (direction === "ArrowLeft" ? candidate.x >= current.x : candidate.x <= current.x) continue;
+        score = Math.abs(candidateCenter.x - currentCenter.x);
+      } else {
+        if (direction === "ArrowUp" ? candidate.z >= current.z : candidate.z <= current.z) continue;
+        score = Math.abs(candidateCenter.y - currentCenter.y) * 1000 + Math.abs(candidateCenter.x - currentCenter.x);
+      }
+      if (score < closestScore) {
+        closest = candidate;
+        closestScore = score;
+      }
+    }
+    if (closest) onFocusCell(closest);
+  };
 
   return (
     <>
+      {/* biome-ignore lint/a11y/useSemanticElements: SVG has no semantic group element for this labeled map with interactive child polygons. */}
       <svg
         aria-labelledby={titleId}
-        className="block h-auto w-full"
-        role="img"
+        className={`block h-auto w-full ${isStale ? "opacity-50" : ""}`}
+        role="group"
         viewBox={`${minX.toFixed(2)} ${minY.toFixed(2)} ${width.toFixed(2)} ${height.toFixed(2)}`}
       >
         <title id={titleId}>
-          {solution
-            ? roadPuzzleLocale.resultTitle(round, mapNumber, solution.minimumVector)
-            : roadPuzzleLocale.mapTitle(round, mapNumber)}
+          {noRoute
+            ? roadPuzzleLocale.noRouteMapTitle(round, mapNumber, marks.length)
+            : `${solution ? roadPuzzleLocale.resultTitle(round, mapNumber, solution.minimumVector) : roadPuzzleLocale.mapTitle(round, mapNumber)}${marks.length > 0 ? `, ${roadPuzzleLocale.rewardTileCount(marks.length)}` : ""}`}
         </title>
         <g>
           {playableTiles.map((tile) => {
-            const center = centers.get(key(tile))!;
+            const center = centerFor(tile);
             const routeStep = witnessByCoordinate.get(key(tile));
             const fill =
               tile.type === 1 || tile.type === 2
@@ -129,6 +201,9 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
                         ? "color-mix(in oklab, var(--primary) 30%, var(--card))"
                         : "color-mix(in oklab, var(--primary) 6%, var(--card))"
                     : "var(--muted)";
+            const isMarkable = tile.type === 5;
+            const isMarked = markKeys.has(key(tile));
+            const routeLabel = routeStep ? `, ${roadPuzzleLocale.routePassesCell}` : "";
             return (
               <polygon
                 key={`tile:${key(tile)}`}
@@ -136,11 +211,45 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
                 fill={fill}
                 stroke="var(--border)"
                 strokeWidth="0.8"
+                {...(isMarkable
+                  ? {
+                      ref: (element: SVGPolygonElement | null) => {
+                        if (element) cellRefs.current.set(key(tile), element);
+                        else cellRefs.current.delete(key(tile));
+                      },
+                      className:
+                        "cursor-pointer outline-none hover:stroke-foreground/60 hover:stroke-[1.3] focus-visible:stroke-foreground focus-visible:stroke-[1.8]",
+                      role: "button" as const,
+                      tabIndex: focusedKey === key(tile) ? 0 : -1,
+                      "aria-pressed": isMarked,
+                      "aria-label": `${rowByZ.get(tile.z)}${roadPuzzleLocale.rowUnit} ${columnByKey.get(key(tile))}${roadPuzzleLocale.columnUnit}${routeLabel}`,
+                      onClick: () => {
+                        onFocusCell(tile);
+                        onToggleMark(tile);
+                      },
+                      onKeyDown: (event: KeyboardEvent<SVGPolygonElement>) => {
+                        if (event.key === " " || event.key === "Enter") {
+                          event.preventDefault();
+                          onToggleMark(tile);
+                        } else if (event.key.startsWith("Arrow")) {
+                          event.preventDefault();
+                          moveFocus(tile, event.key);
+                        }
+                      },
+                    }
+                  : {})}
               />
             );
           })}
         </g>
-        <g fill="none" stroke="var(--foreground)" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8">
+        <g
+          fill="none"
+          stroke="var(--foreground)"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeWidth="1.8"
+          pointerEvents="none"
+        >
           {map.fixedRails
             .filter(({ x, y, z }) => map.tiles.find((tile) => tile.x === x && tile.y === y && tile.z === z)?.type === 3)
             .map((rail) => {
@@ -149,7 +258,7 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
               return <path key={`fixed:${key(rail)}`} d={railPath(center, rail.entranceIndex, rail.exitIndex)} />;
             })}
         </g>
-        <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4">
+        <g fill="none" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.4" pointerEvents="none">
           {(solution?.witness ?? []).map((step) => {
             if (step.tile !== "empty" || step.entryIndex === undefined || step.exitIndex === undefined) return null;
             const kind = step.railKind ?? getRailKind(step.entryIndex, step.exitIndex);
@@ -165,7 +274,7 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
             );
           })}
         </g>
-        <g>
+        <g pointerEvents="none">
           {map.tiles
             .filter(({ type }) => type === 1 || type === 2 || type === 3)
             .map((tile) => {
@@ -200,6 +309,27 @@ export function RoadPuzzleMapSvg({ map, solution, round, mapNumber, highlightedR
                     aria-hidden="true"
                   />
                 </g>
+              );
+            })}
+        </g>
+        <g pointerEvents="none">
+          {markableTiles
+            .filter((tile) => markKeys.has(key(tile)))
+            .map((tile) => {
+              const center = centerFor(tile);
+              return (
+                <MapPinIcon
+                  key={`mark:${key(tile)}`}
+                  x={center.x - 4.5}
+                  y={center.y - 9.2}
+                  width={9}
+                  height={9}
+                  fill="var(--foreground)"
+                  stroke="var(--card)"
+                  strokeWidth={3}
+                  style={{ paintOrder: "stroke" }}
+                  aria-hidden="true"
+                />
               );
             })}
         </g>

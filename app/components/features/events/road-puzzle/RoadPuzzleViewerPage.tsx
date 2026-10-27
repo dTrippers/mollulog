@@ -1,15 +1,31 @@
-import { ArrowPathIcon, FlagIcon, PlayIcon } from "@heroicons/react/24/solid";
+import { ArrowPathIcon, FlagIcon, MapPinIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useParams, useSearchParams } from "react-router";
 import { Button, Callout, FilterButtons, HoverTooltip, Section } from "~/components/primitives";
-import type { MinigamePayment, RoadPuzzleConfig, RoadPuzzleMap } from "~/domain/event-shop";
+import type { MinigamePayment, RoadPuzzleConfig, RoadPuzzleCoordinate, RoadPuzzleMap } from "~/domain/event-shop";
 import type { RailCounts } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
 import { useRoadPuzzleStats } from "../shop/hooks/useRoadPuzzleStats";
 import { RoadPuzzleMapSvg } from "./RoadPuzzleMapSvg";
 import { RoadPuzzleRouteSummary } from "./RoadPuzzleRouteSummary";
+import {
+  clearRoadPuzzleViewerState,
+  loadRoadPuzzleViewerState,
+  type RoadPuzzleViewerState,
+  roadPuzzleViewerStorageKey,
+  saveRoadPuzzleViewerState,
+} from "./road-puzzle-viewer-persistence";
+import { useRoadPuzzleMapAnalysis } from "./useRoadPuzzleMapAnalysis";
 
 const EMPTY_ROAD_PUZZLE_MAPS: RoadPuzzleMap[] = [];
+const EMPTY_ROAD_PUZZLE_MAP: RoadPuzzleMap = {
+  uid: "",
+  name: "",
+  deck: { straight: 0, longCurve: 0, shortCurve: 0 },
+  tiles: [],
+  fixedRails: [],
+};
+const EMPTY_VIEWER_STATE: RoadPuzzleViewerState = { marks: [], remaining: null };
 const VIEWER_ROUNDS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 function parsedRound(searchParams: URLSearchParams): number {
@@ -46,6 +62,12 @@ function Legend() {
         <span className="size-2.5 rounded-full border border-foreground" aria-hidden="true" />
         {roadPuzzleLocale.transit}
       </span>
+      <HoverTooltip content={roadPuzzleLocale.rewardHelp} focusable>
+        <span className="inline-flex items-center gap-1">
+          <MapPinIcon className="size-3 text-foreground" aria-hidden="true" />
+          {roadPuzzleLocale.reward}
+        </span>
+      </HoverTooltip>
     </div>
   );
 }
@@ -56,6 +78,7 @@ export type RoadPuzzleViewerPageProps = {
 };
 
 export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPageProps) {
+  const { uid: eventUid } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedRound = parsedRound(searchParams);
   const selectedMapNumber = parsedMapNumber(searchParams);
@@ -66,20 +89,161 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
   const calculation = useRoadPuzzleStats(config?.maps ?? EMPTY_ROAD_PUZZLE_MAPS, Boolean(config));
   const [highlightedRailKind, setHighlightedRailKind] = useState<keyof RailCounts | null>(null);
   const [showPendingChip, setShowPendingChip] = useState(false);
+  const [focusedCell, setFocusedCell] = useState<RoadPuzzleCoordinate | null>(null);
+  const stateKey = eventUid && selectedMap ? roadPuzzleViewerStorageKey(eventUid, selectedRound, mapNumber) : "";
+  const [viewerEntry, setViewerEntry] = useState<{ key: string; value: RoadPuzzleViewerState }>({
+    key: "",
+    value: EMPTY_VIEWER_STATE,
+  });
+  const [undoByKey, setUndoByKey] = useState<Record<string, RoadPuzzleCoordinate[][]>>({});
+  const stateReady = !stateKey || viewerEntry.key === stateKey;
+  const viewerState = viewerEntry.key === stateKey ? viewerEntry.value : EMPTY_VIEWER_STATE;
+  const historyKey = stateKey || selectedMap?.uid || "";
+  const undoStack = undoByKey[historyKey] ?? [];
+
+  useEffect(() => {
+    if (!stateKey || !selectedMap || !eventUid) {
+      setViewerEntry({ key: stateKey, value: EMPTY_VIEWER_STATE });
+      return;
+    }
+    setViewerEntry({
+      key: stateKey,
+      value: loadRoadPuzzleViewerState(eventUid, selectedRound, mapNumber, selectedMap) ?? EMPTY_VIEWER_STATE,
+    });
+  }, [eventUid, mapNumber, selectedMap, selectedRound, stateKey]);
+
+  useEffect(() => {
+    if (!stateKey || !eventUid || !selectedMap || !stateReady) return;
+    if (viewerState.marks.length === 0 && viewerState.remaining === null) {
+      clearRoadPuzzleViewerState(eventUid, selectedRound, mapNumber);
+    } else {
+      saveRoadPuzzleViewerState(eventUid, selectedRound, mapNumber, viewerState);
+    }
+  }, [eventUid, mapNumber, selectedMap, selectedRound, stateKey, stateReady, viewerState]);
+
   const selectedMapUidRef = useRef(selectedMap?.uid);
+  const updateViewerState = (update: (current: RoadPuzzleViewerState) => RoadPuzzleViewerState) => {
+    if (!stateReady) return;
+    setViewerEntry((current) => ({
+      key: stateKey,
+      value: update(current.key === stateKey ? current.value : EMPTY_VIEWER_STATE),
+    }));
+  };
+
+  const marks = viewerState.marks;
+  const remaining = viewerState.remaining;
+  const isProgress = Boolean(
+    remaining &&
+      selectedMap &&
+      (Object.keys(selectedMap.deck) as (keyof RailCounts)[]).some((kind) => remaining[kind] < selectedMap.deck[kind]),
+  );
+  const hasInteractiveState = marks.length > 0 || isProgress;
+  const interactiveCalculation = useRoadPuzzleMapAnalysis(
+    selectedMap ?? EMPTY_ROAD_PUZZLE_MAP,
+    marks,
+    remaining,
+    Boolean(selectedMap && stateReady && hasInteractiveState),
+  );
+  const baselineSolution =
+    selectedMap && calculation.status === "ready" ? (calculation.resultsByUid[selectedMap.uid] ?? null) : null;
+  const displayedAnalysis =
+    hasInteractiveState &&
+    interactiveCalculation.status !== "failed" &&
+    interactiveCalculation.analysisMapUid === selectedMap?.uid
+      ? interactiveCalculation.analysis
+      : null;
+  const routeFromAnalysis =
+    displayedAnalysis?.witness && displayedAnalysis.requiredVector
+      ? { witness: displayedAnalysis.witness, minimumVector: displayedAnalysis.requiredVector }
+      : null;
+  const solution = hasInteractiveState
+    ? interactiveCalculation.status === "failed"
+      ? null
+      : displayedAnalysis
+        ? routeFromAnalysis
+        : baselineSolution
+    : baselineSolution;
+  const analysisPending = hasInteractiveState && interactiveCalculation.status === "pending";
+  const calculationPending = hasInteractiveState ? analysisPending : calculation.status === "pending";
+  const calculationFailed = hasInteractiveState
+    ? interactiveCalculation.status === "failed"
+    : calculation.status === "failed";
+  const showStaleResult = analysisPending && Boolean(displayedAnalysis || baselineSolution);
+  const showAnalysisError =
+    hasInteractiveState && interactiveCalculation.status === "ready" && displayedAnalysis?.status === "no-route";
+  const summaryCalculating = hasInteractiveState
+    ? analysisPending && !displayedAnalysis && !baselineSolution
+    : calculationPending;
+  const summaryProgress = displayedAnalysis
+    ? displayedAnalysis.status === "incomplete" || displayedAnalysis.status === "completable"
+    : analysisPending
+      ? false
+      : isProgress;
+  const retryCalculation = hasInteractiveState ? interactiveCalculation.retry : calculation.retry;
+
+  const toggleMark = (cell: RoadPuzzleCoordinate) => {
+    if (!stateReady) return;
+    setUndoByKey((current) => ({
+      ...current,
+      [historyKey]: [...(current[historyKey] ?? []), viewerState.marks.map((mark) => ({ ...mark }))],
+    }));
+    updateViewerState((current) => {
+      const key = `${cell.x},${cell.y},${cell.z}`;
+      const hasMark = current.marks.some((mark) => `${mark.x},${mark.y},${mark.z}` === key);
+      return {
+        ...current,
+        marks: hasMark
+          ? current.marks.filter((mark) => `${mark.x},${mark.y},${mark.z}` !== key)
+          : [...current.marks, cell],
+      };
+    });
+  };
+
+  const updateRemaining = (kind: keyof RailCounts, value: number) => {
+    if (!selectedMap || !stateReady) return;
+    updateViewerState((current) => {
+      const next = { ...(current.remaining ?? selectedMap.deck), [kind]: value };
+      const unchanged = (Object.keys(selectedMap.deck) as (keyof RailCounts)[]).every(
+        (railKind) => next[railKind] === selectedMap.deck[railKind],
+      );
+      return { ...current, remaining: unchanged ? null : next };
+    });
+  };
+
+  const undoMark = () => {
+    const previousMarks = undoStack.at(-1);
+    if (!previousMarks) return;
+    setUndoByKey((current) => {
+      const currentHistory = current[historyKey];
+      return currentHistory ? { ...current, [historyKey]: currentHistory.slice(0, -1) } : current;
+    });
+    updateViewerState((current) => ({ ...current, marks: previousMarks }));
+  };
+
+  const resetState = () => {
+    updateViewerState(() => EMPTY_VIEWER_STATE);
+    setUndoByKey((current) => ({ ...current, [historyKey]: [] }));
+    if (stateKey && eventUid) clearRoadPuzzleViewerState(eventUid, selectedRound, mapNumber);
+  };
 
   useEffect(() => {
     const mapChanged = selectedMapUidRef.current !== selectedMap?.uid;
     selectedMapUidRef.current = selectedMap?.uid;
-    if (mapChanged) setHighlightedRailKind(null);
-    if (calculation.status !== "pending") {
+    if (mapChanged) {
+      setHighlightedRailKind(null);
+      setFocusedCell(null);
+    }
+  }, [selectedMap?.uid]);
+
+  useEffect(() => {
+    if (!calculationPending) {
       setShowPendingChip(false);
       return;
     }
     setShowPendingChip(false);
     const timer = setTimeout(() => setShowPendingChip(true), 300);
     return () => clearTimeout(timer);
-  }, [calculation.status, selectedMap?.uid]);
+  }, [calculationPending]);
 
   const setSelection = (round: number, map: number) => {
     const next = new URLSearchParams(searchParams);
@@ -88,10 +252,6 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
     setSearchParams(next, { replace: true });
   };
 
-  const calculationPending = calculation.status === "pending";
-  const calculationFailed = calculation.status === "failed";
-  const solution =
-    selectedMap && calculation.status === "ready" ? (calculation.resultsByUid[selectedMap.uid] ?? null) : null;
   const missingData = !config || !payment || !roundConfig || !selectedMap;
 
   const roundButtons = VIEWER_ROUNDS.map((round) => ({
@@ -134,11 +294,26 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
             </div>
           )}
 
+          {showAnalysisError && (
+            <div className="my-3" role="alert">
+              <Callout className="flex flex-wrap items-center justify-between gap-3">
+                <span>{roadPuzzleLocale.noRouteThroughMarks}</span>
+                <Button
+                  text={roadPuzzleLocale.undo}
+                  size="sm"
+                  variant="secondary"
+                  disabled={undoStack.length === 0}
+                  onClick={undoMark}
+                />
+              </Callout>
+            </div>
+          )}
+
           {calculationFailed && (
             <div className="my-3" role="alert">
               <Callout tone="destructive" className="flex flex-wrap items-center justify-between gap-3">
                 <span>{roadPuzzleLocale.routeFailed}</span>
-                <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={calculation.retry} />
+                <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={retryCalculation} />
               </Callout>
             </div>
           )}
@@ -155,37 +330,62 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
               )}
               <RoadPuzzleMapSvg
                 map={selectedMap}
-                solution={calculationPending || calculationFailed ? null : solution}
+                solution={calculationFailed ? null : solution}
                 round={selectedRound}
                 mapNumber={mapNumber}
                 highlightedRailKind={highlightedRailKind}
+                marks={marks}
+                focusedCell={focusedCell}
+                onToggleMark={toggleMark}
+                onFocusCell={setFocusedCell}
+                noRoute={displayedAnalysis?.status === "no-route" && !calculationFailed}
+                isStale={showStaleResult}
               />
               <Legend />
             </div>
 
             <div>
-              {calculation.status === "ready" && solution === null && (
+              {!hasInteractiveState && calculation.status === "ready" && baselineSolution === null && (
                 <p className="mb-3 text-sm text-muted-foreground" role="status">
                   {roadPuzzleLocale.routeNotFound}
                 </p>
               )}
               <RoadPuzzleRouteSummary
                 map={selectedMap}
-                solution={calculationFailed || calculationPending ? null : solution}
+                solution={calculationFailed ? null : baselineSolution}
+                analysis={calculationFailed ? null : displayedAnalysis}
+                remaining={remaining}
                 payment={payment}
-                isCalculating={calculationPending}
+                isCalculating={summaryCalculating}
+                isStale={showStaleResult}
+                isProgress={summaryProgress}
+                hasState={marks.length > 0 || isProgress}
                 selectedRailKind={highlightedRailKind}
+                onRemainingChange={updateRemaining}
+                onReset={resetState}
                 onSelectRailKind={(kind) => setHighlightedRailKind((current) => (current === kind ? null : kind))}
               />
             </div>
           </div>
 
           <p className="sr-only" role="status" aria-live="polite">
-            {calculation.status === "ready"
-              ? roadPuzzleLocale.calculationComplete
-              : calculationFailed
-                ? roadPuzzleLocale.routeFailed
-                : ""}
+            {!hasInteractiveState
+              ? calculation.status === "ready"
+                ? roadPuzzleLocale.calculationComplete
+                : calculationFailed
+                  ? roadPuzzleLocale.routeFailed
+                  : ""
+              : calculationPending
+                ? ""
+                : calculationFailed
+                  ? roadPuzzleLocale.routeFailed
+                  : displayedAnalysis?.status === "no-route"
+                    ? roadPuzzleLocale.noRouteThroughMarks
+                    : displayedAnalysis?.status === "completable"
+                      ? roadPuzzleLocale.canCompleteNow
+                      : displayedAnalysis?.status === "incomplete"
+                        ? roadPuzzleLocale.progressExpectationLive(Math.round(displayedAnalysis.expectedStickers ?? 0))
+                        : roadPuzzleLocale.calculationComplete}
           </p>
         </>
       )}

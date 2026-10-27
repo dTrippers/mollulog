@@ -35,7 +35,24 @@ export type RoadPuzzleSolution = {
   expectedStickers: number;
 };
 
+export type RoadPuzzleInteractiveAnalysis = {
+  status: "no-route" | "planned" | "completable" | "incomplete";
+  witness: RoadPuzzlePathStep[] | null;
+  requiredVector: RailCounts | null;
+  drawnVector: RailCounts | null;
+  minimumStickers: number | null;
+  expectedStickers: number | null;
+  maximumStickers: number | null;
+  delta: { minimumStickers: number; expectedStickers: number } | null;
+};
+
 type RouteCandidate = { counts: RailCounts; witness: RoadPuzzlePathStep[] };
+
+export type RoadPuzzleRouteBaseline = {
+  mapUid: string;
+  routes: readonly RouteCandidate[];
+  solution: RoadPuzzleSolution | null;
+};
 
 const coordinateKey = ({ x, y, z }: RoadPuzzleCoordinate) => `${x},${y},${z}`;
 const vectorKey = ({ straight, longCurve, shortCurve }: RailCounts) => `${straight},${longCurve},${shortCurve}`;
@@ -151,7 +168,10 @@ export function calculateExpectedDraws(deck: RoadPuzzleDeck, paretoVectors: read
   return expected;
 }
 
-export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | null {
+function findRoadPuzzleRoutes(
+  map: RoadPuzzleMap,
+  requiredCells: readonly RoadPuzzleCoordinate[] = [],
+): RouteCandidate[] {
   const { tileByCoordinate, railByCoordinate, start, end, transits } = validateMap(map);
   const startRail = railByCoordinate.get(coordinateKey(start))!;
   const endKey = coordinateKey(end);
@@ -164,6 +184,12 @@ export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | nul
   );
   const startIndex = indexByCoordinate.get(coordinateKey(start))!;
   const endIndex = indexByCoordinate.get(endKey)!;
+  const requiredIndices = new Set<number>();
+  for (const cell of requiredCells) {
+    const index = indexByCoordinate.get(coordinateKey(cell));
+    if (index === undefined || tileByCoordinate.get(coordinateKey(cell))?.type !== 5) return [];
+    requiredIndices.add(index);
+  }
   const tileTypes = tiles.map(({ type }) => type);
   const fixedRails = tiles.map((tile) => railByCoordinate.get(coordinateKey(tile)));
   const transitCount = transits.length;
@@ -201,6 +227,7 @@ export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | nul
   };
 
   const recordCandidate = () => {
+    if ([...requiredIndices].some((index) => !used[index])) return;
     for (const candidate of candidates.values()) {
       if (vectorDominates(candidate.counts, counts)) return;
     }
@@ -274,12 +301,15 @@ export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | nul
     witness.pop();
   }
 
-  if (candidates.size === 0) return null;
-  const orderedCandidates = [...candidates.values()].sort((left, right) => {
+  return [...candidates.values()].sort((left, right) => {
     const totalDiff = vectorTotal(left.counts) - vectorTotal(right.counts);
     if (totalDiff !== 0) return totalDiff;
     return vectorKey(left.counts).localeCompare(vectorKey(right.counts));
   });
+}
+
+function solutionFromRoutes(map: RoadPuzzleMap, orderedCandidates: readonly RouteCandidate[]): RoadPuzzleSolution | null {
+  if (orderedCandidates.length === 0) return null;
   const minimum = orderedCandidates[0]!;
   const paretoVectors = orderedCandidates.map(({ counts }) => counts);
   const minimumTiles = vectorTotal(minimum.counts);
@@ -296,5 +326,149 @@ export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | nul
     minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
     maximumStickers: maximumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
     expectedStickers: expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
+  };
+}
+
+export function solveRoadPuzzleMap(map: RoadPuzzleMap): RoadPuzzleSolution | null {
+  return solutionFromRoutes(map, findRoadPuzzleRoutes(map));
+}
+
+export function createRoadPuzzleRouteBaseline(map: RoadPuzzleMap): RoadPuzzleRouteBaseline {
+  const routes = findRoadPuzzleRoutes(map);
+  return { mapUid: map.uid, routes, solution: solutionFromRoutes(map, routes) };
+}
+
+function missingRailCount(required: RailCounts, drawn: RailCounts): number {
+  return Math.max(0, required.straight - drawn.straight) +
+    Math.max(0, required.longCurve - drawn.longCurve) +
+    Math.max(0, required.shortCurve - drawn.shortCurve);
+}
+
+function residualVector(required: RailCounts, drawn: RailCounts): RailCounts {
+  return {
+    straight: Math.max(0, required.straight - drawn.straight),
+    longCurve: Math.max(0, required.longCurve - drawn.longCurve),
+    shortCurve: Math.max(0, required.shortCurve - drawn.shortCurve),
+  };
+}
+
+function reduceParetoVectors(vectors: readonly RailCounts[]): RailCounts[] {
+  const result: RailCounts[] = [];
+  const seen = new Set<string>();
+  for (const vector of vectors) {
+    const key = vectorKey(vector);
+    if (seen.has(key) || result.some((candidate) => vectorDominates(candidate, vector))) continue;
+    seen.add(key);
+    for (let index = result.length - 1; index >= 0; index -= 1) {
+      if (vectorDominates(vector, result[index]!)) result.splice(index, 1);
+    }
+    result.push(vector);
+  }
+  return result;
+}
+
+function assertRemainingWithinDeck(deck: RoadPuzzleDeck, remaining: RailCounts): void {
+  for (const kind of Object.keys(deck) as (keyof RailCounts)[]) {
+    const count = remaining[kind];
+    if (!Number.isSafeInteger(count) || count < 0 || count > deck[kind]) {
+      throw new Error("Road puzzle remaining deck is invalid.");
+    }
+  }
+}
+
+function emptyInteractiveAnalysis(): RoadPuzzleInteractiveAnalysis {
+  return {
+    status: "no-route",
+    witness: null,
+    requiredVector: null,
+    drawnVector: null,
+    minimumStickers: null,
+    expectedStickers: null,
+    maximumStickers: null,
+    delta: null,
+  };
+}
+
+export function analyzeRoadPuzzleMap(
+  map: RoadPuzzleMap,
+  requiredCells: readonly RoadPuzzleCoordinate[],
+  remaining: RailCounts | null,
+  precomputedBaseline?: RoadPuzzleRouteBaseline,
+): RoadPuzzleInteractiveAnalysis {
+  const baseline = precomputedBaseline?.mapUid === map.uid ? precomputedBaseline : undefined;
+  const routes = requiredCells.length === 0 && baseline ? baseline.routes : findRoadPuzzleRoutes(map, requiredCells);
+  if (routes.length === 0) return emptyInteractiveAnalysis();
+
+  if (remaining === null) {
+    const solution = solutionFromRoutes(map, routes)!;
+    const noMarkBaseline = requiredCells.length > 0 ? (baseline ?? createRoadPuzzleRouteBaseline(map)).solution : solution;
+    if (!noMarkBaseline) throw new Error("Road puzzle constrained route has no baseline route.");
+    return {
+      status: "planned",
+      witness: solution.witness,
+      requiredVector: solution.minimumVector,
+      drawnVector: null,
+      minimumStickers: solution.minimumStickers,
+      expectedStickers: solution.expectedStickers,
+      maximumStickers: solution.maximumStickers,
+      delta:
+        requiredCells.length > 0
+          ? {
+              minimumStickers: solution.minimumStickers - noMarkBaseline.minimumStickers,
+              expectedStickers: Math.round(solution.expectedStickers) - Math.round(noMarkBaseline.expectedStickers),
+            }
+          : null,
+    };
+  }
+
+  assertRemainingWithinDeck(map.deck, remaining);
+  const drawnVector = {
+    straight: map.deck.straight - remaining.straight,
+    longCurve: map.deck.longCurve - remaining.longCurve,
+    shortCurve: map.deck.shortCurve - remaining.shortCurve,
+  };
+  const completable = routes.find(({ counts }) => missingRailCount(counts, drawnVector) === 0);
+  if (completable) {
+    return {
+      ...emptyInteractiveAnalysis(),
+      status: "completable",
+      witness: completable.witness,
+      requiredVector: completable.counts,
+      drawnVector,
+    };
+  }
+
+  const recommended = [...routes].sort((left, right) => {
+    const missingDiff = missingRailCount(left.counts, drawnVector) - missingRailCount(right.counts, drawnVector);
+    if (missingDiff !== 0) return missingDiff;
+    const totalDiff = vectorTotal(left.counts) - vectorTotal(right.counts);
+    if (totalDiff !== 0) return totalDiff;
+    return vectorKey(left.counts).localeCompare(vectorKey(right.counts));
+  })[0]!;
+  const residualVectors = reduceParetoVectors(routes.map(({ counts }) => residualVector(counts, drawnVector)));
+  const minimumTiles = missingRailCount(recommended.counts, drawnVector);
+  const expectedTiles = calculateExpectedDraws(remaining, residualVectors);
+  const remainingTotal = vectorTotal(remaining);
+  let delta: RoadPuzzleInteractiveAnalysis["delta"] = null;
+  if (requiredCells.length > 0) {
+    const noMarkBaseline = baseline ?? createRoadPuzzleRouteBaseline(map);
+    const baselineAnalysis = analyzeRoadPuzzleMap(map, [], remaining, noMarkBaseline);
+    const baselineMinimum = baselineAnalysis.status === "incomplete" ? baselineAnalysis.minimumStickers! : 0;
+    const baselineExpected = baselineAnalysis.status === "incomplete" ? Math.round(baselineAnalysis.expectedStickers!) : 0;
+    delta = {
+      minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE - baselineMinimum,
+      expectedStickers: Math.round(expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE) - baselineExpected,
+    };
+  }
+
+  return {
+    status: "incomplete",
+    witness: recommended.witness,
+    requiredVector: recommended.counts,
+    drawnVector,
+    minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
+    expectedStickers: expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
+    maximumStickers: remainingTotal * ROAD_PUZZLE_STICKERS_PER_TILE,
+    delta,
   };
 }

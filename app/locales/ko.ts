@@ -461,6 +461,9 @@ export const treasureHuntLocale = {
   failedResult: "보물찾기 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
 } as const;
 
+const VIEWER_COST_HELP =
+  "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 최대값은 레일을 모두 뽑는 경우예요.";
+
 export const roadPuzzleLocale = {
   menuTitle: "철도 연결",
   menuDescription: "회차별 맵과 레일 배치 비용을 확인해보세요",
@@ -498,6 +501,31 @@ export const roadPuzzleLocale = {
   mapNumber: (number: number) => `${number}`,
   routeCount: "경로 수",
   deckCount: "덱 수",
+  remainingCount: "남은 수",
+  drawnRequired: "뽑은/필요",
+  planTableCaption: "레일 종류별 경로 수와 남은 수",
+  progressTableCaption: "레일 종류별 뽑은 수와 필요한 수, 남은 수",
+  drawnRequiredLabel: (required: number, drawn: number) => `필요 ${required}개 중 ${drawn}개 뽑음`,
+  canCompleteNow: "지금 뽑은 레일로 완성할 수 있어요",
+  additionalRequired: "추가 필요",
+  reset: "초기화",
+  undo: "되돌리기",
+  noRouteThroughMarks: "표시한 칸을 모두 지나는 경로가 없어요. 회차와 맵이 맞는지 확인해보세요",
+  reward: "보상",
+  rewardHelp: "경로가 지나야 하는 보상 칸을 눌러 표시해요",
+  rewardTileCount: (count: number) => `보상 칸 ${count}개`,
+  noRouteMapTitle: (round: number, map: number, count: number) =>
+    `${roadPuzzleLocale.mapTitle(round, map)}, ${roadPuzzleLocale.rewardTileCount(count)}: 경로 없음`,
+  rowUnit: "행",
+  columnUnit: "열",
+  routePassesCell: "경로가 지나는 칸",
+  shortestDelta: (value: number, expected: boolean) =>
+    `최단 경로보다 스티커 ${expected ? "약 " : ""}${value.toLocaleString()}개 더 필요해요`,
+  progressExpectationLive: (value: number) => `추가 필요 스티커 기대값 약 ${value.toLocaleString()}개`,
+  progressCostHelp: `지금까지 뽑은 레일을 뺀, 앞으로 더 필요한 스티커 비용이에요. ${VIEWER_COST_HELP.replace(
+    "최대값은 레일을 모두 뽑는 경우예요.",
+    "최대값은 남은 레일을 모두 뽑는 경우예요.",
+  )}`,
   railTypes: {
     straight: "직선",
     longCurve: "큰 곡선",
@@ -509,8 +537,7 @@ export const roadPuzzleLocale = {
   routeFailed: "경로를 계산하지 못했어요",
   routeNotFound: "경로를 찾지 못했어요",
   computingRoute: "계산 중",
-  viewerCostHelp:
-    "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 최대값은 레일을 모두 뽑는 경우예요.",
+  viewerCostHelp: VIEWER_COST_HELP,
   plannerPending: "철도 연결 비용을 계산하고 있어요",
   plannerFailed: "철도 연결 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
   resultTitle: (round: number, map: number, counts: { straight: number; longCurve: number; shortCurve: number }) =>
