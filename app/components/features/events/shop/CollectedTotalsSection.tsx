@@ -6,7 +6,7 @@ import { Button, NumberInput, ResourceCard, Section } from "~/components/primiti
 import type { CollectableResource, MinigameConfig, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import type { ResourceTypeEnum } from "~/graphql/graphql";
-import { treasureHuntLocale } from "~/locales/ko";
+import { roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import BugReportModal from "./BugReportModal";
 import { type BreakdownLine, buildResourceBreakdownLines } from "./calculations/resource-breakdown-lines";
 import { calculateBoughtResourceQuantities } from "./calculations/shop-rewards";
@@ -25,6 +25,8 @@ type CollectedTotalsSectionProps = {
   minigameRewards?: RewardItem[];
   treasureHuntStatus?: "pending" | "provisional" | "failed" | "round-limit";
   onRetryTreasureHunt?: () => void;
+  roadPuzzleStatus?: "pending" | "failed" | "missing";
+  onRetryRoadPuzzle?: () => void;
   provisionalMinigameResourceUid?: string;
   state: ShopState;
   actions: ShopActions;
@@ -109,6 +111,8 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
   minigameRewards,
   treasureHuntStatus,
   onRetryTreasureHunt,
+  roadPuzzleStatus,
+  onRetryRoadPuzzle,
   provisionalMinigameResourceUid,
   state,
   actions,
@@ -217,6 +221,31 @@ export const CollectedTotalsSection = memo(function CollectedTotalsSection({
       onClose={() => setShowBugReportModal(false)}
     />
   ) : null;
+
+  if (roadPuzzleStatus) {
+    return (
+      <>
+        <Section title="최종 결과" description="필요한 AP와 아이템 수량을 확인할 수 있어요">
+          <div className="flex flex-wrap items-center gap-2 py-2 text-sm text-muted-foreground" aria-live="polite">
+            {roadPuzzleStatus === "pending" ? (
+              <>
+                <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                <span>{roadPuzzleLocale.calculating}</span>
+              </>
+            ) : roadPuzzleStatus === "missing" ? (
+              <span role="alert">{roadPuzzleLocale.noData}</span>
+            ) : (
+              <>
+                <span role="alert">{roadPuzzleLocale.plannerFailed}</span>
+                <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={onRetryRoadPuzzle} />
+              </>
+            )}
+          </div>
+        </Section>
+        {bugReportModal}
+      </>
+    );
+  }
 
   if (treasureHuntStatus === "pending" || treasureHuntStatus === "failed" || treasureHuntStatus === "round-limit") {
     return (

@@ -1,11 +1,19 @@
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/primitives";
-import type { CollectableResource, EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
+import type {
+  CollectableResource,
+  EventRewardBonus,
+  MinigameConfig,
+  RoadPuzzleMap,
+  ShopResource,
+  Stage,
+} from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
+import { getRoadPuzzleTotalCost, getRoadPuzzleTotalRewards } from "~/domain/road-puzzle/calculator";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
-import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
 import type { EventShopPlanContext } from "./shop";
 import {
   convertClueSearchCostsToPoints,
@@ -19,6 +27,7 @@ import {
   useShopCalculations,
   useShopState,
 } from "./shop/hooks";
+import { useRoadPuzzleStats } from "./shop/hooks/useRoadPuzzleStats";
 import { useTreasureHuntStats } from "./shop/hooks/useTreasureHuntStats";
 import type { TreasureHuntSectionStatus } from "./shop/TreasureHuntSection";
 import {
@@ -29,6 +38,8 @@ import {
   type TreasureHuntEstimate,
 } from "./shop/treasure-hunt";
 import { calculateMinigamePaymentCosts } from "./shop/utils";
+
+const EMPTY_ROAD_PUZZLE_MAPS: RoadPuzzleMap[] = [];
 
 type EventDetailShopPageProps = {
   stages: Stage[];
@@ -72,7 +83,10 @@ export default function EventDetailShopPage({
     [clueSearchExchange, shopResources],
   );
   const isTreasureHunt = minigameConfig?.minigameType === "treasure_hunt";
+  const isRoadPuzzle = minigameConfig?.minigameType === "road_puzzle";
   const treasureHunt = isTreasureHunt ? (minigameConfig.treasureHunt ?? null) : null;
+  const roadPuzzle = isRoadPuzzle ? (minigameConfig.roadPuzzle ?? null) : null;
+  const roadPuzzlePaymentQuantity = isRoadPuzzle ? minigameConfig.payment.quantity : 0;
 
   const collectableResources = useMemo<CollectableResource[]>(() => {
     const items: CollectableResource[] = [];
@@ -136,6 +150,19 @@ export default function EventDetailShopPage({
         }
       }
 
+      if (minigameConfig.minigameType === "road_puzzle") {
+        for (const reward of minigameConfig.roadPuzzle?.rounds.flatMap((round) => round.rewards) ?? []) {
+          if (items.some(({ uid }) => uid === reward.resourceUid)) continue;
+          items.push({
+            type: reward.resourceType,
+            uid: reward.resourceUid,
+            name: reward.resourceName ?? "재화",
+            imageUrl: reward.imageUrl,
+            forPayment: false,
+          });
+        }
+      }
+
       if (clueSearchExchange?.supported && clueSearchExchange.pointResource) {
         const { type, uid, name, imageUrl } = clueSearchExchange.pointResource;
         if (!items.some((item) => item.uid === uid)) {
@@ -161,7 +188,30 @@ export default function EventDetailShopPage({
     }
     return calculateCardFlipStrategyComparison(minigameConfig.cardFlip, state.minigamePlayCount);
   }, [minigameConfig, state.minigamePlayCount]);
-  const selectedCardFlipResult = cardFlipComparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
+  const selectedCardFlipResult =
+    cardFlipComparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
+  const roadPuzzleCalculation = useRoadPuzzleStats(roadPuzzle?.maps ?? EMPTY_ROAD_PUZZLE_MAPS, Boolean(roadPuzzle));
+  const roadPuzzleTotalCost = useMemo(() => {
+    if (!roadPuzzle || state.minigamePlayCount <= 0 || roadPuzzleCalculation.status !== "ready") {
+      return null;
+    }
+    return getRoadPuzzleTotalCost(
+      roadPuzzle,
+      roadPuzzleCalculation.resultsByUid,
+      Math.max(1, state.minigameStartRound),
+      state.minigamePlayCount,
+      state.minigamePaymentQuantityMode,
+      roadPuzzlePaymentQuantity,
+    );
+  }, [
+    roadPuzzle,
+    roadPuzzleCalculation.resultsByUid,
+    roadPuzzleCalculation.status,
+    roadPuzzlePaymentQuantity,
+    state.minigamePaymentQuantityMode,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+  ]);
 
   const treasureHuntRoundSelection = useMemo(
     () =>
@@ -272,6 +322,10 @@ export default function EventDetailShopPage({
 
   const minigamePaymentCosts = useMemo(() => {
     if (!minigameConfig) return undefined;
+    if (minigameConfig.minigameType === "road_puzzle") {
+      if (state.minigamePlayCount <= 0 || roadPuzzleTotalCost === null) return [];
+      return [{ ...minigameConfig.payment, quantity: roadPuzzleTotalCost }];
+    }
     if (minigameConfig.minigameType === "treasure_hunt") {
       return treasureHuntCalculation.estimate ? [treasureHuntCalculation.estimate.payment] : [];
     }
@@ -290,6 +344,7 @@ export default function EventDetailShopPage({
   }, [
     clueSearchExchange,
     minigameConfig,
+    roadPuzzleTotalCost,
     treasureHuntCalculation.estimate,
     selectedCardFlipResult,
     state.minigamePaymentQuantityMode,
@@ -299,13 +354,31 @@ export default function EventDetailShopPage({
 
   const minigameRewards = useMemo(() => {
     if (minigameConfig?.minigameType === "card_flip") return selectedCardFlipResult?.rewards ?? [];
+    if (minigameConfig?.minigameType === "road_puzzle") {
+      return roadPuzzle
+        ? getRoadPuzzleTotalRewards(roadPuzzle, Math.max(1, state.minigameStartRound), state.minigamePlayCount)
+        : [];
+    }
     if (!isTreasureHunt) return undefined;
     const estimate = treasureHuntCalculation.estimate;
     return estimate ? [...estimate.treasureRewards, ...estimate.openCellRewards] : [];
-  }, [isTreasureHunt, minigameConfig, selectedCardFlipResult, treasureHuntCalculation.estimate]);
+  }, [
+    isTreasureHunt,
+    minigameConfig,
+    roadPuzzle,
+    selectedCardFlipResult,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+    treasureHuntCalculation.estimate,
+  ]);
   const holdTreasureHuntCalculations =
     isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
-  const minigameConfigForCalculations = isTreasureHunt ? null : minigameConfig;
+  const holdRoadPuzzleCalculationInput =
+    isRoadPuzzle &&
+    state.minigamePlayCount > 0 &&
+    (roadPuzzleCalculation.status !== "ready" || roadPuzzleTotalCost === null);
+  const minigameConfigForCalculations =
+    isTreasureHunt || holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput ? null : minigameConfig;
 
   // Shop calculations
   const stageCalculations = useShopCalculations({
@@ -317,8 +390,18 @@ export default function EventDetailShopPage({
     minigameRewards,
     excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
     minigameConfig: minigameConfigForCalculations,
-    holdCalculations: holdTreasureHuntCalculations,
+    holdCalculations: holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput,
   });
+  const holdRoadPuzzleCalculations =
+    isRoadPuzzle && state.minigamePlayCount > 0 && (holdRoadPuzzleCalculationInput || !stageCalculations.isReady);
+  const roadPuzzlePlannerStatus = holdRoadPuzzleCalculations
+    ? !roadPuzzle
+      ? "missing"
+      : roadPuzzleCalculation.status === "failed" ||
+          (roadPuzzleCalculation.status === "ready" && roadPuzzleTotalCost === null)
+        ? "failed"
+        : "pending"
+    : undefined;
   const showCalculationToast = isTreasureHunt ? stageCalculations.isUserCalculating : stageCalculations.isCalculating;
   const resultTreasureHuntStatus =
     isTreasureHunt &&
@@ -348,6 +431,9 @@ export default function EventDetailShopPage({
     clueSearchExchange,
     treasureHuntCalculation,
     holdTreasureHuntCalculations,
+    roadPuzzleCalculation,
+    holdRoadPuzzleCalculations,
+    roadPuzzlePlannerStatus,
     resultTreasureHuntStatus,
     provisionalMinigameResourceUid: treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid,
     minigamePaymentCosts,

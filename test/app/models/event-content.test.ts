@@ -136,6 +136,59 @@ async function loadCardFlipContent(cardFlip: unknown, paymentResource?: unknown)
   return getEventShopContent(env, "main-story-timeline");
 }
 
+function createRoadPuzzleSource(roadPuzzle: unknown) {
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "road_puzzle",
+          payment: { quantity: 150, resource: { type: "item", uid: "85410", name: "하이랜더 기념 스티커" } },
+          payments: [{ quantity: 150, resource: { type: "item", uid: "85410", name: "하이랜더 기념 스티커" } }],
+          rewardGroups: [],
+          roadPuzzle,
+        },
+      ],
+    },
+  }) as never;
+}
+
+function createRoadPuzzleFixture(overrides: Record<string, unknown> = {}) {
+  return {
+    instantClearRound: 7,
+    maps: [
+      {
+        uid: "map-1",
+        name: "RoadPuzzle_1",
+        deck: { straight: 7, longCurve: 12, shortCurve: 11 },
+        tiles: [
+          { x: 0, y: 0, z: 0, type: 1, rotation: 0 },
+          { x: 1, y: -1, z: 0, type: 3, rotation: 1 },
+          { x: 2, y: -2, z: 0, type: 2, rotation: 2 },
+        ],
+        fixedRails: [
+          { x: 0, y: 0, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 0 },
+          { x: 1, y: -1, z: 0, entranceIndex: 0, exitIndex: 3, rotation: 1 },
+          { x: 2, y: -2, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 2 },
+        ],
+      },
+    ],
+    railSetReward: [{ quantity: 7_500, resource: { type: "currency", uid: "1", name: "크레딧" } }],
+    rounds: [
+      {
+        round: 1,
+        isLoop: false,
+        mapUids: ["map-1"],
+        rewards: [{ quantity: 40, resource: { type: "item", uid: "wrench", name: "파이프 렌치", rarity: 1 } }],
+        additionalRewards: [{ quantity: 2, resource: { type: "item", uid: "eleph", name: "엘레프", rarity: 1 } }],
+      },
+    ],
+    ...overrides,
+  };
+}
+
 function createCardFlipFixture(overrides: Record<string, unknown> = {}) {
   return {
     slotCount: 4,
@@ -554,7 +607,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -587,7 +640,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v4::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
@@ -1069,7 +1122,7 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v1::contentUid=shop-content::runType=rerun",
+      "source::event-minigame-type::v2::contentUid=shop-content::runType=rerun",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
@@ -1100,7 +1153,7 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v1::contentUid=base-content::runType=permanent",
+      "source::event-minigame-type::v2::contentUid=base-content::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -1125,6 +1178,80 @@ describe("getEventMinigameType", () => {
     const transportError = new Error("upstream transport failure");
     mockedRunQuery.mockRejectedValue(transportError);
     await expect(getEventMinigameType(env, createEventMetadata())).rejects.toBe(transportError);
+  });
+
+  it("normalizes typed road puzzle data and bumps the event source cache key", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(createRoadPuzzleSource(createRoadPuzzleFixture()));
+
+    const content = await getEventShopContent(env, "main-story-timeline");
+    expect(content?.minigameConfig).toMatchObject({
+      minigameType: "road_puzzle",
+      payment: { resourceUid: "85410", quantity: 150 },
+      payments: [{ resourceUid: "85410", quantity: 150 }],
+      rewardGroups: [],
+      roadPuzzle: {
+        instantClearRound: 7,
+        maps: [
+          {
+            uid: "map-1",
+            deck: { straight: 7, longCurve: 12, shortCurve: 11 },
+            fixedRails: [
+              { x: 0, y: 0, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 0 },
+              { x: 1, y: -1, z: 0, entranceIndex: 0, exitIndex: 3, rotation: 1 },
+              { x: 2, y: -2, z: 0, entranceIndex: 0, exitIndex: 1, rotation: 2 },
+            ],
+          },
+        ],
+        rounds: [{ round: 1, mapUids: ["map-1"], additionalRewards: [{ resourceUid: "eleph", quantity: 2 }] }],
+      },
+    });
+    expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
+      env,
+      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      expect.any(Function),
+      7 * 24 * 60 * 60,
+      false,
+    );
+
+    const queryCall = mockedRunQuery.mock.calls[0];
+    if (!queryCall) throw new Error("Expected the road puzzle shop query to run.");
+    const queryText = print(queryCall[0]);
+    expect(queryText).toContain("roadPuzzle");
+    expect(queryText).toContain("fixedRails");
+    expect(queryText).toContain("additionalRewards");
+  });
+
+  it("keeps missing road puzzle data explicit instead of choosing the generic minigame section", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(createRoadPuzzleSource(null));
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toMatchObject({
+      minigameConfig: { minigameType: "road_puzzle", roadPuzzle: null },
+    });
+  });
+
+  it("rejects road puzzle rounds that reference a missing map", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(
+      createRoadPuzzleSource(
+        createRoadPuzzleFixture({
+          rounds: [
+            {
+              round: 1,
+              isLoop: false,
+              mapUids: ["missing-map"],
+              rewards: [],
+              additionalRewards: [],
+            },
+          ],
+        }),
+      ),
+    );
+
+    await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow(
+      "Road puzzle round 1 references a missing map.",
+    );
   });
 
   it("does not query or cache when neither content UID is available", async () => {

@@ -8,6 +8,8 @@ import { ClueSearchSection } from "./ClueSearchSection";
 import type { ClueSearchExchange } from "./clue-search";
 import type { ShopActions, ShopState } from "./hooks";
 import { TreasureHuntSection, type TreasureHuntSectionState } from "./TreasureHuntSection";
+import { RoadPuzzleSection } from "./RoadPuzzleSection";
+import type { RoadPuzzleStatsCalculation } from "./hooks/useRoadPuzzleStats";
 import {
   calculateDiceMinigameStats,
   calculateMinigamePaymentCosts,
@@ -23,11 +25,12 @@ type MiniGameSectionProps = {
   actions: ShopActions;
   exchange?: ClueSearchExchange | null;
   treasureHuntCalculation: TreasureHuntSectionState;
+  roadPuzzleCalculation: RoadPuzzleStatsCalculation;
   cardFlipComparison: CardFlipStrategyResult[] | null;
 };
 type GenericMiniGameSectionProps = Omit<
   MiniGameSectionProps,
-  "eventUid" | "exchange" | "treasureHuntCalculation" | "cardFlipComparison"
+  "eventUid" | "exchange" | "treasureHuntCalculation" | "roadPuzzleCalculation" | "cardFlipComparison"
 >;
 
 export function MiniGameSection({
@@ -37,6 +40,7 @@ export function MiniGameSection({
   actions,
   exchange = null,
   treasureHuntCalculation,
+  roadPuzzleCalculation,
   cardFlipComparison,
 }: MiniGameSectionProps) {
   if (config.minigameType === "clue_search") {
@@ -62,6 +66,18 @@ export function MiniGameSection({
         state={state}
         actions={actions}
         comparison={cardFlipComparison}
+      />
+    );
+  }
+
+  if (config.minigameType === "road_puzzle") {
+    return (
+      <RoadPuzzleSection
+        config={config}
+        eventUid={eventUid}
+        state={state}
+        actions={actions}
+        calculation={roadPuzzleCalculation}
       />
     );
   }

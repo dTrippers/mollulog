@@ -259,4 +259,46 @@ describe("calculateResourceLedger", () => {
     expect(ledger.fromMinigame).not.toHaveProperty("legacy-reward");
     expect(ledger.requiredForMinigame).not.toHaveProperty("legacy-cost");
   });
+
+  it("applies road-puzzle sticker costs and pipe-wrench rewards to shop planning", () => {
+    const wrenchResource = { type: ResourceTypeEnum.Item, uid: "pipe-wrench", name: "파이프 렌치" };
+    const stickerPayment = {
+      resourceType: ResourceTypeEnum.Item,
+      resourceUid: "highlander-sticker",
+      resourceName: "하이랜더 기념 스티커",
+      quantity: 150,
+    };
+    const minigameConfig: MinigameConfig = {
+      minigameType: "road_puzzle",
+      payment: stickerPayment,
+      payments: [stickerPayment],
+      rewardGroups: [],
+      roadPuzzle: null,
+    };
+    const shopResource: ShopResource = {
+      uid: "shop-item",
+      resource: { type: ResourceTypeEnum.Item, uid: "shop-item-resource", name: "상점 상품", rarity: 1 },
+      resourceAmount: 1,
+      paymentResource: wrenchResource,
+      purchaseTiers: [{ tierIndex: 0, startQuantity: 1, quantity: 1, unitPrice: 100, paymentResource: wrenchResource }],
+      shopAmount: 1,
+    };
+    const ledger = calculateResourceLedger({
+      shopResources: [shopResource],
+      itemQuantities: { "shop-item": 1 },
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 9,
+      minigameConfig,
+      minigamePaymentCosts: [{ ...stickerPayment, quantity: 25_359 }],
+      minigameRewards: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "pipe-wrench", quantity: 40 }],
+    });
+
+    expect(ledger.requiredForMinigame).toEqual({ "highlander-sticker": 25_359 });
+    expect(ledger.requiredForShopItems).toEqual({ "pipe-wrench": 100 });
+    expect(ledger.fromMinigame).toEqual({ "pipe-wrench": 40 });
+    expect(ledger.remainingToFarm).toEqual({ "highlander-sticker": 25_359, "pipe-wrench": 60 });
+  });
 });

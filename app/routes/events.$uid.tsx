@@ -1,6 +1,7 @@
 import {
   InformationCircleIcon,
   ListBulletIcon,
+  MapIcon,
   RectangleStackIcon,
   ShoppingCartIcon,
   SparklesIcon,
@@ -18,7 +19,7 @@ import {
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
-import { cardFlipLocale, treasureHuntLocale } from "~/locales/ko";
+import { cardFlipLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
@@ -158,6 +159,18 @@ export default function EventPage() {
                       Icon: Squares2X2Icon,
                       link: `/events/${uid}/treasure-hunt`,
                       active: pathname === `/events/${uid}/treasure-hunt`,
+                      linkState: futureLinkState,
+                    },
+                  ]
+                : []),
+              ...(minigameType === "road_puzzle"
+                ? [
+                    {
+                      text: roadPuzzleLocale.menuTitle,
+                      description: roadPuzzleLocale.menuDescription,
+                      Icon: MapIcon,
+                      link: `/events/${uid}/road-puzzle`,
+                      active: pathname === `/events/${uid}/road-puzzle`,
                       linkState: futureLinkState,
                     },
                   ]

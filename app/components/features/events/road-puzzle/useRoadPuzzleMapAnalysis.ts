@@ -1,0 +1,182 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { RoadPuzzleCoordinate, RoadPuzzleMap } from "~/domain/event-shop";
+import type { RailCounts, RoadPuzzleInteractiveAnalysis } from "~/domain/road-puzzle/solver";
+import type {
+  RoadPuzzleAnalysisWorkerRequest,
+  RoadPuzzleAnalysisWorkerResponse,
+} from "./road-puzzle-analysis-worker.shared";
+
+type AnalysisStatus = "idle" | "pending" | "ready" | "failed";
+
+type AnalysisState = {
+  signature: string;
+  mapUid: string | null;
+  status: AnalysisStatus;
+  analysis: RoadPuzzleInteractiveAnalysis | null;
+};
+
+export type RoadPuzzleMapAnalysis = {
+  status: AnalysisStatus;
+  analysis: RoadPuzzleInteractiveAnalysis | null;
+  analysisMapUid: string | null;
+  retry: () => void;
+};
+
+export function useRoadPuzzleMapAnalysis(
+  map: RoadPuzzleMap,
+  marks: readonly RoadPuzzleCoordinate[],
+  remaining: RailCounts | null,
+  enabled: boolean,
+): RoadPuzzleMapAnalysis {
+  const workerRef = useRef<Worker | null>(null);
+  const latestRequestIdRef = useRef(0);
+  const inFlightRequestRef = useRef<RoadPuzzleAnalysisWorkerRequest | null>(null);
+  const latestPendingRequestRef = useRef<RoadPuzzleAnalysisWorkerRequest | null>(null);
+  const dispatchRequestRef = useRef<(request: RoadPuzzleAnalysisWorkerRequest) => void>(() => {});
+  const requestRef = useRef({ map, marks: [...marks], remaining });
+  const workerFailedRef = useRef(false);
+  const [workerGeneration, setWorkerGeneration] = useState(0);
+  const [workerReadyGeneration, setWorkerReadyGeneration] = useState<number | null>(null);
+  const [state, setState] = useState<AnalysisState>({
+    signature: "",
+    mapUid: null,
+    status: "idle",
+    analysis: null,
+  });
+
+  requestRef.current = { map, marks: [...marks], remaining };
+  const signature = JSON.stringify([map, marks.map(({ x, y, z }) => `${x},${y},${z}`).sort(), remaining]);
+
+  useEffect(() => {
+    let worker: Worker | null = null;
+    workerFailedRef.current = false;
+    inFlightRequestRef.current = null;
+    latestPendingRequestRef.current = null;
+    dispatchRequestRef.current = () => {};
+    if (!enabled) {
+      workerRef.current = null;
+      setWorkerReadyGeneration(null);
+      return;
+    }
+    try {
+      const activeWorker = new Worker(new URL("./road-puzzle-analysis.worker.ts", import.meta.url), {
+        type: "module",
+        name: `road-puzzle-analysis-${workerGeneration}`,
+      });
+      worker = activeWorker;
+      workerRef.current = activeWorker;
+      const sendRequest = (request: RoadPuzzleAnalysisWorkerRequest) => {
+        inFlightRequestRef.current = request;
+        try {
+          activeWorker.postMessage(request);
+        } catch {
+          inFlightRequestRef.current = null;
+          latestPendingRequestRef.current = null;
+          workerFailedRef.current = true;
+          setState((current) => ({ ...current, status: "failed" }));
+        }
+      };
+      dispatchRequestRef.current = (request) => {
+        if (inFlightRequestRef.current) {
+          latestPendingRequestRef.current = request;
+        } else {
+          sendRequest(request);
+        }
+      };
+      activeWorker.onmessage = (event: MessageEvent<RoadPuzzleAnalysisWorkerResponse>) => {
+        const response = event.data;
+        if (workerRef.current !== activeWorker || inFlightRequestRef.current?.requestId !== response.requestId) {
+          return;
+        }
+        inFlightRequestRef.current = null;
+        const pendingRequest = latestPendingRequestRef.current;
+        latestPendingRequestRef.current = null;
+        if (pendingRequest) sendRequest(pendingRequest);
+        if (response.requestId !== latestRequestIdRef.current) return;
+        if (response.type === "error") {
+          setState((current) => ({ ...current, status: "failed" }));
+          return;
+        }
+        setState((current) => ({ ...current, status: "ready", analysis: response.analysis }));
+      };
+      activeWorker.onerror = () => {
+        if (workerRef.current !== activeWorker) return;
+        workerFailedRef.current = true;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
+        setState((current) => ({ ...current, status: "failed" }));
+      };
+      activeWorker.onmessageerror = () => {
+        if (workerRef.current !== activeWorker) return;
+        workerFailedRef.current = true;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
+        setState((current) => ({ ...current, status: "failed" }));
+      };
+    } catch {
+      workerRef.current = null;
+      workerFailedRef.current = true;
+    }
+
+    setWorkerReadyGeneration(workerGeneration);
+    return () => {
+      if (workerRef.current === worker) {
+        workerRef.current = null;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
+        dispatchRequestRef.current = () => {};
+      }
+      worker?.terminate();
+    };
+  }, [enabled, workerGeneration]);
+
+  useEffect(() => {
+    if (workerReadyGeneration !== workerGeneration) return;
+    if (!enabled) {
+      latestRequestIdRef.current += 1;
+      latestPendingRequestRef.current = null;
+      setState({ signature, mapUid: map.uid, status: "idle", analysis: null });
+      return;
+    }
+    if (workerFailedRef.current) {
+      latestRequestIdRef.current += 1;
+      latestPendingRequestRef.current = null;
+      setState((current) => ({ ...current, signature, mapUid: map.uid, status: "failed" }));
+      return;
+    }
+
+    const requestId = latestRequestIdRef.current + 1;
+    latestRequestIdRef.current = requestId;
+    setState((current) => ({
+      signature,
+      mapUid: map.uid,
+      status: "pending",
+      analysis: current.mapUid === map.uid ? current.analysis : null,
+    }));
+
+    const worker = workerRef.current;
+    if (!worker) {
+      workerFailedRef.current = true;
+      setState((current) => ({ ...current, status: "failed" }));
+      return;
+    }
+    const request = requestRef.current;
+    dispatchRequestRef.current({ type: "analyze", requestId, ...request, marks: [...request.marks] });
+
+    return () => {
+      if (latestRequestIdRef.current === requestId) latestRequestIdRef.current += 1;
+    };
+  }, [enabled, map.uid, signature, workerGeneration, workerReadyGeneration]);
+
+  const retry = useCallback(() => setWorkerGeneration((generation) => generation + 1), []);
+  if (!enabled) return { status: "idle", analysis: null, analysisMapUid: null, retry };
+  if (state.signature !== signature || state.mapUid !== map.uid) {
+    return {
+      status: "pending",
+      analysis: state.mapUid === map.uid ? state.analysis : null,
+      analysisMapUid: state.mapUid,
+      retry,
+    };
+  }
+  return { status: state.status, analysis: state.analysis, analysisMapUid: state.mapUid, retry };
+}
