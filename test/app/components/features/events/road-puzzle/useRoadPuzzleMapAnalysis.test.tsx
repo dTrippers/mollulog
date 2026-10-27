@@ -87,8 +87,9 @@ describe("useRoadPuzzleMapAnalysis", () => {
       { initialProps: { marks: [firstMark] } },
     );
     await waitFor(() => expect(FakeWorker.instances[0]?.requests).toHaveLength(1));
-    const worker = FakeWorker.instances[0]!;
-    const firstRequest = worker.requests[0]!;
+    const worker = FakeWorker.instances[0];
+    const firstRequest = worker?.requests[0];
+    if (!worker || !firstRequest) throw new Error("The initial worker request was not sent.");
 
     act(() => worker.respond({ type: "result", requestId: firstRequest.requestId, analysis: planned }));
     expect(result.current.status).toBe("ready");
@@ -121,5 +122,39 @@ describe("useRoadPuzzleMapAnalysis", () => {
     await waitFor(() => expect(FakeWorker.instances[1]?.requests).toHaveLength(1));
     expect(FakeWorker.instances[0]!.terminated).toBe(true);
     expect(result.current.status).toBe("pending");
+  });
+
+  it("keeps only the latest pending analysis during rapid remaining-count changes", async () => {
+    const progressMap = { ...map, deck: { straight: 6, longCurve: 1, shortCurve: 1 } };
+    const marks = [
+      { x: 1, y: -1, z: 0 },
+      { x: 2, y: -2, z: 0 },
+    ];
+    const initialRemaining = { straight: 6, longCurve: 1, shortCurve: 1 };
+    const { result, rerender } = renderHook(
+      ({ remaining }) => useRoadPuzzleMapAnalysis(progressMap, marks, remaining, true),
+      { initialProps: { remaining: initialRemaining } },
+    );
+    await waitFor(() => expect(FakeWorker.instances[0]?.requests).toHaveLength(1));
+    const worker = FakeWorker.instances[0]!;
+    const firstRequest = worker.requests[0]!;
+
+    for (let straight = 5; straight >= 0; straight -= 1) {
+      rerender({ remaining: { straight, longCurve: 1, shortCurve: 1 } });
+    }
+
+    expect(worker.requests).toHaveLength(1);
+    expect(result.current.status).toBe("pending");
+
+    act(() => worker.respond({ type: "result", requestId: firstRequest.requestId, analysis: planned }));
+    await waitFor(() => expect(worker.requests).toHaveLength(2));
+    const finalRequest = worker.requests[1];
+    if (!finalRequest) throw new Error("The final worker request was not sent.");
+    expect(finalRequest.remaining).toEqual({ straight: 0, longCurve: 1, shortCurve: 1 });
+    expect(result.current.status).toBe("pending");
+
+    act(() => worker.respond({ type: "result", requestId: finalRequest.requestId, analysis: incomplete }));
+    expect(result.current.status).toBe("ready");
+    expect(result.current.analysis).toBe(incomplete);
   });
 });

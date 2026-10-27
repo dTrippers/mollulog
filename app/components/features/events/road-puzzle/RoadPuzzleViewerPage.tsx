@@ -1,8 +1,16 @@
 import { ArrowPathIcon, FlagIcon, MapPinIcon, PlayIcon } from "@heroicons/react/24/solid";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "react-router";
-import { Button, Callout, FilterButtons, HoverTooltip, Section } from "~/components/primitives";
-import type { MinigamePayment, RoadPuzzleConfig, RoadPuzzleCoordinate, RoadPuzzleMap } from "~/domain/event-shop";
+import { resourceCountLabel } from "~/components/features/events/shop/utils";
+import { Button, Callout, FilterButtons, HoverTooltip, ResourceCard, Section } from "~/components/primitives";
+import type {
+  MinigamePayment,
+  RewardItem,
+  RoadPuzzleConfig,
+  RoadPuzzleCoordinate,
+  RoadPuzzleMap,
+} from "~/domain/event-shop";
+import { getRoadPuzzleRoundRows } from "~/domain/road-puzzle/calculator";
 import type { RailCounts } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
 import { useRoadPuzzleStats } from "../shop/hooks/useRoadPuzzleStats";
@@ -69,6 +77,70 @@ function Legend() {
         </span>
       </HoverTooltip>
     </div>
+  );
+}
+
+function RoadPuzzleRewardCards({ rewards }: { rewards: readonly RewardItem[] }) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {rewards.map((reward) => (
+        <ResourceCard
+          key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
+          resourceType={reward.resourceType}
+          itemUid={reward.resourceUid}
+          imageUrl={reward.imageUrl ?? undefined}
+          imageAlt={reward.resourceName}
+          name={reward.resourceName}
+          rarity={reward.rarity}
+          label={resourceCountLabel(reward.quantity)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function RoadPuzzleRoundRewards({ config }: { config: RoadPuzzleConfig }) {
+  const rows = getRoadPuzzleRoundRows(config, {}, 1, 7, 1);
+  const hasRewardData =
+    rows.length === 7 &&
+    rows.every(
+      ({ completionRewards, pathRewards }) =>
+        completionRewards.length > 0 &&
+        completionRewards.every(({ resourceName }) => Boolean(resourceName)) &&
+        pathRewards.every(({ resourceName }) => Boolean(resourceName)),
+    );
+
+  return (
+    <Section
+      title={roadPuzzleLocale.roundDetails}
+      collapsible
+      persistenceKey="event-road-puzzle-section::round-rewards"
+      defaultExpanded
+    >
+      {hasRewardData ? (
+        <div className="space-y-2">
+          {rows.map(({ round, isLoop, completionRewards, pathRewards }) => (
+            <div key={round} className="space-y-2 rounded-md bg-muted p-2">
+              <span className="whitespace-nowrap text-sm font-semibold text-foreground">
+                {isLoop ? roadPuzzleLocale.mapRound(7) : roadPuzzleLocale.roundLabel(round)}
+              </span>
+              <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-start sm:gap-x-2">
+                <span className="text-xs text-muted-foreground">{roadPuzzleLocale.totalRewards}</span>
+                <RoadPuzzleRewardCards rewards={completionRewards} />
+              </div>
+              {!isLoop && (
+                <div className="grid grid-cols-1 gap-y-1 sm:grid-cols-[max-content_minmax(0,1fr)] sm:items-start sm:gap-x-2">
+                  <span className="text-xs text-muted-foreground">{roadPuzzleLocale.pathRewards}</span>
+                  <RoadPuzzleRewardCards rewards={pathRewards} />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      ) : (
+        <Callout>{roadPuzzleLocale.rewardDataMissing}</Callout>
+      )}
+    </Section>
   );
 }
 
@@ -270,125 +342,136 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
   }));
 
   return (
-    <Section title={roadPuzzleLocale.title}>
-      {missingData ? (
-        <Callout>{roadPuzzleLocale.noData}</Callout>
-      ) : (
-        <>
-          <div className="mb-2">
-            <span id="road-puzzle-round-label" className="mb-1 block text-xs font-semibold text-muted-foreground">
-              {roadPuzzleLocale.round}
-            </span>
-            <fieldset aria-labelledby="road-puzzle-round-label" className="m-0 min-w-0 border-0 p-0">
-              <FilterButtons exclusive atLeastOne size="sm" buttonProps={roundButtons} className="my-0" />
-            </fieldset>
-          </div>
-          {roundConfig.isLoop && (
-            <div>
-              <span id="road-puzzle-map-label" className="mb-1 block text-xs font-semibold text-muted-foreground">
-                {roadPuzzleLocale.map}
+    <>
+      <Section title={roadPuzzleLocale.title}>
+        {missingData ? (
+          <Callout>{roadPuzzleLocale.noData}</Callout>
+        ) : (
+          <>
+            <div className="mb-2">
+              <span id="road-puzzle-round-label" className="mb-1 block text-xs font-semibold text-muted-foreground">
+                {roadPuzzleLocale.round}
               </span>
-              <fieldset aria-labelledby="road-puzzle-map-label" className="m-0 min-w-0 border-0 p-0">
-                <FilterButtons exclusive atLeastOne size="sm" buttonProps={mapButtons} className="my-0" />
+              <fieldset aria-labelledby="road-puzzle-round-label" className="m-0 min-w-0 border-0 p-0">
+                <FilterButtons exclusive atLeastOne size="sm" buttonProps={roundButtons} className="my-0" />
               </fieldset>
             </div>
-          )}
+            {roundConfig.isLoop && (
+              <div>
+                <span id="road-puzzle-map-label" className="mb-1 block text-xs font-semibold text-muted-foreground">
+                  {roadPuzzleLocale.map}
+                </span>
+                <fieldset aria-labelledby="road-puzzle-map-label" className="m-0 min-w-0 border-0 p-0">
+                  <FilterButtons exclusive atLeastOne size="sm" buttonProps={mapButtons} className="my-0" />
+                </fieldset>
+              </div>
+            )}
 
-          {showAnalysisError && (
-            <div className="my-3" role="alert">
-              <Callout className="flex flex-wrap items-center justify-between gap-3">
-                <span>{roadPuzzleLocale.noRouteThroughMarks}</span>
-                <Button
-                  text={roadPuzzleLocale.undo}
-                  size="sm"
-                  variant="secondary"
-                  disabled={undoStack.length === 0}
-                  onClick={undoMark}
+            <p className="mt-3 text-xs text-muted-foreground">{roadPuzzleLocale.viewerGuide}</p>
+
+            {showAnalysisError && (
+              <div className="my-3" role="alert">
+                <Callout className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{roadPuzzleLocale.noRouteThroughMarks}</span>
+                  <Button
+                    text={roadPuzzleLocale.undo}
+                    size="sm"
+                    variant="secondary"
+                    disabled={undoStack.length === 0}
+                    onClick={undoMark}
+                  />
+                </Callout>
+              </div>
+            )}
+
+            {calculationFailed && (
+              <div className="my-3" role="alert">
+                <Callout tone="destructive" className="flex flex-wrap items-center justify-between gap-3">
+                  <span>{roadPuzzleLocale.routeFailed}</span>
+                  <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={retryCalculation} />
+                </Callout>
+              </div>
+            )}
+
+            <div className="mt-4 grid items-start gap-4 md:grid-cols-[minmax(0,2.5fr)_minmax(0,2fr)]">
+              <div className="relative rounded-md bg-card p-3">
+                {showPendingChip && (
+                  <div className="absolute inset-x-0 top-2 z-10 flex justify-center" role="status">
+                    <span className="inline-flex items-center gap-2 rounded-md bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-sm">
+                      <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                      {roadPuzzleLocale.computingRoute}
+                    </span>
+                  </div>
+                )}
+                <RoadPuzzleMapSvg
+                  map={selectedMap}
+                  solution={calculationFailed ? null : solution}
+                  round={selectedRound}
+                  mapNumber={mapNumber}
+                  highlightedRailKind={highlightedRailKind}
+                  marks={marks}
+                  focusedCell={focusedCell}
+                  onToggleMark={toggleMark}
+                  onFocusCell={setFocusedCell}
+                  noRoute={displayedAnalysis?.status === "no-route" && !calculationFailed}
+                  isStale={showStaleResult}
                 />
-              </Callout>
-            </div>
-          )}
+                <Legend />
+              </div>
 
-          {calculationFailed && (
-            <div className="my-3" role="alert">
-              <Callout tone="destructive" className="flex flex-wrap items-center justify-between gap-3">
-                <span>{roadPuzzleLocale.routeFailed}</span>
-                <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={retryCalculation} />
-              </Callout>
-            </div>
-          )}
-
-          <div className="mt-4 grid items-start gap-4 md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-            <div className="relative rounded-md bg-card p-3">
-              {showPendingChip && (
-                <div className="absolute inset-x-0 top-2 z-10 flex justify-center" role="status">
-                  <span className="inline-flex items-center gap-2 rounded-md bg-popover px-3 py-1.5 text-sm font-medium text-popover-foreground shadow-sm">
-                    <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                    {roadPuzzleLocale.computingRoute}
-                  </span>
-                </div>
-              )}
-              <RoadPuzzleMapSvg
-                map={selectedMap}
-                solution={calculationFailed ? null : solution}
-                round={selectedRound}
-                mapNumber={mapNumber}
-                highlightedRailKind={highlightedRailKind}
-                marks={marks}
-                focusedCell={focusedCell}
-                onToggleMark={toggleMark}
-                onFocusCell={setFocusedCell}
-                noRoute={displayedAnalysis?.status === "no-route" && !calculationFailed}
-                isStale={showStaleResult}
-              />
-              <Legend />
+              <div>
+                {!hasInteractiveState && calculation.status === "ready" && baselineSolution === null && (
+                  <p className="mb-3 text-sm text-muted-foreground" role="status">
+                    {roadPuzzleLocale.routeNotFound}
+                  </p>
+                )}
+                <RoadPuzzleRouteSummary
+                  map={selectedMap}
+                  solution={calculationFailed ? null : baselineSolution}
+                  analysis={calculationFailed ? null : displayedAnalysis}
+                  remaining={remaining}
+                  payment={payment}
+                  isCalculating={summaryCalculating}
+                  isStale={showStaleResult}
+                  isProgress={summaryProgress}
+                  hasState={marks.length > 0 || isProgress}
+                  selectedRailKind={highlightedRailKind}
+                  onRemainingChange={updateRemaining}
+                  onReset={resetState}
+                  onSelectRailKind={(kind) => setHighlightedRailKind((current) => (current === kind ? null : kind))}
+                />
+              </div>
             </div>
 
-            <div>
-              {!hasInteractiveState && calculation.status === "ready" && baselineSolution === null && (
-                <p className="mb-3 text-sm text-muted-foreground" role="status">
-                  {roadPuzzleLocale.routeNotFound}
-                </p>
-              )}
-              <RoadPuzzleRouteSummary
-                map={selectedMap}
-                solution={calculationFailed ? null : baselineSolution}
-                analysis={calculationFailed ? null : displayedAnalysis}
-                remaining={remaining}
-                payment={payment}
-                isCalculating={summaryCalculating}
-                isStale={showStaleResult}
-                isProgress={summaryProgress}
-                hasState={marks.length > 0 || isProgress}
-                selectedRailKind={highlightedRailKind}
-                onRemainingChange={updateRemaining}
-                onReset={resetState}
-                onSelectRailKind={(kind) => setHighlightedRailKind((current) => (current === kind ? null : kind))}
-              />
-            </div>
-          </div>
-
-          <p className="sr-only" role="status" aria-live="polite">
-            {!hasInteractiveState
-              ? calculation.status === "ready"
-                ? roadPuzzleLocale.calculationComplete
-                : calculationFailed
-                  ? roadPuzzleLocale.routeFailed
-                  : ""
-              : calculationPending
-                ? ""
-                : calculationFailed
-                  ? roadPuzzleLocale.routeFailed
-                  : displayedAnalysis?.status === "no-route"
-                    ? roadPuzzleLocale.noRouteThroughMarks
-                    : displayedAnalysis?.status === "completable"
-                      ? roadPuzzleLocale.canCompleteNow
-                      : displayedAnalysis?.status === "incomplete"
-                        ? roadPuzzleLocale.progressExpectationLive(Math.round(displayedAnalysis.expectedStickers ?? 0))
-                        : roadPuzzleLocale.calculationComplete}
-          </p>
-        </>
+            <p className="sr-only" role="status" aria-live="polite">
+              {!hasInteractiveState
+                ? calculation.status === "ready"
+                  ? roadPuzzleLocale.calculationComplete
+                  : calculationFailed
+                    ? roadPuzzleLocale.routeFailed
+                    : ""
+                : calculationPending
+                  ? ""
+                  : calculationFailed
+                    ? roadPuzzleLocale.routeFailed
+                    : displayedAnalysis?.status === "no-route"
+                      ? roadPuzzleLocale.noRouteThroughMarks
+                      : displayedAnalysis?.status === "completable"
+                        ? roadPuzzleLocale.canCompleteNow
+                        : displayedAnalysis?.status === "incomplete"
+                          ? roadPuzzleLocale.progressExpectationLive(
+                              Math.round(displayedAnalysis.expectedStickers ?? 0),
+                            )
+                          : roadPuzzleLocale.calculationComplete}
+            </p>
+          </>
+        )}
+      </Section>
+      {config && (
+        <div className="mt-8">
+          <RoadPuzzleRoundRewards config={config} />
+        </div>
       )}
-    </Section>
+    </>
   );
 }

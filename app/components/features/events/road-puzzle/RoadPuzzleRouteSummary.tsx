@@ -1,6 +1,6 @@
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
-import { CheckCircleIcon, InformationCircleIcon } from "@heroicons/react/24/outline";
-import { Button, HoverTooltip, NumberInput, ResourceCard } from "~/components/primitives";
+import { CheckCircleIcon } from "@heroicons/react/24/outline";
+import { Button, NumberInput, ResourceCard } from "~/components/primitives";
 import type { MinigamePayment, RoadPuzzleMap } from "~/domain/event-shop";
 import type { RailCounts, RoadPuzzleInteractiveAnalysis, RoadPuzzleSolution } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
@@ -114,7 +114,7 @@ export function RoadPuzzleRouteSummary({
             <th className="w-[1%] whitespace-nowrap py-2 pl-1.5 text-right font-medium" scope="col">
               {isProgress ? roadPuzzleLocale.drawnRequired : roadPuzzleLocale.routeCount}
             </th>
-            <th className="w-[3.5rem] whitespace-nowrap py-2 text-right font-medium" scope="col">
+            <th className="w-16 whitespace-nowrap py-2 pl-1.5 text-right font-medium" scope="col">
               {roadPuzzleLocale.remainingCount}
             </th>
           </tr>
@@ -129,7 +129,7 @@ export function RoadPuzzleRouteSummary({
                     type="button"
                     aria-pressed={selected}
                     aria-label={`${roadPuzzleLocale.railTypes[kind]} 레일 강조`}
-                    className="flex w-full items-center gap-0 rounded-sm py-2 text-left text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                    className="flex w-full items-center gap-1 rounded-sm py-2 text-left text-foreground focus-visible:outline-2 focus-visible:outline-ring"
                     onClick={() => onSelectRailKind(kind)}
                   >
                     <RailGlyph kind={kind} />
@@ -137,7 +137,7 @@ export function RoadPuzzleRouteSummary({
                   </button>
                 </th>
                 <td
-                  className={`w-[1%] whitespace-nowrap py-2 pl-1.5 text-right tabular-nums ${isStale ? "opacity-50" : ""}`}
+                  className={`w-[1%] whitespace-nowrap py-2 pl-1.5 pr-1.5 text-right tabular-nums ${isStale ? "opacity-50" : ""}`}
                 >
                   {isCalculating ? (
                     <ArrowPathIcon
@@ -160,7 +160,7 @@ export function RoadPuzzleRouteSummary({
                     required[kind]
                   )}
                 </td>
-                <td className="w-[3.5rem] whitespace-nowrap py-2 text-right tabular-nums">
+                <td className="w-16 whitespace-nowrap py-2 pl-1.5 text-right tabular-nums">
                   <NumberInput
                     size="sm"
                     minValue={0}
@@ -193,25 +193,23 @@ export function RoadPuzzleRouteSummary({
         </div>
       ) : (
         <>
-          <div className="mt-3 flex min-h-7 items-center gap-2">
+          <div className="mt-3 flex min-h-7 items-center gap-1">
             <span className="sr-only">{payment.resourceName}</span>
-            <ResourceCard
-              resourceType={payment.resourceType}
-              itemUid={payment.resourceUid}
-              imageUrl={payment.imageUrl ?? undefined}
-              imageAlt={payment.resourceName}
-              name={payment.resourceName}
-              size="sm"
-            />
-            {isProgress && analysis?.status === "incomplete" && (
-              <span className="text-sm font-medium">{roadPuzzleLocale.additionalRequired}</span>
-            )}
-            <HoverTooltip
-              content={isProgress ? roadPuzzleLocale.progressCostHelp : roadPuzzleLocale.viewerCostHelp}
-              focusable
-            >
-              <InformationCircleIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-            </HoverTooltip>
+            <div className="relative top-0.5 -mr-1 shrink-0">
+              <ResourceCard
+                resourceType={payment.resourceType}
+                itemUid={payment.resourceUid}
+                imageUrl={payment.imageUrl ?? undefined}
+                imageAlt={payment.resourceName}
+                name={payment.resourceName}
+                size="sm"
+              />
+            </div>
+            <span className="text-sm font-medium">
+              {isProgress
+                ? roadPuzzleLocale.viewerAdditionalRequiredResources
+                : roadPuzzleLocale.viewerRequiredResources}
+            </span>
             {resetButton}
           </div>
           <dl className={`mt-2 grid grid-cols-3 gap-2 text-center text-xs ${isStale ? "opacity-50" : ""}`}>
@@ -247,6 +245,9 @@ export function RoadPuzzleRouteSummary({
               );
             })}
           </dl>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {isProgress ? roadPuzzleLocale.progressCostHelp : roadPuzzleLocale.viewerCostHelp}
+          </p>
         </>
       )}
     </div>

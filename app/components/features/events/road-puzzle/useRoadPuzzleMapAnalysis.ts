@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { RoadPuzzleMap, RoadPuzzleCoordinate } from "~/domain/event-shop";
+import type { RoadPuzzleCoordinate, RoadPuzzleMap } from "~/domain/event-shop";
 import type { RailCounts, RoadPuzzleInteractiveAnalysis } from "~/domain/road-puzzle/solver";
-import type { RoadPuzzleAnalysisWorkerResponse } from "./road-puzzle-analysis-worker.shared";
+import type {
+  RoadPuzzleAnalysisWorkerRequest,
+  RoadPuzzleAnalysisWorkerResponse,
+} from "./road-puzzle-analysis-worker.shared";
 
 type AnalysisStatus = "idle" | "pending" | "ready" | "failed";
 
@@ -27,6 +30,9 @@ export function useRoadPuzzleMapAnalysis(
 ): RoadPuzzleMapAnalysis {
   const workerRef = useRef<Worker | null>(null);
   const latestRequestIdRef = useRef(0);
+  const inFlightRequestRef = useRef<RoadPuzzleAnalysisWorkerRequest | null>(null);
+  const latestPendingRequestRef = useRef<RoadPuzzleAnalysisWorkerRequest | null>(null);
+  const dispatchRequestRef = useRef<(request: RoadPuzzleAnalysisWorkerRequest) => void>(() => {});
   const requestRef = useRef({ map, marks: [...marks], remaining });
   const workerFailedRef = useRef(false);
   const [workerGeneration, setWorkerGeneration] = useState(0);
@@ -39,43 +45,72 @@ export function useRoadPuzzleMapAnalysis(
   });
 
   requestRef.current = { map, marks: [...marks], remaining };
-  const signature = JSON.stringify([
-    map,
-    marks.map(({ x, y, z }) => `${x},${y},${z}`).sort(),
-    remaining,
-  ]);
+  const signature = JSON.stringify([map, marks.map(({ x, y, z }) => `${x},${y},${z}`).sort(), remaining]);
 
   useEffect(() => {
     let worker: Worker | null = null;
     workerFailedRef.current = false;
+    inFlightRequestRef.current = null;
+    latestPendingRequestRef.current = null;
+    dispatchRequestRef.current = () => {};
     if (!enabled) {
       workerRef.current = null;
       setWorkerReadyGeneration(null);
       return;
     }
     try {
-      worker = new Worker(new URL("./road-puzzle-analysis.worker.ts", import.meta.url), {
+      const activeWorker = new Worker(new URL("./road-puzzle-analysis.worker.ts", import.meta.url), {
         type: "module",
         name: `road-puzzle-analysis-${workerGeneration}`,
       });
-      workerRef.current = worker;
-      worker.onmessage = (event: MessageEvent<RoadPuzzleAnalysisWorkerResponse>) => {
+      worker = activeWorker;
+      workerRef.current = activeWorker;
+      const sendRequest = (request: RoadPuzzleAnalysisWorkerRequest) => {
+        inFlightRequestRef.current = request;
+        try {
+          activeWorker.postMessage(request);
+        } catch {
+          inFlightRequestRef.current = null;
+          latestPendingRequestRef.current = null;
+          workerFailedRef.current = true;
+          setState((current) => ({ ...current, status: "failed" }));
+        }
+      };
+      dispatchRequestRef.current = (request) => {
+        if (inFlightRequestRef.current) {
+          latestPendingRequestRef.current = request;
+        } else {
+          sendRequest(request);
+        }
+      };
+      activeWorker.onmessage = (event: MessageEvent<RoadPuzzleAnalysisWorkerResponse>) => {
         const response = event.data;
-        if (workerRef.current !== worker || response.requestId !== latestRequestIdRef.current) return;
+        if (workerRef.current !== activeWorker || inFlightRequestRef.current?.requestId !== response.requestId) {
+          return;
+        }
+        inFlightRequestRef.current = null;
+        const pendingRequest = latestPendingRequestRef.current;
+        latestPendingRequestRef.current = null;
+        if (pendingRequest) sendRequest(pendingRequest);
+        if (response.requestId !== latestRequestIdRef.current) return;
         if (response.type === "error") {
           setState((current) => ({ ...current, status: "failed" }));
           return;
         }
         setState((current) => ({ ...current, status: "ready", analysis: response.analysis }));
       };
-      worker.onerror = () => {
-        if (workerRef.current !== worker) return;
+      activeWorker.onerror = () => {
+        if (workerRef.current !== activeWorker) return;
         workerFailedRef.current = true;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
         setState((current) => ({ ...current, status: "failed" }));
       };
-      worker.onmessageerror = () => {
-        if (workerRef.current !== worker) return;
+      activeWorker.onmessageerror = () => {
+        if (workerRef.current !== activeWorker) return;
         workerFailedRef.current = true;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
         setState((current) => ({ ...current, status: "failed" }));
       };
     } catch {
@@ -85,7 +120,12 @@ export function useRoadPuzzleMapAnalysis(
 
     setWorkerReadyGeneration(workerGeneration);
     return () => {
-      if (workerRef.current === worker) workerRef.current = null;
+      if (workerRef.current === worker) {
+        workerRef.current = null;
+        inFlightRequestRef.current = null;
+        latestPendingRequestRef.current = null;
+        dispatchRequestRef.current = () => {};
+      }
       worker?.terminate();
     };
   }, [enabled, workerGeneration]);
@@ -94,11 +134,13 @@ export function useRoadPuzzleMapAnalysis(
     if (workerReadyGeneration !== workerGeneration) return;
     if (!enabled) {
       latestRequestIdRef.current += 1;
+      latestPendingRequestRef.current = null;
       setState({ signature, mapUid: map.uid, status: "idle", analysis: null });
       return;
     }
     if (workerFailedRef.current) {
       latestRequestIdRef.current += 1;
+      latestPendingRequestRef.current = null;
       setState((current) => ({ ...current, signature, mapUid: map.uid, status: "failed" }));
       return;
     }
@@ -114,15 +156,12 @@ export function useRoadPuzzleMapAnalysis(
 
     const worker = workerRef.current;
     if (!worker) {
+      workerFailedRef.current = true;
       setState((current) => ({ ...current, status: "failed" }));
       return;
     }
-    try {
-      const request = requestRef.current;
-      worker.postMessage({ type: "analyze", requestId, ...request, marks: [...request.marks] });
-    } catch {
-      setState((current) => ({ ...current, status: "failed" }));
-    }
+    const request = requestRef.current;
+    dispatchRequestRef.current({ type: "analyze", requestId, ...request, marks: [...request.marks] });
 
     return () => {
       if (latestRequestIdRef.current === requestId) latestRequestIdRef.current += 1;

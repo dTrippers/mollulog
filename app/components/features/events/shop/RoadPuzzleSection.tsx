@@ -319,7 +319,7 @@ export function RoadPuzzleSection({ config, eventUid, state, actions, calculatio
       <div className="mt-4 max-w-[40rem] rounded-md bg-card p-3">
         <div className="overflow-x-auto">
           <table className="w-full border-collapse text-sm">
-            <caption className="sr-only">{`${roadPuzzleLocale.round}별 필요 스티커와 보상`}</caption>
+            <caption className="sr-only">{`${roadPuzzleLocale.round}별 필요 재화와 보상`}</caption>
             <thead>
               <tr className="border-b border-border text-muted-foreground">
                 <th className="py-2 text-left font-medium" scope="col">

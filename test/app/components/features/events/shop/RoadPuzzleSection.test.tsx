@@ -3,12 +3,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { fireEvent, render, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { TextDecoder, TextEncoder } from "node:util";
 import type { ShopActions, ShopState } from "~/components/features/events/shop/hooks";
 import type { MinigameConfig } from "~/domain/event-shop";
 import type { RoadPuzzleStatsCalculation } from "~/components/features/events/shop/hooks/useRoadPuzzleStats";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { roadPuzzleLocale } from "~/locales/ko";
 
 Object.defineProperty(globalThis, "TextEncoder", { configurable: true, value: TextEncoder });
 Object.defineProperty(globalThis, "TextDecoder", { configurable: true, value: TextDecoder });
@@ -74,31 +75,69 @@ const calculation: RoadPuzzleStatsCalculation = {
   retry: jest.fn(),
 };
 
-function renderSection(targetRound: number, startRound: number) {
-  return renderToStaticMarkup(
-    createElement(
-      MemoryRouter,
-      null,
-      createElement(RoadPuzzleSection, {
-        config,
-        eventUid: "10846",
-        state: {
-          minigamePlayCount: targetRound,
-          minigameStartRound: startRound,
-          minigamePaymentQuantityMode: "expected",
-        } as ShopState,
-        actions: {
-          setMinigamePlayCount: jest.fn(),
-          setMinigameStartRound: jest.fn(),
-          setMinigamePaymentQuantityMode: jest.fn(),
-        } as unknown as ShopActions,
-        calculation,
-      }),
-    ),
+function roadPuzzleSectionElement(
+  targetRound: number,
+  startRound: number,
+  currentCalculation: RoadPuzzleStatsCalculation = calculation,
+) {
+  return createElement(
+    MemoryRouter,
+    null,
+    createElement(RoadPuzzleSection, {
+      config,
+      eventUid: "10846",
+      state: {
+        minigamePlayCount: targetRound,
+        minigameStartRound: startRound,
+        minigamePaymentQuantityMode: "expected",
+      } as ShopState,
+      actions: {
+        setMinigamePlayCount: jest.fn(),
+        setMinigameStartRound: jest.fn(),
+        setMinigamePaymentQuantityMode: jest.fn(),
+      } as unknown as ShopActions,
+      calculation: currentCalculation,
+    }),
   );
 }
 
+function renderSection(
+  targetRound: number,
+  startRound: number,
+  currentCalculation: RoadPuzzleStatsCalculation = calculation,
+) {
+  return renderToStaticMarkup(roadPuzzleSectionElement(targetRound, startRound, currentCalculation));
+}
+
 describe("RoadPuzzleSection", () => {
+  it("uses resource wording in the shop help, caption, and calculation statuses", () => {
+    const readyMarkup = renderSection(9, 3);
+    const pendingMarkup = renderSection(9, 3, { ...calculation, status: "pending" });
+    const failedMarkup = renderSection(9, 3, { ...calculation, status: "failed" });
+
+    expect(roadPuzzleLocale.costModeHelp).toBe(
+      "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요. 7회차~는 5개 맵 평균이에요. 최대값은 레일을 모두 뽑는 경우예요.",
+    );
+    expect(roadPuzzleLocale.calculatingCost).toBe("필요 재화를 계산하고 있어요");
+    expect(roadPuzzleLocale.calculationComplete).toBe("필요 재화 계산을 마쳤어요");
+    expect(roadPuzzleLocale.calculationFailed).toBe("필요 재화를 계산하지 못했어요");
+    expect(readyMarkup).toContain("회차별 필요 재화와 보상");
+    expect(readyMarkup).toContain(roadPuzzleLocale.calculationComplete);
+    expect(pendingMarkup).toContain(roadPuzzleLocale.calculatingCost);
+    expect(failedMarkup).toContain(roadPuzzleLocale.calculationFailed);
+  });
+
+  it("shows the updated shop cost explanation in its tooltip", () => {
+    const { container } = render(roadPuzzleSectionElement(9, 3));
+    const icon = container.querySelector("svg.size-4.text-muted-foreground");
+    const trigger = icon?.parentElement;
+    if (!trigger) throw new Error("The cost explanation tooltip trigger is missing.");
+
+    fireEvent.focus(trigger);
+
+    expect(screen.getByRole("tooltip").textContent).toBe(roadPuzzleLocale.costModeHelp);
+  });
+
   it("shows a 7-row expected-cost table, per-run loop rewards, and completion rewards without path or rail-set rewards", () => {
     const markup = renderSection(9, 3);
     expect(markup).toContain("최소값");
@@ -128,27 +167,7 @@ describe("RoadPuzzleSection", () => {
   });
 
   it("places the round disclosure at the row end and names expanded rewards", () => {
-    const { container } = render(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(RoadPuzzleSection, {
-          config,
-          eventUid: "10846",
-          state: {
-            minigamePlayCount: 9,
-            minigameStartRound: 3,
-            minigamePaymentQuantityMode: "expected",
-          } as ShopState,
-          actions: {
-            setMinigamePlayCount: jest.fn(),
-            setMinigameStartRound: jest.fn(),
-            setMinigamePaymentQuantityMode: jest.fn(),
-          } as unknown as ShopActions,
-          calculation,
-        }),
-      ),
-    );
+    const { container } = render(roadPuzzleSectionElement(9, 3));
     const table = container.querySelector("table");
     expect(table?.closest(".rounded-md.bg-card.p-3")).not.toBeNull();
     const firstRow = Array.from(table!.querySelectorAll<HTMLTableRowElement>("tbody tr")).find((row) =>

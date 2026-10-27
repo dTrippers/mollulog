@@ -461,9 +461,6 @@ export const treasureHuntLocale = {
   failedResult: "보물찾기 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
 } as const;
 
-const VIEWER_COST_HELP =
-  "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 최대값은 레일을 모두 뽑는 경우예요.";
-
 export const roadPuzzleLocale = {
   menuTitle: "철도 연결",
   menuDescription: "회차별 맵과 레일 배치 비용을 확인해보세요",
@@ -477,7 +474,7 @@ export const roadPuzzleLocale = {
   expected: "기대값",
   maximum: "최대값",
   costModeHelp:
-    "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 7회차~는 5개 맵 평균이에요. 최대값은 레일을 모두 뽑는 경우예요.",
+    "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요. 7회차~는 5개 맵 평균이에요. 최대값은 레일을 모두 뽑는 경우예요.",
   requiredResources: "필요 재화",
   totalRewards: "획득 보상",
   roundLabel: (round: number) => `${round}회차`,
@@ -488,26 +485,29 @@ export const roadPuzzleLocale = {
   mapLink: "맵",
   viewerLinkTitle: "회차별 맵",
   viewerLinkDescription: "최단 경로와 필요한 레일",
+  roundDetails: "회차별 보상",
+  viewerGuide: "패널을 클릭해서 경유할 위치를 추가해주세요",
   noData: "철도 연결 데이터를 찾지 못했어요",
   rewardDataMissing: "철도 연결 보상 정보를 찾지 못했어요",
   calculating: "계산 중",
-  calculatingCost: "스티커 비용을 계산하고 있어요",
-  calculationComplete: "스티커 비용 계산을 마쳤어요",
-  calculationFailed: "스티커 비용을 계산하지 못했어요",
+  calculatingCost: "필요 재화를 계산하고 있어요",
+  calculationComplete: "필요 재화 계산을 마쳤어요",
+  calculationFailed: "필요 재화를 계산하지 못했어요",
   retry: "다시 시도",
   included: "포함",
   round: "회차",
   map: "맵",
   mapNumber: (number: number) => `${number}`,
-  routeCount: "경로 수",
+  routeCount: "필요 수",
   deckCount: "덱 수",
   remainingCount: "남은 수",
-  drawnRequired: "뽑은/필요",
-  planTableCaption: "레일 종류별 경로 수와 남은 수",
-  progressTableCaption: "레일 종류별 뽑은 수와 필요한 수, 남은 수",
-  drawnRequiredLabel: (required: number, drawn: number) => `필요 ${required}개 중 ${drawn}개 뽑음`,
-  canCompleteNow: "지금 뽑은 레일로 완성할 수 있어요",
-  additionalRequired: "추가 필요",
+  drawnRequired: "배치/필요",
+  planTableCaption: "레일 종류별 필요 수와 남은 수",
+  progressTableCaption: "레일 종류별 배치한 수와 필요한 수, 남은 수",
+  drawnRequiredLabel: (required: number, drawn: number) => `필요 ${required}개, ${drawn}개 배치`,
+  viewerRequiredResources: "필요 재화",
+  viewerAdditionalRequiredResources: "추가 필요 재화",
+  canCompleteNow: "지금 배치한 레일로 완성할 수 있어요",
   reset: "초기화",
   undo: "되돌리기",
   noRouteThroughMarks: "표시한 칸을 모두 지나는 경로가 없어요. 회차와 맵이 맞는지 확인해보세요",
@@ -520,12 +520,10 @@ export const roadPuzzleLocale = {
   columnUnit: "열",
   routePassesCell: "경로가 지나는 칸",
   shortestDelta: (value: number, expected: boolean) =>
-    `최단 경로보다 스티커 ${expected ? "약 " : ""}${value.toLocaleString()}개 더 필요해요`,
-  progressExpectationLive: (value: number) => `추가 필요 스티커 기대값 약 ${value.toLocaleString()}개`,
-  progressCostHelp: `지금까지 뽑은 레일을 뺀, 앞으로 더 필요한 스티커 비용이에요. ${VIEWER_COST_HELP.replace(
-    "최대값은 레일을 모두 뽑는 경우예요.",
-    "최대값은 남은 레일을 모두 뽑는 경우예요.",
-  )}`,
+    `최단 경로보다 ${expected ? "약 " : ""}${value.toLocaleString()}개 더 필요해요`,
+  progressExpectationLive: (value: number) => `추가 필요 재화 기대값 약 ${value.toLocaleString()}개`,
+  progressCostHelp:
+    "배치한 레일은 빼고 계산해요. 기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요.",
   railTypes: {
     straight: "직선",
     longCurve: "큰 곡선",
@@ -537,7 +535,7 @@ export const roadPuzzleLocale = {
   routeFailed: "경로를 계산하지 못했어요",
   routeNotFound: "경로를 찾지 못했어요",
   computingRoute: "계산 중",
-  viewerCostHelp: VIEWER_COST_HELP,
+  viewerCostHelp: "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요.",
   plannerPending: "철도 연결 비용을 계산하고 있어요",
   plannerFailed: "철도 연결 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
   resultTitle: (round: number, map: number, counts: { straight: number; longCurve: number; shortCurve: number }) =>
