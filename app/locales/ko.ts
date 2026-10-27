@@ -474,7 +474,7 @@ export const roadPuzzleLocale = {
   expected: "기대값",
   maximum: "최대값",
   costModeHelp:
-    "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 7회차~는 5개 맵 평균이에요. 최대값은 레일을 모두 뽑는 경우예요.",
+    "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요. 7회차~는 5개 맵 평균이에요. 최대값은 레일을 모두 뽑는 경우예요.",
   requiredResources: "필요 재화",
   totalRewards: "획득 보상",
   roundLabel: (round: number) => `${round}회차`,
@@ -488,9 +488,9 @@ export const roadPuzzleLocale = {
   noData: "철도 연결 데이터를 찾지 못했어요",
   rewardDataMissing: "철도 연결 보상 정보를 찾지 못했어요",
   calculating: "계산 중",
-  calculatingCost: "스티커 비용을 계산하고 있어요",
-  calculationComplete: "스티커 비용 계산을 마쳤어요",
-  calculationFailed: "스티커 비용을 계산하지 못했어요",
+  calculatingCost: "필요 재화를 계산하고 있어요",
+  calculationComplete: "필요 재화 계산을 마쳤어요",
+  calculationFailed: "필요 재화를 계산하지 못했어요",
   retry: "다시 시도",
   included: "포함",
   round: "회차",
@@ -510,7 +510,7 @@ export const roadPuzzleLocale = {
   routeNotFound: "경로를 찾지 못했어요",
   computingRoute: "계산 중",
   viewerCostHelp:
-    "기대값은 남은 레일에서 무작위로 뽑고, 경로가 완성되는 즉시 멈춘다고 가정한 추정치예요. 최대값은 레일을 모두 뽑는 경우예요.",
+    "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요.",
   plannerPending: "철도 연결 비용을 계산하고 있어요",
   plannerFailed: "철도 연결 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요",
   resultTitle: (round: number, map: number, counts: { straight: number; longCurve: number; shortCurve: number }) =>
