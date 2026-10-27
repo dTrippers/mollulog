@@ -71,8 +71,8 @@ export default function EventComment({
   }, [commentsRefreshFetcher.data, commentsRefreshFetcher.state]);
 
   useEffect(() => {
-    setHideRecruitmentOpinions(me !== null && initialHideRecruitmentOpinions);
-  }, [initialHideRecruitmentOpinions, me]);
+    setHideRecruitmentOpinions(initialHideRecruitmentOpinions);
+  }, [initialHideRecruitmentOpinions]);
 
   return (
     <>
