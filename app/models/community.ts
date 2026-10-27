@@ -144,6 +144,8 @@ export type CommunityFeedPageOptions = {
   authorUserId?: number;
   youtubeChannelKey?: "jp" | "kr";
   includeEngagement?: boolean;
+  /** Hides other users' recruitment-result opinions and recruitment-result posts. */
+  hideRecruitmentOpinions?: boolean;
   /** Lets the cached-feed path background-refresh via `ctx.waitUntil` instead of firing-and-forgetting past the response. */
   ctx?: ExecutionContext;
 };
@@ -176,7 +178,14 @@ export async function getCommunityFeedPageWithCache(
     return loader(env, options);
   }
 
-  const { postType, postTypes, authorUserId, youtubeChannelKey, includeEngagement = true } = options;
+  const {
+    postType,
+    postTypes,
+    authorUserId,
+    youtubeChannelKey,
+    includeEngagement = true,
+    hideRecruitmentOpinions = false,
+  } = options;
   const types = postTypes && postTypes.length > 0 ? [...postTypes].sort() : postType ? [postType] : [];
   const feedCacheKey = cacheKey(
     "cache",
@@ -185,6 +194,7 @@ export async function getCommunityFeedPageWithCache(
     cacheQuery({
       author: authorUserId ?? "",
       eng: includeEngagement ? 1 : 0,
+      hide: hideRecruitmentOpinions ? 1 : 0,
       size: Math.max(1, options.pageSize ?? 20),
       types: types.join(","),
       yt: youtubeChannelKey ?? "",

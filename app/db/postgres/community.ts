@@ -127,11 +127,18 @@ function recruitmentOpinionVisiblePredicate(
   viewerUserId: number | undefined,
   options: PostgresCommunityOptions,
 ): SQL {
-  if (!options.hideRecruitmentOpinions || viewerUserId == null) return sql`TRUE`;
+  if (!options.hideRecruitmentOpinions) return sql`TRUE`;
+  if (viewerUserId == null) return sql`${columns.classification} IS DISTINCT FROM 'result'`;
   return sql`NOT (
     ${columns.userId} <> ${viewerUserId}
     AND ${columns.classification} IS NOT DISTINCT FROM 'result'
   )`;
+}
+
+/** Hides other users' recruitment-result posts from the feed while recruitment results are hidden. */
+function recruitmentResultPostVisiblePredicate(viewerUserId: number | null | undefined): SQL {
+  if (viewerUserId == null) return sql`${pgCommunityPostsTable.postType} <> 'recruitment_result'`;
+  return sql`(${pgCommunityPostsTable.postType} <> 'recruitment_result' OR ${pgCommunityPostsTable.userId} = ${viewerUserId})`;
 }
 
 export function recruitmentOpinionVisibleForRow(
@@ -141,8 +148,7 @@ export function recruitmentOpinionVisibleForRow(
 ): boolean {
   return (
     !options.hideRecruitmentOpinions ||
-    viewerUserId == null ||
-    row.userId === viewerUserId ||
+    (viewerUserId != null && row.userId === viewerUserId) ||
     row.recruitmentClassification !== "result"
   );
 }
@@ -366,6 +372,17 @@ export async function getPostgresCommunityFeedPage(
   if (options.postTypes?.length) filters.push(inArray(pgCommunityPostsTable.postType, options.postTypes));
   else if (options.postType) filters.push(eq(pgCommunityPostsTable.postType, options.postType));
   if (options.authorUserId) filters.push(eq(pgCommunityPostsTable.userId, options.authorUserId));
+  if (options.hideRecruitmentOpinions) {
+    const viewerUserId = options.currentUserId ?? undefined;
+    filters.push(
+      recruitmentOpinionVisiblePredicate(
+        { userId: pgCommunityPostsTable.userId, classification: pgCommunityPostsTable.recruitmentClassification },
+        viewerUserId,
+        options,
+      ),
+    );
+    filters.push(recruitmentResultPostVisiblePredicate(viewerUserId));
+  }
   if (options.youtubeChannelKey) {
     filters.push(
       or(

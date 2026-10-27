@@ -9,6 +9,7 @@ import {
 } from "~/db/postgres/community";
 import { getContentRecruitmentPeriod, updateComment } from "~/models/content.server";
 import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent } from "~/models/timeline-content.server";
 import { action } from "~/routes/api.contents.$uid.comments";
 
@@ -29,6 +30,7 @@ jest.mock("~/models/recruitment-opinion-classifier.server", () => ({
   classifyAndPersistRecruitmentOpinion: jest.fn(),
 }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
+jest.mock("~/models/sensei", () => ({ getHideRecruitmentOpinions: jest.fn() }));
 
 const env = {} as Env;
 const ctx = { waitUntil: jest.fn() } as unknown as ExecutionContext;
@@ -38,6 +40,7 @@ describe("opinion write classification boundaries", () => {
     jest.resetAllMocks();
     jest.mocked(getActiveSensei).mockResolvedValue({ id: 1 } as never);
     jest.mocked(getPostgresContentComments).mockResolvedValue({});
+    jest.mocked(getHideRecruitmentOpinions).mockResolvedValue(true);
     jest.mocked(getPostgresCommunityPostByUid).mockResolvedValue({
       postType: "event_opinion",
       subjectContentUid: "content-1",

@@ -746,6 +746,43 @@ describe("PostgreSQL community repository", () => {
     expect(feedCalls.some(({ values }) => values?.includes(2))).toBe(true);
   });
 
+  it.each([
+    ["a guest", undefined, "IS DISTINCT FROM 'result'"],
+    ["a signed-in viewer", 2, "IS NOT DISTINCT FROM 'result'"],
+  ])("hides recruitment results from the feed for %s when the setting is on", async (_label, currentUserId, classificationSql) => {
+    const { client, query } = createClient(() => []);
+    createPgClient.mockReturnValue(client);
+
+    await getPostgresCommunityFeedPage(env, {
+      currentUserId,
+      hideRecruitmentOpinions: true,
+      includeEngagement: false,
+      pageSize: 1,
+    });
+
+    const feedCalls = query.mock.calls
+      .map(([config, values]) => ({ text: config.text, values }))
+      .filter(({ text }) => text.includes('left join "senseis"'));
+    expect(feedCalls).toHaveLength(2);
+    for (const { text } of feedCalls) {
+      expect(text).toContain(`"recruitment_classification" ${classificationSql}`);
+      expect(text).toContain("<> 'recruitment_result'");
+    }
+  });
+
+  it("leaves recruitment results in the feed when the setting is off", async () => {
+    const { client, query } = createClient(() => []);
+    createPgClient.mockReturnValue(client);
+
+    await getPostgresCommunityFeedPage(env, { currentUserId: 2, includeEngagement: false, pageSize: 1 });
+
+    const feedTexts = query.mock.calls
+      .map(([config]) => config.text)
+      .filter((text) => text.includes('left join "senseis"'));
+    expect(feedTexts.some((text) => text.includes("'result'"))).toBe(false);
+    expect(feedTexts.some((text) => text.includes("'recruitment_result'"))).toBe(false);
+  });
+
   it("loads recent grading tags only after the PostgreSQL page query", async () => {
     setAuthors([1, "public"], [2, "public"], [3, "public"]);
     const { client, query } = createClient((text) => {

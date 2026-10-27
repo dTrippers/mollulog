@@ -19,6 +19,7 @@ import {
 } from "~/models/favorite-students";
 import { getPostByTimelineContentUid } from "~/models/post";
 import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import EventComment from "./events.$uid._components/EventComment";
 
@@ -64,8 +65,10 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const currentUser = await getActiveSensei(env, request);
   const canFilterRecruitmentOpinions = content.contentType !== "live" && eventContent.recruitmentPeriod !== null;
+  const hideRecruitmentOpinions =
+    canFilterRecruitmentOpinions && (await getHideRecruitmentOpinions(env, currentUser, { ctx }));
   const commentReadOptions = {
-    hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
+    hideRecruitmentOpinions,
     ctx,
   };
 
@@ -110,7 +113,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   return {
     eventContent: { ...eventContent, recruitments: recruitmentsWithFavorites },
     signedIn: currentUser !== null,
-    hideRecruitmentOpinions: canFilterRecruitmentOpinions && currentUser?.hideRecruitmentOpinions === true,
+    hideRecruitmentOpinions,
     canFilterRecruitmentOpinions,
     allComments: commentResult.comments,
     commentsUnavailable: commentResult.unavailable,

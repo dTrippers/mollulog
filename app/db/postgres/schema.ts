@@ -86,7 +86,7 @@ export const pgSenseisTable = pgTable(
     questionMemberDataConsentedAt: timestamptz("question_member_data_consented_at"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),
     updatedAt: timestamptz("updated_at").notNull().defaultNow(),
-    hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(false),
+    hideRecruitmentOpinions: boolean("hide_recruitment_opinions").notNull().default(true),
     labels: jsonb().$type<AccountLabel[]>().notNull().default([]),
   },
   (table) => [

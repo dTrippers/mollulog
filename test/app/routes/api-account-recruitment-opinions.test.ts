@@ -53,18 +53,15 @@ beforeEach(() => {
 });
 
 describe("api.account.recruitment-opinions", () => {
-  it("persists the setting and refreshes the authenticated session value", async () => {
+  it("persists the setting without rewriting the session", async () => {
     const response = await action(args({ hideRecruitmentOpinions: true }));
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({ ok: true, hideRecruitmentOpinions: true });
     expect(mockUpdateSensei).toHaveBeenCalledWith(env, 7, { hideRecruitmentOpinions: true }, { ctx });
-    expect(mockSessionSet).toHaveBeenCalledWith("sensei", {
-      ...activeSensei,
-      hideRecruitmentOpinions: true,
-    });
-    expect(mockCommitSession).toHaveBeenCalled();
-    expect(response.headers.get("Set-Cookie")).toBe("session=updated");
+    expect(mockSessionSet).not.toHaveBeenCalled();
+    expect(mockCommitSession).not.toHaveBeenCalled();
+    expect(response.headers.get("Set-Cookie")).toBeNull();
   });
 
   it("rejects malformed values without changing the account", async () => {

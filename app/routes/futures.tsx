@@ -80,6 +80,7 @@ import { COMMENT_ENABLED_WITHOUT_RECRUITMENT_CONTENT_TYPES } from "~/models/cont
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { type FutureContent, getFutureContents } from "~/views/futures";
 import type { ActionData as ContentsActionData } from "./api.contents";
 import type { ActionData as CommentActionData, CommentResponse } from "./api.contents.$uid.comments";
@@ -173,6 +174,16 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       currentUserPromise,
     ]);
     const currentUser = currentUserResult.user;
+    const hideRecruitmentOpinionsResult = await ctx.tracing
+      .enterSpan("recruitment_opinion_setting", () => getHideRecruitmentOpinions(env, currentUser, { ctx }))
+      .then(
+        (value) => ({ status: "available" as const, value }),
+        (error: unknown) => {
+          reportLoadFailure(error, "recruitment_opinion_setting");
+          return { status: "unavailable" as const, value: true };
+        },
+      );
+    const hideRecruitmentOpinions = hideRecruitmentOpinionsResult.value;
     const contents: FutureContentsLoaderContent[] = rawContents.map((content: FutureContent) => ({
       uid: content.uid,
       name: content.name,
@@ -212,7 +223,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
           currentUserId,
           undefined,
           {
-            hideRecruitmentOpinions: currentUser?.hideRecruitmentOpinions === true,
+            hideRecruitmentOpinions,
             ctx,
           },
         ),
@@ -267,6 +278,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const contentsStatus: FutureContentsLoaderData["contentsStatus"] =
       contentsReadStatus === "available" &&
       currentUserResult.status === "available" &&
+      hideRecruitmentOpinionsResult.status === "available" &&
       favoritedCountsResult.status === "available"
         ? "available"
         : "unavailable";
@@ -274,7 +286,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     const payload: FutureContentsLoaderData = {
       contentsStatus,
       signedIn,
-      hideRecruitmentOpinions: currentUser?.hideRecruitmentOpinions === true,
+      hideRecruitmentOpinions,
       contents,
       favoritedCounts: favoritedCountsResult.counts,
       viewer: settleViewerPair(favoritedStudentsPromise, recruitmentResultsPromise),

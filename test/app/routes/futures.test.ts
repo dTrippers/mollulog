@@ -4,6 +4,7 @@ import { captureServerError, getLogger } from "~/lib/observability.server";
 import { getContentsCommentSummaries } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { clientLoader, loader } from "~/routes/futures";
 import { getFutureContents } from "~/views/futures";
 
@@ -29,6 +30,10 @@ jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResultsByRecruitmentGroupUids: jest.fn(),
 }));
 
+jest.mock("~/models/sensei", () => ({
+  getHideRecruitmentOpinions: jest.fn(),
+}));
+
 jest.mock("~/views/futures", () => ({
   getFutureContents: jest.fn(),
 }));
@@ -47,6 +52,9 @@ const mockedGetRecruitmentResults = getRecruitmentResultsByRecruitmentGroupUids 
   typeof getRecruitmentResultsByRecruitmentGroupUids
 >;
 const mockedGetFutureContents = getFutureContents as jest.MockedFunction<typeof getFutureContents>;
+const mockedGetHideRecruitmentOpinions = getHideRecruitmentOpinions as jest.MockedFunction<
+  typeof getHideRecruitmentOpinions
+>;
 const logger = {
   debug: jest.fn(),
   info: jest.fn(),
@@ -81,6 +89,7 @@ describe("futures loader data source routing", () => {
     mockedGetFavoritedCounts.mockResolvedValue([]);
     mockedGetUserFavoritedStudents.mockResolvedValue([]);
     mockedGetRecruitmentResults.mockResolvedValue([]);
+    mockedGetHideRecruitmentOpinions.mockResolvedValue(true);
   });
 
   // The loader defers viewer state and comment summaries. These tests read them once they settle, as the page does.
@@ -119,6 +128,20 @@ describe("futures loader data source routing", () => {
     expect(mockedCaptureServerError).toHaveBeenCalledWith(error, { route: "futures.loader", operation: "auth" });
   });
 
+  it("turns a recruitment opinion setting failure into the page's failed state", async () => {
+    const error = new Error("setting timeout");
+    mockedGetActiveSensei.mockResolvedValue({ id: 42, uid: "sensei-42", username: "sensei" } as never);
+    mockedGetHideRecruitmentOpinions.mockRejectedValue(error);
+
+    const result = await loader(createLoaderArgs());
+
+    expect(result).toMatchObject({ contentsStatus: "unavailable" });
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(error, {
+      route: "futures.loader",
+      operation: "recruitment_opinion_setting",
+    });
+  });
+
   it("turns a favorite-count failure into the page's failed state, with an empty count list", async () => {
     const error = new Error("favorites timeout");
     mockedGetActiveSensei.mockResolvedValue(null);
@@ -146,8 +169,10 @@ describe("futures loader data source routing", () => {
       commentSummaries: { status: "available", summaries: {} },
     });
     expect(mockedGetFutureContents).toHaveBeenCalledWith(env, false, ctx);
+    expect(result.hideRecruitmentOpinions).toBe(true);
+    expect(mockedGetHideRecruitmentOpinions).toHaveBeenCalledWith(env, null, { ctx });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], undefined, undefined, {
-      hideRecruitmentOpinions: false,
+      hideRecruitmentOpinions: true,
       ctx,
     });
     expect(mockedGetFavoritedCounts).toHaveBeenCalledWith(env, [], { ctx });
@@ -156,7 +181,9 @@ describe("futures loader data source routing", () => {
   });
 
   it("keeps signed-in comment and personalized reads on primary", async () => {
-    mockedGetActiveSensei.mockResolvedValue({ id: 42, uid: "sensei-42", username: "sensei" } as never);
+    const currentUser = { id: 42, uid: "sensei-42", username: "sensei" };
+    mockedGetActiveSensei.mockResolvedValue(currentUser as never);
+    mockedGetHideRecruitmentOpinions.mockResolvedValue(false);
 
     const result = await settleLoaderData(await loader(createLoaderArgs()));
 
@@ -166,6 +193,8 @@ describe("futures loader data source routing", () => {
       favoritedCounts: [],
       recruitmentResults: { status: "available", value: [] },
     });
+    expect(result.hideRecruitmentOpinions).toBe(false);
+    expect(mockedGetHideRecruitmentOpinions).toHaveBeenCalledWith(env, currentUser, { ctx });
     expect(mockedGetContentsCommentSummaries).toHaveBeenCalledWith(env, [], 42, undefined, {
       hideRecruitmentOpinions: false,
       ctx,

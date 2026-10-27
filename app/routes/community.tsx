@@ -18,6 +18,7 @@ import { canonicalLink } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
 
@@ -82,6 +83,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const currentUser = await getActiveSensei(env, request);
   const postTypes = parseCommunityPostTypes(request);
   const page = parsePage(request);
+  const hideRecruitmentOpinions = await getHideRecruitmentOpinions(env, currentUser, { ctx });
 
   const feedPage = await getCommunityFeedPage(env, {
     currentUserId: currentUser?.id,
@@ -89,6 +91,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     youtubeChannelKey: "kr",
     page,
     pageSize: COMMUNITY_FEED_PAGE_SIZE,
+    hideRecruitmentOpinions,
     ctx,
   });
   const enrichedFeed = await enrichCommunityFeedPosts(publicReadEnv, feedPage.items, {
@@ -101,6 +104,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     page: feedPage.page,
     totalPages: feedPage.totalPages,
     signedIn: currentUser !== null,
+    hideRecruitmentOpinions,
     studentsByUid: enrichedFeed.studentsByUid,
     posts: enrichedFeed.posts,
   };
@@ -129,7 +133,8 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export default function CommunityPage() {
-  const { posts, signedIn, studentsByUid, postTypes, page, totalPages } = useLoaderData<typeof loader>();
+  const { posts, signedIn, hideRecruitmentOpinions, studentsByUid, postTypes, page, totalPages } =
+    useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
   const getPageUrl = useCallback(
     (nextPage: number) => {
@@ -155,7 +160,7 @@ export default function CommunityPage() {
         studentsByUid={studentsByUid}
         page={page}
         totalPages={totalPages}
-        emptyText="아직 표시할 피드 컨텐츠가 없어요"
+        emptyText={hideRecruitmentOpinions ? "표시할 피드 컨텐츠가 없어요" : "아직 표시할 피드 컨텐츠가 없어요"}
         resetKey={postTypes.join(",")}
         getPageUrl={getPageUrl}
       />

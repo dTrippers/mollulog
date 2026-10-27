@@ -7,6 +7,7 @@ import { getNestedContentComments } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
 import { getPostByTimelineContentUid } from "~/models/post";
 import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from "~/models/recruitment";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import EventIndex, { loader } from "~/routes/events.$uid._index";
 
@@ -52,6 +53,10 @@ jest.mock("~/models/recruitment", () => ({
   normalizeRecruitmentGroupPeriod: jest.fn(),
 }));
 
+jest.mock("~/models/sensei", () => ({
+  getHideRecruitmentOpinions: jest.fn(),
+}));
+
 jest.mock("~/models/timeline-content.server", () => ({
   getTimelineContent: jest.fn(),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
@@ -80,6 +85,9 @@ const mockedGetRecruitmentGroupByUidStrict = getRecruitmentGroupByUidStrict as j
 >;
 const mockedNormalizeRecruitmentGroupPeriod = normalizeRecruitmentGroupPeriod as jest.MockedFunction<
   typeof normalizeRecruitmentGroupPeriod
+>;
+const mockedGetHideRecruitmentOpinions = getHideRecruitmentOpinions as jest.MockedFunction<
+  typeof getHideRecruitmentOpinions
 >;
 const mockedGetTimelineContent = getTimelineContent as jest.MockedFunction<typeof getTimelineContent>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
@@ -133,6 +141,7 @@ function loaderArgs() {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedGetActiveSensei.mockResolvedValue(null);
+  mockedGetHideRecruitmentOpinions.mockResolvedValue(true);
   mockedGetNestedContentComments.mockResolvedValue([] as never);
   mockedGetFavoritedCounts.mockResolvedValue([]);
   mockedGetUserFavoritedStudents.mockResolvedValue([]);
@@ -145,7 +154,7 @@ beforeEach(() => {
 });
 
 describe("event recruitment period notice loader", () => {
-  it("includes the normalized recruitment period while preserving the filtered recruitment data", async () => {
+  it("includes the normalized recruitment period and hides results from a guest", async () => {
     const result = await loader(loaderArgs());
 
     expect(result.eventContent).toMatchObject({
@@ -156,17 +165,27 @@ describe("event recruitment period notice loader", () => {
     expect(mockedGetRecruitmentGroupByUidStrict).toHaveBeenCalledWith(env, "group-a");
     expect(mockedNormalizeRecruitmentGroupPeriod).toHaveBeenCalledWith(recruitmentGroup as never);
     expect(result).toMatchObject({
-      hideRecruitmentOpinions: false,
+      hideRecruitmentOpinions: true,
       canFilterRecruitmentOpinions: true,
     });
+    expect(mockedGetHideRecruitmentOpinions).toHaveBeenCalledWith(env, null, { ctx });
     expect(mockedGetNestedContentComments).toHaveBeenCalledWith(env, "future-event", null, {
-      hideRecruitmentOpinions: false,
+      hideRecruitmentOpinions: true,
       ctx,
     });
   });
 
-  it("passes the signed-in recruitment opinion setting to the event comment read", async () => {
-    const currentUser = { id: 7, username: "sensei", hideRecruitmentOpinions: true };
+  it("shows results to a signed-in viewer whose stored setting is off", async () => {
+    mockedGetActiveSensei.mockResolvedValue({ id: 7, username: "sensei" } as never);
+    mockedGetHideRecruitmentOpinions.mockResolvedValue(false);
+
+    const result = await loader(loaderArgs());
+
+    expect(result.hideRecruitmentOpinions).toBe(false);
+  });
+
+  it("passes the stored setting, not the session copy, to the event comment read", async () => {
+    const currentUser = { id: 7, username: "sensei", hideRecruitmentOpinions: false };
     mockedGetActiveSensei.mockResolvedValue(currentUser as never);
 
     const result = await loader(loaderArgs());

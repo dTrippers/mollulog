@@ -18,6 +18,7 @@ import {
 import { getCommunityFeedPage } from "~/models/community.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getHomeYoutubeChannelLinks, getHomeYoutubeSections } from "~/models/youtube";
 import { settleViewerPair, settleViewerState } from "~/routes/futures._components/viewer-state";
 import { enrichCommunityFeedPosts } from "~/views/community.server";
@@ -118,12 +119,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     });
 
     const feed = ctx.tracing
-      .enterSpan("community", () =>
+      .enterSpan("community", async () =>
         getCommunityFeedPage(env, {
           currentUserId,
           postTypes: ["student_review", "event_opinion", "walkthrough_timeline"],
           pageSize: 4,
           includeEngagement: false,
+          hideRecruitmentOpinions: await getHideRecruitmentOpinions(env, currentUser, { ctx }),
           ctx,
         }),
       )

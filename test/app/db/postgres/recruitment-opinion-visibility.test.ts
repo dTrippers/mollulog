@@ -8,7 +8,7 @@ describe("recruitment opinion visibility", () => {
     const row = { userId: 2, recruitmentClassification: "result" as const };
     expect(recruitmentOpinionVisibleForRow(row, 1, enabled)).toBe(false);
     expect(recruitmentOpinionVisibleForRow(row, 2, enabled)).toBe(true);
-    expect(recruitmentOpinionVisibleForRow(row, undefined, enabled)).toBe(true);
+    expect(recruitmentOpinionVisibleForRow(row, undefined, enabled)).toBe(false);
     expect(recruitmentOpinionVisibleForRow(row, 1, {})).toBe(true);
   });
 

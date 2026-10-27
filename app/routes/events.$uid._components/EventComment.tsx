@@ -31,7 +31,7 @@ export default function EventComment({
   const [allComments, setAllComments] = useState(initialComments);
   const [hasPendingUpdate, setHasPendingUpdate] = useState(false);
   const [commentsUnavailable, setCommentsUnavailable] = useState(initialCommentsUnavailable);
-  const [hideRecruitmentOpinions, setHideRecruitmentOpinions] = useState(me !== null && initialHideRecruitmentOpinions);
+  const [hideRecruitmentOpinions, setHideRecruitmentOpinions] = useState(initialHideRecruitmentOpinions);
   const justUpdatedRef = useRef(false);
 
   const fetcher = useFetcher<CommentResponse>();

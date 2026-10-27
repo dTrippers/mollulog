@@ -13,6 +13,7 @@ import {
   updateComment,
 } from "~/models/content.server";
 import { classifyAndPersistRecruitmentOpinion } from "~/models/recruitment-opinion-classifier.server";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 
 export type CommentResponse = {
   comments: NestedComment[];
@@ -26,12 +27,11 @@ async function getCommentsResponse(
   ctx: ExecutionContext,
 ): Promise<CommentResponse> {
   const logger = getLogger(env, ctx, { route: "api.contents.comments", contentUid });
-  const hideRecruitmentOpinions = currentUser?.hideRecruitmentOpinions === true;
-  const options = {
-    hideRecruitmentOpinions,
-    ctx,
-  };
   try {
+    const options = {
+      hideRecruitmentOpinions: await getHideRecruitmentOpinions(env, currentUser, { ctx }),
+      ctx,
+    };
     return { comments: await getNestedContentComments(env, contentUid, currentUser, options), unavailable: false };
   } catch (error) {
     const errorContext = {
