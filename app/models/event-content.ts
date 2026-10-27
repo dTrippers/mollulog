@@ -248,6 +248,21 @@ const eventContentShopContentQuery = graphql(`
         minigameType
         payment { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
         payments { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+        roadPuzzle {
+          instantClearRound
+          maps {
+            uid name
+            deck { straight longCurve shortCurve }
+            tiles { x y z type rotation }
+            fixedRails { x y z entranceIndex exitIndex rotation }
+          }
+          railSetReward { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+          rounds {
+            round isLoop mapUids
+            rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+            additionalRewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+        }
         treasureHunt {
           loopRound
           rounds {
@@ -450,6 +465,135 @@ function transformBonuses(bonuses: NonNullable<EventContentData>["bonuses"]) {
 type ServerCondition = NonNullable<EventContentData>["minigameConfigs"][number]["rewardGroups"][number]["condition"];
 type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][number]["treasureHunt"];
 type ServerCardFlip = NonNullable<EventContentData>["minigameConfigs"][number]["cardFlip"];
+type ServerRoadPuzzle = NonNullable<EventContentData>["minigameConfigs"][number]["roadPuzzle"];
+
+function transformRoadPuzzleRewards(rewards: NonNullable<ServerRoadPuzzle>["railSetReward"]): RewardItem[] {
+  return rewards.map((reward) => {
+    if (!reward.resource) throw new Error("Road puzzle reward is missing its resource.");
+    return {
+      resourceType: reward.resource.type,
+      resourceUid: reward.resource.uid,
+      resourceName: reward.resource.name,
+      imageUrl: getEmblemImageUrl(reward.resource),
+      quantity: reward.quantity,
+      rarity:
+        "rarity" in reward.resource && typeof reward.resource.rarity === "number" ? reward.resource.rarity : undefined,
+    };
+  });
+}
+
+function transformRoadPuzzle(roadPuzzle: ServerRoadPuzzle): MinigameConfig["roadPuzzle"] {
+  if (!roadPuzzle) return null;
+  if (roadPuzzle.maps.length === 0 || roadPuzzle.rounds.length === 0) {
+    throw new Error("Road puzzle configuration is missing maps or rounds.");
+  }
+  if (!Number.isSafeInteger(roadPuzzle.instantClearRound) || roadPuzzle.instantClearRound < 0) {
+    throw new Error("Road puzzle instant clear round is invalid.");
+  }
+
+  const mapsByUid = new Set<string>();
+  const maps = roadPuzzle.maps.map((map) => {
+    if (!map.uid.trim() || mapsByUid.has(map.uid)) throw new Error("Road puzzle map UID is missing or duplicated.");
+    mapsByUid.add(map.uid);
+    const deck = { straight: map.deck.straight, longCurve: map.deck.longCurve, shortCurve: map.deck.shortCurve };
+    if (Object.values(deck).some((amount) => !Number.isSafeInteger(amount) || amount < 0)) {
+      throw new Error(`Road puzzle map ${map.uid} has an invalid deck.`);
+    }
+    const tileCoordinates = new Set<string>();
+    const tileTypes = new Map<string, number>();
+    for (const tile of map.tiles) {
+      const key = `${tile.x},${tile.y},${tile.z}`;
+      if (
+        tile.x + tile.y + tile.z !== 0 ||
+        tileCoordinates.has(key) ||
+        !Number.isSafeInteger(tile.type) ||
+        tile.type < 1 ||
+        tile.type > 5 ||
+        !Number.isSafeInteger(tile.rotation)
+      ) {
+        throw new Error(`Road puzzle map ${map.uid} has invalid terrain.`);
+      }
+      tileCoordinates.add(key);
+      tileTypes.set(key, tile.type);
+    }
+    const fixedRailCoordinates = new Set<string>();
+    for (const rail of map.fixedRails) {
+      const key = `${rail.x},${rail.y},${rail.z}`;
+      if (
+        !tileCoordinates.has(key) ||
+        fixedRailCoordinates.has(key) ||
+        !Number.isSafeInteger(rail.entranceIndex) ||
+        rail.entranceIndex < 0 ||
+        rail.entranceIndex > 5 ||
+        !Number.isSafeInteger(rail.exitIndex) ||
+        rail.exitIndex < 0 ||
+        rail.exitIndex > 5 ||
+        rail.entranceIndex === rail.exitIndex ||
+        !Number.isSafeInteger(rail.rotation)
+      ) {
+        throw new Error(`Road puzzle map ${map.uid} has invalid fixed rails.`);
+      }
+      fixedRailCoordinates.add(key);
+    }
+    const fixedTypes = [...tileTypes.values()];
+    if (
+      fixedTypes.filter((type) => type === 1).length !== 1 ||
+      fixedTypes.filter((type) => type === 2).length !== 1 ||
+      fixedTypes.filter((type) => type === 3).length === 0
+    ) {
+      throw new Error(`Road puzzle map ${map.uid} has invalid station terrain.`);
+    }
+    for (const [key, type] of tileTypes) {
+      if ((type === 1 || type === 2 || type === 3) !== fixedRailCoordinates.has(key)) {
+        throw new Error(`Road puzzle map ${map.uid} is missing or has an unexpected fixed rail.`);
+      }
+    }
+    return {
+      uid: map.uid,
+      name: map.name,
+      deck,
+      tiles: map.tiles.map(({ x, y, z, type, rotation }) => ({ x, y, z, type, rotation })),
+      fixedRails: map.fixedRails.map(({ x, y, z, entranceIndex, exitIndex, rotation }) => ({
+        x,
+        y,
+        z,
+        entranceIndex,
+        exitIndex,
+        rotation,
+      })),
+    };
+  });
+
+  const seenRounds = new Set<number>();
+  const rounds = roadPuzzle.rounds.map((round) => {
+    if (
+      !Number.isSafeInteger(round.round) ||
+      round.round < 1 ||
+      seenRounds.has(round.round) ||
+      round.mapUids.length === 0
+    ) {
+      throw new Error("Road puzzle round configuration is invalid.");
+    }
+    seenRounds.add(round.round);
+    if (round.mapUids.some((uid) => !mapsByUid.has(uid))) {
+      throw new Error(`Road puzzle round ${round.round} references a missing map.`);
+    }
+    return {
+      round: round.round,
+      isLoop: round.isLoop,
+      mapUids: [...round.mapUids],
+      rewards: transformRoadPuzzleRewards(round.rewards),
+      additionalRewards: transformRoadPuzzleRewards(round.additionalRewards),
+    };
+  });
+
+  return {
+    instantClearRound: roadPuzzle.instantClearRound,
+    railSetReward: transformRoadPuzzleRewards(roadPuzzle.railSetReward),
+    rounds: rounds.sort((left, right) => left.round - right.round),
+    maps: maps.sort((left, right) => Number(left.uid) - Number(right.uid)),
+  };
+}
 
 function resolveRounds(condition: ServerCondition): MinigameConfig["rewardGroups"][number]["rounds"] {
   if (condition.type === "exact" && condition.values) {
@@ -567,10 +711,7 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
   }
 
   const flipCosts = [...cardFlip.flipCosts].sort((left, right) => left.flip - right.flip);
-  if (
-    flipCosts.length !== drawRules.maxDrawCount ||
-    flipCosts.some(({ flip }, index) => flip !== index + 1)
-  ) {
+  if (flipCosts.length !== drawRules.maxDrawCount || flipCosts.some(({ flip }, index) => flip !== index + 1)) {
     return { status: "invalid" };
   }
   const payments: MinigamePayment[][] = [];
@@ -604,7 +745,11 @@ function transformCardFlip(cardFlip: ServerCardFlip): MinigameConfig["cardFlip"]
     if (
       slots.some(
         ({ slot, weight }) =>
-          !Number.isSafeInteger(slot) || slot < 1 || slot > cardFlip.slotCount || !Number.isFinite(weight) || weight < 0,
+          !Number.isSafeInteger(slot) ||
+          slot < 1 ||
+          slot > cardFlip.slotCount ||
+          !Number.isFinite(weight) ||
+          weight < 0,
       ) ||
       new Set(slots.map(({ slot }) => slot)).size !== slots.length
     ) {
@@ -652,6 +797,8 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   const serverConfig = configs[0];
   const transformedCardFlip =
     serverConfig.minigameType === "card_flip" ? transformCardFlip(serverConfig.cardFlip) : undefined;
+  const transformedRoadPuzzle =
+    serverConfig.minigameType === "road_puzzle" ? transformRoadPuzzle(serverConfig.roadPuzzle) : undefined;
   const cardFlipPayment =
     transformedCardFlip?.status === "available" ? transformedCardFlip.flipCosts[0]?.payments[0] : null;
   const paymentResource = cardFlipPayment
@@ -662,7 +809,12 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
         imageUrl: cardFlipPayment.imageUrl,
       }
     : serverConfig.payment.resource;
-  if (!paymentResource) return null;
+  if (!paymentResource) {
+    if (serverConfig.minigameType === "road_puzzle") {
+      throw new Error("Road puzzle placement payment is missing its resource.");
+    }
+    return null;
+  }
 
   const payments =
     transformedCardFlip?.status === "available"
@@ -685,6 +837,7 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
     minigameType: serverConfig.minigameType as MinigameConfig["minigameType"],
     treasureHunt: transformTreasureHunt(serverConfig.treasureHunt),
     cardFlip: transformedCardFlip,
+    ...(serverConfig.minigameType === "road_puzzle" ? { roadPuzzle: transformedRoadPuzzle } : {}),
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
@@ -748,7 +901,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 4, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 5, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,
@@ -785,7 +938,7 @@ export async function getEventMinigameType(
   const { runType } = metadata;
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-minigame-type", 1, cacheQuery({ contentUid, runType })),
+    cacheKey("source", "event-minigame-type", 2, cacheQuery({ contentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentMinigameTypeQuery, {
         eventUid: contentUid,

@@ -278,6 +278,7 @@ describe("MiniGameSection for card flip", () => {
             setCardFlipStrategy: jest.fn(),
           } as unknown as ShopActions,
           treasureHuntCalculation: null as never,
+          roadPuzzleCalculation: null as never,
           cardFlipComparison: comparison,
         }),
       ),

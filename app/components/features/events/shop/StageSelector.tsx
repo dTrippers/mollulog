@@ -2,7 +2,7 @@ import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import type Decimal from "decimal.js";
 import { Button, Section, Toggle } from "~/components/primitives";
 import type { Stage } from "~/domain/event-shop";
-import { treasureHuntLocale } from "~/locales/ko";
+import { roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import type { ShopActions, ShopState } from "./hooks";
 import { StageCard } from "./StageCard";
 
@@ -14,6 +14,8 @@ type StagesProps = {
   actions: ShopActions;
   treasureHuntStatus?: "pending" | "provisional" | "failed" | "round-limit";
   onRetryTreasureHunt?: () => void;
+  roadPuzzleStatus?: "pending" | "failed" | "missing";
+  onRetryRoadPuzzle?: () => void;
 };
 
 export function StageSelector({
@@ -24,6 +26,8 @@ export function StageSelector({
   actions,
   treasureHuntStatus,
   onRetryTreasureHunt,
+  roadPuzzleStatus,
+  onRetryRoadPuzzle,
 }: StagesProps) {
   const sweepStages = stages.filter(({ difficulty }) => difficulty === 1);
   if (sweepStages.length === 0) {
@@ -44,7 +48,25 @@ export function StageSelector({
         onChange={actions.setIncludeFirstClear}
       />
 
-      {treasureHuntStatus && (
+      {roadPuzzleStatus && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
+          {roadPuzzleStatus === "pending" ? (
+            <>
+              <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+              <span>{roadPuzzleLocale.plannerPending}</span>
+            </>
+          ) : roadPuzzleStatus === "missing" ? (
+            <span role="alert">{roadPuzzleLocale.noData}</span>
+          ) : (
+            <>
+              <span role="alert">{roadPuzzleLocale.plannerFailed}</span>
+              <Button text={roadPuzzleLocale.retry} size="sm" variant="secondary" onClick={onRetryRoadPuzzle} />
+            </>
+          )}
+        </div>
+      )}
+
+      {!roadPuzzleStatus && treasureHuntStatus && (
         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
           {treasureHuntStatus === "provisional" ? (
             <>
@@ -67,20 +89,22 @@ export function StageSelector({
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {sweepStages.map((stage) => (
-          <StageCard
-            key={stage.uid}
-            stage={stage}
-            isEnabled={!!state.enabledStages[stage.uid]}
-            calculatedRuns={stageRuns[stage.uid] || 0}
-            extraRuns={state.extraStageRuns[stage.uid] || 0}
-            appliedBonusRatio={appliedBonusRatio}
-            onToggleStage={actions.toggleStage}
-            onChangeExtraRuns={actions.updateExtraRuns}
-          />
-        ))}
-      </div>
+      {!roadPuzzleStatus && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+          {sweepStages.map((stage) => (
+            <StageCard
+              key={stage.uid}
+              stage={stage}
+              isEnabled={!!state.enabledStages[stage.uid]}
+              calculatedRuns={stageRuns[stage.uid] || 0}
+              extraRuns={state.extraStageRuns[stage.uid] || 0}
+              appliedBonusRatio={appliedBonusRatio}
+              onToggleStage={actions.toggleStage}
+              onChangeExtraRuns={actions.updateExtraRuns}
+            />
+          ))}
+        </div>
+      )}
     </Section>
   );
 }

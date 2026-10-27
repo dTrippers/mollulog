@@ -109,7 +109,8 @@ export type MinigameConfig = {
     | "fortune_gacha"
     | "box_gacha"
     | "clue_search"
-    | "treasure_hunt";
+    | "treasure_hunt"
+    | "road_puzzle";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
@@ -122,6 +123,49 @@ export type MinigameConfig = {
   dice?: DiceMinigameConfig;
   treasureHunt?: TreasureHuntConfig | null;
   cardFlip?: CardFlipData;
+  roadPuzzle?: RoadPuzzleConfig | null;
+};
+
+export type RoadPuzzleCoordinate = { x: number; y: number; z: number };
+
+export type RoadPuzzleDeck = {
+  straight: number;
+  longCurve: number;
+  shortCurve: number;
+};
+
+export type RoadPuzzleTile = RoadPuzzleCoordinate & {
+  type: number;
+  rotation: number;
+};
+
+export type RoadPuzzleFixedRail = RoadPuzzleCoordinate & {
+  entranceIndex: number;
+  exitIndex: number;
+  rotation: number;
+};
+
+export type RoadPuzzleMap = {
+  uid: string;
+  name: string;
+  deck: RoadPuzzleDeck;
+  tiles: RoadPuzzleTile[];
+  fixedRails: RoadPuzzleFixedRail[];
+};
+
+export type RoadPuzzleRound = {
+  round: number;
+  isLoop: boolean;
+  mapUids: string[];
+  rewards: RewardItem[];
+  additionalRewards: RewardItem[];
+};
+
+export type RoadPuzzleConfig = {
+  instantClearRound: number;
+  railSetReward: RewardItem[];
+  rounds: RoadPuzzleRound[];
+  maps: RoadPuzzleMap[];
 };
 
 export type MinigamePayment = {

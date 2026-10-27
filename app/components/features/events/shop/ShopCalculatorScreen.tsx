@@ -12,6 +12,7 @@ import type {
 } from "~/domain/event-shop";
 import type { CardFlipStrategyResult } from "~/domain/card-flip-strategy";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
+import type { RoadPuzzleStatsCalculation } from "./hooks/useRoadPuzzleStats";
 import EventInfoCard from "../EventInfoCard";
 import { CollectedTotalsSection } from "./CollectedTotalsSection";
 import type { ClueSearchExchange } from "./clue-search";
@@ -46,6 +47,9 @@ export type EventShopPlanContext = {
   treasureHuntCalculation: TreasureHuntSectionState;
   holdTreasureHuntCalculations: boolean;
   resultTreasureHuntStatus: TreasureHuntResultStatus;
+  roadPuzzleCalculation: RoadPuzzleStatsCalculation;
+  holdRoadPuzzleCalculations: boolean;
+  roadPuzzlePlannerStatus?: "pending" | "failed" | "missing";
   provisionalMinigameResourceUid?: string;
   minigamePaymentCosts: MinigamePayment[] | undefined;
   minigameRewards: RewardItem[] | undefined;
@@ -75,6 +79,9 @@ export function ShopCalculatorScreen({
   treasureHuntCalculation,
   holdTreasureHuntCalculations,
   resultTreasureHuntStatus,
+  roadPuzzleCalculation,
+  holdRoadPuzzleCalculations,
+  roadPuzzlePlannerStatus,
   provisionalMinigameResourceUid,
   minigameRewards,
   cardFlipComparison,
@@ -130,17 +137,20 @@ export function ShopCalculatorScreen({
             actions={actions}
             exchange={clueSearchExchange}
             treasureHuntCalculation={treasureHuntCalculation}
+            roadPuzzleCalculation={roadPuzzleCalculation}
             cardFlipComparison={cardFlipComparison}
           />
         )}
         <StageSelector
           stages={stages}
           appliedBonusRatio={appliedBonusRatio}
-          stageRuns={holdTreasureHuntCalculations ? {} : stageCalculations.stageRuns}
+          stageRuns={holdTreasureHuntCalculations || holdRoadPuzzleCalculations ? {} : stageCalculations.stageRuns}
           state={state}
           actions={actions}
           treasureHuntStatus={resultTreasureHuntStatus}
           onRetryTreasureHunt={treasureHuntCalculation.retry}
+          roadPuzzleStatus={roadPuzzlePlannerStatus}
+          onRetryRoadPuzzle={roadPuzzleCalculation.retry}
         />
 
         <CollectedTotalsSection
@@ -154,6 +164,8 @@ export function ShopCalculatorScreen({
           minigameRewards={minigameRewards}
           treasureHuntStatus={resultTreasureHuntStatus}
           onRetryTreasureHunt={treasureHuntCalculation.retry}
+          roadPuzzleStatus={roadPuzzlePlannerStatus}
+          onRetryRoadPuzzle={roadPuzzleCalculation.retry}
           provisionalMinigameResourceUid={provisionalMinigameResourceUid}
           state={state}
           actions={actions}
