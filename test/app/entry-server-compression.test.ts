@@ -44,16 +44,14 @@ const routerContext = {
   },
 } as unknown as EntryContext;
 
-async function renderDocument(acceptEncoding: string | null) {
+async function renderDocument(acceptEncoding: string | null, clientAcceptEncoding?: string) {
   const headers: Record<string, string> = { "User-Agent": "Mozilla/5.0" };
   if (acceptEncoding !== null) headers["Accept-Encoding"] = acceptEncoding;
-  return handleRequest(
-    new Request("https://mollulog.test/developers", { headers }),
-    200,
-    new Headers(),
-    routerContext,
-    loadContext,
-  );
+  const request = new Request("https://mollulog.test/developers", { headers });
+  if (clientAcceptEncoding !== undefined) {
+    Object.defineProperty(request, "cf", { value: { clientAcceptEncoding } });
+  }
+  return handleRequest(request, 200, new Headers(), routerContext, loadContext);
 }
 
 describe("document compression", () => {
@@ -78,6 +76,15 @@ describe("document compression", () => {
 
     expect(response.headers.get("Content-Encoding")).toBeNull();
     expect(response.headers.get("Vary")).toBe("User-Agent");
+  });
+
+  it("follows the visitor's original Accept-Encoding when Cloudflare rewrote the header", async () => {
+    botRequest = false;
+    const refused = await renderDocument("br, gzip", "identity;q=1, gzip;q=0");
+    expect(refused.headers.get("Content-Encoding")).toBeNull();
+
+    const accepted = await renderDocument("br, gzip", "gzip, deflate");
+    expect(accepted.headers.get("Content-Encoding")).toBe("gzip");
   });
 
   it("leaves bot documents unencoded", async () => {

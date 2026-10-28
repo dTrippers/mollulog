@@ -1,7 +1,9 @@
-import { describe, expect, it } from "@jest/globals";
+/** @jest-environment jsdom */
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import {
   getContentScrollEntryKey,
   readContentScrollPosition,
+  restoreContentScrollPosition,
   saveContentScrollPosition,
 } from "~/lib/content-scroll-restoration";
 
@@ -51,5 +53,65 @@ describe("content scroll restoration", () => {
     expect(readContentScrollPosition(storage, "a")).toBeNull();
     expect(readContentScrollPosition(null, "a")).toBeNull();
     expect(() => saveContentScrollPosition(null, "a", 10)).not.toThrow();
+  });
+});
+
+// A scroll container whose content height can change, clamping scrollTop the way a browser does.
+function scrollContainer(contentHeight: number, clientHeight = 600) {
+  const element = document.createElement("div");
+  let height = contentHeight;
+  let top = 0;
+  Object.defineProperty(element, "scrollTop", {
+    get: () => top,
+    set: (value: number) => {
+      top = Math.max(0, Math.min(value, height - clientHeight));
+    },
+  });
+  return { element, grow: (next: number) => (height = next) };
+}
+
+describe("restoring the content offset", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("restores at once when the content is already tall enough", () => {
+    const { element } = scrollContainer(2400);
+    restoreContentScrollPosition(element, 800);
+    expect(element.scrollTop).toBe(800);
+  });
+
+  it("keeps applying the offset until content that renders later is tall enough", () => {
+    const { element, grow } = scrollContainer(700);
+    restoreContentScrollPosition(element, 800);
+    expect(element.scrollTop).toBe(100);
+
+    grow(2400);
+    jest.advanceTimersByTime(50);
+    expect(element.scrollTop).toBe(800);
+  });
+
+  it("stops when the visitor scrolls first", () => {
+    const { element, grow } = scrollContainer(700);
+    restoreContentScrollPosition(element, 800);
+    element.dispatchEvent(new Event("wheel"));
+    element.scrollTop = 40;
+
+    grow(2400);
+    jest.advanceTimersByTime(50);
+    expect(element.scrollTop).toBe(40);
+  });
+
+  it("gives up after a short time", () => {
+    const { element, grow } = scrollContainer(700);
+    restoreContentScrollPosition(element, 800);
+    jest.advanceTimersByTime(2500);
+
+    grow(2400);
+    jest.advanceTimersByTime(50);
+    expect(element.scrollTop).toBe(100);
   });
 });

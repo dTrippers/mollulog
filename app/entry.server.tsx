@@ -83,7 +83,10 @@ export default async function handleRequest(
       { method: request.method, routePattern: routePage.routePattern },
     );
     if (botRequest) {
-      await watchIo("ssr.allReady", streamingBody.allReady, { method: request.method, routePattern: routePage.routePattern });
+      await watchIo("ssr.allReady", streamingBody.allReady, {
+        method: request.method,
+        routePattern: routePage.routePattern,
+      });
     }
     body = streamingBody;
   }
@@ -193,7 +196,11 @@ function appendVary(headers: Headers, value: string) {
 }
 
 function acceptsGzip(request: Request): boolean {
-  return (request.headers.get("Accept-Encoding") ?? "").split(",").some((entry) => {
+  // Cloudflare may rewrite Accept-Encoding before the Worker sees it; the visitor's own value is kept in the cf object.
+  const clientAcceptEncoding = request.cf?.clientAcceptEncoding;
+  const acceptEncoding =
+    typeof clientAcceptEncoding === "string" ? clientAcceptEncoding : (request.headers.get("Accept-Encoding") ?? "");
+  return acceptEncoding.split(",").some((entry) => {
     const [coding, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
     return coding === "gzip" && !params.some((param) => /^q=0(\.0*)?$/.test(param));
   });

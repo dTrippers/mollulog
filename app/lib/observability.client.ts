@@ -87,9 +87,19 @@ function loadSentry(dsn: string, stage: string | undefined) {
   return sentryLoad;
 }
 
-// The entry's stale-chunk reload must not fire because this background import failed on a flaky connection.
-export function isObservabilityChunkLoading() {
-  return sentryLoadInFlight;
+// Matches the Sentry chunk's file name, which keeps this module's name in both dev and hashed production builds.
+const SENTRY_CHUNK_NAME = "observability-sentry.client";
+
+// The entry's stale-chunk reload must not fire because this background import failed on a flaky connection, but it
+// must still fire for any other feature's chunk that fails meanwhile. Browsers that name the failed module in the error
+// are matched by that name. Safari reports "Importing a module script failed." without one, so while the Sentry import
+// is in flight such an error is taken to be that import.
+export function isObservabilityChunkError(error: unknown) {
+  const message = error instanceof Error ? error.message : typeof error === "string" ? error : "";
+  if (message.includes(SENTRY_CHUNK_NAME)) {
+    return true;
+  }
+  return sentryLoadInFlight && !/https?:\/\//.test(message);
 }
 
 export function initializeClientObservability() {

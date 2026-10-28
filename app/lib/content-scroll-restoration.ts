@@ -70,3 +70,38 @@ export function getContentScrollContainer(): HTMLElement | null {
   }
   return document.querySelector<HTMLElement>(".mllg-content-area");
 }
+
+const RESTORE_RETRY_MS = 2000;
+const USER_SCROLL_EVENTS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+
+// Some pages first render a short loading state (for example guest data read in an effect), so the container cannot
+// hold the saved offset yet and clamps it. The offset is applied again on each frame until it fits, the visitor scrolls,
+// or a short time passes. Returns a function that stops the retries.
+export function restoreContentScrollPosition(container: HTMLElement, scrollTop: number): () => void {
+  container.scrollTop = scrollTop;
+  if (container.scrollTop >= scrollTop - 1 || typeof requestAnimationFrame === "undefined") {
+    return () => {};
+  }
+
+  const deadline = performance.now() + RESTORE_RETRY_MS;
+  let frame = 0;
+  const stop = () => {
+    cancelAnimationFrame(frame);
+    for (const type of USER_SCROLL_EVENTS) {
+      container.removeEventListener(type, stop);
+    }
+  };
+  const retry = () => {
+    container.scrollTop = scrollTop;
+    if (container.scrollTop >= scrollTop - 1 || performance.now() >= deadline) {
+      stop();
+      return;
+    }
+    frame = requestAnimationFrame(retry);
+  };
+  for (const type of USER_SCROLL_EVENTS) {
+    container.addEventListener(type, stop, { passive: true });
+  }
+  frame = requestAnimationFrame(retry);
+  return stop;
+}

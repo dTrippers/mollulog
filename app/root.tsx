@@ -53,6 +53,7 @@ import {
   getContentScrollContainer,
   getContentScrollEntryKey,
   readContentScrollPosition,
+  restoreContentScrollPosition,
   saveContentScrollPosition,
 } from "./lib/content-scroll-restoration";
 import { captureClientError } from "./lib/observability.client";
@@ -439,13 +440,19 @@ export default function App() {
       return;
     }
 
+    let stopRestoring: (() => void) | undefined;
     if (scrollableContainer) {
       // Only a back/forward navigation inside the app restores; the first render of a visit or reload starts at the top.
       const savedScrollTop =
         previousEntry && navigationType === "POP" ? readContentScrollPosition(storage, scrollEntryKey) : null;
-      scrollableContainer.scrollTop = savedScrollTop ?? 0;
+      if (savedScrollTop === null) {
+        scrollableContainer.scrollTop = 0;
+      } else {
+        stopRestoring = restoreContentScrollPosition(scrollableContainer, savedScrollTop);
+      }
     }
     keepCurrentScroll();
+    return stopRestoring;
   }, [location, navigationType, routeKey]);
 
   useIsomorphicLayoutEffect(() => {
