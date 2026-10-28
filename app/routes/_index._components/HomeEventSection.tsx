@@ -107,7 +107,8 @@ function EventHero({
         {content.imageUrl && haloMode ? (
           <BlurhashPlaceholder blurhash={content.imageBlurhash} />
         ) : content.imageUrl ? (
-          <img src={content.imageUrl} alt="" className="size-full object-cover" />
+          // The banner is the home page's largest paint, so it goes ahead of the images below it on a slow connection.
+          <img src={content.imageUrl} alt="" fetchPriority="high" className="size-full object-cover" />
         ) : (
           <div className="flex size-full items-center justify-center">
             <CalendarDaysIcon aria-hidden="true" className="size-10 text-v2-fg-disabled" />

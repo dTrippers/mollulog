@@ -171,11 +171,11 @@ export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://assets.baql.net" },
   { rel: "preconnect", href: "https://assets.mollulog.net" },
   { rel: "preconnect", href: "https://cdnjs.cloudflare.com", crossOrigin: "anonymous" },
-  // The dynamic subset splits the font into unicode-range files, so a page downloads only the glyph ranges it renders
-  // instead of a full ~770KB file per weight.
+  // Full files rather than the dynamic subset: the subset swaps glyph ranges in one by one as new text appears, so text
+  // visibly flickers on every page, while full files swap once and are cached afterwards.
   {
     rel: "stylesheet",
-    href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/variable/pretendardvariable-dynamic-subset.min.css",
+    href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/static/pretendard.css",
   },
   { rel: "stylesheet", href: styles },
 ];

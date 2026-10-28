@@ -101,6 +101,13 @@ export default async function handleRequest(
     responseHeaders.set("X-Robots-Tag", "noindex");
   }
   appendVary(responseHeaders, "User-Agent");
+  // `no-transform` also stops Cloudflare from compressing the document, which made pages several times larger on the
+  // wire. The Workers runtime compresses the stream itself when the response names an encoding, so visitors get gzip
+  // without Cloudflare touching the response. Bot responses are left exactly as before for the SEO checks.
+  if (!botRequest && acceptsGzip(request)) {
+    responseHeaders.set("Content-Encoding", "gzip");
+    appendVary(responseHeaders, "Accept-Encoding");
+  }
   responseHeaders.set(SEO_DEBUG_HEADERS.renderId, requestDiagnostics.renderId);
   responseHeaders.set(SEO_DEBUG_HEADERS.requestPath, requestDiagnostics.requestPath);
   responseHeaders.set(SEO_DEBUG_HEADERS.routerPath, routerPath);
@@ -183,6 +190,13 @@ function appendVary(headers: Headers, value: string) {
   );
   values.add(value);
   headers.set("Vary", [...values].join(", "));
+}
+
+function acceptsGzip(request: Request): boolean {
+  return (request.headers.get("Accept-Encoding") ?? "").split(",").some((entry) => {
+    const [coding, ...params] = entry.split(";").map((part) => part.trim().toLowerCase());
+    return coding === "gzip" && !params.some((param) => /^q=0(\.0*)?$/.test(param));
+  });
 }
 
 async function sha256Hex(body: string): Promise<string> {
