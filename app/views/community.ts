@@ -1,4 +1,4 @@
-import type { CommunityFeedPost } from "~/models/community";
+import type { CommunityFeedPost, CommunityPostBlock, MarkdownCommunityPostBlock } from "~/models/community";
 import type { RecruitmentFeedStats } from "~/models/community-feed";
 import type { StudentGradingTagValue } from "~/models/student-grading-tag";
 
@@ -11,7 +11,13 @@ export const COMMUNITY_VISIBLE_POST_TYPES = [
   "walkthrough_timeline",
 ] as const;
 
-export type EnrichedCommunityFeedPost = CommunityFeedPost & {
+// Markdown blocks carry server-rendered, sanitized HTML so the client does not need a markdown renderer.
+export type EnrichedCommunityPostBlock =
+  | Exclude<CommunityPostBlock, MarkdownCommunityPostBlock>
+  | (MarkdownCommunityPostBlock & { html: string });
+
+export type EnrichedCommunityFeedPost = Omit<CommunityFeedPost, "blocks"> & {
+  blocks: EnrichedCommunityPostBlock[];
   subjectStudentName: string | null;
   subjectContentName: string | null;
   tags: StudentGradingTagValue[];

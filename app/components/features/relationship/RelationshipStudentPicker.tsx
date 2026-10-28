@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { StudentSelectForm } from "~/components/features/forms";
 import { ProfileImage } from "~/components/primitives";
 import { cn } from "~/lib/utils";
-import { formatVisibleName } from "~/models/student";
+import { formatVisibleName } from "~/models/student-name";
 
 type RelationshipStudent = {
   uid: string;

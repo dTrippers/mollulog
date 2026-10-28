@@ -7,7 +7,8 @@ import { Button, Field, SectionCard, TagIcon, Textarea } from "~/components/prim
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { formatStudentFullName, getStudentGradeDetail } from "~/models/student";
+import { getStudentGradeDetail } from "~/models/student";
+import { formatStudentFullName } from "~/models/student-name";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading.server";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 

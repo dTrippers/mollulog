@@ -1,9 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MarkdownContent } from "~/components/v2/primitives/MarkdownContent";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 
 function render(text: string, headingLevel: 2 | 3 = 2) {
-  return renderToStaticMarkup(<MarkdownContent text={text} headingLevel={headingLevel} />);
+  return renderToStaticMarkup(<MarkdownContent html={renderMarkdownToSafeHtml(text)} headingLevel={headingLevel} />);
 }
 
 describe("MarkdownContent", () => {

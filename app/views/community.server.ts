@@ -6,6 +6,7 @@ import {
   type CommunityFeedStatsTimelineContent,
   getRecruitmentFeedStatsByPostUid,
 } from "~/models/community-feed.server";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getAllStudentsMap } from "~/models/student";
 import { getGradingTagsByGradingUids } from "~/models/student-grading-tag.server";
@@ -81,6 +82,9 @@ export async function enrichCommunityFeedPosts(
 
       return {
         ...post,
+        blocks: post.blocks.map((block) =>
+          block.type === "markdown" ? { ...block, html: renderMarkdownToSafeHtml(block.text) } : block,
+        ),
         liked: walkthroughEngagement?.liked ?? post.liked,
         likeCount: walkthroughEngagement?.likeCount ?? post.likeCount,
         likeTarget,

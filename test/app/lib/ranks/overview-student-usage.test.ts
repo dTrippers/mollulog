@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import protobuf from "protobufjs";
 import { Defense } from "~/graphql/graphql";
 import { fetchProtobufBytes } from "~/lib/ranks/base";
-import { decodeRaidOverviewStudentUsage, fetchRaidOverviewStudentUsage } from "~/lib/ranks/overview";
+import { decodeRaidOverviewStudentUsage, fetchRaidOverviewStudentUsage } from "~/lib/ranks/overview-student-usage";
 
 jest.mock("~/lib/ranks/base", () => ({
   RANK_API_BASE_URL: "https://ranks.baql.net",

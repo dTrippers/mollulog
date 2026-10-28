@@ -1,0 +1,7 @@
+# Vite content-hashes every file under /assets, so a changed file always gets a new URL.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Logo-only subsets of GyeonggiTitle (경기천년제목). Rename the files when the subset changes.
+/fonts/*
+  Cache-Control: public, max-age=2592000

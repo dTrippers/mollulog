@@ -8,6 +8,7 @@ import { createMemoryRouter, RouterProvider } from "react-router";
 import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
 import { ErrorBoundary, default as PostDetailPage } from "~/routes/posts.$uid";
 import { routeError } from "~/lib/http-errors";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import type { PostDetailView } from "~/views/post-detail";
 
 jest.mock("~/lib/observability.client", () => ({ captureClientError: jest.fn() }));
@@ -29,6 +30,12 @@ const newsView: PostDetailView = {
   },
 };
 
+// The route loader renders the body on the server and sends it as HTML in place of the markdown.
+function toLoaderData(view: PostDetailView) {
+  const { content, ...post } = view.post;
+  return { ...view, post, contentHtml: renderMarkdownToSafeHtml(content) };
+}
+
 function renderPost(
   options: { view?: PostDetailView; loaderError?: unknown; state?: unknown; history?: boolean } = {},
 ) {
@@ -43,7 +50,7 @@ function renderPost(
           if (options.loaderError) {
             throw options.loaderError;
           }
-          return loaderValue;
+          return loaderValue ? toLoaderData(loaderValue) : loaderValue;
         },
       },
       { path: "/news", element: <p>news list</p> },
@@ -175,7 +182,7 @@ describe("post detail screen", () => {
             if (attempts === 1) {
               throw new Error("connection reset by peer");
             }
-            return newsView;
+            return toLoaderData(newsView);
           },
         },
         { path: "/news", element: <p>news list</p> },

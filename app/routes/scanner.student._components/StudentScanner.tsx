@@ -44,7 +44,7 @@ import type {
   StudentVideoFieldState,
 } from "~/domain/student-video-ocr";
 import { cn } from "~/lib/utils";
-import { formatVisibleName } from "~/models/student";
+import { formatVisibleName } from "~/models/student-name";
 import type { ScannerOutletContext } from "../scanner";
 import ScannerFileList from "../scanner._components/ScannerFileList";
 import ScannerImageDialog from "../scanner._components/ScannerImageDialog";

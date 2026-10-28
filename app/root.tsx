@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { LinksFunction, LoaderFunctionArgs } from "react-router";
+import type { LinksFunction, LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import {
   Links,
   Meta,
@@ -11,6 +11,7 @@ import {
   useMatches,
   useNavigation,
   useNavigationType,
+  useParams,
 } from "react-router";
 import LoadingBar, { type LoadingBarRef } from "react-top-loading-bar";
 import type { Route } from "./+types/root";
@@ -34,6 +35,7 @@ import { StudentCardPopupProvider } from "./contexts/StudentCardPopupProvider";
 import { TimeZoneProvider } from "./contexts/TimeZoneProvider";
 import { type MobileNavigationPair, normalizeMobileNavigationIds } from "./domain/mobile-navigation";
 import { DEFAULT_TIME_ZONE, getBrowserTimeZone, normalizeTimeZone } from "./lib/date-time";
+import { isRootIndependentSubmission } from "./lib/revalidation";
 import {
   initializeGoogleAnalytics,
   setGoogleAnalyticsEnabled,
@@ -47,6 +49,13 @@ import {
   trackGoogleAnalyticsEvent,
 } from "./lib/google-analytics-events.client";
 import { useConsumeGoogleAnalyticsEventCookie } from "./lib/google-analytics-hooks";
+import {
+  getContentScrollContainer,
+  getContentScrollEntryKey,
+  readContentScrollPosition,
+  restoreContentScrollPosition,
+  saveContentScrollPosition,
+} from "./lib/content-scroll-restoration";
 import { captureClientError } from "./lib/observability.client";
 import { createRequestDiagnostics } from "./lib/request-diagnostics";
 import { isServerRouteError, normalizeRouteError } from "./lib/route-error";
@@ -139,6 +148,11 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   });
 };
 
+// The root loader reads the session, preferences, and navigation badges on every page. Background submissions that
+// cannot change any of them, such as likes or the event shop autosave, skip it.
+export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
+  !isRootIndependentSubmission(args) && args.defaultShouldRevalidate;
+
 export const links: LinksFunction = () => [
   {
     rel: "icon",
@@ -154,15 +168,20 @@ export const links: LinksFunction = () => [
   },
   { rel: "apple-touch-icon", sizes: "180x180", href: "/apple-touch-icon.png" },
   { rel: "manifest", href: "/site.webmanifest" },
+  // Student, event, and resource images come from assets.baql.net; UI and boss images from assets.mollulog.net.
+  { rel: "preconnect", href: "https://assets.baql.net" },
+  { rel: "preconnect", href: "https://assets.mollulog.net" },
+  { rel: "preconnect", href: "https://cdnjs.cloudflare.com", crossOrigin: "anonymous" },
+  // `precedence` makes React emit these stylesheets ahead of the ~100 module preloads it hoists into the head. Listed after
+  // them, the CSS that gates the first paint shared a slow connection with all of that JavaScript.
+  // Full files rather than the dynamic subset: the subset swaps glyph ranges in one by one as new text appears, so text
+  // visibly flickers on every page, while full files swap once and are cached afterwards.
   {
     rel: "stylesheet",
     href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/static/pretendard.css",
+    precedence: "default",
   },
-  {
-    rel: "stylesheet",
-    href: "https://cdn.jsdelivr.net/gh/Nyannnnnng/GyeonggiTitleWoff/stylesheet.css",
-  },
-  { rel: "stylesheet", href: styles },
+  { rel: "stylesheet", href: styles, precedence: "default" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -261,7 +280,8 @@ export default function App() {
 
   const navigate = useNavigation();
   useEffect(() => {
-    if (navigate.state === "loading") {
+    // "submitting" counts too, so a slow form submission shows progress instead of looking ignored.
+    if (navigate.state !== "idle") {
       loadingBarRef.current?.continuousStart();
     } else {
       loadingBarRef.current?.complete();
@@ -301,6 +321,9 @@ export default function App() {
   const matches = useMatches();
   const navigationType = useNavigationType();
   const pathname = location.pathname;
+  // Pages are remounted when the URL params change (another student, event, user, ...) so their local state starts
+  // fresh, but not when only a static segment changes, so a layout keeps its state and images across its tabs.
+  const routeParamsKey = JSON.stringify(useParams());
   const isOAuthAuthorizeRoute = matches.some((match) => match.id === "routes/oauth.authorize");
   const routePage = getRoutePageMetadata(matches);
   const previousRoutePatternRef = useRef<string | undefined>(undefined);
@@ -365,13 +388,43 @@ export default function App() {
 
   useConsumeGoogleAnalyticsEventCookie();
 
+  // The offset of the current history entry, kept up to date by a scroll listener. It is read when the entry changes,
+  // because by then the container already holds the next page and may have clamped its scrollTop.
+  const contentScrollRef = useRef<{ entryKey: string; scrollTop: number } | null>(null);
+
+  useEffect(() => {
+    const container = getContentScrollContainer();
+    if (!container) {
+      return;
+    }
+    const handleScroll = () => {
+      if (contentScrollRef.current) {
+        contentScrollRef.current.scrollTop = container.scrollTop;
+      }
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    return () => container.removeEventListener("scroll", handleScroll);
+  }, []);
+
   useIsomorphicLayoutEffect(() => {
-    void routeKey;
+    const storage = getBrowserStorage("sessionStorage");
+    const scrollableContainer = getContentScrollContainer();
+    const scrollEntryKey = getContentScrollEntryKey(location);
+    const previousEntry = contentScrollRef.current;
+    if (previousEntry && previousEntry.entryKey !== scrollEntryKey) {
+      saveContentScrollPosition(storage, previousEntry.entryKey, previousEntry.scrollTop);
+    }
+    // Child layout effects run first, so a route that restores its own offset has already done so here.
+    const keepCurrentScroll = () => {
+      contentScrollRef.current = { entryKey: scrollEntryKey, scrollTop: scrollableContainer?.scrollTop ?? 0 };
+    };
+
     const restoredFutureVisit =
       navigationType === "POP" && location.pathname === "/futures"
-        ? readFutureVisitState(getBrowserStorage("sessionStorage"), routeKey)
+        ? readFutureVisitState(storage, routeKey)
         : null;
     if (restoredFutureVisit) {
+      keepCurrentScroll();
       return;
     }
     // A back navigation to the news list restores its own saved offset (news route), so root must not reset it.
@@ -380,17 +433,27 @@ export default function App() {
         pathname: location.pathname,
         navigationType,
         entryKey: routeKey,
-        storage: getBrowserStorage("sessionStorage"),
+        storage,
       })
     ) {
+      keepCurrentScroll();
       return;
     }
 
-    const scrollableContainer = document.querySelector(".mllg-content-area") as HTMLElement;
+    let stopRestoring: (() => void) | undefined;
     if (scrollableContainer) {
-      scrollableContainer.scrollTop = 0;
+      // Only a back/forward navigation inside the app restores; the first render of a visit or reload starts at the top.
+      const savedScrollTop =
+        previousEntry && navigationType === "POP" ? readContentScrollPosition(storage, scrollEntryKey) : null;
+      if (savedScrollTop === null) {
+        scrollableContainer.scrollTop = 0;
+      } else {
+        stopRestoring = restoreContentScrollPosition(scrollableContainer, savedScrollTop);
+      }
     }
-  }, [location.pathname, navigationType, routeKey]);
+    keepCurrentScroll();
+    return stopRestoring;
+  }, [location, navigationType, routeKey]);
 
   useIsomorphicLayoutEffect(() => {
     const direction = consumeNavigationDirection();
@@ -446,7 +509,7 @@ export default function App() {
             >
               <div className="grow">
                 <TimeZoneProvider timeZone={displayTimeZone}>
-                  <StudentCardPopupProvider key={pathname}>
+                  <StudentCardPopupProvider key={routeParamsKey}>
                     {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
                     <Outlet
                       context={

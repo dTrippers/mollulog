@@ -49,10 +49,10 @@ describe("post detail route", () => {
     expect(result.post).toEqual({
       uid: loadedPost.uid,
       title: loadedPost.title,
-      content: loadedPost.content,
       thumbnailImageUrl: null,
       createdAt: loadedPost.createdAt,
     });
+    expect(result.contentHtml).toContain("<p>본문입니다.</p>");
     expect(result.post).not.toHaveProperty("board");
     expect(result.post).not.toHaveProperty("timelineContentUid");
     expect(result.recent).toBeNull();

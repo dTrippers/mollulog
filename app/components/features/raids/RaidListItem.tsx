@@ -39,6 +39,8 @@ type RaidListItemProps = {
   className?: string;
   imageClassName?: string;
   contentClassName?: string;
+  // Set when the item is the first thing on the page, where lazy loading would delay its largest paint.
+  priorityImage?: boolean;
 };
 
 export default function RaidListItem({
@@ -48,6 +50,7 @@ export default function RaidListItem({
   className,
   imageClassName,
   contentClassName,
+  priorityImage = false,
 }: RaidListItemProps) {
   const displayTimeZone = useDisplayTimeZone();
   const { raidBoss, raidType, seasonIndex, startAt, endAt, terrain } = raid;
@@ -64,7 +67,8 @@ export default function RaidListItem({
         src={bossImageUrl(raidBoss.uid)}
         alt="보스 이미지"
         className={cn("absolute top-0 right-0 h-full object-cover opacity-70", imageClassName)}
-        loading="lazy"
+        loading={priorityImage ? "eager" : "lazy"}
+        fetchPriority={priorityImage ? "high" : "auto"}
       />
       <div
         className={cn(

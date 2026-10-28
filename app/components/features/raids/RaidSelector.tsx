@@ -62,6 +62,7 @@ export default function RaidSelector({ raids, currentRaid, belowSelector }: Raid
             <RaidListItem
               raid={currentRaid}
               reserveRightAccessorySpace
+              priorityImage
               className="shadow-sm group-hover:shadow-md"
               contentClassName="group-hover:bg-card/80"
             />

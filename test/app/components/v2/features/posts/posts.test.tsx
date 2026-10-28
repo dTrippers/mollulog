@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { PostLatest } from "~/components/v2/features/posts/PostLatest";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { newsListOriginState, PostRowList } from "~/components/v2/features/posts/PostRowList";
 import { RecentPosts } from "~/components/v2/features/posts/RecentPosts";
 import {
@@ -66,9 +67,9 @@ describe("PostLatest", () => {
         post={{
           uid: "post-1",
           title: "9/8 업데이트 안내",
-          content: "## 새로운 기능\n\n- 항목",
           createdAt: "2026-09-08T00:00:00.000Z",
         }}
+        contentHtml={renderMarkdownToSafeHtml("## 새로운 기능\n\n- 항목")}
         timeZone="UTC"
       />,
     );

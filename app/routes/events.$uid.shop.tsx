@@ -1,10 +1,11 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopPurchaseDays } from "~/components/features/events/shop/calculations";
 import type { EventShopPlanContext } from "~/components/features/events/shop/ShopCalculatorScreen";
 import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain/event-shop-state-key";
-import { getEventContentSchedule, getEventMetadata, getEventShopContent } from "~/models/event-content";
+import { isEventShopPlanSaveSubmission } from "~/lib/revalidation";
+import { getEventContentSchedule, getEventMetadata, getEventShopContentForMetadata } from "~/models/event-content";
 import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
@@ -23,13 +24,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!metadata) {
     throw new Response("Not Found", { status: 404 });
   }
-  const shopContent = await getEventShopContent(publicReadEnv, timelineUid, false, ctx);
-  const shopSchedule = metadata.shopContentUid
-    ? await getEventContentSchedule(env, metadata.shopContentUid, metadata.runType)
-    : null;
-  const canonicalShopDates = metadata.shopContentUid
-    ? await getTimelineContentDatesByContentUid(publicReadEnv, metadata.shopContentUid, { ctx })
-    : null;
+  const [shopContent, shopSchedule, canonicalShopDates] = await Promise.all([
+    getEventShopContentForMetadata(publicReadEnv, metadata),
+    metadata.shopContentUid ? getEventContentSchedule(env, metadata.shopContentUid, metadata.runType) : null,
+    metadata.shopContentUid
+      ? getTimelineContentDatesByContentUid(publicReadEnv, metadata.shopContentUid, { ctx })
+      : null,
+  ]);
   const shopSince = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
   const shopUntil = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;
   if (
@@ -56,25 +57,23 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const { stages, shopResources, eventRewardBonus, minigameConfig } = shopContent;
 
   const currentUser = await getActiveSensei(env, request);
-  let recruitedStudentUids: string[] = [];
-  let ownedQuantities: Record<string, number> | null = null;
-  if (currentUser) {
-    const [recruitedStudents, userOwnedQuantities] = await Promise.all([
-      getRecruitedStudents(env, currentUser.id),
-      getEventShopOwnedQuantities(env, currentUser.id, shopResources),
-    ]);
-    recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
-    ownedQuantities = userOwnedQuantities;
-  }
-
   const shopStateIdentity = buildEventShopStateIdentity({
     timelineUid,
     shopContentUid: metadata.shopContentUid,
   });
+  let recruitedStudentUids: string[] = [];
+  let ownedQuantities: Record<string, number> | null = null;
   let savedShopState: EventShopState | null = null;
   let savedShopStateSource: SavedShopStateSource = "none";
   if (currentUser) {
-    savedShopState = await getEventShopState(env, currentUser.id, shopStateIdentity.shopStateUid);
+    const [recruitedStudents, userOwnedQuantities, primaryShopState] = await Promise.all([
+      getRecruitedStudents(env, currentUser.id),
+      getEventShopOwnedQuantities(env, currentUser.id, shopResources),
+      getEventShopState(env, currentUser.id, shopStateIdentity.shopStateUid),
+    ]);
+    recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
+    ownedQuantities = userOwnedQuantities;
+    savedShopState = primaryShopState;
     if (savedShopState) {
       savedShopStateSource = "primary";
     } else if (shopStateIdentity.fallbackStateUid) {
@@ -100,6 +99,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     signedIn: currentUser !== null,
   };
 };
+
+// The plan autosave only stores the state already on screen and reads its result from the fetcher, so reloading the
+// shop data after every save is unnecessary. Owned quantity updates still reload it.
+export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
+  !isEventShopPlanSaveSubmission(args) && args.defaultShouldRevalidate;
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData, params }) => {
   const title = `${loaderData?.eventName ?? "이벤트"} - 상점 계산기`;

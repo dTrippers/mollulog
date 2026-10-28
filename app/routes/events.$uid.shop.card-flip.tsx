@@ -1,7 +1,8 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
 import { CardFlipDetail } from "~/components/features/events/card-flip/CardFlipDetail";
 import type { EventShopPlanContext } from "~/components/features/events/shop/ShopCalculatorScreen";
+import { isEventShopStateSubmission } from "~/lib/revalidation";
 import { cardFlipLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
 
@@ -24,6 +25,10 @@ export const loader = async ({ params, context }: LoaderFunctionArgs) => {
 
   return { eventName: metadata.name, eventUid: timelineUid };
 };
+
+// Shop state submissions never change the event metadata this loader reads.
+export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
+  !isEventShopStateSubmission(args) && args.defaultShouldRevalidate;
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const title = `${loaderData?.eventName ?? "이벤트"} - ${cardFlipLocale.menuTitle}`;

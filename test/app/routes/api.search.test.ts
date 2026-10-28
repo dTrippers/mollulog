@@ -31,8 +31,6 @@ jest.mock("~/components/v2/layout/navigation/navigation-menu", () => ({
 }));
 
 jest.mock("~/models/student", () => ({
-  formatStudentFullName: ({ name, familyName }: { name: string; familyName?: string | null }) =>
-    familyName ? `${familyName} ${name}` : name,
   getAllStudents: jest.fn(() =>
     Promise.resolve([
       {

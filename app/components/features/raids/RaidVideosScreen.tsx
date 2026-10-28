@@ -120,7 +120,7 @@ function VideoCard({
         aria-label={`${title} 영상 보기`}
       >
         <div className="relative aspect-video">
-          <img src={thumbnailUrl} alt={title} className="h-full w-full object-cover" />
+          <img src={thumbnailUrl} alt={title} className="h-full w-full object-cover" loading="lazy" decoding="async" />
           <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity hover:opacity-100">
             <PlayIcon className="size-12 text-white" />
           </div>
