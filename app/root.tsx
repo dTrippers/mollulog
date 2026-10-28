@@ -171,13 +171,16 @@ export const links: LinksFunction = () => [
   { rel: "preconnect", href: "https://assets.baql.net" },
   { rel: "preconnect", href: "https://assets.mollulog.net" },
   { rel: "preconnect", href: "https://cdnjs.cloudflare.com", crossOrigin: "anonymous" },
+  // `precedence` makes React emit these stylesheets ahead of the ~100 module preloads it hoists into the head. Listed after
+  // them, the CSS that gates the first paint shared a slow connection with all of that JavaScript.
   // Full files rather than the dynamic subset: the subset swaps glyph ranges in one by one as new text appears, so text
   // visibly flickers on every page, while full files swap once and are cached afterwards.
   {
     rel: "stylesheet",
     href: "https://cdnjs.cloudflare.com/ajax/libs/pretendard/1.3.8/static/pretendard.css",
+    precedence: "default",
   },
-  { rel: "stylesheet", href: styles },
+  { rel: "stylesheet", href: styles, precedence: "default" },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
