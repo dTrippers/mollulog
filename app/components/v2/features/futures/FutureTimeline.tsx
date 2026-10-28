@@ -3,6 +3,7 @@ import {
   ChevronRightIcon,
   EyeIcon,
   EyeSlashIcon,
+  MapIcon,
   PencilSquareIcon,
   RectangleStackIcon,
   Squares2X2Icon,
@@ -327,7 +328,8 @@ function MinigameMark({ minigameType }: { minigameType: string }) {
   if (label === null) {
     return null;
   }
-  const Icon = minigameType === "treasure_hunt" ? Squares2X2Icon : RectangleStackIcon;
+  const Icon =
+    minigameType === "treasure_hunt" ? Squares2X2Icon : minigameType === "road_puzzle" ? MapIcon : RectangleStackIcon;
   return (
     <MetaSeparatorAnd>
       <span className="inline-flex items-center gap-1">
@@ -517,6 +519,9 @@ function minigameLabel(minigameType: string): string | null {
   }
   if (minigameType === "card_flip") {
     return "카드 뒤집기";
+  }
+  if (minigameType === "road_puzzle") {
+    return "철도 연결";
   }
   return null;
 }

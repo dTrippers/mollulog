@@ -1,6 +1,7 @@
 import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import {
   CalendarDaysIcon,
+  MapIcon,
   RectangleStackIcon,
   ShoppingCartIcon,
   SparklesIcon,
@@ -18,13 +19,18 @@ import type { TimelineContent } from "~/models/timeline-content";
 import type { HomeEventsSource, HomeSourceResult } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
 
-const minigameLabel: Record<string, string> = { card_flip: "카드 뒤집기", treasure_hunt: "보물찾기" };
+const minigameLabel: Record<string, string> = {
+  card_flip: "카드 뒤집기",
+  treasure_hunt: "보물찾기",
+  road_puzzle: "철도 연결",
+};
 
 const entryIcon = {
   shop: ShoppingCartIcon,
   simulator: SparklesIcon,
   "card-flip": RectangleStackIcon,
   "treasure-hunt": Squares2X2Icon,
+  "road-puzzle": MapIcon,
 } as const;
 
 // The time chip of one event: ongoing shows the remaining time, upcoming the wait.
@@ -39,7 +45,8 @@ function eventChip(content: TimelineContent, now: UtcIsoString, timeZone: string
 function EventKindLine({ content, minigameType }: { content: TimelineContent; minigameType: string | null }) {
   const kind = getFutureMediaTypeLabel(content);
   const minigame = minigameType ? minigameLabel[minigameType] : undefined;
-  const MinigameIcon = minigameType === "treasure_hunt" ? Squares2X2Icon : RectangleStackIcon;
+  const MinigameIcon =
+    minigameType === "treasure_hunt" ? Squares2X2Icon : minigameType === "road_puzzle" ? MapIcon : RectangleStackIcon;
   return (
     <span className="inline-flex flex-wrap items-center gap-x-1.5">
       <span>{kind}</span>

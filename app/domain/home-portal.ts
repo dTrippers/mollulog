@@ -55,7 +55,8 @@ export type HomeEntryPoint =
   | { key: "shop"; label: "상점 계산기"; href: string }
   | { key: "simulator"; label: "모집 시뮬레이션"; href: string }
   | { key: "card-flip"; label: "카드 뒤집기"; href: string }
-  | { key: "treasure-hunt"; label: "보물찾기"; href: string };
+  | { key: "treasure-hunt"; label: "보물찾기"; href: string }
+  | { key: "road-puzzle"; label: "철도 연결"; href: string };
 
 // Only the entry points the event can use. Card flip needs the shop; the simulator needs a recruitment group.
 export function getHomeEntryPoints(
@@ -78,6 +79,9 @@ export function getHomeEntryPoints(
   }
   if (minigameType === "treasure_hunt") {
     points.push({ key: "treasure-hunt", label: "보물찾기", href: `/events/${content.uid}/treasure-hunt` });
+  }
+  if (minigameType === "road_puzzle") {
+    points.push({ key: "road-puzzle", label: "철도 연결", href: `/events/${content.uid}/road-puzzle` });
   }
   return points;
 }

@@ -140,6 +140,11 @@ describe("getHomeEntryPoints", () => {
       "simulator",
       "treasure-hunt",
     ]);
+    expect(getHomeEntryPoints(shopEvent, "road_puzzle").map((point) => point.key)).toEqual([
+      "shop",
+      "simulator",
+      "road-puzzle",
+    ]);
 
     const permanent = content({ uid: "permanent", runType: "permanent", contentUid: "content-2" });
     expect(getHomeEntryPoints(permanent, "card_flip")).toEqual([]);
