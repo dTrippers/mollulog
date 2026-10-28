@@ -2,19 +2,12 @@ import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "~/components/primitives";
 import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
-import type {
-  CollectableResource,
-  EventRewardBonus,
-  MinigameConfig,
-  RoadPuzzleMap,
-  ShopResource,
-  Stage,
-} from "~/domain/event-shop";
+import type { EventRewardBonus, MinigameConfig, RoadPuzzleMap, ShopResource, Stage } from "~/domain/event-shop";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { getRoadPuzzleTotalCost, getRoadPuzzleTotalRewards } from "~/domain/road-puzzle/calculator";
-import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopState } from "~/models/event-shop-state";
 import type { EventShopPlanContext } from "./shop";
+import { buildCollectableResources } from "./shop/calculations/collectable-resources";
 import {
   convertClueSearchCostsToPoints,
   filterClueSearchShopResources,
@@ -32,7 +25,6 @@ import { useTreasureHuntStats } from "./shop/hooks/useTreasureHuntStats";
 import type { TreasureHuntSectionStatus } from "./shop/TreasureHuntSection";
 import {
   calculateTreasureHuntEstimate,
-  getTreasureHuntCellCostResources,
   getTreasureHuntRoundSelection,
   shouldHoldTreasureHuntShopCalculations,
   type TreasureHuntEstimate,
@@ -88,91 +80,11 @@ export default function EventDetailShopPage({
   const roadPuzzle = isRoadPuzzle ? (minigameConfig.roadPuzzle ?? null) : null;
   const roadPuzzlePaymentQuantity = isRoadPuzzle ? minigameConfig.payment.quantity : 0;
 
-  const collectableResources = useMemo<CollectableResource[]>(() => {
-    const items: CollectableResource[] = [];
-    for (const { paymentResource, purchaseTiers } of visibleShopResources) {
-      const paymentResources = [paymentResource, ...purchaseTiers.map((tier) => tier.paymentResource)];
-      for (const paymentResource of paymentResources) {
-        if (items.some(({ uid }) => uid === paymentResource.uid)) {
-          continue;
-        }
-
-        items.push({
-          type: paymentResource.type,
-          uid: paymentResource.uid,
-          name: paymentResource.name,
-          imageUrl: paymentResource.imageUrl,
-          forPayment: true,
-        });
-      }
-    }
-
-    for (const stage of stages) {
-      for (const { item } of stage.rewards) {
-        if (item && item.category === "coin" && !items.some(({ uid }) => uid === item.uid)) {
-          items.push({ type: ResourceTypeEnum.Item, uid: item.uid, name: item.name, forPayment: false });
-        }
-      }
-    }
-
-    if (minigameConfig?.minigameType === "treasure_hunt") {
-      const cellCosts = getTreasureHuntCellCostResources(minigameConfig.treasureHunt?.rounds ?? []);
-      for (const payment of cellCosts) {
-        if (!items.some(({ uid }) => uid === payment.resourceUid)) {
-          items.push({
-            type: payment.resourceType,
-            uid: payment.resourceUid,
-            name: payment.resourceName ?? "재화",
-            imageUrl: payment.imageUrl,
-            forPayment: false,
-          });
-        }
-      }
-    } else if (minigameConfig) {
-      const minigamePaymentResources = [
-        minigameConfig.payment,
-        ...minigameConfig.payments,
-        ...minigameConfig.rewardGroups.flatMap((group) => group.payments),
-      ];
-      for (const { resourceType, resourceUid, resourceName, imageUrl } of minigamePaymentResources) {
-        if (clueSearchExchange?.supported && clueSearchExchange.clueUids.includes(resourceUid)) {
-          continue;
-        }
-
-        if (!items.some(({ uid }) => uid === resourceUid)) {
-          items.push({
-            type: resourceType,
-            uid: resourceUid,
-            name: resourceName ?? "재화",
-            imageUrl,
-            forPayment: false,
-          });
-        }
-      }
-
-      if (minigameConfig.minigameType === "road_puzzle") {
-        for (const reward of minigameConfig.roadPuzzle?.rounds.flatMap((round) => round.rewards) ?? []) {
-          if (items.some(({ uid }) => uid === reward.resourceUid)) continue;
-          items.push({
-            type: reward.resourceType,
-            uid: reward.resourceUid,
-            name: reward.resourceName ?? "재화",
-            imageUrl: reward.imageUrl,
-            forPayment: false,
-          });
-        }
-      }
-
-      if (clueSearchExchange?.supported && clueSearchExchange.pointResource) {
-        const { type, uid, name, imageUrl } = clueSearchExchange.pointResource;
-        if (!items.some((item) => item.uid === uid)) {
-          items.push({ type, uid, name, imageUrl, forPayment: false });
-        }
-      }
-    }
-
-    return items;
-  }, [clueSearchExchange, minigameConfig, stages, visibleShopResources]);
+  const collectableResources = useMemo(
+    () =>
+      buildCollectableResources({ shopResources: visibleShopResources, stages, minigameConfig, clueSearchExchange }),
+    [clueSearchExchange, minigameConfig, stages, visibleShopResources],
+  );
 
   // Unified state management
   const { state, actions } = useShopState({

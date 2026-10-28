@@ -311,4 +311,50 @@ describe("road puzzle planner hold state", () => {
     expect(screen.getByText("5회 소탕")).toBeTruthy();
     expect(screen.getAllByText("840").length).toBeGreaterThan(0);
   });
+
+  it("passes only farming resources, not rail puzzle rewards, to the final result", () => {
+    mockRoadPuzzleStatus = "ready";
+    mockShopCalculationsReady = true;
+    const reward = (resourceUid: string) => ({ resourceType: ResourceTypeEnum.Item, resourceUid, quantity: 1 });
+    const configWithRewards: MinigameConfig = {
+      ...plannerConfig,
+      roadPuzzle: {
+        ...plannerConfig.roadPuzzle!,
+        railSetReward: [reward("rail-set-reward")],
+        rounds: [
+          {
+            round: 1,
+            isLoop: false,
+            mapUids: ["map-1"],
+            rewards: [reward("round-reward")],
+            additionalRewards: [reward("additional-reward")],
+          },
+        ],
+      },
+    };
+    let collectableUids: string[] = [];
+
+    render(
+      createElement(EventDetailShopPage, {
+        stages,
+        shopResources: [],
+        ownedQuantities: null,
+        eventRewardBonus: [],
+        recruitedStudentUids: [],
+        eventUid: "10846",
+        shopStateUid: "10846",
+        savedShopState: null,
+        savedShopStateSource: "none" as const,
+        availablePurchaseDays: 1,
+        signedIn: false,
+        minigameConfig: configWithRewards,
+        renderScreen: (context: EventShopPlanContext) => {
+          collectableUids = context.collectableResources.map(({ uid }) => uid);
+          return null;
+        },
+      }),
+    );
+
+    expect(collectableUids).toEqual(["sticker"]);
+  });
 });
