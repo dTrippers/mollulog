@@ -18,7 +18,7 @@ import {
 } from "~/locales/ko";
 import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { Role } from "~/models/content.d";
-import { parseVisibleNames } from "~/models/student";
+import { parseVisibleNames } from "~/models/student-name";
 
 type StudentCardProps = {
   uid: string | null;
@@ -163,6 +163,7 @@ export default function StudentCard({
   const [usesMobilePopupLayout, setUsesMobilePopupLayout] = useState(false);
   const [popupPosition, setPopupPosition] = useState<PopupPosition | null>(null);
   const interactive = Boolean(onSelect ? uid : popups && popupId);
+  const hasPopup = Boolean((uid || popupId) && name && popups && popups.length > 0);
   const handleCardClick = getStudentCardAction({
     uid,
     onSelect,
@@ -171,7 +172,12 @@ export default function StudentCard({
     setActivePopupId,
   });
 
+  // Long lists render cards without popups, so only cards that can open one pay for the portal state and the media
+  // query listener.
   useEffect(() => {
+    if (!hasPopup) {
+      return;
+    }
     setCanUsePopupPortal(true);
     const mediaQuery = window.matchMedia("(max-width: 767px)");
     const updatePopupLayout = () => setUsesMobilePopupLayout(mediaQuery.matches);
@@ -179,7 +185,7 @@ export default function StudentCard({
     mediaQuery.addEventListener("change", updatePopupLayout);
 
     return () => mediaQuery.removeEventListener("change", updatePopupLayout);
-  }, []);
+  }, [hasPopup]);
 
   useEffect(() => {
     if (!showPopup) {
@@ -255,7 +261,7 @@ export default function StudentCard({
         maxHeight: "calc(100vh - 2rem)",
       };
   const pressed = onSelect ? (indeterminate && !checked ? "mixed" : checked) : undefined;
-  const popup = (uid || popupId) && name && popups && popups.length > 0 && (
+  const popup = hasPopup && name && popups && (
     <Transition
       show={showPositionedPopup}
       as="div"
@@ -465,11 +471,17 @@ export function StudentCardPopup({ student, popups, onClose }: StudentCardPopupP
       </div>
       <div className="space-y-0.5">
         {popups.map((popup, index) => {
-          const itemClassName = "flex min-h-10 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm font-normal transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+          const itemClassName =
+            "flex min-h-10 w-full items-center gap-3 rounded-md px-2 py-2 text-left text-sm font-normal transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
 
           const content = (
             <>
-              {popup.Icon && <popup.Icon className={cn("size-4 shrink-0", popup.iconClassName ?? "text-muted-foreground")} aria-hidden="true" />}
+              {popup.Icon && (
+                <popup.Icon
+                  className={cn("size-4 shrink-0", popup.iconClassName ?? "text-muted-foreground")}
+                  aria-hidden="true"
+                />
+              )}
               {popup.text && <span>{popup.text}</span>}
               {popup.children}
             </>

@@ -48,7 +48,8 @@ import {
   upsertRelationshipLevel,
 } from "~/models/relationship-level";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
-import { formatVisibleName, getAllStudents } from "~/models/student";
+import { getAllStudents } from "~/models/student";
+import { formatVisibleName } from "~/models/student-name";
 import { getUserResourceInventoryMap } from "~/models/user-resource-inventory";
 import RelationshipGiftCalculationMode, {
   type RelationshipGiftCalculationModeValue,

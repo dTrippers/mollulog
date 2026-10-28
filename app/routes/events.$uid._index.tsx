@@ -37,18 +37,17 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     throw new Response("Not Found", { status: 404 });
   }
 
-  const recruitmentGroup = content.recruitmentGroupUid
-    ? await getRecruitmentGroupByUidStrict(env, content.recruitmentGroupUid)
-    : null;
+  const { recruitmentGroupUid } = content;
+  const [recruitmentGroup, groupContents, currentUser] = await Promise.all([
+    recruitmentGroupUid ? getRecruitmentGroupByUidStrict(env, recruitmentGroupUid) : null,
+    recruitmentGroupUid ? getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [recruitmentGroupUid], { ctx }) : [],
+    getActiveSensei(env, request),
+  ]);
   const recruitments = filterRecruitmentsByStudentUids(
     recruitmentGroup?.recruitments ?? [],
     content.recruitmentStudentUids,
   );
-  const siblingEvents = content.recruitmentGroupUid
-    ? (await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [content.recruitmentGroupUid], { ctx })).filter(
-        (sibling) => sibling.uid !== content.uid,
-      )
-    : [];
+  const siblingEvents = groupContents.filter((sibling) => sibling.uid !== content.uid);
   const eventContent = {
     name: content.name,
     since: content.startAt,
@@ -64,7 +63,6 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     recruitments,
   };
 
-  const currentUser = await getActiveSensei(env, request);
   const canFilterRecruitmentOpinions = content.contentType !== "live" && eventContent.recruitmentPeriod !== null;
   const hideRecruitmentOpinions =
     canFilterRecruitmentOpinions && (await getHideRecruitmentOpinions(env, currentUser, { ctx }));

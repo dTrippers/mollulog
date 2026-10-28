@@ -11,7 +11,6 @@ jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn(() => ({ err
 jest.mock("~/models/raid", () => ({ getAllRaidSchedules: jest.fn() }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudentTiers: jest.fn() }));
 jest.mock("~/models/student", () => ({
-  formatStudentFullName: jest.fn(),
   getAllStudentsMap: jest.fn(),
   getStudentDetail: jest.fn(),
 }));

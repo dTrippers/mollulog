@@ -13,7 +13,8 @@ import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { formatStudentFullName, getStudentHeader } from "~/models/student";
+import { getStudentHeader } from "~/models/student";
+import { formatStudentFullName } from "~/models/student-name";
 import type { TimelineContent } from "~/models/timeline-content";
 import { findEventsForRecruitmentStudent, groupTimelineContentsByRecruitmentGroupUid } from "~/models/timeline-content";
 
