@@ -28,7 +28,16 @@ function post(index: number): Post {
   };
 }
 
-const listData = { posts: Array.from({ length: 3 }, (_, index) => post(index)), page: 1, totalPages: 1 };
+const listData = {
+  posts: Array.from({ length: 3 }, (_, index) => post(index)).map(({ uid, title, createdAt }) => ({
+    uid,
+    title,
+    createdAt,
+  })),
+  latestContentHtml: "<p>짧은 본문</p>",
+  page: 1,
+  totalPages: 1,
+};
 
 // Mirrors root's layout effect: the scroll container is reset to 0 on a pathname change, unless root keeps a saved
 // news offset for a back navigation (the same condition as app/root.tsx).

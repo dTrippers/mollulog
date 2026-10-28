@@ -2,7 +2,7 @@ import { getRecurringRaidStudents, type RaidPortalSeasonStudentUsage } from "~/d
 import type { Defense } from "~/graphql/graphql";
 import { cacheKey, cacheQuery, fetchRouteCached } from "~/lib/cache";
 import { compareInstantAsc, isInstantAfter, nowUtcIso } from "~/lib/date-time";
-import { fetchRaidOverviewStudentUsage } from "~/lib/ranks/overview";
+import { fetchRaidOverviewStudentUsage } from "~/lib/ranks/overview-student-usage";
 import { fetchRaidVideos } from "~/lib/ranks/videos";
 import type { RaidType } from "~/models/content.d";
 import { getAllRaidSchedules, type RaidScheduleListItem } from "~/models/raid";

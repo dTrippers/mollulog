@@ -1,14 +1,4 @@
-import { marked } from "marked";
-import sanitizeHtml from "sanitize-html";
 import { cn } from "~/lib/utils";
-
-// The same sanitize rules as the 1.x MarkdownText. Keep them identical: this allowlist is a security boundary.
-const allowedTags = sanitizeHtml.defaults.allowedTags.concat(["img"]);
-const allowedAttributes = {
-  ...sanitizeHtml.defaults.allowedAttributes,
-  a: ["href", "name", "title"],
-  img: ["src", "alt", "title", "width", "height", "loading"],
-};
 
 // Visual size follows the markdown level: `#` and `##` read as the section size, `###` and deeper as the body-strong size.
 const headingClassName = {
@@ -52,19 +42,13 @@ const contentClassName = cn(
 );
 
 export type MarkdownContentProps = {
-  text: string;
+  // Sanitized HTML from renderMarkdownToSafeHtml in a loader; it is injected without further sanitizing.
+  html: string;
   // The DOM level of the shallowest body heading: 2 on the detail page, 3 inside an expanded list post.
   headingLevel: 2 | 3;
 };
 
-export function MarkdownContent({ text, headingLevel }: MarkdownContentProps) {
-  const html = sanitizeHtml(marked(text, { async: false }), {
-    allowedTags,
-    allowedAttributes,
-    allowedSchemes: ["http", "https", "mailto", "tel"],
-    allowProtocolRelative: false,
-  });
-
+export function MarkdownContent({ html, headingLevel }: MarkdownContentProps) {
   return (
     // biome-ignore lint/security/noDangerouslySetInnerHtml: rendered markdown is sanitized before injection
     <div className={contentClassName} dangerouslySetInnerHTML={{ __html: shiftHeadings(html, headingLevel) }} />

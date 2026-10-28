@@ -10,6 +10,7 @@ import {
 import {
   type LoaderFunctionArgs,
   Outlet,
+  type ShouldRevalidateFunction,
   redirect,
   useLoaderData,
   useLocation,
@@ -19,9 +20,20 @@ import {
 import { PanelEventSelector } from "~/components/features/events";
 import { Page } from "~/components/features/layout";
 import { compareInstantAsc } from "~/lib/date-time";
+import { isEventShopStateSubmission } from "~/lib/revalidation";
 import { cardFlipLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
-import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
+import {
+  getEventMetadata,
+  getEventMinigameType,
+  getShopAvailableEvents,
+  type ShopAvailableEvent,
+} from "~/models/event-content";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
+
+// Only the shop page shows the event selector, so the loader reads the shop events for that page alone.
+function isShopPath(pathname: string) {
+  return pathname.endsWith("/shop");
+}
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
   const uid = params.uid;
@@ -34,15 +46,17 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   if (!eventMetadata) {
     throw new Response("Not Found", { status: 404 });
   }
-  const minigameType =
-    eventMetadata.contentType === "live" ? null : await getEventMinigameType(publicReadEnv, eventMetadata);
   const pathname = new URL(request.url).pathname;
   if (eventMetadata.contentType === "live" && pathname !== `/events/${uid}`) {
     return redirect(`/events/${uid}`);
   }
-  const shopAvailableEvents = pathname.endsWith("/shop") ? await getShopAvailableEvents(publicReadEnv, ctx) : [];
+  const isShopPage = isShopPath(pathname);
+  const [minigameType, shopAvailableEvents] = await Promise.all([
+    eventMetadata.contentType === "live" ? null : getEventMinigameType(publicReadEnv, eventMetadata),
+    isShopPage ? getShopAvailableEvents(publicReadEnv, ctx) : ([] as ShopAvailableEvent[]),
+  ]);
   if (
-    pathname.endsWith("/shop") &&
+    isShopPage &&
     eventMetadata.shopAvailable &&
     !shopAvailableEvents.some((event) => event.uid === uid)
   ) {
@@ -57,6 +71,12 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }
   return { eventMetadata, minigameType, shopAvailableEvents };
 };
+
+// Moving to or from the shop tab keeps this layout mounted, so the loader must run again to load or drop the selector's
+// events. Shop state submissions never change the event metadata this loader reads.
+export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
+  !isEventShopStateSubmission(args) &&
+  (isShopPath(args.currentUrl.pathname) !== isShopPath(args.nextUrl.pathname) || args.defaultShouldRevalidate);
 
 export default function EventPage() {
   const navigate = useNavigate();

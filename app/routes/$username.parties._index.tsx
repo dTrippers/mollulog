@@ -25,10 +25,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const me = sensei.username === currentUser?.username;
 
-  const allStudents = await getAllStudents(env, true);
-  const recruitedStudentTiers = await getRecruitedStudentTiers(env, sensei.id);
-  const allRaids = await getAllRaidSchedules(env);
-  const parties = (await getUserParties(env, sensei.username, { includePrivate: me })).reverse();
+  const [allStudents, recruitedStudentTiers, allRaids, userParties] = await Promise.all([
+    getAllStudents(env, true),
+    getRecruitedStudentTiers(env, sensei.id),
+    getAllRaidSchedules(env),
+    getUserParties(env, sensei.username, { includePrivate: me }),
+  ]);
+  const parties = userParties.reverse();
 
   return {
     me,

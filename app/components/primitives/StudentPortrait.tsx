@@ -31,7 +31,20 @@ export default function StudentPortrait({
   const portraitImage = useSourceImageState(concealedSrc);
 
   if (presentation.kind === "collection") {
-    return <img src={presentation.src} alt={alt} className={className} loading={loading} onError={onError} />;
+    // Every collection portrait is 200x226. Declaring it reserves the card's height before the image arrives, so grids do
+    // not shift and lazy loading only fetches the cards near the viewport.
+    return (
+      <img
+        src={presentation.src}
+        alt={alt}
+        width={200}
+        height={226}
+        className={className}
+        loading={loading}
+        decoding="async"
+        onError={onError}
+      />
+    );
   }
 
   const frameContent =

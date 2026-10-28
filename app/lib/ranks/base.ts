@@ -1,4 +1,4 @@
-import protobuf from "protobufjs";
+import type protobuf from "protobufjs";
 import { fetchWithTimeout, readBodyWithTimeout } from "~/lib/fetch-timeout";
 import { RUNTIME_TIMEOUTS } from "~/lib/runtime-timeouts";
 
@@ -29,7 +29,9 @@ export function createProtobufRootCache() {
   return async (schema: string): Promise<protobuf.Root> => {
     let root = roots.get(schema);
     if (!root) {
-      root = protobuf.parse(schema).root;
+      // Loaded on first use so protobufjs is not part of the initial bundle of routes that decode rank data in the browser.
+      const { default: protobufjs } = await import("protobufjs");
+      root = protobufjs.parse(schema).root;
       roots.set(schema, root);
     }
 
@@ -67,9 +69,12 @@ export async function fetchProtobuf<T>(params: {
   getRoot: (schema: string) => Promise<protobuf.Root>;
 }): Promise<T> {
   const { schema, messageType, getRoot, ...fetchParams } = params;
+  // Resolve the schema while the request is in flight; the first call also downloads protobufjs.
+  const rootPromise = getRoot(schema);
+  rootPromise.catch(() => {});
   const arrayBuffer = await fetchProtobufBytes(fetchParams);
 
-  return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, getRoot);
+  return await parseProtobufResponse<T>(arrayBuffer, schema, messageType, () => rootPromise);
 }
 
 export async function fetchProtobufBytes(params: {

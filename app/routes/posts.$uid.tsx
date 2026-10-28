@@ -18,6 +18,7 @@ import { MarkdownContent } from "~/components/v2/primitives/MarkdownContent";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
@@ -75,7 +76,8 @@ export const loader = async ({ context, params }: LoaderFunctionArgs) => {
   if (!view) {
     throw notFoundResponse();
   }
-  return view;
+  const { content, ...post } = view.post;
+  return { ...view, post, contentHtml: renderMarkdownToSafeHtml(content) };
 };
 
 export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
@@ -134,7 +136,7 @@ export function ErrorBoundary() {
 }
 
 export default function PostDetailPage() {
-  const { post, back, recent } = useLoaderData<typeof loader>();
+  const { post, contentHtml, back, recent } = useLoaderData<typeof loader>();
   const timeZone = useDisplayTimeZone();
   const location = useLocation();
   const navigate = useNavigate();
@@ -198,7 +200,7 @@ export default function PostDetailPage() {
       />
       <PageMain>
         <article className="rounded-lg bg-v2-surface p-v2-block-p">
-          <MarkdownContent text={post.content} headingLevel={2} />
+          <MarkdownContent html={contentHtml} headingLevel={2} />
           <span className="sr-only" role="status">
             {shareStatus === "error"
               ? "게시글 주소를 공유하지 못했어요."

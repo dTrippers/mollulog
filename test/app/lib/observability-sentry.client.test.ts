@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import { describe, expect, it } from "@jest/globals";
-import { scrubClientSentryBreadcrumb, scrubClientSentryEvent } from "~/lib/observability.client";
+import { scrubClientSentryBreadcrumb, scrubClientSentryEvent } from "~/lib/observability-sentry.client";
 import { rememberRoutePattern } from "~/lib/route-pattern";
 
 describe("client Sentry privacy scrubbing", () => {

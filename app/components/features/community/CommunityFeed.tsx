@@ -13,7 +13,7 @@ import { bossImageUrl } from "~/models/assets";
 import type { CommunityFeedPost, CommunityPostBlock } from "~/models/community";
 import type { CommunityEngagementActionResult } from "~/models/community-engagement";
 import { STUDENT_GRADING_TAG_DISPLAY, sortStudentGradingTags } from "~/models/student-grading-tag";
-import type { EnrichedCommunityFeedPost } from "~/views/community";
+import type { EnrichedCommunityFeedPost, EnrichedCommunityPostBlock } from "~/views/community";
 import { StudentCards } from "../students";
 import {
   getCommentEditorPanelClassName,
@@ -480,7 +480,7 @@ function BlockView({
   post,
   studentsByUid,
 }: {
-  block: CommunityPostBlock;
+  block: EnrichedCommunityPostBlock;
   post: CommunityFeedPostItem;
   studentsByUid: Record<string, { name: string }>;
 }) {
@@ -503,7 +503,7 @@ function BlockView({
       return null;
     }
 
-    return <MarkdownText text={block.text} />;
+    return <MarkdownText html={block.html} />;
   }
 
   if (block.type === "youtube") {

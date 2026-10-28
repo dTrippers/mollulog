@@ -9,6 +9,7 @@ import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/do
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { captureServerError, getLogger } from "~/lib/observability.server";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
 import { getNestedContentComments } from "~/models/content.server";
 import {
@@ -120,7 +121,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     me: currentUser ? { username: currentUser.username } : null,
     eventUid: timelineUid,
     siblingEvents: siblingEvents.map((sibling) => ({ uid: sibling.uid, name: sibling.name })),
-    livePost,
+    livePost: livePost ? { title: livePost.title, contentHtml: renderMarkdownToSafeHtml(livePost.content) } : null,
   };
 };
 
@@ -260,7 +261,7 @@ export default function EventIndex() {
           {livePost ? (
             <>
               <h2 className="text-lg font-black md:text-xl">{livePost.title}</h2>
-              <MarkdownText text={livePost.content} />
+              <MarkdownText html={livePost.contentHtml} />
             </>
           ) : (
             <p className="text-sm text-neutral-500 dark:text-neutral-400">

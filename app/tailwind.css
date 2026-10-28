@@ -24,6 +24,32 @@
 }
 @plugin "@tailwindcss/typography";
 
+/* GyeonggiTitle is only used for the "몰루로그" logo text, so these files are subset to those four glyphs.
+   Regenerate them with pyftsubset --text="몰루로그" if the logo text changes. */
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-L.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-M.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GyeonggiTitle';
+  src: url('/fonts/gyeonggi-title-logo-B.woff2') format('woff2');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant hover (&:hover);
 @custom-variant pointer-coarse (@media (pointer: coarse));
@@ -31,7 +57,7 @@
 @theme {
   --font-*: initial;
   --font-sans:
-    Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
+    'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto,
     'Helvetica Neue', 'Segoe UI', 'Apple SD Gothic Neo', 'Noto Sans KR',
     'Malgun Gothic', sans-serif;
   --font-ingame:

@@ -51,7 +51,10 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   );
 
   // Fetch skill items only for favorited students that appear in matched events
-  const skillItemsMap = await getStudentSkillItemsBatch(env, [...relevantStudentUids]);
+  const [skillItemsMap, contentComments] = await Promise.all([
+    getStudentSkillItemsBatch(env, [...relevantStudentUids]),
+    getContentsComments(env, plannedContentIds, currentUser?.id),
+  ]);
 
   // Build events in the shape FuturePlan expects
   const events = matchedContents.map((content) => ({
@@ -83,7 +86,6 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }));
 
   const allComments: Record<string, NestedComment[]> = {};
-  const contentComments = await getContentsComments(env, plannedContentIds, currentUser?.id);
   for (const contentId of plannedContentIds) {
     allComments[contentId] = nestComments(contentComments[contentId] ?? [], sensei);
   }

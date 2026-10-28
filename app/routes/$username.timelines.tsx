@@ -16,8 +16,12 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   const me = sensei.id === currentUser?.id;
-  const hasParties = me && (await getUserParties(env, sensei.username, { includePrivate: true })).length > 0;
-  const timelines = await listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx });
+  const [hasParties, timelines] = await Promise.all([
+    me
+      ? getUserParties(env, sensei.username, { includePrivate: true }).then((parties) => parties.length > 0)
+      : false,
+    listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx }),
+  ]);
   const timelineUids = timelines.map((timeline) => timeline.uid);
   const engagementByUid = await getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, currentUser?.id, {
     ctx,

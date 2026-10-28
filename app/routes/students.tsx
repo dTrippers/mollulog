@@ -6,7 +6,7 @@ import {
   UserIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation, useOutletContext } from "react-router";
 import { Page } from "~/components/features/layout";
 import PageLink from "~/components/features/layout/PageLink";
@@ -49,10 +49,13 @@ const studentFilterCookieOptions = {
   allowedDisplays: STUDENT_FILTER_DISPLAYS,
 } as const;
 
+// Only the directory page itself renders the student list, so the loader skips it on the other student pages.
+function needsStudentDirectory(url: URL) {
+  return url.pathname === "/students";
+}
+
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const url = new URL(request.url);
-  const pathname = url.pathname;
-  const needsStudentList = pathname === "/students";
+  const needsStudentList = needsStudentDirectory(new URL(request.url));
   const filterState = readStudentFilterStateFromCookie(request.headers.get("Cookie"), studentFilterCookieOptions);
 
   if (!needsStudentList) {
@@ -69,6 +72,11 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     filterState,
   };
 };
+
+// Moving between a student page and the directory keeps this layout mounted, so the loader must run again to load or drop
+// the list.
+export const shouldRevalidate: ShouldRevalidateFunction = ({ currentUrl, nextUrl, defaultShouldRevalidate }) =>
+  needsStudentDirectory(currentUrl) !== needsStudentDirectory(nextUrl) || defaultShouldRevalidate;
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "학생부 | 몰루로그";

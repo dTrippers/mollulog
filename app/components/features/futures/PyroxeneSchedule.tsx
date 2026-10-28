@@ -1,5 +1,5 @@
 import dayjs from "dayjs";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { EmptyView, Section, SectionCard, Toggle } from "~/components/primitives";
 import type { PyroxeneCalculationOptions, PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import {
@@ -11,11 +11,13 @@ import { collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import PyroxeneAvailableOneTimePackages from "./PyroxeneAvailableOneTimePackages";
 import PyroxeneCalculationAssumptions from "./PyroxeneCalculationAssumptions";
-import PyroxeneChart from "./PyroxeneChart";
 import PyroxeneInitialResources from "./PyroxeneInitialResources";
 import PyroxeneTimelineEvent from "./PyroxeneTimelineEvent";
 import PyroxeneTimelineResources from "./PyroxeneTimelineResources";
 import { usePyroxeneTimeline } from "./usePyroxeneTimeline";
+
+// recharts is large, so the chart is loaded separately from the planner's initial bundle.
+const PyroxeneChart = lazy(() => import("./PyroxeneChart"));
 
 type PyroxeneScheduleProps = {
   selectedEventUid?: string | null;
@@ -315,7 +317,9 @@ export default function PyroxeneSchedule({
                 <span>계산 중...</span>
               </div>
             )}
-            <PyroxeneChart timeline={timeline} />
+            <Suspense fallback={timeline.length >= 2 ? <div className="h-[200px]" /> : null}>
+              <PyroxeneChart timeline={timeline} />
+            </Suspense>
           </SectionCard>
         </div>
       </Section>

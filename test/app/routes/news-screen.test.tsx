@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { render, screen, within } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import { installLayoutTestEnv } from "../components/v2/layout/layout-test-env";
+import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import type { Post } from "~/models/post";
 import { getNewsPosts } from "~/models/post";
 import { default as News, ErrorBoundary, loader } from "~/routes/news";
@@ -31,10 +32,13 @@ function post(index: number): Post {
   };
 }
 
-// The loader result the screen renders: the posts of the page, the clamped page, and the page count.
+// The loader result the screen renders: the post rows of the page, the rendered body of the newest post on page 1, the
+// clamped page, and the page count.
 function pageData(count: number, page: number, totalPages: number) {
+  const posts = Array.from({ length: count }, (_, index) => post(index));
   return {
-    posts: Array.from({ length: count }, (_, index) => post(index)),
+    posts: posts.map(({ uid, title, createdAt }) => ({ uid, title, createdAt })),
+    latestContentHtml: page === 1 && posts[0] ? renderMarkdownToSafeHtml(posts[0].content) : null,
     page,
     totalPages,
   };
@@ -85,7 +89,20 @@ describe("news list loader", () => {
     } as never);
 
     expect(mockedGetNewsPosts).toHaveBeenCalledWith(env, 2, 20, { ctx });
-    expect(result).toMatchObject({ page: 2, totalPages: 3 });
+    expect(result).toMatchObject({ page: 2, totalPages: 3, latestContentHtml: null });
+  });
+
+  it("sends only the newest post body on page 1, rendered as sanitized HTML", async () => {
+    mockedGetNewsPosts.mockResolvedValue(modelPage(3, 1, 1));
+
+    const result = await loader({
+      request: new Request("https://mollulog.net/news"),
+      context: { cloudflare: { env, ctx } },
+      params: {},
+    } as never);
+
+    expect(result.latestContentHtml).toContain("<h2>새로운 기능</h2>");
+    expect(result.posts.every((row) => !("content" in row))).toBe(true);
   });
 
   it("treats a missing or invalid page as page 1", async () => {

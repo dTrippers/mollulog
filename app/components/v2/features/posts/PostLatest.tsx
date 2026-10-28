@@ -7,7 +7,9 @@ import { v2FocusRing } from "../../layout/styles";
 import { MarkdownContent } from "../../primitives/MarkdownContent";
 
 export type PostLatestProps = {
-  post: Pick<Post, "uid" | "title" | "content" | "createdAt">;
+  post: Pick<Post, "uid" | "title" | "createdAt">;
+  // Sanitized HTML of the post body, rendered by the loader.
+  contentHtml: string;
   timeZone: string;
   linkState?: unknown;
 };
@@ -21,7 +23,7 @@ function splitLastWord(title: string) {
 }
 
 // The newest post on the first list page, shown in full. Its title links to the detail page.
-export function PostLatest({ post, timeZone, linkState }: PostLatestProps) {
+export function PostLatest({ post, contentHtml, timeZone, linkState }: PostLatestProps) {
   const { head: titleHead, tail: titleTail } = splitLastWord(post.title);
   return (
     <article aria-labelledby="latest-post-title" className="rounded-lg bg-v2-surface p-v2-block-p">
@@ -48,7 +50,7 @@ export function PostLatest({ post, timeZone, linkState }: PostLatestProps) {
         {formatInstant(post.createdAt, { timeZone, format: "YYYY/MM/DD" })}
       </time>
       <div className="mt-4">
-        <MarkdownContent text={post.content} headingLevel={3} />
+        <MarkdownContent html={contentHtml} headingLevel={3} />
       </div>
     </article>
   );
