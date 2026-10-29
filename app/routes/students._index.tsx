@@ -64,7 +64,7 @@ export default function Students() {
   return (
     <>
       <PageToolbar>
-        <div data-student-directory-toolbar className="flex min-w-0 items-center gap-2 px-4 sm:px-0">
+        <div data-student-directory-toolbar className="flex min-w-0 items-center gap-2 px-[var(--v2-gutter)] @min-[48rem]/page-available:px-0">
           <SearchInput
             value={filterState.search}
             onChange={updateSearch}
