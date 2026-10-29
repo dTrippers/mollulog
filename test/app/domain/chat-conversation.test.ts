@@ -4,6 +4,7 @@ import {
   CHAT_PENDING_STALE_MS,
   type ChatMessage,
   chatConversationTitle,
+  getChatConversationListStatus,
   isChatMessageInProgress,
   isChatMessageInterrupted,
   isChatMessageRetryable,
@@ -112,6 +113,26 @@ describe("message state", () => {
   it("retries failed messages but not answered ones", () => {
     expect(isChatMessageRetryable(message("failed", { status: "failed", answer: null }), now)).toBe(true);
     expect(isChatMessageRetryable(message("answered"), now)).toBe(false);
+  });
+
+  it("shows pending and stale final messages with the conversation-list status", () => {
+    expect(getChatConversationListStatus(message("fresh", { status: "pending", answer: null }), now)).toBe(
+      "in_progress",
+    );
+    expect(
+      getChatConversationListStatus(
+        message("stale", {
+          status: "pending",
+          answer: null,
+          updatedAt: new Date(now.getTime() - CHAT_PENDING_STALE_MS - 1),
+        }),
+        now,
+      ),
+    ).toBe("failed");
+    expect(
+      getChatConversationListStatus(message("failed", { status: "failed", answer: null, failureCode: "timeout" }), now),
+    ).toBe("failed");
+    expect(getChatConversationListStatus(message("answered"), now)).toBeNull();
   });
 });
 
