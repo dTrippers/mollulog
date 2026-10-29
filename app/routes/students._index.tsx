@@ -99,7 +99,7 @@ export default function Students() {
                 groups.map((group) => (
                   <section key={group.key} aria-label={group.label ?? "학생 목록"} className="space-y-2">
                     {group.label ? <DirectoryGroupHeader title={group.label} count={group.students.length} /> : null}
-                    <div className="grid grid-cols-6 gap-x-2 gap-y-4 sm:grid-cols-8 sm:gap-x-3">
+                    <div className="flex flex-wrap gap-x-1 gap-y-4 sm:gap-x-2">
                       {group.students.map((student) => (
                         <DirectoryCard key={student.uid} student={student} state={filterState} personal={personalState} />
                       ))}

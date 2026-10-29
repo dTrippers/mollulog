@@ -29,6 +29,7 @@ import { terrainAdaptationIconUrl } from "~/models/assets";
 import type { StudentDirectoryStudent } from "~/models/student-directory";
 import { ToggleChip } from "../../primitives/ToggleChip";
 import { FilterGroupDisclosure } from "./FilterGroupDisclosure";
+import { StarTierLabel } from "./StarTierLabel";
 
 const skillLabels: Record<string, string> = {
   debuff: "디버프",
@@ -166,7 +167,6 @@ export function DirectoryFilterPanel({
         </StaticGroup>
       </div>
 
-      <div aria-hidden="true" className="border-t border-v2-divider" />
 
       <div>
         <FilterGroupDisclosure title="학교" selectedCount={groupCount("schools")}>
@@ -321,7 +321,7 @@ export function DirectoryFilterPanel({
                 pressed={state.initialTiers.includes(value)}
                 onPressedChange={(pressed) => toggleList("initialTiers", value, pressed)}
               >
-                {value}성
+                <StarTierLabel tier={value} />
               </DirectoryToggleChip>
             ))}
           </ChipRow>

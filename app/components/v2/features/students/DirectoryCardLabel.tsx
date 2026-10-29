@@ -24,7 +24,6 @@ export function DirectoryCard({
       studentUid={student.uid}
       name={name}
       variant={variant}
-      fillWidth
       linkTo={`/students/${student.uid}`}
       scrimLabel={label ? <ScrimContent student={student} label={label} /> : null}
       scrimAriaLabel={label?.ariaLabel}

@@ -575,7 +575,7 @@ function getPersonalLabel(
     const stage = record.tier - 5;
     return record.tier > 5
       ? { kind: "personalTier", value: String(stage), ariaLabel: `고유무기 ${stage}성` }
-      : { kind: "personalTier", value: String(record.tier), ariaLabel: `내 성작 ${record.tier}성` };
+      : { kind: "personalTier", value: String(record.tier), ariaLabel: `내 등급 ${record.tier}성` };
   }
   if (sort === "myLevel") return record.level === null ? textLabel("미입력") : textLabel(`Lv.${record.level}`);
   return record.bondLevel === null ? textLabel("미입력") : textLabel(String(record.bondLevel));
@@ -628,7 +628,7 @@ export function getStudentDirectorySortTitle(sort: StudentDirectorySort): string
     indoor: "실내 적성",
     school: "학교",
     club: "동아리",
-    myTier: "내 성작",
+    myTier: "내 등급",
     myLevel: "내 레벨",
     myBond: "내 인연 랭크",
   };
@@ -644,6 +644,8 @@ type StudentDirectoryAppliedFilter = {
   label: string;
   ariaLabel?: string;
   terrainRank?: (typeof STUDENT_DIRECTORY_TERRAIN_RANKS)[number];
+  // A star tier chip, shown as a star icon and the number.
+  tier?: number;
   remove: (state: StudentDirectoryFilterState) => StudentDirectoryFilterState;
 };
 
@@ -674,7 +676,7 @@ export function getStudentDirectoryAppliedFilters(
   addValues("skill", state.skillEffects, skillEffectLabels, "skillEffects");
   addValues("acquisition", state.acquisitionTypes, acquisitionLabels, "acquisitionTypes");
   for (const value of state.initialTiers) {
-    chips.push({ key: `tier:${value}`, label: `${value}성`, remove: (current) => ({ ...current, initialTiers: current.initialTiers.filter((tier) => tier !== value) }) });
+    chips.push({ key: `tier:${value}`, label: `${value}성`, ariaLabel: `초기 성급 ${value}성`, tier: value, remove: (current) => ({ ...current, initialTiers: current.initialTiers.filter((tier) => tier !== value) }) });
   }
   for (const value of state.recruitment) {
     chips.push({ key: `recruitment:${value}`, label: value === "recruited" ? "모집함" : "미모집", remove: (current) => ({ ...current, recruitment: current.recruitment.filter((item) => item !== value) }) });

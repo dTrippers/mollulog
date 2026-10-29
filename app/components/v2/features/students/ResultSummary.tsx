@@ -9,6 +9,7 @@ import { terrainAdaptationIconUrl } from "~/models/assets";
 import type { StudentDirectoryStudent } from "~/models/student-directory";
 import { Button } from "../../primitives/Button";
 import { RemovableChip } from "../../primitives/RemovableChip";
+import { StarTierLabel } from "./StarTierLabel";
 
 export function ResultSummary({
   students,
@@ -66,6 +67,8 @@ export function ResultSummary({
                   className="size-3.5 shrink-0 object-contain"
                 />
               </span>
+            ) : chip.tier !== undefined ? (
+              <StarTierLabel tier={chip.tier} />
             ) : (
               chip.label
             )

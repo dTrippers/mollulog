@@ -90,11 +90,10 @@ describe("StudentThumb while the student data is being prepared", () => {
 });
 
 describe("StudentThumb directory links", () => {
-  it("fills its cell, links to the student detail, and exposes the scrim value accessibly", () => {
+  it("links to the student detail, and exposes the scrim value accessibly", () => {
     const { container } = renderThumb({
       onOpen: undefined,
       linkTo: "/students/42",
-      fillWidth: true,
       recruitmentLabel: undefined,
       favorite: undefined,
       scrimLabel: "2025/03/07 예정",
@@ -105,7 +104,6 @@ describe("StudentThumb directory links", () => {
     expect(link.getAttribute("href")).toBe("/students/42");
     expect(link.getAttribute("data-prefetch")).toBe("intent");
     expect(link.getAttribute("data-transition")).toBe("forward");
-    expect(container.firstElementChild?.className).toContain("w-full");
     expect(screen.queryByRole("button")).toBeNull();
   });
 });

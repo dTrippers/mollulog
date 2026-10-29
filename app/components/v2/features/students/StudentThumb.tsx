@@ -24,13 +24,13 @@ export type StudentThumbProps = {
   compact?: boolean;
   // A portrait beside its name, such as a completion list row (24px wide).
   small?: boolean;
-  // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default keeps the 60px thumbnail.
+  // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default is 56px wide on mobile and 64px from the sm breakpoint.
   large?: boolean;
   // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
-  // Fill the parent grid cell for a directory card.
-  fillWidth?: boolean;
+  // The student detail header portrait keeps the 60px width of its approved layout.
+  headerPortrait?: boolean;
   // Internal route link for a directory card. Links prefetch on intent and use the forward transition.
   linkTo?: string;
   // A directory's sort or display value replaces the recruitment label in the scrim.
@@ -55,7 +55,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     large = false,
     showCaption = true,
     showRecruitmentLabel = true,
-    fillWidth = false,
+    headerPortrait = false,
     linkTo,
     scrimLabel,
     scrimAriaLabel,
@@ -116,7 +116,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        fillWidth ? "w-full" : large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : "w-[3.75rem]",
+        large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : headerPortrait ? "w-[3.75rem]" : "w-14 sm:w-16",
       )}
     >
       {linkTo ? (

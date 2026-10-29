@@ -1,3 +1,4 @@
+import { StarIcon } from "@heroicons/react/16/solid";
 import { ArrowDownIcon, ArrowUpIcon, ChevronDownIcon } from "@heroicons/react/16/solid";
 import { useRef, useState } from "react";
 import type {
@@ -62,7 +63,7 @@ export function SortControl({
           v2FocusRing,
         )}
       >
-        <span>{getStudentDirectorySortTitle(sort)}</span>
+        <SortTitle sort={sort} />
         <ChevronDownIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
       </button>
       <button
@@ -158,7 +159,7 @@ function SortOption({
         v2FocusRing,
       )}
     >
-      <span>{title}</span>
+      <SortTitle sort={sort} fallback={title} />
       {selected ? (
         <span className="ml-3 inline-flex items-center gap-1 text-xs tabular-nums text-v2-fg-secondary">
           <span aria-hidden="true">{direction === "desc" ? "↓" : "↑"}</span>
@@ -166,5 +167,15 @@ function SortOption({
         </span>
       ) : null}
     </button>
+  );
+}
+
+// "내 등급" shows a star before 등급, as the star tier labels do.
+function SortTitle({ sort, fallback }: { sort: StudentDirectorySort; fallback?: string }) {
+  if (sort !== "myTier") return <span>{fallback ?? getStudentDirectorySortTitle(sort)}</span>;
+  return (
+    <span className="inline-flex items-center">
+      내&nbsp;<StarIcon className="size-3.5 shrink-0" aria-hidden="true" />등급
+    </span>
   );
 }

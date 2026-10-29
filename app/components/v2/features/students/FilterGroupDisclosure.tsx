@@ -24,7 +24,7 @@ export function FilterGroupDisclosure({
           aria-controls={bodyId}
           onClick={() => setExpanded((open) => !open)}
           className={cn(
-            "flex min-h-v2-row-min w-full items-center justify-between rounded-md px-0 text-left text-sm font-medium text-v2-fg hover:bg-v2-hover active:bg-v2-filled-hover sm:min-h-8 sm:px-1",
+            "flex min-h-v2-row-min w-full items-center justify-between rounded-md px-0 text-left text-sm text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg active:bg-v2-filled-hover sm:min-h-8 sm:px-1",
             v2FocusRing,
           )}
         >

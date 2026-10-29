@@ -196,7 +196,7 @@ describe("student directory controls", () => {
     );
     expect(screen.getByRole("button", { name: "정렬 방향: 가나다순" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "정렬 기준: 이름" }));
-    const personalSort = await screen.findByRole("button", { name: "내 성작" });
+    const personalSort = await screen.findByRole("button", { name: "내 등급" });
     expect(personalSort.hasAttribute("disabled")).toBe(true);
     expect(screen.getByText("내 기록")).toBeTruthy();
   });
