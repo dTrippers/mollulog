@@ -51,6 +51,7 @@ export default function StudentBossUsageChart({
             {terrainLocale[row.terrain]} · {formatDefenseTypeSetLabel(row.defenseTypes)}
           </>
         )}
+        getBarStyle={(row) => (row.defenseTypes[0] ? { backgroundColor: `var(--v2-attr-${defenseTypeColor[row.defenseTypes[0]]})` } : {})}
         renderValue={(row) => `${formatUsagePercent(row.usageRate)} · ${row.usageCount.toLocaleString()}회`}
       />
       {hiddenCount > 0 || expanded ? (

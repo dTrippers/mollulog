@@ -22,6 +22,7 @@ export default function StudentDifficultyUsageChart({
         getKey={(row) => row.difficulty}
         getRatio={(row) => row.usageRate}
         renderLabel={(row) => difficultyLocale[row.difficulty] ?? row.difficulty}
+        getBarStyle={() => ({ backgroundColor: "var(--v2-accent)" })}
         renderValue={(row) => <>{row.sampleSize.toLocaleString()}회 중 <strong className="font-medium text-v2-fg">{formatUsagePercent(row.usageRate)}</strong> 사용</>}
       />
     </UsageChartCard>

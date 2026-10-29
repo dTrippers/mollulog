@@ -141,8 +141,8 @@ export default function StudentDetailPage() {
         <span className="text-xs text-v2-fg-secondary">
           {positionLocale[student.position]} · {tacticRoleLocale[student.tacticRole]}
         </span>
-        {student.catalog?.terrainAdaptations ? <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} /> : null}
       </div>
+      {student.catalog?.terrainAdaptations ? <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} /> : null}
     </div>
   );
   const schaleDbLink = student.schaleDbId
@@ -167,7 +167,7 @@ export default function StudentDetailPage() {
         />
       </div>
       <PageStackedSummary>
-        <StudentProfileFacts student={student} compact />
+        <StudentProfileFacts student={student} compact standingUid={student.uid} />
       </PageStackedSummary>
       <PageToolbar>
         <ScreenTabs
@@ -197,7 +197,7 @@ export default function StudentDetailPage() {
         />
       </PageToolbar>
       <PageAside>
-        <StudentProfileFacts student={student} />
+        <StudentProfileFacts student={student} standingUid={student.uid} />
         <AsideLinks items={[...(schaleDbLink ? [schaleDbLink] : []), videoLink]} />
       </PageAside>
       <div className="contents [&_.v2-action-bar]:!bottom-[68px]">

@@ -53,15 +53,15 @@ export function UsageChartCard({ title, loading = false, failed = false, onRetry
 export function UsageBarList<T>({ variant, rows, getKey, getRatio, renderLabel, renderDescription, renderSubLabel, renderMarker, renderValue, getBarStyle }: UsageBarListProps<T>) {
   if (variant === "boss") {
     return (
-      <div className="divide-y divide-v2-divider">
-        {rows.map((row, index) => (
-          <div key={getKey(row)} className={`grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 gap-y-0.5 py-2 ${index === 0 ? "pt-0" : ""}`}>
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <div key={getKey(row)} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-2.5 gap-y-0.5">
             <div className="truncate text-sm leading-[1.43] font-medium text-v2-fg">{renderLabel(row)}</div>
             <div className="self-center whitespace-nowrap text-right text-[13px] leading-[1.43] text-v2-fg-secondary tabular-nums">{renderValue(row)}</div>
             {renderSubLabel ? <div className="inline-flex items-center gap-1.5 text-xs leading-[1.43] text-v2-fg-tertiary">{renderSubLabel(row)}</div> : <span aria-hidden="true" />}
             <span aria-hidden="true" />
             <div className="col-span-2 mt-1 h-1.5 overflow-hidden rounded-full bg-v2-inset">
-              <div className="h-full rounded-full bg-v2-fg-secondary" style={{ width: `${Math.min(Math.max(getRatio(row), 0), 1) * 100}%` }} />
+              <div className="h-full rounded-full bg-v2-fg-secondary" style={{ width: `${Math.min(Math.max(getRatio(row), 0), 1) * 100}%`, ...getBarStyle?.(row) }} />
             </div>
           </div>
         ))}
@@ -71,15 +71,15 @@ export function UsageBarList<T>({ variant, rows, getKey, getRatio, renderLabel, 
 
   if (variant === "difficulty") {
     return (
-      <div className="divide-y divide-v2-divider">
-        {rows.map((row, index) => (
-          <div key={getKey(row)} className={`py-2 ${index === 0 ? "pt-0" : ""} ${index === rows.length - 1 ? "pb-0" : ""}`}>
-          <div className="flex items-center justify-between gap-2 text-sm leading-[1.43]">
+      <div className="space-y-3">
+        {rows.map((row) => (
+          <div key={getKey(row)}>
+            <div className="flex items-center justify-between gap-2 text-sm leading-[1.43]">
               <div className="min-w-0 truncate font-medium text-v2-fg">{renderLabel(row)}</div>
               <div className="shrink-0 whitespace-nowrap text-[13px] leading-[1.43] text-v2-fg-secondary tabular-nums">{renderValue(row)}</div>
             </div>
             <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-v2-inset">
-              <div className="h-full rounded-full bg-v2-fg-secondary" style={{ width: `${Math.min(Math.max(getRatio(row), 0), 1) * 100}%` }} />
+              <div className="h-full rounded-full bg-v2-fg-secondary" style={{ width: `${Math.min(Math.max(getRatio(row), 0), 1) * 100}%`, ...getBarStyle?.(row) }} />
             </div>
           </div>
         ))}
