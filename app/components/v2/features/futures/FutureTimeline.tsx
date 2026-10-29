@@ -497,9 +497,9 @@ function StudentBlock({
   return (
     <div className="space-y-2">
       {label ? <p className="text-xs text-v2-fg-tertiary">{label}</p> : null}
-      <ul className="grid grid-cols-5 gap-x-2 gap-y-3 md:flex md:flex-wrap md:gap-3">
+      <ul className="flex flex-wrap gap-x-2 gap-y-3 md:gap-3">
         {entries.map((entry) => (
-          <li key={entry.favoriteKey} className="min-w-0">
+          <li key={entry.favoriteKey} className="shrink-0">
             <StudentSlot
               entry={entry}
               signedIn={signedIn}
