@@ -128,6 +128,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       darkMode: preference.darkMode ?? true,
       haloMode: preference.haloMode ?? false,
       displayTimeZone: normalizeTimeZone(preference.timeZone ?? DEFAULT_TIME_ZONE),
+      hasStoredTimeZone: preference.timeZone !== undefined,
       favoriteNavigationIds: preference.favoriteNavigationIds ?? [],
       mobileNavigationIds: preference.mobileNavigationIds ?? normalizeMobileNavigationIds(undefined),
       desktopNavigationCollapsed: preference.desktopNavigationCollapsed,
@@ -272,6 +273,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
   const [haloMode, setHaloMode] = useState(loaderData.haloMode);
   const [displayTimeZone, setDisplayTimeZone] = useState(loaderData.displayTimeZone);
+  const [displayTimeZoneResolved, setDisplayTimeZoneResolved] = useState(loaderData.hasStoredTimeZone);
   const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
     normalizeMobileNavigationIds(initialMobileNavigationIds),
   );
@@ -294,15 +296,17 @@ export default function App() {
 
   useEffect(() => {
     const browserTimeZone = getBrowserTimeZone();
-    if (
-      !browserTimeZone ||
-      browserTimeZone === loaderData.displayTimeZone ||
-      browserTimeZone === submittedTimeZoneRef.current
-    ) {
+    if (!browserTimeZone) {
+      return;
+    }
+
+    if (browserTimeZone === loaderData.displayTimeZone || browserTimeZone === submittedTimeZoneRef.current) {
+      setDisplayTimeZoneResolved(true);
       return;
     }
 
     setDisplayTimeZone(browserTimeZone);
+    setDisplayTimeZoneResolved(true);
     submittedTimeZoneRef.current = browserTimeZone;
     void submitPreference({ timeZone: browserTimeZone }).catch(() => undefined);
   }, [loaderData.displayTimeZone]);
@@ -508,7 +512,7 @@ export default function App() {
               }`}
             >
               <div className="grow">
-                <TimeZoneProvider timeZone={displayTimeZone}>
+                <TimeZoneProvider timeZone={displayTimeZone} resolved={displayTimeZoneResolved}>
                   <StudentCardPopupProvider key={routeParamsKey}>
                     {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
                     <Outlet

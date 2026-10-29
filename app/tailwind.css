@@ -714,7 +714,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --spacing-v2-media-gap: 0.75rem;
   --spacing-v2-list-gap: 0.125rem;
   --spacing-v2-group-gap: 1rem;
-  --spacing-v2-block-p: 1.25rem;
+  --spacing-v2-block-p: 1rem;
   --spacing-v2-block-gap: 0.75rem;
   --spacing-v2-column-gap: 2rem;
   --spacing-v2-row-min: 2.25rem;
@@ -731,7 +731,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
 @media (max-width: 767px) {
   :root {
-    --spacing-v2-block-p: 1rem;
+    --spacing-v2-block-p: 0.875rem;
     --spacing-v2-block-gap: 0.5rem;
     --spacing-v2-row-min: 2.75rem;
     --spacing-v2-control-min: 2.5rem;
@@ -878,6 +878,43 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   view-transition-name: v2-action-bar;
 }
 
+/* Tall enough that the empty-state composer reaches the viewport bottom and sticks like a conversation's. */
+.v2-chat-root {
+  min-height: calc(100dvh - 5rem);
+}
+
+.v2-chat-composer {
+  position: sticky;
+  bottom: 0;
+  left: auto;
+  width: 100%;
+  margin-top: auto;
+  padding-bottom: 1rem;
+}
+
+.v2-chat-turn-list {
+  padding-bottom: calc(var(--question-composer-height) + 1rem);
+}
+
+.v2-chat-latest-turn {
+  min-height: calc(100dvh - var(--question-composer-height) - 1rem);
+}
+
+/* Below lg the bottom navigation overlays the page in the side-by-side layout too. */
+@media (max-width: 1023px) {
+  .v2-chat-composer {
+    bottom: var(--mobile-nav-height);
+  }
+
+  .v2-chat-turn-list {
+    padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
+  }
+
+  .v2-chat-latest-turn {
+    min-height: calc(100dvh - var(--question-composer-height) - var(--mobile-nav-height) - 1rem);
+  }
+}
+
 @container page-available (width >= 64rem) {
   [data-v2-layout] {
     --v2-aside-w: 18rem;
@@ -892,6 +929,11 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 }
 
 @container page-available (width >= 48rem) {
+  /* The header action also renders in Sheet's portal, outside this container. */
+  .v2-chat-new-conversation-stacked {
+    display: none;
+  }
+
   [data-v2-layout]:has(> .v2-aside) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
     grid-template-areas:
@@ -933,6 +975,32 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 }
 
 @container page-available (width < 48rem) {
+  .v2-chat-root {
+    min-height: calc(100dvh - 8rem);
+  }
+
+  .v2-chat-composer {
+    position: fixed;
+    bottom: var(--mobile-nav-height);
+    left: var(--v2-gutter);
+    width: min(48rem, calc(100vw - var(--v2-gutter) - var(--v2-gutter)));
+    padding-bottom: 0.5rem;
+  }
+
+  .v2-chat-turn-list {
+    padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
+  }
+
+  .v2-chat-latest-turn {
+    min-height: calc(
+      100dvh - var(--question-composer-height) - var(--mobile-nav-height) - var(--spacing-v2-row-min) - 1rem
+    );
+  }
+
+  .v2-chat-new-conversation-wide {
+    display: none;
+  }
+
   .v2-toolbar {
     position: sticky;
     top: 0;

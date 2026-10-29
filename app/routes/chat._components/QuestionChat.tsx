@@ -38,7 +38,7 @@ import {
   type ChatProgressStep,
   isChatMessageInterrupted,
 } from "~/domain/chat-conversation";
-import type { AnswerSource, QuestionRunEvent, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import type { QuestionRunEvent, QuestionRunResult } from "~/models/al1s-question-contract";
 import { bossImageUrl } from "~/models/assets";
 import {
   applyChatProgressEvent,
@@ -117,14 +117,6 @@ const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
   question_too_long: "질문이 너무 길어요. 줄여서 보내 주세요.",
 };
 
-const SOURCE_KIND_LABELS: Record<SourceKind, string> = {
-  knowledge: "게임 용어·규칙",
-  student: "학생 정보",
-  schedule: "일정",
-  raid_stats: "총력전·대결전 통계",
-  member: "내 데이터",
-};
-
 const PROGRESS_TOOL_LABELS: Record<string, { working: string; complete: string }> = {
   get_schedule: { working: "일정 확인 중", complete: "일정 확인" },
   find_students: { working: "학생 찾는 중", complete: "학생 찾기" },
@@ -150,23 +142,32 @@ function ProgressStepRow({ step, active }: { step: ChatProgressStep; active: boo
       ) : (
         <XMarkIcon className="size-4 shrink-0 text-v2-danger" aria-hidden="true" />
       )}
-      <span>{active ? label.working : label.complete}</span>
+      <span className="text-xs">{active ? label.working : label.complete}</span>
       {step.target ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg">
-          {step.subject?.type === "student" ? (
+        step.subject?.type === "student" ? (
+          <Link
+            to={`/students/${encodeURIComponent(step.subject.uid)}`}
+            className={`inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg hover:text-v2-fg-secondary hover:underline ${v2FocusRing}`}
+          >
             <StudentPortrait uid={step.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
-          ) : imageSrc && !image.failed ? (
-            <img
-              ref={image.ref}
-              src={imageSrc}
-              onError={image.onError}
-              onLoad={image.onLoad}
-              alt=""
-              className="size-5 shrink-0 rounded-full object-cover"
-            />
-          ) : null}
-          <span className="truncate">{step.target}</span>
-        </span>
+            <span className="truncate">{step.target}</span>
+            <ArrowUpRightIcon className="size-3 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg">
+            {imageSrc && !image.failed ? (
+              <img
+                ref={image.ref}
+                src={imageSrc}
+                onError={image.onError}
+                onLoad={image.onLoad}
+                alt=""
+                className="size-5 shrink-0 rounded-full object-cover"
+              />
+            ) : null}
+            <span className="truncate">{step.target}</span>
+          </span>
+        )
       ) : null}
     </li>
   );
@@ -209,46 +210,6 @@ function ProgressDisclosure({
   );
 }
 
-function SourceChip({ source }: { source: AnswerSource }) {
-  const imageSrc = source.subject?.type === "raid_boss" ? bossImageUrl(source.subject.boss) : null;
-  const image = useImageFailure(imageSrc);
-  const hasAvatar = source.subject !== undefined;
-  const content = (
-    <>
-      {source.subject?.type === "student" ? (
-        <StudentPortrait uid={source.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
-      ) : imageSrc && !image.failed ? (
-        <img
-          ref={image.ref}
-          src={imageSrc}
-          onError={image.onError}
-          onLoad={image.onLoad}
-          alt=""
-          className="size-5 shrink-0 rounded-full object-cover"
-        />
-      ) : null}
-      <span className="text-sm font-medium">{source.label}</span>
-      <span className="text-xs text-v2-fg-tertiary">{SOURCE_KIND_LABELS[source.kind]}</span>
-    </>
-  );
-  const className = `inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset ${hasAvatar ? "pl-1.5 pr-3" : "px-3"} text-v2-fg`;
-  return (
-    <li>
-      {source.subject?.type === "student" ? (
-        <Link
-          to={`/students/${encodeURIComponent(source.subject.uid)}`}
-          className={`${className} hover:bg-v2-filled-hover ${v2FocusRing}`}
-        >
-          {content}
-          <ArrowUpRightIcon aria-hidden="true" className="size-3 text-v2-fg-tertiary" />
-        </Link>
-      ) : (
-        <span className={className}>{content}</span>
-      )}
-    </li>
-  );
-}
-
 function codePointLength(value: string): number {
   return [...value].length;
 }
@@ -262,7 +223,7 @@ function AssistantMark({ working = false }: { working?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-5 items-center justify-center ${working ? "animate-v2-ai-working shadow-v2-ai-glow" : ""}`}
+      className={`inline-flex size-5 items-center justify-center ${working ? "animate-v2-ai-working" : ""}`}
     >
       <svg viewBox="0 0 24 24" className="size-5" fill="none" aria-hidden="true" focusable="false">
         <defs>
@@ -281,25 +242,16 @@ function AssistantMark({ working = false }: { working?: boolean }) {
   );
 }
 
-function AnswerSources({
+function AnswerDetails({
   result,
-  id,
 }: {
   result: Pick<
     Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>,
     "status" | "answer"
   >;
-  id: string;
 }) {
   return (
     <div className="mt-4 flex flex-col gap-3">
-      {result.answer.sources.length ? (
-        <ul id={id} className="flex flex-wrap gap-2">
-          {result.answer.sources.map((source) => (
-            <SourceChip key={`${source.kind}:${source.sourceId}`} source={source} />
-          ))}
-        </ul>
-      ) : null}
       {result.answer.limitations.length ? (
         <div>
           <p className="text-sm text-v2-fg-secondary">확인하지 못한 내용</p>
@@ -324,7 +276,7 @@ function AnswerSources({
   );
 }
 
-function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRetry: () => void; sourcesId: string }) {
+function AssistantTurn({ turn, onRetry }: { turn: QuestionTurn; onRetry: () => void }) {
   if (turn.pending) {
     return (
       <div className="rounded-lg bg-v2-surface p-4">
@@ -401,7 +353,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
       </div>
       {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
       <p className="mt-3 whitespace-pre-wrap break-keep text-base leading-7 text-v2-fg">{result.answer.text}</p>
-      <AnswerSources result={result} id={sourcesId} />
+      <AnswerDetails result={result} />
     </div>
   );
 }
@@ -482,7 +434,8 @@ export function QuestionChat({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    const minHeight = Number.parseFloat(window.getComputedStyle(textarea).minHeight);
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, minHeight), 120)}px`;
   });
 
   useLayoutEffect(() => {
@@ -793,11 +746,11 @@ export function QuestionChat({
 
   return (
     <div
-      className="flex min-h-[calc(100dvh-8rem)] flex-col"
+      className="v2-chat-root flex flex-col"
       style={{ "--question-composer-height": `${composerHeight}px` } as CSSProperties}
     >
       {turns.length === 0 ? (
-        <div className="flex flex-1 flex-col gap-4 pt-2 pb-6">
+        <div className="flex flex-1 flex-col gap-4 pt-2">
           <div className="flex items-center gap-2.5 text-lg font-semibold text-v2-fg">
             <AssistantMark />
             <p>블루 아카이브에 대해 궁금한 점을 물어보세요</p>
@@ -820,7 +773,7 @@ export function QuestionChat({
                     void updatePersonalMode(true);
                   }
                 }}
-                className={`flex min-h-v2-row-min flex-col items-start gap-1 rounded-lg bg-v2-surface px-4 py-3 text-left text-sm leading-5 text-v2-fg hover:bg-v2-hover ${v2FocusRing}`}
+                className={`flex min-h-v2-row-min cursor-pointer flex-col items-start gap-1 rounded-lg bg-v2-surface px-4 py-3 text-left text-sm leading-5 text-v2-fg hover:bg-v2-hover ${v2FocusRing}`}
               >
                 <span className="text-xs text-v2-fg-tertiary">{suggestion.label}</span>
                 <span>{suggestion.question}</span>
@@ -829,9 +782,13 @@ export function QuestionChat({
           </div>
         </div>
       ) : (
-        <div className="flex-1 space-y-4 pb-[calc(var(--question-composer-height)_+_var(--mobile-nav-height)_+_1rem)] lg:pb-[calc(var(--question-composer-height)_+_1rem)]">
-          {turns.map((turn) => (
-            <article key={turn.id} id={`question-${turn.id}`} className="scroll-mt-4">
+        <div className="v2-chat-turn-list flex-1 space-y-4">
+          {turns.map((turn, index) => (
+            <article
+              key={turn.id}
+              id={`question-${turn.id}`}
+              className={`scroll-mt-4 ${index === turns.length - 1 ? "v2-chat-latest-turn" : ""}`}
+            >
               <div className="ml-auto max-w-[88%] rounded-lg bg-v2-inset px-3 py-2.5 text-base leading-6 text-v2-fg">
                 <p className="whitespace-pre-wrap break-keep">{turn.question}</p>
               </div>
@@ -844,7 +801,6 @@ export function QuestionChat({
                 <AssistantTurn
                   turn={{ ...turn, waitingLonger }}
                   onRetry={() => void submitQuestion(turn.question, turn)}
-                  sourcesId={`sources-${turn.id}`}
                 />
               </div>
             </article>
@@ -856,11 +812,7 @@ export function QuestionChat({
       <div
         ref={composerRef}
         style={keyboardBottomInset === null ? undefined : { bottom: `${keyboardBottomInset}px` }}
-        className={`z-10 bg-v2-canvas pt-2 ${
-          stacked
-            ? "fixed bottom-[var(--mobile-nav-height)] left-4 w-[min(48rem,calc(100vw_-_2rem))] md:left-8 md:w-[min(48rem,calc(100vw_-_4rem))]"
-            : "sticky bottom-0 left-auto mt-auto w-full"
-        }`}
+        className="v2-chat-composer z-10 bg-v2-canvas pt-2"
       >
         <div className="rounded-lg border border-v2-control-border bg-v2-surface px-3 py-2 focus-within:border-v2-control-border-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus focus-within:shadow-v2-ai-glow">
           <label className="sr-only" htmlFor="question-input">
@@ -879,10 +831,10 @@ export function QuestionChat({
               isComposing.current = false;
             }}
             placeholder="궁금한 점을 입력해 주세요"
-            rows={1}
+            rows={2}
             disabled={pending}
             aria-describedby="question-shortcut-help"
-            className="block max-h-[120px] min-h-8 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-11 max-lg:py-3"
+            className="block max-h-[120px] min-h-12 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-16 max-lg:py-3"
           />
           <span id="question-shortcut-help" className="sr-only">
             Enter로 질문 보내기, Shift+Enter로 줄바꿈
@@ -964,16 +916,17 @@ export function QuestionChat({
           <p>
             스위치를 켜 두면 질문할 때마다 몰루로그에 저장된 아래 정보를 질문과 함께 외부 AI 모델 제공사에 전달해요.
           </p>
-          <ul className="rounded-md bg-v2-inset px-4 py-2">
+          <ul className="border-l-2 border-v2-divider pl-3">
             <li>· 보유 학생</li>
             <li>· 관심 학생</li>
             <li>· 편성</li>
           </ul>
           <p>전달한 정보는 질문, 답변과 함께 기록으로 저장돼요.</p>
           <p>동의는 계정에 저장되어 스위치를 끌 때까지 유지돼요. 스위치를 끄면 동의가 취소돼요.</p>
-          <div className="flex gap-2 pt-1">
+          <div className="flex justify-end gap-2 pt-1">
             <Button
               type="button"
+              variant="text"
               onClick={() => {
                 setConsentDialogOpen(false);
                 if (focusDraftAfterConsent.current) {
@@ -982,17 +935,10 @@ export function QuestionChat({
                 }
               }}
               disabled={savingConsent}
-              className="flex-1"
             >
               취소
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void agreeToPersonalMode()}
-              disabled={savingConsent}
-              className="flex-1"
-            >
+            <Button type="button" variant="primary" onClick={() => void agreeToPersonalMode()} disabled={savingConsent}>
               동의하고 켜기
             </Button>
           </div>

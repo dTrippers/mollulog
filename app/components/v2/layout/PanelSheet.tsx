@@ -147,7 +147,7 @@ export function PanelSheet({
             id={bodyId}
             onAnimationEnd={handleBodyAnimationEnd}
             className={cn(
-              "mt-v2-group-gap text-sm",
+              "mt-v2-block-gap text-sm",
               animated && (phase === "open" ? "v2-panel-enter" : "v2-panel-exit"),
             )}
           >
