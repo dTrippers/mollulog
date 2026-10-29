@@ -776,12 +776,16 @@ function SkillRow({
       <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} />
       <div className="min-w-0">
         <span className="block text-xs font-medium text-muted-foreground">{skillSlotLabels[skill.slot]}</span>
-        <strong className="mt-0.5 block">{skill.name}</strong>
+        <SkillName name={skill.name} cost={exSkillCost(skill, skill.slot, skill.selectedLevel)} />
         <SkillDescription skill={{ ...skill, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
         {linkedSkills.map((linked) => (
           <div key={linked.uid} className="mt-3 border-l-2 border-border pl-3">
             <span className="text-xs font-medium text-muted-foreground">{linked.label}</span>
-            <strong className="mt-0.5 block text-sm">{linked.name}</strong>
+            <SkillName
+              name={linked.name}
+              cost={exSkillCost(linked, skill.slot, skill.selectedLevel)}
+              className="text-sm"
+            />
             <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} entries={knowledgeEntries} />
           </div>
         ))}
@@ -789,6 +793,28 @@ function SkillRow({
       <div className="col-span-2 sm:col-span-1">
         <LevelSlider label="레벨" value={skill.selectedLevel} min={1} max={skill.maxLevel} onChange={onLevelChange} />
       </div>
+    </div>
+  );
+}
+
+function exSkillCost(
+  skill: Pick<StudentCalculatorSource["skills"][number], "levels">,
+  slot: StudentSkillTypeEnum,
+  level: number,
+): number | null {
+  if (slot !== "ex") return null;
+  return skill.levels.find((candidate) => candidate.level === level)?.cost ?? null;
+}
+
+function SkillName({ name, cost, className }: { name: string; cost: number | null; className?: string }) {
+  return (
+    <div className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+      <strong className={className}>{name}</strong>
+      {cost !== null && (
+        <span className="shrink-0 rounded-sm bg-muted px-1 py-px text-[10px] leading-3.5 font-semibold text-muted-foreground">
+          COST <span className="text-xs font-bold tabular-nums text-foreground">{cost}</span>
+        </span>
+      )}
     </div>
   );
 }
