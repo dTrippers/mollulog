@@ -52,7 +52,7 @@ const ROOT_INDEPENDENT_ACTION_PATHS = [
   /^\/api\/contents\/[^/]+\/comments$/,
   /^\/api\/contents$/,
   /^\/api\/followerships$/,
-  /^\/api\/ask$/,
+  /^\/api\/chat$/,
   /^\/api\/recruitment-results$/,
   /^\/api\/account\/recruitment-opinions$/,
   /^\/api\/ocr\/jobs(\/.*)?$/,

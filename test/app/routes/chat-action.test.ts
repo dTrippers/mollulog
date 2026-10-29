@@ -1,13 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, jest } from "@jest/globals";
-import type {
-  HistoryMessage,
-  MemberSnapshot,
-  QuestionRequest,
-  QuestionRunResult,
-} from "~/models/al1s-question-contract";
+import type { ChatMessage } from "~/domain/chat-conversation";
+import type { MemberSnapshot, QuestionRequest, QuestionRunResult } from "~/models/al1s-question-contract";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
+jest.mock("~/models/chat-conversation", () => ({
+  startChatMessage: jest.fn(),
+  retryChatMessage: jest.fn(),
+  completeChatMessage: jest.fn(),
+}));
 jest.mock("~/models/sensei", () => ({
   getQuestionMemberDataConsentAt: jest.fn(),
   consentToQuestionMemberData: jest.fn(),
@@ -16,15 +17,16 @@ jest.mock("~/models/sensei", () => ({
 
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { runQuestion as callQuestionService } from "~/models/al1s-question.server";
+import { completeChatMessage, startChatMessage } from "~/models/chat-conversation";
 import {
   consentToQuestionMemberData,
   getQuestionMemberDataConsentAt,
   revokeQuestionMemberDataConsent,
 } from "~/models/sensei";
-import * as askResourceRoute from "~/routes/api.ask";
-import { type AskQuestionActionDependencies, filterQuestionHistory, handleAskAction } from "~/routes/api.ask";
-import * as askPageRoute from "~/routes/ask";
-import { loadAskPageData } from "~/routes/ask";
+import * as chatResourceRoute from "~/routes/api.chat";
+import { type ChatActionDependencies, handleChatAction } from "~/routes/api.chat";
+import * as chatPageRoute from "~/routes/chat";
+import { loadChatPageData } from "~/routes/chat";
 
 const now = new Date("2026-10-19T03:04:05.000Z");
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
@@ -34,6 +36,8 @@ const mockedGetQuestionMemberDataConsentAt = getQuestionMemberDataConsentAt as j
 const mockedConsentToQuestionMemberData = consentToQuestionMemberData as jest.MockedFunction<
   typeof consentToQuestionMemberData
 >;
+const mockedStartChatMessage = startChatMessage as jest.MockedFunction<typeof startChatMessage>;
+const mockedCompleteChatMessage = completeChatMessage as jest.MockedFunction<typeof completeChatMessage>;
 const mockedRevokeQuestionMemberDataConsent = revokeQuestionMemberDataConsent as jest.MockedFunction<
   typeof revokeQuestionMemberDataConsent
 >;
@@ -59,14 +63,39 @@ const answer: QuestionRunResult = {
   },
 };
 
-function makeDependencies(overrides: Partial<AskQuestionActionDependencies> = {}): AskQuestionActionDependencies {
+function storedMessage(uid: string, overrides: Partial<ChatMessage> = {}): ChatMessage {
   return {
-    getSensei: async () => null,
+    uid,
+    seq: 1,
+    question: `question ${uid}`,
+    personalMode: false,
+    status: "answered",
+    answer: { text: `answer ${uid}`, sources: [], limitations: [] },
+    failureCode: null,
+    createdAt: now,
+    updatedAt: now,
+    ...overrides,
+  };
+}
+
+function started(previousMessages: ChatMessage[] = [], question = "Question") {
+  return {
+    ok: true as const,
+    started: { conversationUid: "conversation-1", messageUid: "message-1", question, previousMessages },
+  };
+}
+
+function makeDependencies(overrides: Partial<ChatActionDependencies> = {}): ChatActionDependencies {
+  return {
+    getSensei: async () => ({ id: 7, username: "sensei" }),
     readConsent: async () => new Date("2026-10-01T00:00:00.000Z"),
     consent: async () => new Date(),
     revokeConsent: async () => undefined,
     buildSnapshot: async () => ({ version: 1, students: [], favorites: [], formations: [] }),
     runQuestion: async () => ({ ok: true, result: answer }),
+    startMessage: async (input) => started([], input.question),
+    retryMessage: async () => started(),
+    completeMessage: async () => undefined,
     limiter: { limit: async () => ({ success: true }) },
     now: () => now,
     ...overrides,
@@ -74,7 +103,7 @@ function makeDependencies(overrides: Partial<AskQuestionActionDependencies> = {}
 }
 
 function actionRequest(body: unknown, headers: Record<string, string> = { "CF-Connecting-IP": "203.0.113.9" }) {
-  return new Request("https://mollulog.test/api/ask", {
+  return new Request("https://mollulog.test/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
@@ -82,7 +111,7 @@ function actionRequest(body: unknown, headers: Record<string, string> = { "CF-Co
 }
 
 function malformedActionRequest() {
-  return new Request("https://mollulog.test/api/ask", {
+  return new Request("https://mollulog.test/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: "{",
@@ -97,31 +126,31 @@ async function responseBody(response: Response) {
   return response.json() as Promise<Record<string, unknown>>;
 }
 
-describe("AI question page and resource action", () => {
+describe("AI chatbot page and resource action", () => {
   it("keeps JSON posts on the resource route", () => {
-    const askPageSource = readFileSync("app/routes/ask.tsx", "utf8");
-    const askClientSource = readFileSync("app/routes/ask._components/ask-client.ts", "utf8");
-    expect("action" in askPageRoute).toBe(false);
-    expect("action" in askResourceRoute).toBe(true);
-    expect("default" in askResourceRoute).toBe(false);
-    expect(askPageSource).not.toContain("require-admin.server");
-    expect(askClientSource).toContain('fetcher("/api/ask"');
-    expect(askClientSource).not.toContain('fetcher("/ask"');
+    const chatPageSource = readFileSync("app/routes/chat.tsx", "utf8");
+    const chatClientSource = readFileSync("app/routes/chat._components/chat-client.ts", "utf8");
+    expect("action" in chatPageRoute).toBe(false);
+    expect("action" in chatResourceRoute).toBe(true);
+    expect("default" in chatResourceRoute).toBe(false);
+    expect(chatPageSource).not.toContain("require-admin.server");
+    expect(chatClientSource).toContain('fetcher("/api/chat"');
+    expect(chatClientSource).not.toContain('fetcher("/chat"');
   });
 
   it("reads consent fresh for the session account and starts enabled only for a saved timestamp", async () => {
     const readConsent = jest.fn(async (_senseiId: number) => new Date("2026-10-18T00:00:00.000Z"));
     await expect(
-      loadAskPageData(async () => ({ id: 18, username: "sensei", role: "admin" }), readConsent),
+      loadChatPageData(async () => ({ id: 18, username: "sensei", role: "admin" }), readConsent),
     ).resolves.toEqual({
       isSignedIn: true,
       initialConsent: true,
       consentUnavailable: false,
     });
     expect(readConsent).toHaveBeenCalledWith(18);
-    await expect(loadAskPageData(async () => null, readConsent)).rejects.toMatchObject({ status: 404 });
+    await expect(loadChatPageData(async () => null, readConsent)).rejects.toMatchObject({ status: 404 });
     await expect(
-      loadAskPageData(async () => ({ id: 19, username: "guest", role: "guest" }), readConsent),
+      loadChatPageData(async () => ({ id: 19, username: "guest", role: "guest" }), readConsent),
     ).rejects.toMatchObject({ status: 404 });
     expect(readConsent).toHaveBeenCalledTimes(1);
   });
@@ -129,7 +158,7 @@ describe("AI question page and resource action", () => {
   it("keeps consent off and reports an unavailable setting when its fresh DB read fails", async () => {
     const report = jest.fn((_error: unknown) => undefined);
     await expect(
-      loadAskPageData(
+      loadChatPageData(
         async () => ({ id: 18, username: "sensei", role: "admin" }),
         async () => {
           throw new Error("database details stay server-side");
@@ -140,23 +169,23 @@ describe("AI question page and resource action", () => {
     expect(report).toHaveBeenCalledTimes(1);
   });
 
-  it("returns 404 from the /ask loader for signed-out and guest sessions, but loads admin data", async () => {
+  it("returns 404 from the /chat loader for signed-out and guest sessions, but loads admin data", async () => {
     const env = {} as Env;
     const args = {
-      request: new Request("https://mollulog.test/ask"),
+      request: new Request("https://mollulog.test/chat"),
       context: routeContext(env),
       params: {},
     } as never;
     mockedGetQuestionMemberDataConsentAt.mockResolvedValue(new Date("2026-10-18T00:00:00.000Z"));
 
     mockedGetActiveSensei.mockResolvedValue(null);
-    await expect(askPageRoute.loader(args)).rejects.toMatchObject({ status: 404 });
+    await expect(chatPageRoute.loader(args)).rejects.toMatchObject({ status: 404 });
     mockedGetActiveSensei.mockResolvedValue({ id: 19, username: "guest", role: "guest" } as never);
-    await expect(askPageRoute.loader(args)).rejects.toMatchObject({ status: 404 });
+    await expect(chatPageRoute.loader(args)).rejects.toMatchObject({ status: 404 });
     expect(mockedGetQuestionMemberDataConsentAt).not.toHaveBeenCalled();
 
     mockedGetActiveSensei.mockResolvedValue({ id: 18, username: "admin", role: "admin" } as never);
-    await expect(askPageRoute.loader(args)).resolves.toEqual({
+    await expect(chatPageRoute.loader(args)).resolves.toEqual({
       isSignedIn: true,
       initialConsent: true,
       consentUnavailable: false,
@@ -174,7 +203,7 @@ describe("AI question page and resource action", () => {
     const env = { QUESTION_RATE_LIMITER: limiter, AL1S: { runQuestion: bindingRunQuestion } } as unknown as Env;
     const args = (sensei: unknown) => {
       mockedGetActiveSensei.mockResolvedValue(sensei as never);
-      return askResourceRoute.action({
+      return chatResourceRoute.action({
         request: actionRequest(body),
         context: routeContext(env),
         params: {},
@@ -198,7 +227,7 @@ describe("AI question page and resource action", () => {
 
   it("returns the access 404 before parsing an unauthorized request body", async () => {
     mockedGetActiveSensei.mockResolvedValue(null);
-    const response = await askResourceRoute.action({
+    const response = await chatResourceRoute.action({
       request: malformedActionRequest(),
       context: routeContext({} as Env),
       params: {},
@@ -216,18 +245,38 @@ describe("AI question page and resource action", () => {
     mockedGetActiveSensei.mockResolvedValue({ id: 18, username: "admin", role: "admin" } as never);
     mockedConsentToQuestionMemberData.mockResolvedValue(now);
     mockedRevokeQuestionMemberDataConsent.mockResolvedValue(undefined);
+    mockedStartChatMessage.mockResolvedValue(started());
+    mockedCompleteChatMessage.mockResolvedValue(undefined);
 
-    const questionResponse = await askResourceRoute.action({
+    const questionResponse = await chatResourceRoute.action({
       request: actionRequest({ intent: "question", question: "Question" }),
       context,
       params: {},
     } as never);
     expect(questionResponse.status).toBe(200);
-    expect(await responseBody(questionResponse)).toMatchObject({ intent: "question", ok: true });
+    expect(await responseBody(questionResponse)).toMatchObject({
+      intent: "question",
+      ok: true,
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+    });
     expect(limiter.limit).toHaveBeenCalledWith({ key: "18" });
+    expect(mockedStartChatMessage).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ senseiId: 18, conversationUid: null, question: "Question", personalMode: false }),
+      { ctx: undefined },
+    );
+    expect(mockedCompleteChatMessage).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({
+        messageUid: "message-1",
+        outcome: { status: "answered", answer: { text: "Answer", sources: [], limitations: [] }, runId: "run-1" },
+      }),
+      { ctx: undefined },
+    );
     expect(bindingRunQuestion).toHaveBeenCalledTimes(1);
 
-    const consentResponse = await askResourceRoute.action({
+    const consentResponse = await chatResourceRoute.action({
       request: actionRequest({ intent: "consent" }),
       context,
       params: {},
@@ -236,7 +285,7 @@ describe("AI question page and resource action", () => {
     expect(await responseBody(consentResponse)).toEqual({ intent: "consent", ok: true });
     expect(mockedConsentToQuestionMemberData).toHaveBeenCalledWith(env, 18, { ctx: undefined });
 
-    const revokeResponse = await askResourceRoute.action({
+    const revokeResponse = await chatResourceRoute.action({
       request: actionRequest({ intent: "revoke" }),
       context,
       params: {},
@@ -253,22 +302,22 @@ describe("AI question page and resource action", () => {
     const deps = makeDependencies({ getSensei, consent, revokeConsent });
 
     expect(
-      await responseBody(await handleAskAction(actionRequest({ intent: "consent", senseiId: 999 }), deps)),
+      await responseBody(await handleChatAction(actionRequest({ intent: "consent", senseiId: 999 }), deps)),
     ).toEqual({
       intent: "consent",
       ok: true,
     });
-    expect(await responseBody(await handleAskAction(actionRequest({ intent: "revoke", senseiId: 999 }), deps))).toEqual(
-      {
-        intent: "revoke",
-        ok: true,
-      },
-    );
+    expect(
+      await responseBody(await handleChatAction(actionRequest({ intent: "revoke", senseiId: 999 }), deps)),
+    ).toEqual({
+      intent: "revoke",
+      ok: true,
+    });
     expect(consent).toHaveBeenCalledWith(42);
     expect(revokeConsent).toHaveBeenCalledWith(42);
   });
 
-  it("builds a public request from server fields and bounds supplied history", async () => {
+  it("builds a public request from server fields and stored history, ignoring client history", async () => {
     const runQuestion = jest.fn(async (_question: QuestionRequest) => ({ ok: true as const, result: answer }));
     const buildSnapshot = jest.fn(async (_senseiId: number) => ({
       version: 1 as const,
@@ -280,25 +329,32 @@ describe("AI question page and resource action", () => {
       expect(key).toBe("14");
       return { success: true };
     });
-    const validHistory: HistoryMessage[] = Array.from({ length: 8 }, (_, index) => ({
-      role: "user",
-      text: `turn-${index}`,
-    }));
-    const history: unknown[] = [...validHistory, { role: "system", text: "drop" }];
+    const startMessage = jest.fn(async (input: Parameters<ChatActionDependencies["startMessage"]>[0]) =>
+      started(
+        [
+          storedMessage("old", { seq: 1 }),
+          storedMessage("private", { seq: 2, personalMode: true }),
+          storedMessage("failed", { seq: 3, status: "failed", answer: null, failureCode: "timeout" }),
+        ],
+        input.question,
+      ),
+    );
     const deps = makeDependencies({
       getSensei: async () => ({ id: 14, username: "signed-in" }),
       runQuestion,
       buildSnapshot,
+      startMessage,
       limiter: { limit },
       now: () => now,
     });
 
     const result = await responseBody(
-      await handleAskAction(
+      await handleChatAction(
         actionRequest({
           intent: "question",
           question: "  Public question  ",
-          history,
+          conversationUid: "conversation-1",
+          history: [{ role: "user", text: "forged" }],
           personalMode: false,
           profile: "internal",
           member: { secret: "must-ignore" },
@@ -307,16 +363,168 @@ describe("AI question page and resource action", () => {
       ),
     );
 
-    expect(result).toMatchObject({ intent: "question", ok: true });
+    expect(result).toMatchObject({ intent: "question", ok: true, conversationUid: "conversation-1" });
     expect(limit).toHaveBeenCalledTimes(1);
+    expect(startMessage).toHaveBeenCalledWith({
+      senseiId: 14,
+      conversationUid: "conversation-1",
+      question: "Public question",
+      personalMode: false,
+      now,
+    });
     expect(runQuestion).toHaveBeenCalledWith({
       question: "Public question",
       context: { region: "gl", asOf: now.toISOString() },
-      history: validHistory.slice(2),
+      history: [
+        { role: "user", text: "question old" },
+        { role: "assistant", text: "answer old" },
+      ],
       profile: "public",
     });
-    expect([...filterQuestionHistory([{ role: "user", text: "🙂".repeat(4_001) }])[0].text]).toHaveLength(4_000);
     expect(buildSnapshot).not.toHaveBeenCalled();
+  });
+
+  it("retries the stored question of a message and requires its conversation", async () => {
+    const runQuestion = jest.fn(async (_question: QuestionRequest) => ({ ok: true as const, result: answer }));
+    const retryMessage = jest.fn(async (_input: Parameters<ChatActionDependencies["retryMessage"]>[0]) =>
+      started([storedMessage("old")], "Stored question"),
+    );
+    const startMessage = jest.fn(async () => started());
+    const deps = makeDependencies({ runQuestion, retryMessage, startMessage });
+
+    expect(
+      await responseBody(
+        await handleChatAction(actionRequest({ intent: "question", retryMessageUid: "message-1" }), deps),
+      ),
+    ).toEqual({ intent: "question", ok: false, code: "invalid_request" });
+    expect(retryMessage).not.toHaveBeenCalled();
+
+    expect(
+      await responseBody(
+        await handleChatAction(
+          actionRequest({
+            intent: "question",
+            question: "Edited text is ignored",
+            conversationUid: "conversation-1",
+            retryMessageUid: "message-1",
+          }),
+          deps,
+        ),
+      ),
+    ).toMatchObject({ intent: "question", ok: true, messageUid: "message-1" });
+    expect(retryMessage).toHaveBeenCalledWith({
+      senseiId: 7,
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+      personalMode: false,
+      now,
+    });
+    expect(startMessage).not.toHaveBeenCalled();
+    expect(runQuestion).toHaveBeenCalledWith(expect.objectContaining({ question: "Stored question" }));
+  });
+
+  it.each([
+    ["not_found", "conversation_not_found"],
+    ["busy", "conversation_busy"],
+    ["not_retryable", "invalid_request"],
+  ] as const)("maps a %s start to %s without calling AL1S", async (reason, code) => {
+    const runQuestion = jest.fn(async () => ({ ok: true as const, result: answer }));
+    const deps = makeDependencies({ runQuestion, startMessage: async () => ({ ok: false, reason }) });
+    expect(
+      await responseBody(
+        await handleChatAction(
+          actionRequest({ intent: "question", question: "Question", conversationUid: "conversation-1" }),
+          deps,
+        ),
+      ),
+    ).toEqual({ intent: "question", ok: false, code });
+    expect(runQuestion).not.toHaveBeenCalled();
+  });
+
+  it("stores failures after the message starts, but not rate-limited or invalid requests", async () => {
+    const completeMessage = jest.fn(
+      async (_input: Parameters<ChatActionDependencies["completeMessage"]>[0]) => undefined,
+    );
+    const startMessage = jest.fn(async () => started());
+    const failedRun: QuestionRunResult = { status: "failed", error: { code: "timeout" }, run: answer.run };
+
+    const failedDeps = makeDependencies({
+      completeMessage,
+      startMessage,
+      runQuestion: async () => ({ ok: true, result: failedRun }),
+    });
+    expect(
+      await responseBody(
+        await handleChatAction(actionRequest({ intent: "question", question: "Question" }), failedDeps),
+      ),
+    ).toMatchObject({ intent: "question", ok: true, result: { status: "failed" }, messageUid: "message-1" });
+    expect(completeMessage).toHaveBeenLastCalledWith({
+      messageUid: "message-1",
+      outcome: { status: "failed", failureCode: "timeout", runId: "run-1" },
+      now,
+    });
+
+    const unavailableDeps = makeDependencies({
+      completeMessage,
+      startMessage,
+      runQuestion: async () => ({ ok: false, reason: "unavailable" }),
+    });
+    expect(
+      await responseBody(
+        await handleChatAction(actionRequest({ intent: "question", question: "Question" }), unavailableDeps),
+      ),
+    ).toEqual({
+      intent: "question",
+      ok: false,
+      code: "service_unavailable",
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+    });
+    expect(completeMessage).toHaveBeenLastCalledWith({
+      messageUid: "message-1",
+      outcome: { status: "failed", failureCode: "service_unavailable", runId: null },
+      now,
+    });
+
+    completeMessage.mockClear();
+    startMessage.mockClear();
+    const limited = makeDependencies({
+      completeMessage,
+      startMessage,
+      limiter: { limit: async () => ({ success: false }) },
+    });
+    await handleChatAction(actionRequest({ intent: "question", question: "Question" }), limited);
+    await handleChatAction(actionRequest({ intent: "question", question: "" }), limited);
+    expect(startMessage).not.toHaveBeenCalled();
+    expect(completeMessage).not.toHaveBeenCalled();
+  });
+
+  it("still returns the answer when saving it fails, and reports the failure", async () => {
+    const reportError = jest.fn((_message: string, _error: unknown) => undefined);
+    const deps = makeDependencies({
+      reportError,
+      completeMessage: async () => {
+        throw new Error("database details stay server-side");
+      },
+    });
+    expect(
+      await responseBody(await handleChatAction(actionRequest({ intent: "question", question: "Question" }), deps)),
+    ).toMatchObject({ intent: "question", ok: true, result: { status: "answered" } });
+    expect(reportError).toHaveBeenCalledWith("Failed to save an AI chat message", expect.any(Error));
+  });
+
+  it("returns service_unavailable without calling AL1S when the message cannot be stored", async () => {
+    const runQuestion = jest.fn(async () => ({ ok: true as const, result: answer }));
+    const deps = makeDependencies({
+      runQuestion,
+      startMessage: async () => {
+        throw new Error("database details stay server-side");
+      },
+    });
+    expect(
+      await responseBody(await handleChatAction(actionRequest({ intent: "question", question: "Question" }), deps)),
+    ).toEqual({ intent: "question", ok: false, code: "service_unavailable" });
+    expect(runQuestion).not.toHaveBeenCalled();
   });
 
   it("sends a member profile only after session, stored consent, and client opt-in all pass", async () => {
@@ -349,7 +557,7 @@ describe("AI question page and resource action", () => {
 
     expect(
       await responseBody(
-        await handleAskAction(
+        await handleChatAction(
           actionRequest({
             intent: "question",
             question: "What do I own?",
@@ -379,7 +587,7 @@ describe("AI question page and resource action", () => {
     const deps = makeDependencies({ getSensei: async () => null, buildSnapshot, runQuestion });
     expect(
       await responseBody(
-        await handleAskAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
+        await handleChatAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
       ),
     ).toEqual({ intent: "question", ok: false, code: "session_expired" });
     expect(buildSnapshot).not.toHaveBeenCalled();
@@ -395,12 +603,18 @@ describe("AI question page and resource action", () => {
     });
     expect(
       await responseBody(
-        await handleAskAction(
+        await handleChatAction(
           actionRequest({ intent: "question", question: "Private", personalMode: true }),
           noConsent,
         ),
       ),
-    ).toEqual({ intent: "question", ok: false, code: "consent_required" });
+    ).toEqual({
+      intent: "question",
+      ok: false,
+      code: "consent_required",
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+    });
     expect(buildSnapshot).not.toHaveBeenCalled();
     expect(limit).toHaveBeenCalledWith({ key: "5" });
   });
@@ -416,9 +630,15 @@ describe("AI question page and resource action", () => {
     });
     expect(
       await responseBody(
-        await handleAskAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
+        await handleChatAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
       ),
-    ).toEqual({ intent: "question", ok: false, code: "member_data_unavailable" });
+    ).toEqual({
+      intent: "question",
+      ok: false,
+      code: "member_data_unavailable",
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+    });
     expect(runQuestion).not.toHaveBeenCalled();
   });
 
@@ -448,16 +668,22 @@ describe("AI question page and resource action", () => {
     });
     expect(
       await responseBody(
-        await handleAskAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
+        await handleChatAction(actionRequest({ intent: "question", question: "Private", personalMode: true }), deps),
       ),
-    ).toEqual({ intent: "question", ok: false, code: "snapshot_too_large" });
+    ).toEqual({
+      intent: "question",
+      ok: false,
+      code: "snapshot_too_large",
+      conversationUid: "conversation-1",
+      messageUid: "message-1",
+    });
     expect(runQuestion).not.toHaveBeenCalled();
   });
 
   it("returns safe errors for an unavailable limiter, limiter failure, and exhaustion", async () => {
     const payload = { intent: "question", question: "Question" };
     const noLimiter = makeDependencies({ limiter: undefined });
-    expect(await responseBody(await handleAskAction(actionRequest(payload), noLimiter))).toEqual({
+    expect(await responseBody(await handleChatAction(actionRequest(payload), noLimiter))).toEqual({
       intent: "question",
       ok: false,
       code: "service_unavailable",
@@ -470,14 +696,14 @@ describe("AI question page and resource action", () => {
         },
       },
     });
-    expect(await responseBody(await handleAskAction(actionRequest(payload), failedLimiter))).toEqual({
+    expect(await responseBody(await handleChatAction(actionRequest(payload), failedLimiter))).toEqual({
       intent: "question",
       ok: false,
       code: "service_unavailable",
     });
 
     const exhaustedLimiter = makeDependencies({ limiter: { limit: async () => ({ success: false }) } });
-    expect(await responseBody(await handleAskAction(actionRequest(payload), exhaustedLimiter))).toEqual({
+    expect(await responseBody(await handleChatAction(actionRequest(payload), exhaustedLimiter))).toEqual({
       intent: "question",
       ok: false,
       code: "rate_limited",
