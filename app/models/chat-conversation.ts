@@ -1,13 +1,31 @@
 import {
   completePostgresChatMessage,
+  listPostgresChatConversations,
   type PostgresChatOptions,
+  readPostgresChatConversation,
   retryPostgresChatMessage,
   type StartChatMessageResult,
   startPostgresChatMessage,
 } from "~/db/postgres/chat-conversations";
-import type { ChatMessageOutcome } from "~/domain/chat-conversation";
+import type { ChatConversation, ChatConversationSummary, ChatMessageOutcome } from "~/domain/chat-conversation";
 
 export type { StartChatMessageResult, StartedChatMessage } from "~/db/postgres/chat-conversations";
+
+export function listChatConversations(
+  env: Env,
+  input: { senseiId: number; now: Date; listDays: number },
+  options: PostgresChatOptions = {},
+): Promise<ChatConversationSummary[]> {
+  return listPostgresChatConversations(env, input, options);
+}
+
+export function readChatConversation(
+  env: Env,
+  input: { senseiId: number; conversationUid: string },
+  options: PostgresChatOptions = {},
+): Promise<ChatConversation | null> {
+  return readPostgresChatConversation(env, input, options);
+}
 
 export function startChatMessage(
   env: Env,

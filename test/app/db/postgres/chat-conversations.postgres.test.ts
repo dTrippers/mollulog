@@ -5,10 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "@jest/globals";
 import { Client } from "pg";
 import {
   completePostgresChatMessage,
+  listPostgresChatConversations,
+  readPostgresChatConversation,
   retryPostgresChatMessage,
   startPostgresChatMessage,
 } from "~/db/postgres/chat-conversations";
-import { CHAT_PENDING_STALE_MS } from "~/domain/chat-conversation";
+import { CHAT_CONVERSATION_LIST_DAYS, CHAT_PENDING_STALE_MS } from "~/domain/chat-conversation";
 
 const describeDatabase = process.env.MOLLULOG_CHAT_POSTGRES === "1" ? describe : describe.skip;
 const schema = `chat_test_${randomUUID().replaceAll("-", "")}`;
@@ -99,6 +101,91 @@ describeDatabase("chat conversations on PostgreSQL", () => {
         options,
       ),
     ).toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("lists only the owner's conversations at the 30-day boundary with ordered messages and latest status", async () => {
+    const now = at(0);
+    const cutoff = new Date(now.getTime() - CHAT_CONVERSATION_LIST_DAYS * 24 * 60 * 60 * 1000);
+
+    const recent = await start(null, "Recent", new Date(now.getTime() - 5_000), 21);
+    if (!recent.ok) throw new Error("recent message should start");
+    await completePostgresChatMessage(
+      env,
+      {
+        messageUid: recent.started.messageUid,
+        outcome: { status: "answered", answer, runId: "recent-1" },
+        now: new Date(now.getTime() - 4_000),
+      },
+      options,
+    );
+    const second = await start(recent.started.conversationUid, "Latest", new Date(now.getTime() - 3_000), 21);
+    if (!second.ok) throw new Error("second message should start");
+    await completePostgresChatMessage(
+      env,
+      {
+        messageUid: second.started.messageUid,
+        outcome: { status: "failed", failureCode: "timeout", runId: "recent-2" },
+        now: new Date(now.getTime() - 2_000),
+      },
+      options,
+    );
+
+    const boundary = await start(null, "Boundary", cutoff, 21);
+    if (!boundary.ok) throw new Error("boundary message should start");
+    await completePostgresChatMessage(
+      env,
+      {
+        messageUid: boundary.started.messageUid,
+        outcome: { status: "answered", answer, runId: "boundary" },
+        now: cutoff,
+      },
+      options,
+    );
+    const older = await start(null, "Older", new Date(cutoff.getTime() - 1), 21);
+    if (!older.ok) throw new Error("older message should start");
+    const anotherSensei = await start(null, "Private", now, 22);
+    if (!anotherSensei.ok) throw new Error("other sensei message should start");
+
+    const listed = await listPostgresChatConversations(
+      env,
+      { senseiId: 21, now, listDays: CHAT_CONVERSATION_LIST_DAYS },
+      options,
+    );
+    expect(listed).toEqual([
+      {
+        uid: recent.started.conversationUid,
+        title: "Recent",
+        lastMessageAt: new Date(now.getTime() - 3_000),
+        questionCount: 2,
+        latestMessage: { status: "failed", updatedAt: new Date(now.getTime() - 2_000) },
+      },
+      {
+        uid: boundary.started.conversationUid,
+        title: "Boundary",
+        lastMessageAt: cutoff,
+        questionCount: 1,
+        latestMessage: { status: "answered", updatedAt: cutoff },
+      },
+    ]);
+    const read = await readPostgresChatConversation(
+      env,
+      { senseiId: 21, conversationUid: recent.started.conversationUid },
+      options,
+    );
+    expect(read?.messages.map(({ seq, question, status }) => ({ seq, question, status }))).toEqual([
+      { seq: 1, question: "Recent", status: "answered" },
+      { seq: 2, question: "Latest", status: "failed" },
+    ]);
+    await expect(
+      readPostgresChatConversation(env, { senseiId: 22, conversationUid: recent.started.conversationUid }, options),
+    ).resolves.toBeNull();
+    await expect(
+      readPostgresChatConversation(
+        env,
+        { senseiId: 21, conversationUid: anotherSensei.started.conversationUid },
+        options,
+      ),
+    ).resolves.toBeNull();
   });
 
   it("retries failed and interrupted messages in place, but not answered or in-progress ones", async () => {

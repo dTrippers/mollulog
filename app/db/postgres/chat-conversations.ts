@@ -1,7 +1,9 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, gte } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgChatConversationsTable, pgChatMessagesTable } from "~/db/postgres/schema";
 import {
+  type ChatConversation,
+  type ChatConversationSummary,
   type ChatMessage,
   type ChatMessageOutcome,
   chatConversationTitle,
@@ -32,6 +34,7 @@ export type StartChatMessageResult =
 
 type ChatDatabase = NodePgDatabase;
 type ChatTransaction = Parameters<Parameters<ChatDatabase["transaction"]>[0]>[0];
+type ChatMessageReader = Pick<ChatDatabase, "select">;
 
 async function withChatDatabase<T>(
   env: Pick<Env, "HYPERDRIVE">,
@@ -52,7 +55,7 @@ async function withChatDatabase<T>(
 }
 
 function toChatMessage(row: typeof pgChatMessagesTable.$inferSelect): ChatMessage {
-  return {
+  const message: ChatMessage = {
     uid: row.uid,
     seq: row.seq,
     question: row.question,
@@ -63,15 +66,128 @@ function toChatMessage(row: typeof pgChatMessagesTable.$inferSelect): ChatMessag
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+  validateChatMessageState(message.status, message.answer, message.failureCode);
+  return message;
 }
 
-async function selectMessages(tx: ChatTransaction, conversationId: number): Promise<ChatMessage[]> {
+function validateChatMessageState(
+  status: ChatMessage["status"],
+  answer: ChatMessage["answer"],
+  failureCode: ChatMessage["failureCode"],
+): void {
+  if (
+    (status === "failed" && failureCode === null) ||
+    (status !== "failed" && failureCode !== null) ||
+    (status !== "pending" && status !== "failed" && answer === null) ||
+    (status === "pending" && answer !== null)
+  ) {
+    throw new Error("Stored chat message state is invalid.");
+  }
+}
+
+async function selectMessages(tx: ChatMessageReader, conversationId: number): Promise<ChatMessage[]> {
   const rows = await tx
     .select()
     .from(pgChatMessagesTable)
     .where(eq(pgChatMessagesTable.conversationId, conversationId))
     .orderBy(asc(pgChatMessagesTable.seq));
   return rows.map(toChatMessage);
+}
+
+export async function listPostgresChatConversations(
+  env: Pick<Env, "HYPERDRIVE">,
+  input: { senseiId: number; now: Date; listDays: number },
+  options: PostgresChatOptions = {},
+): Promise<ChatConversationSummary[]> {
+  const cutoff = new Date(input.now.getTime() - input.listDays * 24 * 60 * 60 * 1000);
+  return withChatDatabase(
+    env,
+    "list_conversations",
+    async (db) => {
+      const rows = await db
+        .select({
+          uid: pgChatConversationsTable.uid,
+          title: pgChatConversationsTable.title,
+          lastMessageAt: pgChatConversationsTable.lastMessageAt,
+          seq: pgChatMessagesTable.seq,
+          status: pgChatMessagesTable.status,
+          updatedAt: pgChatMessagesTable.updatedAt,
+          failureCode: pgChatMessagesTable.failureCode,
+        })
+        .from(pgChatConversationsTable)
+        .innerJoin(pgChatMessagesTable, eq(pgChatMessagesTable.conversationId, pgChatConversationsTable.id))
+        .where(
+          and(
+            eq(pgChatConversationsTable.senseiId, input.senseiId),
+            gte(pgChatConversationsTable.lastMessageAt, cutoff),
+          ),
+        )
+        .orderBy(desc(pgChatConversationsTable.lastMessageAt), desc(pgChatMessagesTable.seq));
+
+      const summaries = new Map<string, ChatConversationSummary>();
+      for (const row of rows) {
+        const messageStatus = parseChatMessageStatus(row.status);
+        const message: Pick<ChatMessage, "status" | "updatedAt"> = {
+          status: messageStatus,
+          updatedAt: row.updatedAt,
+        };
+        const current = summaries.get(row.uid);
+        if (current) {
+          current.questionCount += 1;
+        } else {
+          // The first joined row has the greatest message sequence for this conversation.
+          if (messageStatus === "failed" && parseChatMessageFailureCode(row.failureCode) === null) {
+            throw new Error("Stored failed chat message is missing its failure code.");
+          }
+          summaries.set(row.uid, {
+            uid: row.uid,
+            title: row.title,
+            lastMessageAt: row.lastMessageAt,
+            questionCount: 1,
+            latestMessage: message,
+          });
+        }
+      }
+      return [...summaries.values()];
+    },
+    options,
+  );
+}
+
+export async function readPostgresChatConversation(
+  env: Pick<Env, "HYPERDRIVE">,
+  input: { senseiId: number; conversationUid: string },
+  options: PostgresChatOptions = {},
+): Promise<ChatConversation | null> {
+  return withChatDatabase(
+    env,
+    "read_conversation",
+    async (db) => {
+      const [row] = await db
+        .select({
+          id: pgChatConversationsTable.id,
+          uid: pgChatConversationsTable.uid,
+          title: pgChatConversationsTable.title,
+          lastMessageAt: pgChatConversationsTable.lastMessageAt,
+        })
+        .from(pgChatConversationsTable)
+        .where(
+          and(
+            eq(pgChatConversationsTable.uid, input.conversationUid),
+            eq(pgChatConversationsTable.senseiId, input.senseiId),
+          ),
+        )
+        .limit(1);
+      if (!row) return null;
+      return {
+        uid: row.uid,
+        title: row.title,
+        lastMessageAt: row.lastMessageAt,
+        messages: await selectMessages(db, row.id),
+      };
+    },
+    options,
+  );
 }
 
 // Locks the conversation row so that messages of one conversation start one at a time.

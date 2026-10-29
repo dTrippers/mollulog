@@ -8,6 +8,8 @@ jest.mock("~/models/chat-conversation", () => ({
   startChatMessage: jest.fn(),
   retryChatMessage: jest.fn(),
   completeChatMessage: jest.fn(),
+  listChatConversations: jest.fn(),
+  readChatConversation: jest.fn(),
 }));
 jest.mock("~/models/sensei", () => ({
   getQuestionMemberDataConsentAt: jest.fn(),
@@ -17,7 +19,12 @@ jest.mock("~/models/sensei", () => ({
 
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { runQuestion as callQuestionService } from "~/models/al1s-question.server";
-import { completeChatMessage, startChatMessage } from "~/models/chat-conversation";
+import {
+  completeChatMessage,
+  listChatConversations,
+  readChatConversation,
+  startChatMessage,
+} from "~/models/chat-conversation";
 import {
   consentToQuestionMemberData,
   getQuestionMemberDataConsentAt,
@@ -38,6 +45,8 @@ const mockedConsentToQuestionMemberData = consentToQuestionMemberData as jest.Mo
 >;
 const mockedStartChatMessage = startChatMessage as jest.MockedFunction<typeof startChatMessage>;
 const mockedCompleteChatMessage = completeChatMessage as jest.MockedFunction<typeof completeChatMessage>;
+const mockedListChatConversations = listChatConversations as jest.MockedFunction<typeof listChatConversations>;
+const mockedReadChatConversation = readChatConversation as jest.MockedFunction<typeof readChatConversation>;
 const mockedRevokeQuestionMemberDataConsent = revokeQuestionMemberDataConsent as jest.MockedFunction<
   typeof revokeQuestionMemberDataConsent
 >;
@@ -140,17 +149,16 @@ describe("AI chatbot page and resource action", () => {
 
   it("reads consent fresh for the session account and starts enabled only for a saved timestamp", async () => {
     const readConsent = jest.fn(async (_senseiId: number) => new Date("2026-10-18T00:00:00.000Z"));
+    const readChatData = jest.fn(async () => ({ conversations: [], selectedConversation: null }));
     await expect(
-      loadChatPageData(async () => ({ id: 18, username: "sensei", role: "admin" }), readConsent),
-    ).resolves.toEqual({
-      isSignedIn: true,
-      initialConsent: true,
-      consentUnavailable: false,
-    });
+      loadChatPageData(async () => ({ id: 18, username: "sensei", role: "admin" }), readConsent, readChatData, null),
+    ).resolves.toMatchObject({ isSignedIn: true, initialConsent: true, consentUnavailable: false, conversations: [] });
     expect(readConsent).toHaveBeenCalledWith(18);
-    await expect(loadChatPageData(async () => null, readConsent)).rejects.toMatchObject({ status: 404 });
+    await expect(loadChatPageData(async () => null, readConsent, readChatData, null)).rejects.toMatchObject({
+      status: 404,
+    });
     await expect(
-      loadChatPageData(async () => ({ id: 19, username: "guest", role: "guest" }), readConsent),
+      loadChatPageData(async () => ({ id: 19, username: "guest", role: "guest" }), readConsent, readChatData, null),
     ).rejects.toMatchObject({ status: 404 });
     expect(readConsent).toHaveBeenCalledTimes(1);
   });
@@ -163,9 +171,11 @@ describe("AI chatbot page and resource action", () => {
         async () => {
           throw new Error("database details stay server-side");
         },
+        async () => ({ conversations: [], selectedConversation: null }),
+        null,
         report,
       ),
-    ).resolves.toEqual({ isSignedIn: true, initialConsent: false, consentUnavailable: true });
+    ).resolves.toMatchObject({ isSignedIn: true, initialConsent: false, consentUnavailable: true, conversations: [] });
     expect(report).toHaveBeenCalledTimes(1);
   });
 
@@ -177,6 +187,8 @@ describe("AI chatbot page and resource action", () => {
       params: {},
     } as never;
     mockedGetQuestionMemberDataConsentAt.mockResolvedValue(new Date("2026-10-18T00:00:00.000Z"));
+    mockedListChatConversations.mockResolvedValue([]);
+    mockedReadChatConversation.mockResolvedValue(null);
 
     mockedGetActiveSensei.mockResolvedValue(null);
     await expect(chatPageRoute.loader(args)).rejects.toMatchObject({ status: 404 });
@@ -185,12 +197,43 @@ describe("AI chatbot page and resource action", () => {
     expect(mockedGetQuestionMemberDataConsentAt).not.toHaveBeenCalled();
 
     mockedGetActiveSensei.mockResolvedValue({ id: 18, username: "admin", role: "admin" } as never);
-    await expect(chatPageRoute.loader(args)).resolves.toEqual({
+    await expect(chatPageRoute.loader(args)).resolves.toMatchObject({
       isSignedIn: true,
       initialConsent: true,
       consentUnavailable: false,
+      conversations: [],
+      selectedUid: null,
+      selectedConversation: null,
     });
     expect(mockedGetQuestionMemberDataConsentAt).toHaveBeenCalledWith(env, 18, { ctx: undefined });
+    expect(mockedListChatConversations).toHaveBeenCalledWith(
+      env,
+      expect.objectContaining({ senseiId: 18, listDays: 30, now: expect.any(Date) }),
+      { ctx: undefined },
+    );
+  });
+
+  it("scopes selected conversation reads to the admin session and keeps missing IDs as not found", async () => {
+    const env = {} as Env;
+    const args = {
+      request: new Request("https://mollulog.test/chat?c=private-id"),
+      context: routeContext(env),
+      params: {},
+    } as never;
+    mockedGetActiveSensei.mockResolvedValue({ id: 18, username: "admin", role: "admin" } as never);
+    mockedGetQuestionMemberDataConsentAt.mockResolvedValue(null);
+    mockedListChatConversations.mockResolvedValue([]);
+    mockedReadChatConversation.mockResolvedValue(null);
+
+    await expect(chatPageRoute.loader(args)).resolves.toMatchObject({
+      selectedUid: "private-id",
+      selectedConversation: null,
+    });
+    expect(mockedReadChatConversation).toHaveBeenCalledWith(
+      env,
+      { senseiId: 18, conversationUid: "private-id" },
+      { ctx: undefined },
+    );
   });
 
   it.each([

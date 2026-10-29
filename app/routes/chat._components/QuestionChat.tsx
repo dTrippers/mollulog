@@ -1,6 +1,6 @@
 import {
   ArrowUpIcon,
-  ChevronDownIcon,
+  ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   PlusIcon,
   QuestionMarkCircleIcon,
@@ -17,14 +17,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { Link, useNavigation } from "react-router";
+import { useV2Page } from "~/components/v2/layout";
+import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
 import { Dialog } from "~/components/v2/primitives/Dialog";
 import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { Switch } from "~/components/v2/primitives/Switch";
-import { v2FocusRing } from "~/components/v2/layout/styles";
-import type { ChatErrorCode } from "~/domain/chat-conversation";
-import type { AnswerSource, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import { type ChatErrorCode, type ChatMessage, isChatMessageInterrupted } from "~/domain/chat-conversation";
+import type { QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import { canApplyChatResponse, reconcileChatTurns } from "./chat-ui-state";
 
 export type QuestionChatActionResult =
   | { ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
@@ -36,10 +39,15 @@ export type QuestionTurn = {
   personalMode: boolean;
   // Set once the server has stored the turn, so that a retry asks the stored message again.
   messageUid?: string;
-  result?: Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>;
+  result?: Pick<
+    Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>,
+    "status" | "answer"
+  >;
   failure?: ChatErrorCode;
   pending?: boolean;
   waitingLonger?: boolean;
+  interrupted?: boolean;
+  localInFlight?: boolean;
 };
 
 export type ChatInput = {
@@ -55,6 +63,10 @@ type QuestionChatProps = {
   consentUnavailable: boolean;
   onConsent: (consented: boolean) => Promise<boolean>;
   onAsk: (input: ChatInput) => Promise<QuestionChatActionResult>;
+  initialConversationUid: string | null;
+  initialMessages: ChatMessage[];
+  loadedAt: Date;
+  onConversationUid: (uid: string) => void;
 };
 
 const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
@@ -118,35 +130,66 @@ function AssistantMark({ working = false }: { working?: boolean }) {
   );
 }
 
-function AnswerSources({ sources, id }: { sources: AnswerSource[]; id: string }) {
-  const [open, setOpen] = useState(false);
-  if (sources.length === 0) return null;
+function AnswerSources({
+  result,
+  id,
+}: {
+  result: Pick<
+    Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>,
+    "status" | "answer"
+  >;
+  id: string;
+}) {
   return (
-    <div className="mt-4 border-t border-v2-divider pt-3">
-      <button
-        type="button"
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-v2-row-min items-center gap-1 rounded-md text-sm text-v2-fg-secondary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-      >
-        <span>출처 {sources.length}개</span>
-        <ChevronDownIcon className={`size-4 transition-transform ${open ? "rotate-180" : ""}`} aria-hidden="true" />
-      </button>
-      {open ? (
-        <ol id={id} className="mt-2 space-y-1 text-sm text-v2-fg-secondary">
-          {sources.map((source, index) => (
-            <li key={source.sourceId} className="flex gap-2">
-              <span aria-hidden="true" className="w-4 shrink-0 text-right tabular-nums">
-                {index + 1}
-              </span>
-              <span>
-                {source.label} · {SOURCE_KIND_LABELS[source.kind]}
-              </span>
-            </li>
-          ))}
-        </ol>
+    <div className="mt-4 flex flex-col gap-3">
+      {result.answer.sources.length ? (
+        <ul id={id} className="flex flex-wrap gap-2">
+          {result.answer.sources.map((source) => {
+            const content = (
+              <>
+                <span className="text-sm font-medium">{source.label}</span>
+                <span className="text-xs text-v2-fg-tertiary">{SOURCE_KIND_LABELS[source.kind]}</span>
+              </>
+            );
+            return (
+              <li key={`${source.kind}:${source.sourceId}`}>
+                {source.kind === "student" ? (
+                  <Link
+                    to={`/students/${encodeURIComponent(source.sourceId)}`}
+                    className={`inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset px-3 text-v2-fg hover:bg-v2-filled-hover ${v2FocusRing}`}
+                  >
+                    {content}
+                  </Link>
+                ) : (
+                  <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset px-3 text-v2-fg">
+                    {content}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
       ) : null}
+      {result.answer.limitations.length ? (
+        <div>
+          <p className="text-sm text-v2-fg-secondary">확인하지 못한 내용</p>
+          <ul className="mt-1 list-inside list-disc space-y-1 text-sm leading-6 text-v2-fg-secondary">
+            {result.answer.limitations.map((limitation) => (
+              <li key={limitation}>{limitation}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      <div>
+        <IconButton
+          icon={ClipboardDocumentIcon}
+          label="답변 복사"
+          onClick={() => {
+            void navigator.clipboard?.writeText(result.answer.text).catch(() => undefined);
+          }}
+          className="size-8 text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg"
+        />
+      </div>
     </div>
   );
 }
@@ -166,6 +209,24 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
     );
   }
 
+  if (turn.interrupted) {
+    return (
+      <div className="rounded-lg bg-v2-surface p-4">
+        <div className="flex items-center gap-2 text-sm font-medium text-v2-danger">
+          <AssistantMark />
+          <XCircleIcon className="size-4" aria-hidden="true" />
+          <span>답변이 중단됐어요</span>
+        </div>
+        <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-6 text-v2-fg">
+          답변을 받는 중에 연결이 끊겼어요. 다시 시도해 주세요.
+        </p>
+        <Button type="button" onClick={onRetry} className="mt-3">
+          다시 시도
+        </Button>
+      </div>
+    );
+  }
+
   if (turn.failure) {
     return (
       <div className="rounded-lg bg-v2-surface p-4">
@@ -174,7 +235,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
           <XCircleIcon className="size-4" aria-hidden="true" />
           <span>답변하지 못했어요</span>
         </div>
-        <p className="mt-3 whitespace-pre-wrap break-keep text-xs leading-5 text-v2-fg">{ERROR_COPY[turn.failure]}</p>
+        <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-6 text-v2-fg">{ERROR_COPY[turn.failure]}</p>
         {turn.failure !== "budget_exhausted" &&
         turn.failure !== "invalid_request" &&
         turn.failure !== "snapshot_too_large" &&
@@ -204,25 +265,50 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         {StatusIcon ? <StatusIcon className="size-4" aria-hidden="true" /> : null}
         <span>{status.label}</span>
       </div>
-      <p className="mt-3 whitespace-pre-wrap break-keep text-xs leading-5 text-v2-fg">{result.answer.text}</p>
-      {result.answer.limitations.length > 0 ? (
-        <div className="mt-4 border-t border-v2-divider pt-3">
-          <p className="text-xs text-v2-fg-secondary">확인하지 못한 내용</p>
-          <ul className="mt-2 list-inside list-disc space-y-1 text-xs leading-5 text-v2-fg-secondary">
-            {result.answer.limitations.map((limitation) => (
-              <li key={limitation}>{limitation}</li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-      <AnswerSources sources={result.answer.sources} id={sourcesId} />
+      <p className="mt-3 whitespace-pre-wrap break-keep text-base leading-7 text-v2-fg">{result.answer.text}</p>
+      <AnswerSources result={result} id={sourcesId} />
     </div>
   );
 }
 
-export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, onConsent, onAsk }: QuestionChatProps) {
-  const [turns, setTurns] = useState<QuestionTurn[]>([]);
-  const [conversationUid, setConversationUid] = useState<string | null>(null);
+function toQuestionTurn(message: ChatMessage, loadedAt: Date): QuestionTurn {
+  const turn: QuestionTurn = {
+    id: message.uid,
+    messageUid: message.uid,
+    question: message.question,
+    personalMode: message.personalMode,
+  };
+  if (message.status === "pending") {
+    return isChatMessageInterrupted(message, loadedAt) ? { ...turn, interrupted: true } : { ...turn, pending: true };
+  }
+  if (message.status === "failed") {
+    if (message.failureCode === null) throw new Error("Stored failed chat message is missing its failure code.");
+    return { ...turn, failure: message.failureCode };
+  }
+  if (message.answer) return { ...turn, result: { status: message.status, answer: message.answer } };
+  return turn;
+}
+
+export function QuestionChat({
+  isSignedIn,
+  initialConsent,
+  consentUnavailable,
+  onConsent,
+  onAsk,
+  initialConversationUid,
+  initialMessages,
+  loadedAt,
+  onConversationUid,
+}: QuestionChatProps) {
+  const { stacked } = useV2Page();
+  const navigation = useNavigation();
+  const navigationRef = useRef(navigation);
+  navigationRef.current = navigation;
+  const mountedRef = useRef(false);
+  const [turns, setTurns] = useState<QuestionTurn[]>(() =>
+    initialMessages.map((message) => toQuestionTurn(message, loadedAt)),
+  );
+  const [conversationUid, setConversationUid] = useState<string | null>(initialConversationUid);
   const [draft, setDraft] = useState("");
   const [personalMode, setPersonalMode] = useState(initialConsent);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -240,8 +326,14 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
   const scrollQuestionId = useRef<string | null>(null);
   const scrollConversationEnd = useRef(false);
   const isComposing = useRef(false);
+  const focusDraftAfterConsent = useRef(false);
   const [composerHeight, setComposerHeight] = useState(0);
   const [keyboardBottomInset, setKeyboardBottomInset] = useState<number | null>(null);
+  const isResponseActive = () => {
+    const currentNavigation = navigationRef.current;
+    const pendingLocation = currentNavigation.state === "idle" ? undefined : currentNavigation.location;
+    return canApplyChatResponse(mountedRef.current, initialConversationUid, pendingLocation);
+  };
   const personalModeDescription = !isSignedIn
     ? "로그인하면 쓸 수 있어요"
     : consentUnavailable
@@ -267,8 +359,19 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    setTurns((current) => reconcileChatTurns(current, initialMessages, (message) => toQuestionTurn(message, loadedAt)));
+  }, [initialMessages, loadedAt]);
+
+  useEffect(() => {
     const updateKeyboardInset = () => {
-      if (window.matchMedia("(min-width: 1024px)").matches || !window.visualViewport) {
+      if (!stacked || !window.visualViewport) {
         setKeyboardBottomInset(null);
         return;
       }
@@ -284,7 +387,7 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
       window.visualViewport?.removeEventListener("resize", updateKeyboardInset);
       window.visualViewport?.removeEventListener("scroll", updateKeyboardInset);
     };
-  }, []);
+  }, [stacked]);
 
   useEffect(() => {
     if (!pending) return;
@@ -343,6 +446,8 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
         setPersonalMode(true);
         setConsentDialogOpen(false);
         setAnnouncement("내 데이터 함께 보내기를 켰어요");
+        focusDraftAfterConsent.current = false;
+        window.requestAnimationFrame(() => textareaRef.current?.focus());
       } else {
         setConsentError("설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
         setAnnouncement("설정을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.");
@@ -382,13 +487,18 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
                 personalMode: activePersonalMode,
                 failure: undefined,
                 result: undefined,
+                interrupted: false,
                 pending: true,
+                localInFlight: true,
               }
             : turn,
         ),
       );
     } else {
-      setTurns((current) => [...current, { id, question, personalMode: activePersonalMode, pending: true }]);
+      setTurns((current) => [
+        ...current,
+        { id, question, personalMode: activePersonalMode, pending: true, localInFlight: true },
+      ]);
       scrollQuestionId.current = id;
     }
 
@@ -399,13 +509,19 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
         conversationUid,
         ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
       });
-      if (response.conversationUid) setConversationUid(response.conversationUid);
+      if (!isResponseActive()) return;
+      if (response.conversationUid) {
+        setConversationUid(response.conversationUid);
+        if (response.conversationUid !== conversationUid) onConversationUid(response.conversationUid);
+      }
       const messageUid = response.messageUid ?? existingTurn?.messageUid;
       if (!response.ok) {
         const failure = response.code;
         scrollConversationEnd.current = true;
         setTurns((current) =>
-          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, failure } : turn)),
+          current.map((turn) =>
+            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+          ),
         );
         if (failure === "consent_required") setPersonalMode(false);
         if (failure === "conversation_not_found") setConversationUid(null);
@@ -414,14 +530,18 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
         const failure = response.result.error.code;
         scrollConversationEnd.current = true;
         setTurns((current) =>
-          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, failure } : turn)),
+          current.map((turn) =>
+            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+          ),
         );
         setAnnouncement(ERROR_COPY[failure]);
       } else {
         const result = response.result;
         scrollConversationEnd.current = true;
         setTurns((current) =>
-          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, result } : turn)),
+          current.map((turn) =>
+            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, result } : turn,
+          ),
         );
         setAnnouncement(
           {
@@ -432,14 +552,19 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
         );
       }
     } catch {
+      if (!isResponseActive()) return;
       scrollConversationEnd.current = true;
       setTurns((current) =>
-        current.map((turn) => (turn.id === id ? { ...turn, pending: false, failure: "network" } : turn)),
+        current.map((turn) =>
+          turn.id === id ? { ...turn, pending: false, localInFlight: false, failure: "network" } : turn,
+        ),
       );
       setAnnouncement(ERROR_COPY.network);
     } finally {
-      setPending(false);
-      setWaitingLonger(false);
+      if (isResponseActive()) {
+        setPending(false);
+        setWaitingLonger(false);
+      }
     }
   };
 
@@ -461,15 +586,42 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
       style={{ "--question-composer-height": `${composerHeight}px` } as CSSProperties}
     >
       {turns.length === 0 ? (
-        <div className="flex items-start gap-2.5 pt-2 pb-6">
-          <AssistantMark />
-          <p className="text-xs leading-5 font-normal text-v2-fg">블루 아카이브에 대해 궁금한 점을 물어보세요.</p>
+        <div className="flex flex-1 flex-col gap-4 pt-2 pb-6">
+          <div className="flex items-center gap-2.5 text-lg font-semibold text-v2-fg">
+            <AssistantMark />
+            <p>블루 아카이브에 대해 궁금한 점을 물어보세요</p>
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {[
+              { label: "일정", question: "다음 픽업 학생과 기간 알려 줘" },
+              { label: "학생", question: "미카 EX 스킬 효과 정리해 줘" },
+              { label: "총력전", question: "이번 총력전 상위권은 누구를 많이 써?" },
+              { label: "내 데이터", question: "내 보유 학생으로 신비 편성 추천해 줘", personal: true },
+            ].map((suggestion) => (
+              <button
+                key={suggestion.label}
+                type="button"
+                onClick={() => {
+                  setDraft(suggestion.question);
+                  textareaRef.current?.focus();
+                  if (suggestion.personal && !personalMode && isSignedIn && !consentUnavailable && !savingConsent) {
+                    focusDraftAfterConsent.current = true;
+                    void updatePersonalMode(true);
+                  }
+                }}
+                className={`flex min-h-v2-row-min flex-col items-start gap-1 rounded-lg bg-v2-surface px-4 py-3 text-left text-sm leading-5 text-v2-fg hover:bg-v2-hover ${v2FocusRing}`}
+              >
+                <span className="text-xs text-v2-fg-tertiary">{suggestion.label}</span>
+                <span>{suggestion.question}</span>
+              </button>
+            ))}
+          </div>
         </div>
       ) : (
         <div className="flex-1 space-y-4 pb-[calc(var(--question-composer-height)_+_var(--mobile-nav-height)_+_1rem)] lg:pb-[calc(var(--question-composer-height)_+_1rem)]">
           {turns.map((turn) => (
             <article key={turn.id} id={`question-${turn.id}`} className="scroll-mt-4">
-              <div className="ml-auto max-w-[88%] rounded-lg bg-v2-inset px-3 py-2.5 text-xs text-v2-fg">
+              <div className="ml-auto max-w-[88%] rounded-lg bg-v2-inset px-3 py-2.5 text-base leading-6 text-v2-fg">
                 <p className="whitespace-pre-wrap break-keep">{turn.question}</p>
               </div>
               {turn.personalMode ? (
@@ -493,7 +645,11 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
       <div
         ref={composerRef}
         style={keyboardBottomInset === null ? undefined : { bottom: `${keyboardBottomInset}px` }}
-        className="fixed bottom-[var(--mobile-nav-height)] left-4 z-10 w-[min(48rem,calc(100vw_-_2rem))] bg-v2-canvas pt-2 md:left-8 md:w-[min(48rem,calc(100vw_-_4rem))] lg:sticky lg:bottom-0 lg:left-auto lg:mt-auto lg:w-full"
+        className={`z-10 bg-v2-canvas pt-2 ${
+          stacked
+            ? "fixed bottom-[var(--mobile-nav-height)] left-4 w-[min(48rem,calc(100vw_-_2rem))] md:left-8 md:w-[min(48rem,calc(100vw_-_4rem))]"
+            : "sticky bottom-0 left-auto mt-auto w-full"
+        }`}
       >
         <div className="rounded-lg border border-v2-control-border bg-v2-surface px-3 py-2 focus-within:border-v2-control-border-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus focus-within:shadow-v2-ai-glow">
           <label className="sr-only" htmlFor="question-input">
@@ -515,7 +671,7 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
             rows={1}
             disabled={pending}
             aria-describedby="question-shortcut-help"
-            className="block max-h-[120px] min-h-8 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-11 max-lg:py-3 lg:text-xs"
+            className="block max-h-[120px] min-h-8 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-11 max-lg:py-3"
           />
           <span id="question-shortcut-help" className="sr-only">
             Enter로 질문 보내기, Shift+Enter로 줄바꿈
@@ -582,7 +738,13 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
       <Dialog
         open={consentDialogOpen}
         onClose={() => {
-          if (!savingConsent) setConsentDialogOpen(false);
+          if (!savingConsent) {
+            setConsentDialogOpen(false);
+            if (focusDraftAfterConsent.current) {
+              focusDraftAfterConsent.current = false;
+              window.requestAnimationFrame(() => textareaRef.current?.focus());
+            }
+          }
         }}
         title="질문과 함께 내 데이터를 보낼까요?"
         size="sm"
@@ -601,7 +763,13 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
           <div className="flex gap-2 pt-1">
             <Button
               type="button"
-              onClick={() => setConsentDialogOpen(false)}
+              onClick={() => {
+                setConsentDialogOpen(false);
+                if (focusDraftAfterConsent.current) {
+                  focusDraftAfterConsent.current = false;
+                  window.requestAnimationFrame(() => textareaRef.current?.focus());
+                }
+              }}
               disabled={savingConsent}
               className="flex-1"
             >

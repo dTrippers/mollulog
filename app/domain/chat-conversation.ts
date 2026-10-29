@@ -47,6 +47,30 @@ export type ChatMessage = {
   updatedAt: Date;
 };
 
+export type ChatConversationSummary = {
+  uid: string;
+  title: string;
+  lastMessageAt: Date;
+  questionCount: number;
+  latestMessage: Pick<ChatMessage, "status" | "updatedAt">;
+};
+
+export type ChatConversation = Omit<ChatConversationSummary, "questionCount" | "latestMessage"> & {
+  messages: ChatMessage[];
+};
+
+export type ChatConversationListStatus = "in_progress" | "failed" | null;
+
+export function getChatConversationListStatus(
+  latestMessage: Pick<ChatMessage, "status" | "updatedAt">,
+  now: Date,
+): ChatConversationListStatus {
+  if (latestMessage.status === "pending") {
+    return isChatMessageInterrupted(latestMessage, now) ? "failed" : "in_progress";
+  }
+  return latestMessage.status === "failed" ? "failed" : null;
+}
+
 export type ChatMessageOutcome =
   | { status: AnswerStatus; answer: Answer; runId: string }
   | { status: "failed"; failureCode: ChatMessageFailureCode; runId: string | null };
