@@ -11,6 +11,7 @@ import {
   parseChatAnswer,
   parseChatMessageFailureCode,
   parseChatMessageStatus,
+  parseChatProgress,
 } from "~/domain/chat-conversation";
 
 const now = new Date("2026-10-29T03:00:00.000Z");
@@ -23,6 +24,7 @@ function message(uid: string, overrides: Partial<ChatMessage> = {}): ChatMessage
     personalMode: false,
     status: "answered",
     answer: { text: `answer ${uid}`, sources: [], limitations: [] },
+    progress: null,
     failureCode: null,
     createdAt: now,
     updatedAt: now,
@@ -179,5 +181,33 @@ describe("stored value parsers", () => {
     expect(() => parseChatAnswer({ text: "Answer", sources: [], limitations: [1] })).toThrow();
     expect(() => parseChatMessageStatus("done")).toThrow();
     expect(() => parseChatMessageFailureCode("rate_limited")).toThrow();
+  });
+
+  it("keeps valid progress entries and drops malformed entries", () => {
+    expect(
+      parseChatProgress([
+        {
+          callId: "call-1",
+          round: 1,
+          toolName: "get_student",
+          target: "미카",
+          subject: { type: "student", uid: "101" },
+          ok: false,
+          sourceCount: 0,
+        },
+        { callId: "bad", round: -1, toolName: "unknown", target: null, ok: true, sourceCount: 0 },
+      ]),
+    ).toEqual([
+      {
+        callId: "call-1",
+        round: 1,
+        toolName: "get_student",
+        target: "미카",
+        subject: { type: "student", uid: "101" },
+        ok: false,
+        sourceCount: 0,
+      },
+    ]);
+    expect(parseChatProgress(null)).toBeNull();
   });
 });

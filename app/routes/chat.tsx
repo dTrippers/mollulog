@@ -10,17 +10,30 @@ import {
   type ChatConversation,
   type ChatConversationSummary,
   type ChatErrorCode,
+  type ChatProgressStep,
   chatConversationTitle,
 } from "~/domain/chat-conversation";
 import { isAdminSensei } from "~/domain/sensei-role";
 import { getLogger } from "~/lib/observability.server";
-import type { QuestionRunResult } from "~/models/al1s-question-contract";
+import type { QuestionRunEvent, QuestionRunResult } from "~/models/al1s-question-contract";
 import { listChatConversations, readChatConversation } from "~/models/chat-conversation";
 import { getQuestionMemberDataConsentAt } from "~/models/sensei";
 import { ChatHistoryPanel, ChatMobileToolbar } from "./chat._components/ChatHistoryPanel";
 import { mapChatActionErrorCode, postChatAction } from "./chat._components/chat-client";
-import { addInFlightChatSends, getChatScreenKey, type InFlightChatSend } from "./chat._components/chat-ui-state";
-import { type ChatInput, QuestionChat, type QuestionChatActionResult } from "./chat._components/QuestionChat";
+import {
+  addInFlightChatSends,
+  applyChatProgressEvent,
+  findChatSendOutcome,
+  getChatScreenKey,
+  type InFlightChatSend,
+  shouldKeepInFlightChatSend,
+} from "./chat._components/chat-ui-state";
+import {
+  type ChatAskHandlers,
+  type ChatInput,
+  QuestionChat,
+  type QuestionChatActionResult,
+} from "./chat._components/QuestionChat";
 
 type ChatSensei = { id: number; username: string; role: "guest" | "app_developer" | "admin" };
 type ChatPageData = {
@@ -36,6 +49,10 @@ type ChatPageData = {
 type RouteInFlightChatSend = InFlightChatSend & {
   baseLoadedAt: number;
   awaitingRefresh: boolean;
+  messageUid?: string;
+  progress: ChatProgressStep[];
+  activeProgressIds: string[];
+  outcome?: QuestionChatActionResult;
 };
 
 export const meta: MetaFunction = () => [{ title: "AI 챗봇 | 몰루로그" }];
@@ -101,6 +118,7 @@ export default function ChatRoute() {
   const revalidator = useRevalidator();
   const [resetToken, setResetToken] = useState(0);
   const [activeSends, setActiveSends] = useState<RouteInFlightChatSend[]>([]);
+  const selectedConversation = pageData.selectedConversation;
   const onNewConversation = () => {
     setResetToken((token) => token + 1);
     navigate("/chat");
@@ -112,11 +130,13 @@ export default function ChatRoute() {
         if (!send.awaitingRefresh || !send.conversationUid || pageData.loadedAt.getTime() <= send.baseLoadedAt) {
           return true;
         }
-        return !pageData.conversations.some((conversation) => conversation.uid === send.conversationUid);
+        const conversation = pageData.conversations.find((item) => item.uid === send.conversationUid);
+        const messages = selectedConversation?.uid === send.conversationUid ? selectedConversation.messages : [];
+        return shouldKeepInFlightChatSend(send, messages, conversation?.latestMessage.status);
       });
       return next.length === current.length ? current : next;
     });
-  }, [pageData.conversations, pageData.loadedAt]);
+  }, [pageData.conversations, pageData.loadedAt, selectedConversation]);
   const onConsent = async (consented: boolean) => {
     try {
       const result = await postChatAction<{ ok: boolean }>({ intent: consented ? "consent" : "revoke" });
@@ -125,7 +145,7 @@ export default function ChatRoute() {
       return false;
     }
   };
-  const onAsk = async (input: ChatInput): Promise<QuestionChatActionResult> => {
+  const onAsk = async (input: ChatInput, handlers: ChatAskHandlers): Promise<QuestionChatActionResult> => {
     const requestId = crypto.randomUUID();
     const savedConversation = pageData.conversations.find((conversation) => conversation.uid === input.conversationUid);
     const selectedConversation =
@@ -133,7 +153,7 @@ export default function ChatRoute() {
     const existingQuestionCount = savedConversation?.questionCount ?? selectedConversation?.messages.length ?? 0;
     const title = savedConversation?.title ?? selectedConversation?.title ?? chatConversationTitle(input.question);
     setActiveSends((current) => [
-      ...current,
+      ...current.filter((send) => !input.retryMessageUid || send.messageUid !== input.retryMessageUid),
       {
         requestId,
         conversationUid: input.conversationUid,
@@ -142,25 +162,64 @@ export default function ChatRoute() {
         questionCount: existingQuestionCount + (input.retryMessageUid ? 0 : 1),
         baseLoadedAt: pageData.loadedAt.getTime(),
         awaitingRefresh: false,
+        progress: [],
+        activeProgressIds: [],
       },
     ]);
     let response: QuestionChatActionResult;
+    let startedMessageUid: string | undefined;
+    let startedConversationUid: string | undefined;
     try {
       const result = await postChatAction<
         | { intent: "question"; ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
         | { intent: "question"; ok: false; code: ChatErrorCode; conversationUid?: string; messageUid?: string }
-      >({ intent: "question", ...input });
+      >({ intent: "question", ...input }, fetch, {
+        onStarted: (started) => {
+          startedMessageUid = started.messageUid;
+          startedConversationUid = started.conversationUid;
+          handlers.onStarted(started);
+          setActiveSends((current) =>
+            current.map((send) =>
+              send.requestId === requestId
+                ? {
+                    ...send,
+                    conversationUid: started.conversationUid,
+                    messageUid: started.messageUid,
+                    awaitingRefresh: true,
+                  }
+                : send,
+            ),
+          );
+          revalidator.revalidate();
+        },
+        onEvent: (event: QuestionRunEvent) => {
+          handlers.onEvent(event);
+          setActiveSends((current) =>
+            current.map((send) =>
+              send.requestId === requestId ? { ...send, ...applyChatProgressEvent(send, event) } : send,
+            ),
+          );
+        },
+      });
       response = result.ok
         ? { ok: true, result: result.result, conversationUid: result.conversationUid, messageUid: result.messageUid }
         : { ok: false, code: result.code, conversationUid: result.conversationUid, messageUid: result.messageUid };
     } catch (error) {
       response = { ok: false, code: mapChatActionErrorCode(error) };
     }
-    if (response.conversationUid) {
+    const messageUid = response.messageUid ?? startedMessageUid;
+    const conversationUid = response.conversationUid ?? startedConversationUid;
+    if (messageUid) {
       setActiveSends((current) =>
         current.map((send) =>
           send.requestId === requestId
-            ? { ...send, conversationUid: response.conversationUid ?? null, awaitingRefresh: true }
+            ? {
+                ...send,
+                conversationUid: conversationUid ?? send.conversationUid,
+                messageUid,
+                outcome: response,
+                awaitingRefresh: true,
+              }
             : send,
         ),
       );
@@ -171,6 +230,8 @@ export default function ChatRoute() {
     return response;
   };
   const onConversationUid = (uid: string) => navigate(`/chat?c=${encodeURIComponent(uid)}`);
+  const selectedProgress = activeSends.find((send) => send.conversationUid === pageData.selectedUid && send.messageUid);
+  const selectedOutcome = findChatSendOutcome(activeSends, selectedProgress?.messageUid);
 
   return (
     <V2Page width="wide">
@@ -193,6 +254,15 @@ export default function ChatRoute() {
               onAsk={onAsk}
               initialConversationUid={pageData.selectedUid}
               initialMessages={pageData.selectedConversation?.messages ?? []}
+              liveProgress={
+                selectedProgress?.messageUid
+                  ? {
+                      ...selectedProgress,
+                      messageUid: selectedProgress.messageUid,
+                      outcome: selectedOutcome,
+                    }
+                  : undefined
+              }
               loadedAt={pageData.loadedAt}
               onConversationUid={onConversationUid}
             />

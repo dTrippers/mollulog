@@ -1,12 +1,16 @@
 import {
+  ArrowPathIcon,
   ArrowUpIcon,
   ArrowUpRightIcon,
+  CheckIcon,
+  ChevronDownIcon,
   ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   PlusIcon,
   QuestionMarkCircleIcon,
   UserCircleIcon,
   XCircleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import {
   type ComponentProps,
@@ -28,10 +32,26 @@ import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { Switch } from "~/components/v2/primitives/Switch";
 import { useImageFailure } from "~/components/v2/primitives/use-image-failure";
-import { type ChatErrorCode, type ChatMessage, isChatMessageInterrupted } from "~/domain/chat-conversation";
-import type { AnswerSource, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import {
+  type ChatErrorCode,
+  type ChatMessage,
+  type ChatProgressStep,
+  isChatMessageInterrupted,
+} from "~/domain/chat-conversation";
+import type { AnswerSource, QuestionRunEvent, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
 import { bossImageUrl } from "~/models/assets";
-import { canApplyChatResponse, reconcileChatTurns } from "./chat-ui-state";
+import {
+  applyChatProgressEvent,
+  canApplyChatResponse,
+  type LiveChatProgress,
+  reconcileChatTurns,
+  settledChatTurnState,
+} from "./chat-ui-state";
+
+export type ChatAskHandlers = {
+  onStarted: (started: { conversationUid: string; messageUid: string }) => void;
+  onEvent: (event: QuestionRunEvent) => void;
+};
 
 export type QuestionChatActionResult =
   | { ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
@@ -52,6 +72,8 @@ export type QuestionTurn = {
   waitingLonger?: boolean;
   interrupted?: boolean;
   localInFlight?: boolean;
+  progress?: ChatProgressStep[];
+  activeProgressIds?: string[];
 };
 
 export type ChatInput = {
@@ -66,9 +88,10 @@ type QuestionChatProps = {
   initialConsent: boolean;
   consentUnavailable: boolean;
   onConsent: (consented: boolean) => Promise<boolean>;
-  onAsk: (input: ChatInput) => Promise<QuestionChatActionResult>;
+  onAsk: (input: ChatInput, handlers: ChatAskHandlers) => Promise<QuestionChatActionResult>;
   initialConversationUid: string | null;
   initialMessages: ChatMessage[];
+  liveProgress?: LiveChatProgress & { messageUid: string; outcome?: QuestionChatActionResult };
   loadedAt: Date;
   onConversationUid: (uid: string) => void;
 };
@@ -101,6 +124,90 @@ const SOURCE_KIND_LABELS: Record<SourceKind, string> = {
   raid_stats: "총력전·대결전 통계",
   member: "내 데이터",
 };
+
+const PROGRESS_TOOL_LABELS: Record<string, { working: string; complete: string }> = {
+  get_schedule: { working: "일정 확인 중", complete: "일정 확인" },
+  find_students: { working: "학생 찾는 중", complete: "학생 찾기" },
+  get_student: { working: "학생 정보 확인 중", complete: "학생 정보 확인" },
+  get_raid_stats: { working: "통계 확인 중", complete: "통계 확인" },
+  search_knowledge: { working: "자료 찾는 중", complete: "자료 찾기" },
+  get_knowledge: { working: "자료 확인 중", complete: "자료 확인" },
+  get_my_data: { working: "내 데이터 확인 중", complete: "내 데이터 확인" },
+  get_content: { working: "콘텐츠 정보 확인 중", complete: "콘텐츠 정보 확인" },
+};
+
+function ProgressStepRow({ step, active }: { step: ChatProgressStep; active: boolean }) {
+  const imageSrc = step.subject?.type === "raid_boss" ? bossImageUrl(step.subject.boss) : null;
+  const image = useImageFailure(imageSrc);
+  const label = PROGRESS_TOOL_LABELS[step.toolName];
+  if (!label) return null;
+  return (
+    <li className={`flex items-center gap-2 text-sm leading-5 ${active ? "text-v2-fg" : "text-v2-fg-secondary"}`}>
+      {active ? (
+        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-v2-fg-secondary" aria-hidden="true" />
+      ) : step.ok ? (
+        <CheckIcon className="size-4 shrink-0 text-v2-success" aria-hidden="true" />
+      ) : (
+        <XMarkIcon className="size-4 shrink-0 text-v2-danger" aria-hidden="true" />
+      )}
+      <span>{active ? label.working : label.complete}</span>
+      {step.target ? (
+        <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg">
+          {step.subject?.type === "student" ? (
+            <StudentPortrait uid={step.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
+          ) : imageSrc && !image.failed ? (
+            <img
+              ref={image.ref}
+              src={imageSrc}
+              onError={image.onError}
+              onLoad={image.onLoad}
+              alt=""
+              className="size-5 shrink-0 rounded-full object-cover"
+            />
+          ) : null}
+          <span className="truncate">{step.target}</span>
+        </span>
+      ) : null}
+    </li>
+  );
+}
+
+function ProgressDisclosure({
+  steps,
+  activeProgressIds = [],
+  live = false,
+}: {
+  steps: ChatProgressStep[];
+  activeProgressIds?: string[];
+  live?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = steps.filter((step) => PROGRESS_TOOL_LABELS[step.toolName]);
+  if (visible.length === 0) return null;
+  const rows = visible.map((step) => (
+    <ProgressStepRow
+      key={`${step.round}:${step.callId}`}
+      step={step}
+      active={activeProgressIds.includes(`${step.round}:${step.callId}`)}
+    />
+  ));
+  if (live) return <ul className="mt-2 flex flex-col gap-1.5 border-l-2 border-v2-divider pl-3">{rows}</ul>;
+  return (
+    <div className="mt-2">
+      <Button
+        variant="text"
+        size="sm"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="min-h-0 px-0 py-0 text-v2-fg-tertiary hover:text-v2-fg-secondary"
+      >
+        확인한 자료 {visible.length}건
+        <ChevronDownIcon className={`size-4 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+      </Button>
+      {expanded ? <ul className="mt-1.5 flex flex-col gap-1.5 border-l-2 border-v2-divider pl-3">{rows}</ul> : null}
+    </div>
+  );
+}
 
 function SourceChip({ source }: { source: AnswerSource }) {
   const imageSrc = source.subject?.type === "raid_boss" ? bossImageUrl(source.subject.boss) : null;
@@ -228,6 +335,9 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         {turn.waitingLonger ? (
           <p className="mt-1 pl-8 text-xs text-v2-fg-tertiary">자료를 확인하고 있어요. 1분 가까이 걸릴 수 있어요.</p>
         ) : null}
+        {turn.progress?.length ? (
+          <ProgressDisclosure steps={turn.progress} activeProgressIds={turn.activeProgressIds} live />
+        ) : null}
       </div>
     );
   }
@@ -258,6 +368,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
           <XCircleIcon className="size-4" aria-hidden="true" />
           <span>답변하지 못했어요</span>
         </div>
+        {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
         <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-6 text-v2-fg">{ERROR_COPY[turn.failure]}</p>
         {turn.failure !== "budget_exhausted" &&
         turn.failure !== "invalid_request" &&
@@ -288,6 +399,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         {StatusIcon ? <StatusIcon className="size-4" aria-hidden="true" /> : null}
         <span>{status.label}</span>
       </div>
+      {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
       <p className="mt-3 whitespace-pre-wrap break-keep text-base leading-7 text-v2-fg">{result.answer.text}</p>
       <AnswerSources result={result} id={sourcesId} />
     </div>
@@ -300,6 +412,7 @@ function toQuestionTurn(message: ChatMessage, loadedAt: Date): QuestionTurn {
     messageUid: message.uid,
     question: message.question,
     personalMode: message.personalMode,
+    progress: message.progress ?? undefined,
   };
   if (message.status === "pending") {
     return isChatMessageInterrupted(message, loadedAt) ? { ...turn, interrupted: true } : { ...turn, pending: true };
@@ -320,6 +433,7 @@ export function QuestionChat({
   onAsk,
   initialConversationUid,
   initialMessages,
+  liveProgress,
   loadedAt,
   onConversationUid,
 }: QuestionChatProps) {
@@ -332,6 +446,7 @@ export function QuestionChat({
     initialMessages.map((message) => toQuestionTurn(message, loadedAt)),
   );
   const [conversationUid, setConversationUid] = useState<string | null>(initialConversationUid);
+  const activeConversationUidRef = useRef(initialConversationUid);
   const [draft, setDraft] = useState("");
   const [personalMode, setPersonalMode] = useState(initialConsent);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -355,7 +470,7 @@ export function QuestionChat({
   const isResponseActive = () => {
     const currentNavigation = navigationRef.current;
     const pendingLocation = currentNavigation.state === "idle" ? undefined : currentNavigation.location;
-    return canApplyChatResponse(mountedRef.current, initialConversationUid, pendingLocation);
+    return canApplyChatResponse(mountedRef.current, activeConversationUidRef.current, pendingLocation);
   };
   const personalModeDescription = !isSignedIn
     ? "로그인하면 쓸 수 있어요"
@@ -391,6 +506,40 @@ export function QuestionChat({
   useEffect(() => {
     setTurns((current) => reconcileChatTurns(current, initialMessages, (message) => toQuestionTurn(message, loadedAt)));
   }, [initialMessages, loadedAt]);
+
+  useEffect(() => {
+    if (!liveProgress) {
+      setPending(false);
+      return;
+    }
+    if (liveProgress.outcome) {
+      const outcome = liveProgress.outcome;
+      setPending(false);
+      setTurns((current) =>
+        current.map((turn) => {
+          if (turn.messageUid !== liveProgress.messageUid) return turn;
+          return { ...turn, ...settledChatTurnState(outcome) };
+        }),
+      );
+      setAnnouncement(
+        !outcome.ok
+          ? ERROR_COPY[outcome.code]
+          : outcome.result.status === "failed"
+            ? ERROR_COPY[outcome.result.error.code]
+            : "답변이 도착했어요",
+      );
+      scrollConversationEnd.current = true;
+      return;
+    }
+    setPending(true);
+    setTurns((current) =>
+      current.map((turn) =>
+        turn.messageUid === liveProgress.messageUid
+          ? { ...turn, pending: true, result: undefined, failure: undefined, localInFlight: true, ...liveProgress }
+          : turn,
+      ),
+    );
+  }, [liveProgress]);
 
   useEffect(() => {
     const updateKeyboardInset = () => {
@@ -510,6 +659,8 @@ export function QuestionChat({
                 personalMode: activePersonalMode,
                 failure: undefined,
                 result: undefined,
+                progress: [],
+                activeProgressIds: [],
                 interrupted: false,
                 pending: true,
                 localInFlight: true,
@@ -526,14 +677,45 @@ export function QuestionChat({
     }
 
     try {
-      const response = await onAsk({
-        question,
-        personalMode: activePersonalMode,
-        conversationUid,
-        ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
-      });
+      const response = await onAsk(
+        {
+          question,
+          personalMode: activePersonalMode,
+          conversationUid,
+          ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
+        },
+        {
+          onStarted: (started) => {
+            if (!isResponseActive()) return;
+            const previousUid = activeConversationUidRef.current;
+            activeConversationUidRef.current = started.conversationUid;
+            setConversationUid(started.conversationUid);
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.id === id
+                  ? { ...turn, messageUid: started.messageUid, progress: [], activeProgressIds: [] }
+                  : turn,
+              ),
+            );
+            if (previousUid !== started.conversationUid) onConversationUid(started.conversationUid);
+          },
+          onEvent: (event) => {
+            setTurns((current) =>
+              current.map((turn) => {
+                if (turn.id !== id) return turn;
+                const next = applyChatProgressEvent(
+                  { progress: turn.progress ?? [], activeProgressIds: turn.activeProgressIds ?? [] },
+                  event,
+                );
+                return { ...turn, ...next };
+              }),
+            );
+          },
+        },
+      );
       if (!isResponseActive()) return;
       if (response.conversationUid) {
+        activeConversationUidRef.current = response.conversationUid;
         setConversationUid(response.conversationUid);
         if (response.conversationUid !== conversationUid) onConversationUid(response.conversationUid);
       }
@@ -543,7 +725,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, failure, activeProgressIds: [] }
+              : turn,
           ),
         );
         if (failure === "consent_required") setPersonalMode(false);
@@ -554,7 +738,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, failure, activeProgressIds: [] }
+              : turn,
           ),
         );
         setAnnouncement(ERROR_COPY[failure]);
@@ -563,7 +749,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, result } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, activeProgressIds: [], result }
+              : turn,
           ),
         );
         setAnnouncement(

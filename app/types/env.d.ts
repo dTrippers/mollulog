@@ -1,6 +1,6 @@
 import type { QuestionRequest } from "~/models/al1s-question-contract";
 
-type Al1sBinding = { runQuestion(request: QuestionRequest): Promise<unknown> };
+type Al1sBinding = { runQuestion(request: QuestionRequest, onEvent?: (event: unknown) => void): Promise<unknown> };
 
 declare global {
   interface Env {

@@ -15,6 +15,10 @@ import { CHAT_CONVERSATION_LIST_DAYS, CHAT_PENDING_STALE_MS } from "~/domain/cha
 const describeDatabase = process.env.MOLLULOG_CHAT_POSTGRES === "1" ? describe : describe.skip;
 const schema = `chat_test_${randomUUID().replaceAll("-", "")}`;
 const migration = readFileSync(resolve("db/postgres/migrations/20261029000100_create_chat_conversations.sql"), "utf8");
+const progressMigration = readFileSync(
+  resolve("db/postgres/migrations/20261029000200_add_chat_message_progress.sql"),
+  "utf8",
+);
 const env = {} as Env;
 const options = {
   createClient: () => new Client({ options: `-c search_path=${schema}`, connectionTimeoutMillis: 5000 }),
@@ -41,6 +45,7 @@ describeDatabase("chat conversations on PostgreSQL", () => {
     await admin.query(`CREATE SCHEMA ${schema}`);
     await admin.query(`SET search_path TO ${schema}`);
     await admin.query(migration);
+    await admin.query(progressMigration);
   });
 
   afterAll(async () => {
@@ -63,14 +68,75 @@ describeDatabase("chat conversations on PostgreSQL", () => {
 
     await completePostgresChatMessage(
       env,
-      { messageUid: first.started.messageUid, outcome: { status: "answered", answer, runId: "run-1" }, now: at(2) },
+      {
+        messageUid: first.started.messageUid,
+        outcome: {
+          status: "answered",
+          answer,
+          runId: "run-1",
+          progress: [
+            {
+              callId: "call-1",
+              round: 1,
+              toolName: "get_student",
+              target: "미카",
+              subject: { type: "student", uid: "101" },
+              ok: true,
+              sourceCount: 1,
+            },
+          ],
+        },
+        now: at(2),
+      },
       options,
     );
     const second = await start(first.started.conversationUid, "Second", at(3));
     if (!second.ok) throw new Error("second message should start");
     expect(second.started.previousMessages).toMatchObject([
-      { uid: first.started.messageUid, seq: 1, status: "answered", answer, failureCode: null },
+      {
+        uid: first.started.messageUid,
+        seq: 1,
+        status: "answered",
+        answer,
+        failureCode: null,
+        progress: [
+          {
+            callId: "call-1",
+            round: 1,
+            toolName: "get_student",
+            target: "미카",
+            subject: { type: "student", uid: "101" },
+            ok: true,
+            sourceCount: 1,
+          },
+        ],
+      },
     ]);
+    const failedProgress = [
+      {
+        callId: "call-2",
+        round: 1,
+        toolName: "search_knowledge",
+        target: "총력전 공략",
+        ok: false,
+        sourceCount: 0,
+      },
+    ];
+    await completePostgresChatMessage(
+      env,
+      {
+        messageUid: second.started.messageUid,
+        outcome: { status: "failed", failureCode: "timeout", runId: "run-2", progress: failedProgress },
+        now: at(4),
+      },
+      options,
+    );
+    const stored = await readPostgresChatConversation(
+      env,
+      { senseiId: 1, conversationUid: first.started.conversationUid },
+      options,
+    );
+    expect(stored?.messages[1]).toMatchObject({ status: "failed", progress: failedProgress });
 
     const { rows: conversations } = await admin.query(
       "SELECT title, last_message_at FROM chat_conversations WHERE uid = $1",
@@ -80,7 +146,7 @@ describeDatabase("chat conversations on PostgreSQL", () => {
     const { rows: messages } = await admin.query("SELECT seq, status, run_id FROM chat_messages ORDER BY seq");
     expect(messages).toEqual([
       { seq: 1, status: "answered", run_id: "run-1" },
-      { seq: 2, status: "pending", run_id: null },
+      { seq: 2, status: "failed", run_id: "run-2" },
     ]);
   });
 
@@ -217,11 +283,11 @@ describeDatabase("chat conversations on PostgreSQL", () => {
     const failedRetry = await retry(new Date(interruptedAt.getTime() + 2000));
     expect(failedRetry).toMatchObject({ ok: true });
     const { rows } = await admin.query(
-      "SELECT status, personal_mode, failure_code, run_id, completed_at FROM chat_messages WHERE uid = $1",
+      "SELECT status, personal_mode, failure_code, run_id, completed_at, progress FROM chat_messages WHERE uid = $1",
       [messageUid],
     );
     expect(rows).toEqual([
-      { status: "pending", personal_mode: true, failure_code: null, run_id: null, completed_at: null },
+      { status: "pending", personal_mode: true, failure_code: null, run_id: null, completed_at: null, progress: null },
     ]);
 
     await completePostgresChatMessage(
