@@ -43,7 +43,25 @@ export const REQUEST_LIMITS = {
 
 export type AnswerStatus = "answered" | "needs_clarification" | "insufficient_evidence";
 export type SourceKind = "knowledge" | "student" | "schedule" | "raid_stats" | "member";
-export type AnswerSource = { sourceId: string; kind: SourceKind; label: string };
+export type SourceSubject = { type: "student"; uid: string } | { type: "raid_boss"; boss: string };
+export type AnswerSource = { sourceId: string; kind: SourceKind; label: string; subject?: SourceSubject };
+export type QuestionRunEvent =
+  | { type: "tool_started"; callId: string; round: number; toolName: string; target: string | null; subject?: SourceSubject }
+  | { type: "tool_completed"; callId: string; round: number; toolName: string; ok: boolean; sources: AnswerSource[] };
+
+export function parseSourceSubject(value: unknown): SourceSubject | undefined {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const subject = value as Record<string, unknown>;
+  if (Object.keys(subject).length !== 2) return undefined;
+  if (subject.type === "student" && typeof subject.uid === "string" && subject.uid.trim() !== "") {
+    return { type: "student", uid: subject.uid };
+  }
+  if (subject.type === "raid_boss" && typeof subject.boss === "string" && subject.boss.trim() !== "") {
+    return { type: "raid_boss", boss: subject.boss };
+  }
+  return undefined;
+}
+
 export type Answer = { text: string; sources: AnswerSource[]; limitations: string[] };
 export type FailureCode =
   | "invalid_request"
@@ -77,6 +95,7 @@ export type SourceRecord = {
   arguments: JsonValue;
   kind: SourceKind;
   label: string;
+  subject?: SourceSubject;
   facts: JsonValue;
   modelView: JsonValue;
   retrievedAt: string;

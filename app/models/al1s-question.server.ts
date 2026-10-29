@@ -10,6 +10,7 @@ import type {
   SourceKind,
   SourceRecord,
 } from "./al1s-question-contract";
+import { parseSourceSubject } from "./al1s-question-contract";
 
 export type QuestionServiceCall =
   | { ok: true; result: QuestionRunResult }
@@ -111,6 +112,7 @@ function parseSourceRecord(value: unknown): SourceRecord | null {
     (scope.asOf !== undefined && !string(scope.asOf))
   )
     return null;
+  const subject = parseSourceSubject(source.subject);
   return {
     sourceId: source.sourceId,
     toolName: source.toolName,
@@ -124,6 +126,7 @@ function parseSourceRecord(value: unknown): SourceRecord | null {
       ...(string(scope.region) ? { region: scope.region } : {}),
       ...(string(scope.asOf) ? { asOf: scope.asOf } : {}),
     },
+    ...(subject === undefined ? {} : { subject }),
   };
 }
 
@@ -152,7 +155,13 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
     ) {
       return null;
     }
-    sources.push({ sourceId: source.sourceId, kind: source.kind as SourceKind, label: source.label });
+    const subject = parseSourceSubject(source.subject);
+    sources.push({
+      sourceId: source.sourceId,
+      kind: source.kind as SourceKind,
+      label: source.label,
+      ...(subject === undefined ? {} : { subject }),
+    });
   }
   if (!answer.limitations.every(string)) return null;
   if (result.sourceRecords !== undefined && !Array.isArray(result.sourceRecords)) return null;

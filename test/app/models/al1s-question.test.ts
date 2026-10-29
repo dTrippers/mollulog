@@ -34,6 +34,53 @@ describe("AL1S question result parser", () => {
     });
   });
 
+  it("preserves valid subjects and drops malformed optional subjects without dropping their sources", () => {
+    const result = parseQuestionRunResult({
+      status: "answered",
+      answer: {
+        text: "Answer",
+        sources: [
+          { sourceId: "s1", kind: "student", label: "Student", subject: { type: "student", uid: "101" } },
+          { sourceId: "s2", kind: "schedule", label: "Raid", subject: { type: "raid_boss", boss: "binah" } },
+          {
+            sourceId: "s3",
+            kind: "student",
+            label: "Old source",
+            subject: { type: "student", uid: "101", boss: "extra" },
+          },
+        ],
+        limitations: [],
+      },
+      sourceRecords: [
+        {
+          sourceId: "s1",
+          toolName: "get_student",
+          arguments: {},
+          kind: "student",
+          label: "Student",
+          facts: {},
+          modelView: {},
+          retrievedAt: "2026-10-29",
+          scope: {},
+          subject: { type: "student", uid: "101" },
+        },
+      ],
+      run,
+    });
+
+    expect(result).toMatchObject({
+      answer: {
+        sources: [
+          { sourceId: "s1", subject: { type: "student", uid: "101" } },
+          { sourceId: "s2", subject: { type: "raid_boss", boss: "binah" } },
+          { sourceId: "s3", label: "Old source" },
+        ],
+      },
+      sourceRecords: [{ subject: { type: "student", uid: "101" } }],
+    });
+    expect(result && result.status !== "failed" ? result.answer.sources[2] : undefined).not.toHaveProperty("subject");
+  });
+
   it("accepts known failed results and rejects unknown shapes", () => {
     expect(parseQuestionRunResult({ status: "failed", error: { code: "timeout" }, run })).toMatchObject({
       status: "failed",

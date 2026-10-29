@@ -4,6 +4,7 @@ import {
   type AnswerStatus,
   type FailureCode,
   type HistoryMessage,
+  parseSourceSubject,
   REQUEST_LIMITS,
   type SourceKind,
 } from "~/models/al1s-question-contract";
@@ -170,7 +171,13 @@ export function parseChatAnswer(value: unknown): Answer | null {
     ) {
       throw new Error("Stored chat answer source is invalid.");
     }
-    return { sourceId: source.sourceId, kind: source.kind as SourceKind, label: source.label };
+    const subject = source.subject === undefined ? undefined : parseSourceSubject(source.subject);
+    return {
+      sourceId: source.sourceId,
+      kind: source.kind as SourceKind,
+      label: source.label,
+      ...(subject === undefined ? {} : { subject }),
+    };
   });
   return { text: answer.text, sources, limitations: answer.limitations as string[] };
 }
