@@ -162,7 +162,7 @@ export default function StudentDetailPage() {
         <PageHeader
           title={title}
           back={{ title: "학생 목록", to: "/students" }}
-          media={<StudentThumb studentUid={student.uid} name={fullName} variant={null} showCaption={false} />}
+          media={<StudentThumb studentUid={student.uid} name={fullName} variant={null} showCaption={false} headerPortrait />}
           meta={headerMeta}
         />
       </div>
