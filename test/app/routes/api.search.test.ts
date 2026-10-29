@@ -18,7 +18,7 @@ jest.mock("~/components/v2/layout/navigation/navigation-menu", () => ({
     isAdmin?: boolean;
   } = {}) => {
     const publicItems = [{ id: "events", name: "이벤트", to: "/events" }];
-    const adminItems = isAdmin ? [{ id: "ai-question", name: "AI 질문", to: "/ask", requiresAdmin: true }] : [];
+    const adminItems = isAdmin ? [{ id: "ai-question", name: "AI 챗봇", to: "/chat", requiresAdmin: true }] : [];
     const personalItems =
       currentUsername && isSignedIn
         ? [
@@ -101,11 +101,11 @@ describe("api.search", () => {
 
   it("includes the AI question destination only for an admin search session", async () => {
     mockedGetActiveSensei.mockResolvedValue({ username: "guest", role: "guest" } as never);
-    const guestResponse = await callLoader("AI 질문");
+    const guestResponse = await callLoader("AI 챗봇");
     expect(guestResponse.results).toEqual([]);
 
     mockedGetActiveSensei.mockResolvedValue({ username: "admin", role: "admin" } as never);
-    const adminResponse = await callLoader("AI 질문");
-    expect(adminResponse.results).toEqual([{ type: "menu", name: "AI 질문", to: "/ask" }]);
+    const adminResponse = await callLoader("AI 챗봇");
+    expect(adminResponse.results).toEqual([{ type: "menu", name: "AI 챗봇", to: "/chat" }]);
   });
 });

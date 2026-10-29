@@ -51,7 +51,7 @@ describe("global navigation catalog", () => {
     expect(catalogIds).toEqual([...NAVIGATION_MENU_IDS].sort());
     expect(namesById).toMatchObject({
       "integrated-planner": "통합 플래너",
-      "ai-question": "AI 질문",
+      "ai-question": "AI 챗봇",
       "ap-planner": "AP 플래너",
       "resource-planner": "재화 플래너",
       "farming-calculator": "파밍 계산기",
@@ -77,13 +77,13 @@ describe("global navigation catalog", () => {
   });
 
   it("places AI questions last in game information and omits them from the mobile bottom bar", () => {
-    const catalog = getNavigationCatalog({ ...guestOptions, pathname: "/ask" });
+    const catalog = getNavigationCatalog({ ...guestOptions, pathname: "/chat" });
     const item = catalog.find(({ menuId }) => menuId === "ai-question");
     const mobile = getMobileNavigationItems(guestOptions);
 
     expect(item).toMatchObject({
-      to: "/ask",
-      name: "AI 질문",
+      to: "/chat",
+      name: "AI 챗봇",
       description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
       group: "game",
       surfaces: ["desktop", "more", "search"],
@@ -99,32 +99,32 @@ describe("global navigation catalog", () => {
       expect(
         getDesktopNavigation(options)
           .groups.flatMap(({ items }) => items)
-          .some(({ to }) => to === "/ask"),
+          .some(({ to }) => to === "/chat"),
       ).toBe(false);
       expect(
         getMoreNavigationSections(options)
           .flatMap(({ items }) => items)
-          .some(({ to }) => to === "/ask"),
+          .some(({ to }) => to === "/chat"),
       ).toBe(false);
       expect(
         getSearchableMenuItems({
           currentUsername: options.isSignedIn ? "sensei" : null,
           isSignedIn: options.isSignedIn,
-        }).some(({ to }) => to === "/ask"),
+        }).some(({ to }) => to === "/chat"),
       ).toBe(false);
     }
 
     expect(
       getDesktopNavigation(adminOptions)
         .groups.flatMap(({ items }) => items)
-        .some(({ to }) => to === "/ask"),
+        .some(({ to }) => to === "/chat"),
     ).toBe(true);
     expect(
       getMoreNavigationSections(adminOptions)
         .flatMap(({ items }) => items)
-        .some(({ to }) => to === "/ask"),
+        .some(({ to }) => to === "/chat"),
     ).toBe(true);
-    expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true }).some(({ to }) => to === "/ask")).toBe(
+    expect(getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true }).some(({ to }) => to === "/chat")).toBe(
       true,
     );
   });
@@ -233,7 +233,7 @@ describe("global navigation catalog", () => {
       "/furniture",
       "/coupons",
     ]);
-    expect(adminGameDestinations).toEqual([...itemsByGroup.game, "/ask"]);
+    expect(adminGameDestinations).toEqual([...itemsByGroup.game, "/chat"]);
     expect(itemsByGroup.planner).toEqual([
       "/planner",
       "/utils/pyroxene",
@@ -322,9 +322,9 @@ describe("global navigation catalog", () => {
       "가구 도감",
       "쿠폰",
     ]);
-    expect(guestSections.flatMap(({ items }) => items).some(({ to }) => to === "/ask")).toBe(false);
-    expect(signedInSections.flatMap(({ items }) => items).some(({ to }) => to === "/ask")).toBe(false);
-    expect(adminSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/ask");
+    expect(guestSections.flatMap(({ items }) => items).some(({ to }) => to === "/chat")).toBe(false);
+    expect(signedInSections.flatMap(({ items }) => items).some(({ to }) => to === "/chat")).toBe(false);
+    expect(adminSections.find(({ id }) => id === "game")?.items.at(-1)?.to).toBe("/chat");
     expect(signedInSections.map(({ name }) => name)).toEqual([
       "게임 정보",
       "플래너·계산기",
@@ -395,9 +395,9 @@ describe("global navigation catalog", () => {
     const adminItems = getSearchableMenuItems({ currentUsername: "sensei", isAdmin: true });
 
     expect(guestItems.some(({ requiresSignIn }) => requiresSignIn)).toBe(false);
-    expect(guestItems.some(({ to }) => to === "/ask")).toBe(false);
-    expect(signedInItems.some(({ to }) => to === "/ask")).toBe(false);
-    expect(adminItems).toContainEqual(expect.objectContaining({ id: "ai-question", to: "/ask", requiresAdmin: true }));
+    expect(guestItems.some(({ to }) => to === "/chat")).toBe(false);
+    expect(signedInItems.some(({ to }) => to === "/chat")).toBe(false);
+    expect(adminItems).toContainEqual(expect.objectContaining({ id: "ai-question", to: "/chat", requiresAdmin: true }));
     expect(guestItems.some(({ to }) => to === "/unauthorized")).toBe(false);
     expect(guestItems).toEqual(expect.arrayContaining([expect.objectContaining({ name: "이벤트", to: "/events" })]));
     expect(signedInItems).toEqual(

@@ -23,41 +23,30 @@ import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { Switch } from "~/components/v2/primitives/Switch";
 import { v2FocusRing } from "~/components/v2/layout/styles";
-import type { AnswerSource, HistoryMessage, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
-
-export type QuestionActionErrorCode =
-  | "rate_limited"
-  | "service_unavailable"
-  | "timeout"
-  | "internal_error"
-  | "provider_failure"
-  | "validation_failed"
-  | "budget_exhausted"
-  | "invalid_request"
-  | "member_data_unavailable"
-  | "snapshot_too_large"
-  | "session_expired"
-  | "consent_required"
-  | "network";
+import type { ChatErrorCode } from "~/domain/chat-conversation";
+import type { AnswerSource, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
 
 export type QuestionChatActionResult =
-  | { ok: true; result: QuestionRunResult }
-  | { ok: false; code: QuestionActionErrorCode };
+  | { ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
+  | { ok: false; code: ChatErrorCode; conversationUid?: string; messageUid?: string };
 
 export type QuestionTurn = {
   id: string;
   question: string;
   personalMode: boolean;
+  // Set once the server has stored the turn, so that a retry asks the stored message again.
+  messageUid?: string;
   result?: Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>;
-  failure?: QuestionActionErrorCode | "network";
+  failure?: ChatErrorCode;
   pending?: boolean;
   waitingLonger?: boolean;
 };
 
-export type AskInput = {
+export type ChatInput = {
   question: string;
-  history: HistoryMessage[];
   personalMode: boolean;
+  conversationUid: string | null;
+  retryMessageUid?: string;
 };
 
 type QuestionChatProps = {
@@ -65,13 +54,13 @@ type QuestionChatProps = {
   initialConsent: boolean;
   consentUnavailable: boolean;
   onConsent: (consented: boolean) => Promise<boolean>;
-  onAsk: (input: AskInput) => Promise<QuestionChatActionResult>;
+  onAsk: (input: ChatInput) => Promise<QuestionChatActionResult>;
 };
 
-const ERROR_COPY: Record<QuestionActionErrorCode | "network" | "question_too_long", string> = {
+const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
   rate_limited: "짧은 시간에 질문이 많았어요. 잠시 후 다시 시도해 주세요.",
-  service_unavailable: "지금은 AI 질문을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
-  provider_failure: "지금은 AI 질문을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
+  service_unavailable: "지금은 AI 챗봇을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
+  provider_failure: "지금은 AI 챗봇을 사용할 수 없어요. 잠시 후 다시 시도해 주세요.",
   timeout: "답변하는 데 시간이 너무 오래 걸렸어요. 질문을 더 구체적으로 바꿔서 다시 시도해 주세요.",
   internal_error: "답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
   validation_failed: "답변을 만들지 못했어요. 잠시 후 다시 시도해 주세요.",
@@ -83,6 +72,8 @@ const ERROR_COPY: Record<QuestionActionErrorCode | "network" | "question_too_lon
     "내 데이터가 너무 많아 함께 보낼 수 없어요. ‘내 데이터 함께 보내기’를 끄고 질문해 주세요. 끄면 동의도 취소돼요.",
   session_expired: "로그인이 만료됐어요. 다시 로그인한 뒤 질문해 주세요.",
   consent_required: "‘내 데이터 함께 보내기’에 대한 동의가 취소된 상태예요. 다시 켜서 동의한 뒤 질문해 주세요.",
+  conversation_not_found: "대화를 찾을 수 없어요. 새 대화에서 다시 질문해 주세요.",
+  conversation_busy: "이전 질문에 대한 답변을 기다리고 있어요. 답변이 끝난 뒤 다시 보내 주세요.",
   network: "연결에 문제가 있어 답변을 받지 못했어요. 다시 시도해 주세요.",
   question_too_long: "질문이 너무 길어요. 줄여서 보내 주세요.",
 };
@@ -99,25 +90,8 @@ function codePointLength(value: string): number {
   return [...value].length;
 }
 
-function clampHistoryText(value: string): string {
-  return [...value].slice(-4000).join("");
-}
-
 function QuestionSendIcon(props: ComponentProps<typeof ArrowUpIcon>) {
   return <ArrowUpIcon {...props} className="size-6 lg:size-4" />;
-}
-
-export function buildQuestionHistory(turns: QuestionTurn[], personalMode: boolean): HistoryMessage[] {
-  return turns
-    .filter(
-      (turn): turn is QuestionTurn & { result: NonNullable<QuestionTurn["result"]> } =>
-        !turn.pending && !turn.failure && turn.result !== undefined && (personalMode || !turn.personalMode),
-    )
-    .flatMap((turn) => [
-      { role: "user" as const, text: clampHistoryText(turn.question) },
-      { role: "assistant" as const, text: clampHistoryText(turn.result.answer.text) },
-    ])
-    .slice(-6);
 }
 
 function AssistantMark({ working = false }: { working?: boolean }) {
@@ -205,7 +179,8 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         turn.failure !== "invalid_request" &&
         turn.failure !== "snapshot_too_large" &&
         turn.failure !== "session_expired" &&
-        turn.failure !== "consent_required" ? (
+        turn.failure !== "consent_required" &&
+        turn.failure !== "conversation_not_found" ? (
           <Button type="button" onClick={onRetry} className="mt-3">
             다시 시도
           </Button>
@@ -247,6 +222,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
 
 export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, onConsent, onAsk }: QuestionChatProps) {
   const [turns, setTurns] = useState<QuestionTurn[]>([]);
+  const [conversationUid, setConversationUid] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [personalMode, setPersonalMode] = useState(initialConsent);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -379,7 +355,7 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
     }
   };
 
-  const submitQuestion = async (rawQuestion: string, existingTurnId?: string) => {
+  const submitQuestion = async (rawQuestion: string, existingTurn?: Pick<QuestionTurn, "id" | "messageUid">) => {
     if (pending) return;
     const question = rawQuestion.trim();
     if (!question) return;
@@ -395,11 +371,11 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
     setWaitingLonger(false);
     setAnnouncement("답변을 준비하고 있어요");
     const activePersonalMode = personalMode;
-    const id = existingTurnId ?? crypto.randomUUID();
-    if (existingTurnId) {
+    const id = existingTurn?.id ?? crypto.randomUUID();
+    if (existingTurn) {
       setTurns((current) =>
         current.map((turn) =>
-          turn.id === existingTurnId
+          turn.id === existingTurn.id
             ? {
                 ...turn,
                 question,
@@ -419,24 +395,34 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
     try {
       const response = await onAsk({
         question,
-        history: buildQuestionHistory(turns, activePersonalMode),
         personalMode: activePersonalMode,
+        conversationUid,
+        ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
       });
+      if (response.conversationUid) setConversationUid(response.conversationUid);
+      const messageUid = response.messageUid ?? existingTurn?.messageUid;
       if (!response.ok) {
         const failure = response.code;
         scrollConversationEnd.current = true;
-        setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, pending: false, failure } : turn)));
+        setTurns((current) =>
+          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, failure } : turn)),
+        );
         if (failure === "consent_required") setPersonalMode(false);
+        if (failure === "conversation_not_found") setConversationUid(null);
         setAnnouncement(ERROR_COPY[failure]);
       } else if (response.result.status === "failed") {
         const failure = response.result.error.code;
         scrollConversationEnd.current = true;
-        setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, pending: false, failure } : turn)));
+        setTurns((current) =>
+          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, failure } : turn)),
+        );
         setAnnouncement(ERROR_COPY[failure]);
       } else {
         const result = response.result;
         scrollConversationEnd.current = true;
-        setTurns((current) => current.map((turn) => (turn.id === id ? { ...turn, pending: false, result } : turn)));
+        setTurns((current) =>
+          current.map((turn) => (turn.id === id ? { ...turn, messageUid, pending: false, result } : turn)),
+        );
         setAnnouncement(
           {
             answered: "답변이 도착했어요",
@@ -494,7 +480,7 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
               <div className="mt-3">
                 <AssistantTurn
                   turn={{ ...turn, waitingLonger }}
-                  onRetry={() => void submitQuestion(turn.question, turn.id)}
+                  onRetry={() => void submitQuestion(turn.question, turn)}
                   sourcesId={`sources-${turn.id}`}
                 />
               </div>
@@ -586,7 +572,7 @@ export function QuestionChat({ isSignedIn, initialConsent, consentUnavailable, o
           {composerError ? <p className="mt-1 text-xs text-v2-danger">{composerError}</p> : null}
         </div>
         <p className="py-2 text-xs leading-4 text-v2-fg-tertiary">
-          AI 답변은 틀릴 수 있어요. 질문과 답변은 기록으로 저장돼요.
+          AI 답변은 틀릴 수 있어요. 질문과 답변은 대화 기록에 저장돼요.
         </p>
       </div>
 

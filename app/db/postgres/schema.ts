@@ -1531,3 +1531,42 @@ export const pgKnowledgeEntriesTable = pgTable(
       .where(sql`${table.archivedAt} is null and ${table.publishedRevisionId} is not null`),
   ],
 );
+
+export const pgChatConversationsTable = pgTable(
+  "chat_conversations",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    senseiId: integer("sensei_id").notNull(),
+    title: text().notNull(),
+    lastMessageAt: timestamptz("last_message_at").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("chat_conversations_sensei_last_message_idx").on(table.senseiId, table.lastMessageAt.desc()),
+  ],
+);
+
+export const pgChatMessagesTable = pgTable(
+  "chat_messages",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull().unique(),
+    conversationId: bigint("conversation_id", { mode: "number" })
+      .notNull()
+      .references(() => pgChatConversationsTable.id, { onDelete: "cascade" }),
+    seq: integer().notNull(),
+    question: text().notNull(),
+    personalMode: boolean("personal_mode").notNull(),
+    status: text().notNull(),
+    // The answer is validated when read, so the column stays untyped JSON here.
+    answer: jsonb(),
+    failureCode: text("failure_code"),
+    runId: text("run_id"),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+    updatedAt: timestamptz("updated_at").notNull().defaultNow(),
+    completedAt: timestamptz("completed_at"),
+  },
+  (table) => [uniqueIndex("chat_messages_conversation_seq_uidx").on(table.conversationId, table.seq)],
+);

@@ -211,7 +211,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "coupons":
       return pathname.startsWith("/coupons");
     case "ai-question":
-      return pathname === "/ask" || pathname.startsWith("/ask/");
+      return pathname === "/chat" || pathname.startsWith("/chat/");
     case "integrated-planner":
       return pathname.startsWith("/planner");
     case "pyroxene-planner":
@@ -402,8 +402,8 @@ export function getNavigationCatalog({
       menuId: "ai-question",
       group: "game",
       surfaces: ["desktop", "more", "search"],
-      to: "/ask",
-      name: "AI 질문",
+      to: "/chat",
+      name: "AI 챗봇",
       description: "블루 아카이브에 대해 궁금한 점을 AI에게 물어보세요",
       requiresAdmin: true,
       OutlineIcon: SparklesIconOutline,

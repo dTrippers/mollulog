@@ -7,25 +7,21 @@ import { isAdminSensei } from "~/domain/sensei-role";
 import { getLogger } from "~/lib/observability.server";
 import type { QuestionRunResult } from "~/models/al1s-question-contract";
 import { getQuestionMemberDataConsentAt } from "~/models/sensei";
-import {
-  type AskInput,
-  type QuestionActionErrorCode,
-  QuestionChat,
-  type QuestionChatActionResult,
-} from "./ask._components/QuestionChat";
-import { mapAskActionErrorCode, postAskAction } from "./ask._components/ask-client";
+import type { ChatErrorCode } from "~/domain/chat-conversation";
+import { type ChatInput, QuestionChat, type QuestionChatActionResult } from "./chat._components/QuestionChat";
+import { mapChatActionErrorCode, postChatAction } from "./chat._components/chat-client";
 
-type AskSensei = { id: number; username: string; role: "guest" | "app_developer" | "admin" };
-type AskPageData = { isSignedIn: boolean; initialConsent: boolean; consentUnavailable: boolean };
+type ChatSensei = { id: number; username: string; role: "guest" | "app_developer" | "admin" };
+type ChatPageData = { isSignedIn: boolean; initialConsent: boolean; consentUnavailable: boolean };
 
-export const meta: MetaFunction = () => [{ title: "AI 질문 | 몰루로그" }];
+export const meta: MetaFunction = () => [{ title: "AI 챗봇 | 몰루로그" }];
 export const ErrorBoundary = RouteErrorBoundary;
 
-export async function loadAskPageData(
-  resolveSensei: () => Promise<AskSensei | null>,
+export async function loadChatPageData(
+  resolveSensei: () => Promise<ChatSensei | null>,
   readConsent: (senseiId: number) => Promise<Date | null>,
   reportConsentReadError: (error: unknown) => void = () => undefined,
-): Promise<AskPageData> {
+): Promise<ChatPageData> {
   const sensei = await resolveSensei();
   if (!isAdminSensei(sensei)) throw new Response("Not Found", { status: 404 });
   try {
@@ -39,41 +35,41 @@ export async function loadAskPageData(
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
-  const logger = getLogger(env, ctx, { route: "ask.loader" });
-  return loadAskPageData(
+  const logger = getLogger(env, ctx, { route: "chat.loader" });
+  return loadChatPageData(
     () => getActiveSensei(env, request, ctx),
     (senseiId) => getQuestionMemberDataConsentAt(env, senseiId, { ctx }),
     (error) => logger.error("Failed to read AI question consent", error),
   );
 };
 
-export default function AskRoute() {
+export default function ChatRoute() {
   const pageData = useLoaderData<typeof loader>();
   const onConsent = async (consented: boolean) => {
     try {
-      const result = await postAskAction<{ ok: boolean }>({ intent: consented ? "consent" : "revoke" });
+      const result = await postChatAction<{ ok: boolean }>({ intent: consented ? "consent" : "revoke" });
       return result.ok;
     } catch {
       return false;
     }
   };
-  const onAsk = async (input: AskInput): Promise<QuestionChatActionResult> => {
+  const onAsk = async (input: ChatInput): Promise<QuestionChatActionResult> => {
     try {
-      const result = await postAskAction<
-        | { intent: "question"; ok: true; result: QuestionRunResult }
-        | { intent: "question"; ok: false; code: QuestionActionErrorCode }
+      const result = await postChatAction<
+        | { intent: "question"; ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
+        | { intent: "question"; ok: false; code: ChatErrorCode; conversationUid?: string; messageUid?: string }
       >({ intent: "question", ...input });
-      return result.ok ? { ok: true, result: result.result } : { ok: false, code: result.code };
+      return result.ok
+        ? { ok: true, result: result.result, conversationUid: result.conversationUid, messageUid: result.messageUid }
+        : { ok: false, code: result.code, conversationUid: result.conversationUid, messageUid: result.messageUid };
     } catch (error) {
-      return { ok: false, code: mapAskActionErrorCode(error) };
+      return { ok: false, code: mapChatActionErrorCode(error) };
     }
   };
 
   return (
     <V2Page width="reading">
-      <PageHeader
-        title={<span className="text-lg leading-7 md:text-xl">AI 질문</span>}
-      />
+      <PageHeader title={<span className="text-lg leading-7 md:text-xl">AI 챗봇</span>} />
       <PageMain>
         <QuestionChat
           isSignedIn={pageData.isSignedIn}
