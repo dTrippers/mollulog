@@ -26,6 +26,10 @@ export type StudentThumbProps = {
   small?: boolean;
   // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default is 56px wide on mobile and 64px from the sm breakpoint.
   large?: boolean;
+  // One step above the default on wider screens for a browsing grid: the default 56px on mobile and 80px from the sm breakpoint.
+  relaxed?: boolean;
+  // Scales the linked or clickable thumbnail to 105% on hover with a fine pointer, as the 1.x student cards did.
+  hoverScale?: boolean;
   // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
@@ -39,6 +43,9 @@ export type StudentThumbProps = {
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
+const hoverScaleClassName =
+  "motion-safe:transition-transform motion-safe:duration-v2-fast motion-safe:ease-v2-standard [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105";
+
 export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(function StudentThumb(
   {
     studentUid,
@@ -53,6 +60,8 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     compact = false,
     small = false,
     large = false,
+    relaxed = false,
+    hoverScale = false,
     showCaption = true,
     showRecruitmentLabel = true,
     headerPortrait = false,
@@ -116,7 +125,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : headerPortrait ? "w-[3.75rem]" : "w-14 sm:w-16",
+        large ? "w-[4.375rem] md:w-[5.5rem]" : relaxed ? "w-14 sm:w-20" : small ? "w-6" : compact ? "w-9" : headerPortrait ? "w-[3.75rem]" : "w-14 sm:w-16",
       )}
     >
       {linkTo ? (
@@ -125,7 +134,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           prefetch="intent"
           aria-label={accessibleName}
           {...getV2LinkTransitionProps("forward")}
-          className="block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          className={cn("block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus", hoverScale && hoverScaleClassName)}
         >
           <span className={frameClassName}>{frame}</span>
           {caption}
@@ -141,6 +150,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           className={cn(
             frameClassName,
             "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+            hoverScale && hoverScaleClassName,
           )}
         >
           {frame}

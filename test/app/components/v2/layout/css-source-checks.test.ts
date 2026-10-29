@@ -144,7 +144,7 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only sheets, popovers, dropdown chevrons, and select icon alignment use translate, scale, or rotate utilities", () => {
+  it("V2: only sheets, popovers, dropdown chevrons, select icon alignment, and the opt-in student thumbnail hover use translate, scale, or rotate utilities", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
@@ -153,6 +153,7 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
     expect(usingFiles.sort()).toEqual([
       "features/students/FilterGroupDisclosure.tsx",
+      "features/students/StudentThumb.tsx",
       "layout/PanelSheet.tsx",
       "primitives/Popover.tsx",
       "primitives/Select.tsx",

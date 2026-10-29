@@ -24,6 +24,8 @@ export function DirectoryCard({
       studentUid={student.uid}
       name={name}
       variant={variant}
+      relaxed
+      hoverScale
       linkTo={`/students/${student.uid}`}
       scrimLabel={label ? <ScrimContent student={student} label={label} /> : null}
       scrimAriaLabel={label?.ariaLabel}
