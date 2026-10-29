@@ -11,11 +11,21 @@ import type {
   SourceKind,
   SourceRecord,
 } from "./al1s-question-contract";
-import { parseSourceSubject } from "./al1s-question-contract";
+import { parseAnswerBlocks, parseSourceSubject } from "./al1s-question-contract";
+import { renderChatMarkdownToSafeHtml } from "~/lib/markdown.server";
 
 export type QuestionServiceCall =
   | { ok: true; result: QuestionRunResult }
   | { ok: false; reason: "unavailable" | "unexpected_result" };
+
+export function renderQuestionAnswer(answer: import("./al1s-question-contract").Answer) {
+  return {
+    ...answer,
+    blocks: answer.blocks.map((block) => block.type === "markdown"
+      ? { ...block, html: renderChatMarkdownToSafeHtml(block.text) }
+      : block),
+  };
+}
 
 const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const answerStatuses = new Set<AnswerStatus>(["answered", "needs_clarification", "insufficient_evidence"]);
@@ -75,6 +85,8 @@ function parseRun(value: unknown): RunInfo | null {
     typeof usage.complete !== "boolean"
   )
     return null;
+  const metrics = record(run.answerBlockMetrics);
+  if (metrics && ["chartBlocksChecked", "chartBlocksPassed", "chartBlocksDropped", "chartRewriteCount", "unsupportedMarkdownCount"].some((key) => !Number.isInteger(metrics[key]) || (metrics[key] as number) < 0)) return null;
   return {
     runId: run.runId,
     provider: run.provider,
@@ -91,6 +103,7 @@ function parseRun(value: unknown): RunInfo | null {
       costUsd: usage.costUsd,
       complete: usage.complete,
     } satisfies RunUsage,
+    ...(metrics === null || metrics === undefined ? {} : { answerBlockMetrics: metrics as unknown as NonNullable<RunInfo["answerBlockMetrics"]> }),
   };
 }
 
@@ -222,7 +235,7 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
   if (sourceRecords?.some((source) => source === null)) return null;
   return {
     status: result.status as AnswerStatus,
-    answer: { text: answer.text, sources, limitations: answer.limitations as string[] },
+    answer: { text: answer.text, blocks: parseAnswerBlocks(answer.blocks, answer.text), sources, limitations: answer.limitations as string[] },
     run,
     ...(sourceRecords ? { sourceRecords: sourceRecords as SourceRecord[] } : {}),
   };

@@ -25,6 +25,18 @@ const options = {
 };
 const answer = {
   text: "Answer",
+  blocks: [
+    { type: "markdown" as const, text: "Answer" },
+    {
+      type: "bar_chart" as const,
+      title: "사용률",
+      unit: "percent" as const,
+      categories: ["루나틱"],
+      series: [
+        { name: "미카", values: [99.8], sourceId: "s1", subject: { type: "student" as const, uid: "student-1" } },
+      ],
+    },
+  ],
   sources: [{ sourceId: "s1", kind: "student" as const, label: "미카" }],
   limitations: [],
 };

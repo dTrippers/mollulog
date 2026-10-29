@@ -52,7 +52,7 @@ const mockedRevokeQuestionMemberDataConsent = revokeQuestionMemberDataConsent as
 >;
 const answer: QuestionRunResult = {
   status: "answered",
-  answer: { text: "Answer", sources: [], limitations: [] },
+  answer: { text: "Answer", blocks: [{ type: "plaintext", text: "Answer" }], sources: [], limitations: [] },
   run: {
     runId: "run-1",
     provider: "provider",
@@ -79,7 +79,12 @@ function storedMessage(uid: string, overrides: Partial<ChatMessage> = {}): ChatM
     question: `question ${uid}`,
     personalMode: false,
     status: "answered",
-    answer: { text: `answer ${uid}`, sources: [], limitations: [] },
+    answer: {
+      text: `answer ${uid}`,
+      blocks: [{ type: "plaintext", text: `answer ${uid}` }],
+      sources: [],
+      limitations: [],
+    },
     progress: null,
     failureCode: null,
     createdAt: now,
@@ -325,7 +330,7 @@ describe("AI chatbot page and resource action", () => {
         messageUid: "message-1",
         outcome: {
           status: "answered",
-          answer: { text: "Answer", sources: [], limitations: [] },
+          answer: { text: "Answer", blocks: [{ type: "plaintext", text: "Answer" }], sources: [], limitations: [] },
           runId: "run-1",
           progress: [],
         },

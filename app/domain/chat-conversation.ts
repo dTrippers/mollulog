@@ -4,6 +4,7 @@ import {
   type AnswerStatus,
   type FailureCode,
   type HistoryMessage,
+  parseAnswerBlocks,
   parseSourceSubject,
   REQUEST_LIMITS,
   type SourceKind,
@@ -107,6 +108,26 @@ export function chatConversationTitle(question: string): string {
   return [...question.trim().replace(/\s+/g, " ")].slice(0, CHAT_TITLE_CODE_POINTS).join("");
 }
 
+export function chatAnswerCopyText(answer: Answer): string {
+  if (answer.blocks.length === 1 && answer.blocks[0]?.type === "plaintext") return answer.text;
+  return answer.blocks.map((block) => {
+    if (block.type === "plaintext") return block.text;
+    if (block.type === "markdown") return block.text.replace(/\*\*(\S(?:[^\n]*?\S)?)\*\*/g, "$1").replace(/__(.*?)__/gs, "$1");
+    const all = block.series.flatMap((series) => series.values).filter((value): value is number => value !== null);
+    const pcts = all.map((value) => block.unit === "fraction" ? value * 100 : value);
+    const decimal = pcts.some((value) => Math.round(value * 10) % 10 !== 0);
+    const format = (value: number | null) => {
+      if (value === null) return "–";
+      if (block.unit === "percent" || block.unit === "fraction") {
+        const percentage = block.unit === "fraction" ? value * 100 : value;
+        return `${percentage > 0 && percentage < 0.1 ? "<0.1" : decimal ? percentage.toFixed(1) : Math.round(percentage)}%`;
+      }
+      return block.unit === "count" ? value.toLocaleString("ko-KR") : String(value);
+    };
+    return `${block.title}\n${block.categories.map((category, index) => `- ${category}: ${block.series.map((series) => `${series.name} ${format(series.values[index] ?? null)}`).join(", ")}`).join("\n")}`;
+  }).join("\n\n");
+}
+
 export function isChatMessageInterrupted(message: Pick<ChatMessage, "status" | "updatedAt">, now: Date): boolean {
   return message.status === "pending" && now.getTime() - message.updatedAt.getTime() > CHAT_PENDING_STALE_MS;
 }
@@ -190,7 +211,7 @@ export function parseChatAnswer(value: unknown): Answer | null {
       ...(subject === undefined ? {} : { subject }),
     };
   });
-  return { text: answer.text, sources, limitations: answer.limitations as string[] };
+  return { text: answer.text, blocks: parseAnswerBlocks(answer.blocks, answer.text), sources, limitations: answer.limitations as string[] };
 }
 
 export function parseChatProgress(value: unknown): ChatProgressStep[] | null {

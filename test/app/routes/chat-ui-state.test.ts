@@ -24,7 +24,15 @@ function message(uid: string, status: ChatMessage["status"] = "answered"): ChatM
     question: `question ${uid}`,
     personalMode: false,
     status,
-    answer: status === "answered" ? { text: `answer ${uid}`, sources: [], limitations: [] } : null,
+    answer:
+      status === "answered"
+        ? {
+            text: `answer ${uid}`,
+            blocks: [{ type: "plaintext", text: `answer ${uid}` }],
+            sources: [],
+            limitations: [],
+          }
+        : null,
     progress: null,
     failureCode: null,
     createdAt: now,
@@ -147,7 +155,7 @@ describe("in-flight chat list state", () => {
         ok: true,
         result: {
           status: "answered",
-          answer: { text: "answer", sources: [], limitations: [] },
+          answer: { text: "answer", blocks: [{ type: "plaintext", text: "answer" }], sources: [], limitations: [] },
           run: {
             runId: "run-1",
             provider: "provider",
@@ -172,7 +180,10 @@ describe("in-flight chat list state", () => {
       localInFlight: false,
       activeProgressIds: [],
       failure: undefined,
-      result: { status: "answered", answer: { text: "answer", sources: [], limitations: [] } },
+      result: {
+        status: "answered",
+        answer: { text: "answer", blocks: [{ type: "plaintext", text: "answer" }], sources: [], limitations: [] },
+      },
     });
   });
 });

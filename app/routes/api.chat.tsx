@@ -9,7 +9,7 @@ import {
 } from "~/domain/chat-conversation";
 import { isAdminSensei } from "~/domain/sensei-role";
 import { getLogger } from "~/lib/observability.server";
-import { type QuestionServiceCall, runQuestion } from "~/models/al1s-question.server";
+import { renderQuestionAnswer, type QuestionServiceCall, runQuestion } from "~/models/al1s-question.server";
 import { type QuestionRequest, type QuestionRunEvent, REQUEST_LIMITS } from "~/models/al1s-question-contract";
 import {
   completeChatMessage,
@@ -249,7 +249,7 @@ export async function handleChatAction(request: Request, deps: ChatActionDepende
         ? { status: "failed", failureCode: result.error.code, runId: result.run.runId, progress }
         : { status: result.status, answer: result.answer, runId: result.run.runId, progress },
     );
-    emit({ type: "result", intent: "question", ok: true, result, ...ids });
+    emit({ type: "result", intent: "question", ok: true, result: result.status === "failed" ? result : { ...result, answer: renderQuestionAnswer(result.answer) }, ...ids });
   };
 
   let task: Promise<void> = Promise.resolve();

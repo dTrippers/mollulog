@@ -18,6 +18,7 @@ import { getLogger } from "~/lib/observability.server";
 import type { QuestionRunEvent, QuestionRunResult } from "~/models/al1s-question-contract";
 import { listChatConversations, readChatConversation } from "~/models/chat-conversation";
 import { getQuestionMemberDataConsentAt } from "~/models/sensei";
+import { renderQuestionAnswer } from "~/models/al1s-question.server";
 import { ChatHistoryPanel, ChatMobileToolbar } from "./chat._components/ChatHistoryPanel";
 import { mapChatActionErrorCode, postChatAction } from "./chat._components/chat-client";
 import {
@@ -82,13 +83,18 @@ export async function loadChatPageData(
   }
   const loadedAt = new Date();
   const { conversations, selectedConversation } = await readChatData(sensei.id, conversationUid, loadedAt);
+  const renderedSelectedConversation = selectedConversation
+    ? { ...selectedConversation, messages: selectedConversation.messages.map((message) => message.answer
+      ? { ...message, answer: renderQuestionAnswer(message.answer) }
+      : message) }
+    : null;
   return {
     isSignedIn: true,
     initialConsent,
     consentUnavailable,
     conversations,
     selectedUid: conversationUid,
-    selectedConversation,
+    selectedConversation: renderedSelectedConversation,
     loadedAt,
   };
 }

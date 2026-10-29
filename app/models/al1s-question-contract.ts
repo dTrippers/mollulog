@@ -62,7 +62,37 @@ export function parseSourceSubject(value: unknown): SourceSubject | undefined {
   return undefined;
 }
 
-export type Answer = { text: string; sources: AnswerSource[]; limitations: string[] };
+export type AnswerBlock =
+  | { type: "plaintext"; text: string }
+  | { type: "markdown"; text: string; html?: string }
+  | { type: "bar_chart"; title: string; unit: "percent" | "fraction" | "count" | "none"; categories: string[]; series: Array<{ name: string; values: Array<number | null>; sourceId: string; subject?: SourceSubject }> };
+export type Answer = { text: string; blocks: AnswerBlock[]; sources: AnswerSource[]; limitations: string[] };
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+export function parseAnswerBlocks(value: unknown, fallbackText: string): AnswerBlock[] {
+  if (!Array.isArray(value)) return [{ type: "plaintext", text: fallbackText }];
+  const blocks = value.flatMap((candidate): AnswerBlock[] => {
+    const block = record(candidate);
+    if (block?.type === "markdown" && typeof block.text === "string") return [{ type: "markdown", text: block.text }];
+    if (block?.type !== "bar_chart") return [];
+    const categories = block.categories;
+    const seriesInput = block.series;
+    if (typeof block.title !== "string" || !block.title.trim() || !["percent", "fraction", "count", "none"].includes(String(block.unit)) || !Array.isArray(categories) || categories.length < 1 || categories.length > 8 || !categories.every((item) => typeof item === "string" && item.trim() !== "") || new Set(categories).size !== categories.length || !Array.isArray(seriesInput) || seriesInput.length < 1 || seriesInput.length > 3) return [];
+    const unit = block.unit as "percent" | "fraction" | "count" | "none";
+    const series = seriesInput.flatMap((candidateSeries) => {
+      const item = record(candidateSeries);
+      if (!item || typeof item.name !== "string" || !item.name.trim() || typeof item.sourceId !== "string" || !item.sourceId.trim() || !Array.isArray(item.values) || item.values.length !== categories.length || !item.values.every((value) => value === null || (typeof value === "number" && Number.isFinite(value) && (unit === "percent" ? value >= 0 && value <= 100 : unit === "fraction" ? value >= 0 && value <= 1 : true)))) return [];
+      const subject = item.subject === undefined ? undefined : parseSourceSubject(item.subject);
+      return [{ name: item.name, sourceId: item.sourceId, values: item.values as Array<number | null>, ...(subject ? { subject } : {}) }];
+    });
+    if (series.length !== seriesInput.length) return [];
+    return [{ type: "bar_chart", title: block.title, unit, categories: categories as string[], series }];
+  });
+  return blocks.length > 0 ? blocks : [{ type: "plaintext", text: fallbackText }];
+}
 export type FailureCode =
   | "invalid_request"
   | "provider_failure"
@@ -88,6 +118,7 @@ export type RunInfo = {
   promptVersion: string;
   artifactHash: string;
   usage: RunUsage;
+  answerBlockMetrics?: { chartBlocksChecked: number; chartBlocksPassed: number; chartBlocksDropped: number; chartRewriteCount: number; unsupportedMarkdownCount: number };
 };
 export type SourceRecord = {
   sourceId: string;

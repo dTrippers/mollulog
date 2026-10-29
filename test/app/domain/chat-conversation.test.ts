@@ -3,6 +3,7 @@ import {
   buildChatHistory,
   CHAT_PENDING_STALE_MS,
   type ChatMessage,
+  chatAnswerCopyText,
   chatConversationTitle,
   getChatConversationListStatus,
   isChatMessageInProgress,
@@ -23,7 +24,12 @@ function message(uid: string, overrides: Partial<ChatMessage> = {}): ChatMessage
     question: `question ${uid}`,
     personalMode: false,
     status: "answered",
-    answer: { text: `answer ${uid}`, sources: [], limitations: [] },
+    answer: {
+      text: `answer ${uid}`,
+      blocks: [{ type: "plaintext", text: `answer ${uid}` }],
+      sources: [],
+      limitations: [],
+    },
     progress: null,
     failureCode: null,
     createdAt: now,
@@ -76,7 +82,10 @@ describe("buildChatHistory", () => {
     const history = buildChatHistory(
       [
         message("old"),
-        message("long", { question: longText, answer: { text: longText, sources: [], limitations: [] } }),
+        message("long", {
+          question: longText,
+          answer: { text: longText, blocks: [{ type: "plaintext", text: longText }], sources: [], limitations: [] },
+        }),
         message("new-1"),
         message("new-2"),
       ],
@@ -92,6 +101,53 @@ describe("buildChatHistory", () => {
       "question new-2",
       "answer new-2",
     ]);
+  });
+});
+
+describe("chatAnswerCopyText", () => {
+  it("copies markdown as plain text and appends chart rows in block order", () => {
+    expect(
+      chatAnswerCopyText({
+        text: "결론입니다.",
+        blocks: [
+          { type: "markdown", text: "**결론**입니다." },
+          {
+            type: "bar_chart",
+            title: "사용률",
+            unit: "fraction",
+            categories: ["루나틱", "토먼트"],
+            series: [
+              { name: "미카", sourceId: "s1", values: [0.998, null] },
+              { name: "아리스", sourceId: "s2", values: [0.441, 0] },
+            ],
+          },
+        ],
+        sources: [],
+        limitations: [],
+      }),
+    ).toBe("결론입니다.\n\n사용률\n- 루나틱: 미카 99.8%, 아리스 44.1%\n- 토먼트: 미카 –, 아리스 0.0%");
+  });
+
+  it("strips matched bold markers beside Hangul while preserving spaced and unmatched asterisks", () => {
+    expect(
+      chatAnswerCopyText({
+        text: "",
+        blocks: [{ type: "markdown", text: "**이로하(수영복)**의 비율\n\n2 ** 3\n\nunmatched ** marker" }],
+        sources: [],
+        limitations: [],
+      }),
+    ).toBe("이로하(수영복)의 비율\n\n2 ** 3\n\nunmatched ** marker");
+  });
+
+  it("copies legacy plaintext verbatim", () => {
+    expect(
+      chatAnswerCopyText({
+        text: "**평문**",
+        blocks: [{ type: "plaintext", text: "**평문**" }],
+        sources: [],
+        limitations: [],
+      }),
+    ).toBe("**평문**");
   });
 });
 
@@ -142,6 +198,7 @@ describe("stored value parsers", () => {
   it("accepts stored answers, statuses, and failure codes", () => {
     const answer = {
       text: "Answer",
+      blocks: [{ type: "plaintext", text: "Answer" }],
       sources: [
         { sourceId: "s1", kind: "student", label: "미카" },
         { sourceId: "c1", kind: "content", label: "이벤트 보상" },
@@ -168,6 +225,7 @@ describe("stored value parsers", () => {
       }),
     ).toEqual({
       text: "Answer",
+      blocks: [{ type: "plaintext", text: "Answer" }],
       sources: [
         { sourceId: "s1", kind: "student", label: "미카", subject: { type: "student", uid: "101" } },
         { sourceId: "s2", kind: "schedule", label: "레이드", subject: { type: "raid_boss", boss: "binah" } },

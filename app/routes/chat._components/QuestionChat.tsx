@@ -36,10 +36,12 @@ import {
   type ChatErrorCode,
   type ChatMessage,
   type ChatProgressStep,
+  chatAnswerCopyText,
   isChatMessageInterrupted,
 } from "~/domain/chat-conversation";
 import type { QuestionRunEvent, QuestionRunResult } from "~/models/al1s-question-contract";
 import { bossImageUrl } from "~/models/assets";
+import { AnswerBlocks } from "./AnswerBlocks";
 import {
   applyChatProgressEvent,
   canApplyChatResponse,
@@ -267,7 +269,7 @@ function AnswerDetails({
           icon={ClipboardDocumentIcon}
           label="답변 복사"
           onClick={() => {
-            void navigator.clipboard?.writeText(result.answer.text).catch(() => undefined);
+            void navigator.clipboard?.writeText(chatAnswerCopyText(result.answer)).catch(() => undefined);
           }}
           className="size-8 text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg"
         />
@@ -352,7 +354,7 @@ function AssistantTurn({ turn, onRetry }: { turn: QuestionTurn; onRetry: () => v
         <span>{status.label}</span>
       </div>
       {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
-      <p className="mt-3 whitespace-pre-wrap break-keep text-base leading-7 text-v2-fg">{result.answer.text}</p>
+      <AnswerBlocks blocks={result.answer.blocks} />
       <AnswerDetails result={result} />
     </div>
   );

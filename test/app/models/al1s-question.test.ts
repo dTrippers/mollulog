@@ -24,12 +24,22 @@ describe("AL1S question result parser", () => {
     expect(
       parseQuestionRunResult({
         status: "answered",
-        answer: { text: "Answer", sources: [{ sourceId: "s1", kind: "student", label: "Student" }], limitations: [] },
+        answer: {
+          text: "Answer",
+          blocks: [{ type: "plaintext", text: "Answer" }],
+          sources: [{ sourceId: "s1", kind: "student", label: "Student" }],
+          limitations: [],
+        },
         run,
       }),
     ).toEqual({
       status: "answered",
-      answer: { text: "Answer", sources: [{ sourceId: "s1", kind: "student", label: "Student" }], limitations: [] },
+      answer: {
+        text: "Answer",
+        blocks: [{ type: "plaintext", text: "Answer" }],
+        sources: [{ sourceId: "s1", kind: "student", label: "Student" }],
+        limitations: [],
+      },
       run,
     });
   });
@@ -90,6 +100,37 @@ describe("AL1S question result parser", () => {
     expect(parseQuestionRunResult({ status: "answered", answer: {}, run })).toBeNull();
   });
 
+  it("keeps valid blocks, skips malformed blocks, and keeps text if every block is malformed", () => {
+    const result = parseQuestionRunResult({
+      status: "answered",
+      run,
+      answer: {
+        text: "Answer",
+        sources: [],
+        limitations: [],
+        blocks: [
+          { type: "markdown", text: "**Answer**" },
+          {
+            type: "bar_chart",
+            title: "broken",
+            unit: "percent",
+            categories: ["루나틱"],
+            series: [{ sourceId: "s1", name: "미카", values: ["bad"] }],
+          },
+          { type: "unknown", text: "discard" },
+        ],
+      },
+    });
+    expect(result).toMatchObject({ answer: { text: "Answer", blocks: [{ type: "markdown", text: "**Answer**" }] } });
+    expect(
+      parseQuestionRunResult({
+        status: "answered",
+        run,
+        answer: { text: "Kept", sources: [], limitations: [], blocks: [{ type: "unknown" }] },
+      }),
+    ).toMatchObject({ answer: { text: "Kept", blocks: [{ type: "plaintext", text: "Kept" }] } });
+  });
+
   it("maps missing bindings, thrown calls, and unexpected shapes to safe outcomes", async () => {
     const request = {
       question: "Question",
@@ -120,7 +161,12 @@ describe("AL1S question result parser", () => {
     const contentSource = { sourceId: "c1", kind: "content", label: "Event rewards" };
     const result = {
       status: "answered",
-      answer: { text: "Answer", sources: [contentSource], limitations: [] },
+      answer: {
+        text: "Answer",
+        blocks: [{ type: "markdown", text: "Answer" }],
+        sources: [contentSource],
+        limitations: [],
+      },
       run,
     };
     expect(parseQuestionRunResult(result)).toEqual(result);
@@ -158,7 +204,7 @@ describe("AL1S question result parser", () => {
   it("forwards only valid progress events and ignores observer failures", async () => {
     const validResult = {
       status: "answered",
-      answer: { text: "Answer", sources: [], limitations: [] },
+      answer: { text: "Answer", blocks: [{ type: "plaintext", text: "Answer" }], sources: [], limitations: [] },
       run,
     };
     const events: unknown[] = [];
