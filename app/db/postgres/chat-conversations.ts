@@ -10,6 +10,7 @@ import {
   isChatMessageInProgress,
   isChatMessageRetryable,
   parseChatAnswer,
+  parseChatProgress,
   parseChatMessageFailureCode,
   parseChatMessageStatus,
 } from "~/domain/chat-conversation";
@@ -62,6 +63,7 @@ function toChatMessage(row: typeof pgChatMessagesTable.$inferSelect): ChatMessag
     personalMode: row.personalMode,
     status: parseChatMessageStatus(row.status),
     answer: parseChatAnswer(row.answer ?? null),
+    progress: parseChatProgress(row.progress ?? null),
     failureCode: parseChatMessageFailureCode(row.failureCode),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -292,6 +294,7 @@ export async function retryPostgresChatMessage(
             status: "pending",
             personalMode,
             answer: null,
+            progress: null,
             failureCode: null,
             runId: null,
             updatedAt: now,
@@ -329,6 +332,7 @@ export async function completePostgresChatMessage(
         .set({
           status: outcome.status,
           answer: outcome.status === "failed" ? null : outcome.answer,
+          progress: outcome.progress ?? null,
           failureCode: outcome.status === "failed" ? outcome.failureCode : null,
           runId: outcome.runId,
           updatedAt: now,

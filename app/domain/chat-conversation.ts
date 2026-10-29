@@ -43,9 +43,20 @@ export type ChatMessage = {
   personalMode: boolean;
   status: ChatMessageStatus;
   answer: Answer | null;
+  progress: ChatProgressStep[] | null;
   failureCode: ChatMessageFailureCode | null;
   createdAt: Date;
   updatedAt: Date;
+};
+
+export type ChatProgressStep = {
+  callId: string;
+  round: number;
+  toolName: string;
+  target: string | null;
+  subject?: NonNullable<AnswerSource["subject"]>;
+  ok: boolean;
+  sourceCount: number;
 };
 
 export type ChatConversationSummary = {
@@ -73,12 +84,12 @@ export function getChatConversationListStatus(
 }
 
 export type ChatMessageOutcome =
-  | { status: AnswerStatus; answer: Answer; runId: string }
-  | { status: "failed"; failureCode: ChatMessageFailureCode; runId: string | null };
+  | { status: AnswerStatus; answer: Answer; runId: string; progress?: ChatProgressStep[] }
+  | { status: "failed"; failureCode: ChatMessageFailureCode; runId: string | null; progress?: ChatProgressStep[] };
 
 const answerStatuses = new Set<string>(["answered", "needs_clarification", "insufficient_evidence"]);
 const messageStatuses = new Set<string>(["pending", "failed", ...answerStatuses]);
-const sourceKinds = new Set<string>(["knowledge", "student", "schedule", "raid_stats", "member"]);
+const sourceKinds = new Set<string>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const messageFailureCodes = new Set<string>([
   "service_unavailable",
   "invalid_request",
@@ -180,4 +191,36 @@ export function parseChatAnswer(value: unknown): Answer | null {
     };
   });
   return { text: answer.text, sources, limitations: answer.limitations as string[] };
+}
+
+export function parseChatProgress(value: unknown): ChatProgressStep[] | null {
+  if (value === null) return null;
+  if (!Array.isArray(value)) return null;
+  return value.flatMap((value): ChatProgressStep[] => {
+    const step = record(value);
+    if (
+      !step ||
+      typeof step.callId !== "string" ||
+      !step.callId ||
+      !Number.isInteger(step.round) ||
+      (step.round as number) < 0 ||
+      typeof step.toolName !== "string" ||
+      !step.toolName ||
+      (step.target !== null && typeof step.target !== "string") ||
+      typeof step.ok !== "boolean" ||
+      !Number.isInteger(step.sourceCount) ||
+      (step.sourceCount as number) < 0
+    ) return [];
+    const subject = step.subject === undefined ? undefined : parseSourceSubject(step.subject);
+    if (step.subject !== undefined && subject === undefined) return [];
+    return [{
+      callId: step.callId,
+      round: step.round as number,
+      toolName: step.toolName,
+      target: step.target as string | null,
+      ...(subject ? { subject } : {}),
+      ok: step.ok,
+      sourceCount: step.sourceCount as number,
+    }];
+  });
 }

@@ -4,6 +4,7 @@ import type {
   FailureCode,
   JsonValue,
   QuestionRequest,
+  QuestionRunEvent,
   QuestionRunResult,
   RunInfo,
   RunUsage,
@@ -16,7 +17,7 @@ export type QuestionServiceCall =
   | { ok: true; result: QuestionRunResult }
   | { ok: false; reason: "unavailable" | "unexpected_result" };
 
-const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member"]);
+const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const answerStatuses = new Set<AnswerStatus>(["answered", "needs_clarification", "insufficient_evidence"]);
 const failureCodes = new Set<FailureCode>([
   "invalid_request",
@@ -130,6 +131,58 @@ function parseSourceRecord(value: unknown): SourceRecord | null {
   };
 }
 
+function parseQuestionRunEvent(value: unknown): QuestionRunEvent | null {
+  const event = record(value);
+  if (
+    !event ||
+    !nonEmptyString(event.callId) ||
+    !Number.isInteger(event.round) ||
+    (event.round as number) < 0 ||
+    !nonEmptyString(event.toolName)
+  ) return null;
+  if (event.type === "tool_started") {
+    if (event.target !== null && !string(event.target)) return null;
+    const subject = event.subject === undefined ? undefined : parseSourceSubject(event.subject);
+    if (event.subject !== undefined && subject === undefined) return null;
+    return {
+      type: "tool_started",
+      callId: event.callId,
+      round: event.round as number,
+      toolName: event.toolName,
+      target: event.target as string | null,
+      ...(subject ? { subject } : {}),
+    };
+  }
+  if (event.type !== "tool_completed" || typeof event.ok !== "boolean" || !Array.isArray(event.sources)) return null;
+  const sources = event.sources.map((value) => {
+    const source = record(value);
+    if (
+      !source ||
+      !nonEmptyString(source.sourceId) ||
+      !string(source.kind) ||
+      !sourceKinds.has(source.kind as SourceKind) ||
+      !nonEmptyString(source.label)
+    ) return null;
+    const subject = source.subject === undefined ? undefined : parseSourceSubject(source.subject);
+    if (source.subject !== undefined && subject === undefined) return null;
+    return {
+      sourceId: source.sourceId,
+      kind: source.kind as SourceKind,
+      label: source.label,
+      ...(subject ? { subject } : {}),
+    };
+  });
+  if (sources.some((source) => source === null)) return null;
+  return {
+    type: "tool_completed",
+    callId: event.callId,
+    round: event.round as number,
+    toolName: event.toolName,
+    ok: event.ok,
+    sources: sources as NonNullable<(typeof sources)[number]>[],
+  };
+}
+
 export function parseQuestionRunResult(value: unknown): QuestionRunResult | null {
   const result = record(value);
   const run = parseRun(result?.run);
@@ -178,10 +231,21 @@ export function parseQuestionRunResult(value: unknown): QuestionRunResult | null
 export async function runQuestion(
   env: Partial<Pick<Env, "AL1S">>,
   request: QuestionRequest,
+  onEvent?: (event: QuestionRunEvent) => void,
 ): Promise<QuestionServiceCall> {
   if (!env.AL1S) return { ok: false, reason: "unavailable" };
   try {
-    const result = parseQuestionRunResult(await env.AL1S.runQuestion(request));
+    const result = parseQuestionRunResult(
+      await env.AL1S.runQuestion(request, (value) => {
+        const event = parseQuestionRunEvent(value);
+        if (!event) return;
+        try {
+          onEvent?.(event);
+        } catch {
+          // Progress reporting must not interrupt the answer run.
+        }
+      }),
+    );
     return result ? { ok: true, result } : { ok: false, reason: "unexpected_result" };
   } catch {
     return { ok: false, reason: "unavailable" };

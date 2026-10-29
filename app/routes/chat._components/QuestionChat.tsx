@@ -1,12 +1,16 @@
 import {
+  ArrowPathIcon,
   ArrowUpIcon,
   ArrowUpRightIcon,
+  CheckIcon,
+  ChevronDownIcon,
   ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   PlusIcon,
   QuestionMarkCircleIcon,
   UserCircleIcon,
   XCircleIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import {
   type ComponentProps,
@@ -28,10 +32,26 @@ import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { Switch } from "~/components/v2/primitives/Switch";
 import { useImageFailure } from "~/components/v2/primitives/use-image-failure";
-import { type ChatErrorCode, type ChatMessage, isChatMessageInterrupted } from "~/domain/chat-conversation";
-import type { AnswerSource, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import {
+  type ChatErrorCode,
+  type ChatMessage,
+  type ChatProgressStep,
+  isChatMessageInterrupted,
+} from "~/domain/chat-conversation";
+import type { QuestionRunEvent, QuestionRunResult } from "~/models/al1s-question-contract";
 import { bossImageUrl } from "~/models/assets";
-import { canApplyChatResponse, reconcileChatTurns } from "./chat-ui-state";
+import {
+  applyChatProgressEvent,
+  canApplyChatResponse,
+  type LiveChatProgress,
+  reconcileChatTurns,
+  settledChatTurnState,
+} from "./chat-ui-state";
+
+export type ChatAskHandlers = {
+  onStarted: (started: { conversationUid: string; messageUid: string }) => void;
+  onEvent: (event: QuestionRunEvent) => void;
+};
 
 export type QuestionChatActionResult =
   | { ok: true; result: QuestionRunResult; conversationUid: string; messageUid: string }
@@ -52,6 +72,8 @@ export type QuestionTurn = {
   waitingLonger?: boolean;
   interrupted?: boolean;
   localInFlight?: boolean;
+  progress?: ChatProgressStep[];
+  activeProgressIds?: string[];
 };
 
 export type ChatInput = {
@@ -66,9 +88,10 @@ type QuestionChatProps = {
   initialConsent: boolean;
   consentUnavailable: boolean;
   onConsent: (consented: boolean) => Promise<boolean>;
-  onAsk: (input: ChatInput) => Promise<QuestionChatActionResult>;
+  onAsk: (input: ChatInput, handlers: ChatAskHandlers) => Promise<QuestionChatActionResult>;
   initialConversationUid: string | null;
   initialMessages: ChatMessage[];
+  liveProgress?: LiveChatProgress & { messageUid: string; outcome?: QuestionChatActionResult };
   loadedAt: Date;
   onConversationUid: (uid: string) => void;
 };
@@ -94,51 +117,96 @@ const ERROR_COPY: Record<ChatErrorCode | "question_too_long", string> = {
   question_too_long: "질문이 너무 길어요. 줄여서 보내 주세요.",
 };
 
-const SOURCE_KIND_LABELS: Record<SourceKind, string> = {
-  knowledge: "게임 용어·규칙",
-  student: "학생 정보",
-  schedule: "일정",
-  raid_stats: "총력전·대결전 통계",
-  member: "내 데이터",
+const PROGRESS_TOOL_LABELS: Record<string, { working: string; complete: string }> = {
+  get_schedule: { working: "일정 확인 중", complete: "일정 확인" },
+  find_students: { working: "학생 찾는 중", complete: "학생 찾기" },
+  get_student: { working: "학생 정보 확인 중", complete: "학생 정보 확인" },
+  get_raid_stats: { working: "통계 확인 중", complete: "통계 확인" },
+  search_knowledge: { working: "자료 찾는 중", complete: "자료 찾기" },
+  get_knowledge: { working: "자료 확인 중", complete: "자료 확인" },
+  get_my_data: { working: "내 데이터 확인 중", complete: "내 데이터 확인" },
+  get_content: { working: "콘텐츠 정보 확인 중", complete: "콘텐츠 정보 확인" },
 };
 
-function SourceChip({ source }: { source: AnswerSource }) {
-  const imageSrc = source.subject?.type === "raid_boss" ? bossImageUrl(source.subject.boss) : null;
+function ProgressStepRow({ step, active }: { step: ChatProgressStep; active: boolean }) {
+  const imageSrc = step.subject?.type === "raid_boss" ? bossImageUrl(step.subject.boss) : null;
   const image = useImageFailure(imageSrc);
-  const hasAvatar = source.subject !== undefined;
-  const content = (
-    <>
-      {source.subject?.type === "student" ? (
-        <StudentPortrait uid={source.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
-      ) : imageSrc && !image.failed ? (
-        <img
-          ref={image.ref}
-          src={imageSrc}
-          onError={image.onError}
-          onLoad={image.onLoad}
-          alt=""
-          className="size-5 shrink-0 rounded-full object-cover"
-        />
-      ) : null}
-      <span className="text-sm font-medium">{source.label}</span>
-      <span className="text-xs text-v2-fg-tertiary">{SOURCE_KIND_LABELS[source.kind]}</span>
-    </>
-  );
-  const className = `inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset ${hasAvatar ? "pl-1.5 pr-3" : "px-3"} text-v2-fg`;
+  const label = PROGRESS_TOOL_LABELS[step.toolName];
+  if (!label) return null;
   return (
-    <li>
-      {source.subject?.type === "student" ? (
-        <Link
-          to={`/students/${encodeURIComponent(source.subject.uid)}`}
-          className={`${className} hover:bg-v2-filled-hover ${v2FocusRing}`}
-        >
-          {content}
-          <ArrowUpRightIcon aria-hidden="true" className="size-3 text-v2-fg-tertiary" />
-        </Link>
+    <li className={`flex items-center gap-2 text-sm leading-5 ${active ? "text-v2-fg" : "text-v2-fg-secondary"}`}>
+      {active ? (
+        <ArrowPathIcon className="size-4 shrink-0 animate-spin text-v2-fg-secondary" aria-hidden="true" />
+      ) : step.ok ? (
+        <CheckIcon className="size-4 shrink-0 text-v2-success" aria-hidden="true" />
       ) : (
-        <span className={className}>{content}</span>
+        <XMarkIcon className="size-4 shrink-0 text-v2-danger" aria-hidden="true" />
       )}
+      <span className="text-xs">{active ? label.working : label.complete}</span>
+      {step.target ? (
+        step.subject?.type === "student" ? (
+          <Link
+            to={`/students/${encodeURIComponent(step.subject.uid)}`}
+            className={`inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg hover:text-v2-fg-secondary hover:underline ${v2FocusRing}`}
+          >
+            <StudentPortrait uid={step.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
+            <span className="truncate">{step.target}</span>
+            <ArrowUpRightIcon className="size-3 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+          </Link>
+        ) : (
+          <span className="inline-flex min-w-0 items-center gap-1.5 font-medium text-v2-fg">
+            {imageSrc && !image.failed ? (
+              <img
+                ref={image.ref}
+                src={imageSrc}
+                onError={image.onError}
+                onLoad={image.onLoad}
+                alt=""
+                className="size-5 shrink-0 rounded-full object-cover"
+              />
+            ) : null}
+            <span className="truncate">{step.target}</span>
+          </span>
+        )
+      ) : null}
     </li>
+  );
+}
+
+function ProgressDisclosure({
+  steps,
+  activeProgressIds = [],
+  live = false,
+}: {
+  steps: ChatProgressStep[];
+  activeProgressIds?: string[];
+  live?: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const visible = steps.filter((step) => PROGRESS_TOOL_LABELS[step.toolName]);
+  if (visible.length === 0) return null;
+  const rows = visible.map((step) => (
+    <ProgressStepRow
+      key={`${step.round}:${step.callId}`}
+      step={step}
+      active={activeProgressIds.includes(`${step.round}:${step.callId}`)}
+    />
+  ));
+  if (live) return <ul className="mt-2 flex flex-col gap-1.5 border-l-2 border-v2-divider pl-3">{rows}</ul>;
+  return (
+    <div className="mt-2">
+      <Button
+        variant="text"
+        size="sm"
+        aria-expanded={expanded}
+        onClick={() => setExpanded((value) => !value)}
+        className="min-h-0 px-0 py-0 text-v2-fg-tertiary hover:text-v2-fg-secondary"
+      >
+        확인한 자료 {visible.length}건
+        <ChevronDownIcon className={`size-4 transition-transform ${expanded ? "rotate-180" : ""}`} aria-hidden="true" />
+      </Button>
+      {expanded ? <ul className="mt-1.5 flex flex-col gap-1.5 border-l-2 border-v2-divider pl-3">{rows}</ul> : null}
+    </div>
   );
 }
 
@@ -155,7 +223,7 @@ function AssistantMark({ working = false }: { working?: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`inline-flex size-5 items-center justify-center ${working ? "animate-v2-ai-working shadow-v2-ai-glow" : ""}`}
+      className={`inline-flex size-5 items-center justify-center ${working ? "animate-v2-ai-working" : ""}`}
     >
       <svg viewBox="0 0 24 24" className="size-5" fill="none" aria-hidden="true" focusable="false">
         <defs>
@@ -174,25 +242,16 @@ function AssistantMark({ working = false }: { working?: boolean }) {
   );
 }
 
-function AnswerSources({
+function AnswerDetails({
   result,
-  id,
 }: {
   result: Pick<
     Extract<QuestionRunResult, { status: "answered" | "needs_clarification" | "insufficient_evidence" }>,
     "status" | "answer"
   >;
-  id: string;
 }) {
   return (
     <div className="mt-4 flex flex-col gap-3">
-      {result.answer.sources.length ? (
-        <ul id={id} className="flex flex-wrap gap-2">
-          {result.answer.sources.map((source) => (
-            <SourceChip key={`${source.kind}:${source.sourceId}`} source={source} />
-          ))}
-        </ul>
-      ) : null}
       {result.answer.limitations.length ? (
         <div>
           <p className="text-sm text-v2-fg-secondary">확인하지 못한 내용</p>
@@ -217,7 +276,7 @@ function AnswerSources({
   );
 }
 
-function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRetry: () => void; sourcesId: string }) {
+function AssistantTurn({ turn, onRetry }: { turn: QuestionTurn; onRetry: () => void }) {
   if (turn.pending) {
     return (
       <div className="rounded-lg bg-v2-surface p-4">
@@ -227,6 +286,9 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         </div>
         {turn.waitingLonger ? (
           <p className="mt-1 pl-8 text-xs text-v2-fg-tertiary">자료를 확인하고 있어요. 1분 가까이 걸릴 수 있어요.</p>
+        ) : null}
+        {turn.progress?.length ? (
+          <ProgressDisclosure steps={turn.progress} activeProgressIds={turn.activeProgressIds} live />
         ) : null}
       </div>
     );
@@ -258,6 +320,7 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
           <XCircleIcon className="size-4" aria-hidden="true" />
           <span>답변하지 못했어요</span>
         </div>
+        {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
         <p className="mt-3 whitespace-pre-wrap break-keep text-sm leading-6 text-v2-fg">{ERROR_COPY[turn.failure]}</p>
         {turn.failure !== "budget_exhausted" &&
         turn.failure !== "invalid_request" &&
@@ -288,8 +351,9 @@ function AssistantTurn({ turn, onRetry, sourcesId }: { turn: QuestionTurn; onRet
         {StatusIcon ? <StatusIcon className="size-4" aria-hidden="true" /> : null}
         <span>{status.label}</span>
       </div>
+      {turn.progress?.length ? <ProgressDisclosure steps={turn.progress} /> : null}
       <p className="mt-3 whitespace-pre-wrap break-keep text-base leading-7 text-v2-fg">{result.answer.text}</p>
-      <AnswerSources result={result} id={sourcesId} />
+      <AnswerDetails result={result} />
     </div>
   );
 }
@@ -300,6 +364,7 @@ function toQuestionTurn(message: ChatMessage, loadedAt: Date): QuestionTurn {
     messageUid: message.uid,
     question: message.question,
     personalMode: message.personalMode,
+    progress: message.progress ?? undefined,
   };
   if (message.status === "pending") {
     return isChatMessageInterrupted(message, loadedAt) ? { ...turn, interrupted: true } : { ...turn, pending: true };
@@ -320,6 +385,7 @@ export function QuestionChat({
   onAsk,
   initialConversationUid,
   initialMessages,
+  liveProgress,
   loadedAt,
   onConversationUid,
 }: QuestionChatProps) {
@@ -332,6 +398,7 @@ export function QuestionChat({
     initialMessages.map((message) => toQuestionTurn(message, loadedAt)),
   );
   const [conversationUid, setConversationUid] = useState<string | null>(initialConversationUid);
+  const activeConversationUidRef = useRef(initialConversationUid);
   const [draft, setDraft] = useState("");
   const [personalMode, setPersonalMode] = useState(initialConsent);
   const [optionsOpen, setOptionsOpen] = useState(false);
@@ -355,7 +422,7 @@ export function QuestionChat({
   const isResponseActive = () => {
     const currentNavigation = navigationRef.current;
     const pendingLocation = currentNavigation.state === "idle" ? undefined : currentNavigation.location;
-    return canApplyChatResponse(mountedRef.current, initialConversationUid, pendingLocation);
+    return canApplyChatResponse(mountedRef.current, activeConversationUidRef.current, pendingLocation);
   };
   const personalModeDescription = !isSignedIn
     ? "로그인하면 쓸 수 있어요"
@@ -367,7 +434,8 @@ export function QuestionChat({
     const textarea = textareaRef.current;
     if (!textarea) return;
     textarea.style.height = "auto";
-    textarea.style.height = `${Math.min(textarea.scrollHeight, 120)}px`;
+    const minHeight = Number.parseFloat(window.getComputedStyle(textarea).minHeight);
+    textarea.style.height = `${Math.min(Math.max(textarea.scrollHeight, minHeight), 120)}px`;
   });
 
   useLayoutEffect(() => {
@@ -391,6 +459,40 @@ export function QuestionChat({
   useEffect(() => {
     setTurns((current) => reconcileChatTurns(current, initialMessages, (message) => toQuestionTurn(message, loadedAt)));
   }, [initialMessages, loadedAt]);
+
+  useEffect(() => {
+    if (!liveProgress) {
+      setPending(false);
+      return;
+    }
+    if (liveProgress.outcome) {
+      const outcome = liveProgress.outcome;
+      setPending(false);
+      setTurns((current) =>
+        current.map((turn) => {
+          if (turn.messageUid !== liveProgress.messageUid) return turn;
+          return { ...turn, ...settledChatTurnState(outcome) };
+        }),
+      );
+      setAnnouncement(
+        !outcome.ok
+          ? ERROR_COPY[outcome.code]
+          : outcome.result.status === "failed"
+            ? ERROR_COPY[outcome.result.error.code]
+            : "답변이 도착했어요",
+      );
+      scrollConversationEnd.current = true;
+      return;
+    }
+    setPending(true);
+    setTurns((current) =>
+      current.map((turn) =>
+        turn.messageUid === liveProgress.messageUid
+          ? { ...turn, pending: true, result: undefined, failure: undefined, localInFlight: true, ...liveProgress }
+          : turn,
+      ),
+    );
+  }, [liveProgress]);
 
   useEffect(() => {
     const updateKeyboardInset = () => {
@@ -510,6 +612,8 @@ export function QuestionChat({
                 personalMode: activePersonalMode,
                 failure: undefined,
                 result: undefined,
+                progress: [],
+                activeProgressIds: [],
                 interrupted: false,
                 pending: true,
                 localInFlight: true,
@@ -526,14 +630,45 @@ export function QuestionChat({
     }
 
     try {
-      const response = await onAsk({
-        question,
-        personalMode: activePersonalMode,
-        conversationUid,
-        ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
-      });
+      const response = await onAsk(
+        {
+          question,
+          personalMode: activePersonalMode,
+          conversationUid,
+          ...(existingTurn?.messageUid ? { retryMessageUid: existingTurn.messageUid } : {}),
+        },
+        {
+          onStarted: (started) => {
+            if (!isResponseActive()) return;
+            const previousUid = activeConversationUidRef.current;
+            activeConversationUidRef.current = started.conversationUid;
+            setConversationUid(started.conversationUid);
+            setTurns((current) =>
+              current.map((turn) =>
+                turn.id === id
+                  ? { ...turn, messageUid: started.messageUid, progress: [], activeProgressIds: [] }
+                  : turn,
+              ),
+            );
+            if (previousUid !== started.conversationUid) onConversationUid(started.conversationUid);
+          },
+          onEvent: (event) => {
+            setTurns((current) =>
+              current.map((turn) => {
+                if (turn.id !== id) return turn;
+                const next = applyChatProgressEvent(
+                  { progress: turn.progress ?? [], activeProgressIds: turn.activeProgressIds ?? [] },
+                  event,
+                );
+                return { ...turn, ...next };
+              }),
+            );
+          },
+        },
+      );
       if (!isResponseActive()) return;
       if (response.conversationUid) {
+        activeConversationUidRef.current = response.conversationUid;
         setConversationUid(response.conversationUid);
         if (response.conversationUid !== conversationUid) onConversationUid(response.conversationUid);
       }
@@ -543,7 +678,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, failure, activeProgressIds: [] }
+              : turn,
           ),
         );
         if (failure === "consent_required") setPersonalMode(false);
@@ -554,7 +691,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, failure } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, failure, activeProgressIds: [] }
+              : turn,
           ),
         );
         setAnnouncement(ERROR_COPY[failure]);
@@ -563,7 +702,9 @@ export function QuestionChat({
         scrollConversationEnd.current = true;
         setTurns((current) =>
           current.map((turn) =>
-            turn.id === id ? { ...turn, messageUid, pending: false, localInFlight: false, result } : turn,
+            turn.id === id
+              ? { ...turn, messageUid, pending: false, localInFlight: false, activeProgressIds: [], result }
+              : turn,
           ),
         );
         setAnnouncement(
@@ -605,11 +746,11 @@ export function QuestionChat({
 
   return (
     <div
-      className="flex min-h-[calc(100dvh-8rem)] flex-col"
+      className="v2-chat-root flex flex-col"
       style={{ "--question-composer-height": `${composerHeight}px` } as CSSProperties}
     >
       {turns.length === 0 ? (
-        <div className="flex flex-1 flex-col gap-4 pt-2 pb-6">
+        <div className="flex flex-1 flex-col gap-4 pt-2">
           <div className="flex items-center gap-2.5 text-lg font-semibold text-v2-fg">
             <AssistantMark />
             <p>블루 아카이브에 대해 궁금한 점을 물어보세요</p>
@@ -632,7 +773,7 @@ export function QuestionChat({
                     void updatePersonalMode(true);
                   }
                 }}
-                className={`flex min-h-v2-row-min flex-col items-start gap-1 rounded-lg bg-v2-surface px-4 py-3 text-left text-sm leading-5 text-v2-fg hover:bg-v2-hover ${v2FocusRing}`}
+                className={`flex min-h-v2-row-min cursor-pointer flex-col items-start gap-1 rounded-lg bg-v2-surface px-4 py-3 text-left text-sm leading-5 text-v2-fg hover:bg-v2-hover ${v2FocusRing}`}
               >
                 <span className="text-xs text-v2-fg-tertiary">{suggestion.label}</span>
                 <span>{suggestion.question}</span>
@@ -641,9 +782,13 @@ export function QuestionChat({
           </div>
         </div>
       ) : (
-        <div className="flex-1 space-y-4 pb-[calc(var(--question-composer-height)_+_var(--mobile-nav-height)_+_1rem)] lg:pb-[calc(var(--question-composer-height)_+_1rem)]">
-          {turns.map((turn) => (
-            <article key={turn.id} id={`question-${turn.id}`} className="scroll-mt-4">
+        <div className="v2-chat-turn-list flex-1 space-y-4">
+          {turns.map((turn, index) => (
+            <article
+              key={turn.id}
+              id={`question-${turn.id}`}
+              className={`scroll-mt-4 ${index === turns.length - 1 ? "v2-chat-latest-turn" : ""}`}
+            >
               <div className="ml-auto max-w-[88%] rounded-lg bg-v2-inset px-3 py-2.5 text-base leading-6 text-v2-fg">
                 <p className="whitespace-pre-wrap break-keep">{turn.question}</p>
               </div>
@@ -656,7 +801,6 @@ export function QuestionChat({
                 <AssistantTurn
                   turn={{ ...turn, waitingLonger }}
                   onRetry={() => void submitQuestion(turn.question, turn)}
-                  sourcesId={`sources-${turn.id}`}
                 />
               </div>
             </article>
@@ -668,11 +812,7 @@ export function QuestionChat({
       <div
         ref={composerRef}
         style={keyboardBottomInset === null ? undefined : { bottom: `${keyboardBottomInset}px` }}
-        className={`z-10 bg-v2-canvas pt-2 ${
-          stacked
-            ? "fixed bottom-[var(--mobile-nav-height)] left-4 w-[min(48rem,calc(100vw_-_2rem))] md:left-8 md:w-[min(48rem,calc(100vw_-_4rem))]"
-            : "sticky bottom-0 left-auto mt-auto w-full"
-        }`}
+        className="v2-chat-composer z-10 bg-v2-canvas pt-2"
       >
         <div className="rounded-lg border border-v2-control-border bg-v2-surface px-3 py-2 focus-within:border-v2-control-border-strong focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-v2-focus focus-within:shadow-v2-ai-glow">
           <label className="sr-only" htmlFor="question-input">
@@ -691,10 +831,10 @@ export function QuestionChat({
               isComposing.current = false;
             }}
             placeholder="궁금한 점을 입력해 주세요"
-            rows={1}
+            rows={2}
             disabled={pending}
             aria-describedby="question-shortcut-help"
-            className="block max-h-[120px] min-h-8 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-11 max-lg:py-3"
+            className="block max-h-[120px] min-h-12 w-full resize-none bg-transparent py-1 text-base leading-5 text-v2-fg outline-none placeholder:text-v2-fg-tertiary/75 disabled:opacity-60 max-lg:min-h-16 max-lg:py-3"
           />
           <span id="question-shortcut-help" className="sr-only">
             Enter로 질문 보내기, Shift+Enter로 줄바꿈
@@ -776,16 +916,17 @@ export function QuestionChat({
           <p>
             스위치를 켜 두면 질문할 때마다 몰루로그에 저장된 아래 정보를 질문과 함께 외부 AI 모델 제공사에 전달해요.
           </p>
-          <ul className="rounded-md bg-v2-inset px-4 py-2">
+          <ul className="border-l-2 border-v2-divider pl-3">
             <li>· 보유 학생</li>
             <li>· 관심 학생</li>
             <li>· 편성</li>
           </ul>
           <p>전달한 정보는 질문, 답변과 함께 기록으로 저장돼요.</p>
           <p>동의는 계정에 저장되어 스위치를 끌 때까지 유지돼요. 스위치를 끄면 동의가 취소돼요.</p>
-          <div className="flex gap-2 pt-1">
+          <div className="flex justify-end gap-2 pt-1">
             <Button
               type="button"
+              variant="text"
               onClick={() => {
                 setConsentDialogOpen(false);
                 if (focusDraftAfterConsent.current) {
@@ -794,17 +935,10 @@ export function QuestionChat({
                 }
               }}
               disabled={savingConsent}
-              className="flex-1"
             >
               취소
             </Button>
-            <Button
-              type="button"
-              variant="primary"
-              onClick={() => void agreeToPersonalMode()}
-              disabled={savingConsent}
-              className="flex-1"
-            >
+            <Button type="button" variant="primary" onClick={() => void agreeToPersonalMode()} disabled={savingConsent}>
               동의하고 켜기
             </Button>
           </div>

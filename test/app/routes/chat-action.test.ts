@@ -80,6 +80,7 @@ function storedMessage(uid: string, overrides: Partial<ChatMessage> = {}): ChatM
     personalMode: false,
     status: "answered",
     answer: { text: `answer ${uid}`, sources: [], limitations: [] },
+    progress: null,
     failureCode: null,
     createdAt: now,
     updatedAt: now,
@@ -132,6 +133,15 @@ function routeContext(env: Env) {
 }
 
 async function responseBody(response: Response) {
+  if (response.headers.get("Content-Type")?.includes("application/x-ndjson")) {
+    const lines = (await response.text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    const result = lines.at(-1) as Record<string, unknown>;
+    const { type: _type, ...body } = result;
+    return body;
+  }
   return response.json() as Promise<Record<string, unknown>>;
 }
 
@@ -313,7 +323,12 @@ describe("AI chatbot page and resource action", () => {
       env,
       expect.objectContaining({
         messageUid: "message-1",
-        outcome: { status: "answered", answer: { text: "Answer", sources: [], limitations: [] }, runId: "run-1" },
+        outcome: {
+          status: "answered",
+          answer: { text: "Answer", sources: [], limitations: [] },
+          runId: "run-1",
+          progress: [],
+        },
       }),
       { ctx: undefined },
     );
@@ -415,7 +430,7 @@ describe("AI chatbot page and resource action", () => {
       personalMode: false,
       now,
     });
-    expect(runQuestion).toHaveBeenCalledWith({
+    expect(runQuestion.mock.calls[0]?.[0]).toEqual({
       question: "Public question",
       context: { region: "gl", asOf: now.toISOString() },
       history: [
@@ -463,7 +478,7 @@ describe("AI chatbot page and resource action", () => {
       now,
     });
     expect(startMessage).not.toHaveBeenCalled();
-    expect(runQuestion).toHaveBeenCalledWith(expect.objectContaining({ question: "Stored question" }));
+    expect(runQuestion.mock.calls[0]?.[0]).toMatchObject({ question: "Stored question" });
   });
 
   it.each([
@@ -503,7 +518,7 @@ describe("AI chatbot page and resource action", () => {
     ).toMatchObject({ intent: "question", ok: true, result: { status: "failed" }, messageUid: "message-1" });
     expect(completeMessage).toHaveBeenLastCalledWith({
       messageUid: "message-1",
-      outcome: { status: "failed", failureCode: "timeout", runId: "run-1" },
+      outcome: { status: "failed", failureCode: "timeout", runId: "run-1", progress: [] },
       now,
     });
 
@@ -525,7 +540,7 @@ describe("AI chatbot page and resource action", () => {
     });
     expect(completeMessage).toHaveBeenLastCalledWith({
       messageUid: "message-1",
-      outcome: { status: "failed", failureCode: "service_unavailable", runId: null },
+      outcome: { status: "failed", failureCode: "service_unavailable", runId: null, progress: [] },
       now,
     });
 
@@ -610,7 +625,7 @@ describe("AI chatbot page and resource action", () => {
         ),
       ),
     ).toMatchObject({ intent: "question", ok: true });
-    expect(bindingRunQuestion).toHaveBeenCalledWith({
+    expect(bindingRunQuestion.mock.calls[0]?.[0]).toEqual({
       question: "What do I own?",
       context: { region: "gl", asOf: now.toISOString() },
       history: [],
@@ -751,5 +766,83 @@ describe("AI chatbot page and resource action", () => {
       ok: false,
       code: "rate_limited",
     });
+  });
+
+  it("streams started and tool events before the result and saves the completed progress", async () => {
+    const tasks: Promise<void>[] = [];
+    const completeMessage = jest.fn(
+      async (_input: Parameters<ChatActionDependencies["completeMessage"]>[0]) => undefined,
+    );
+    const deps = makeDependencies({
+      completeMessage,
+      waitUntil: (promise) => tasks.push(promise),
+      runQuestion: async (_question, onEvent) => {
+        onEvent?.({
+          type: "tool_started",
+          callId: "call-1",
+          round: 1,
+          toolName: "get_student",
+          target: "미카",
+          subject: { type: "student", uid: "101" },
+        });
+        onEvent?.({
+          type: "tool_completed",
+          callId: "call-1",
+          round: 1,
+          toolName: "get_student",
+          ok: true,
+          sources: [{ sourceId: "s1", kind: "student", label: "미카" }],
+        });
+        return { ok: true, result: answer };
+      },
+    });
+    const response = await handleChatAction(actionRequest({ intent: "question", question: "Question" }), deps);
+    expect(response.headers.get("Content-Type")).toContain("application/x-ndjson");
+    const lines = (await response.text())
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(lines.map((line) => line.type)).toEqual(["started", "event", "event", "result"]);
+    expect(lines[0]).toEqual({ type: "started", conversationUid: "conversation-1", messageUid: "message-1" });
+    expect(completeMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messageUid: "message-1",
+        outcome: expect.objectContaining({
+          status: "answered",
+          progress: [
+            {
+              callId: "call-1",
+              round: 1,
+              toolName: "get_student",
+              target: "미카",
+              subject: { type: "student", uid: "101" },
+              ok: true,
+              sourceCount: 1,
+            },
+          ],
+        }),
+      }),
+    );
+    await Promise.all(tasks);
+  });
+
+  it("continues the started message to storage after the response body is canceled", async () => {
+    const tasks: Promise<void>[] = [];
+    const completeMessage = jest.fn(
+      async (_input: Parameters<ChatActionDependencies["completeMessage"]>[0]) => undefined,
+    );
+    const response = await handleChatAction(
+      actionRequest({ intent: "question", question: "Question" }),
+      makeDependencies({
+        completeMessage,
+        waitUntil: (promise) => tasks.push(promise),
+        runQuestion: async () => ({ ok: true, result: answer }),
+      }),
+    );
+    await response.body?.cancel();
+    await Promise.all(tasks);
+    expect(completeMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ messageUid: "message-1", outcome: expect.objectContaining({ status: "answered" }) }),
+    );
   });
 });

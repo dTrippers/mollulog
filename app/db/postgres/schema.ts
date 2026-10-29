@@ -25,6 +25,7 @@ import type {
 import type { TimelineContentVideo } from "~/domain/timeline-content";
 import type { TimelineContentNameI18n } from "~/domain/timeline-content-name-i18n";
 import type { ApiScope } from "~/domain/mollulog-api-spec";
+import type { ChatProgressStep } from "~/domain/chat-conversation";
 import type {
   WalkthroughTimelineDefenseType,
   WalkthroughTimelineDifficulty,
@@ -1562,6 +1563,7 @@ export const pgChatMessagesTable = pgTable(
     status: text().notNull(),
     // The answer is validated when read, so the column stays untyped JSON here.
     answer: jsonb(),
+    progress: jsonb().$type<ChatProgressStep[]>(),
     failureCode: text("failure_code"),
     runId: text("run_id"),
     createdAt: timestamptz("created_at").notNull().defaultNow(),

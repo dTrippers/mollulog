@@ -115,4 +115,73 @@ describe("AL1S question result parser", () => {
       reason: "unexpected_result",
     });
   });
+
+  it("accepts content sources in answers and completed tool events", async () => {
+    const contentSource = { sourceId: "c1", kind: "content", label: "Event rewards" };
+    const result = {
+      status: "answered",
+      answer: { text: "Answer", sources: [contentSource], limitations: [] },
+      run,
+    };
+    expect(parseQuestionRunResult(result)).toEqual(result);
+
+    const events: unknown[] = [];
+    const service = {
+      runQuestion: async (_request: unknown, onEvent?: (event: unknown) => void) => {
+        onEvent?.({
+          type: "tool_completed",
+          callId: "call-1",
+          round: 1,
+          toolName: "get_content",
+          ok: true,
+          sources: [contentSource],
+        });
+        return result;
+      },
+    };
+    const request = { question: "Question", context: { region: "gl", asOf: "2026-10-19" }, profile: "public" } as const;
+    await expect(runQuestion({ AL1S: service }, request, (event) => events.push(event))).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(events).toEqual([
+      {
+        type: "tool_completed",
+        callId: "call-1",
+        round: 1,
+        toolName: "get_content",
+        ok: true,
+        sources: [contentSource],
+      },
+    ]);
+  });
+
+  it("forwards only valid progress events and ignores observer failures", async () => {
+    const validResult = {
+      status: "answered",
+      answer: { text: "Answer", sources: [], limitations: [] },
+      run,
+    };
+    const events: unknown[] = [];
+    const service = {
+      runQuestion: async (_request: unknown, onEvent?: (event: unknown) => void) => {
+        onEvent?.({ type: "tool_started", callId: "call-1", round: 1, toolName: "get_student", target: "미카" });
+        onEvent?.({ type: "tool_started", callId: "call-2", round: 1, toolName: "get_student", target: 7 });
+        return validResult;
+      },
+    };
+    const request = { question: "Question", context: { region: "gl", asOf: "2026-10-19" }, profile: "public" } as const;
+    await expect(runQuestion({ AL1S: service }, request, (event) => events.push(event))).resolves.toMatchObject({
+      ok: true,
+    });
+    expect(events).toEqual([
+      { type: "tool_started", callId: "call-1", round: 1, toolName: "get_student", target: "미카" },
+    ]);
+    await expect(
+      runQuestion({ AL1S: service }, request, () => {
+        throw new Error("observer");
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+    });
+  });
 });
