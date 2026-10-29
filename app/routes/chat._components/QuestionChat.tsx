@@ -1,5 +1,6 @@
 import {
   ArrowUpIcon,
+  ArrowUpRightIcon,
   ClipboardDocumentIcon,
   ExclamationTriangleIcon,
   PlusIcon,
@@ -18,6 +19,7 @@ import {
   useState,
 } from "react";
 import { Link, useNavigation } from "react-router";
+import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
 import { useV2Page } from "~/components/v2/layout";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
@@ -25,8 +27,10 @@ import { Dialog } from "~/components/v2/primitives/Dialog";
 import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
 import { Switch } from "~/components/v2/primitives/Switch";
+import { useImageFailure } from "~/components/v2/primitives/use-image-failure";
 import { type ChatErrorCode, type ChatMessage, isChatMessageInterrupted } from "~/domain/chat-conversation";
-import type { QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import type { AnswerSource, QuestionRunResult, SourceKind } from "~/models/al1s-question-contract";
+import { bossImageUrl } from "~/models/assets";
 import { canApplyChatResponse, reconcileChatTurns } from "./chat-ui-state";
 
 export type QuestionChatActionResult =
@@ -98,6 +102,46 @@ const SOURCE_KIND_LABELS: Record<SourceKind, string> = {
   member: "내 데이터",
 };
 
+function SourceChip({ source }: { source: AnswerSource }) {
+  const imageSrc = source.subject?.type === "raid_boss" ? bossImageUrl(source.subject.boss) : null;
+  const image = useImageFailure(imageSrc);
+  const hasAvatar = source.subject !== undefined;
+  const content = (
+    <>
+      {source.subject?.type === "student" ? (
+        <StudentPortrait uid={source.subject.uid} className="size-5 shrink-0 rounded-full object-cover" />
+      ) : imageSrc && !image.failed ? (
+        <img
+          ref={image.ref}
+          src={imageSrc}
+          onError={image.onError}
+          onLoad={image.onLoad}
+          alt=""
+          className="size-5 shrink-0 rounded-full object-cover"
+        />
+      ) : null}
+      <span className="text-sm font-medium">{source.label}</span>
+      <span className="text-xs text-v2-fg-tertiary">{SOURCE_KIND_LABELS[source.kind]}</span>
+    </>
+  );
+  const className = `inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset ${hasAvatar ? "pl-1.5 pr-3" : "px-3"} text-v2-fg`;
+  return (
+    <li>
+      {source.subject?.type === "student" ? (
+        <Link
+          to={`/students/${encodeURIComponent(source.subject.uid)}`}
+          className={`${className} hover:bg-v2-filled-hover ${v2FocusRing}`}
+        >
+          {content}
+          <ArrowUpRightIcon aria-hidden="true" className="size-3 text-v2-fg-tertiary" />
+        </Link>
+      ) : (
+        <span className={className}>{content}</span>
+      )}
+    </li>
+  );
+}
+
 function codePointLength(value: string): number {
   return [...value].length;
 }
@@ -144,30 +188,9 @@ function AnswerSources({
     <div className="mt-4 flex flex-col gap-3">
       {result.answer.sources.length ? (
         <ul id={id} className="flex flex-wrap gap-2">
-          {result.answer.sources.map((source) => {
-            const content = (
-              <>
-                <span className="text-sm font-medium">{source.label}</span>
-                <span className="text-xs text-v2-fg-tertiary">{SOURCE_KIND_LABELS[source.kind]}</span>
-              </>
-            );
-            return (
-              <li key={`${source.kind}:${source.sourceId}`}>
-                {source.kind === "student" ? (
-                  <Link
-                    to={`/students/${encodeURIComponent(source.sourceId)}`}
-                    className={`inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset px-3 text-v2-fg hover:bg-v2-filled-hover ${v2FocusRing}`}
-                  >
-                    {content}
-                  </Link>
-                ) : (
-                  <span className="inline-flex min-h-8 items-center gap-2 rounded-full bg-v2-inset px-3 text-v2-fg">
-                    {content}
-                  </span>
-                )}
-              </li>
-            );
-          })}
+          {result.answer.sources.map((source) => (
+            <SourceChip key={`${source.kind}:${source.sourceId}`} source={source} />
+          ))}
         </ul>
       ) : null}
       {result.answer.limitations.length ? (

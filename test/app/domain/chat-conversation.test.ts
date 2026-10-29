@@ -150,6 +150,28 @@ describe("stored value parsers", () => {
     expect(parseChatMessageFailureCode(null)).toBeNull();
   });
 
+  it("keeps valid source subjects after persistence and drops malformed ones", () => {
+    expect(
+      parseChatAnswer({
+        text: "Answer",
+        sources: [
+          { sourceId: "s1", kind: "student", label: "미카", subject: { type: "student", uid: "101" } },
+          { sourceId: "s2", kind: "schedule", label: "레이드", subject: { type: "raid_boss", boss: "binah" } },
+          { sourceId: "s3", kind: "student", label: "기존 출처", subject: { type: "unknown", uid: "101" } },
+        ],
+        limitations: [],
+      }),
+    ).toEqual({
+      text: "Answer",
+      sources: [
+        { sourceId: "s1", kind: "student", label: "미카", subject: { type: "student", uid: "101" } },
+        { sourceId: "s2", kind: "schedule", label: "레이드", subject: { type: "raid_boss", boss: "binah" } },
+        { sourceId: "s3", kind: "student", label: "기존 출처" },
+      ],
+      limitations: [],
+    });
+  });
+
   it("fails explicitly for malformed stored values", () => {
     expect(() =>
       parseChatAnswer({ text: "Answer", sources: [{ sourceId: "s1", kind: "unknown", label: "x" }], limitations: [] }),
