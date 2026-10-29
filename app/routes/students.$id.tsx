@@ -200,9 +200,7 @@ export default function StudentDetailPage() {
         <StudentProfileFacts student={student} standingUid={student.uid} />
         <AsideLinks items={[...(schaleDbLink ? [schaleDbLink] : []), videoLink]} />
       </PageAside>
-      <div className="contents [&_.v2-action-bar]:!bottom-[68px]">
-        <MobileActionBar links={pathname.endsWith("/grade") ? [] : mobileLinks} />
-      </div>
+      <MobileActionBar links={pathname.endsWith("/grade") ? [] : mobileLinks} />
       <PageMain>
         <Outlet context={loaderData satisfies StudentDetailPageContext} />
       </PageMain>
