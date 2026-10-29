@@ -975,26 +975,29 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 }
 
 @container page-available (width < 48rem) {
-  .v2-chat-root {
-    min-height: calc(100dvh - 8rem);
-  }
+  /* The fixed composer is for the bottom-navigation layout; at lg the stacked page keeps it in the content column. */
+  @media (max-width: 1023px) {
+    .v2-chat-root {
+      min-height: calc(100dvh - 8rem);
+    }
 
-  .v2-chat-composer {
-    position: fixed;
-    bottom: var(--mobile-nav-height);
-    left: var(--v2-gutter);
-    width: min(48rem, calc(100vw - var(--v2-gutter) - var(--v2-gutter)));
-    padding-bottom: 0.5rem;
-  }
+    .v2-chat-composer {
+      position: fixed;
+      bottom: var(--mobile-nav-height);
+      left: var(--v2-gutter);
+      width: min(48rem, calc(100vw - var(--v2-gutter) - var(--v2-gutter)));
+      padding-bottom: 0.5rem;
+    }
 
-  .v2-chat-turn-list {
-    padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
-  }
+    .v2-chat-turn-list {
+      padding-bottom: calc(var(--question-composer-height) + var(--mobile-nav-height) + 1rem);
+    }
 
-  .v2-chat-latest-turn {
-    min-height: calc(
-      100dvh - var(--question-composer-height) - var(--mobile-nav-height) - var(--spacing-v2-row-min) - 1rem
-    );
+    .v2-chat-latest-turn {
+      min-height: calc(
+        100dvh - var(--question-composer-height) - var(--mobile-nav-height) - var(--spacing-v2-row-min) - 1rem
+      );
+    }
   }
 
   .v2-chat-new-conversation-wide {

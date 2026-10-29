@@ -17,7 +17,7 @@ export type QuestionServiceCall =
   | { ok: true; result: QuestionRunResult }
   | { ok: false; reason: "unavailable" | "unexpected_result" };
 
-const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member"]);
+const sourceKinds = new Set<SourceKind>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const answerStatuses = new Set<AnswerStatus>(["answered", "needs_clarification", "insufficient_evidence"]);
 const failureCodes = new Set<FailureCode>([
   "invalid_request",

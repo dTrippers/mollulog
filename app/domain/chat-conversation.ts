@@ -89,7 +89,7 @@ export type ChatMessageOutcome =
 
 const answerStatuses = new Set<string>(["answered", "needs_clarification", "insufficient_evidence"]);
 const messageStatuses = new Set<string>(["pending", "failed", ...answerStatuses]);
-const sourceKinds = new Set<string>(["knowledge", "student", "schedule", "raid_stats", "member"]);
+const sourceKinds = new Set<string>(["knowledge", "student", "schedule", "raid_stats", "member", "content"]);
 const messageFailureCodes = new Set<string>([
   "service_unavailable",
   "invalid_request",

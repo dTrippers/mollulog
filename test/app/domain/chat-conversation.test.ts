@@ -142,7 +142,10 @@ describe("stored value parsers", () => {
   it("accepts stored answers, statuses, and failure codes", () => {
     const answer = {
       text: "Answer",
-      sources: [{ sourceId: "s1", kind: "student", label: "미카" }],
+      sources: [
+        { sourceId: "s1", kind: "student", label: "미카" },
+        { sourceId: "c1", kind: "content", label: "이벤트 보상" },
+      ],
       limitations: ["한계"],
     };
     expect(parseChatAnswer(answer)).toEqual(answer);

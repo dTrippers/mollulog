@@ -42,7 +42,7 @@ export const REQUEST_LIMITS = {
 } as const;
 
 export type AnswerStatus = "answered" | "needs_clarification" | "insufficient_evidence";
-export type SourceKind = "knowledge" | "student" | "schedule" | "raid_stats" | "member";
+export type SourceKind = "knowledge" | "student" | "schedule" | "raid_stats" | "member" | "content";
 export type SourceSubject = { type: "student"; uid: string } | { type: "raid_boss"; boss: string };
 export type AnswerSource = { sourceId: string; kind: SourceKind; label: string; subject?: SourceSubject };
 export type QuestionRunEvent =
