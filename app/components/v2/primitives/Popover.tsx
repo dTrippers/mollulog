@@ -1,5 +1,5 @@
 import { Portal, Transition } from "@headlessui/react";
-import { type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { type PointerEvent, type ReactNode, type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { getPopoverPosition, type PopoverPosition } from "./popover-position";
 
@@ -16,6 +16,9 @@ export type PopoverProps = {
   placement?: "auto" | "above";
   // When enabled, focus the panel if it contains no enabled button or link.
   focusPanelIfNoFocusable?: boolean;
+  // For a caller that keeps the panel open while the pointer rests on it.
+  onPanelPointerEnter?: (event: PointerEvent<HTMLDivElement>) => void;
+  onPanelPointerLeave?: (event: PointerEvent<HTMLDivElement>) => void;
   className?: string;
   children: ReactNode;
 };
@@ -42,6 +45,8 @@ export function Popover({
   anchorRef,
   placement: placementMode = "auto",
   focusPanelIfNoFocusable = false,
+  onPanelPointerEnter,
+  onPanelPointerLeave,
   className,
   children,
 }: PopoverProps) {
@@ -121,7 +126,7 @@ export function Popover({
         returnFocusRef.current?.focus();
       }
     };
-    const handlePointerDown = (event: PointerEvent) => {
+    const handlePointerDown = (event: globalThis.PointerEvent) => {
       const target = event.target as Node;
       // A press on the trigger or anywhere in the anchor is not outside, so it does not close and reopen the panel.
       if (
@@ -158,6 +163,8 @@ export function Popover({
           aria-label={label}
           tabIndex={-1}
           data-placement={placement}
+          onPointerEnter={onPanelPointerEnter}
+          onPointerLeave={onPanelPointerLeave}
           style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
           className={cn(
             "fixed z-30 w-72 rounded-lg bg-v2-popover-surface p-v2-block-p shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm",

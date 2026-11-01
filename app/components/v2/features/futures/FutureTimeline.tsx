@@ -24,6 +24,11 @@ import {
   isOngoingFutureContent,
   selectFutureMediaSource,
 } from "~/domain/futures/futures-view-model";
+import {
+  FREE_RECRUITMENT_NOTICE,
+  isPickupUnavailableRecruitment,
+  PICKUP_UNAVAILABLE_NOTICE,
+} from "~/domain/recruitment-notice";
 import { formatInstant, formatInstantDateKey, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import {
@@ -37,6 +42,7 @@ import {
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
+import { HintChip } from "../../primitives/HintChip";
 import { StudentSlot } from "../students/StudentSlot";
 import { ContentMedia } from "./ContentMedia";
 import { ContentHighlightOverlay } from "./FeaturedContentBanner";
@@ -348,6 +354,7 @@ function SpecialCaseChip({ specialCase }: { specialCase: FutureSpecialCase }) {
           <StarIcon className="size-3.5" aria-hidden="true" />
           100회 무료
         </span>
+        <HintChip {...FREE_RECRUITMENT_NOTICE} />
       </MetaSeparatorAnd>
     );
   }
@@ -467,6 +474,7 @@ function RecruitmentStudents({
               {others.length > 0 ? (
                 <StudentBlock
                   label={pickups.length > 0 ? "픽업 외 모집 가능" : null}
+                  showPickupUnavailableNotice={others.some(isPickupUnavailableRecruitment)}
                   entries={others}
                   signedIn={signedIn}
                   openKey={openKey}
@@ -483,12 +491,14 @@ function RecruitmentStudents({
 
 function StudentBlock({
   label,
+  showPickupUnavailableNotice = false,
   entries,
   signedIn,
   openKey,
   onOpenKeyChange,
 }: {
   label: string | null;
+  showPickupUnavailableNotice?: boolean;
   entries: FutureViewContent["students"];
   signedIn: boolean;
   openKey: string | null;
@@ -496,7 +506,12 @@ function StudentBlock({
 }) {
   return (
     <div className="space-y-2">
-      {label ? <p className="text-xs text-v2-fg-tertiary">{label}</p> : null}
+      {label || showPickupUnavailableNotice ? (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {label ? <p className="text-xs text-v2-fg-tertiary">{label}</p> : null}
+          {showPickupUnavailableNotice ? <HintChip {...PICKUP_UNAVAILABLE_NOTICE} /> : null}
+        </div>
+      ) : null}
       <ul className="flex flex-wrap gap-x-2 gap-y-3 md:gap-3">
         {entries.map((entry) => (
           <li key={entry.favoriteKey} className="shrink-0">

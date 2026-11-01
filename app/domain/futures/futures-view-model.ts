@@ -1,4 +1,5 @@
 import { raidTypeToParam } from "~/domain/raid";
+import { isFreeRecruitmentAvailable } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind, type RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import {
   formatInstant,
@@ -268,10 +269,7 @@ export function getFutureSpecialCases({
   timeZone: string;
 }): FutureSpecialCase[] {
   const cases: FutureSpecialCase[] = [];
-  if (
-    tags.includes("recruit_free_100") &&
-    recruitments.every((recruitment) => recruitment.until !== null && isInstantAfter(recruitment.until, now))
-  ) {
+  if (isFreeRecruitmentAvailable({ tags, recruitments, now })) {
     cases.push({ kind: "perk-free-100" });
   }
 

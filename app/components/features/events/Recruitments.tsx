@@ -5,7 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useFetcher } from "react-router";
 import { AttributeBadge, HorizontalScroll, SubTitle } from "~/components/primitives";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { HintChip } from "~/components/v2/primitives/HintChip";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import {
+  FREE_RECRUITMENT_NOTICE,
+  isPickupUnavailableRecruitment,
+  PICKUP_UNAVAILABLE_NOTICE,
+} from "~/domain/recruitment-notice";
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
@@ -43,6 +49,7 @@ export type Recruitment = {
 type RecruitmentsProps = {
   recruitments: Recruitment[];
   signedIn: boolean;
+  freeRecruitmentAvailable?: boolean;
 };
 
 type ActionData = {
@@ -115,7 +122,7 @@ function RecruitmentFavoriteButton({
   );
 }
 
-export default function Recruitments({ recruitments, signedIn }: RecruitmentsProps) {
+export default function Recruitments({ recruitments, signedIn, freeRecruitmentAvailable = false }: RecruitmentsProps) {
   const displayTimeZone = useDisplayTimeZone();
   const groups = useMemo(() => {
     const pickupRecruitments = recruitments.filter(
@@ -140,11 +147,20 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
   }, [displayTimeZone, recruitments]);
 
   const limitedRecruitments = useMemo(
-    () => recruitments.filter(({ pickup, recruitmentType }) => !pickup && recruitmentType !== "given"),
+    () => recruitments.filter(isPickupUnavailableRecruitment),
     [recruitments],
   );
 
   const showDateLabels = groups.length > 1;
+  const freeRecruitmentNotice = freeRecruitmentAvailable ? (
+    <span className="inline-flex flex-wrap items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-perk">
+        <StarIcon className="size-3.5" aria-hidden="true" />
+        100회 무료
+      </span>
+      <HintChip {...FREE_RECRUITMENT_NOTICE} />
+    </span>
+  ) : null;
 
   if (groups.length === 0 && limitedRecruitments.length === 0) {
     return null;
@@ -154,7 +170,7 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
     <>
       {groups.length > 0 && (
         <>
-          <SubTitle text="모집 학생" />
+          <SubTitle text="모집 학생" aside={freeRecruitmentNotice} />
           {recruitments.some(({ recruitmentType }) => recruitmentType === "fes") && (
             <EventInfoCard
               Icon={StarIcon}
@@ -209,7 +225,15 @@ export default function Recruitments({ recruitments, signedIn }: RecruitmentsPro
 
       {limitedRecruitments.length > 0 && (
         <>
-          <SubTitle text="기간 한정 모집 학생" />
+          <SubTitle
+            text="픽업 외 모집 가능"
+            aside={
+              <>
+                {groups.length === 0 ? freeRecruitmentNotice : null}
+                <HintChip {...PICKUP_UNAVAILABLE_NOTICE} />
+              </>
+            }
+          />
           <EventInfoCard
             Icon={XCircleIcon}
             title="모집 포인트(천장) 교환 불가"

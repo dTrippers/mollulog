@@ -6,6 +6,7 @@ import { EventHeader, EventInfoCard, Recruitments } from "~/components/features/
 import { Callout, MarkdownText, SectionCard } from "~/components/primitives";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
+import { isFreeRecruitmentAvailable } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNotice } from "~/domain/recruitment-period-notice";
 import { formatInstant, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { captureServerError, getLogger } from "~/lib/observability.server";
@@ -111,6 +112,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   return {
     eventContent: { ...eventContent, recruitments: recruitmentsWithFavorites },
+    freeRecruitmentAvailable: isFreeRecruitmentAvailable({
+      tags: content.tags,
+      recruitments: recruitmentsWithFavorites,
+      now: nowUtcIso(),
+    }),
     signedIn: currentUser !== null,
     hideRecruitmentOpinions,
     canFilterRecruitmentOpinions,
@@ -182,6 +188,7 @@ export const handle = { ownsOpenGraphImage: true } as const;
 export default function EventIndex() {
   const {
     eventContent,
+    freeRecruitmentAvailable,
     signedIn,
     hideRecruitmentOpinions,
     canFilterRecruitmentOpinions,
@@ -251,7 +258,11 @@ export default function EventIndex() {
       ))}
 
       {eventContent.recruitments.length > 0 && (
-        <Recruitments recruitments={eventContent.recruitments} signedIn={signedIn} />
+        <Recruitments
+          recruitments={eventContent.recruitments}
+          signedIn={signedIn}
+          freeRecruitmentAvailable={freeRecruitmentAvailable}
+        />
       )}
 
       {isLive && (
