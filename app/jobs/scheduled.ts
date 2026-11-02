@@ -16,11 +16,16 @@ import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
 import { getAllStudents, getStudentSkillItemsBatch, syncRawStudents } from "~/models/student";
 import { syncStudentDirectory } from "~/models/student-directory";
+import { syncTimelineContentsFromSources } from "~/models/timeline-auto-sync.server";
 import { syncAllTimelineContentsMeta } from "~/models/timeline-content.server";
 import { syncYoutubeCommunityPosts } from "~/models/youtube";
 import { warmActiveUpcomingEventContent } from "~/views/events";
 
-type ScheduledJobName = "maintainOcrJobs" | "syncYoutubeCommunityPosts" | "refreshSourceCaches";
+type ScheduledJobName =
+  | "maintainOcrJobs"
+  | "syncYoutubeCommunityPosts"
+  | "refreshSourceCaches"
+  | "syncTimelineContents";
 
 type ScheduledJob = {
   name: ScheduledJobName;
@@ -43,6 +48,13 @@ const SOURCE_FORCED_REFRESH_MARKER_KEY = cacheKey(
   "cron-source-refresh",
   1,
   cacheQuery({ name: "baql-sources" }),
+);
+const TIMELINE_AUTO_SYNC_WINDOW_SECONDS = 60 * 60;
+const TIMELINE_AUTO_SYNC_MARKER_KEY = cacheKey(
+  "source",
+  "cron-timeline-auto-sync",
+  1,
+  cacheQuery({ name: "timeline-contents" }),
 );
 
 async function runSourceRefreshTasks(tasks: Array<() => Promise<unknown>>, errorMessage: string): Promise<void> {
@@ -124,6 +136,16 @@ async function refreshSourceCaches(env: Env, ctx?: ExecutionContext): Promise<vo
   await runSourceRefreshTasks(tasks, "One or more source cache refresh tasks failed");
 }
 
+async function syncTimelineContentsHourly(env: Env, ctx?: ExecutionContext): Promise<void> {
+  if (await isKvCacheWindowFresh(env, TIMELINE_AUTO_SYNC_MARKER_KEY, TIMELINE_AUTO_SYNC_WINDOW_SECONDS)) {
+    return;
+  }
+
+  // A failed run leaves no marker, so the next 10-minute cron retries it.
+  await syncTimelineContentsFromSources(env, ctx);
+  await markKvCacheWindow(env, TIMELINE_AUTO_SYNC_MARKER_KEY);
+}
+
 export async function runScheduledJobs(
   env: Env,
   ctx?: ExecutionContext,
@@ -144,6 +166,7 @@ export async function runScheduledJobs(
       : [
           { name: "syncYoutubeCommunityPosts", run: () => syncYoutubeCommunityPosts(env, ctx) },
           { name: "refreshSourceCaches", run: () => refreshSourceCaches(env, ctx) },
+          { name: "syncTimelineContents", run: () => syncTimelineContentsHourly(env, ctx) },
         ];
 
   const results = await Promise.allSettled(

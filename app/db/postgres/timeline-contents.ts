@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgTimelineContentsTable } from "~/db/postgres/schema";
 import {
@@ -7,6 +7,7 @@ import {
   type TimelineContentType,
   toTimelineContent,
 } from "~/domain/timeline-content";
+import type { TimelineAutoSyncExistingRow, TimelineAutoSyncPlan } from "~/domain/timeline-auto-sync";
 import { normalizeTimelineContentNames } from "~/domain/timeline-content-name-i18n";
 import { normalizeInstant, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
@@ -361,5 +362,101 @@ export async function getPostgresAllTimelineContentsMeta(
           .orderBy(asc(pgTimelineContentsTable.startAt), asc(pgTimelineContentsTable.uid)),
       options,
     ),
+  );
+}
+
+/** Rows the auto sync must compare against: the candidates by uid, and future rows the source may have dropped. */
+export async function getPostgresTimelineAutoSyncRows(
+  env: Pick<Env, "HYPERDRIVE">,
+  contentType: TimelineContentType,
+  candidateUids: readonly string[],
+  now: UtcIsoString,
+  options: PostgresTimelineContentsOptions = {},
+): Promise<TimelineAutoSyncExistingRow[]> {
+  const futureRows = and(
+    eq(pgTimelineContentsTable.contentType, contentType),
+    gt(pgTimelineContentsTable.startAt, new Date(now)),
+  );
+  const rows = await selectRows(
+    env,
+    "get_auto_sync_rows",
+    (db) =>
+      db
+        .select({
+          uid: pgTimelineContentsTable.uid,
+          contentType: pgTimelineContentsTable.contentType,
+          contentUid: pgTimelineContentsTable.contentUid,
+          startAt: pgTimelineContentsTable.startAt,
+          endAt: pgTimelineContentsTable.endAt,
+          endless: pgTimelineContentsTable.endless,
+        })
+        .from(pgTimelineContentsTable)
+        .where(
+          candidateUids.length > 0
+            ? or(inArray(pgTimelineContentsTable.uid, [...candidateUids]), futureRows)
+            : futureRows,
+        ),
+    options,
+  );
+  return rows.map((row) => ({
+    ...row,
+    startAt: normalizePostgresInstant(row.startAt),
+    endAt: row.endAt ? normalizePostgresInstant(row.endAt) : null,
+  }));
+}
+
+export async function applyPostgresTimelineAutoSyncPlan(
+  env: Pick<Env, "HYPERDRIVE">,
+  plan: Pick<TimelineAutoSyncPlan, "creates" | "updates">,
+  now: UtcIsoString,
+  options: PostgresTimelineContentsOptions = {},
+): Promise<void> {
+  if (plan.creates.length === 0 && plan.updates.length === 0) return;
+
+  const { ctx, createClient = createPostgresClient } = options;
+  const syncedAt = new Date(now);
+  await withPostgresClient(
+    env,
+    (client) =>
+      drizzle(client).transaction(async (tx) => {
+        if (plan.creates.length > 0) {
+          await tx
+            .insert(pgTimelineContentsTable)
+            .values(
+              plan.creates.map((row) => ({
+                uid: row.uid,
+                contentType: row.contentType,
+                contentUid: row.contentUid,
+                runType: row.runType,
+                occurrence: row.occurrence,
+                nameI18n: row.nameI18n,
+                startAt: new Date(row.startAt),
+                endAt: row.endAt ? new Date(row.endAt) : null,
+                endless: row.endless,
+                confirmed: row.confirmed,
+                syncedAt,
+                createdAt: syncedAt,
+                updatedAt: syncedAt,
+              })),
+            )
+            // An admin may create the same uid between the read and this write; their row wins.
+            .onConflictDoNothing({ target: pgTimelineContentsTable.uid });
+        }
+
+        for (const row of plan.updates) {
+          await tx
+            .update(pgTimelineContentsTable)
+            .set({
+              startAt: new Date(row.startAt),
+              endAt: row.endAt ? new Date(row.endAt) : null,
+              endless: row.endless,
+              syncedAt,
+              updatedAt: syncedAt,
+            })
+            .where(eq(pgTimelineContentsTable.uid, row.uid));
+        }
+      }),
+    createClient,
+    ctx,
   );
 }
