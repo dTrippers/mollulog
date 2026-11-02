@@ -4,13 +4,15 @@ import { runQuery } from "~/lib/baql";
 import { toUtcIso } from "~/lib/date-time";
 import { syncTimelineContentsFromSources, type TimelineAutoSyncSource } from "~/models/timeline-auto-sync.server";
 
+const mockLoggerError = jest.fn();
+
 jest.mock("~/db/postgres/timeline-contents", () => ({
   applyPostgresTimelineAutoSyncPlan: jest.fn(),
   getPostgresTimelineAutoSyncRows: jest.fn(),
 }));
 jest.mock("~/lib/baql", () => ({ runQuery: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({
-  getLogger: jest.fn(() => ({ info: jest.fn(), error: jest.fn() })),
+  getLogger: jest.fn(() => ({ info: jest.fn(), error: mockLoggerError })),
 }));
 
 const mockedRunQuery = runQuery as unknown as jest.Mock<(...args: unknown[]) => Promise<unknown>>;
@@ -64,6 +66,13 @@ describe("syncTimelineContentsFromSources", () => {
 
     const plan = mockedApply.mock.calls[0]?.[1];
     expect(plan?.creates.map((row) => row.uid)).toEqual(["campaign-20991103"]);
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "Timeline auto sync rejected source items",
+      expect.objectContaining({
+        message: expect.stringContaining("20991104 (unknown campaign category: new_category)"),
+      }),
+      { contentType: "campaign" },
+    );
   });
 
   it("writes nothing and fails the run when BAQL fails", async () => {
@@ -72,6 +81,11 @@ describe("syncTimelineContentsFromSources", () => {
     await expect(syncTimelineContentsFromSources(env)).rejects.toThrow(AggregateError);
 
     expect(mockedApply).not.toHaveBeenCalled();
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      "Timeline auto sync source failed",
+      expect.objectContaining({ message: "baql down" }),
+      { contentType: "campaign" },
+    );
   });
 
   it("keeps running the remaining sources after one fails", async () => {

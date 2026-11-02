@@ -111,11 +111,15 @@ export async function syncTimelineContentsFromSources(
       });
 
       if (rejected.length > 0) {
-        errors.push(
-          new Error(`${source.contentType}: ${rejected.map((r) => `${r.contentUid} (${r.reason})`).join(", ")}`),
+        const rejectedError = new Error(
+          `${source.contentType}: ${rejected.map((r) => `${r.contentUid} (${r.reason})`).join(", ")}`,
         );
+        logger.error("Timeline auto sync rejected source items", rejectedError, { contentType: source.contentType });
+        errors.push(rejectedError);
       }
     } catch (error) {
+      // Log here because the logging serializer drops AggregateError.errors.
+      logger.error("Timeline auto sync source failed", error, { contentType: source.contentType });
       errors.push(error);
     }
   }
