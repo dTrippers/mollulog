@@ -1,13 +1,13 @@
 import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lte, ne, or } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgTimelineContentsTable } from "~/db/postgres/schema";
+import type { TimelineAutoSyncExistingRow, TimelineAutoSyncPlan } from "~/domain/timeline-auto-sync";
 import {
   type RunType,
   type TimelineContent,
   type TimelineContentType,
   toTimelineContent,
 } from "~/domain/timeline-content";
-import type { TimelineAutoSyncExistingRow, TimelineAutoSyncPlan } from "~/domain/timeline-auto-sync";
 import { normalizeTimelineContentNames } from "~/domain/timeline-content-name-i18n";
 import { normalizeInstant, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { createPostgresClient, type PostgresClientFactory, withPostgresClient } from "~/lib/postgres.server";
