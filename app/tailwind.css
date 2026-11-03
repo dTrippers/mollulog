@@ -52,7 +52,6 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 @custom-variant hover (&:hover);
-@custom-variant pointer-coarse (@media (pointer: coarse));
 
 @theme {
   --font-*: initial;
@@ -733,17 +732,6 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   :root {
     --spacing-v2-block-p: 0.875rem;
     --spacing-v2-block-gap: 0.5rem;
-    --spacing-v2-row-min: 2.75rem;
-    --spacing-v2-control-min: 2.5rem;
-    --spacing-v2-input-min: 2.25rem;
-  }
-}
-
-@media (pointer: coarse) {
-  :root {
-    --spacing-v2-row-min: 2.75rem;
-    --spacing-v2-control-min: 2.5rem;
-    --spacing-v2-input-min: 2.25rem;
   }
 }
 
@@ -1011,6 +999,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     margin-inline: calc(var(--v2-gutter) * -1);
     margin-bottom: var(--spacing-v2-block-gap);
     padding-inline: 0;
+  }
+
+  .v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar]) {
+    padding-block: var(--spacing-v2-block-gap);
   }
 
   /* The toolbar is full-bleed. The list padding keeps the first and last tab at the content edge when at rest. */

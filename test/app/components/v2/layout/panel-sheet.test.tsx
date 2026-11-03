@@ -3,7 +3,7 @@
  */
 import "./layout-test-polyfills";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, useNavigate } from "react-router";
 import {
   MobileActionBar,
@@ -95,6 +95,26 @@ function HeaderActionHarness({ withAction }: { withAction: boolean }) {
   );
 }
 
+function SheetDescriptionHarness({ request }: { request: V2PanelRequest }) {
+  return (
+    <V2Page width="wide" panelRequest={request}>
+      <PageHeader title="학생부" />
+      <PageMain>본문</PageMain>
+      <PageAside>
+        <PanelSheet
+          panelId="filter"
+          title="필터"
+          Icon={Icon}
+          description="Aside 설명"
+          sheetDescription="Sheet 설명"
+        >
+          <span>필터 본문</span>
+        </PanelSheet>
+      </PageAside>
+    </V2Page>
+  );
+}
+
 describe("PanelSheet", () => {
   beforeEach(() => {
     installLayoutTestEnv();
@@ -106,6 +126,7 @@ describe("PanelSheet", () => {
     const toggle = screen.getByRole("button", { name: "표시 설정" });
 
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(toggle.className).toContain("active:bg-v2-filled-hover");
     expect(screen.queryByText("표시 설정 본문")).toBeNull();
 
     fireEvent.click(toggle);
@@ -141,6 +162,15 @@ describe("PanelSheet", () => {
 
     expect(await screen.findByRole("dialog", { name: "컨텐츠 필터" })).toBeTruthy();
     await waitFor(() => expect(document.activeElement?.textContent).toBe("컨텐츠 필터"));
+  });
+
+  it("uses the sheet-specific description in the mobile sheet", async () => {
+    setLayoutWidth(390);
+    renderHarness(<SheetDescriptionHarness request={{ panelId: "filter", requestId: 1 }} />);
+
+    const dialog = await screen.findByRole("dialog", { name: "필터" });
+    expect(within(dialog).getByText("Sheet 설명")).toBeTruthy();
+    expect(within(dialog).queryByText("Aside 설명")).toBeNull();
   });
 
   it("keeps one body instance while the stacked sheet is open", async () => {

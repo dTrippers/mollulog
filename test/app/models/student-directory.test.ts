@@ -19,6 +19,7 @@ function rawStudent(overrides: Record<string, unknown> = {}) {
     school: "millennium",
     initialTier: 3,
     order: 10,
+    releaseAt: null,
     attackType: "explosive",
     defenseType: "light",
     position: "front",
@@ -44,11 +45,26 @@ describe("student directory source", () => {
         uid: "student-a",
         familyName: "성",
         altNames: ["별칭"],
+        releaseAt: null,
         catalog: {
           profile: { age: "17세", schoolYear: "2학년", height: "159.7cm" },
           terrainAdaptations: { street: "SS", outdoor: "A", indoor: "B" },
         },
       }),
+    ]);
+  });
+
+  it.each([
+    ["wire string", "2025-03-07T15:30:00.000Z"],
+    ["Date", new Date("2025-03-07T15:30:00.000Z")],
+  ])("normalizes a BAQL release timestamp supplied as a %s to UTC ISO", async (_shape, releaseAt) => {
+    mockedRunQuery.mockResolvedValueOnce({
+      data: { students: [rawStudent({ releaseAt })] },
+      error: undefined,
+    } as never);
+
+    await expect(getStudentDirectoryStudents(env, true)).resolves.toEqual([
+      expect.objectContaining({ releaseAt: "2025-03-07T15:30:00.000Z" }),
     ]);
   });
 

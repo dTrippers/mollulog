@@ -1,6 +1,8 @@
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
+import { Link } from "react-router";
 import type { FavoriteLabelState } from "~/domain/futures/futures-view-model";
 import { cn } from "~/lib/utils";
+import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { FavoriteLabel } from "./FavoriteLabel";
 import StudentPortrait from "./StudentPortrait";
 
@@ -9,10 +11,10 @@ export type StudentThumbProps = {
   studentUid: string | null;
   name: string;
   variant: string | null;
-  recruitmentLabel: string;
+  recruitmentLabel?: string;
   // True for a new (non-rerun) recruitment, which the label marks in the accent color.
-  isNew: boolean;
-  favorite: FavoriteLabelState;
+  isNew?: boolean;
+  favorite?: FavoriteLabelState;
   personalStatePending?: boolean;
   // Clicking opens the quick panel. Hover and focus styling belong to the button. Without it the thumbnail is not interactive:
   // it has no button role and cannot take focus.
@@ -22,14 +24,28 @@ export type StudentThumbProps = {
   compact?: boolean;
   // A portrait beside its name, such as a completion list row (24px wide).
   small?: boolean;
-  // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default keeps the 60px thumbnail.
+  // The home's portraits: 70px wide (84px tall) on mobile and 88px from the md breakpoint. The default is 56px wide on mobile and 64px from the sm breakpoint.
   large?: boolean;
+  // One step above the default on wider screens for a browsing grid: the default 56px on mobile and 80px from the sm breakpoint.
+  relaxed?: boolean;
+  // Scales the linked or clickable thumbnail to 105% on hover with a fine pointer, as the 1.x student cards did.
+  hoverScale?: boolean;
   // False hides the name and variant below the image, for layouts that show the name beside the portrait.
   showCaption?: boolean;
   showRecruitmentLabel?: boolean;
+  // The student detail header portrait keeps the 60px width of its approved layout.
+  headerPortrait?: boolean;
+  // Internal route link for a directory card. Links prefetch on intent and use the forward transition.
+  linkTo?: string;
+  // A directory's sort or display value replaces the recruitment label in the scrim.
+  scrimLabel?: ReactNode;
+  scrimAriaLabel?: string;
 };
 
 // Student thumbnail: a 5:6 image with a label band at the bottom, a favorite label on the top edge, and the name below.
+const hoverScaleClassName =
+  "motion-safe:transition-transform motion-safe:duration-v2-fast motion-safe:ease-v2-standard [@media(hover:hover)_and_(pointer:fine)]:hover:scale-105";
+
 export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(function StudentThumb(
   {
     studentUid,
@@ -44,15 +60,24 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     compact = false,
     small = false,
     large = false,
+    relaxed = false,
+    hoverScale = false,
     showCaption = true,
     showRecruitmentLabel = true,
+    headerPortrait = false,
+    linkTo,
+    scrimLabel,
+    scrimAriaLabel,
   },
   ref,
 ) {
   // The button's aria-label replaces the names of its children, so the favorite label's count and own state join the
   // button's own name. A hidden label (no count, no own state) adds nothing.
   const detailName = `${name}${variant ? `(${variant})` : ""} 상세`;
-  const accessibleName = favorite.visible ? `${detailName}, ${favorite.accessibleName}` : detailName;
+  const accessibleName = [detailName, scrimAriaLabel, favorite?.visible ? favorite.accessibleName : null]
+    .filter(Boolean)
+    .join(", ");
+  const showBand = scrimLabel != null || (showRecruitmentLabel && !!recruitmentLabel);
   const frameClassName = "relative block aspect-[5/6] w-full overflow-hidden rounded-md bg-v2-inset";
   const frame = (
     <>
@@ -60,33 +85,61 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         uid={studentUid ?? "unlisted"}
         className={
           // The placeholder icon fills the width of the area above the label band (18px tall), centered vertically.
-          studentUid === null && showRecruitmentLabel
+          studentUid === null && showBand
             ? "absolute inset-x-0 top-0 h-[calc(100%-1.125rem)] w-full object-cover"
             : "size-full object-cover"
         }
-        haloAboveBand={showRecruitmentLabel}
+        haloAboveBand={showBand}
         haloScale="72%"
       />
-      {showRecruitmentLabel ? (
+      {showBand ? (
         <span
           aria-hidden="true"
           className="absolute inset-x-0 bottom-0 flex items-center justify-center bg-v2-scrim px-0.5 py-px text-[0.6875rem] leading-4 font-semibold whitespace-nowrap text-v2-on-media"
         >
-          <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>
+          {scrimLabel ?? <span className={cn(isNew && "text-v2-new")}>{recruitmentLabel}</span>}
         </span>
       ) : null}
-      <FavoriteLabel state={favorite} personalStatePending={personalStatePending} />
+      {favorite ? <FavoriteLabel state={favorite} personalStatePending={personalStatePending} /> : null}
     </>
   );
+  const caption = showCaption ? (
+    <>
+      <span
+        className={cn(
+          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
+          large ? "mt-0.5 md:mt-1" : "mt-1",
+        )}
+      >
+        {name}
+      </span>
+      {variant ? (
+        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
+          {variant}
+        </span>
+      ) : null}
+    </>
+  ) : null;
 
   return (
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        large ? "w-[4.375rem] md:w-[5.5rem]" : small ? "w-6" : compact ? "w-9" : "w-[3.75rem]",
+        large ? "w-[4.375rem] md:w-[5.5rem]" : relaxed ? "w-14 sm:w-20" : small ? "w-6" : compact ? "w-9" : headerPortrait ? "w-[3.75rem]" : "w-14 sm:w-16",
       )}
     >
-      {onOpen ? (
+      {linkTo ? (
+        <Link
+          to={linkTo}
+          prefetch="intent"
+          aria-label={accessibleName}
+          {...getV2LinkTransitionProps("forward")}
+          className={cn("block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus", hoverScale && hoverScaleClassName)}
+        >
+          <span className={frameClassName}>{frame}</span>
+          {caption}
+        </Link>
+      ) : onOpen ? (
         <button
           ref={ref}
           type="button"
@@ -97,6 +150,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           className={cn(
             frameClassName,
             "cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+            hoverScale && hoverScaleClassName,
           )}
         >
           {frame}
@@ -104,23 +158,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
       ) : (
         <span className={frameClassName}>{frame}</span>
       )}
-      {showCaption ? (
-        <>
-          <span
-            className={cn(
-              "block w-full truncate text-center text-xs leading-4 text-v2-fg",
-              large ? "mt-0.5 md:mt-1" : "mt-1",
-            )}
-          >
-            {name}
-          </span>
-          {variant ? (
-            <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-              {variant}
-            </span>
-          ) : null}
-        </>
-      ) : null}
+      {!linkTo ? caption : null}
     </div>
   );
 });

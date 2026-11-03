@@ -2,52 +2,35 @@ import {
   AdjustmentsHorizontalIcon,
   ChatBubbleLeftRightIcon,
   FunnelIcon,
-  IdentificationIcon,
-  UserIcon,
+  UserGroupIcon,
 } from "@heroicons/react/24/outline";
 import { useMemo } from "react";
 import type { LoaderFunctionArgs, MetaFunction, ShouldRevalidateFunction } from "react-router";
 import { Outlet, useLoaderData, useLocation, useOutletContext } from "react-router";
-import { Page } from "~/components/features/layout";
-import PageLink from "~/components/features/layout/PageLink";
-import {
-  clearStudentDirectoryDisplaySettings,
-  clearStudentFilters,
-  getFilteredStudentUids,
-  getStudentDirectoryDisplaySettingsSummary,
-  hasActiveStudentDirectoryDisplaySettings,
-  hasActiveStudentFilters,
-  STUDENT_DIRECTORY_DISPLAY_VALUES,
-  STUDENT_DIRECTORY_GROUP_VALUES,
-  StudentDirectoryDisplaySettings,
-  default as StudentFilter,
-  trackStudentFilterChanges,
-} from "~/components/features/students/StudentFilter";
-import { readStudentFilterStateFromCookie } from "~/components/features/students/student-filter-cookie";
-import { usePersistentStudentFilterState } from "~/components/features/students/usePersistentStudentFilterState";
-import { Button } from "~/components/primitives";
+import { getActiveSensei } from "~/auth/authenticator.server";
+import { DirectoryFilterPanel } from "~/components/v2/features/students/DirectoryFilterPanel";
+import { Select } from "~/components/v2/primitives/Select";
+import { AsideLinks, MobileActionBar, PageAside, PageHeader, PanelSheet, V2Page } from "~/components/v2/layout";
 import { useSignIn } from "~/contexts/SignInProvider";
+import {
+  filterAndSortStudentDirectory,
+  getStudentDirectoryVisibleState,
+  studentDirectoryDisplayOptions,
+  studentDirectoryGroupOptions,
+  type StudentDirectoryFilterState,
+  type StudentDirectoryPersonalState,
+} from "~/domain/student-directory";
+import { getLogger, captureServerError } from "~/lib/observability.server";
 import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { canonicalLink } from "~/lib/seo";
 import { getStudentDirectoryStudents } from "~/models/student-directory";
+import { loadStudentDirectoryPersonalState } from "~/views/student-directory";
 import type { RootOutletContext } from "~/root";
+import { readStudentDirectoryFilterStateFromCookie } from "./students._components/student-directory-cookie";
+import { useStudentDirectoryFilterState } from "./students._components/use-student-directory-filter-state";
 
 export const STUDENT_FILTER_COOKIE_NAME = "mollulog_students_filter";
 export const STUDENT_FILTER_COOKIE_PATH = "/";
-export const STUDENT_FILTER_SORTS = ["recent", "old", "name", "tier"] as const;
-export const STUDENT_FILTER_GROUPS = STUDENT_DIRECTORY_GROUP_VALUES;
-export const STUDENT_FILTER_DISPLAYS = STUDENT_DIRECTORY_DISPLAY_VALUES;
-
-const studentFilterCookieOptions = {
-  cookieName: STUDENT_FILTER_COOKIE_NAME,
-  cookiePath: STUDENT_FILTER_COOKIE_PATH,
-  defaultSort: "recent",
-  allowedSorts: STUDENT_FILTER_SORTS,
-  defaultGroup: "none",
-  allowedGroups: STUDENT_FILTER_GROUPS,
-  defaultDisplay: "none",
-  allowedDisplays: STUDENT_FILTER_DISPLAYS,
-} as const;
 
 // Only the directory page itself renders the student list, so the loader skips it on the other student pages.
 function needsStudentDirectory(url: URL) {
@@ -55,21 +38,67 @@ function needsStudentDirectory(url: URL) {
 }
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const needsStudentList = needsStudentDirectory(new URL(request.url));
-  const filterState = readStudentFilterStateFromCookie(request.headers.get("Cookie"), studentFilterCookieOptions);
-
-  if (!needsStudentList) {
+  const url = new URL(request.url);
+  if (!needsStudentDirectory(url)) {
     return {
       students: [],
-      filterState,
+      listStatus: "loaded" as const,
+      filterState: readStudentDirectoryFilterStateFromCookie(
+        request.headers.get("Cookie"),
+        STUDENT_FILTER_COOKIE_NAME,
+        [],
+      ),
+      personalState: { status: "signed-out" } as StudentDirectoryPersonalState,
     };
   }
 
-  const env = context.cloudflare.env;
-  const allStudents = await getStudentDirectoryStudents(env, true);
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "students.loader" });
+  const reportFailure = (operation: string, error: unknown) => {
+    const errorContext = { route: "students.loader", operation };
+    logger.error("Failed to load student directory data", error, errorContext);
+    captureServerError(error, errorContext);
+  };
+  const [studentResult, userResult] = await Promise.all([
+    getStudentDirectoryStudents(env, true).then(
+      (students) => ({ status: "loaded" as const, students }),
+      (error: unknown) => {
+        reportFailure("student_list", error);
+        return { status: "failed" as const, students: [] };
+      },
+    ),
+    getActiveSensei(env, request, ctx).then(
+      (user) => ({ status: "loaded" as const, user }),
+      (error: unknown) => {
+        reportFailure("auth", error);
+        return { status: "failed" as const, user: null };
+      },
+    ),
+  ]);
+  const students = studentResult.status === "loaded" ? studentResult.students : [];
+  const filterState = readStudentDirectoryFilterStateFromCookie(
+    request.headers.get("Cookie"),
+    STUDENT_FILTER_COOKIE_NAME,
+    students,
+  );
+  let personalState: StudentDirectoryPersonalState;
+  if (userResult.status === "failed") {
+    personalState = { status: "failed" };
+  } else if (userResult.user === null) {
+    personalState = { status: "signed-out" };
+  } else if (studentResult.status === "failed") {
+    personalState = { status: "failed" };
+  } else {
+    const personalResult = await loadStudentDirectoryPersonalState(env, userResult.user.id, students);
+    personalState = personalResult.state;
+    if (personalResult.error !== undefined) reportFailure("personal_records", personalResult.error);
+  }
+
   return {
-    students: [...allStudents].sort((a, b) => b.order - a.order),
+    students,
+    listStatus: studentResult.status,
     filterState,
+    personalState,
   };
 };
 
@@ -93,120 +122,153 @@ export const meta: MetaFunction = ({ location }) => {
 };
 
 export default function StudentsLayout() {
-  const { filterState: initialFilterState, students } = useLoaderData<typeof loader>();
+  const { students, listStatus, filterState: initialState, personalState } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   const { currentUsername } = useOutletContext<RootOutletContext>();
   const { showSignIn } = useSignIn();
-  const usesStudentsPageLayout = pathname === "/students" || pathname === "/students/gradings";
-  const studentMap = useMemo(() => new Map(students.map((student) => [student.uid, student])), [students]);
-  const [filterState, setFilterState] = usePersistentStudentFilterState({
-    ...studentFilterCookieOptions,
-    initialState: initialFilterState,
-  });
-  const filteredUids = useMemo(() => getFilteredStudentUids(students, filterState), [students, filterState]);
-  const filteredStudents = useMemo(() => {
-    return filteredUids.flatMap((uid) => {
-      const student = studentMap.get(uid);
-      return student ? [student] : [];
-    });
-  }, [studentMap, filteredUids]);
-  useTrackGoogleAnalyticsSearch(filterState.search, "students", filteredStudents.length);
-  const isStudentsIndex = pathname === "/students";
+  const [filterState, setFilterState] = useStudentDirectoryFilterState(
+    STUDENT_FILTER_COOKIE_NAME,
+    initialState,
+    students,
+    listStatus === "loaded",
+  );
+  const visibleState = useMemo(
+    () => getStudentDirectoryVisibleState(filterState, personalState.status),
+    [filterState, personalState.status],
+  );
+  const results = useMemo(
+    () => filterAndSortStudentDirectory(students, visibleState, personalState),
+    [students, visibleState, personalState],
+  );
+  useTrackGoogleAnalyticsSearch(visibleState.search, "students", results.length);
 
-  if (!usesStudentsPageLayout) {
-    return <Outlet />;
-  }
+  if (pathname !== "/students") return <Outlet />;
+
+  const listFailed = listStatus === "failed";
+  const recruitedLink = currentUsername
+    ? { key: "recruited", title: "모집한 학생", Icon: UserGroupIcon, to: `/@${currentUsername}/students` }
+    : { key: "recruited", title: "모집한 학생", Icon: UserGroupIcon, onClick: showSignIn };
 
   return (
-    <Page
-      title="학생부"
-      description="학생들의 프로필과 총력전/대결전 통계, 평가 정보를 확인해보세요"
-      belowTitle={
-        isStudentsIndex ? (
-          <PageLink
-            Icon={UserIcon}
-            title="모집한 학생"
-            description="모집한 학생의 성급과 성장 정보를 관리해요"
-            to={currentUsername ? `/@${currentUsername}/students` : "/unauthorized"}
-            onClick={currentUsername ? undefined : showSignIn}
+    <V2Page width="wide">
+      <PageHeader title="학생부" />
+      <Outlet
+        context={
+          {
+            students,
+            results,
+            listStatus,
+            filterState: visibleState,
+            setFilterState,
+            personalState,
+            onRequestSignIn: showSignIn,
+          } satisfies StudentsPageContext
+        }
+      />
+      <PageAside>
+        <PanelSheet
+          key={`student-directory-filter-${listFailed ? "list-failed" : "list-loaded"}`}
+          panelId="student-directory-filter"
+          title="필터"
+          sheetDescription={listFailed ? undefined : `${results.length}명`}
+          Icon={FunnelIcon}
+          disabled={listFailed}
+        >
+          <DirectoryFilterPanel
+            students={students}
+            state={visibleState}
+            personalStatus={personalState.status}
+            onChange={setFilterState}
+            onRequestSignIn={showSignIn}
           />
-        ) : undefined
-      }
-      panels={
-        isStudentsIndex
-          ? [
-              {
-                title: "필터 및 정렬",
-                description: `${students.length}명 중 ${filteredStudents.length}명 표시 중`,
-                Icon: FunnelIcon,
-                headerAction: hasActiveStudentFilters(filterState) ? (
-                  <Button
-                    text="필터 해제"
-                    size="xs"
-                    variant="danger-subtle"
-                    onClick={() => {
-                      const nextState = clearStudentFilters(filterState);
-                      trackStudentFilterChanges("students", filterState, nextState);
-                      setFilterState(() => nextState);
-                    }}
-                  />
-                ) : undefined,
-                children: (
-                  <StudentFilter
-                    students={students}
-                    state={filterState}
-                    onStateChange={setFilterState}
-                    sortBy={[...STUDENT_FILTER_SORTS]}
-                    useFilter
-                    useSearch
-                    directory
-                  />
-                ),
+        </PanelSheet>
+        <PanelSheet
+          key={`student-directory-display-${listFailed ? "list-failed" : "list-loaded"}`}
+          panelId="student-directory-display"
+          title="표시 설정"
+          Icon={AdjustmentsHorizontalIcon}
+          collapsible
+          disabled={listFailed}
+        >
+          <div className="space-y-2">
+            <div className="flex min-h-v2-row-min items-center justify-between gap-3">
+              <span className="text-sm text-v2-fg-secondary">표시할 정보</span>
+              <Select
+                label="학생 카드에 표시할 정보"
+                value={visibleState.displayBy}
+                options={studentDirectoryDisplayOptions}
+                onChange={(displayBy) => setFilterState((current) => ({ ...current, displayBy }))}
+              />
+            </div>
+            <div className="flex min-h-v2-row-min items-center justify-between gap-3">
+              <span className="text-sm text-v2-fg-secondary">묶어보기</span>
+              <Select
+                label="학생 묶어보기"
+                value={visibleState.groupBy}
+                options={studentDirectoryGroupOptions}
+                onChange={(groupBy) => setFilterState((current) => ({ ...current, groupBy }))}
+              />
+            </div>
+          </div>
+        </PanelSheet>
+        <AsideLinks
+          items={[
+            recruitedLink,
+            {
+              key: "student-reviews",
+              title: "학생 평가 목록",
+              Icon: ChatBubbleLeftRightIcon,
+              to: "/community?type=student_review",
+            },
+          ]}
+        />
+      </PageAside>
+      <MobileActionBar
+        links={[
+          currentUsername
+            ? {
+                key: "recruited",
+                title: "모집한 학생",
+                shortTitle: "모집한 학생",
+                Icon: UserGroupIcon,
+                to: `/@${currentUsername}/students`,
+              }
+            : {
+                key: "recruited",
+                title: "모집한 학생",
+                shortTitle: "모집한 학생",
+                Icon: UserGroupIcon,
+                onClick: showSignIn,
               },
-              {
-                title: "표시 설정",
-                description: getStudentDirectoryDisplaySettingsSummary(filterState),
-                Icon: AdjustmentsHorizontalIcon,
-                headerAction: hasActiveStudentDirectoryDisplaySettings(filterState) ? (
-                  <Button
-                    text="초기화"
-                    size="xs"
-                    variant="danger-subtle"
-                    onClick={() => {
-                      const nextState = clearStudentDirectoryDisplaySettings(filterState);
-                      trackStudentFilterChanges("students", filterState, nextState);
-                      setFilterState(() => nextState);
-                    }}
-                  />
-                ) : undefined,
-                children: <StudentDirectoryDisplaySettings state={filterState} onStateChange={setFilterState} />,
-              },
-            ]
-          : undefined
-      }
-      screens={[
-        {
-          text: "학생 목록",
-          description: "프로필 및 통계 정보",
-          Icon: IdentificationIcon,
-          link: "/students",
-          active: pathname === "/students",
-        },
-        {
-          text: "학생 평가 목록",
-          description: "최근 작성된 학생 평가",
-          Icon: ChatBubbleLeftRightIcon,
-          link: "/community?type=student_review",
-          active: false,
-        },
-      ]}
-    >
-      <Outlet context={{ students: filteredStudents, filterState } satisfies StudentsPageContext} />
-    </Page>
+          {
+            key: "student-reviews",
+            title: "학생 평가 목록",
+            shortTitle: "평가",
+            Icon: ChatBubbleLeftRightIcon,
+            to: "/community?type=student_review",
+          },
+        ]}
+        panels={[
+          { panelId: "student-directory-filter", title: "필터", Icon: FunnelIcon, disabled: listFailed },
+          {
+            panelId: "student-directory-display",
+            title: "표시",
+            shortTitle: "표시",
+            Icon: AdjustmentsHorizontalIcon,
+            disabled: listFailed,
+          },
+        ]}
+      />
+    </V2Page>
   );
 }
 
 export type StudentsPageContext = {
   students: Awaited<ReturnType<typeof loader>>["students"];
-  filterState: Awaited<ReturnType<typeof loader>>["filterState"];
+  results: Awaited<ReturnType<typeof loader>>["students"];
+  listStatus: "loaded" | "failed";
+  filterState: StudentDirectoryFilterState;
+  setFilterState: ReturnType<typeof useStudentDirectoryFilterState>[1];
+  personalState: StudentDirectoryPersonalState;
+  onRequestSignIn: () => void;
 };

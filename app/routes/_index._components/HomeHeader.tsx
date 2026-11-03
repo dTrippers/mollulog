@@ -9,7 +9,7 @@ export function HomeHeader() {
       <h1 className="min-w-0 text-xl font-bold text-v2-fg md:text-2xl">진행 중인 컨텐츠</h1>
       <Link
         to="/futures"
-        className="inline-flex min-h-11 shrink-0 items-center gap-1.5 text-sm font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+        className="inline-flex min-h-v2-row-min shrink-0 items-center gap-1.5 text-sm font-medium text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
       >
         <CalendarDaysIcon aria-hidden="true" className="size-4" />
         전체 일정 (미래시)

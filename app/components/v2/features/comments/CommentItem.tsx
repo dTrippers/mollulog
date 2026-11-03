@@ -80,11 +80,11 @@ export function CommentItem({
       label="수정 취소"
       onClick={onEdit}
       disabled={submitting}
-      className="-my-2 max-lg:-my-3.5"
+      className="-my-2"
     />
   ) : (
     // The buttons center on the name line and overflow it instead of growing it, so the name stays level with the avatar top.
-    <div className="-my-2 flex shrink-0 items-center max-lg:-my-3.5">
+    <div className="-my-2 flex shrink-0 items-center">
       {top && canReply ? (
         <IconButton
           icon={replying ? XMarkIcon : ArrowUturnLeftIcon}

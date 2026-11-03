@@ -64,11 +64,11 @@ describe("PanelAction", () => {
     expect(button.classList.contains("disabled:cursor-not-allowed")).toBe(true);
   });
 
-  it("grows the touch hit area on coarse pointers only", () => {
+  it("keeps the visible action compact on every pointer type", () => {
     render(<PanelAction onClick={() => {}}>모두 보기</PanelAction>);
 
     const button = screen.getByRole("button", { name: "모두 보기" });
-    expect(button.classList.contains("pointer-coarse:before:-inset-y-2")).toBe(true);
+    expect(button.classList.contains("pointer-coarse:before:-inset-y-2")).toBe(false);
     expect(button.classList.contains("h-7")).toBe(true);
   });
 });

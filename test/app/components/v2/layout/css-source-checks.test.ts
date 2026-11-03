@@ -38,6 +38,18 @@ describe("corr-2 layout CSS", () => {
     expect(ruleBody(css, "  .v2-toolbar")).toContain("position: sticky;");
   });
 
+  it("T2: pads the stuck student directory toolbar only in the stacked layout", () => {
+    const selector = '.v2-toolbar[data-sticky="true"]:has([data-student-directory-toolbar])';
+    const rule = css.indexOf(`${selector} {`);
+    const stackedLayout = css.lastIndexOf("@container page-available (width < 48rem) {", rule);
+    const sideBySideLayout = css.lastIndexOf("@container page-available (width >= 48rem) {", rule);
+
+    expect(rule).toBeGreaterThan(-1);
+    expect(stackedLayout).toBeGreaterThan(sideBySideLayout);
+    expect(css.slice(rule, css.indexOf("}", rule))).toContain("padding-block: var(--spacing-v2-block-gap);");
+    expect(css.indexOf(`${selector} {`, rule + 1)).toBe(-1);
+  });
+
   it("T3: forward and reverse move the content area; crossfade names Main and Toolbar only", () => {
     expect(ruleBody(css, ".v2-main")).not.toContain("view-transition-name");
     expect(css).toContain('html[data-v2-transition="forward"] .mllg-content-area:has([data-v2-layout])');
@@ -132,19 +144,33 @@ describe("corr-4 layout motion, spacing, and tab geometry", () => {
     expect(sheetSource).not.toContain("transition-[transform,opacity]");
   });
 
-  it("V2: only the sheet, the popover, and the chevron use translate, scale, or rotate utilities, each with a matching transition", () => {
+  it("V2: only sheets, popovers, dropdown chevrons, select icon alignment, and the opt-in student thumbnail hover use translate, scale, or rotate utilities", () => {
     const componentRoot = join(process.cwd(), "app/components/v2");
     const tsxFiles = readdirSync(componentRoot, { recursive: true, encoding: "utf8" }).filter((file) =>
       file.endsWith(".tsx"),
     );
     const motionUtility = /\b(?:translate|scale|rotate)-/;
     const usingFiles = tsxFiles.filter((file) => motionUtility.test(readFileSync(join(componentRoot, file), "utf8")));
-    expect(usingFiles.sort()).toEqual(["layout/PanelSheet.tsx", "primitives/Popover.tsx", "primitives/Sheet.tsx"]);
-    // Tailwind v4 transition-transform lists translate, scale, and rotate, so the chevron's rotate animates.
+    expect(usingFiles.sort()).toEqual([
+      "features/students/FilterGroupDisclosure.tsx",
+      "features/students/StudentThumb.tsx",
+      "layout/PanelSheet.tsx",
+      "primitives/Popover.tsx",
+      "primitives/Select.tsx",
+      "primitives/Sheet.tsx",
+    ]);
+    // Tailwind v4 transition-transform lists translate, scale, and rotate, so both chevrons rotate safely.
     expect(panelSource).toContain(
       '"size-4 shrink-0 text-v2-fg-tertiary motion-safe:transition-transform duration-v2-base ease-v2-standard"',
     );
     expect(panelSource).toContain('phase === "open" && "rotate-180"');
+    const directoryDisclosureSource = readFileSync(
+      join(componentRoot, "features/students/FilterGroupDisclosure.tsx"),
+      "utf8",
+    );
+    expect(directoryDisclosureSource).toContain("motion-safe:transition-transform");
+    expect(directoryDisclosureSource).toContain('expanded && "rotate-180"');
+    expect(readFileSync(join(componentRoot, "primitives/Select.tsx"), "utf8")).toContain("-translate-y-1/2");
     // The popover's scale and slide run only under motion-safe, so reduced motion gets the opacity fade alone.
     const popoverSource = readFileSync(join(componentRoot, "primitives/Popover.tsx"), "utf8");
     const popoverMotionClasses = popoverSource.match(/\S*(?:translate|scale|rotate)-\S+/g) ?? [];
@@ -211,8 +237,9 @@ describe("corr-5 control border token, docs, and gutter comment", () => {
 
   it("W3: the timeline hint and the sheet tutorial share one one-line hint with no box and no Button primitive", () => {
     const hint = readFileSync(join(process.cwd(), "app/components/v2/features/feature-hint.tsx"), "utf8");
-    expect(hint).toContain("pointer-coarse:min-h-11");
-    expect(hint).toContain("pointer-coarse:before:-inset-y-2");
+    expect(hint).not.toContain("pointer-coarse:");
+    expect(hint).toContain("inline-flex h-6");
+    expect(hint).toContain("inline-flex size-6");
     for (const file of ["features/futures/FeatureBanner.tsx", "features/comments/OpinionTutorial.tsx"]) {
       const source = readFileSync(join(process.cwd(), "app/components/v2", file), "utf8");
       expect(source).toContain("feature-hint");
@@ -258,8 +285,15 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
     expect(css).toContain("--v2-live: oklch(0.505 0.213 27.518);");
   });
 
-  it("C15: the pointer-coarse variant used for the touch hit area is defined", () => {
-    expect(css).toContain("@custom-variant pointer-coarse (@media (pointer: coarse));");
+  it("C16: mobile and coarse layouts keep the shared compact density-token values", () => {
+    expect(css).toContain("--spacing-v2-row-min: 2.25rem;");
+    expect(css).toContain("--spacing-v2-control-min: 2rem;");
+    expect(css).toContain("--spacing-v2-input-min: 2rem;");
+    const mobileStart = css.indexOf("@media (max-width: 767px)");
+    const mobileBlock = css.slice(mobileStart, css.indexOf("\n}", mobileStart));
+    expect(mobileBlock).not.toMatch(/--spacing-v2-(?:row|control|input)-min/);
+    expect(css).not.toContain("@media (pointer: coarse)");
+    expect(css).not.toContain("@custom-variant pointer-coarse");
   });
 
   it("C15: PanelAction uses tokens only, with no literal colors", () => {
@@ -319,8 +353,8 @@ describe("corr-2 component values", () => {
     expect(sheetSource).toContain(
       "min-h-0 flex-1 overflow-y-auto overscroll-contain px-v2-block-p pt-1 pb-[max(env(safe-area-inset-bottom),1rem)]",
     );
-    expect(sheetSource).toContain('<XMarkIcon className="size-5" aria-hidden="true" />');
-    expect(sheetSource).toContain("flex size-11 cursor-pointer items-center justify-center rounded-md");
+    expect(sheetSource).toContain('<XMarkIcon className="size-4" aria-hidden="true" />');
+    expect(sheetSource).toContain("flex size-8 cursor-pointer items-center justify-center rounded-md");
     expect(sheetSource).toContain("max-h-[85dvh]");
     expect(sheetSource).toContain("rounded-t-lg bg-v2-surface");
   });

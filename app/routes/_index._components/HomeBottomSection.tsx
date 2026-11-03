@@ -95,7 +95,7 @@ export function HomeNewsBlock({
             to={`/posts/${post.uid}`}
             prefetch="intent"
             {...getV2LinkTransitionProps("forward")}
-            className={`relative isolate -mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-3 text-sm text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing}`}
+            className={`relative isolate -mx-2 flex min-h-v2-row-min items-center justify-between gap-3 rounded-md px-2 py-v2-row-y text-sm text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing}`}
           >
             <span className="min-w-0 truncate">{post.title}</span>
             <time dateTime={post.createdAt} className="shrink-0 text-sm text-v2-fg-tertiary tabular-nums">
@@ -133,7 +133,7 @@ export function HomeBottomSection({
         action={
           <Link
             to="/news"
-            className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-sm text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
+            className="inline-flex items-center gap-0.5 text-sm text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
           >
             모두 보기
             <ChevronRightIcon aria-hidden="true" className="size-4" />

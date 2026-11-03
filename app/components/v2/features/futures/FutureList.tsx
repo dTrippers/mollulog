@@ -56,7 +56,7 @@ export function FutureList({
         const headingId = `future-list-${key}`;
         return (
           <section key={key} aria-labelledby={headingId} className="overflow-hidden rounded-lg bg-v2-surface">
-            <header className="flex min-h-11 items-center justify-between gap-3 border-b border-v2-inset px-v2-block-p py-2">
+            <header className="flex min-h-v2-row-min items-center justify-between gap-3 border-b border-v2-inset px-v2-block-p py-2">
               {group.groupDate === null ? (
                 <h2 id={headingId} className="text-sm font-semibold text-v2-live">
                   ● 진행 중
@@ -200,7 +200,7 @@ function ListRow({
   const row = (
     <div
       className={cn(
-        "flex items-center gap-3 px-v2-block-p py-2 lg:grid lg:min-h-11 lg:grid-cols-[2rem_7rem_minmax(0,1fr)_6.25rem_6.5rem_1rem] lg:gap-x-3 lg:py-1",
+        "flex items-center gap-3 px-v2-block-p py-2 lg:grid lg:min-h-v2-row-min lg:grid-cols-[2rem_7rem_minmax(0,1fr)_6.25rem_6.5rem_1rem] lg:gap-x-3 lg:py-1",
       )}
     >
       {media}

@@ -98,7 +98,7 @@ function RaidSlotColumn({
       detail={
         <Link
           to="/futures"
-          className="-my-3 inline-flex min-h-11 items-center gap-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
+          className="inline-flex items-center gap-0.5 text-v2-fg-secondary transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg motion-reduce:transition-none"
         >
           미래시에서 보기
           <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0 text-v2-fg-tertiary" />

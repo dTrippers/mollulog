@@ -80,9 +80,9 @@ export function Sheet({
                     type="button"
                     onClick={onClose}
                     aria-label="닫기"
-                    className={`flex size-11 cursor-pointer items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover ${v2FocusRing}`}
+                    className={`flex size-8 cursor-pointer items-center justify-center rounded-md text-v2-fg-secondary hover:bg-v2-hover ${v2FocusRing}`}
                   >
-                    <XMarkIcon className="size-5" aria-hidden="true" />
+                    <XMarkIcon className="size-4" aria-hidden="true" />
                   </button>
                 </div>
               </div>

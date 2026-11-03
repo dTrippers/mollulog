@@ -106,11 +106,12 @@ describe("home route with deferred sources that reject", () => {
     expect(document.body.textContent).not.toMatch(/Server Timeout|Unexpected Application Error/);
   });
 
-  it("keeps the header link's 44px hit box without moving its text up", async () => {
+  it("keeps the header link compact without moving its text up", async () => {
     renderHome(loaderData({ contents: timedOut() }));
 
     const link = await screen.findByRole("link", { name: /전체 일정/ });
-    expect(link.className).toContain("min-h-11");
+    expect(link.className).toContain("min-h-v2-row-min");
+    expect(link.className).not.toContain("min-h-11");
     // The negative vertical margin is gone: it pulled the text up by the margin amount.
     expect(link.className).not.toContain("-my-3");
     expect(link.className).toContain("items-center");

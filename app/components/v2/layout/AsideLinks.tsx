@@ -8,7 +8,7 @@ import { v2FocusRing } from "./styles";
 export type AsideLinkItem = {
   key: string;
   title: string;
-  description: string;
+  description?: string;
   Icon: ElementType;
   to?: string;
   onClick?: () => void;
@@ -38,7 +38,7 @@ export function AsideLinks({ items }: { items: AsideLinkItem[] }) {
             <Icon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium">{item.title}</span>
-              <span className="block truncate text-xs text-v2-fg-tertiary">{item.description}</span>
+              {item.description ? <span className="block truncate text-xs text-v2-fg-tertiary">{item.description}</span> : null}
             </span>
             {external ? (
               <>

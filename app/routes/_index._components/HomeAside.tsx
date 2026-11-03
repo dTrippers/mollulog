@@ -246,7 +246,7 @@ export function HomeFeedBlock({
             </ul>
             <Link
               to="/community"
-              className="relative flex min-h-11 items-center justify-center gap-0.5 text-sm text-v2-fg-secondary before:absolute before:inset-x-v2-block-p before:top-0 before:border-t before:border-v2-divider/60 before:content-[''] transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+              className="relative flex min-h-v2-row-min items-center justify-center gap-0.5 text-sm text-v2-fg-secondary before:absolute before:inset-x-v2-block-p before:top-0 before:border-t before:border-v2-divider/60 before:content-[''] transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
             >
               더 보기
               <ChevronRightIcon aria-hidden="true" className="size-4" />
@@ -334,7 +334,7 @@ export function HomeChannelLinks({ channels }: { channels: HomeYoutubeChannelLin
             href={channel.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="-my-3 inline-flex min-h-11 items-center gap-0.5 rounded-sm transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+            className="inline-flex items-center gap-0.5 rounded-sm transition-colors duration-v2-fast ease-v2-standard hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
           >
             <ArrowTopRightOnSquareIcon aria-hidden="true" className="size-3" />
             {CHANNEL_TITLES[channel.key]}
