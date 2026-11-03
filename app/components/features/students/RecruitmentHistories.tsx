@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { compareInstantDesc, formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import { uploadedImageProps } from "~/models/assets";
 
 type RecruitmentHistoriesProps = {
   recruitments: {
@@ -108,7 +109,11 @@ export default function RecruitmentHistories({ recruitments }: RecruitmentHistor
         {sortedRecruitments.map((event) => (
           <div key={event.uid} className="w-3/4 md:w-2/5 aspect-video rounded-lg relative shrink-0">
             {event.imageUrl && (
-              <img src={event.imageUrl} alt={event.name} className="absolute w-full h-full object-cover rounded-lg" />
+              <img
+                {...uploadedImageProps(event.imageUrl, "(min-width: 768px) 320px, 75vw")}
+                alt={event.name}
+                className="absolute w-full h-full object-cover rounded-lg"
+              />
             )}
             <Link
               to={`/events/${event.uid}`}

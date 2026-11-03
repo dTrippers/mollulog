@@ -10,11 +10,12 @@ import {
 import { Link } from "react-router";
 import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
-import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
+import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getHomeEntryPoints, getHomeOngoingChip, getHomeUpcomingChip, type HomeEntryPoint } from "~/domain/home-portal";
 import type { UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
+import { uploadedImageProps } from "~/models/assets";
 import type { TimelineContent } from "~/models/timeline-content";
 import type { HomeEventsSource, HomeSourceResult } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
@@ -115,7 +116,12 @@ function EventHero({
           <BlurhashPlaceholder blurhash={content.imageBlurhash} />
         ) : content.imageUrl ? (
           // The banner is the home page's largest paint, so it goes ahead of the images below it on a slow connection.
-          <img src={content.imageUrl} alt="" fetchPriority="high" className="size-full object-cover" />
+          <img
+            {...uploadedImageProps(content.imageUrl, "(min-width: 1024px) 900px, 100vw")}
+            alt=""
+            fetchPriority="high"
+            className="size-full object-cover"
+          />
         ) : (
           <div className="flex size-full items-center justify-center">
             <CalendarDaysIcon aria-hidden="true" className="size-10 text-v2-fg-disabled" />
@@ -170,7 +176,12 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
             <HaloModeNotice />
           </>
         ) : content.imageUrl ? (
-          <img src={content.imageUrl} alt="" loading="lazy" className="size-full object-cover" />
+          <img
+            {...uploadedImageProps(content.imageUrl, "(min-width: 768px) 96px, 80px")}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover"
+          />
         ) : (
           <div className="flex size-full items-center justify-center">
             <CalendarDaysIcon aria-hidden="true" className="size-6 text-v2-fg-disabled" />

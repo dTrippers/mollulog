@@ -4,6 +4,7 @@ import dayjs from "dayjs";
 import { useEffect, useRef } from "react";
 import { useFetcher } from "react-router";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { uploadedImageProps } from "~/models/assets";
 import type { Coupon } from "~/models/coupon";
 import CopyField from "./CopyField";
 import CouponRewardList from "./CouponRewardList";
@@ -66,7 +67,13 @@ export default function CouponCard({ coupon, registered, signedIn }: CouponCardP
       {/* 이미지 */}
       <div className="aspect-video bg-neutral-100 dark:bg-neutral-700 overflow-hidden">
         {coupon.imageUrl ? (
-          <img src={coupon.imageUrl} alt={coupon.name} className="w-full h-full object-cover" loading="lazy" />
+          // Two-column cards render about 372px wide; declaring 320px keeps 2x screens on the 640px variant.
+          <img
+            {...uploadedImageProps(coupon.imageUrl, "(min-width: 640px) 320px, 100vw")}
+            alt={coupon.name}
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <div className="w-full h-full flex items-center justify-center text-neutral-300 dark:text-neutral-600 text-sm">
             이미지 없음

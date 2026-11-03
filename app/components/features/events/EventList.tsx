@@ -7,6 +7,7 @@ import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
 import { timelineContentTypeLocale } from "~/locales/ko";
+import { uploadedImageProps } from "~/models/assets";
 import { CONTENT_ORDER, SHOW_LINK_CONTENT_TYPES } from "~/models/content-rules";
 import type { TimelineContentType } from "~/models/timeline-content";
 
@@ -75,8 +76,12 @@ export default function EventList({ events, showArrow = true, className = "" }: 
                   </>
                 ) : (
                   <img
-                    src={event.timelineImageUrl ?? event.imageUrl ?? ""}
+                    {...uploadedImageProps(
+                      event.timelineImageUrl ?? event.imageUrl ?? "",
+                      "(min-width: 768px) 86px, 64px",
+                    )}
                     alt={event.name}
+                    loading="lazy"
                     className="size-full object-cover"
                   />
                 )}

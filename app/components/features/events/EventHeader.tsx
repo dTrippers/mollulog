@@ -22,6 +22,7 @@ import {
 } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { relativeTime, timelineContentTypeLocale } from "~/locales/ko";
+import { uploadedImageProps } from "~/models/assets";
 import type { TimelineContentType } from "~/models/timeline-content";
 
 type Video = {
@@ -188,7 +189,7 @@ export default function EventHeader({
           />
         ) : imageUrl ? (
           <img
-            src={imageUrl}
+            {...uploadedImageProps(imageUrl, "(min-width: 1280px) 1216px, 100vw")}
             alt={name}
             className={`absolute top-0 left-0 w-full h-full object-cover transition-opacity duration-500 ${videoPlaying ? "opacity-0" : "opacity-100"}`}
           />

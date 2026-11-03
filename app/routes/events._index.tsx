@@ -6,8 +6,9 @@ import { Link, useLoaderData } from "react-router";
 import { Page } from "~/components/features/layout";
 import { EmptyView, PanelBody, PanelIconToggleRow, PanelSearchField } from "~/components/primitives";
 import { formatInstant, nowUtcIso } from "~/lib/date-time";
-import { canonicalLink } from "~/lib/seo";
 import { getGoogleAnalyticsResultBucket, trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { canonicalLink } from "~/lib/seo";
+import { uploadedImageProps } from "~/models/assets";
 import type { RunType } from "~/models/timeline-content";
 import { type EventFilterState, filterEventList } from "~/views/event-list-filter";
 import { type EventListItem, type EventListSchedule, getEventList } from "~/views/events";
@@ -138,7 +139,7 @@ function EventBanner({ event }: { event: EventListItem }) {
   if (imageUrl) {
     return (
       <img
-        src={imageUrl}
+        {...uploadedImageProps(imageUrl, "(min-width: 768px) 128px, 112px")}
         alt={event.name}
         loading="lazy"
         onError={() => {

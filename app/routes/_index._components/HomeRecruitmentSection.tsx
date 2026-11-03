@@ -11,6 +11,7 @@ import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale } from "~/locales/ko";
+import { uploadedImageProps } from "~/models/assets";
 import type { RecruitmentCompletionMeta } from "~/models/recruitment-result";
 import type { HomeRecruitmentGroup, HomeSourceResult, IndexRecruitment } from "~/views/home";
 import { HomeEmpty, HomeRetryButton, HomeSection, HomeTile, HomeTimeChip } from "./HomePrimitives";
@@ -90,7 +91,12 @@ function GroupBanner({ group }: { group: HomeRecruitmentGroup }) {
               <HaloModeNotice />
             </>
           ) : (
-            <img src={group.eventImageUrl} alt="" loading="lazy" className="size-full object-cover" />
+            <img
+              {...uploadedImageProps(group.eventImageUrl, "128px")}
+              alt=""
+              loading="lazy"
+              className="size-full object-cover"
+            />
           )}
         </div>
       ) : null}
