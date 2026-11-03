@@ -1017,6 +1017,24 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
       "aside main";
   }
 
+  [data-v2-layout]:has(> .v2-aside):has(.v2-header[data-stacked-only="true"]) {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "aside toolbar"
+      "aside main";
+  }
+
+  /* The aside starts the page, so it sticks at the content's top padding (pt-2 lg:pt-6 in root.tsx) and stays level with
+     the toolbar. */
+  [data-v2-layout]:has(.v2-header[data-stacked-only="true"]) > .v2-aside {
+    top: 0.5rem;
+
+    @media (width >= 64rem) {
+      top: 1.5rem;
+    }
+  }
+
+  .v2-header[data-stacked-only="true"],
   .v2-toolbar[data-stacked-only="true"],
   .v2-toolbar-sentinel[data-stacked-only="true"] {
     display: none;

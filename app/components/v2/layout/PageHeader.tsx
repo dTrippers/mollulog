@@ -17,6 +17,8 @@ export type PageHeaderProps = {
   media?: ReactNode;
   // Optional block beside the title on wide page-available widths, under the description otherwise.
   trailing?: ReactNode;
+  // Hide the header beside an aside, where the page renders `PageAsideHeader` at the top of the aside instead.
+  stackedOnly?: boolean;
 };
 
 const backClassName = cn(
@@ -49,7 +51,7 @@ function HeaderText({ title, description, back, meta, compactMeta = false }: Omi
   );
 }
 
-export function PageHeader({ title, description, back, meta, media, trailing }: PageHeaderProps) {
+export function PageHeader({ title, description, back, meta, media, trailing, stackedOnly = false }: PageHeaderProps) {
   const heading = media ? (
     <div className="min-w-0">
       {back ? <HeaderBack back={back} /> : null}
@@ -64,15 +66,31 @@ export function PageHeader({ title, description, back, meta, media, trailing }: 
 
   if (!trailing) {
     return (
-      <div className="v2-header min-w-0 pb-v2-group-gap">
+      <div className="v2-header min-w-0 pb-v2-group-gap" data-stacked-only={stackedOnly ? "true" : undefined}>
         {heading ?? <HeaderText title={title} description={description} back={back} meta={meta} />}
       </div>
     );
   }
   return (
-    <div className="v2-header flex min-w-0 flex-col gap-v2-block-gap pb-v2-group-gap @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between">
+    <div data-stacked-only={stackedOnly ? "true" : undefined} className="v2-header flex min-w-0 flex-col gap-v2-block-gap pb-v2-group-gap @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between">
       {heading ?? <div className="min-w-0"><HeaderText title={title} description={description} back={back} meta={meta} /></div>}
       <div className="min-w-0 @min-[60rem]/page-available:shrink-0">{trailing}</div>
+    </div>
+  );
+}
+
+// The header of a `stackedOnly` page beside its aside. The page renders it first in `PageAside`.
+export function PageAsideHeader({ title, back, meta, media }: Pick<PageHeaderProps, "title" | "back" | "meta" | "media">) {
+  return (
+    <div className="min-w-0">
+      {back ? <HeaderBack back={back} /> : null}
+      <div className="flex min-w-0 items-start gap-v2-media-gap">
+        {media ? <div className="w-[3.75rem] shrink-0">{media}</div> : null}
+        <div className="min-w-0 flex-1">
+          <h1 className="text-xl leading-[1.4] font-bold text-v2-fg">{title}</h1>
+          {meta ? <div className="mt-1 text-sm text-v2-fg-tertiary">{meta}</div> : null}
+        </div>
+      </div>
     </div>
   );
 }

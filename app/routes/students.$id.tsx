@@ -16,6 +16,7 @@ import {
   AsideLinks,
   MobileActionBar,
   PageAside,
+  PageAsideHeader,
   PageHeader,
   PageMain,
   PageStackedSummary,
@@ -145,6 +146,12 @@ export default function StudentDetailPage() {
       {student.catalog?.terrainAdaptations ? <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} /> : null}
     </div>
   );
+  const header = {
+    title,
+    back: { title: "학생 목록", to: "/students" },
+    media: <StudentThumb studentUid={student.uid} name={fullName} variant={null} showCaption={false} headerPortrait />,
+    meta: headerMeta,
+  };
   const schaleDbLink = student.schaleDbId
     ? {
         key: "schale-db",
@@ -159,12 +166,7 @@ export default function StudentDetailPage() {
   return (
     <V2Page width="reading">
       <div className="contents max-md:[&_.v2-header]:-mt-1.5 md:[&_.v2-header]:-translate-y-6 md:[&_.v2-header]:-mb-[23px] md:[&_.v2-header_h1]:!leading-[1.4]">
-        <PageHeader
-          title={title}
-          back={{ title: "학생 목록", to: "/students" }}
-          media={<StudentThumb studentUid={student.uid} name={fullName} variant={null} showCaption={false} headerPortrait />}
-          meta={headerMeta}
-        />
+        <PageHeader {...header} stackedOnly />
       </div>
       <PageStackedSummary>
         <StudentProfileFacts student={student} compact standingUid={student.uid} />
@@ -197,6 +199,7 @@ export default function StudentDetailPage() {
         />
       </PageToolbar>
       <PageAside>
+        <PageAsideHeader {...header} />
         <StudentProfileFacts student={student} standingUid={student.uid} />
         <AsideLinks items={[...(schaleDbLink ? [schaleDbLink] : []), videoLink]} />
       </PageAside>

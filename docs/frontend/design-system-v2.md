@@ -206,6 +206,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - Toolbar is sticky on stacked layouts. Use `stickyOnDesktop` only for data tables.
 - `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
+- `PageHeader stackedOnly` hides the Header at 48rem and wider beside an Aside, and the page grid drops the header row so the Aside and the Toolbar start at the top. The page renders the same header first in `PageAside` with `PageAsideHeader`, which keeps the back link, media, title, and meta. The Aside then sticks at the content's top padding, level with the Toolbar. The student detail page uses it so its tabs and body are not pushed down by a header that only fills the Aside's width.
 
 ### Width rules
 

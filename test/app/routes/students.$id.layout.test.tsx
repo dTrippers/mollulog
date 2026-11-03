@@ -55,7 +55,11 @@ describe("student detail layout", () => {
 
       expect((await screen.findByRole("link", { name: "평가" })).getAttribute("aria-current")).toBe("page");
       expect(screen.getByRole("navigation", { name: "화면 탐색" })).toBeTruthy();
-      expect(screen.getByRole("heading", { level: 1, name: "학생" })).toBeTruthy();
+      // The header renders twice: in the stacked header row and at the top of the aside. CSS shows one per layout.
+      const headings = screen.getAllByRole("heading", { level: 1, name: "학생" });
+      expect(headings).toHaveLength(2);
+      expect(headings[0].closest('.v2-header[data-stacked-only="true"]')).toBeTruthy();
+      expect(headings[1].closest(".v2-aside")).toBeTruthy();
     },
   );
 });
