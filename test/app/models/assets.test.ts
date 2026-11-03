@@ -30,6 +30,21 @@ describe("uploadedImageUrl", () => {
   });
 });
 
+describe("uploadedImageUrl source encoding", () => {
+  it.each([
+    ["a space", "summer banner.jpg", "summer%20banner.jpg"],
+    ["Korean", "여름.jpg", "%EC%97%AC%EB%A6%84.jpg"],
+    ["an already encoded key", "summer%20banner.jpg", "summer%20banner.jpg"],
+    ["a stray percent sign", "100%.jpg", "100%25.jpg"],
+  ])("percent-encodes a key with %s exactly once", (_, key, encoded) => {
+    const url = `https://assets.mollulog.net/assets/images/timeline/${key}`;
+    expect(uploadedImageUrl(url, 640)).toBe(
+      transformUrl(640, `https://assets.mollulog.net/assets/images/timeline/${encoded}`),
+    );
+    expect(uploadedImageProps(url, "100vw").srcSet?.split(", ")).toHaveLength(4);
+  });
+});
+
 describe("uploadedImageProps", () => {
   it("offers every transform width with the rendered size", () => {
     expect(uploadedImageProps(TIMELINE_IMAGE, "(min-width: 768px) 86px, 64px")).toEqual({

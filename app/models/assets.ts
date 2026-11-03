@@ -77,10 +77,20 @@ function isResizableUploadedImage(url: string): boolean {
   );
 }
 
+// srcset splits candidates on whitespace, so keys with spaces or non-ASCII characters must be percent-encoded once.
+function encodeSourceUrl(url: string): string {
+  try {
+    return encodeURI(decodeURI(url));
+  } catch {
+    // A stray "%" cannot be decoded; treat it as a literal character.
+    return encodeURI(url);
+  }
+}
+
 // Returns the URL unchanged for anything that is not a resizable upload (GIFs, other hosts, external URLs).
 export function uploadedImageUrl(url: string, width: UploadedImageWidth): string {
   if (!isResizableUploadedImage(url)) return url;
-  return `${IMAGE_TRANSFORM_BASE_URL}/width=${width},fit=scale-down,format=webp,onerror=redirect/${url}`;
+  return `${IMAGE_TRANSFORM_BASE_URL}/width=${width},fit=scale-down,format=webp,onerror=redirect/${encodeSourceUrl(url)}`;
 }
 
 // `sizes` is the rendered CSS width of the image; the browser picks the smallest listed width that covers it at
