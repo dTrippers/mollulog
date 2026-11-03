@@ -2,7 +2,9 @@ import { describe, expect, it } from "@jest/globals";
 import {
   defaultStudentDirectoryFilterState,
   filterAndSortStudentDirectory,
+  getStudentCostumeName,
   getStudentDirectoryAppliedFilters,
+  getStudentDirectoryFilterOptions,
   getStudentDirectoryLabel,
   getStudentDirectoryVisibleState,
   groupStudentDirectoryStudents,
@@ -166,6 +168,39 @@ describe("student directory filters and sorting", () => {
 
     expect(filterAndSortStudentDirectory(students, byUid, signedOut).map(({ uid }) => uid)).toEqual(["club-match"]);
     expect(filterAndSortStudentDirectory(students, byNone, signedOut).map(({ uid }) => uid)).toEqual(["unaffiliated"]);
+  });
+
+  it("reads the costume from the name's parenthesized suffix", () => {
+    expect(getStudentCostumeName("히나(수영복)")).toBe("수영복");
+    expect(getStudentCostumeName("히나")).toBeNull();
+    expect(getStudentCostumeName("히나(수영복) 외")).toBeNull();
+  });
+
+  it("filters costumes by name and treats a name without a costume as the base option", () => {
+    const students = [
+      student({ uid: "swimsuit", name: "히나(수영복)" }),
+      student({ uid: "dress", name: "히나(드레스)" }),
+      student({ uid: "base", name: "히나" }),
+    ];
+    const filter = (state: Partial<StudentDirectoryFilterState>) =>
+      filterAndSortStudentDirectory(students, { ...defaultStudentDirectoryFilterState, ...state }, signedOut).map(
+        ({ uid }) => uid,
+      );
+
+    expect(getStudentDirectoryFilterOptions(students).costumes).toEqual(["드레스", "수영복"]);
+    expect(filter({ costumes: ["수영복"] })).toEqual(["swimsuit"]);
+    expect(filter({ baseCostume: true })).toEqual(["base"]);
+    expect(filter({ costumes: ["드레스"], baseCostume: true }).sort()).toEqual(["base", "dress"]);
+    expect(
+      getStudentDirectoryAppliedFilters(students, {
+        ...defaultStudentDirectoryFilterState,
+        costumes: ["수영복", "없는 이격"],
+        baseCostume: true,
+      }).map(({ key, label }) => [key, label]),
+    ).toEqual([
+      ["costume:base", "기본"],
+      ["costume:수영복", "수영복"],
+    ]);
   });
 
   it("does not create an unknown-value chip for invalid filter values", () => {

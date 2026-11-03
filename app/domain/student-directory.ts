@@ -93,6 +93,8 @@ export type StudentDirectoryFilterState = {
   schools: string[];
   clubUids: string[];
   unaffiliatedClub: boolean;
+  costumes: string[];
+  baseCostume: boolean;
   positions: Position[];
   terrain: {
     street: string[];
@@ -132,6 +134,8 @@ export const defaultStudentDirectoryFilterState: StudentDirectoryFilterState = {
   schools: [],
   clubUids: [],
   unaffiliatedClub: false,
+  costumes: [],
+  baseCostume: false,
   positions: [],
   terrain: { street: [], outdoor: [], indoor: [] },
   weaponTypes: [],
@@ -223,6 +227,12 @@ const roleOrder = new Map(STUDENT_DIRECTORY_CLASSES.map((value, index) => [value
 const positionOrder = new Map(STUDENT_DIRECTORY_POSITIONS.map((value, index) => [value, index]));
 const rankOrder = new Map(STUDENT_DIRECTORY_TERRAIN_RANKS.map((value, index) => [value, STUDENT_DIRECTORY_TERRAIN_RANKS.length - index]));
 
+// The costume (이격) name is the parenthesized suffix of a student's name, such as 수영복 in 히나(수영복). BAQL has no
+// separate field for it. A name without the suffix is the student's base costume.
+export function getStudentCostumeName(name: string): string | null {
+  return /\(([^()]+)\)$/.exec(name)?.[1].trim() || null;
+}
+
 export function getStudentDirectoryFilterOptions(students: StudentDirectoryStudent[]) {
   const schoolValues = new Set(students.map(({ school }) => school).filter(isKnownSchool));
   const schools = STUDENT_DIRECTORY_SCHOOLS.filter((school) => schoolValues.has(school)).map((value) => ({
@@ -247,6 +257,7 @@ export function getStudentDirectoryFilterOptions(students: StudentDirectoryStude
       }
       return groups;
     }, []);
+  const costumes = [...new Set(students.flatMap(({ name }) => getStudentCostumeName(name) ?? []))].sort((a, b) => a.localeCompare(b, "ko"));
   const weaponValues = new Set(students.map(({ weaponType }) => weaponType).filter(isKnownWeaponType));
   const equipmentSlots = [0, 1, 2].map((slot) => {
     const values = new Set(students.map(({ equipments }) => equipments[slot]).filter((value) => Boolean(equipmentTypeLocale[value])));
@@ -258,6 +269,7 @@ export function getStudentDirectoryFilterOptions(students: StudentDirectoryStude
     schools,
     clubGroups,
     clubUids: [...clubs.keys()],
+    costumes,
     weaponTypes: STUDENT_DIRECTORY_WEAPON_TYPES.filter((value) => weaponValues.has(value)).map((value) => ({
       value,
       label: weaponLabels[value],
@@ -301,6 +313,8 @@ export function hasStudentDirectoryFilters(state: StudentDirectoryFilterState): 
       state.schools.length ||
       state.clubUids.length ||
       state.unaffiliatedClub ||
+      state.costumes.length ||
+      state.baseCostume ||
       state.positions.length ||
       Object.values(state.terrain).some((ranks) => ranks.length) ||
       state.weaponTypes.length ||
@@ -315,11 +329,20 @@ export function hasStudentDirectoryFilters(state: StudentDirectoryFilterState): 
 export function countStudentDirectoryFilterGroup(
   group: keyof Pick<
     StudentDirectoryFilterState,
-    "schools" | "clubUids" | "positions" | "weaponTypes" | "cover" | "skillEffects" | "acquisitionTypes" | "initialTiers"
+    | "schools"
+    | "clubUids"
+    | "costumes"
+    | "positions"
+    | "weaponTypes"
+    | "cover"
+    | "skillEffects"
+    | "acquisitionTypes"
+    | "initialTiers"
   > | "terrain" | "equipmentSlots",
   state: StudentDirectoryFilterState,
 ): number {
   if (group === "clubUids") return state.clubUids.length + Number(state.unaffiliatedClub);
+  if (group === "costumes") return state.costumes.length + Number(state.baseCostume);
   if (group === "terrain") return Object.values(state.terrain).reduce((sum, ranks) => sum + ranks.length, 0);
   if (group === "equipmentSlots") return state.equipmentSlots.reduce((sum, slot) => sum + slot.length, 0);
   return state[group].length;
@@ -344,6 +367,10 @@ export function filterAndSortStudentDirectory(
       if (!(hasKnownClub && state.clubUids.includes(club?.uid ?? "")) && !(club === null && state.unaffiliatedClub)) {
         return false;
       }
+    }
+    if (state.costumes.length || state.baseCostume) {
+      const costume = getStudentCostumeName(student.name);
+      if (!(costume !== null && state.costumes.includes(costume)) && !(costume === null && state.baseCostume)) return false;
     }
     if (state.terrain.street.length && !state.terrain.street.includes(student.catalog?.terrainAdaptations.street ?? "")) return false;
     if (state.terrain.outdoor.length && !state.terrain.outdoor.includes(student.catalog?.terrainAdaptations.outdoor ?? "")) return false;
@@ -686,6 +713,11 @@ export function getStudentDirectoryAppliedFilters(
     });
   }
   if (state.unaffiliatedClub) chips.push({ key: "club:none", label: "없음", remove: (current) => ({ ...current, unaffiliatedClub: false }) });
+  if (state.baseCostume) chips.push({ key: "costume:base", label: "기본", ariaLabel: "기본 이격", remove: (current) => ({ ...current, baseCostume: false }) });
+  for (const value of state.costumes) {
+    if (!options.costumes.includes(value)) continue;
+    chips.push({ key: `costume:${value}`, label: value, remove: (current) => ({ ...current, costumes: current.costumes.filter((item) => item !== value) }) });
+  }
   for (const field of ["street", "outdoor", "indoor"] as const) {
     const title = field === "street" ? "시가지" : field === "outdoor" ? "야외" : "실내";
     for (const rank of state.terrain[field]) {

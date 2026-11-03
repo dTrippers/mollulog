@@ -91,6 +91,8 @@ export function normalizeStudentDirectoryFilterState(
     schools: filterValues(migratedValue.schools, options.schools.map(({ value: school }) => school)),
     clubUids: filterValues(migratedValue.clubUids, options.clubUids),
     unaffiliatedClub: migratedValue.unaffiliatedClub === true,
+    costumes: filterValues(migratedValue.costumes, options.costumes),
+    baseCostume: migratedValue.baseCostume === true,
     positions: filterValues(migratedValue.positions, STUDENT_DIRECTORY_POSITIONS),
     terrain: {
       street: filterValues(terrain.street, STUDENT_DIRECTORY_TERRAIN_RANKS),

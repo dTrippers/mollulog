@@ -38,7 +38,7 @@ function student(overrides: Partial<StudentDirectoryStudent> = {}): StudentDirec
   };
 }
 
-const students: StudentDirectoryStudent[] = [student()];
+const students: StudentDirectoryStudent[] = [student(), student({ uid: "10002", name: "학생(수영복)" })];
 
 describe("student directory cookie", () => {
   it("migrates 1.x role fields and carries valid filters through current validation", () => {
@@ -113,6 +113,8 @@ describe("student directory cookie", () => {
         defenseTypes: [Defense.Heavy],
         schools: ["millennium", "unmapped"],
         clubUids: ["club-uid", "internal-id"],
+        costumes: ["수영복", "없는 이격"],
+        baseCostume: true,
         weaponTypes: ["ar", "unmapped"],
         acquisitionTypes: ["regular", "unknown"],
         skillEffects: ["debuff", "unknown"],
@@ -131,6 +133,8 @@ describe("student directory cookie", () => {
       defenseTypes: [Defense.Heavy],
       schools: ["millennium"],
       clubUids: ["club-uid"],
+      costumes: ["수영복"],
+      baseCostume: true,
       weaponTypes: ["ar"],
       acquisitionTypes: ["regular"],
       skillEffects: ["debuff"],

@@ -217,6 +217,27 @@ export function DirectoryFilterPanel({
             </div>
           </div>
         </FilterGroupDisclosure>
+        <FilterGroupDisclosure title="이격명" selectedCount={groupCount("costumes")}>
+          <ChipRow>
+            <DirectoryToggleChip
+              pressed={state.baseCostume}
+              onPressedChange={(pressed) => onChange((current) => ({ ...current, baseCostume: pressed }))}
+            >
+              기본
+            </DirectoryToggleChip>
+            {options.costumes.map((value) => (
+              <DirectoryToggleChip
+                key={value}
+                pressed={state.costumes.includes(value)}
+                onPressedChange={(pressed) =>
+                  onChange((current) => ({ ...current, costumes: toggle(current.costumes, value, pressed) }))
+                }
+              >
+                {value}
+              </DirectoryToggleChip>
+            ))}
+          </ChipRow>
+        </FilterGroupDisclosure>
         <FilterGroupDisclosure title="포지션" selectedCount={groupCount("positions")}>
           <ChipRow>
             {STUDENT_DIRECTORY_POSITIONS.map((value) => (
