@@ -11,6 +11,7 @@ import { Link } from "react-router";
 import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
 import { getFutureMediaTypeLabel } from "~/components/v2/features/futures/labels";
+import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
 import { useHaloMode } from "~/contexts/HaloModeContext";
 import { getHomeEntryPoints, getHomeOngoingChip, getHomeUpcomingChip, type HomeEntryPoint } from "~/domain/home-portal";
 import type { UtcIsoString } from "~/lib/date-time";
@@ -131,23 +132,22 @@ function EventHero({
           aria-hidden="true"
           className="absolute inset-0 bg-linear-to-t from-v2-scrim via-v2-scrim/30 to-transparent"
         />
-        {content.imageUrl && haloMode ? (
-          <HaloModeNotice />
-        ) : null}
-        <div className="absolute top-2.5 right-2.5 md:top-3 md:right-3">
+        {content.imageUrl && haloMode ? <HaloModeNotice placement="top-start" /> : null}
+        <div className="absolute top-2.5 right-2.5 flex md:top-3 md:right-3">
           <HomeTimeChip chip={chip} />
         </div>
         <div className="absolute inset-x-0 bottom-0 flex min-w-0 flex-col gap-1 p-3 md:max-w-[60%] md:p-4">
-          <p className="text-sm text-v2-on-media">
+          <p className="text-[0.8125rem] text-v2-on-media md:text-sm">
             <EventKindLine content={content} minigameType={minigameType} />
           </p>
-          <h3 className="text-xl font-semibold break-keep text-v2-on-media md:text-2xl">
+          <h3 className="text-lg font-semibold break-keep text-v2-on-media md:text-2xl">
             <Link
               to={`/events/${content.uid}`}
-              className="inline-flex items-center gap-1 rounded-sm underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+              className="rounded-sm whitespace-pre-line underline decoration-transparent underline-offset-4 transition-colors duration-v2-fast ease-v2-standard hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
             >
-              <span className="whitespace-pre-line">{content.name}</span>
-              <ChevronRightIcon aria-hidden="true" className="size-4 shrink-0" />
+              <TrailingIconText text={content.name}>
+                <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle" />
+              </TrailingIconText>
             </Link>
           </h3>
         </div>
@@ -190,15 +190,16 @@ function TogetherTile({ content, now, timeZone }: { content: TimelineContent; no
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 truncate text-sm text-v2-fg-tertiary">{getFutureMediaTypeLabel(content)}</p>
-          <HomeTimeChip chip={chip} />
+          <p className="min-w-0 truncate text-xs text-v2-fg-tertiary md:text-sm">{getFutureMediaTypeLabel(content)}</p>
+          <HomeTimeChip chip={chip} dense />
         </div>
-        <p className="text-lg font-semibold break-keep text-v2-fg">
-          <span className="whitespace-pre-line">{content.name}</span>
-          <ChevronRightIcon
-            aria-hidden="true"
-            className="ml-1 inline-block size-4 shrink-0 align-middle text-v2-fg-tertiary"
-          />
+        <p className="text-base leading-6 font-semibold break-keep whitespace-pre-line text-v2-fg md:text-lg md:leading-7">
+          <TrailingIconText text={content.name}>
+            <ChevronRightIcon
+              aria-hidden="true"
+              className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary"
+            />
+          </TrailingIconText>
         </p>
       </div>
     </Link>

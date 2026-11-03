@@ -514,7 +514,7 @@ describe("home recruitment section", () => {
     recruitments: [],
   };
 
-  it("names a group without students as a banner row with its kind and event", () => {
+  it("names a group with its kind label and, on its own row, the event", () => {
     const markup = render(
       <HomeRecruitmentSection
         groups={{ status: "success", data: [group] }}
@@ -525,7 +525,10 @@ describe("home recruitment section", () => {
         onRetry={noop}
       />,
     );
-    expect(markup).toContain("복각 픽업 모집 · 하이랜더 철도 폭주 사건");
+    expect(markup).toContain(">복각 픽업 모집</p>");
+    expect(markup).toContain('href="/events/ev-1"');
+    expect(markup).toContain("하이랜더 철도 폭주 <span");
+    expect(markup).not.toContain("복각 픽업 모집 · ");
     expect(markup).toContain("11일 남음");
   });
 

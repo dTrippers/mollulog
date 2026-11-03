@@ -5,8 +5,10 @@ import BlurhashPlaceholder from "~/components/media/BlurhashPlaceholder";
 import HaloModeNotice from "~/components/media/HaloModeNotice";
 import { useHaloMode } from "~/contexts/HaloModeContext";
 import { StudentSlot } from "~/components/v2/features/students/StudentSlot";
+import { StudentThumbList } from "~/components/v2/features/students/StudentThumbList";
 import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
 import type { FutureStudentEntry } from "~/components/v2/features/students/types";
+import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
 import { getHomeOngoingChip, getHomeUpcomingChip } from "~/domain/home-portal";
 import { canCompleteRecruitmentStudent } from "~/domain/recruitment-result";
 import { formatInstant, formatInstantDateKey, type UtcIsoString } from "~/lib/date-time";
@@ -78,29 +80,27 @@ function toStudentEntry({
   };
 }
 
+// A group without students shows its event banner in their place. The group header already names the event.
 function GroupBanner({ group }: { group: HomeRecruitmentGroup }) {
   const { haloMode } = useHaloMode();
-  const name = group.eventName ?? group.kindLabel;
+  if (!group.eventImageUrl) {
+    return null;
+  }
   return (
-    <div className="flex items-center gap-3">
-      {group.eventImageUrl ? (
-        <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md bg-v2-inset">
-          {haloMode ? (
-            <>
-              <BlurhashPlaceholder blurhash={group.eventImageBlurhash} />
-              <HaloModeNotice />
-            </>
-          ) : (
-            <img
-              {...uploadedImageProps(group.eventImageUrl, "128px")}
-              alt=""
-              loading="lazy"
-              className="size-full object-cover"
-            />
-          )}
-        </div>
-      ) : null}
-      <p className="min-w-0 text-lg font-semibold break-keep text-v2-fg">{name}</p>
+    <div className="relative aspect-[16/9] w-32 shrink-0 overflow-hidden rounded-md bg-v2-inset">
+      {haloMode ? (
+        <>
+          <BlurhashPlaceholder blurhash={group.eventImageBlurhash} />
+          <HaloModeNotice />
+        </>
+      ) : (
+        <img
+          {...uploadedImageProps(group.eventImageUrl, "128px")}
+          alt=""
+          loading="lazy"
+          className="size-full object-cover"
+        />
+      )}
     </div>
   );
 }
@@ -145,7 +145,7 @@ function NextRecruitmentPreview({ groups, timeZone }: { groups: HomeRecruitmentG
                 ) : (
                   <span aria-hidden="true" />
                 )}
-                <span className="min-w-0 flex-1 text-xs whitespace-pre-line text-v2-fg-secondary line-clamp-2">
+                <span className="min-w-0 flex-1 text-xs break-keep whitespace-pre-line text-v2-fg-secondary line-clamp-2">
                   {group.eventName ?? group.kindLabel}
                 </span>
               </li>
@@ -202,17 +202,38 @@ export function HomeRecruitmentSection({
               (recruitment): recruitment is IndexRecruitment & { student: NonNullable<IndexRecruitment["student"]> } =>
                 recruitment.student !== null,
             );
-            const kind = group.eventName ? `${group.kindLabel} · ${group.eventName}` : group.kindLabel;
             return (
               <div key={group.groupUid} className="flex flex-col gap-2 px-v2-block-p py-3 md:gap-3 md:py-v2-block-p">
-                <div className="flex items-start justify-between gap-2">
-                  <p className="min-w-0 text-sm text-v2-fg-tertiary">{kind}</p>
-                  <HomeTimeChip chip={groupChip(group, now, timeZone)} />
+                {/* The kind label shares the first row with the chip, and the event name takes the full width below. */}
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="min-w-0 text-xs text-v2-fg-tertiary md:text-sm">{group.kindLabel}</p>
+                    <HomeTimeChip chip={groupChip(group, now, timeZone)} dense />
+                  </div>
+                  {group.eventName ? (
+                    <p className="text-base leading-6 font-semibold break-keep whitespace-pre-line text-v2-fg md:text-lg md:leading-7">
+                      {group.eventUid ? (
+                        <Link
+                          to={`/events/${group.eventUid}`}
+                          className="-mx-1 rounded-md px-1 transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+                        >
+                          <TrailingIconText text={group.eventName}>
+                            <ChevronRightIcon
+                              aria-hidden="true"
+                              className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary"
+                            />
+                          </TrailingIconText>
+                        </Link>
+                      ) : (
+                        group.eventName
+                      )}
+                    </p>
+                  ) : null}
                 </div>
                 {students.length === 0 ? (
                   <GroupBanner group={group} />
                 ) : (
-                  <ul className="flex flex-wrap gap-x-3 gap-y-4">
+                  <StudentThumbList size="large">
                     {students.map((recruitment) => {
                       const key = `${group.groupUid}:${recruitment.favoriteKey}`;
                       return (
@@ -230,7 +251,7 @@ export function HomeRecruitmentSection({
                         </li>
                       );
                     })}
-                  </ul>
+                  </StudentThumbList>
                 )}
               </div>
             );

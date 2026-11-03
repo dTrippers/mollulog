@@ -3,6 +3,7 @@ import { BookOpenIcon, MegaphoneIcon, ViewfinderCircleIcon } from "@heroicons/re
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { RaidSummary } from "~/components/v2/features/futures/FutureTimeline";
+import { TrailingIconText } from "~/components/v2/primitives/TrailingIconText";
 import { selectHomeCampaigns, selectHomeJointFiringDrill, selectHomeMainStory } from "~/domain/home-content";
 import {
   getHomeOngoingChip,
@@ -147,11 +148,12 @@ function MainStoryTile({
           to="/mainstory"
           className="-mx-1 rounded-md px-1 whitespace-pre-line transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
         >
-          {story.name}
-          <ChevronRightIcon
-            aria-hidden="true"
-            className="ml-1 inline-block size-4 shrink-0 align-middle text-v2-fg-tertiary"
-          />
+          <TrailingIconText text={story.name}>
+            <ChevronRightIcon
+              aria-hidden="true"
+              className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary"
+            />
+          </TrailingIconText>
         </Link>
       }
     />

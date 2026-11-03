@@ -3,11 +3,20 @@ import { cn } from "~/lib/utils";
 
 const noticeText = "헤일로 모드가 켜져있어요";
 
-export default function HaloModeNotice({ className }: { className?: string }) {
+// `center` suits a thumbnail with nothing else on it. `top-start` keeps a banner's overlaid text clear: the notice sits in
+// the top left corner, at the same offset as a time chip in the top right corner.
+export default function HaloModeNotice({
+  className,
+  placement = "center",
+}: {
+  className?: string;
+  placement?: "center" | "top-start";
+}) {
   return (
     <div
       className={cn(
-        "halo-mode-notice-container pointer-events-none absolute inset-0 z-10 flex items-center justify-center p-1",
+        "halo-mode-notice-container pointer-events-none absolute inset-0 z-10 flex",
+        placement === "center" ? "items-center justify-center p-1" : "items-start justify-start p-2.5 md:p-3",
         className,
       )}
     >

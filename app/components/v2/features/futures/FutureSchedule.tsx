@@ -17,6 +17,7 @@ import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { StudentSlot } from "../students/StudentSlot";
+import { StudentThumbList } from "../students/StudentThumbList";
 import type { FutureStudentEntry } from "../students/types";
 import { ContentMedia } from "./ContentMedia";
 import { ContentHighlightOverlay } from "./FeaturedContentBanner";
@@ -223,7 +224,7 @@ function ScheduleRow({
                   {group.sections.map((section) => (
                     <div key={section.key} className={section.key === "others" ? "mt-3 space-y-2" : "space-y-2"}>
                       {section.title ? <p className="text-xs text-v2-fg-tertiary">{section.title}</p> : null}
-                      <ul className="flex flex-wrap gap-3">
+                      <StudentThumbList>
                         {section.entries.map((entry) => (
                           <li key={entry.favoriteKey}>
                             <StudentSlot
@@ -234,7 +235,7 @@ function ScheduleRow({
                             />
                           </li>
                         ))}
-                      </ul>
+                      </StudentThumbList>
                     </div>
                   ))}
                   {highlightedScheduleTargetKey === `${group.uid}::${row.since}` && highlightAnimationKey > 0 ? (

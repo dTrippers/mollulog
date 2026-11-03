@@ -16,6 +16,7 @@ import {
 } from "~/components/v2/features/scanner/ScannerStepHeader";
 import { scannerNumberInputClassName } from "~/components/v2/features/scanner/scanner-number-input";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { StudentThumbList } from "~/components/v2/features/students/StudentThumbList";
 import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
 import { TierInput } from "~/components/v2/features/students/TierInput";
 import { PageActionBar } from "~/components/v2/layout/PageActionBar";
@@ -1062,9 +1063,9 @@ function StudentCompletionList({
   return (
     <div className="flex flex-col gap-v2-group-gap">
       <p className="text-sm font-semibold text-v2-fg">{title}</p>
-      <ul className="flex flex-wrap gap-3">
+      <StudentThumbList>
         {students.map((student) => <StudentCompletionCard key={student.uid} student={student} />)}
-      </ul>
+      </StudentThumbList>
     </div>
   );
 }

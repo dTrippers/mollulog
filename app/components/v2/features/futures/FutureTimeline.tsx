@@ -43,7 +43,9 @@ import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { HintChip } from "../../primitives/HintChip";
+import { TrailingIconText } from "../../primitives/TrailingIconText";
 import { StudentSlot } from "../students/StudentSlot";
+import { StudentThumbList } from "../students/StudentThumbList";
 import { ContentMedia } from "./ContentMedia";
 import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { FeatureBanner } from "./FeatureBanner";
@@ -180,8 +182,9 @@ function TimelineItem({
       className={cn("group block text-base font-semibold whitespace-pre-line text-v2-fg hover:underline", v2FocusRing)}
       {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
     >
-      {content.name}
-      <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary" />
+      <TrailingIconText text={content.name}>
+        <ChevronRightIcon aria-hidden="true" className="ml-1 inline-block size-4 align-middle text-v2-fg-tertiary" />
+      </TrailingIconText>
     </Link>
   ) : (
     <p className="text-base font-semibold whitespace-pre-line text-v2-fg">{content.name}</p>
@@ -512,7 +515,7 @@ function StudentBlock({
           {showPickupUnavailableNotice ? <HintChip {...PICKUP_UNAVAILABLE_NOTICE} /> : null}
         </div>
       ) : null}
-      <ul className="flex flex-wrap gap-x-2 gap-y-3 md:gap-3">
+      <StudentThumbList>
         {entries.map((entry) => (
           <li key={entry.favoriteKey} className="shrink-0">
             <StudentSlot
@@ -523,7 +526,7 @@ function StudentBlock({
             />
           </li>
         ))}
-      </ul>
+      </StudentThumbList>
     </div>
   );
 }
