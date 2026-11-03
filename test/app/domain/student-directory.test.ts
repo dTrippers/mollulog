@@ -196,11 +196,28 @@ describe("student directory filters and sorting", () => {
     );
   });
 
-  it("keeps unknown sort values last for either direction and breaks public ties by release date", () => {
+  it("sorts 최신순 and 과거순 by order, not by release date", () => {
     const students = [
-      student({ uid: "unknown", school: "unmapped-school", releaseAt: null }),
-      student({ uid: "older", school: "millennium", releaseAt: "2022-01-01T00:00:00.000Z" }),
-      student({ uid: "newer", school: "millennium", releaseAt: "2024-01-01T00:00:00.000Z" }),
+      student({ uid: "first", order: 1, releaseAt: "2025-01-01T00:00:00.000Z" }),
+      student({ uid: "third", order: 3, releaseAt: null }),
+      student({ uid: "second", order: 2, releaseAt: "2021-01-01T00:00:00.000Z" }),
+    ];
+    const sort = (direction: "asc" | "desc") =>
+      filterAndSortStudentDirectory(
+        students,
+        { ...defaultStudentDirectoryFilterState, sort: "release", direction },
+        signedOut,
+      ).map(({ uid }) => uid);
+
+    expect(sort("desc")).toEqual(["third", "second", "first"]);
+    expect(sort("asc")).toEqual(["first", "second", "third"]);
+  });
+
+  it("keeps unknown sort values last for either direction and breaks public ties by the newest order", () => {
+    const students = [
+      student({ uid: "unknown", school: "unmapped-school", order: 3 }),
+      student({ uid: "older", school: "millennium", order: 1, releaseAt: "2024-01-01T00:00:00.000Z" }),
+      student({ uid: "newer", school: "millennium", order: 2, releaseAt: "2022-01-01T00:00:00.000Z" }),
     ];
     const asc = filterAndSortStudentDirectory(
       students,
@@ -432,12 +449,5 @@ describe("student directory filters and sorting", () => {
     expect(
       getStudentDirectoryLabel(laterInstantSameLocalDate, "sortValue", "release", signedOut, "Asia/Seoul")?.value,
     ).toBe("2025/03/08");
-    expect(
-      filterAndSortStudentDirectory(
-        [studentAtUtcAfternoon, laterInstantSameLocalDate],
-        { ...defaultStudentDirectoryFilterState, sort: "release", direction: "desc" },
-        signedOut,
-      ).map(({ uid }) => uid),
-    ).toEqual(["later", "10001"]);
   });
 });

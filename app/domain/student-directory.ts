@@ -396,7 +396,7 @@ export function compareStudentDirectoryStudents(
 ): number {
   const primary = comparePrimarySortValues(a, b, sort, direction, personal);
   if (primary !== 0) return primary;
-  return compareReleaseLatest(a, b) || b.order - a.order || a.name.localeCompare(b.name, "ko") || a.uid.localeCompare(b.uid);
+  return b.order - a.order || a.name.localeCompare(b.name, "ko") || a.uid.localeCompare(b.uid);
 }
 
 function comparePrimarySortValues(
@@ -441,7 +441,8 @@ function personalSortValue(record: StudentDirectoryPersonalRecord, sort: "myTier
 }
 
 function publicSortValue(student: StudentDirectoryStudent, sort: Exclude<StudentDirectorySort, "myTier" | "myLevel" | "myBond">): number | string | null {
-  if (sort === "release") return dateTime(student.releaseAt);
+  // 최신순 and 과거순 follow `order`, not `releaseAt`.
+  if (sort === "release") return student.order;
   if (sort === "name") return student.name.trim() || null;
   if (sort === "initialTier") return student.initialTier > 0 ? student.initialTier : null;
   if (sort === "street" || sort === "outdoor" || sort === "indoor") {
@@ -452,13 +453,6 @@ function publicSortValue(student: StudentDirectoryStudent, sort: Exclude<Student
   if (sort === "school") return isKnownSchool(student.school) ? schoolShortLocale[student.school] : null;
   if (student.club === null) return "없음";
   return student.club.uid && student.club.name ? student.club.name : null;
-}
-
-function compareReleaseLatest(a: StudentDirectoryStudent, b: StudentDirectoryStudent): number {
-  const left = dateTime(a.releaseAt);
-  const right = dateTime(b.releaseAt);
-  if (left === null || right === null) return left === null ? (right === null ? 0 : 1) : -1;
-  return right - left;
 }
 
 function dateTime(value: string | null): number | null {
