@@ -11,6 +11,22 @@ import {
 
 const AYUMU_CONFIG_ENV = "MOLLULOG_AYUMU_CONFIG_PATH";
 
+// Each browser asset is a billed CDN request, and every deploy renames the chunks it touches.
+// Keep the framework in its own chunk so deploys that use the same framework APIs leave it
+// cached, and serve icons as one file instead of one file per icon.
+const CLIENT_CODE_SPLITTING_GROUPS = [
+  {
+    name: "vendor-react",
+    test: /[\\/]node_modules[\\/](?:react|react-dom|react-router|scheduler)[\\/]/,
+    priority: 20,
+  },
+  {
+    name: "icons",
+    test: /[\\/]node_modules[\\/]@heroicons[\\/]/,
+    priority: 10,
+  },
+];
+
 export function workerConfigForCommand(command, env = process.env) {
   return command === "serve"
     ? { secrets: { required: Object.keys(workerBindingsFromEnvironment(env)) } }
@@ -72,6 +88,17 @@ export default defineConfig(({ mode, command }) => {
       tailwindcss(),
       reactRouter(),
     ],
+    environments: {
+      client: {
+        build: {
+          rolldownOptions: {
+            output: {
+              codeSplitting: { groups: CLIENT_CODE_SPLITTING_GROUPS },
+            },
+          },
+        },
+      },
+    },
     worker: {
       format: "es",
     },
