@@ -54,4 +54,15 @@ describe("chat answer blocks", () => {
     expect(chart).toContain("–");
     expect(renderToStaticMarkup(<AnswerBlocks blocks={[{ type: "plaintext", text: "**기존 평문**" }]} />)).toContain("**기존 평문**");
   });
+
+  it("omits the legend for an unnamed points series and labels its table column", () => {
+    const chart = renderToStaticMarkup(<AnswerBlocks blocks={[{
+      type: "bar_chart", title: "직접 편성 비율", unit: "percent", categories: ["아코", "히마리"],
+      series: [{ name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] }],
+    }]} />);
+    expect(chart).not.toContain("<ul");
+    expect(chart).toContain("<th scope=\"col\">값</th>");
+    expect(chart).toContain("아코");
+    expect(chart).toContain("40.1%");
+  });
 });

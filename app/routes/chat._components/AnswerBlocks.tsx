@@ -1,5 +1,5 @@
 import StudentPortrait from "~/components/v2/features/students/StudentPortrait";
-import type { AnswerBlock } from "~/models/al1s-question-contract";
+import type { AnswerBlock, AnswerChartSeries } from "~/models/al1s-question-contract";
 import { Fragment } from "react";
 
 const colors = ["bg-v2-fg", "bg-v2-accent", "bg-v2-fg-tertiary"];
@@ -23,6 +23,10 @@ function valueFormatter(unit: ChartUnit, values: Array<number | null>) {
   };
 }
 
+function seriesKey(series: AnswerChartSeries) {
+  return series.name === null ? series.sourceIds.join(",") : series.sourceId;
+}
+
 function AnswerBarChart({ block }: { block: Extract<AnswerBlock, { type: "bar_chart" }> }) {
   const max = Math.max(0, ...block.series.flatMap((series) => series.values.filter((value): value is number => value !== null)));
   const percent = block.unit === "percent" || block.unit === "fraction";
@@ -33,19 +37,19 @@ function AnswerBarChart({ block }: { block: Extract<AnswerBlock, { type: "bar_ch
   return (
     <figure className="my-5 max-w-md">
       <figcaption className="text-sm font-medium leading-5 text-v2-fg">{block.title}</figcaption>
-      <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-v2-fg-secondary">
+      {block.series.some((series) => series.name !== null) ? <ul className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-5 text-v2-fg-secondary">
         {block.series.map((series, index) => (
           <li
             // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each legend item distinct.
-            key={`${series.sourceId}:${index}`}
+            key={`${seriesKey(series)}:${index}`}
             className="inline-flex min-w-0 items-center gap-1.5"
           >
             {seriesCount > 1 ? <span aria-hidden="true" className={`size-2 shrink-0 rounded-sm ${colors[index]}`} /> : null}
-            {series.subject?.type === "student" ? <StudentPortrait uid={series.subject.uid} className="size-5 shrink-0 rounded-full object-cover" /> : null}
+            {"subject" in series && series.subject?.type === "student" ? <StudentPortrait uid={series.subject.uid} className="size-5 shrink-0 rounded-full object-cover" /> : null}
             <span>{series.name}</span>
           </li>
         ))}
-      </ul>
+      </ul> : null}
       <div aria-hidden="true" className="mt-2.5 grid grid-cols-[fit-content(6rem)_minmax(0,1fr)_auto] items-center gap-x-2 gap-y-1">
         {block.categories.map((category, categoryIndex) => block.series.map((series, seriesIndex) => {
           const value = series.values[categoryIndex] ?? null;
@@ -53,7 +57,7 @@ function AnswerBarChart({ block }: { block: Extract<AnswerBlock, { type: "bar_ch
           const groupClass = categoryIndex > 0 && seriesIndex === 0 ? "mt-1.5" : "";
           return <Fragment
             // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each chart row distinct.
-            key={`${series.sourceId}:${category}:${seriesIndex}`}
+            key={`${seriesKey(series)}:${category}:${seriesIndex}`}
           >
             {seriesIndex === 0 ? <span key={`cat:${category}`} className={`col-start-1 break-keep text-xs leading-4 text-v2-fg-secondary [overflow-wrap:anywhere] ${groupClass}`} style={{ gridRow: `${categoryIndex * seriesCount + 1} / span ${seriesCount}` }}>{category}</span> : null}
             <span className={`col-start-2 flex h-4 min-w-0 items-center ${groupClass}`} style={{ gridRow: row }}><span className={`h-2 w-full rounded-full ${percent ? "bg-v2-inset" : ""}`}><span className={`block h-2 rounded-full ${value !== null && value > 0 ? "min-w-[2px]" : ""} ${colors[seriesIndex]}`} style={{ width: `${Math.max(0, Math.min(100, scale(value ?? 0)))}%` }} /></span></span>
@@ -66,11 +70,11 @@ function AnswerBarChart({ block }: { block: Extract<AnswerBlock, { type: "bar_ch
         <thead><tr><th scope="col">항목</th>{block.series.map((series, index) => <th
           scope="col"
           // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each column distinct.
-          key={`${series.sourceId}:${index}`}
-        >{series.name}</th>)}</tr></thead>
+          key={`${seriesKey(series)}:${index}`}
+        >{series.name ?? "값"}</th>)}</tr></thead>
         <tbody>{block.categories.map((category, index) => <tr key={category}><th scope="row">{category}</th>{block.series.map((series, seriesIndex) => <td
           // biome-ignore lint/suspicious/noArrayIndexKey: source IDs may repeat; the series position keeps each cell distinct.
-          key={`${series.sourceId}:${seriesIndex}`}
+          key={`${seriesKey(series)}:${seriesIndex}`}
         >{format(series.values[index] ?? null)}</td>)}</tr>)}</tbody>
       </table>
     </figure>

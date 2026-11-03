@@ -128,6 +128,25 @@ describe("chatAnswerCopyText", () => {
     ).toBe("결론입니다.\n\n사용률\n- 루나틱: 미카 99.8%, 아리스 44.1%\n- 토먼트: 미카 –, 아리스 0.0%");
   });
 
+  it("copies an unnamed points series as bare values", () => {
+    expect(
+      chatAnswerCopyText({
+        text: "",
+        blocks: [
+          {
+            type: "bar_chart",
+            title: "직접 편성 비율",
+            unit: "percent",
+            categories: ["아코", "히마리"],
+            series: [{ name: null, sourceIds: ["s1", "s2"], values: [32.3, null] }],
+          },
+        ],
+        sources: [],
+        limitations: [],
+      }),
+    ).toBe("직접 편성 비율\n- 아코: 32.3%\n- 히마리: –");
+  });
+
   it("strips matched bold markers beside Hangul while preserving spaced and unmatched asterisks", () => {
     expect(
       chatAnswerCopyText({

@@ -65,7 +65,11 @@ export function parseSourceSubject(value: unknown): SourceSubject | undefined {
 export type AnswerBlock =
   | { type: "plaintext"; text: string }
   | { type: "markdown"; text: string; html?: string }
-  | { type: "bar_chart"; title: string; unit: "percent" | "fraction" | "count" | "none"; categories: string[]; series: Array<{ name: string; values: Array<number | null>; sourceId: string; subject?: SourceSubject }> };
+  | { type: "bar_chart"; title: string; unit: "percent" | "fraction" | "count" | "none"; categories: string[]; series: AnswerChartSeries[] };
+/** A points chart has one unnamed series whose bars each come from a different source. */
+export type AnswerChartSeries =
+  | { name: string; values: Array<number | null>; sourceId: string; subject?: SourceSubject }
+  | { name: null; values: Array<number | null>; sourceIds: string[] };
 export type Answer = { text: string; blocks: AnswerBlock[]; sources: AnswerSource[]; limitations: string[] };
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -82,11 +86,18 @@ export function parseAnswerBlocks(value: unknown, fallbackText: string): AnswerB
     const seriesInput = block.series;
     if (typeof block.title !== "string" || !block.title.trim() || !["percent", "fraction", "count", "none"].includes(String(block.unit)) || !Array.isArray(categories) || categories.length < 1 || categories.length > 8 || !categories.every((item) => typeof item === "string" && item.trim() !== "") || new Set(categories).size !== categories.length || !Array.isArray(seriesInput) || seriesInput.length < 1 || seriesInput.length > 3) return [];
     const unit = block.unit as "percent" | "fraction" | "count" | "none";
-    const series = seriesInput.flatMap((candidateSeries) => {
+    const series = seriesInput.flatMap((candidateSeries): AnswerChartSeries[] => {
       const item = record(candidateSeries);
-      if (!item || typeof item.name !== "string" || !item.name.trim() || typeof item.sourceId !== "string" || !item.sourceId.trim() || !Array.isArray(item.values) || item.values.length !== categories.length || !item.values.every((value) => value === null || (typeof value === "number" && Number.isFinite(value) && (unit === "percent" ? value >= 0 && value <= 100 : unit === "fraction" ? value >= 0 && value <= 1 : true)))) return [];
+      if (!item || !Array.isArray(item.values) || item.values.length !== categories.length || !item.values.every((value) => value === null || (typeof value === "number" && Number.isFinite(value) && (unit === "percent" ? value >= 0 && value <= 100 : unit === "fraction" ? value >= 0 && value <= 1 : true)))) return [];
+      const values = item.values as Array<number | null>;
+      if (item.name === null) {
+        const sourceIds = item.sourceIds;
+        if (seriesInput.length !== 1 || !Array.isArray(sourceIds) || sourceIds.length < 1 || !sourceIds.every((sourceId) => typeof sourceId === "string" && sourceId.trim() !== "")) return [];
+        return [{ name: null, values, sourceIds: sourceIds as string[] }];
+      }
+      if (typeof item.name !== "string" || !item.name.trim() || typeof item.sourceId !== "string" || !item.sourceId.trim()) return [];
       const subject = item.subject === undefined ? undefined : parseSourceSubject(item.subject);
-      return [{ name: item.name, sourceId: item.sourceId, values: item.values as Array<number | null>, ...(subject ? { subject } : {}) }];
+      return [{ name: item.name, sourceId: item.sourceId, values, ...(subject ? { subject } : {}) }];
     });
     if (series.length !== seriesInput.length) return [];
     return [{ type: "bar_chart", title: block.title, unit, categories: categories as string[], series }];

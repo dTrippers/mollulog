@@ -124,7 +124,7 @@ export function chatAnswerCopyText(answer: Answer): string {
       }
       return block.unit === "count" ? value.toLocaleString("ko-KR") : String(value);
     };
-    return `${block.title}\n${block.categories.map((category, index) => `- ${category}: ${block.series.map((series) => `${series.name} ${format(series.values[index] ?? null)}`).join(", ")}`).join("\n")}`;
+    return `${block.title}\n${block.categories.map((category, index) => `- ${category}: ${block.series.map((series) => series.name === null ? format(series.values[index] ?? null) : `${series.name} ${format(series.values[index] ?? null)}`).join(", ")}`).join("\n")}`;
   }).join("\n\n");
 }
 

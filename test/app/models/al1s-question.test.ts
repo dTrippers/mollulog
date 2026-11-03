@@ -131,6 +131,41 @@ describe("AL1S question result parser", () => {
     ).toMatchObject({ answer: { text: "Kept", blocks: [{ type: "plaintext", text: "Kept" }] } });
   });
 
+  it("accepts one unnamed multi-source series, but not alongside other series", () => {
+    const pointsChart = (series: unknown[]) =>
+      parseQuestionRunResult({
+        status: "answered",
+        run,
+        answer: {
+          text: "Answer",
+          sources: [],
+          limitations: [],
+          blocks: [
+            { type: "markdown", text: "Answer" },
+            { type: "bar_chart", title: "사용률", unit: "percent", categories: ["아코", "히마리"], series },
+          ],
+        },
+      });
+    expect(pointsChart([{ name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] }])).toMatchObject({
+      answer: {
+        blocks: [
+          { type: "markdown" },
+          { type: "bar_chart", series: [{ name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] }] },
+        ],
+      },
+    });
+    for (const series of [
+      [
+        { name: null, sourceIds: ["s1", "s2"], values: [32.3, 40.1] },
+        { name: "미카", sourceId: "s3", values: [1, 2] },
+      ],
+      [{ name: null, sourceIds: [], values: [32.3, 40.1] }],
+      [{ name: null, sourceId: "s1", values: [32.3, 40.1] }],
+    ]) {
+      expect(pointsChart(series)).toMatchObject({ answer: { blocks: [{ type: "markdown" }] } });
+    }
+  });
+
   it("maps missing bindings, thrown calls, and unexpected shapes to safe outcomes", async () => {
     const request = {
       question: "Question",
