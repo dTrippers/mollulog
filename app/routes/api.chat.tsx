@@ -10,7 +10,12 @@ import {
 import { isAdminSensei } from "~/domain/sensei-role";
 import { getLogger } from "~/lib/observability.server";
 import { renderQuestionAnswer, type QuestionServiceCall, runQuestion } from "~/models/al1s-question.server";
-import { type QuestionRequest, type QuestionRunEvent, REQUEST_LIMITS } from "~/models/al1s-question-contract";
+import {
+  type Answer,
+  type QuestionRequest,
+  type QuestionRunEvent,
+  REQUEST_LIMITS,
+} from "~/models/al1s-question-contract";
 import {
   completeChatMessage,
   retryChatMessage,
@@ -33,6 +38,7 @@ export type ChatActionDependencies = {
   revokeConsent: (senseiId: number) => Promise<void>;
   buildSnapshot: (senseiId: number) => Promise<QuestionRequest["member"]>;
   runQuestion: (question: QuestionRequest, onEvent?: (event: QuestionRunEvent) => void) => Promise<QuestionServiceCall>;
+  renderAnswer: (answer: Answer) => Answer;
   startMessage: (input: {
     senseiId: number;
     conversationUid: string | null;
@@ -229,7 +235,7 @@ export async function handleChatAction(request: Request, deps: ChatActionDepende
             sourceCount: 0,
           };
           if (existing < 0) progress = [...progress, step];
-          else progress = progress.map((current, index) => index === existing ? step : current);
+          else progress = progress.map((current, index) => (index === existing ? step : current));
         } else {
           progress = progress.map((step) =>
             step.callId === event.callId && step.round === event.round
@@ -249,7 +255,13 @@ export async function handleChatAction(request: Request, deps: ChatActionDepende
         ? { status: "failed", failureCode: result.error.code, runId: result.run.runId, progress }
         : { status: result.status, answer: result.answer, runId: result.run.runId, progress },
     );
-    emit({ type: "result", intent: "question", ok: true, result: result.status === "failed" ? result : { ...result, answer: renderQuestionAnswer(result.answer) }, ...ids });
+    emit({
+      type: "result",
+      intent: "question",
+      ok: true,
+      result: result.status === "failed" ? result : { ...result, answer: deps.renderAnswer(result.answer) },
+      ...ids,
+    });
   };
 
   let task: Promise<void> = Promise.resolve();
@@ -265,13 +277,15 @@ export async function handleChatAction(request: Request, deps: ChatActionDepende
         }
       };
       emit({ type: "started", ...ids });
-      task = process(emit).catch(async (error) => {
-        deps.reportError?.("Failed to process an AI chat message", error);
-        await complete({ status: "failed", failureCode: "service_unavailable", runId: null, progress });
-        emit({ type: "result", intent: "question", ok: false, code: "service_unavailable", ...ids });
-      }).finally(() => {
-        if (connected) controller.close();
-      });
+      task = process(emit)
+        .catch(async (error) => {
+          deps.reportError?.("Failed to process an AI chat message", error);
+          await complete({ status: "failed", failureCode: "service_unavailable", runId: null, progress });
+          emit({ type: "result", intent: "question", ok: false, code: "service_unavailable", ...ids });
+        })
+        .finally(() => {
+          if (connected) controller.close();
+        });
     },
     cancel() {
       // The action's waitUntil task continues even after the browser disconnects.
@@ -300,6 +314,7 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     revokeConsent: (senseiId) => revokeQuestionMemberDataConsent(env, senseiId, { ctx }),
     buildSnapshot: (senseiId) => buildQuestionMemberSnapshot(env, senseiId),
     runQuestion: (question, onEvent) => runQuestion(env, question, onEvent),
+    renderAnswer: renderQuestionAnswer,
     startMessage: (input) => startChatMessage(env, input, { ctx }),
     retryMessage: (input) => retryChatMessage(env, input, { ctx }),
     completeMessage: (input) => completeChatMessage(env, input, { ctx }),

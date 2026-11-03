@@ -83,19 +83,23 @@ export async function loadChatPageData(
   }
   const loadedAt = new Date();
   const { conversations, selectedConversation } = await readChatData(sensei.id, conversationUid, loadedAt);
-  const renderedSelectedConversation = selectedConversation
-    ? { ...selectedConversation, messages: selectedConversation.messages.map((message) => message.answer
-      ? { ...message, answer: renderQuestionAnswer(message.answer) }
-      : message) }
-    : null;
   return {
     isSignedIn: true,
     initialConsent,
     consentUnavailable,
     conversations,
     selectedUid: conversationUid,
-    selectedConversation: renderedSelectedConversation,
+    selectedConversation,
     loadedAt,
+  };
+}
+
+function renderConversationAnswers(conversation: ChatConversation): ChatConversation {
+  return {
+    ...conversation,
+    messages: conversation.messages.map((message) =>
+      message.answer ? { ...message, answer: renderQuestionAnswer(message.answer) } : message,
+    ),
   };
 }
 
@@ -111,7 +115,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
         listChatConversations(env, { senseiId, now, listDays: CHAT_CONVERSATION_LIST_DAYS }, { ctx }),
         uid !== null ? readChatConversation(env, { senseiId, conversationUid: uid }, { ctx }) : Promise.resolve(null),
       ]);
-      return { conversations, selectedConversation };
+      return {
+        conversations,
+        selectedConversation: selectedConversation && renderConversationAnswers(selectedConversation),
+      };
     },
     conversationUid,
     (error) => logger.error("Failed to read AI question consent", error),

@@ -108,6 +108,7 @@ function makeDependencies(overrides: Partial<ChatActionDependencies> = {}): Chat
     revokeConsent: async () => undefined,
     buildSnapshot: async () => ({ version: 1, students: [], favorites: [], formations: [] }),
     runQuestion: async () => ({ ok: true, result: answer }),
+    renderAnswer: (answer) => answer,
     startMessage: async (input) => started([], input.question),
     retryMessage: async () => started(),
     completeMessage: async () => undefined,
@@ -502,6 +503,22 @@ describe("AI chatbot page and resource action", () => {
       ),
     ).toEqual({ intent: "question", ok: false, code });
     expect(runQuestion).not.toHaveBeenCalled();
+  });
+
+  it("renders the answer it returns, but stores the raw answer", async () => {
+    const completeMessage = jest.fn(
+      async (_input: Parameters<ChatActionDependencies["completeMessage"]>[0]) => undefined,
+    );
+    const rendered = { ...answer.answer, blocks: [{ type: "markdown" as const, text: "<p>Answer</p>" }] };
+    const renderAnswer = jest.fn<ChatActionDependencies["renderAnswer"]>(() => rendered);
+    const deps = makeDependencies({ completeMessage, renderAnswer });
+    expect(
+      await responseBody(await handleChatAction(actionRequest({ intent: "question", question: "Question" }), deps)),
+    ).toMatchObject({ intent: "question", ok: true, result: { status: "answered", answer: rendered } });
+    expect(renderAnswer).toHaveBeenCalledWith(answer.answer);
+    expect(completeMessage).toHaveBeenLastCalledWith(
+      expect.objectContaining({ outcome: expect.objectContaining({ answer: answer.answer }) }),
+    );
   });
 
   it("stores failures after the message starts, but not rate-limited or invalid requests", async () => {
