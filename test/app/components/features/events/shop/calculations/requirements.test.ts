@@ -70,6 +70,7 @@ function calculate(overrides: {
     stages,
     includeFirstClear: false,
     minigamePlayCount: 0,
+    jankenStagePlays: {},
     overriddenRequiredQuantities: overrides.overriddenRequiredQuantities ?? {},
   });
 }

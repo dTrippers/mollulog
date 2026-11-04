@@ -26,7 +26,7 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { calendarDayDifference } from "~/domain/home-portal";
 import { compareInstantAsc, formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { isEventShopStateSubmission } from "~/lib/revalidation";
-import { cardFlipLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
+import { cardFlipLocale, jankenLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
 import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
@@ -103,7 +103,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
 
 type DetailHandle = { v2Width?: V2PageWidth; v2HeaderTitleHidden?: boolean };
 
-type EventDetailTabKey = "overview" | "shop" | "simulator" | "card-flip" | "treasure-hunt" | "road-puzzle";
+type EventDetailTabKey = "overview" | "shop" | "simulator" | "card-flip" | "treasure-hunt" | "road-puzzle" | "janken";
 
 export function getActiveEventDetailTab(pathname: string, uid: string): EventDetailTabKey | null {
   if (pathname === `/events/${uid}`) return "overview";
@@ -112,6 +112,7 @@ export function getActiveEventDetailTab(pathname: string, uid: string): EventDet
   if (pathname === `/events/${uid}/shop/card-flip`) return "card-flip";
   if (pathname === `/events/${uid}/treasure-hunt`) return "treasure-hunt";
   if (pathname === `/events/${uid}/road-puzzle`) return "road-puzzle";
+  if (pathname === `/events/${uid}/shop/janken`) return "janken";
   return null;
 }
 
@@ -222,6 +223,18 @@ export default function EventPage() {
             linkState: futureLinkState,
           },
         ]
+      : []),
+    ...(minigameType === "janken"
+      ? [{
+          key: "janken",
+          text: jankenLocale.menuTitle,
+          Icon: RectangleStackIcon,
+          link: `/events/${uid}/shop/janken`,
+          active: activeTab === "janken",
+          disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
+          disabledReason: shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
+          linkState: futureLinkState,
+        }]
       : []),
     ...(minigameType === "treasure_hunt"
       ? [

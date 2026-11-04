@@ -12,6 +12,7 @@ import {
   getShopAvailableEvents,
 } from "../../../app/models/event-content";
 import { getEventList } from "../../../app/views/events";
+import { janken860Fixture } from "../domain/fixtures/janken-860";
 
 jest.mock("~/models/timeline-content.server", () => ({
   getAllTimelineContentsMeta: jest.fn(),
@@ -133,6 +134,74 @@ function createCardFlipSource(
 async function loadCardFlipContent(cardFlip: unknown, paymentResource?: unknown) {
   mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
   mockedRunQuery.mockResolvedValue(createCardFlipSource(cardFlip, paymentResource));
+  return getEventShopContent(env, "main-story-timeline");
+}
+
+function createJankenSource(janken: unknown) {
+  return queryResult({
+    eventContent: {
+      stages: [],
+      shopResources: [],
+      bonuses: [],
+      minigameConfigs: [
+        {
+          minigameType: "janken",
+          payment: { quantity: 5, resource: { type: "item", uid: "legacy-cost", name: "기존 비용" } },
+          payments: [],
+          rewardGroups: [],
+          treasureHunt: null,
+          cardFlip: null,
+          janken,
+        },
+      ],
+    },
+  }) as never;
+}
+
+function createJanken860SourceFixture() {
+  const resource = (uid: string, type: string) => ({ type, uid, name: uid });
+  return {
+    challengeMultipleUnlockScore: janken860Fixture.challengeMultipleUnlockScore,
+    multipleMax: janken860Fixture.multipleMax,
+    stages: janken860Fixture.stages.map((stage) => ({
+      uid: stage.uid,
+      stageType: stage.stageType,
+      stageNumber: stage.stageNumber,
+      previousStageUid: stage.previousStageUid,
+      entryCost: {
+        quantity: stage.entryCost.quantity,
+        resource: resource(stage.entryCost.resourceUid, stage.entryCost.resourceType),
+      },
+      rewards: stage.rewards.map((reward) => ({
+        amount: reward.quantity,
+        probability: reward.probability,
+        tag: reward.tag,
+        resource: resource(reward.resourceUid, reward.resourceType),
+      })),
+    })),
+    scoreRewards: janken860Fixture.scoreRewards.map((reward) => ({
+      tier: reward.tier,
+      score: reward.score,
+      rewards: reward.rewards.map((item) => ({
+        quantity: item.quantity,
+        resource: resource(item.resourceUid, item.resourceType),
+      })),
+    })),
+    equipmentUpgrade: {
+      maxTier: janken860Fixture.equipmentUpgrade.maxTier,
+      costResource: resource(
+        janken860Fixture.equipmentUpgrade.costResource?.resourceUid ?? "",
+        janken860Fixture.equipmentUpgrade.costResource?.resourceType ?? "item",
+      ),
+      tierCosts: janken860Fixture.equipmentUpgrade.tierCosts,
+    },
+    equipments: janken860Fixture.equipments,
+  };
+}
+
+async function loadJankenContent(janken: unknown) {
+  mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+  mockedRunQuery.mockResolvedValue(createJankenSource(janken));
   return getEventShopContent(env, "main-story-timeline");
 }
 
@@ -519,6 +588,87 @@ describe("getEventMetadata", () => {
 });
 
 describe("getEventShopContent", () => {
+  it("converts the event 860 payload into an available janken config", async () => {
+    const shopContent = await loadJankenContent(createJanken860SourceFixture());
+    const janken = shopContent?.minigameConfig?.janken;
+
+    expect(janken?.status).toBe("available");
+    if (janken?.status !== "available") throw new Error("Expected event 860 janken config to be available");
+    expect(janken.stages.map(({ uid }) => uid)).toEqual([
+      "100860101",
+      "100860102",
+      "100860103",
+      "100860104",
+      "100860105",
+      "100860201",
+      "100860202",
+      "100860203",
+      "100860204",
+      "100860301",
+    ]);
+    expect(janken.stages.map(({ stageType }) => stageType)).toEqual([
+      "story",
+      "story",
+      "story",
+      "story",
+      "story",
+      "normal",
+      "normal",
+      "normal",
+      "normal",
+      "challenge",
+    ]);
+    expect(janken.stages.map(({ entryCost }) => entryCost.quantity)).toEqual([
+      100, 100, 100, 100, 100, 325, 350, 375, 400, 400,
+    ]);
+    expect(janken.stages.map(({ previousStageUid }) => previousStageUid)).toEqual([
+      null,
+      "100860101",
+      "100860102",
+      "100860103",
+      "100860104",
+      "100860105",
+      "100860201",
+      "100860202",
+      "100860203",
+      "100860204",
+    ]);
+    expect(janken.scoreRewards.map(({ tier, score }) => [tier, score])).toEqual([
+      [5, 500_000],
+      [10, 1_000_000],
+      [15, 1_750_000],
+      [20, 2_500_000],
+      [25, 3_250_000],
+      [30, 4_000_000],
+      [31, 4_150_000],
+      [50, 7_000_000],
+    ]);
+    expect(janken.equipmentUpgrade).toMatchObject({
+      maxTier: 5,
+      costResource: { resourceUid: "80864" },
+      tierCosts: [
+        { tier: 2, quantity: 100 },
+        { tier: 3, quantity: 150 },
+        { tier: 4, quantity: 200 },
+        { tier: 5, quantity: 250 },
+      ],
+    });
+    expect(janken.multipleMax).toBe(99);
+    expect(janken.challengeMultipleUnlockScore).toBe(2_000_000);
+  });
+
+  it("marks a missing janken payload unavailable", async () => {
+    const shopContent = await loadJankenContent(null);
+
+    expect(shopContent?.minigameConfig?.janken).toEqual({ status: "unavailable" });
+  });
+
+  it("marks a malformed janken payload invalid", async () => {
+    const shopContent = await loadJankenContent({ ...createJanken860SourceFixture(), stages: null });
+
+    expect(shopContent?.minigameConfig?.janken).toEqual({ status: "invalid" });
+  });
+
   it.each([
     [[{ uid: "student-1", name: " 학생 " }], [{ uid: "student-1", name: "학생" }]],
     [[], []],
@@ -642,7 +792,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -675,7 +825,7 @@ describe("getEventShopContent", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       true,
@@ -690,7 +840,7 @@ describe("getEventShopContent", () => {
     await expect(getEventShopContent(env, "main-story-timeline")).rejects.toThrow("shop query failed");
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,
@@ -1271,7 +1421,7 @@ describe("getEventMinigameType", () => {
     });
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-shop::v5::contentUid=linked-event::runType=permanent",
+      "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
       7 * 24 * 60 * 60,
       false,

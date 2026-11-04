@@ -1,16 +1,20 @@
-import { redirect, type LoaderFunctionArgs, type MetaFunction, type ShouldRevalidateFunction } from "react-router";
+import { type LoaderFunctionArgs, type MetaFunction, redirect, type ShouldRevalidateFunction } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
-import EventShopController from "./events.$uid._components/EventShopController";
-import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { calculateShopPurchaseDays } from "~/domain/event-shop/calculations";
+import { getJankenStudentGrowthUid } from "~/domain/event-shop/janken";
+import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain/event-shop-state-key";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
+import { captureServerError, getLogger } from "~/lib/observability.server";
 import { isEventShopPlanSaveSubmission } from "~/lib/revalidation";
 import { getEventContentSchedule, getEventMetadata, getEventShopContentForMetadata } from "~/models/event-content";
 import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
+import { getPlannerState } from "~/models/planner-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
+import { getAllStudents } from "~/models/student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
 import { getEventShopOwnedQuantities } from "~/views/event-shop-owned-quantities";
-import { captureServerError, getLogger } from "~/lib/observability.server";
+import EventShopController from "./events.$uid._components/EventShopController";
+import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const eventUid = params.uid;
@@ -23,7 +27,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     return { status: "unavailable" as const, eventName: "이벤트" };
   }
   if (!metadata) throw new Response("Not Found", { status: 404 });
-  if (metadata.contentType === "live") return redirect(`/lives/${eventUid}${new URL(request.url).search}`, { status: 301 });
+  if (metadata.contentType === "live")
+    return redirect(`/lives/${eventUid}${new URL(request.url).search}`, { status: 301 });
   const logger = getLogger(env, ctx, { route: "events.$uid.shop.loader", contentUid: eventUid });
 
   const availability = await getEventShopAvailability(env, metadata);
@@ -42,22 +47,41 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       return { status: "no-data" as const, eventName: metadata.name };
     }
 
+    const janken = shopContent.minigameConfig?.minigameType === "janken" ? shopContent.minigameConfig.janken : null;
+    const jankenStudentGrowthUid =
+      janken?.status === "available"
+        ? getJankenStudentGrowthUid(
+            janken,
+            (await getAllStudents(env, true)).map(({ uid }) => uid),
+          )
+        : null;
+
     const shopSince = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
     const shopUntil = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;
-    const stateIdentity = buildEventShopStateIdentity({ timelineUid: eventUid, shopContentUid: metadata.shopContentUid });
+    const stateIdentity = buildEventShopStateIdentity({
+      timelineUid: eventUid,
+      shopContentUid: metadata.shopContentUid,
+    });
     let recruitedStudentUids: string[] = [];
     let ownedQuantities: Record<string, number> | null = null;
     let savedShopState: EventShopState | null = null;
     let savedShopStateSource: SavedShopStateSource = "none";
+    let savedJankenEntry: JankenPlannerEntry | null = null;
     if (currentUser) {
-      const [recruitedStudents, userOwnedQuantities, primaryShopState] = await Promise.all([
+      const plannerStatePromise =
+        shopContent.minigameConfig?.minigameType === "janken"
+          ? getPlannerState(env, currentUser.id, { ctx })
+          : Promise.resolve(null);
+      const [recruitedStudents, userOwnedQuantities, primaryShopState, plannerState] = await Promise.all([
         getRecruitedStudents(env, currentUser.id),
         getEventShopOwnedQuantities(env, currentUser.id, shopContent.shopResources),
         getEventShopState(env, currentUser.id, stateIdentity.shopStateUid),
+        plannerStatePromise,
       ]);
       recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
       ownedQuantities = userOwnedQuantities;
       savedShopState = primaryShopState;
+      savedJankenEntry = plannerState?.jankenProgress[stateIdentity.shopStateUid] ?? null;
       if (savedShopState) savedShopStateSource = "primary";
       else if (stateIdentity.fallbackStateUid) {
         savedShopState = await getEventShopState(env, currentUser.id, stateIdentity.fallbackStateUid);
@@ -72,8 +96,10 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       ownedQuantities,
       eventRewardBonus: shopContent.eventRewardBonus,
       minigameConfig: shopContent.minigameConfig ?? null,
+      jankenStudentGrowthUid,
       recruitedStudentUids,
       savedShopState,
+      savedJankenEntry,
       savedShopStateSource,
       availablePurchaseDays: calculateShopPurchaseDays(shopSince, shopUntil),
       eventUid,

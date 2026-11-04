@@ -322,6 +322,25 @@ const eventContentShopContentQuery = graphql(`
             rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
           }
         }
+        janken {
+          challengeMultipleUnlockScore
+          multipleMax
+          stages {
+            uid stageType stageNumber previousStageUid
+            entryCost { quantity resource { type uid name ... on Emblem { imageUrl(lang: ko) } } }
+            rewards { amount probability tag resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+          scoreRewards {
+            tier score
+            rewards { quantity resource { type uid name rarity ... on Emblem { imageUrl(lang: ko) } } }
+          }
+          equipmentUpgrade {
+            maxTier
+            costResource { type uid name ... on Emblem { imageUrl(lang: ko) } }
+            tierCosts { tier quantity }
+          }
+          equipments { uid unlockStageUid tiers { tier attackPower hitPoint } }
+        }
         rewardGroups {
           condition { type value values divisor remainders }
           payments {
@@ -485,6 +504,103 @@ type ServerCondition = NonNullable<EventContentData>["minigameConfigs"][number][
 type ServerTreasureHunt = NonNullable<EventContentData>["minigameConfigs"][number]["treasureHunt"];
 type ServerCardFlip = NonNullable<EventContentData>["minigameConfigs"][number]["cardFlip"];
 type ServerRoadPuzzle = NonNullable<EventContentData>["minigameConfigs"][number]["roadPuzzle"];
+type ServerJanken = NonNullable<EventContentData>["minigameConfigs"][number]["janken"];
+
+function transformJanken(janken: ServerJanken): MinigameConfig["janken"] {
+  if (!janken) return { status: "unavailable" };
+  const invalid = { status: "invalid" } as const;
+  if (
+    !Array.isArray(janken.stages) || !Array.isArray(janken.scoreRewards) ||
+    !janken.equipmentUpgrade || !Array.isArray(janken.equipmentUpgrade.tierCosts) ||
+    !Array.isArray(janken.equipments) ||
+    !Number.isSafeInteger(janken.multipleMax) || janken.multipleMax < 1 ||
+    !Number.isSafeInteger(janken.challengeMultipleUnlockScore) || janken.challengeMultipleUnlockScore < 0 ||
+    janken.stages.length === 0 || janken.scoreRewards.length === 0 ||
+    !Number.isSafeInteger(janken.equipmentUpgrade.maxTier) || janken.equipmentUpgrade.maxTier < 1 ||
+    janken.equipments.length === 0
+  ) return invalid;
+  if (janken.scoreRewards.some((tier) =>
+    !tier || !Array.isArray(tier.rewards) || tier.rewards.some((reward) =>
+      !reward?.resource || !Number.isFinite(reward.quantity) || reward.quantity < 0,
+    ),
+  )) return invalid;
+  if (janken.equipments.some((equipment) =>
+    !equipment || typeof equipment.uid !== "string" || !equipment.uid.trim() || !Array.isArray(equipment.tiers) || equipment.tiers.some((tier) =>
+      !tier || !Number.isSafeInteger(tier.tier) || tier.tier < 1 ||
+      !Number.isFinite(tier.attackPower) || !Number.isFinite(tier.hitPoint),
+    ),
+  )) return invalid;
+  const stageUids = new Set<string>();
+  const stages = janken.stages.map((stage) => {
+    if (!stage || typeof stage.uid !== "string" || !stage.uid.trim() || stageUids.has(stage.uid) || !Number.isSafeInteger(stage.stageNumber) || stage.stageNumber < 1 || !["story", "normal", "challenge"].includes(stage.stageType) || !Array.isArray(stage.rewards) || !stage.entryCost) return null;
+    stageUids.add(stage.uid);
+    const cost = stage.entryCost;
+    if (!cost.resource || typeof cost.resource.uid !== "string" || !cost.resource.uid.trim() || !Number.isSafeInteger(cost.quantity) || cost.quantity < 0) return null;
+    const rewards = stage.rewards.map((reward) => {
+      if (!reward?.resource || typeof reward.resource.uid !== "string" || !reward.resource.uid.trim() || !Number.isSafeInteger(reward.amount) || reward.amount < 0 || !Number.isFinite(reward.probability) || reward.probability < 0 || reward.probability > 1 || !["default", "first_clear", "three_star"].includes(reward.tag)) return null;
+      return {
+        resourceType: reward.resource.type,
+        resourceUid: reward.resource.uid,
+        resourceName: reward.resource.name,
+        imageUrl: getEmblemImageUrl(reward.resource),
+        quantity: reward.amount,
+        probability: reward.probability,
+        tag: reward.tag as "default" | "first_clear" | "three_star",
+      };
+    });
+    if (rewards.some((reward) => reward === null)) return null;
+    return {
+      uid: stage.uid,
+      stageType: stage.stageType as "story" | "normal" | "challenge",
+      stageNumber: stage.stageNumber,
+      previousStageUid: stage.previousStageUid,
+      entryCost: { resourceType: cost.resource.type, resourceUid: cost.resource.uid, resourceName: cost.resource.name, imageUrl: getEmblemImageUrl(cost.resource), quantity: cost.quantity },
+      rewards: rewards as NonNullable<(typeof rewards)[number]>[],
+    };
+  });
+  if (stages.some((stage) => stage === null)) return invalid;
+  if (stages.some((stage) => stage?.previousStageUid && !stageUids.has(stage.previousStageUid))) return invalid;
+  const stageByUid = new Map(stages.flatMap((stage) => stage ? [[stage.uid, stage] as const] : []));
+  for (const stage of stages) {
+    const seen = new Set<string>();
+    let current = stage;
+    while (current?.previousStageUid) {
+      if (seen.has(current.uid)) return invalid;
+      seen.add(current.uid);
+      current = stageByUid.get(current.previousStageUid) ?? null;
+    }
+  }
+  const scoreRewards = janken.scoreRewards.map((tier) => ({
+    tier: tier.tier,
+    score: tier.score,
+    rewards: tier.rewards.flatMap((reward) => reward.resource ? [{
+      resourceType: reward.resource.type,
+      resourceUid: reward.resource.uid,
+      resourceName: reward.resource.name,
+      imageUrl: getEmblemImageUrl(reward.resource),
+      quantity: reward.quantity,
+      rarity: reward.resource.rarity ?? undefined,
+    }] : []),
+  }));
+  if (scoreRewards.some((tier, index) => tier.rewards.length !== janken.scoreRewards[index].rewards.length)) return invalid;
+  if (scoreRewards.some((tier, index) => !Number.isSafeInteger(tier.tier) || tier.tier < 1 || !Number.isSafeInteger(tier.score) || tier.score < 0 || (index > 0 && (tier.tier <= scoreRewards[index - 1].tier || tier.score <= scoreRewards[index - 1].score)))) return invalid;
+  const { equipmentUpgrade } = janken;
+  if (!equipmentUpgrade.costResource || typeof equipmentUpgrade.costResource.uid !== "string" || !equipmentUpgrade.costResource.uid.trim() || equipmentUpgrade.tierCosts.some((cost) => !Number.isSafeInteger(cost.tier) || cost.tier < 2 || cost.tier > equipmentUpgrade.maxTier || !Number.isSafeInteger(cost.quantity) || cost.quantity < 0) || equipmentUpgrade.tierCosts.length !== equipmentUpgrade.maxTier - 1 || new Set(equipmentUpgrade.tierCosts.map(({ tier }) => tier)).size !== equipmentUpgrade.tierCosts.length || equipmentUpgrade.tierCosts.some((cost, index) => cost.tier !== index + 2)) return invalid;
+  const costResource = equipmentUpgrade.costResource;
+  return {
+    status: "available",
+    challengeMultipleUnlockScore: janken.challengeMultipleUnlockScore,
+    multipleMax: janken.multipleMax,
+    stages: stages as NonNullable<(typeof stages)[number]>[],
+    scoreRewards,
+    equipmentUpgrade: {
+      maxTier: equipmentUpgrade.maxTier,
+      costResource: costResource ? { resourceType: costResource.type, resourceUid: costResource.uid, resourceName: costResource.name, imageUrl: getEmblemImageUrl(costResource), quantity: 1 } : null,
+      tierCosts: equipmentUpgrade.tierCosts.map(({ tier, quantity }) => ({ tier, quantity })),
+    },
+    equipments: janken.equipments.map(({ uid, unlockStageUid, tiers }) => ({ uid, unlockStageUid, tiers: tiers.map(({ tier, attackPower, hitPoint }) => ({ tier, attackPower, hitPoint })) })),
+  };
+}
 
 function transformRoadPuzzleRewards(rewards: NonNullable<ServerRoadPuzzle>["railSetReward"]): RewardItem[] {
   return rewards.map((reward) => {
@@ -816,10 +932,12 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
   const serverConfig = configs[0];
   const transformedCardFlip =
     serverConfig.minigameType === "card_flip" ? transformCardFlip(serverConfig.cardFlip) : undefined;
-  const transformedRoadPuzzle =
+      const transformedRoadPuzzle =
     serverConfig.minigameType === "road_puzzle" ? transformRoadPuzzle(serverConfig.roadPuzzle) : undefined;
+  const transformedJanken = serverConfig.minigameType === "janken" ? transformJanken(serverConfig.janken) : undefined;
   const cardFlipPayment =
     transformedCardFlip?.status === "available" ? transformedCardFlip.flipCosts[0]?.payments[0] : null;
+  const jankenPaymentResource = transformedJanken?.status === "available" ? transformedJanken.stages[0]?.entryCost : null;
   const paymentResource = cardFlipPayment
     ? {
         type: cardFlipPayment.resourceType,
@@ -827,7 +945,9 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
         name: cardFlipPayment.resourceName ?? "재화",
         imageUrl: cardFlipPayment.imageUrl,
       }
-    : serverConfig.payment.resource;
+    : jankenPaymentResource
+      ? { type: jankenPaymentResource.resourceType, uid: jankenPaymentResource.resourceUid, name: jankenPaymentResource.resourceName ?? "재화", imageUrl: jankenPaymentResource.imageUrl }
+      : serverConfig.payment.resource;
   if (!paymentResource) {
     if (serverConfig.minigameType === "road_puzzle") {
       throw new Error("Road puzzle placement payment is missing its resource.");
@@ -857,12 +977,13 @@ function transformMinigameConfigs(configs: NonNullable<EventContentData>["miniga
     treasureHunt: transformTreasureHunt(serverConfig.treasureHunt),
     cardFlip: transformedCardFlip,
     ...(serverConfig.minigameType === "road_puzzle" ? { roadPuzzle: transformedRoadPuzzle } : {}),
+    ...(serverConfig.minigameType === "janken" ? { janken: transformedJanken ?? { status: "unavailable" as const } } : {}),
     payment: {
       resourceType: paymentResource.type,
       resourceUid: paymentResource.uid,
       resourceName: paymentResource.name,
       imageUrl: getEmblemImageUrl(paymentResource),
-      quantity: cardFlipPayment?.quantity ?? serverConfig.payment.quantity,
+      quantity: cardFlipPayment?.quantity ?? jankenPaymentResource?.quantity ?? serverConfig.payment.quantity,
     },
     payments,
     rewardGroups: serverConfig.rewardGroups.map((group) => ({
@@ -920,7 +1041,7 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
 
   return fetchLazySourceCached(
     env,
-    cacheKey("source", "event-shop", 5, cacheQuery({ contentUid: shopContentUid, runType })),
+    cacheKey("source", "event-shop", 6, cacheQuery({ contentUid: shopContentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentShopContentQuery, {
         eventUid: shopContentUid,

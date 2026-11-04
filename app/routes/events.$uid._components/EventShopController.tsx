@@ -1,13 +1,14 @@
-import { useEffect, useState } from "react";
-import type { loader } from "../events.$uid.shop";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLoaderData, useRevalidator } from "react-router";
-import { guestPlannerEventShopPlans } from "~/domain/guest-planner";
-import { readGuestPlanner, subscribeGuestPlanner, type GuestPlannerSnapshot } from "~/lib/guest-planner.client";
-import { useEventShopPlan } from "~/lib/event-shop/useEventShopPlan";
 import { PageMain } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { Skeleton } from "~/components/v2/primitives/Skeleton";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { guestPlannerEventShopPlans } from "~/domain/guest-planner";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
+import { useEventShopPlan } from "~/lib/event-shop/useEventShopPlan";
+import { type GuestPlannerSnapshot, readGuestPlanner, subscribeGuestPlanner } from "~/lib/guest-planner.client";
+import type { loader } from "../events.$uid.shop";
 
 export default function EventShopController() {
   const data = useLoaderData<typeof loader>();
@@ -21,16 +22,23 @@ export default function EventShopController() {
   }, [data]);
 
   if (data.status !== "ready") {
-    const message = data.status === "ended"
-      ? "종료된 이벤트라 상점 계산기를 쓸 수 없어요"
-      : data.status === "no-data"
-        ? "상점이 없거나 정보를 준비 중이에요"
-        : "정보를 불러오지 못했어요";
+    const message =
+      data.status === "ended"
+        ? "종료된 이벤트라 상점 계산기를 쓸 수 없어요"
+        : data.status === "no-data"
+          ? "상점이 없거나 정보를 준비 중이에요"
+          : "정보를 불러오지 못했어요";
     return (
       <PageMain>
         <StatusNotice
           tone={data.status === "unavailable" ? "danger" : "neutral"}
-          action={data.status === "unavailable" ? <Button size="sm" onClick={() => revalidator.revalidate()}>다시 시도</Button> : undefined}
+          action={
+            data.status === "unavailable" ? (
+              <Button size="sm" onClick={() => revalidator.revalidate()}>
+                다시 시도
+              </Button>
+            ) : undefined
+          }
         >
           {message}
         </StatusNotice>
@@ -58,11 +66,15 @@ export default function EventShopController() {
     ? guestPlannerEventShopPlans(guestEnvelope).find((plan) => plan.shopStateUid === data.shopStateUid)
     : undefined;
   const savedShopState = data.signedIn ? data.savedShopState : (guestPlan?.state ?? null);
+  const savedJankenEntry: JankenPlannerEntry | null = data.signedIn
+    ? data.savedJankenEntry
+    : (guestEnvelope?.document.jankenProgress[data.shopStateUid] ?? null);
   const guestPlannerStatus = data.signedIn ? "none" : (guestSnapshot?.status ?? "unavailable");
   return (
     <ReadyEventShopController
       data={data}
       savedShopState={savedShopState}
+      savedJankenEntry={savedJankenEntry}
       guestPlannerStatus={guestPlannerStatus}
     />
   );
@@ -73,12 +85,27 @@ type ReadyEventShopData = Extract<Awaited<ReturnType<typeof loader>>, { status: 
 function ReadyEventShopController({
   data,
   savedShopState,
+  savedJankenEntry,
   guestPlannerStatus,
 }: {
   data: ReadyEventShopData;
   savedShopState: ReadyEventShopData["savedShopState"];
+  savedJankenEntry: JankenPlannerEntry | null;
   guestPlannerStatus: "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
 }) {
+  const [jankenClearedStageUids, setJankenClearedStageUids] = useState<string[]>(
+    savedJankenEntry?.progress.clearedStageUids ?? [],
+  );
+  const savedJankenProgress = useMemo(
+    () => ({
+      shopStateUid: data.shopStateUid,
+      clearedStageUids: savedJankenEntry?.progress.clearedStageUids ?? [],
+    }),
+    [data.shopStateUid, savedJankenEntry],
+  );
+  useEffect(() => {
+    setJankenClearedStageUids(savedJankenProgress.clearedStageUids);
+  }, [savedJankenProgress]);
   const controller = useEventShopPlan({
     stages: data.stages,
     shopResources: data.shopResources,
@@ -93,6 +120,9 @@ function ReadyEventShopController({
     signedIn: data.signedIn,
     guestPlannerStatus,
     minigameConfig: data.minigameConfig,
+    jankenStudentGrowthUid: data.jankenStudentGrowthUid,
+    jankenClearedStageUids,
+    setJankenClearedStageUids,
   });
   return <Outlet context={controller.plan} />;
 }

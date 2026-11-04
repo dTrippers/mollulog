@@ -14,14 +14,14 @@ import {
   type TreasureHuntEstimate,
 } from "~/domain/event-shop/treasure-hunt";
 import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
+import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { getRoadPuzzleTotalCost, getRoadPuzzleTotalRewards } from "~/domain/road-puzzle/calculator";
-import type { EventShopState } from "~/models/event-shop-state";
-import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "~/lib/event-shop/hooks";
 import type { GuestPlannerStatus } from "~/lib/event-shop/hooks";
+import { useAutoSave, useBonusCalculation, useShopCalculations, useShopState } from "~/lib/event-shop/hooks";
 import { useRoadPuzzleStats } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 import { useTreasureHuntStats } from "~/lib/event-shop/hooks/useTreasureHuntStats";
 import type { EventShopPlanContext, TreasureHuntSectionState } from "~/lib/event-shop/plan-context";
-import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
+import type { EventShopState } from "~/models/event-shop-state";
 
 const EMPTY_ROAD_PUZZLE_MAPS: RoadPuzzleMap[] = [];
 
@@ -39,6 +39,9 @@ export type EventShopControllerInput = {
   signedIn: boolean;
   guestPlannerStatus: GuestPlannerStatus;
   minigameConfig: MinigameConfig | null;
+  jankenStudentGrowthUid?: string | null;
+  jankenClearedStageUids: string[];
+  setJankenClearedStageUids: (stageUids: string[]) => void;
 };
 
 export function useEventShopPlan(input: EventShopControllerInput) {
@@ -56,6 +59,9 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     signedIn,
     guestPlannerStatus,
     minigameConfig,
+    jankenStudentGrowthUid,
+    jankenClearedStageUids,
+    setJankenClearedStageUids,
   } = input;
   const clueSearchExchange = useMemo(
     () => resolveClueSearchExchange(minigameConfig, shopResources),
@@ -72,7 +78,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
   const roadPuzzlePaymentQuantity = isRoadPuzzle ? minigameConfig.payment.quantity : 0;
 
   const collectableResources = useMemo(
-    () => buildCollectableResources({ shopResources: visibleShopResources, stages, minigameConfig, clueSearchExchange }),
+    () =>
+      buildCollectableResources({ shopResources: visibleShopResources, stages, minigameConfig, clueSearchExchange }),
     [clueSearchExchange, minigameConfig, stages, visibleShopResources],
   );
 
@@ -87,7 +94,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     if (minigameConfig?.minigameType !== "card_flip" || minigameConfig.cardFlip?.status !== "available") return null;
     return calculateCardFlipStrategyComparison(minigameConfig.cardFlip, state.minigamePlayCount);
   }, [minigameConfig, state.minigamePlayCount]);
-  const selectedCardFlipResult = cardFlipComparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
+  const selectedCardFlipResult =
+    cardFlipComparison?.find(({ strategy }) => strategy === state.cardFlipStrategy) ?? null;
   const roadPuzzleCalculation = useRoadPuzzleStats(roadPuzzle?.maps ?? EMPTY_ROAD_PUZZLE_MAPS, Boolean(roadPuzzle));
   const roadPuzzleTotalCost = useMemo(() => {
     if (!roadPuzzle || state.minigamePlayCount <= 0 || roadPuzzleCalculation.status !== "ready") return null;
@@ -99,9 +107,22 @@ export function useEventShopPlan(input: EventShopControllerInput) {
       state.minigamePaymentQuantityMode,
       roadPuzzlePaymentQuantity,
     );
-  }, [roadPuzzle, roadPuzzleCalculation.resultsByUid, roadPuzzleCalculation.status, roadPuzzlePaymentQuantity, state.minigamePaymentQuantityMode, state.minigamePlayCount, state.minigameStartRound]);
+  }, [
+    roadPuzzle,
+    roadPuzzleCalculation.resultsByUid,
+    roadPuzzleCalculation.status,
+    roadPuzzlePaymentQuantity,
+    state.minigamePaymentQuantityMode,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+  ]);
   const treasureHuntRoundSelection = useMemo(
-    () => getTreasureHuntRoundSelection(isTreasureHunt ? treasureHunt : null, state.minigameStartRound, state.minigamePlayCount),
+    () =>
+      getTreasureHuntRoundSelection(
+        isTreasureHunt ? treasureHunt : null,
+        state.minigameStartRound,
+        state.minigamePlayCount,
+      ),
     [isTreasureHunt, state.minigamePlayCount, state.minigameStartRound, treasureHunt],
   );
   const treasureHuntStats = useTreasureHuntStats(
@@ -113,7 +134,12 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     let estimate: TreasureHuntEstimate | null = null;
     if (treasureHuntRoundSelection.targetRoundOverLimit) status = "round-limit";
     else if (isTreasureHunt && !treasureHunt) status = "no-data";
-    else if (isTreasureHunt && treasureHuntRoundSelection.rows.length > 0 && !treasureHuntRoundSelection.economicsCompatible) status = "incompatible";
+    else if (
+      isTreasureHunt &&
+      treasureHuntRoundSelection.rows.length > 0 &&
+      !treasureHuntRoundSelection.economicsCompatible
+    )
+      status = "incompatible";
     else if (isTreasureHunt && treasureHuntRoundSelection.rows.length > 0) {
       const signatures = treasureHuntRoundSelection.workerItems.map(({ signature }) => signature);
       const hasFailure = signatures.some((signature) => treasureHuntStats.statsBySignature[signature]?.failed);
@@ -151,7 +177,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
   const { appliedBonusRatios, bonusSummary } = useBonusCalculation({
     eventRewardBonus,
     selectedStudentUids: state.selectedBonusStudentUids,
-    selectedStudentUidsByItem: state.bonusStudentSelectionMode === "perItem" ? state.selectedBonusStudentUidsByItem : undefined,
+    selectedStudentUidsByItem:
+      state.bonusStudentSelectionMode === "perItem" ? state.selectedBonusStudentUidsByItem : undefined,
   });
   const { isSaving, saveError, retrySave } = useAutoSave({
     state,
@@ -169,7 +196,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
       if (state.minigamePlayCount <= 0 || roadPuzzleTotalCost === null) return [];
       return [{ ...minigameConfig.payment, quantity: roadPuzzleTotalCost }];
     }
-    if (minigameConfig.minigameType === "treasure_hunt") return treasureHuntCalculation.estimate ? [treasureHuntCalculation.estimate.payment] : [];
+    if (minigameConfig.minigameType === "treasure_hunt")
+      return treasureHuntCalculation.estimate ? [treasureHuntCalculation.estimate.payment] : [];
     if (minigameConfig.minigameType === "card_flip") return selectedCardFlipResult?.costs ?? [];
     const costs = calculateMinigamePaymentCosts(
       minigameConfig,
@@ -177,8 +205,19 @@ export function useEventShopPlan(input: EventShopControllerInput) {
       state.minigamePaymentQuantityMode,
       state.minigameStartRound,
     );
-    return minigameConfig.minigameType === "clue_search" ? convertClueSearchCostsToPoints(costs, clueSearchExchange) : costs;
-  }, [clueSearchExchange, minigameConfig, roadPuzzleTotalCost, selectedCardFlipResult, state.minigamePaymentQuantityMode, state.minigamePlayCount, state.minigameStartRound, treasureHuntCalculation.estimate]);
+    return minigameConfig.minigameType === "clue_search"
+      ? convertClueSearchCostsToPoints(costs, clueSearchExchange)
+      : costs;
+  }, [
+    clueSearchExchange,
+    minigameConfig,
+    roadPuzzleTotalCost,
+    selectedCardFlipResult,
+    state.minigamePaymentQuantityMode,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+    treasureHuntCalculation.estimate,
+  ]);
   const minigameRewards = useMemo(() => {
     if (minigameConfig?.minigameType === "card_flip") return selectedCardFlipResult?.rewards ?? [];
     if (minigameConfig?.minigameType === "road_puzzle") {
@@ -189,8 +228,17 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     if (!isTreasureHunt) return undefined;
     const estimate = treasureHuntCalculation.estimate;
     return estimate ? [...estimate.treasureRewards, ...estimate.openCellRewards] : [];
-  }, [isTreasureHunt, minigameConfig, roadPuzzle, selectedCardFlipResult, state.minigamePlayCount, state.minigameStartRound, treasureHuntCalculation.estimate]);
-  const holdTreasureHuntCalculations = isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
+  }, [
+    isTreasureHunt,
+    minigameConfig,
+    roadPuzzle,
+    selectedCardFlipResult,
+    state.minigamePlayCount,
+    state.minigameStartRound,
+    treasureHuntCalculation.estimate,
+  ]);
+  const holdTreasureHuntCalculations =
+    isTreasureHunt && shouldHoldTreasureHuntShopCalculations(treasureHuntCalculation.status);
   const holdRoadPuzzleCalculationInput =
     isRoadPuzzle &&
     state.minigamePlayCount > 0 &&
@@ -206,6 +254,7 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     minigameRewards,
     excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
     minigameConfig: minigameConfigForCalculations,
+    jankenClearedStageUids,
     holdCalculations: holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput,
   });
   const holdRoadPuzzleCalculations =
@@ -231,9 +280,12 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     savedShopStateSource,
     availablePurchaseDays,
     signedIn,
+    jankenClearedStageUids,
+    setJankenClearedStageUids,
     state,
     actions,
     minigameConfig,
+    jankenStudentGrowthUid,
     minigameConfigForCalculations,
     collectableResources,
     clueSearchExchange,
@@ -244,7 +296,7 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     roadPuzzlePlannerStatus,
     resultTreasureHuntStatus:
       isTreasureHunt && ["pending", "provisional", "failed", "round-limit"].includes(treasureHuntCalculation.status)
-        ? treasureHuntCalculation.status as EventShopPlanContext["resultTreasureHuntStatus"]
+        ? (treasureHuntCalculation.status as EventShopPlanContext["resultTreasureHuntStatus"])
         : undefined,
     provisionalMinigameResourceUid: treasureHuntCalculation.rows[0]?.config.cellCost.resourceUid,
     minigamePaymentCosts,

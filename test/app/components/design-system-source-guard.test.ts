@@ -141,6 +141,8 @@ const migratedRouteFiles: string[] = [
   "routes/events.$uid.recruitment-simulator.tsx",
   "routes/events.$uid.treasure-hunt.tsx",
   "routes/events.$uid._components/CardFlipScreen.tsx",
+  "routes/events.$uid._components/JankenScreen.tsx",
+  "routes/events.$uid.shop.janken.tsx",
   "routes/events.$uid._components/EventOpinions.tsx",
   "routes/events.$uid._components/EventShopCalculator.tsx",
   "routes/events.$uid._components/EventShopController.tsx",

@@ -1,6 +1,7 @@
 import Decimal from "decimal.js";
 import { FIRST_CLEAR_REWARD_REQUIREMENT } from "~/domain/event-shop";
 import { calculateMinigameRewards } from "../utils";
+import { evaluateJankenPlan } from "../janken";
 import { calculateShopResourcePaymentCosts } from "./shop-costs";
 import { calculateBoughtResourceQuantities } from "./shop-rewards";
 import type { RequiredQuantitiesInput, ResourceLedger } from "./types";
@@ -46,6 +47,8 @@ export function calculateResourceLedger({
   includeFirstClear,
   minigameStartRound,
   minigamePlayCount,
+  jankenStagePlays,
+  jankenClearedStageUids,
   minigameConfig,
   minigamePaymentCosts,
   minigameRewards,
@@ -67,7 +70,12 @@ export function calculateResourceLedger({
   }
 
   const requiredForMinigame: DecimalMap = {};
-  if (minigamePlayCount > 0) {
+  if (minigameConfig?.minigameType === "janken") {
+    if (Object.values(jankenStagePlays ?? {}).some((count) => count > 0) && minigameConfig.janken) {
+      const evaluated = evaluateJankenPlan(minigameConfig.janken, { stagePlays: jankenStagePlays ?? {}, clearedStageUids: jankenClearedStageUids });
+      if (evaluated.status === "available" && evaluated.entryResourceUid) addQuantity(requiredForMinigame, evaluated.entryResourceUid, evaluated.entryCost);
+    }
+  } else if (minigamePlayCount > 0) {
     for (const { resourceUid, quantity } of minigamePaymentCosts ?? []) {
       addQuantity(requiredForMinigame, resourceUid, quantity);
     }
@@ -107,7 +115,16 @@ export function calculateResourceLedger({
   }
 
   const fromMinigame: DecimalMap = {};
-  if (minigamePlayCount > 0) {
+  if (minigameConfig?.minigameType === "janken") {
+    if (Object.values(jankenStagePlays ?? {}).some((count) => count > 0) && minigameConfig.janken) {
+      const evaluated = evaluateJankenPlan(minigameConfig.janken, { stagePlays: jankenStagePlays ?? {}, clearedStageUids: jankenClearedStageUids });
+      if (evaluated.status === "available") {
+        for (const [uid, quantity] of Object.entries(evaluated.rewards)) addQuantity(fromMinigame, uid, quantity);
+      }
+    } else {
+      // An empty janken stage map contributes no costs or rewards.
+    }
+  } else if (minigamePlayCount > 0) {
     const rewards =
       minigameRewards ??
       (minigameConfig ? calculateMinigameRewards(minigameConfig, minigamePlayCount, minigameStartRound ?? 1) : []);

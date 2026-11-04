@@ -3,6 +3,7 @@ import { calculateShopApRequirement } from "~/domain/event-shop/calculations/cal
 import type { Stage } from "../../../../../../../app/domain/event-shop";
 import { createDefaultEventShopState } from "../../../../../../../app/domain/event-shop-state";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
+import { janken860Fixture } from "../../../../../domain/fixtures/janken-860";
 
 describe("calculateShopApRequirement", () => {
   it("shares the same totalApWithExtras calculation used by the shop screen", () => {
@@ -53,5 +54,52 @@ describe("calculateShopApRequirement", () => {
     expect(result.itemBreakdown.fromMinigame).toEqual({ renge: 200, credit: 8320000 });
     expect(result.itemBreakdown.remaining).toMatchObject({ renge: 200, credit: 8320000 });
     expect(result.unobtainableTargets).toEqual({ yukari: 7000 });
+  });
+
+  it("includes janken entry costs and rewards in the shared AP calculation ledger", () => {
+    const entryStage: Stage = {
+      uid: "entry-farm",
+      index: "9",
+      entryAp: 6,
+      difficulty: 1,
+      rewards: [
+        {
+          amount: 400,
+          rewardRequirement: null,
+          chance: "1.0",
+          item: { uid: "80860", name: "Entry currency", category: "coin", rarity: 1 },
+        },
+      ],
+    };
+    const state = createDefaultEventShopState([entryStage], []);
+    state.enabledStages[entryStage.uid] = true;
+    state.jankenStagePlays = { "100860204": 2 };
+
+    const result = calculateShopApRequirement({
+      state,
+      stages: [entryStage],
+      shopResources: [],
+      appliedBonusRatio: {},
+      jankenClearedStageUids: [
+        "100860101",
+        "100860102",
+        "100860103",
+        "100860104",
+        "100860105",
+        "100860201",
+        "100860202",
+        "100860203",
+      ],
+      minigameConfig: {
+        minigameType: "janken",
+        payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 100 },
+        payments: [],
+        rewardGroups: [],
+        janken: janken860Fixture,
+      },
+    });
+
+    expect(result.totalApWithExtras).toBe(12);
+    expect(result.stageRuns).toEqual({ "entry-farm": 2 });
   });
 });

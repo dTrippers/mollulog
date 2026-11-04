@@ -46,6 +46,7 @@ const plannerState = {
   extraStageRuns: {},
   minigameStartRound: 1,
   minigamePlayCount: 1,
+  jankenStagePlays: {},
   minigamePaymentQuantityMode: "expected",
   cardFlipStrategy: "all-open",
   overriddenRequiredQuantities: {},
@@ -137,6 +138,8 @@ const input: EventShopControllerInput = {
   signedIn: false,
   guestPlannerStatus: "ready",
   minigameConfig: plannerConfig,
+  jankenClearedStageUids: [],
+  setJankenClearedStageUids: () => undefined,
 };
 
 describe("useEventShopPlan road puzzle hold", () => {

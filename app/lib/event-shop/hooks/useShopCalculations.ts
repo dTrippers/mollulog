@@ -14,6 +14,7 @@ type UseShopCalculationsParams = {
   minigameRewards?: RewardItem[];
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
+  jankenClearedStageUids: readonly string[];
   holdCalculations?: boolean;
 };
 
@@ -69,6 +70,7 @@ export function buildShopCalculationInputSets({
   minigameRewards,
   excludedShopResourceUids,
   minigameConfig,
+  jankenClearedStageUids,
 }: ShopCalculationInputParams): ShopCalculationInputSets {
   return {
     user: [
@@ -78,6 +80,8 @@ export function buildShopCalculationInputSets({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
+      state.jankenStagePlays,
+      jankenClearedStageUids,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -95,6 +99,8 @@ export function buildShopCalculationInputSets({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
+      state.jankenStagePlays,
+      jankenClearedStageUids,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -117,6 +123,7 @@ export function buildShopCalculationInputSets({
       minigameRewards,
       excludedShopResourceUids,
       minigameConfig,
+      jankenClearedStageUids,
     },
   };
 }
@@ -135,6 +142,7 @@ export function useShopCalculations({
   minigameRewards,
   excludedShopResourceUids,
   minigameConfig,
+  jankenClearedStageUids,
   holdCalculations = false,
 }: UseShopCalculationsParams) {
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
@@ -157,6 +165,7 @@ export function useShopCalculations({
           extraStageRuns: state.extraStageRuns,
           minigameStartRound: state.minigameStartRound,
           minigamePlayCount: state.minigamePlayCount,
+          jankenStagePlays: state.jankenStagePlays,
           minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
           cardFlipStrategy: state.cardFlipStrategy,
           overriddenRequiredQuantities: state.overriddenRequiredQuantities,
@@ -168,6 +177,7 @@ export function useShopCalculations({
         minigameRewards,
         excludedShopResourceUids,
         minigameConfig,
+        jankenClearedStageUids,
       }),
     [
       state.itemQuantities,
@@ -176,6 +186,8 @@ export function useShopCalculations({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
+      state.jankenStagePlays,
+      jankenClearedStageUids,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -221,6 +233,7 @@ export function useShopCalculations({
       minigameRewards: calculationMinigameRewards,
       excludedShopResourceUids: calculationExcludedShopResourceUids,
       minigameConfig: calculationMinigameConfig,
+      jankenClearedStageUids: calculationJankenClearedStageUids,
     } = currentInputSets.effect;
 
     // Clear existing timer
@@ -248,6 +261,7 @@ export function useShopCalculations({
           minigameRewards: calculationMinigameRewards,
           excludedShopResourceUids: calculationExcludedShopResourceUids,
           minigameConfig: calculationMinigameConfig,
+          jankenClearedStageUids: calculationJankenClearedStageUids,
         }),
       );
       lastCompletedInputsRef.current = calculationInputs;

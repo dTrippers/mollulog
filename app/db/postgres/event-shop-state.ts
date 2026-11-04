@@ -51,6 +51,7 @@ function normalizeEventShopStateForStorage(state: EventShopState): EventShopStat
     extraStageRuns: state.extraStageRuns ?? {},
     minigameStartRound: Math.max(1, state.minigameStartRound ?? 1),
     minigamePlayCount: state.minigamePlayCount ?? 0,
+    jankenStagePlays: state.jankenStagePlays ?? {},
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode ?? "expected",
     cardFlipStrategy: state.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities ?? {},

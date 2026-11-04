@@ -51,6 +51,7 @@ const state: ShopState = {
   extraStageRuns: {},
   minigameStartRound: 1,
   minigamePlayCount: 6,
+  jankenStagePlays: {},
   minigamePaymentQuantityMode: "expected",
   cardFlipStrategy: "all-open",
   overriddenRequiredQuantities: {},
@@ -58,6 +59,7 @@ const state: ShopState = {
 
 const stages: Stage[] = [];
 const shopResources: ShopResource[] = [];
+const noClearedJankenStages: string[] = [];
 
 describe("useShopCalculations input tracking", () => {
   it("does not treat simulation-only result updates as user calculation changes", () => {
@@ -66,6 +68,7 @@ describe("useShopCalculations input tracking", () => {
       stages,
       shopResources: [],
       appliedBonusRatio: {},
+      jankenClearedStageUids: [],
     };
     const pendingInputs = buildShopCalculationInputSets(inputs);
     const provisionalInputs = buildShopCalculationInputSets({
@@ -77,11 +80,17 @@ describe("useShopCalculations input tracking", () => {
       ...inputs,
       state: { ...state, cardFlipStrategy: "sr-reset" },
     });
+    const changedJankenClears = buildShopCalculationInputSets({
+      ...inputs,
+      jankenClearedStageUids: ["stage-1"],
+    });
 
     expect(calculationInputsMatch(pendingInputs.calculation, provisionalInputs.calculation)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.user, provisionalInputs.user)).toBe(true);
     expect(calculationInputsMatch(pendingInputs.calculation, changedStrategyInputs.calculation)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.user, changedStrategyInputs.user)).toBe(false);
+    expect(calculationInputsMatch(pendingInputs.calculation, changedJankenClears.calculation)).toBe(false);
+    expect(calculationInputsMatch(pendingInputs.user, changedJankenClears.user)).toBe(false);
     expect(isUserCalculationPending(false, true, pendingInputs.user, provisionalInputs.user)).toBe(false);
   });
 
@@ -105,6 +114,7 @@ describe("useShopCalculations input tracking", () => {
         stages,
         shopResources,
         appliedBonusRatio,
+        jankenClearedStageUids: noClearedJankenStages,
       }),
     );
 

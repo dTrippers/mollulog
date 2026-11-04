@@ -40,6 +40,7 @@ describe("guest event shop planner", () => {
       ...createDefaultEventShopState([], []),
       minigameStartRound: 3,
       minigamePlayCount: 9,
+      jankenStagePlays: {},
       minigamePaymentQuantityMode: "max" as const,
     };
     const envelope = createEmptyGuestEventShopPlanner();
@@ -54,6 +55,7 @@ describe("guest event shop planner", () => {
     ).toMatchObject({
       minigameStartRound: 3,
       minigamePlayCount: 9,
+      jankenStagePlays: {},
       minigamePaymentQuantityMode: "max",
     });
   });

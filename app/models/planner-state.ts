@@ -2,12 +2,16 @@ import {
   getPostgresPlannerStateDocument,
   type PlannerStateDatabase,
   type PlannerStateDatabaseOptions,
-  type PlannerStateRevisionConflictError,
+  PlannerStateRevisionConflictError,
   updatePostgresPlannerStateDocument,
 } from "~/db/postgres/planner-states";
 import { type ApPlannerState, normalizeApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
-import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import {
+  type JankenPlannerEntry,
+  normalizeJankenPlannerProgress,
+  type PlannerStateDocumentV1,
+} from "~/domain/planner-state";
 
 export { PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/db/postgres/planner-states";
 
@@ -15,6 +19,13 @@ export type PlannerState = PlannerStateDocumentV1;
 export type PyroxenePlannerState = PlannerStateDocumentV1["pyroxene"];
 export type EventShopPlannerStates = PlannerStateDocumentV1["eventShops"];
 export type ApPlannerStoredState = ApPlannerState | null;
+
+export class InvalidJankenPlannerEntryError extends Error {
+  constructor() {
+    super("Invalid planner entry.");
+    this.name = "InvalidJankenPlannerEntryError";
+  }
+}
 
 export function isPlannerStateRevisionConflictError(error: unknown): error is PlannerStateRevisionConflictError {
   return error instanceof Error && error.name === "PlannerStateRevisionConflictError";
@@ -79,6 +90,37 @@ export async function updateApPlannerState<T>(
       const normalized = state === null ? null : normalizeApPlannerState(state);
       if (state !== null && normalized === null) throw new Error("AP 플래너 내용을 확인해주세요.");
       return { document: { ...currentDocument, ap: normalized }, result };
+    },
+    { ...options, retryable: true },
+  );
+}
+
+export async function saveJankenPlannerEntry(
+  env: Pick<Env, "HYPERDRIVE">,
+  userId: number,
+  shopStateUid: string,
+  submitted: JankenPlannerEntry,
+  base: JankenPlannerEntry | null,
+  options: PlannerStateDatabaseOptions = {},
+): Promise<JankenPlannerEntry> {
+  const normalizedSubmitted = normalizeJankenPlannerProgress({ [shopStateUid]: submitted })?.[shopStateUid];
+  if (!normalizedSubmitted) throw new InvalidJankenPlannerEntryError();
+  const normalizedBase =
+    base === null ? null : (normalizeJankenPlannerProgress({ [shopStateUid]: base })?.[shopStateUid] ?? null);
+  if (base !== null && normalizedBase === null) throw new InvalidJankenPlannerEntryError();
+  return updatePostgresPlannerStateDocument(
+    env,
+    userId,
+    async (_tx, document) => {
+      const latest = document.jankenProgress[shopStateUid] ?? null;
+      const equal = (left: JankenPlannerEntry | null, right: JankenPlannerEntry | null) =>
+        JSON.stringify(left) === JSON.stringify(right);
+      if (!equal(latest, normalizedBase) && !equal(latest, normalizedSubmitted))
+        throw new PlannerStateRevisionConflictError();
+      return {
+        document: { ...document, jankenProgress: { ...document.jankenProgress, [shopStateUid]: normalizedSubmitted } },
+        result: normalizedSubmitted,
+      };
     },
     { ...options, retryable: true },
   );

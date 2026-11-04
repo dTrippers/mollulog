@@ -84,6 +84,62 @@ describe("NumberInput grouped stepper", () => {
     expect(input.value).toBe("20");
   });
 
+  it("formats large values for display and keeps an ungrouped draft while editing", () => {
+    const onValueChange = jest.fn<(value: number) => void>();
+    const view = render(
+      <NumberInput grouped formatThousands aria-label="목표 스코어" value={1_750_000} min={0} onValueChange={onValueChange} />,
+    );
+    const input = screen.getByRole("spinbutton", { name: "목표 스코어" }) as HTMLInputElement;
+
+    expect(input.value).toBe("1,750,000");
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "2000000" } });
+    expect(onValueChange).toHaveBeenCalledWith(2_000_000);
+    expect(input.value).toBe("2000000");
+
+    view.rerender(
+      <NumberInput grouped formatThousands aria-label="목표 스코어" value={2_000_000} min={0} onValueChange={onValueChange} />,
+    );
+    fireEvent.blur(input);
+    expect(input.value).toBe("2,000,000");
+  });
+
+  it("restores select-all after keyboard focus reformats a grouped score input", () => {
+    render(
+      <NumberInput grouped formatThousands aria-label="목표 스코어" value={2_500_000} min={0} onValueChange={() => undefined} />,
+    );
+    const input = screen.getByRole("spinbutton", { name: "목표 스코어" }) as HTMLInputElement;
+    jest.spyOn(input, "matches").mockReturnValue(true);
+    const select = jest.spyOn(input, "select");
+
+    fireEvent.focus(input);
+
+    expect(select).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves click-to-place cursor focus in a grouped score input", () => {
+    render(
+      <NumberInput grouped formatThousands aria-label="목표 스코어" value={2_500_000} min={0} onValueChange={() => undefined} />,
+    );
+    const input = screen.getByRole("spinbutton", { name: "목표 스코어" }) as HTMLInputElement;
+    jest.spyOn(input, "matches").mockReturnValue(false);
+    const select = jest.spyOn(input, "select");
+
+    fireEvent.focus(input);
+
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it("keeps an empty formatted value blank instead of showing zero", () => {
+    render(
+      <NumberInput grouped formatThousands aria-label="1회 평균 스코어" value="" min={0} onValueChange={() => undefined} />,
+    );
+    const input = screen.getByRole("spinbutton", { name: "1회 평균 스코어" }) as HTMLInputElement;
+
+    expect(input.value).toBe("");
+    expect(input.getAttribute("aria-valuenow")).toBeNull();
+  });
+
   it("keeps ungrouped inputs on their existing input height", () => {
     const { container } = render(<NumberInput aria-label="필요 수량" value={4} readOnly />);
     const input = container.querySelector("input");

@@ -59,7 +59,7 @@ export function ShopSection({
   return (
     <section className={shopVariant ? undefined : "rounded-lg bg-v2-surface p-v2-block-p"}>
       {shopVariant ? (
-        <h2 className="m-0">
+        <h2 className="m-0 flex items-center gap-3">
           <button
             type="button"
             aria-expanded={expanded}
@@ -68,12 +68,13 @@ export function ShopSection({
             className={v2ButtonClassName({
               variant: "text",
               size: "sm",
-              className: "h-7 w-full justify-between gap-2 px-0 text-left",
+              className: "h-7 min-w-0 flex-1 justify-between gap-2 px-0 text-left",
             })}
           >
-            <span className="text-lg font-semibold text-v2-fg">{title}</span>
+            <span className="truncate text-lg font-semibold text-v2-fg">{title}</span>
             <ChevronIcon className="size-5 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
           </button>
+          {action ? <div className="shrink-0 text-right">{action}</div> : null}
         </h2>
       ) : (
         <div className="flex items-center gap-2">

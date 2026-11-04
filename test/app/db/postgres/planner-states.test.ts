@@ -55,6 +55,7 @@ function baseDocument(): PlannerStateDocumentV1 {
       eventData: { "event-1": { completed: false, expectedTrials: 3 } },
     },
     eventShops: {},
+    jankenProgress: {},
     ap: null,
   };
 }

@@ -72,6 +72,7 @@ function toEventShopState(state: ShopState): EventShopState {
     extraStageRuns: state.extraStageRuns,
     minigameStartRound: state.minigameStartRound,
     minigamePlayCount: state.minigamePlayCount,
+    jankenStagePlays: state.jankenStagePlays,
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
     cardFlipStrategy: state.cardFlipStrategy,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities,

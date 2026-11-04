@@ -18,6 +18,7 @@ function createLiveState(overrides: Partial<ShopState> = {}): ShopState {
     extraStageRuns: {},
     minigameStartRound: 1,
     minigamePlayCount: 0,
+    jankenStagePlays: {},
     minigamePaymentQuantityMode: "expected",
     cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},
@@ -39,6 +40,7 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     extraStageRuns: {},
     minigameStartRound: 1,
     minigamePlayCount: 0,
+    jankenStagePlays: {},
     minigamePaymentQuantityMode: "expected",
     cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},
@@ -59,6 +61,7 @@ describe("toEventShopState", () => {
       minigamePaymentQuantityMode: "expected",
       extraStageRuns: {},
       minigamePlayCount: 2,
+      jankenStagePlays: {},
       includeFirstClear: false,
       existingPaymentItemQuantities: { pyroxene: 120 },
       minigameStartRound: 1,
@@ -73,6 +76,7 @@ describe("toEventShopState", () => {
     };
     const sameStateDifferentOrder = createLiveState({
       minigamePlayCount: 2,
+      jankenStagePlays: {},
       cardFlipStrategy: "sr-reset",
       overriddenRequiredQuantities: { "item-2": 3 },
     });

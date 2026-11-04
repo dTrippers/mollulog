@@ -15,6 +15,27 @@ export type PlannerStateResource = GuestPyroxeneResources;
 export type PlannerStateTimelineRecord = Omit<PyroxeneTimelineItem, "userId">;
 export type PlannerStateEventData = Pick<PyroxeneEventData, "completed" | "expectedTrials">;
 
+export type JankenPlannerEntry = {
+  progress: {
+    currentTier: number;
+    heldEleph: number;
+    cumulativeScore: number;
+    equipmentTier: number;
+    heldEquipmentCurrency: number;
+    clearedStageUids: string[];
+  };
+  goals: {
+    targetTier: number | null;
+    shopCurrencyMode: "linked" | "manual";
+    manualShopCurrency: number;
+    targetScore: number | null;
+    averageScore: number | null;
+    targetEquipmentTier: number | null;
+  };
+};
+
+export type JankenPlannerProgress = Record<string, JankenPlannerEntry>;
+
 export type PlannerStateDocumentV1 = {
   schemaVersion: 1;
   pyroxene: {
@@ -25,6 +46,7 @@ export type PlannerStateDocumentV1 = {
     eventData: Record<string, PlannerStateEventData>;
   };
   eventShops: Record<string, EventShopState>;
+  jankenProgress: JankenPlannerProgress;
   ap: ApPlannerState | null;
 };
 
@@ -40,6 +62,7 @@ export type PlannerStateProjectionRows = {
   collectedSources: readonly unknown[];
   eventData: readonly unknown[];
   eventShops: readonly unknown[];
+  jankenProgress?: unknown;
 };
 
 export class PlannerStateProjectionError extends Error {
@@ -70,6 +93,58 @@ function nonEmptyString(value: unknown, field: string): string {
 
 function integer(value: unknown, field: string): number {
   return typeof value === "number" && Number.isSafeInteger(value) ? value : invalid(field);
+}
+
+function nonNegativeInteger(value: unknown, field: string): number {
+  const parsed = integer(value, field);
+  return parsed >= 0 ? parsed : invalid(field);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) >= 0;
+}
+
+export function normalizeJankenPlannerProgress(value: unknown): JankenPlannerProgress | null {
+  if (value === undefined) return {};
+  if (!isRecord(value)) return null;
+  const result: JankenPlannerProgress = {};
+  for (const [uid, raw] of Object.entries(value)) {
+    if (!uid || !isRecord(raw) || !isRecord(raw.progress) || !isRecord(raw.goals)) return null;
+    const { progress, goals } = raw;
+    const currentTier = progress.currentTier;
+    const equipmentTier = progress.equipmentTier;
+    const targetTier = goals.targetTier;
+    const targetEquipmentTier = goals.targetEquipmentTier;
+    if (!Number.isInteger(currentTier) || (currentTier as number) < 1 || (currentTier as number) > 9 ||
+        !Number.isSafeInteger(equipmentTier) || (equipmentTier as number) < 1 || (equipmentTier as number) > 99 ||
+        !(targetTier === null || (Number.isSafeInteger(targetTier) && (targetTier as number) >= 1 && (targetTier as number) <= 9)) ||
+        !(targetEquipmentTier === null || (Number.isSafeInteger(targetEquipmentTier) && (targetEquipmentTier as number) >= 1 && (targetEquipmentTier as number) <= 99)) ||
+        (goals.shopCurrencyMode !== "linked" && goals.shopCurrencyMode !== "manual") ||
+        !isNonNegativeInteger(progress.heldEleph) || !isNonNegativeInteger(progress.cumulativeScore) ||
+        !isNonNegativeInteger(progress.heldEquipmentCurrency) || !isNonNegativeInteger(goals.manualShopCurrency) ||
+        !(goals.targetScore === null || (Number.isSafeInteger(goals.targetScore) && (goals.targetScore as number) >= 0)) ||
+        !(goals.averageScore === null || (Number.isSafeInteger(goals.averageScore) && (goals.averageScore as number) >= 0)) ||
+        !Array.isArray(progress.clearedStageUids) || progress.clearedStageUids.some((stageUid) => typeof stageUid !== "string" || !stageUid.trim())) return null;
+    result[uid] = {
+      progress: {
+        currentTier: currentTier as number,
+        heldEleph: nonNegativeInteger(progress.heldEleph, "jankenProgress.progress.heldEleph"),
+        cumulativeScore: nonNegativeInteger(progress.cumulativeScore, "jankenProgress.progress.cumulativeScore"),
+        equipmentTier: equipmentTier as number,
+        heldEquipmentCurrency: nonNegativeInteger(progress.heldEquipmentCurrency, "jankenProgress.progress.heldEquipmentCurrency"),
+        clearedStageUids: [...new Set(progress.clearedStageUids as string[])].sort(),
+      },
+      goals: {
+        targetTier: targetTier as number | null,
+        shopCurrencyMode: goals.shopCurrencyMode,
+        manualShopCurrency: nonNegativeInteger(goals.manualShopCurrency, "jankenProgress.goals.manualShopCurrency"),
+        targetScore: goals.targetScore as number | null,
+        averageScore: goals.averageScore as number | null,
+        targetEquipmentTier: targetEquipmentTier as number | null,
+      },
+    };
+  }
+  return result;
 }
 
 function optionalInteger(value: unknown, field: string): number | null {
@@ -171,6 +246,7 @@ function parseEventShop(value: unknown): { eventUid: string; state: EventShopSta
     extraStageRuns: jsonValue(row.extraStageRuns, "event_shop_states.extra_stage_runs"),
     minigameStartRound: row.minigameStartRound,
     minigamePlayCount: row.minigamePlayCount,
+    jankenStagePlays: jsonValue(row.jankenStagePlays, "event_shop_states.janken_stage_plays"),
     minigamePaymentQuantityMode: row.minigamePaymentQuantityMode,
     cardFlipStrategy: row.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: jsonValue(
@@ -230,6 +306,9 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
     eventShops[eventUid] = state;
   }
 
+  const jankenProgress = normalizeJankenPlannerProgress(rows.jankenProgress);
+  if (!jankenProgress) return invalid("janken_progress.payload");
+
   return {
     schemaVersion: 1,
     pyroxene: {
@@ -240,6 +319,7 @@ export function projectPlannerStateDocument(rows: PlannerStateProjectionRows): P
       eventData: Object.fromEntries(Object.entries(eventData).sort(([left], [right]) => left.localeCompare(right))),
     },
     eventShops: Object.fromEntries(Object.entries(eventShops).sort(([left], [right]) => left.localeCompare(right))),
+    jankenProgress,
     ap: null,
   };
 }

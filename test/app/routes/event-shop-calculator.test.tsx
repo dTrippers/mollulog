@@ -12,6 +12,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculation";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import EventShopCalculator, { matchesShopEventSearch } from "~/routes/events.$uid._components/EventShopCalculator";
+import { janken860Fixture } from "../domain/fixtures/janken-860";
 import { createCardFlipPlan, createEventShopPlan } from "./event-shop-fixtures";
 
 describe("event shop event search", () => {
@@ -305,6 +306,35 @@ describe("event shop v2 calculator", () => {
     });
 
     expect(render()).toContain("항상 4장을 모두 열어요");
+  });
+
+  it("truncates fractional janken stage counts and keeps the stage editor visible for invalid saved counts", () => {
+    const empty = createEventShopPlan();
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const setJankenStagePlays = jest.fn<(plays: Record<string, number>) => void>();
+    const overrides = {
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      actions: { ...empty.actions, setJankenStagePlays },
+    };
+    mockPlan = createEventShopPlan({ ...overrides, state: { ...empty.state, jankenStagePlays: {} } });
+    const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    const input = screen.getByRole("spinbutton", { name: "노말 4 플레이 횟수" });
+
+    fireEvent.change(input, { target: { value: "1.5" } });
+
+    expect(setJankenStagePlays).toHaveBeenCalledWith({ "100860204": 1 });
+    mockPlan = createEventShopPlan({ ...overrides, state: { ...empty.state, jankenStagePlays: { "100860204": 1.5 } } });
+    view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+
+    expect(screen.getByRole("spinbutton", { name: "노말 4 플레이 횟수" })).toBeTruthy();
+    expect(screen.getByText("무술대회 설정을 확인하지 못했어요.")).toBeTruthy();
   });
 
   it("renders event search and results directly in the mobile sheet", () => {

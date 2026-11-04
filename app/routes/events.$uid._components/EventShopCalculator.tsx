@@ -1,10 +1,4 @@
-import {
-  BoltIcon,
-  CalculatorIcon,
-  ChevronDownIcon,
-  ListBulletIcon,
-  UserIcon,
-} from "@heroicons/react/16/solid";
+import { BoltIcon, CalculatorIcon, ChevronDownIcon, ListBulletIcon, UserIcon } from "@heroicons/react/16/solid";
 import { UserIcon as UserOutlineIcon } from "@heroicons/react/24/outline";
 import Decimal from "decimal.js";
 import hangul from "hangul-js";
@@ -25,7 +19,7 @@ import { Switch } from "~/components/v2/primitives/Switch";
 import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import { useSignIn } from "~/contexts/SignInProvider";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { CARD_FLIP_STRATEGIES } from "~/domain/event-shop";
+import { CARD_FLIP_STRATEGIES, type MinigameConfig } from "~/domain/event-shop";
 import {
   calculateEffectiveShopPurchaseCount,
   getShopResourcePurchaseDaysLimit,
@@ -36,6 +30,7 @@ import {
   buildResourceBreakdownLines,
 } from "~/domain/event-shop/calculations/resource-breakdown-lines";
 import { calculateBoughtResourceQuantities } from "~/domain/event-shop/calculations/shop-rewards";
+import { evaluateJankenPlan, getJankenResourceRoles } from "~/domain/event-shop/janken";
 import { calculateMinigameRewards, hasVariableMinigamePayment, resourceCountLabel } from "~/domain/event-shop/utils";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
@@ -44,6 +39,7 @@ import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/li
 import {
   cardFlipLocale,
   formatResourceAmount,
+  jankenLocale,
   minigameDescription,
   roadPuzzleLocale,
   treasureHuntLocale,
@@ -301,118 +297,120 @@ export default function EventShopCalculator() {
             >
               {minigame.minigameType === "road_puzzle" ? (
                 <RoadPuzzleShopSection plan={plan} config={minigame} />
+              ) : minigame.minigameType === "janken" ? (
+                <JankenShopSection plan={plan} config={minigame} />
               ) : (
-              <div className="space-y-v2-group-gap">
-                <label htmlFor="event-minigame-count" className="block space-y-1 text-sm text-v2-fg">
-                  <span className="block font-medium">{minigameCountLabel(minigame.minigameType)}</span>
-                  <NumberInput
-                    id="event-minigame-count"
-                    grouped
-                    showMin={false}
-                    showMax={false}
-                    className="w-full"
-                    min={0}
-                    value={plan.state.minigamePlayCount}
-                    onValueChange={handleMinigamePlayCountChange}
-                  />
-                </label>
-                {minigame.minigameType === "clue_search" ? (
-                  <label htmlFor="event-minigame-start-round" className="block space-y-1 text-sm text-v2-fg">
-                    <span className="block font-medium">시작 회차</span>
+                <div className="space-y-v2-group-gap">
+                  <label htmlFor="event-minigame-count" className="block space-y-1 text-sm text-v2-fg">
+                    <span className="block font-medium">{minigameCountLabel(minigame.minigameType)}</span>
                     <NumberInput
-                      id="event-minigame-start-round"
+                      id="event-minigame-count"
                       grouped
                       showMin={false}
                       showMax={false}
                       className="w-full"
-                      min={1}
-                      max={plan.state.minigamePlayCount || undefined}
-                      value={plan.state.minigameStartRound}
-                      onValueChange={plan.actions.setMinigameStartRound}
+                      min={0}
+                      value={plan.state.minigamePlayCount}
+                      onValueChange={handleMinigamePlayCountChange}
                     />
                   </label>
-                ) : null}
-                {minigame.minigameType === "treasure_hunt" ? (
-                  <>
-                    <Switch
-                      id="event-minigame-exclude-completed"
-                      checked={showCompletedTreasureHuntRound}
-                      onCheckedChange={(checked) => {
-                        setShowCompletedTreasureHuntRound(checked);
-                        if (!checked) plan.actions.setMinigameStartRound(1);
-                      }}
-                      label={treasureHuntLocale.excludeCompleted}
-                    />
-                    {showCompletedTreasureHuntRound ? (
-                      <label htmlFor="event-minigame-completed-round" className="block space-y-1 text-sm text-v2-fg">
-                        <span className="block font-medium">{treasureHuntLocale.completedRound}</span>
-                        <NumberInput
-                          id="event-minigame-completed-round"
-                          grouped
-                          showMin={false}
-                          showMax={false}
-                          className="w-full"
-                          min={0}
-                          max={Math.max(0, plan.state.minigamePlayCount - 1)}
-                          value={Math.max(0, plan.state.minigameStartRound - 1)}
-                          onValueChange={(round) => plan.actions.setMinigameStartRound(round + 1)}
-                        />
-                        <p className="text-xs text-v2-fg-tertiary">{treasureHuntLocale.completedRoundHelp}</p>
-                      </label>
-                    ) : null}
-                  </>
-                ) : null}
-                {paymentModeNeeded ? (
-                  <div className="flex flex-wrap gap-v2-block-gap">
-                    {(["min", "expected", "max"] as const).map((mode) => (
-                      <ToggleChip
-                        key={mode}
-                        pressed={plan.state.minigamePaymentQuantityMode === mode}
-                        onPressedChange={() => plan.actions.setMinigamePaymentQuantityMode(mode)}
-                      >
-                        {mode === "min" ? "최소" : mode === "expected" ? "기대" : "최대"}
-                      </ToggleChip>
-                    ))}
-                  </div>
-                ) : null}
-                {minigame.minigameType === "card_flip" ? (
-                  <>
+                  {minigame.minigameType === "clue_search" ? (
+                    <label htmlFor="event-minigame-start-round" className="block space-y-1 text-sm text-v2-fg">
+                      <span className="block font-medium">시작 회차</span>
+                      <NumberInput
+                        id="event-minigame-start-round"
+                        grouped
+                        showMin={false}
+                        showMax={false}
+                        className="w-full"
+                        min={1}
+                        max={plan.state.minigamePlayCount || undefined}
+                        value={plan.state.minigameStartRound}
+                        onValueChange={plan.actions.setMinigameStartRound}
+                      />
+                    </label>
+                  ) : null}
+                  {minigame.minigameType === "treasure_hunt" ? (
+                    <>
+                      <Switch
+                        id="event-minigame-exclude-completed"
+                        checked={showCompletedTreasureHuntRound}
+                        onCheckedChange={(checked) => {
+                          setShowCompletedTreasureHuntRound(checked);
+                          if (!checked) plan.actions.setMinigameStartRound(1);
+                        }}
+                        label={treasureHuntLocale.excludeCompleted}
+                      />
+                      {showCompletedTreasureHuntRound ? (
+                        <label htmlFor="event-minigame-completed-round" className="block space-y-1 text-sm text-v2-fg">
+                          <span className="block font-medium">{treasureHuntLocale.completedRound}</span>
+                          <NumberInput
+                            id="event-minigame-completed-round"
+                            grouped
+                            showMin={false}
+                            showMax={false}
+                            className="w-full"
+                            min={0}
+                            max={Math.max(0, plan.state.minigamePlayCount - 1)}
+                            value={Math.max(0, plan.state.minigameStartRound - 1)}
+                            onValueChange={(round) => plan.actions.setMinigameStartRound(round + 1)}
+                          />
+                          <p className="text-xs text-v2-fg-tertiary">{treasureHuntLocale.completedRoundHelp}</p>
+                        </label>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {paymentModeNeeded ? (
                     <div className="flex flex-wrap gap-v2-block-gap">
-                      {CARD_FLIP_STRATEGIES.map((strategy) => (
+                      {(["min", "expected", "max"] as const).map((mode) => (
                         <ToggleChip
-                          key={strategy}
-                          pressed={plan.state.cardFlipStrategy === strategy}
-                          onPressedChange={() => plan.actions.setCardFlipStrategy(strategy)}
+                          key={mode}
+                          pressed={plan.state.minigamePaymentQuantityMode === mode}
+                          onPressedChange={() => plan.actions.setMinigamePaymentQuantityMode(mode)}
                         >
-                          {cardFlipLocale.strategies[strategy].shortLabel}
+                          {mode === "min" ? "최소" : mode === "expected" ? "기대" : "최대"}
                         </ToggleChip>
                       ))}
                     </div>
-                    <p className="text-xs text-v2-fg-tertiary">
-                      {cardFlipLocale.strategies[plan.state.cardFlipStrategy].shortLabel} ·{" "}
-                      {cardFlipLocale.strategies[plan.state.cardFlipStrategy].rule(
-                        minigame.cardFlip?.status === "available" ? minigame.cardFlip.drawRules.maxDrawCount : 4,
-                      )}
-                    </p>
-                  </>
-                ) : minigameDescription(minigame.minigameType) ? (
-                  <p className="text-xs text-v2-fg-tertiary">{minigameDescription(minigame.minigameType)}</p>
-                ) : null}
-                {plan.state.minigamePlayCount > 0 ? <MinigameResourceBlocks plan={plan} /> : null}
-                {minigame.minigameType === "card_flip" ? (
-                  <AsideLinks
-                    items={[
-                      {
-                        key: "card-flip-strategy",
-                        title: "전략 비교와 카드별 보상 보기",
-                        description: "전략별 소비 재화·기대 획득 보상과 카드별 구성을 확인해보세요",
-                        Icon: CalculatorIcon,
-                        to: `/events/${plan.eventUid}/shop/card-flip`,
-                      },
-                    ]}
-                  />
-                ) : null}
-              </div>
+                  ) : null}
+                  {minigame.minigameType === "card_flip" ? (
+                    <>
+                      <div className="flex flex-wrap gap-v2-block-gap">
+                        {CARD_FLIP_STRATEGIES.map((strategy) => (
+                          <ToggleChip
+                            key={strategy}
+                            pressed={plan.state.cardFlipStrategy === strategy}
+                            onPressedChange={() => plan.actions.setCardFlipStrategy(strategy)}
+                          >
+                            {cardFlipLocale.strategies[strategy].shortLabel}
+                          </ToggleChip>
+                        ))}
+                      </div>
+                      <p className="text-xs text-v2-fg-tertiary">
+                        {cardFlipLocale.strategies[plan.state.cardFlipStrategy].shortLabel} ·{" "}
+                        {cardFlipLocale.strategies[plan.state.cardFlipStrategy].rule(
+                          minigame.cardFlip?.status === "available" ? minigame.cardFlip.drawRules.maxDrawCount : 4,
+                        )}
+                      </p>
+                    </>
+                  ) : minigameDescription(minigame.minigameType) ? (
+                    <p className="text-xs text-v2-fg-tertiary">{minigameDescription(minigame.minigameType)}</p>
+                  ) : null}
+                  {plan.state.minigamePlayCount > 0 ? <MinigameResourceBlocks plan={plan} /> : null}
+                  {minigame.minigameType === "card_flip" ? (
+                    <AsideLinks
+                      items={[
+                        {
+                          key: "card-flip-strategy",
+                          title: "전략 비교와 카드별 보상 보기",
+                          description: "전략별 소비 재화·기대 획득 보상과 카드별 구성을 확인해보세요",
+                          Icon: CalculatorIcon,
+                          to: `/events/${plan.eventUid}/shop/card-flip`,
+                        },
+                      ]}
+                    />
+                  ) : null}
+                </div>
               )}
             </ShopSection>
           ) : null}
@@ -429,14 +427,14 @@ export default function EventShopCalculator() {
               {plan.roadPuzzlePlannerStatus ? (
                 <RoadPuzzlePlannerStatus plan={plan} pendingText={roadPuzzleLocale.plannerPending} />
               ) : (
-              <div className="grid grid-cols-1 gap-v2-block-gap md:grid-cols-2">
-                {plan.stages
-                  .filter(({ difficulty }) => difficulty === 1)
-                  .sort((a, b) => Number.parseInt(a.index, 10) - Number.parseInt(b.index, 10))
-                  .map((stage) => (
-                    <StageCard key={stage.uid} stage={stage} plan={plan} />
-                  ))}
-              </div>
+                <div className="grid grid-cols-1 gap-v2-block-gap md:grid-cols-2">
+                  {plan.stages
+                    .filter(({ difficulty }) => difficulty === 1)
+                    .sort((a, b) => Number.parseInt(a.index, 10) - Number.parseInt(b.index, 10))
+                    .map((stage) => (
+                      <StageCard key={stage.uid} stage={stage} plan={plan} />
+                    ))}
+                </div>
               )}
             </div>
           </ShopSection>
@@ -462,6 +460,123 @@ export default function EventShopCalculator() {
         ) : null}
       </PageAside>
     </>
+  );
+}
+
+function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; config: MinigameConfig }) {
+  const janken = config.janken ?? { status: "unavailable" as const };
+  if (janken.status === "unavailable") return <StatusNotice tone="neutral">{jankenLocale.unavailable}</StatusNotice>;
+  if (janken.status === "invalid") return <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice>;
+  const plays = plan.state.jankenStagePlays;
+  const evaluated = evaluateJankenPlan(janken, { stagePlays: plays, clearedStageUids: plan.jankenClearedStageUids });
+  const roles = getJankenResourceRoles(
+    janken,
+    plan.shopResources.map(({ paymentResource }) => paymentResource.uid),
+    plan.jankenStudentGrowthUid ?? null,
+  );
+  const stageLabel = (stage: (typeof janken.stages)[number]) =>
+    stage.stageType === "story"
+      ? jankenLocale.storyStage(stage.stageNumber)
+      : stage.stageType === "normal"
+        ? jankenLocale.normalStage(stage.stageNumber)
+        : jankenLocale.challengeStage;
+  const resourceLabel = (uid: string) =>
+    uid === roles.entryUid
+      ? jankenLocale.entryCurrency
+      : uid === roles.shopUid
+        ? jankenLocale.shopCurrency
+        : uid === roles.equipmentUid
+          ? jankenLocale.equipmentCurrency
+          : uid === roles.studentUid
+            ? jankenLocale.studentGrowth
+            : jankenLocale.otherReward;
+  return (
+    <div className="space-y-v2-group-gap">
+      <div className="overflow-x-auto rounded-md bg-v2-surface">
+        <table className="w-full min-w-[32rem] text-left text-sm">
+          <thead className="text-xs text-v2-fg-tertiary">
+            <tr>
+              <th className="p-2">{jankenLocale.shopStage}</th>
+              <th className="p-2 text-right">{jankenLocale.shopEntryCost}</th>
+              <th className="w-48 p-2 text-right">{jankenLocale.playCount}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {janken.stages.map((stage) => (
+              <tr key={stage.uid} className="border-t border-v2-divider">
+                <th scope="row" className="p-2">
+                  <span className="rounded bg-v2-inset px-2 py-1">{stageLabel(stage)}</span>
+                </th>
+                <td className="p-2 text-right tabular-nums text-v2-fg-secondary">
+                  {stage.entryCost.quantity.toLocaleString()}
+                </td>
+                <td className="p-2">
+                  <NumberInput
+                    id={`janken-play-${stage.uid}`}
+                    aria-label={jankenLocale.stagePlayCount(stageLabel(stage))}
+                    grouped
+                    min={0}
+                    value={plays[stage.uid] ?? 0}
+                    onValueChange={(value) => {
+                      const next = { ...plays };
+                      const count = Math.max(0, Math.trunc(value));
+                      if (count === 0) delete next[stage.uid];
+                      else next[stage.uid] = count;
+                      plan.actions.setJankenStagePlays(next);
+                    }}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {evaluated.status === "invalid" ? <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice> : null}
+      <p className="text-xs text-v2-fg-tertiary">{jankenLocale.shopFirstClearHelp}</p>
+      {Object.keys(plays).length > 0 && evaluated.status === "available" ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-md bg-v2-inset p-3">
+            <p className="text-xs text-v2-fg-secondary">{jankenLocale.entryCurrencyRequired}</p>
+            <p className="mt-1 text-lg font-semibold tabular-nums">{evaluated.entryCost.toLocaleString()}</p>
+          </div>
+          <div className="rounded-md bg-v2-inset p-3">
+            <p className="text-xs text-v2-fg-secondary">{jankenLocale.expectedRewards}</p>
+            <ul className="mt-2 space-y-2">
+              {Object.entries(evaluated.rewards).map(([uid, quantity]) => (
+                <li key={uid} className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2">
+                    <ResourceThumb
+                      itemUid={uid}
+                      resourceType={
+                        janken.stages.flatMap((stage) => stage.rewards).find((reward) => reward.resourceUid === uid)
+                          ?.resourceType
+                      }
+                      name={resourceLabel(uid)}
+                      size="sm"
+                    />
+                    {resourceLabel(uid)}
+                  </span>
+                  <span className="tabular-nums">
+                    {new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      ) : null}
+      <AsideLinks
+        items={[
+          {
+            key: "janken-planner",
+            title: jankenLocale.shopPlanner,
+            description: jankenLocale.shopPlannerDescription,
+            Icon: CalculatorIcon,
+            to: `/events/${plan.eventUid}/shop/janken`,
+          },
+        ]}
+      />
+    </div>
   );
 }
 
@@ -575,9 +690,9 @@ function BonusRoleRow({
           const selected =
             plan.state.bonusStudentSelectionMode === "shared"
               ? plan.state.selectedBonusStudentUids.includes(student.uid)
-              : (
-                  plan.state.selectedBonusStudentUidsByItem[item.uid] ?? plan.state.selectedBonusStudentUids
-                ).includes(student.uid);
+              : (plan.state.selectedBonusStudentUidsByItem[item.uid] ?? plan.state.selectedBonusStudentUids).includes(
+                  student.uid,
+                );
           const recruited = plan.recruitedStudentUids.includes(student.uid);
           return (
             <div key={student.uid} className="min-w-0">
@@ -1137,12 +1252,13 @@ export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
         {!calculationPending && calculationReady && calculation.totalApWithExtras <= 0 ? (
           <p className="mt-1 text-xs text-v2-fg-tertiary">구매할 아이템을 선택하세요</p>
         ) : null}
-        {calculationReady && apBreakdown.map(([label, value]) => (
-          <div key={label} className="mt-1 flex justify-between text-xs tabular-nums text-v2-fg-secondary">
-            <span>{label}</span>
-            <span>{value.toLocaleString()}</span>
-          </div>
-        ))}
+        {calculationReady &&
+          apBreakdown.map(([label, value]) => (
+            <div key={label} className="mt-1 flex justify-between text-xs tabular-nums text-v2-fg-secondary">
+              <span>{label}</span>
+              <span>{value.toLocaleString()}</span>
+            </div>
+          ))}
       </div>
       {calculationReady && Object.keys(calculation.unobtainableTargets).length > 0 ? (
         <StatusNotice tone="warning">선택한 스테이지에서 획득할 수 없는 이벤트 재화가 있어요.</StatusNotice>
@@ -1616,6 +1732,7 @@ function minigameTitle(type: string) {
         box_gacha: "상자 뽑기",
         fortune_gacha: "운세 뽑기",
         road_puzzle: roadPuzzleLocale.title,
+        janken: jankenLocale.gameTitle,
       } as Record<string, string>
     )[type] ?? "미니게임"
   );

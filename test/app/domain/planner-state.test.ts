@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import {
+  normalizeJankenPlannerProgress,
   PlannerStateProjectionError,
   type PlannerStateProjectionRows,
   projectPlannerStateDocument,
@@ -21,6 +22,7 @@ const shopRow = {
   extraStageRuns: { "stage-1": 2 },
   minigameStartRound: 4,
   minigamePlayCount: 5,
+  jankenStagePlays: {},
   minigamePaymentQuantityMode: "max",
   cardFlipStrategy: "sr-reset",
   overriddenRequiredQuantities: { "item-1": 11 },
@@ -76,6 +78,33 @@ function projectionRows(overrides: Partial<PlannerStateProjectionRows> = {}): Pl
 }
 
 describe("planner state projection", () => {
+  it("defaults missing janken progress and rejects malformed entries", () => {
+    expect(projectPlannerStateDocument(projectionRows()).jankenProgress).toEqual({});
+    expect(normalizeJankenPlannerProgress({ "shop-1": { progress: { currentTier: 0 }, goals: {} } })).toBeNull();
+    expect(
+      normalizeJankenPlannerProgress({
+        "shop-1": {
+          progress: {
+            currentTier: 3,
+            heldEleph: 0,
+            cumulativeScore: 0,
+            equipmentTier: 1,
+            heldEquipmentCurrency: 0,
+            clearedStageUids: ["stage-2", "stage-2"],
+          },
+          goals: {
+            targetTier: null,
+            shopCurrencyMode: "linked",
+            manualShopCurrency: 0,
+            targetScore: null,
+            averageScore: null,
+            targetEquipmentTier: null,
+          },
+        },
+      })?.["shop-1"].progress.clearedStageUids,
+    ).toEqual(["stage-2"]);
+  });
+
   it("sorts planner records by event time while preserving same-time order", () => {
     const input = [
       { uid: "later", eventAt: "2026-09-03T00:00:00.000Z" },
@@ -140,11 +169,13 @@ describe("planner state projection", () => {
           extraStageRuns: { "stage-1": 2 },
           minigameStartRound: 4,
           minigamePlayCount: 5,
+          jankenStagePlays: {},
           minigamePaymentQuantityMode: "max",
           cardFlipStrategy: "sr-reset",
           overriddenRequiredQuantities: { "item-1": 11 },
         },
       },
+      jankenProgress: {},
       ap: null,
     });
   });

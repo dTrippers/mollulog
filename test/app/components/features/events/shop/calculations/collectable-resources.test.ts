@@ -256,6 +256,7 @@ describe("buildCollectableResources", () => {
       stages,
       includeFirstClear: false,
       minigamePlayCount: 1,
+      jankenStagePlays: {},
       minigameRewards: [eventCoinReward, rewardOnly("reward-eligma", 5)],
     });
     const collectableUids = new Set(uidsOf(null));

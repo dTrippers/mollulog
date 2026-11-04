@@ -53,6 +53,15 @@ describe("event shop state", () => {
     expect(normalizeEventShopState({ ...state, cardFlipStrategy: "unsupported" })).toBeNull();
     expect(normalizeEventShopState({ ...state, cardFlipStrategy: undefined })?.cardFlipStrategy).toBe("all-open");
     expect(normalizeEventShopState({ ...state, cardFlipStrategy: "sr-reset" })?.cardFlipStrategy).toBe("sr-reset");
+    expect(normalizeEventShopState({ ...state, jankenStagePlays: { stage: -1 } })).toBeNull();
+    expect(normalizeEventShopState({ ...state, jankenStagePlays: { stage: 0 } })?.jankenStagePlays).toEqual({});
+  });
+
+  it("replaces janken stage play maps as a whole value", () => {
+    const base = { ...createDefaultEventShopState([], []), jankenStagePlays: { normal1: 2, normal2: 3 } };
+    const submitted = { ...base, jankenStagePlays: { normal1: 4 } };
+    const latest = { ...base, jankenStagePlays: { normal2: 8 } };
+    expect(mergeEventShopStateChanges(base, submitted, latest).jankenStagePlays).toEqual({ normal1: 4 });
   });
 
   it("preserves fields changed elsewhere when the detailed screen submits an older full state", () => {

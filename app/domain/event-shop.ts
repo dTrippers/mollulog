@@ -110,7 +110,8 @@ export type MinigameConfig = {
     | "box_gacha"
     | "clue_search"
     | "treasure_hunt"
-    | "road_puzzle";
+    | "road_puzzle"
+    | "janken";
   payment: {
     resourceType: ResourceTypeEnum;
     resourceUid: string;
@@ -124,6 +125,7 @@ export type MinigameConfig = {
   treasureHunt?: TreasureHuntConfig | null;
   cardFlip?: CardFlipData;
   roadPuzzle?: RoadPuzzleConfig | null;
+  janken?: JankenConfig;
 };
 
 export type RoadPuzzleCoordinate = { x: number; y: number; z: number };
@@ -167,6 +169,36 @@ export type RoadPuzzleConfig = {
   rounds: RoadPuzzleRound[];
   maps: RoadPuzzleMap[];
 };
+
+export type JankenStage = {
+  uid: string;
+  stageType: "story" | "normal" | "challenge";
+  stageNumber: number;
+  previousStageUid: string | null;
+  entryCost: MinigamePayment;
+  rewards: (RewardItem & { probability: number; tag: "default" | "first_clear" | "three_star" })[];
+};
+
+export type JankenConfig =
+  | {
+      status: "available";
+      challengeMultipleUnlockScore: number;
+      multipleMax: number;
+      stages: JankenStage[];
+      scoreRewards: { tier: number; score: number; rewards: RewardItem[] }[];
+      equipmentUpgrade: {
+        maxTier: number;
+        costResource: RewardItem | null;
+        tierCosts: { tier: number; quantity: number }[];
+      };
+      equipments: {
+        uid: string;
+        unlockStageUid: string | null;
+        tiers: { tier: number; attackPower: number; hitPoint: number }[];
+      }[];
+    }
+  | { status: "unavailable" }
+  | { status: "invalid" };
 
 export type MinigamePayment = {
   resourceType: ResourceTypeEnum;

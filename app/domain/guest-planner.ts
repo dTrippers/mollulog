@@ -331,6 +331,7 @@ function emptyPlannerDocument(): GuestPlannerDocument {
       eventData: {},
     },
     eventShops: {},
+    jankenProgress: {},
     ap: null,
   };
 }
@@ -402,6 +403,7 @@ function projectDocument(value: unknown): GuestPlannerDocument | null {
       collectedSources: pyroxene.collectedSourceKeys.map((sourceKey) => ({ sourceKey })),
       eventData: Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
       eventShops: Object.entries(value.eventShops).map(([eventUid, state]) => ({ eventUid, ...(state as object) })),
+      jankenProgress: value.jankenProgress,
     });
     return { ...projected, ap };
   } catch {
@@ -1066,6 +1068,7 @@ export function guestPlannerHasPrimaryData(envelope: GuestPlannerEnvelope): bool
       pyroxene.collectedSourceKeys.length ||
       Object.keys(pyroxene.eventData).length ||
       Object.keys(envelope.document.eventShops).length ||
+      Object.keys(envelope.document.jankenProgress).length ||
       apPlannerStateHasData(envelope.document.ap) ||
       envelope.favorites.length,
   );
@@ -1394,7 +1397,11 @@ export function clearGuestPlannerItemsIfUnchanged(
   submitted: GuestPlannerEnvelope,
   items: readonly GuestPlannerItemReference[],
 ): GuestPlannerEnvelope {
-  const nextDocument = { ...current.document, pyroxene: { ...current.document.pyroxene } };
+  const nextDocument = {
+    ...current.document,
+    pyroxene: { ...current.document.pyroxene },
+    jankenProgress: { ...current.document.jankenProgress },
+  };
   const records = [...current.document.pyroxene.records];
   const collectedSourceKeys = [...current.document.pyroxene.collectedSourceKeys];
   const eventData = { ...current.document.pyroxene.eventData };

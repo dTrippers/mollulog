@@ -68,6 +68,8 @@ export type RequiredQuantitiesInput = {
   includeFirstClear: boolean;
   minigameStartRound?: number;
   minigamePlayCount: number;
+  jankenStagePlays?: Record<string, number>;
+  jankenClearedStageUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
   minigamePaymentCosts?: MinigamePayment[];
   minigameRewards?: RewardItem[];

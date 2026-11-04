@@ -12,6 +12,7 @@ type ShopApCalculationState = Pick<
   | "includeFirstClear"
   | "minigameStartRound"
   | "minigamePlayCount"
+  | "jankenStagePlays"
   | "enabledStages"
   | "extraStageRuns"
   | "overriddenRequiredQuantities"
@@ -24,6 +25,7 @@ export function calculateShopApRequirement(input: {
   appliedBonusRatio: Record<string, Decimal>;
   minigamePaymentCosts?: MinigamePayment[];
   minigameRewards?: RewardItem[];
+  jankenClearedStageUids?: readonly string[];
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
 }): CalculationResult {
@@ -34,6 +36,7 @@ export function calculateShopApRequirement(input: {
     appliedBonusRatio,
     minigamePaymentCosts,
     minigameRewards,
+    jankenClearedStageUids,
     excludedShopResourceUids,
     minigameConfig,
   } = input;
@@ -46,6 +49,8 @@ export function calculateShopApRequirement(input: {
     includeFirstClear: state.includeFirstClear,
     minigameStartRound: state.minigameStartRound,
     minigamePlayCount: state.minigamePlayCount,
+    jankenStagePlays: state.jankenStagePlays,
+    jankenClearedStageUids,
     minigameConfig,
     minigamePaymentCosts,
     minigameRewards,

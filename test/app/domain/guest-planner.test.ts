@@ -388,6 +388,26 @@ describe("guest planner envelope", () => {
     envelope.document.pyroxene.eventData = { "event-1": { completed: false, expectedTrials: 200 } };
     envelope.favorites = [{ contentUid: "content-1", studentUid: "student-1" }];
     envelope.document.eventShops = { "shop-1": createDefaultEventShopState([], []) };
+    envelope.document.jankenProgress = {
+      "shop-1": {
+        progress: {
+          currentTier: 1,
+          heldEleph: 0,
+          cumulativeScore: 0,
+          equipmentTier: 1,
+          heldEquipmentCurrency: 0,
+          clearedStageUids: [],
+        },
+        goals: {
+          targetTier: null,
+          shopCurrencyMode: "linked",
+          manualShopCurrency: 0,
+          targetScore: null,
+          averageScore: null,
+          targetEquipmentTier: null,
+        },
+      },
+    };
     envelope.eventShopTimelineUids = { "shop-1": "timeline-1" };
     envelope.document.ap = {
       accountLevel: 85,
@@ -395,6 +415,7 @@ describe("guest planner envelope", () => {
       comfort: 4_500,
       eventPlans: { "event-1": { accessAt: "2026-09-30T03:00:00.000Z" } },
     };
+    expect(guestPlannerHasData(envelope)).toBe(true);
 
     const cleared = clearGuestPlannerItemsIfUnchanged(envelope, envelope, [
       { type: "resources", key: "current" },
@@ -415,9 +436,10 @@ describe("guest planner envelope", () => {
     expect(cleared.document.pyroxene.eventData).toEqual({});
     expect(cleared.favorites).toEqual([]);
     expect(cleared.document.eventShops).toEqual({});
+    expect(cleared.document.jankenProgress).toEqual(envelope.document.jankenProgress);
     expect(cleared.eventShopTimelineUids).toEqual({});
     expect(cleared.document.ap).toBeNull();
-    expect(guestPlannerHasData(cleared)).toBe(false);
+    expect(guestPlannerHasData(cleared)).toBe(true);
   });
 
   it("keeps AP when the guest source changed after the submitted import snapshot", () => {

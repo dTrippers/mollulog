@@ -78,6 +78,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
     });
 
     expect(ledger.requiredForShopItems).toEqual({ gamepad: 6700, cable: 70 });
@@ -118,6 +119,7 @@ describe("calculateResourceLedger", () => {
       stages,
       includeFirstClear: true,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
       overriddenRequiredQuantities: { gamepad: 120 },
     });
 
@@ -151,6 +153,7 @@ describe("calculateResourceLedger", () => {
       existingPaymentItemQuantities: {},
       stages,
       minigamePlayCount: 0,
+      jankenStagePlays: {},
       overriddenRequiredQuantities: { gamepad: 100 },
     };
 
@@ -176,6 +179,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 1,
+      jankenStagePlays: {},
       minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "event-points", quantity: 400 }],
       excludedShopResourceUids: ["legacy-clue-for-points", "legacy-points-for-clue"],
     });
@@ -215,6 +219,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: playCount,
+      jankenStagePlays: {},
       minigameConfig,
       minigamePaymentCosts,
     });
@@ -246,6 +251,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 6,
+      jankenStagePlays: {},
       minigameConfig,
       minigamePaymentCosts: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "yukari", quantity: 7000 }],
       minigameRewards: [
@@ -291,6 +297,7 @@ describe("calculateResourceLedger", () => {
       stages: [],
       includeFirstClear: false,
       minigamePlayCount: 9,
+      jankenStagePlays: {},
       minigameConfig,
       minigamePaymentCosts: [{ ...stickerPayment, quantity: 25_359 }],
       minigameRewards: [{ resourceType: ResourceTypeEnum.Item, resourceUid: "pipe-wrench", quantity: 40 }],
