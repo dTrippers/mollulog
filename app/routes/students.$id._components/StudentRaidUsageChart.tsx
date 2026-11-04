@@ -35,7 +35,7 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics, ti
   );
   const yAxisMax = Math.max(24000, Math.ceil(chartData.yAxisMax / 8000) * 8000);
   const yAxisTicks = Array.from({ length: yAxisMax / 8000 + 1 }, (_, index) => index * 8000);
-  const tierKeys = chartData.tierKeys.filter((key) => chartData.rows.some((row) => row[key as `tier${number}`] > 0));
+  const barTierKeys = chartData.tierKeys.filter((key) => chartData.rows.some((row) => row[key as `tier${number}`] > 0));
   if (chartData.rows.length === 0) {
     return <p className="rounded-lg bg-v2-surface p-v2-block-p text-sm leading-[1.43] text-v2-fg-secondary">표시할 총력전/대결전 통계가 없어요</p>;
   }
@@ -51,11 +51,11 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics, ti
         </div>
         <section className="relative w-full overflow-visible" aria-label="총력전·대결전 시즌별 편성 횟수 차트">
           <Suspense fallback={<div className="h-[226px] w-full" />}>
-            <StudentRaidUsageBarChart chartData={chartData} tierKeys={tierKeys} yAxisMax={yAxisMax} yAxisTicks={yAxisTicks} chartRootRef={chartRootRef} />
+            <StudentRaidUsageBarChart chartData={chartData} tierKeys={barTierKeys} yAxisMax={yAxisMax} yAxisTicks={yAxisTicks} chartRootRef={chartRootRef} />
           </Suspense>
         </section>
         <ul aria-label="성급 범례" className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs leading-[1.43] text-v2-fg-secondary">
-          {tierKeys.map((key) => <li key={key} className="inline-flex items-center gap-[5px]"><span className="size-2 rounded-[2px]" style={{ backgroundColor: TIER_COLORS[key] }} />{formatTierLabel(key)}</li>)}
+          {chartData.tierKeys.map((key) => <li key={key} className="inline-flex items-center gap-[5px]"><span className="size-2 rounded-[2px]" style={{ backgroundColor: TIER_COLORS[key] }} />{formatTierLabel(key)}</li>)}
         </ul>
         <div className="relative max-w-full overflow-hidden focus-within:overflow-x-auto">
           <table className="sr-only focus-within:not-sr-only focus-within:mt-2 focus-within:w-full focus-within:min-w-max border-separate border-spacing-0 bg-v2-surface text-sm leading-[1.43] text-v2-fg">
@@ -66,7 +66,7 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics, ti
                 <th scope="col" className="border-b border-v2-divider px-3 py-2 text-right font-semibold whitespace-nowrap">전체</th>
                 <th scope="col" className="border-b border-v2-divider px-3 py-2 text-right font-semibold whitespace-nowrap">모집</th>
                 <th scope="col" className="border-b border-v2-divider px-3 py-2 text-right font-semibold whitespace-nowrap">조력</th>
-                {tierKeys.map((key) => <th key={key} scope="col" className="border-b border-v2-divider px-3 py-2 text-right font-semibold whitespace-nowrap">{formatTierLabel(key)}</th>)}
+                {chartData.tierKeys.map((key) => <th key={key} scope="col" className="border-b border-v2-divider px-3 py-2 text-right font-semibold whitespace-nowrap">{formatTierLabel(key)}</th>)}
               </tr>
             </thead>
             <tbody>{chartData.rows.map((row) => (
@@ -77,7 +77,7 @@ export default function StudentRaidUsageChart({ releaseAt, raids, statistics, ti
                 <td className="border-b border-v2-divider px-3 py-2 text-right tabular-nums whitespace-nowrap">{row.totalCount.toLocaleString()}</td>
                 <td className="border-b border-v2-divider px-3 py-2 text-right tabular-nums whitespace-nowrap">{row.slotCount.toLocaleString()}</td>
                 <td className="border-b border-v2-divider px-3 py-2 text-right tabular-nums whitespace-nowrap">{row.assistCount.toLocaleString()}</td>
-                {tierKeys.map((key) => <td key={key} className="border-b border-v2-divider px-3 py-2 text-right tabular-nums whitespace-nowrap">{row[key as `tier${number}`].toLocaleString()}</td>)}
+                {chartData.tierKeys.map((key) => <td key={key} className="border-b border-v2-divider px-3 py-2 text-right tabular-nums whitespace-nowrap">{(row[key as `tier${number}`] ?? 0).toLocaleString()}</td>)}
               </tr>
             ))}</tbody>
           </table>
