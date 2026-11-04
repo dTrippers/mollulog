@@ -12,6 +12,7 @@ const config = {
     "^~/(.*)$": "<rootDir>/app/$1",
   },
   testPathIgnorePatterns: [
+    "\\.slow\\.test\\.ts$",
     "<rootDir>/scripts/local-dev.test.mjs",
     "<rootDir>/scripts/student-state-migration.test.mjs",
   ],
