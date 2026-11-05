@@ -99,12 +99,15 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 | `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
 | `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | same | same | Minimum row height (36px). List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
-| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
+| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact; do not size visible controls, chips, or rows to a 44px touch target. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
 | `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | same | same | Number and select inputs stay 32px on every layout. Keep mobile text inputs at `text-base` to avoid iOS zoom |
 
 ## Button variants
 
 - `text` is a secondary action with a hover background. `link` is an inline add or secondary action aligned to a field edge: it has no horizontal padding or hover background, and hover changes only the text color.
+- An action must look pressable at rest. `text` and `link` show no boundary until hover, so they read as plain text; do not use them for a row's or panel's own actions (for example 되돌리기, 삭제, 수급 완료, 저장). Use `secondary` (or `primary`, `danger`, `danger-subtle` by meaning), or `IconButton` with an accessible name. Keep `text` and `link` for actions placed next to a label or field edge, as above.
+- Buttons that sit together in a row or repeat across rows share one width or one size, so their edges line up; do not let each label set its own width.
+- Use the v2 `Select`, `Checkbox`, `Switch`, and `NumberInput` primitives. Do not render the browser's native select, checkbox, or number input in v2 screens.
 
 ## Numeric and date formats
 
@@ -127,6 +130,7 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - Among recruitment labels, only `new` (신규) is colored. Other labels such as 한정 복각, 복각, and 배포 stay as `text-v2-on-media` text on the scrim.
 - In dark mode, `live` and `attr-red` share the same value. Always show them with their labels.
 - The light `attr-yellow` stripe has low contrast (about 1.68:1). The text label carries the meaning, so the stripe stays.
+- Show terrain adaptation ranks with the rank icons (`TerrainRanks`, `terrainAdaptationIconUrl`), not `SS` / `S` / `A` text. The icon carries `적성 <rank>` as its accessible name.
 
 ## Motion
 
