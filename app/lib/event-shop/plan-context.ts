@@ -10,6 +10,7 @@ import type {
   Stage,
 } from "~/domain/event-shop";
 import type { CalculationResult } from "~/domain/event-shop/calculations";
+import type { JankenScoreProgress } from "~/domain/event-shop/janken";
 import type { ClueSearchExchange } from "~/domain/event-shop/clue-search";
 import type {
   TreasureHuntCalculationStatus,
@@ -45,7 +46,9 @@ export type EventShopPlanContext = {
   availablePurchaseDays: number;
   signedIn: boolean;
   jankenClearedStageUids: string[];
+  jankenScore: JankenScoreProgress;
   setJankenClearedStageUids: (stageUids: string[]) => void;
+  setJankenScore: (score: JankenScoreProgress) => void;
   state: ShopState;
   actions: ShopActions;
   minigameConfig: MinigameConfig | null;

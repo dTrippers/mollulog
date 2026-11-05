@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { CalculationResult } from "~/domain/event-shop/calculations";
 import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
+import type { JankenScoreProgress } from "~/domain/event-shop/janken";
 import type { ShopState } from "./useShopState";
 
 type UseShopCalculationsParams = {
@@ -15,6 +16,7 @@ type UseShopCalculationsParams = {
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
   jankenClearedStageUids: readonly string[];
+  jankenScore: JankenScoreProgress;
   holdCalculations?: boolean;
 };
 
@@ -71,6 +73,7 @@ export function buildShopCalculationInputSets({
   excludedShopResourceUids,
   minigameConfig,
   jankenClearedStageUids,
+  jankenScore,
 }: ShopCalculationInputParams): ShopCalculationInputSets {
   return {
     user: [
@@ -82,6 +85,8 @@ export function buildShopCalculationInputSets({
       state.minigamePlayCount,
       state.jankenStagePlays,
       jankenClearedStageUids,
+      jankenScore.currentScore,
+      jankenScore.averageScore,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -101,6 +106,8 @@ export function buildShopCalculationInputSets({
       state.minigamePlayCount,
       state.jankenStagePlays,
       jankenClearedStageUids,
+      jankenScore.currentScore,
+      jankenScore.averageScore,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -124,6 +131,7 @@ export function buildShopCalculationInputSets({
       excludedShopResourceUids,
       minigameConfig,
       jankenClearedStageUids,
+      jankenScore,
     },
   };
 }
@@ -143,8 +151,11 @@ export function useShopCalculations({
   excludedShopResourceUids,
   minigameConfig,
   jankenClearedStageUids,
+  jankenScore,
   holdCalculations = false,
 }: UseShopCalculationsParams) {
+  const jankenCurrentScore = jankenScore.currentScore;
+  const jankenAverageScore = jankenScore.averageScore;
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
   const [isCalculating, setIsCalculating] = useState(false);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -178,6 +189,7 @@ export function useShopCalculations({
         excludedShopResourceUids,
         minigameConfig,
         jankenClearedStageUids,
+        jankenScore: { currentScore: jankenCurrentScore, averageScore: jankenAverageScore },
       }),
     [
       state.itemQuantities,
@@ -188,6 +200,8 @@ export function useShopCalculations({
       state.minigamePlayCount,
       state.jankenStagePlays,
       jankenClearedStageUids,
+      jankenCurrentScore,
+      jankenAverageScore,
       state.minigamePaymentQuantityMode,
       state.cardFlipStrategy,
       state.enabledStages,
@@ -234,6 +248,7 @@ export function useShopCalculations({
       excludedShopResourceUids: calculationExcludedShopResourceUids,
       minigameConfig: calculationMinigameConfig,
       jankenClearedStageUids: calculationJankenClearedStageUids,
+      jankenScore: calculationJankenScore,
     } = currentInputSets.effect;
 
     // Clear existing timer
@@ -262,6 +277,7 @@ export function useShopCalculations({
           excludedShopResourceUids: calculationExcludedShopResourceUids,
           minigameConfig: calculationMinigameConfig,
           jankenClearedStageUids: calculationJankenClearedStageUids,
+          jankenScore: calculationJankenScore,
         }),
       );
       lastCompletedInputsRef.current = calculationInputs;

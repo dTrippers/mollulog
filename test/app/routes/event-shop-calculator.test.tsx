@@ -6,8 +6,9 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useMatches, useOutletContext } from "react-router";
-import { fireEvent, render as renderDom, screen } from "@testing-library/react";
+import { fireEvent, render as renderDom, screen, within } from "@testing-library/react";
 import type { EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import { evaluateJankenPlan } from "~/domain/event-shop/janken";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculation";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
@@ -335,6 +336,93 @@ describe("event shop v2 calculator", () => {
 
     expect(screen.getByRole("spinbutton", { name: "노말 4 플레이 횟수" })).toBeTruthy();
     expect(screen.getByText("무술대회 설정을 확인하지 못했어요.")).toBeTruthy();
+  });
+
+  it("shows the saved-score basis or missing-average notice for challenge plays", () => {
+    const empty = createEventShopPlan();
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const base = createEventShopPlan({
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      state: { ...empty.state, jankenStagePlays: { "100860301": 2 } },
+      jankenClearedStageUids: [
+        "100860101",
+        "100860102",
+        "100860103",
+        "100860104",
+        "100860105",
+        "100860201",
+        "100860202",
+        "100860203",
+        "100860204",
+      ],
+    });
+
+    mockPlan = createEventShopPlan({ ...base, jankenScore: { currentScore: 1_200_000, averageScore: 250_000 } });
+    const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    expect(document.body.textContent).toContain("누적 스코어 보상 포함 · 현재 120만 점 → 예상 170만 점");
+    expect(document.body.textContent).toContain("스코어는 무술대회 플래너의 진행 상황을 기준으로 계산해요.");
+
+    mockPlan = createEventShopPlan({ ...base, jankenScore: { currentScore: 1_200_000, averageScore: null } });
+    view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    expect(document.body.textContent).toContain(
+      "1회 평균 스코어가 없어 누적 스코어 보상은 계산하지 않았어요. 무술대회 플래너에서 입력해 주세요.",
+    );
+  });
+
+  it("omits zero-quantity rewards from the janken expected rewards list", () => {
+    const janken = {
+      ...janken860Fixture,
+      scoreRewards: janken860Fixture.scoreRewards.map((tier, index) =>
+        index === janken860Fixture.scoreRewards.length - 1
+          ? {
+              ...tier,
+              rewards: [
+                ...tier.rewards,
+                {
+                  resourceType: ResourceTypeEnum.Item,
+                  resourceUid: "zero-reward",
+                  quantity: 0,
+                  probability: 1,
+                  tag: "default" as const,
+                },
+              ],
+            }
+          : tier,
+      ),
+    };
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken,
+    };
+    const evaluation = evaluateJankenPlan(janken, {
+      stagePlays: { "100860301": 1 },
+      currentScore: 6_500_000,
+      averageScore: 500_000,
+    });
+    expect(evaluation.rewards["zero-reward"]).toBe(0);
+
+    const empty = createEventShopPlan();
+    mockPlan = createEventShopPlan({
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      jankenScore: { currentScore: 6_500_000, averageScore: 500_000 },
+      state: { ...empty.state, jankenStagePlays: { "100860301": 1 } },
+    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+
+    const rewardsList = within(screen.getByRole("list"));
+    expect(rewardsList.queryByText("0", { exact: true })).toBeNull();
+    expect(rewardsList.getByText("5", { exact: true })).toBeTruthy();
   });
 
   it("renders event search and results directly in the mobile sheet", () => {

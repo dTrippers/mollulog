@@ -139,6 +139,8 @@ const input: EventShopControllerInput = {
   guestPlannerStatus: "ready",
   minigameConfig: plannerConfig,
   jankenClearedStageUids: [],
+  jankenScore: { currentScore: 0, averageScore: null },
+  setJankenScore: () => undefined,
   setJankenClearedStageUids: () => undefined,
 };
 

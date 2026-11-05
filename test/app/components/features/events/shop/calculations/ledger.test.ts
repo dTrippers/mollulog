@@ -1,8 +1,10 @@
 import { describe, expect, it } from "@jest/globals";
 import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
+import { evaluateJankenPlan, planJanken } from "~/domain/event-shop/janken";
 import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
 import type { MinigameConfig, ShopResource, Stage } from "../../../../../../../app/domain/event-shop";
 import { ResourceTypeEnum } from "../../../../../../../app/graphql/graphql";
+import { janken860Fixture } from "../../../../../../app/domain/fixtures/janken-860";
 
 const gamepad = {
   type: ResourceTypeEnum.Item,
@@ -69,6 +71,90 @@ function createClueExchangeResources(): ShopResource[] {
 }
 
 describe("calculateResourceLedger", () => {
+  it("matches planner reward totals when applied stage plays include score rewards", () => {
+    const progress = {
+      currentTier: 1,
+      heldEleph: 0,
+      cumulativeScore: 0,
+      equipmentTier: 1,
+      heldEquipmentCurrency: 0,
+      clearedStageUids: [] as string[],
+    };
+    const plannerGoals = {
+      targetTier: null,
+      shopCurrencyMode: "manual" as const,
+      manualShopCurrency: 0,
+      targetScore: 1_000_000,
+      averageScore: 500_000,
+      targetEquipmentTier: null,
+    };
+    const planned = planJanken(janken860Fixture, {
+      progress,
+      goals: plannerGoals,
+      shopCurrencyRequired: 0,
+      studentGrowthTotalRequired: 0,
+    });
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const ledger = calculateResourceLedger({
+      shopResources: [],
+      itemQuantities: {},
+      itemPurchaseDays: {},
+      existingPaymentItemQuantities: {},
+      stages: [],
+      includeFirstClear: false,
+      minigamePlayCount: 0,
+      jankenStagePlays: planned.stagePlays,
+      jankenClearedStageUids: progress.clearedStageUids,
+      jankenScore: { currentScore: progress.cumulativeScore, averageScore: plannerGoals.averageScore },
+      minigameConfig: config,
+    });
+
+    expect(planned.status).toBe("available");
+    expect(planned.rewards["26016"]).toBeGreaterThan(23);
+    expect(ledger.fromMinigame).toEqual(planned.rewards);
+    expect(
+      evaluateJankenPlan(janken860Fixture, {
+        stagePlays: planned.stagePlays,
+        clearedStageUids: progress.clearedStageUids,
+        currentScore: progress.cumulativeScore,
+        averageScore: plannerGoals.averageScore,
+      }).rewards,
+    ).toEqual(ledger.fromMinigame);
+  });
+
+  it("includes cumulative score rewards only when an average score is available", () => {
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const clearedPrerequisites = janken860Fixture.stages.filter(({ uid }) => uid !== "100860301").map(({ uid }) => uid);
+    const getRewards = (averageScore: number | null) =>
+      calculateResourceLedger({
+        shopResources: [],
+        itemQuantities: {},
+        itemPurchaseDays: {},
+        existingPaymentItemQuantities: {},
+        stages: [],
+        includeFirstClear: false,
+        minigamePlayCount: 0,
+        jankenStagePlays: { "100860301": 1 },
+        jankenClearedStageUids: clearedPrerequisites,
+        jankenScore: { currentScore: 0, averageScore },
+        minigameConfig: config,
+      }).fromMinigame["26016"];
+
+    expect(getRewards(500_000) - getRewards(null)).toBe(10);
+  });
+
   it("uses selected shop purchases as both resource costs and acquisitions", () => {
     const ledger = calculateResourceLedger({
       shopResources: createShopResources(),

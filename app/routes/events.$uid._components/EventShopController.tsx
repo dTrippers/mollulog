@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Outlet, useLoaderData, useRevalidator } from "react-router";
 import { PageMain } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
@@ -82,6 +82,13 @@ export default function EventShopController() {
 
 type ReadyEventShopData = Extract<Awaited<ReturnType<typeof loader>>, { status: "ready" }>;
 
+function scoreForJankenEntry(entry: JankenPlannerEntry | null) {
+  return {
+    currentScore: entry?.progress.cumulativeScore ?? 0,
+    averageScore: entry?.goals.averageScore ?? null,
+  };
+}
+
 function ReadyEventShopController({
   data,
   savedShopState,
@@ -96,6 +103,16 @@ function ReadyEventShopController({
   const [jankenClearedStageUids, setJankenClearedStageUids] = useState<string[]>(
     savedJankenEntry?.progress.clearedStageUids ?? [],
   );
+  const [jankenScore, setJankenScore] = useState(() => scoreForJankenEntry(savedJankenEntry));
+  const localJankenScoreRef = useRef(jankenScore);
+  const savedJankenScoreRef = useRef(scoreForJankenEntry(savedJankenEntry));
+  const scoreShopStateUidRef = useRef(data.shopStateUid);
+  const setLiveJankenScore = useCallback((score: typeof jankenScore) => {
+    localJankenScoreRef.current = score;
+    setJankenScore(score);
+  }, []);
+  const savedCurrentScore = savedJankenEntry?.progress.cumulativeScore ?? 0;
+  const savedAverageScore = savedJankenEntry?.goals.averageScore ?? null;
   const savedJankenProgress = useMemo(
     () => ({
       shopStateUid: data.shopStateUid,
@@ -106,6 +123,23 @@ function ReadyEventShopController({
   useEffect(() => {
     setJankenClearedStageUids(savedJankenProgress.clearedStageUids);
   }, [savedJankenProgress]);
+  useEffect(() => {
+    const nextSavedScore = { currentScore: savedCurrentScore, averageScore: savedAverageScore };
+    const previousSavedScore = savedJankenScoreRef.current;
+    const localMatchesPrevious =
+      localJankenScoreRef.current.currentScore === previousSavedScore.currentScore &&
+      localJankenScoreRef.current.averageScore === previousSavedScore.averageScore;
+    const localMatchesNext =
+      localJankenScoreRef.current.currentScore === nextSavedScore.currentScore &&
+      localJankenScoreRef.current.averageScore === nextSavedScore.averageScore;
+    const shopChanged = scoreShopStateUidRef.current !== data.shopStateUid;
+    scoreShopStateUidRef.current = data.shopStateUid;
+    savedJankenScoreRef.current = nextSavedScore;
+    if (shopChanged || localMatchesPrevious || localMatchesNext) {
+      localJankenScoreRef.current = nextSavedScore;
+      setJankenScore(nextSavedScore);
+    }
+  }, [data.shopStateUid, savedCurrentScore, savedAverageScore]);
   const controller = useEventShopPlan({
     stages: data.stages,
     shopResources: data.shopResources,
@@ -122,6 +156,8 @@ function ReadyEventShopController({
     minigameConfig: data.minigameConfig,
     jankenStudentGrowthUid: data.jankenStudentGrowthUid,
     jankenClearedStageUids,
+    jankenScore,
+    setJankenScore: setLiveJankenScore,
     setJankenClearedStageUids,
   });
   return <Outlet context={controller.plan} />;

@@ -16,6 +16,7 @@ import { calculateShopApRequirement } from "~/domain/event-shop/calculations/cal
 import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
 import {
   evaluateJankenPlan,
+  getJankenScoreRewardWindow,
   getJankenResourceRoles,
   getJankenStudentGrowthRequired,
   type JankenPlanStep,
@@ -49,6 +50,7 @@ const emptyEntry: JankenPlannerEntry = {
   },
 };
 const emptyResourceRoles: JankenResourceRoles = { entryUid: null, shopUid: null, studentUid: null, equipmentUid: null };
+type PendingPlannerSave = { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void };
 const resourceLabel = (uid: string, roles: JankenResourceRoles) =>
   uid === roles.entryUid
     ? t.entryCurrency
@@ -175,12 +177,19 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
   const [saveError, setSaveError] = useState<string | null>(null);
   const [latestConflict, setLatestConflict] = useState<JankenPlannerEntry | null>(null);
   const [isConflict, setIsConflict] = useState(false);
+  const [isApplying, setIsApplying] = useState(false);
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const tab = selectedTab ?? (stacked ? "score" : "eff");
   const [showAllScoreRewards, setShowAllScoreRewards] = useState(false);
   const baseRef = useRef<JankenPlannerEntry | null>(loaderData.entry);
   const submittedEntryRef = useRef<JankenPlannerEntry | null>(null);
   const handledResponseRef = useRef<unknown>(null);
+  const pendingSaveRef = useRef<PendingPlannerSave | null>(null);
+  const pendingGuestSaveRef = useRef<Promise<void> | null>(null);
+  const applyGenerationRef = useRef(0);
+  useEffect(() => () => {
+    applyGenerationRef.current += 1;
+  }, []);
   const entriesEqual = useCallback(
     (left: JankenPlannerEntry | null, right: JankenPlannerEntry | null) => {
       const canonicalEntry = (candidate: JankenPlannerEntry | null) =>
@@ -191,6 +200,59 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       return JSON.stringify(canonicalEntry(left)) === JSON.stringify(canonicalEntry(right));
     },
     [loaderData.shopStateUid],
+  );
+  const submitAccountEntry = useCallback(
+    (submitted: JankenPlannerEntry, base = baseRef.current) => {
+      let resolve!: () => void;
+      let reject!: (error: Error) => void;
+      const promise = new Promise<void>((resolvePromise, rejectPromise) => {
+        resolve = resolvePromise;
+        reject = rejectPromise;
+      });
+      pendingSaveRef.current = { promise, resolve, reject };
+      submittedEntryRef.current = submitted;
+      try {
+        fetcher.submit(
+          { shopStateUid: loaderData.shopStateUid, entry: submitted, base },
+          { method: "post", action: "/api/planner/janken", encType: "application/json" },
+        );
+      } catch {
+        pendingSaveRef.current = null;
+        reject(new Error("Planner save failed."));
+      }
+      return promise;
+    },
+    [fetcher.submit, loaderData.shopStateUid],
+  );
+  const saveGuestEntry = useCallback(
+    async (submitted: JankenPlannerEntry) => {
+      const previous = pendingGuestSaveRef.current;
+      if (previous) await previous.catch(() => undefined);
+      const save = (async () => {
+        const snapshot = await updateGuestPlanner((envelope) => ({
+          ...envelope,
+          document: {
+            ...envelope.document,
+            jankenProgress: { ...envelope.document.jankenProgress, [loaderData.shopStateUid]: submitted },
+          },
+        }));
+        if (snapshot.status !== "ready") {
+          setSaveError(t.guestSaveFailed);
+          throw new Error("Guest planner save failed.");
+        }
+        baseRef.current = submitted;
+        setHasSavedEntry(true);
+        setHasEdited(!entriesEqual(entryRef.current, submitted));
+        setSaveError(null);
+      })();
+      pendingGuestSaveRef.current = save;
+      try {
+        await save;
+      } finally {
+        if (pendingGuestSaveRef.current === save) pendingGuestSaveRef.current = null;
+      }
+    },
+    [entriesEqual, loaderData.shopStateUid],
   );
   const goals = entry.goals;
   const progress = useMemo(
@@ -255,6 +317,13 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
   );
 
   useEffect(() => {
+    planContext.setJankenScore({
+      currentScore: entry.progress.cumulativeScore,
+      averageScore: entry.goals.averageScore,
+    });
+  }, [entry.progress.cumulativeScore, entry.goals.averageScore, planContext.setJankenScore]);
+
+  useEffect(() => {
     if (loaderData.signedIn) return;
     const snapshot = readGuestPlanner();
     if (snapshot.status === "ready") {
@@ -262,55 +331,49 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       if (stored) {
         setEntry(stored);
         planContext.setJankenClearedStageUids(stored.progress.clearedStageUids);
+        planContext.setJankenScore({
+          currentScore: stored.progress.cumulativeScore,
+          averageScore: stored.goals.averageScore,
+        });
         setHasSavedEntry(true);
         baseRef.current = stored;
       }
     } else setSaveError(t.guestSaveFailed);
-  }, [loaderData.shopStateUid, loaderData.signedIn, planContext.setJankenClearedStageUids]);
+  }, [
+    loaderData.shopStateUid,
+    loaderData.signedIn,
+    planContext.setJankenClearedStageUids,
+    planContext.setJankenScore,
+  ]);
 
   useEffect(() => {
-    if (!hasEdited || isConflict || fetcher.state !== "idle" || entriesEqual(entry, baseRef.current)) return;
+    if (!hasEdited || isApplying || isConflict || fetcher.state !== "idle" || entriesEqual(entry, baseRef.current)) return;
     const timeout = setTimeout(() => {
       if (loaderData.signedIn) {
-        submittedEntryRef.current = entry;
-        fetcher.submit(
-          { shopStateUid: loaderData.shopStateUid, entry, base: baseRef.current },
-          { method: "post", action: "/api/planner/janken", encType: "application/json" },
-        );
+        void submitAccountEntry(entry).catch(() => undefined);
       } else {
-        void updateGuestPlanner((envelope) => ({
-          ...envelope,
-          document: {
-            ...envelope.document,
-            jankenProgress: { ...envelope.document.jankenProgress, [loaderData.shopStateUid]: entry },
-          },
-        }))
-          .then((snapshot) => {
-            if (snapshot.status === "ready") {
-              baseRef.current = entry;
-              setHasSavedEntry(true);
-              setSaveError(null);
-            } else setSaveError(t.guestSaveFailed);
-          })
-          .catch(() => setSaveError(t.guestSaveFailed));
+        void saveGuestEntry(entry).catch(() => setSaveError(t.guestSaveFailed));
       }
     }, 800);
     return () => clearTimeout(timeout);
   }, [
     entry,
     entriesEqual,
-    fetcher,
     fetcher.state,
     hasEdited,
+    isApplying,
     isConflict,
-    loaderData.shopStateUid,
     loaderData.signedIn,
+    saveGuestEntry,
+    submitAccountEntry,
   ]);
 
   useEffect(() => {
     const response = fetcher.data;
     if (!response || handledResponseRef.current === response) return;
     handledResponseRef.current = response;
+    const pendingSave = pendingSaveRef.current;
+    pendingSaveRef.current = null;
     if (response.success && response.entry) {
       baseRef.current = response.entry;
       setHasSavedEntry(true);
@@ -318,30 +381,76 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       setSaveError(null);
       setHasEdited(!entriesEqual(entryRef.current, submittedEntryRef.current ?? response.entry));
       submittedEntryRef.current = null;
+      pendingSave?.resolve();
     }
     if (response.conflict) {
       setLatestConflict(response.latest ?? null);
       setIsConflict(true);
+      pendingSave?.reject(new Error("Planner save conflict."));
+    } else if (response.error) {
+      setSaveError(response.error);
+      pendingSave?.reject(new Error("Planner save failed."));
+    } else if (!response.success) {
+      setSaveError(t.saveFailed);
+      pendingSave?.reject(new Error("Planner save failed."));
     }
   }, [entriesEqual, fetcher.data]);
 
   const updateProgress = (patch: Partial<JankenPlannerEntry["progress"]>) => {
     if (patch.clearedStageUids) planContext.setJankenClearedStageUids(patch.clearedStageUids);
+    if ("cumulativeScore" in patch) {
+      planContext.setJankenScore({
+        currentScore: patch.cumulativeScore ?? entryRef.current.progress.cumulativeScore,
+        averageScore: entryRef.current.goals.averageScore,
+      });
+    }
     setHasEdited(true);
     setEntry((current) => ({ ...current, progress: { ...current.progress, ...patch } }));
   };
   const updateGoals = (patch: Partial<JankenPlannerEntry["goals"]>) => {
+    if ("averageScore" in patch) {
+      planContext.setJankenScore({
+        currentScore: entryRef.current.progress.cumulativeScore,
+        averageScore: patch.averageScore ?? null,
+      });
+    }
     setHasEdited(true);
     setEntry((current) => ({ ...current, goals: { ...current.goals, ...patch } }));
   };
-  const apply = () => {
-    if (planned?.status === "available") planContext.actions.setJankenStagePlays(planned.stagePlays);
+  const apply = async () => {
+    if (planned?.status !== "available" || isConflict) return;
+    const applyGeneration = ++applyGenerationRef.current;
+    const entrySnapshot = entryRef.current;
+    const playsSnapshot = planned.stagePlays;
+    const shouldPersist = hasEdited || pendingSaveRef.current !== null || pendingGuestSaveRef.current !== null;
+    setIsApplying(true);
+    try {
+      if (shouldPersist) {
+        const pendingSave = loaderData.signedIn ? pendingSaveRef.current?.promise : pendingGuestSaveRef.current;
+        if (pendingSave) {
+          await pendingSave;
+          if (applyGenerationRef.current !== applyGeneration) return;
+        }
+        if (!entriesEqual(entrySnapshot, baseRef.current)) {
+          if (loaderData.signedIn) await submitAccountEntry(entrySnapshot);
+          else await saveGuestEntry(entrySnapshot);
+          if (applyGenerationRef.current !== applyGeneration) return;
+        }
+      }
+      if (applyGenerationRef.current === applyGeneration) planContext.actions.setJankenStagePlays(playsSnapshot);
+    } catch {
+      // The existing save or conflict notice communicates why the plan was not applied.
+    } finally {
+      if (applyGenerationRef.current === applyGeneration) setIsApplying(false);
+    }
   };
   const serializePlays = (plays: Record<string, number>) =>
     JSON.stringify(Object.fromEntries(Object.entries(plays).sort(([a], [b]) => a.localeCompare(b))));
   const applied =
     planned?.status === "available" &&
     serializePlays(planContext.state.jankenStagePlays) === serializePlays(planned.stagePlays);
+  const hasUnsavedPlannerEntry =
+    (hasEdited || pendingSaveRef.current !== null) && !entriesEqual(entry, baseRef.current);
   const ap = useMemo(() => {
     if (planned?.status !== "available") return null;
     return calculateShopApRequirement({
@@ -351,6 +460,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       appliedBonusRatio: planContext.appliedBonusRatio,
       minigameConfig: planContext.minigameConfig,
       jankenClearedStageUids: progress.clearedStageUids,
+      jankenScore: planContext.jankenScore,
     }).totalApWithExtras;
   }, [planned, planContext, progress.clearedStageUids]);
   const rewardTotals = planned?.status === "available" ? planned.rewards : {};
@@ -429,6 +539,11 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     config,
   ]);
   const achievedCount = goalRows.filter(({ done }) => done).length;
+  const visibleScoreRewards = showAllScoreRewards
+    ? (config.status === "available" ? config.scoreRewards : [])
+    : config.status === "available"
+      ? getJankenScoreRewardWindow(config.scoreRewards, progress.cumulativeScore, goals.targetScore)
+      : [];
   const recommendationRows = useMemo(() => {
     if (!available || config.status !== "available" || !planned) return [];
     const cleared = new Set(progress.clearedStageUids);
@@ -495,6 +610,10 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                       setEntry(latest);
                       submittedEntryRef.current = null;
                       planContext.setJankenClearedStageUids(latest.progress.clearedStageUids);
+                      planContext.setJankenScore({
+                        currentScore: latest.progress.cumulativeScore,
+                        averageScore: latest.goals.averageScore,
+                      });
                       baseRef.current = latestConflict;
                       setLatestConflict(null);
                       setIsConflict(false);
@@ -509,11 +628,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                       baseRef.current = latestConflict;
                       setLatestConflict(null);
                       setIsConflict(false);
-                      submittedEntryRef.current = entry;
-                      fetcher.submit(
-                        { shopStateUid: loaderData.shopStateUid, entry, base: latestConflict },
-                        { method: "post", action: "/api/planner/janken", encType: "application/json" },
-                      );
+                      void submitAccountEntry(entry, latestConflict).catch(() => undefined);
                     }}
                   >
                     {t.overwrite}
@@ -556,7 +671,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           <ToggleChip
                             key={tier}
                             pressed={progress.currentTier === tier}
-                            ariaLabel={t.tierLabel(tier)}
+                            ariaLabel={`${t.currentTier} ${t.tierLabel(tier)}`}
                             onPressedChange={() => updateProgress({ currentTier: tier })}
                           >
                             <span className="flex items-center gap-1">
@@ -713,7 +828,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             key={tier}
                             disabled={tier <= progress.currentTier && goals.targetTier !== tier}
                             pressed={goals.targetTier === tier}
-                            ariaLabel={t.tierLabel(tier)}
+                            ariaLabel={`${t.targetTier} ${t.tierLabel(tier)}`}
                             onPressedChange={() => updateGoals({ targetTier: goals.targetTier === tier ? null : tier })}
                           >
                             <span className="flex items-center gap-1">
@@ -1071,7 +1186,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                 {tab === "score" ? (
                   <>
                     <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
-                      {config.scoreRewards.slice(0, showAllScoreRewards ? undefined : 10).map((reward) => (
+                      {visibleScoreRewards.map((reward) => (
                         <div
                           key={reward.tier}
                           className={`flex items-center justify-between px-3 py-2 text-sm ${reward.score <= progress.cumulativeScore ? "text-v2-fg-tertiary" : goals.targetScore === reward.score ? "bg-v2-link-subtle" : ""}`}
@@ -1150,7 +1265,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <div className="mt-3 border-t border-v2-divider pt-3">
             {goalRows.map((row) => (
               <div key={row.label} className="flex items-center justify-between gap-2 py-1 text-sm">
-                <span className="flex items-center gap-2">
+                <span className="flex items-center gap-2 break-keep">
                   {row.iconUid ? (
                     <ResourceThumb itemUid={row.iconUid} name={row.label} size="sm" />
                   ) : row.iconKind === "score" ? (
@@ -1183,10 +1298,10 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <Button
             variant="primary"
             className="mt-4 w-full"
-            disabled={planned?.status !== "available" || applied}
+            disabled={planned?.status !== "available" || (applied && !hasUnsavedPlannerEntry) || isApplying}
             onClick={apply}
           >
-            {applied ? t.applied : t.applyPlan}
+            {applied && !hasUnsavedPlannerEntry ? t.applied : t.applyPlan}
           </Button>
           <p className="mt-2 text-xs text-v2-fg-tertiary">{t.applyPlanHelp}</p>
         </PanelSheet>
@@ -1224,10 +1339,10 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
         >
           <Button
             variant={applied ? "secondary" : "primary"}
-            disabled={planned?.status !== "available" || applied}
+            disabled={planned?.status !== "available" || (applied && !hasUnsavedPlannerEntry) || isApplying}
             onClick={apply}
           >
-            {applied ? t.applied : t.applyPlan}
+            {applied && !hasUnsavedPlannerEntry ? t.applied : t.applyPlan}
           </Button>
         </PageActionBar>
       ) : null}

@@ -49,6 +49,7 @@ export function calculateResourceLedger({
   minigamePlayCount,
   jankenStagePlays,
   jankenClearedStageUids,
+  jankenScore,
   minigameConfig,
   minigamePaymentCosts,
   minigameRewards,
@@ -72,7 +73,12 @@ export function calculateResourceLedger({
   const requiredForMinigame: DecimalMap = {};
   if (minigameConfig?.minigameType === "janken") {
     if (Object.values(jankenStagePlays ?? {}).some((count) => count > 0) && minigameConfig.janken) {
-      const evaluated = evaluateJankenPlan(minigameConfig.janken, { stagePlays: jankenStagePlays ?? {}, clearedStageUids: jankenClearedStageUids });
+      const evaluated = evaluateJankenPlan(minigameConfig.janken, {
+        stagePlays: jankenStagePlays ?? {},
+        clearedStageUids: jankenClearedStageUids,
+        currentScore: jankenScore?.currentScore,
+        averageScore: jankenScore?.averageScore,
+      });
       if (evaluated.status === "available" && evaluated.entryResourceUid) addQuantity(requiredForMinigame, evaluated.entryResourceUid, evaluated.entryCost);
     }
   } else if (minigamePlayCount > 0) {
@@ -117,7 +123,12 @@ export function calculateResourceLedger({
   const fromMinigame: DecimalMap = {};
   if (minigameConfig?.minigameType === "janken") {
     if (Object.values(jankenStagePlays ?? {}).some((count) => count > 0) && minigameConfig.janken) {
-      const evaluated = evaluateJankenPlan(minigameConfig.janken, { stagePlays: jankenStagePlays ?? {}, clearedStageUids: jankenClearedStageUids });
+      const evaluated = evaluateJankenPlan(minigameConfig.janken, {
+        stagePlays: jankenStagePlays ?? {},
+        clearedStageUids: jankenClearedStageUids,
+        currentScore: jankenScore?.currentScore,
+        averageScore: jankenScore?.averageScore,
+      });
       if (evaluated.status === "available") {
         for (const [uid, quantity] of Object.entries(evaluated.rewards)) addQuantity(fromMinigame, uid, quantity);
       }

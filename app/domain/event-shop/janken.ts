@@ -3,6 +3,20 @@ import { calculateCumulativeTierEleph } from "~/domain/growth-resource";
 import type { JankenPlannerEntry } from "~/domain/planner-state";
 
 export type JankenResourceTotals = Record<string, number>;
+export type JankenScoreProgress = { currentScore: number; averageScore: number | null };
+export function getJankenScoreRewardWindow<T extends { score: number }>(
+  rewards: readonly T[],
+  currentScore: number,
+  targetScore: number | null,
+): T[] {
+  const firstUnreached = rewards.findIndex(({ score }) => score > currentScore);
+  const start = Math.max(0, Math.min((firstUnreached < 0 ? rewards.length : firstUnreached) - 1, rewards.length - 10));
+  let end = Math.min(rewards.length, start + 10);
+  const targetIndex = targetScore == null ? -1 : rewards.findIndex(({ score }) => score === targetScore);
+  const windowStart = targetIndex >= 0 ? Math.min(start, targetIndex) : start;
+  if (targetIndex >= end) end = targetIndex + 1;
+  return rewards.slice(windowStart, end);
+}
 export type JankenResourceRoles = {
   entryUid: string | null;
   shopUid: string | null;

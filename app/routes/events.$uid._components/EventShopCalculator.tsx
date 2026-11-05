@@ -468,7 +468,12 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
   if (janken.status === "unavailable") return <StatusNotice tone="neutral">{jankenLocale.unavailable}</StatusNotice>;
   if (janken.status === "invalid") return <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice>;
   const plays = plan.state.jankenStagePlays;
-  const evaluated = evaluateJankenPlan(janken, { stagePlays: plays, clearedStageUids: plan.jankenClearedStageUids });
+  const evaluated = evaluateJankenPlan(janken, {
+    stagePlays: plays,
+    clearedStageUids: plan.jankenClearedStageUids,
+    currentScore: plan.jankenScore.currentScore,
+    averageScore: plan.jankenScore.averageScore,
+  });
   const roles = getJankenResourceRoles(
     janken,
     plan.shopResources.map(({ paymentResource }) => paymentResource.uid),
@@ -480,6 +485,8 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
       : stage.stageType === "normal"
         ? jankenLocale.normalStage(stage.stageNumber)
         : jankenLocale.challengeStage;
+  const challengePlays = janken.stages.find(({ stageType }) => stageType === "challenge");
+  const challengePlayCount = challengePlays ? (plays[challengePlays.uid] ?? 0) : 0;
   const resourceLabel = (uid: string) =>
     uid === roles.entryUid
       ? jankenLocale.entryCurrency
@@ -531,6 +538,21 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
           </tbody>
         </table>
       </div>
+      {challengePlayCount > 0 ? (
+        plan.jankenScore.averageScore != null && plan.jankenScore.averageScore > 0 ? (
+          <div>
+            <p className="text-sm font-medium">
+              {jankenLocale.shopScoreBasis(
+                plan.jankenScore.currentScore,
+                plan.jankenScore.currentScore + challengePlayCount * plan.jankenScore.averageScore,
+              )}
+            </p>
+            <p className="mt-1 text-xs text-v2-fg-tertiary">{jankenLocale.shopScoreBasisHelp}</p>
+          </div>
+        ) : (
+          <StatusNotice tone="neutral">{jankenLocale.shopScoreAverageMissing}</StatusNotice>
+        )
+      ) : null}
       {evaluated.status === "invalid" ? <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice> : null}
       <p className="text-xs text-v2-fg-tertiary">{jankenLocale.shopFirstClearHelp}</p>
       {Object.keys(plays).length > 0 && evaluated.status === "available" ? (
@@ -542,25 +564,29 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
           <div className="rounded-md bg-v2-inset p-3">
             <p className="text-xs text-v2-fg-secondary">{jankenLocale.expectedRewards}</p>
             <ul className="mt-2 space-y-2">
-              {Object.entries(evaluated.rewards).map(([uid, quantity]) => (
-                <li key={uid} className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2">
-                    <ResourceThumb
-                      itemUid={uid}
-                      resourceType={
-                        janken.stages.flatMap((stage) => stage.rewards).find((reward) => reward.resourceUid === uid)
-                          ?.resourceType
-                      }
-                      name={resourceLabel(uid)}
-                      size="sm"
-                    />
-                    {resourceLabel(uid)}
-                  </span>
-                  <span className="tabular-nums">
-                    {new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity)}
-                  </span>
-                </li>
-              ))}
+              {Object.entries(evaluated.rewards)
+                .filter(([, quantity]) => quantity > 0)
+                .map(([uid, quantity]) => (
+                  <li key={uid} className="flex items-center justify-between gap-2">
+                    <span className="flex items-center gap-2">
+                      <ResourceThumb
+                        itemUid={uid}
+                        resourceType={
+                          [
+                            ...janken.stages.flatMap((stage) => stage.rewards),
+                            ...janken.scoreRewards.flatMap((tier) => tier.rewards),
+                          ].find((reward) => reward.resourceUid === uid)?.resourceType
+                        }
+                        name={resourceLabel(uid)}
+                        size="sm"
+                      />
+                      {resourceLabel(uid)}
+                    </span>
+                    <span className="tabular-nums">
+                      {new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity)}
+                    </span>
+                  </li>
+                ))}
             </ul>
           </div>
         </div>

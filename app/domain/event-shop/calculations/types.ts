@@ -1,5 +1,6 @@
 import type Decimal from "decimal.js";
 import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
+import type { JankenScoreProgress } from "~/domain/event-shop/janken";
 
 export type StageInfo = {
   uid: string;
@@ -70,6 +71,7 @@ export type RequiredQuantitiesInput = {
   minigamePlayCount: number;
   jankenStagePlays?: Record<string, number>;
   jankenClearedStageUids?: readonly string[];
+  jankenScore?: JankenScoreProgress;
   minigameConfig?: MinigameConfig | null;
   minigamePaymentCosts?: MinigamePayment[];
   minigameRewards?: RewardItem[];

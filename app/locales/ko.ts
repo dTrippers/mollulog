@@ -317,7 +317,7 @@ export const jankenLocale = {
   studentGrowthUnavailable: "학생 성장 목표는 보상 대상을 하나로 확인할 수 있을 때 사용할 수 있어요.",
   currentTier: "현재 등급",
   heldCount: "보유 개수",
-  initialTierNotice: "모집한 학생에 없어서 초기 등급으로 계산해요.",
+  initialTierNotice: "모집하지 않은 학생이라 초기 등급으로 계산해요.",
   recruitedSource: "모집한 학생에서 불러왔어요",
   recruitedSourceLabel: "모집한 학생",
   recruitedSourceSuffix: "에서 불러왔어요",
@@ -365,7 +365,7 @@ export const jankenLocale = {
   normalStage: (number: number) => `노말 ${number}`,
   storyStage: (number: number) => `스토리 ${number}`,
   challengeStage: "챌린지",
-  playCountBadge: (count: number) => `× ${count}`,
+  playCountBadge: (count: number) => `×${count}`,
   multiplierAdvice: "배율 권장",
   multiplierSplit: (plays: number, max: number) => {
     if (plays <= max) return `${plays}배로 1회`;
@@ -374,9 +374,9 @@ export const jankenLocale = {
     return remainder === 0 ? `${max}배 ${full}회` : `${max}배 ${full}회 · ${remainder}배 1회`;
   },
   firstClearResult: "초회 보상을 포함해요.",
-  scoreResult: (score: number) => `예상 스코어 + ${score.toLocaleString()}점`,
+  scoreResult: (score: number) => `예상 스코어 +${score.toLocaleString()}점`,
   expectedResourceResult: (resource: string, amount: number) =>
-    `${resource} 기대 ${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(amount)}`,
+    `${resource} 기대 ${new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(amount)}개`,
   equipmentStepResult: (have: number, need: number, tier: number) =>
     `${have.toLocaleString()} / ${need.toLocaleString()} → 장비 T${tier} 강화`,
   efficiencyTab: "효율 비교",
@@ -399,7 +399,12 @@ export const jankenLocale = {
   applied: "적용됨",
   applyPlanHelp: "상점 계산기 미니게임의 플레이 횟수를 남은 계획으로 덮어써요.",
   shopCalculator: "상점 계산기",
-  shopCalculatorDescription: "계산한 플레이 횟수를 확인해요",
+  shopCalculatorDescription: "상점 계산기에서 적용된 플레이 횟수를 확인해요",
+  shopScoreBasis: (current: number, projected: number) =>
+    `누적 스코어 보상 포함 · 현재 ${jankenLocale.scoreInMan(current)} 점 → 예상 ${jankenLocale.scoreInMan(projected)} 점`,
+  shopScoreBasisHelp: "스코어는 무술대회 플래너의 진행 상황을 기준으로 계산해요.",
+  shopScoreAverageMissing:
+    "1회 평균 스코어가 없어 누적 스코어 보상은 계산하지 않았어요. 무술대회 플래너에서 입력해 주세요.",
   scoreInputRequired: "스코어 입력 필요",
   goalCountSummary: (total: number, achieved: number) =>
     total === achieved ? `목표 ${total}개 모두 달성` : `목표 ${total}개 중 ${achieved}개 달성`,

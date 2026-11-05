@@ -41,6 +41,8 @@ export type EventShopControllerInput = {
   minigameConfig: MinigameConfig | null;
   jankenStudentGrowthUid?: string | null;
   jankenClearedStageUids: string[];
+  jankenScore: EventShopPlanContext["jankenScore"];
+  setJankenScore: EventShopPlanContext["setJankenScore"];
   setJankenClearedStageUids: (stageUids: string[]) => void;
 };
 
@@ -61,6 +63,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     minigameConfig,
     jankenStudentGrowthUid,
     jankenClearedStageUids,
+    jankenScore,
+    setJankenScore,
     setJankenClearedStageUids,
   } = input;
   const clueSearchExchange = useMemo(
@@ -255,6 +259,7 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
     minigameConfig: minigameConfigForCalculations,
     jankenClearedStageUids,
+    jankenScore,
     holdCalculations: holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput,
   });
   const holdRoadPuzzleCalculations =
@@ -281,6 +286,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     availablePurchaseDays,
     signedIn,
     jankenClearedStageUids,
+    jankenScore,
+    setJankenScore,
     setJankenClearedStageUids,
     state,
     actions,

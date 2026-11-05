@@ -1,6 +1,7 @@
 import type Decimal from "decimal.js";
 import type { MinigameConfig, MinigamePayment, RewardItem, ShopResource, Stage } from "~/domain/event-shop";
 import type { EventShopState } from "~/domain/event-shop-state";
+import type { JankenScoreProgress } from "~/domain/event-shop/janken";
 import { calculateItemBreakdowns, calculateResourceLedger, calculateStageInfos, optimizeStageRuns } from ".";
 import type { CalculationResult } from "./types";
 
@@ -26,6 +27,7 @@ export function calculateShopApRequirement(input: {
   minigamePaymentCosts?: MinigamePayment[];
   minigameRewards?: RewardItem[];
   jankenClearedStageUids?: readonly string[];
+  jankenScore?: JankenScoreProgress;
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
 }): CalculationResult {
@@ -37,6 +39,7 @@ export function calculateShopApRequirement(input: {
     minigamePaymentCosts,
     minigameRewards,
     jankenClearedStageUids,
+    jankenScore,
     excludedShopResourceUids,
     minigameConfig,
   } = input;
@@ -51,6 +54,7 @@ export function calculateShopApRequirement(input: {
     minigamePlayCount: state.minigamePlayCount,
     jankenStagePlays: state.jankenStagePlays,
     jankenClearedStageUids,
+    jankenScore,
     minigameConfig,
     minigamePaymentCosts,
     minigameRewards,

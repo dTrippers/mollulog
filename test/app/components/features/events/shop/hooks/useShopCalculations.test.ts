@@ -69,6 +69,7 @@ describe("useShopCalculations input tracking", () => {
       shopResources: [],
       appliedBonusRatio: {},
       jankenClearedStageUids: [],
+      jankenScore: { currentScore: 0, averageScore: null },
     };
     const pendingInputs = buildShopCalculationInputSets(inputs);
     const provisionalInputs = buildShopCalculationInputSets({
@@ -84,6 +85,10 @@ describe("useShopCalculations input tracking", () => {
       ...inputs,
       jankenClearedStageUids: ["stage-1"],
     });
+    const changedJankenScore = buildShopCalculationInputSets({
+      ...inputs,
+      jankenScore: { currentScore: 100_000, averageScore: 50_000 },
+    });
 
     expect(calculationInputsMatch(pendingInputs.calculation, provisionalInputs.calculation)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.user, provisionalInputs.user)).toBe(true);
@@ -91,6 +96,8 @@ describe("useShopCalculations input tracking", () => {
     expect(calculationInputsMatch(pendingInputs.user, changedStrategyInputs.user)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.calculation, changedJankenClears.calculation)).toBe(false);
     expect(calculationInputsMatch(pendingInputs.user, changedJankenClears.user)).toBe(false);
+    expect(calculationInputsMatch(pendingInputs.calculation, changedJankenScore.calculation)).toBe(false);
+    expect(calculationInputsMatch(pendingInputs.user, changedJankenScore.user)).toBe(false);
     expect(isUserCalculationPending(false, true, pendingInputs.user, provisionalInputs.user)).toBe(false);
   });
 
@@ -115,6 +122,7 @@ describe("useShopCalculations input tracking", () => {
         shopResources,
         appliedBonusRatio,
         jankenClearedStageUids: noClearedJankenStages,
+        jankenScore: { currentScore: 0, averageScore: null },
       }),
     );
 

@@ -3,6 +3,7 @@ import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger
 import {
   evaluateJankenPlan,
   getJankenResourceRoles,
+  getJankenScoreRewardWindow,
   getJankenStudentGrowthRequired,
   getJankenStudentGrowthUid,
   planJanken,
@@ -36,6 +37,24 @@ const goals = {
   averageScore: null,
   targetEquipmentTier: null,
 };
+
+describe("janken score reward window", () => {
+  it("starts before the first unreached tier and extends to include the selected goal", () => {
+    const rewards = Array.from({ length: 20 }, (_, index) => ({ tier: index + 1, score: (index + 1) * 100_000 }));
+
+    expect(getJankenScoreRewardWindow(rewards, 500_000, 1_800_000).map(({ tier }) => tier)).toEqual(
+      Array.from({ length: 14 }, (_, index) => index + 5),
+    );
+  });
+
+  it("clamps the collapsed window to the available reward list", () => {
+    expect(getJankenScoreRewardWindow(janken860Fixture.scoreRewards, 0, null)).toEqual(janken860Fixture.scoreRewards);
+    const rewards = Array.from({ length: 20 }, (_, index) => ({ tier: index + 1, score: (index + 1) * 100_000 }));
+    expect(getJankenScoreRewardWindow(rewards, Number.MAX_SAFE_INTEGER, null).map(({ tier }) => tier)).toEqual(
+      Array.from({ length: 10 }, (_, index) => index + 11),
+    );
+  });
+});
 
 describe("event 860 janken planning", () => {
   it("uses expected default rewards and adds an uncleared stage first-clear once", () => {
