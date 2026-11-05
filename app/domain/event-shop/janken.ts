@@ -51,6 +51,59 @@ export type JankenPlanInput = {
   studentGrowthResourceUid?: string;
 };
 
+export type JankenDefaultProgress = Pick<JankenPlannerEntry["progress"], "currentTier" | "heldEleph">;
+
+export function createDefaultJankenPlannerEntry(defaultProgress: JankenDefaultProgress): JankenPlannerEntry {
+  return {
+    progress: {
+      ...defaultProgress,
+      cumulativeScore: 0,
+      equipmentTier: 1,
+      heldEquipmentCurrency: 0,
+      clearedStageUids: [],
+    },
+    goals: {
+      targetTier: null,
+      shopCurrencyMode: "linked",
+      manualShopCurrency: 0,
+      targetScore: null,
+      averageScore: null,
+      targetEquipmentTier: null,
+    },
+  };
+}
+
+export function deriveJankenPlan(
+  config: JankenConfig | null,
+  entry: JankenPlannerEntry | null,
+  defaultProgress: JankenDefaultProgress,
+  input: {
+    shopCurrencyRequired: number;
+    shopCurrencyResourceUid?: string;
+    studentGrowthResourceUid?: string | null;
+  },
+): JankenEvaluation {
+  if (!config) return evaluateJankenPlan({ status: "unavailable" }, { stagePlays: {} });
+  const defaults = createDefaultJankenPlannerEntry(defaultProgress);
+  const progress = entry?.progress ?? defaults.progress;
+  const goals = entry?.goals ?? defaults.goals;
+  const studentGrowthTotalRequired =
+    goals.targetTier != null && goals.targetTier > progress.currentTier
+      ? calculateCumulativeTierEleph(progress.currentTier, goals.targetTier)
+      : 0;
+  const plan = planJanken(config, {
+    progress,
+    goals,
+    shopCurrencyRequired: input.shopCurrencyRequired,
+    studentGrowthTotalRequired,
+    shopCurrencyResourceUid: input.shopCurrencyResourceUid,
+    studentGrowthResourceUid: input.studentGrowthResourceUid ?? undefined,
+  });
+  return plan.status === "available"
+    ? plan
+    : { ...plan, stagePlays: {}, entryCost: 0, entryResourceUid: null, rewards: {}, planSteps: [] };
+}
+
 export function getJankenStudentGrowthUid(
   config: AvailableJankenConfig,
   studentUids: readonly string[],

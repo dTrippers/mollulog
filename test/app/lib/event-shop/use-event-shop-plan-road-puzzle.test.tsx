@@ -8,10 +8,14 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { RoadPuzzleStatsCalculation } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 import type { ShopState } from "~/lib/event-shop/hooks/useShopState";
 import { type EventShopControllerInput, useEventShopPlan } from "~/lib/event-shop/useEventShopPlan";
+import { janken860Fixture } from "../../domain/fixtures/janken-860";
 
 let mockRoadPuzzleStatus: RoadPuzzleStatsCalculation["status"] = "pending";
 let mockShopCalculationsReady = false;
 let mockLastCalculationHold = false;
+let mockResolveAfterStableJankenPlays = false;
+let mockPreviousJankenStagePlays: Record<string, number> | null = null;
+let mockLatestJankenStagePlays: Record<string, number> | null = null;
 
 const emptyCalculationResult: CalculationResult = {
   stageRuns: {},
@@ -67,8 +71,13 @@ const roadPuzzleSolution: RoadPuzzleSolution = {
 jest.mock("~/lib/event-shop/hooks", () => ({
   useAutoSave: () => ({ isSaving: false, saveError: null, retrySave: jest.fn() }),
   useBonusCalculation: () => ({ appliedBonusRatios: {} }),
-  useShopCalculations: (params: { holdCalculations?: boolean }) => {
+  useShopCalculations: (params: { holdCalculations?: boolean; jankenStagePlays: Record<string, number> }) => {
     mockLastCalculationHold = Boolean(params.holdCalculations);
+    mockLatestJankenStagePlays = params.jankenStagePlays;
+    if (mockResolveAfterStableJankenPlays && mockPreviousJankenStagePlays === params.jankenStagePlays) {
+      mockShopCalculationsReady = true;
+    }
+    mockPreviousJankenStagePlays = params.jankenStagePlays;
     return {
       ...emptyCalculationResult,
       isCalculating: !mockShopCalculationsReady && !params.holdCalculations,
@@ -138,10 +147,23 @@ const input: EventShopControllerInput = {
   signedIn: false,
   guestPlannerStatus: "ready",
   minigameConfig: plannerConfig,
-  jankenClearedStageUids: [],
-  jankenScore: { currentScore: 0, averageScore: null },
-  setJankenScore: () => undefined,
-  setJankenClearedStageUids: () => undefined,
+  jankenEntry: {
+    progress: { currentTier: 1, heldEleph: 0, cumulativeScore: 0, equipmentTier: 1, heldEquipmentCurrency: 0, clearedStageUids: [] },
+    goals: { targetTier: null, shopCurrencyMode: "linked", manualShopCurrency: 0, targetScore: null, averageScore: null, targetEquipmentTier: null },
+  },
+  savedJankenEntry: null,
+  setJankenEntry: () => undefined,
+  jankenDefaultProgress: { currentTier: 1, heldEleph: 0 },
+  jankenPersistence: {
+    hasSavedEntry: false,
+    isSaving: false,
+    saveError: null,
+    isConflict: false,
+    conflictError: null,
+    reloadLatest: () => undefined,
+    overwrite: () => undefined,
+    retrySave: () => undefined,
+  },
 };
 
 describe("useEventShopPlan road puzzle hold", () => {
@@ -190,5 +212,39 @@ describe("useEventShopPlan road puzzle hold", () => {
     const { result } = renderHook(() => useEventShopPlan(input));
 
     expect(result.current.plan.collectableResources.map(({ uid }) => uid)).toEqual(["sticker"]);
+  });
+
+  it("settles shop AP with zero janken plays while a score goal awaits its average", () => {
+    mockShopCalculationsReady = false;
+    mockResolveAfterStableJankenPlays = true;
+    mockPreviousJankenStagePlays = null;
+    mockLatestJankenStagePlays = null;
+    const entry = {
+      ...input.jankenEntry,
+      goals: { ...input.jankenEntry.goals, targetScore: 100_000, averageScore: null },
+    };
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "entry", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const pendingInput = {
+      ...input,
+      minigameConfig: config,
+      jankenEntry: entry,
+    };
+    const { result, rerender } = renderHook(() => useEventShopPlan(pendingInput));
+
+    expect(result.current.plan.jankenPlan.status).toBe("score-input-required");
+    expect(result.current.plan.isCalculating).toBe(true);
+    expect(mockLatestJankenStagePlays).toEqual({});
+
+    rerender();
+
+    expect(mockLatestJankenStagePlays).toEqual({});
+    expect(result.current.plan.isCalculating).toBe(false);
+    mockResolveAfterStableJankenPlays = false;
   });
 });

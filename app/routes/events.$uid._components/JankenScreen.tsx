@@ -1,19 +1,16 @@
-import { ExclamationCircleIcon, FlagIcon, StarIcon } from "@heroicons/react/16/solid";
-import { SparklesIcon } from "@heroicons/react/24/outline";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useFetcher, useOutletContext } from "react-router";
+import { FlagIcon, StarIcon } from "@heroicons/react/16/solid";
+import { useMemo, useRef, useState } from "react";
+import { Link, useOutletContext } from "react-router";
 import { ShopSection } from "~/components/v2/features/events/ShopSection";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
-import { AsideLinks, PageActionBar, PageAside, PageMain, PanelSheet, useV2Page } from "~/components/v2/layout";
-import { Button } from "~/components/v2/primitives/Button";
+import { PageActionBar, PageAside, PageMain, PanelSheet, useV2Page } from "~/components/v2/layout";
+import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
 import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
-import { Switch } from "~/components/v2/primitives/Switch";
 import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
+import { useSignIn } from "~/contexts/SignInProvider";
 import type { JankenConfig } from "~/domain/event-shop";
-import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
-import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
 import {
   evaluateJankenPlan,
   getJankenScoreRewardWindow,
@@ -21,36 +18,14 @@ import {
   getJankenStudentGrowthRequired,
   type JankenPlanStep,
   type JankenResourceRoles,
-  planJanken,
 } from "~/domain/event-shop/janken";
-import { calculateCumulativeTierEleph } from "~/domain/growth-resource";
-import { type JankenPlannerEntry, normalizeJankenPlannerProgress } from "~/domain/planner-state";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
-import { readGuestPlanner, updateGuestPlanner } from "~/lib/guest-planner.client";
 import { jankenLocale as t } from "~/locales/ko";
 import type { loader } from "../events.$uid.shop.janken";
 
 type LoaderData = Exclude<Awaited<ReturnType<typeof loader>>, Response>;
-const emptyEntry: JankenPlannerEntry = {
-  progress: {
-    currentTier: 1,
-    heldEleph: 0,
-    cumulativeScore: 0,
-    equipmentTier: 1,
-    heldEquipmentCurrency: 0,
-    clearedStageUids: [],
-  },
-  goals: {
-    targetTier: null,
-    shopCurrencyMode: "linked",
-    manualShopCurrency: 0,
-    targetScore: null,
-    averageScore: null,
-    targetEquipmentTier: null,
-  },
-};
 const emptyResourceRoles: JankenResourceRoles = { entryUid: null, shopUid: null, studentUid: null, equipmentUid: null };
-type PendingPlannerSave = { promise: Promise<void>; resolve: () => void; reject: (error: Error) => void };
 const resourceLabel = (uid: string, roles: JankenResourceRoles) =>
   uid === roles.entryUid
     ? t.entryCurrency
@@ -126,11 +101,15 @@ function summarizeStepResult(
 function scorePresets(config: Extract<JankenConfig, { status: "available" }>, studentUid: string | null) {
   const rows = config.scoreRewards;
   const candidates: { score: number; tier: number }[] = [];
+  let studentRewardScore: number | null = null;
   if (studentUid) {
     const lastEleph = [...rows]
       .reverse()
       .find(({ rewards }) => rewards.some((reward) => reward.resourceUid === studentUid));
-    if (lastEleph) candidates.push({ score: lastEleph.score, tier: lastEleph.tier });
+    if (lastEleph) {
+      candidates.push({ score: lastEleph.score, tier: lastEleph.tier });
+      studentRewardScore = lastEleph.score;
+    }
   }
   if (rows.length > 1) {
     const signature = (row: (typeof rows)[number]) =>
@@ -147,120 +126,31 @@ function scorePresets(config: Extract<JankenConfig, { status: "available" }>, st
   }
   const last = rows.at(-1);
   if (last) candidates.push({ score: last.score, tier: last.tier });
-  return [...new Map(candidates.map((item) => [item.score, item])).values()];
+  return [...new Map(candidates.map((item) => [item.score, item])).values()].map((item) => ({
+    ...item,
+    rewardUid: item.score === studentRewardScore ? studentUid : null,
+  }));
 }
 
 export default function JankenScreen({ loaderData }: { loaderData: LoaderData }) {
   const planContext = useOutletContext<EventShopPlanContext>();
+  const { showSignIn } = useSignIn();
   const { stacked } = useV2Page();
-  const fetcher = useFetcher<{
-    success?: boolean;
-    conflict?: boolean;
-    error?: string;
-    entry?: JankenPlannerEntry;
-    latest?: JankenPlannerEntry | null;
-  }>();
-  const config = loaderData.config ?? { status: "unavailable" as const };
-  const defaultEntry: JankenPlannerEntry = {
-    ...emptyEntry,
-    progress: {
-      ...emptyEntry.progress,
-      currentTier: loaderData.defaultProgress.currentTier,
-      heldEleph: loaderData.defaultProgress.heldEleph,
-    },
-  };
-  const [entry, setEntry] = useState<JankenPlannerEntry>(loaderData.entry ?? defaultEntry);
+  const persistence = planContext.jankenPersistence;
+  const config =
+    planContext.minigameConfig?.minigameType === "janken"
+      ? (planContext.minigameConfig.janken ?? { status: "unavailable" as const })
+      : { status: "unavailable" as const };
+  const entry = planContext.jankenEntry;
   const entryRef = useRef(entry);
   entryRef.current = entry;
-  const [hasEdited, setHasEdited] = useState(false);
-  const [hasSavedEntry, setHasSavedEntry] = useState(loaderData.entry !== null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [latestConflict, setLatestConflict] = useState<JankenPlannerEntry | null>(null);
-  const [isConflict, setIsConflict] = useState(false);
-  const [isApplying, setIsApplying] = useState(false);
   const [selectedTab, setSelectedTab] = useState<string | null>(null);
   const tab = selectedTab ?? (stacked ? "score" : "eff");
   const [showAllScoreRewards, setShowAllScoreRewards] = useState(false);
-  const baseRef = useRef<JankenPlannerEntry | null>(loaderData.entry);
-  const submittedEntryRef = useRef<JankenPlannerEntry | null>(null);
-  const handledResponseRef = useRef<unknown>(null);
-  const pendingSaveRef = useRef<PendingPlannerSave | null>(null);
-  const pendingGuestSaveRef = useRef<Promise<void> | null>(null);
-  const applyGenerationRef = useRef(0);
-  useEffect(() => () => {
-    applyGenerationRef.current += 1;
-  }, []);
-  const entriesEqual = useCallback(
-    (left: JankenPlannerEntry | null, right: JankenPlannerEntry | null) => {
-      const canonicalEntry = (candidate: JankenPlannerEntry | null) =>
-        candidate
-          ? (normalizeJankenPlannerProgress({ [loaderData.shopStateUid]: candidate })?.[loaderData.shopStateUid] ??
-            candidate)
-          : null;
-      return JSON.stringify(canonicalEntry(left)) === JSON.stringify(canonicalEntry(right));
-    },
-    [loaderData.shopStateUid],
-  );
-  const submitAccountEntry = useCallback(
-    (submitted: JankenPlannerEntry, base = baseRef.current) => {
-      let resolve!: () => void;
-      let reject!: (error: Error) => void;
-      const promise = new Promise<void>((resolvePromise, rejectPromise) => {
-        resolve = resolvePromise;
-        reject = rejectPromise;
-      });
-      pendingSaveRef.current = { promise, resolve, reject };
-      submittedEntryRef.current = submitted;
-      try {
-        fetcher.submit(
-          { shopStateUid: loaderData.shopStateUid, entry: submitted, base },
-          { method: "post", action: "/api/planner/janken", encType: "application/json" },
-        );
-      } catch {
-        pendingSaveRef.current = null;
-        reject(new Error("Planner save failed."));
-      }
-      return promise;
-    },
-    [fetcher.submit, loaderData.shopStateUid],
-  );
-  const saveGuestEntry = useCallback(
-    async (submitted: JankenPlannerEntry) => {
-      const previous = pendingGuestSaveRef.current;
-      if (previous) await previous.catch(() => undefined);
-      const save = (async () => {
-        const snapshot = await updateGuestPlanner((envelope) => ({
-          ...envelope,
-          document: {
-            ...envelope.document,
-            jankenProgress: { ...envelope.document.jankenProgress, [loaderData.shopStateUid]: submitted },
-          },
-        }));
-        if (snapshot.status !== "ready") {
-          setSaveError(t.guestSaveFailed);
-          throw new Error("Guest planner save failed.");
-        }
-        baseRef.current = submitted;
-        setHasSavedEntry(true);
-        setHasEdited(!entriesEqual(entryRef.current, submitted));
-        setSaveError(null);
-      })();
-      pendingGuestSaveRef.current = save;
-      try {
-        await save;
-      } finally {
-        if (pendingGuestSaveRef.current === save) pendingGuestSaveRef.current = null;
-      }
-    },
-    [entriesEqual, loaderData.shopStateUid],
-  );
   const goals = entry.goals;
-  const progress = useMemo(
-    () => ({ ...entry.progress, clearedStageUids: planContext.jankenClearedStageUids }),
-    [entry.progress, planContext.jankenClearedStageUids],
-  );
+  const progress = entry.progress;
   const available = config.status === "available";
-  const studentUid = available ? loaderData.studentGrowthUid : null;
+  const studentUid = available ? (planContext.jankenStudentGrowthUid ?? null) : null;
   const resourceRoles = useMemo(
     () =>
       available
@@ -273,274 +163,43 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     [available, config, planContext.shopResources, studentUid],
   );
   const shopUid = resourceRoles.shopUid;
-  const linkedShopCurrencyLedger =
-    available && shopUid
-      ? calculateResourceLedger({
-          shopResources: planContext.shopResources,
-          itemQuantities: planContext.state.itemQuantities,
-          itemPurchaseDays: planContext.state.itemPurchaseDays,
-          existingPaymentItemQuantities: planContext.state.existingPaymentItemQuantities,
-          stages: planContext.stages,
-          includeFirstClear: planContext.state.includeFirstClear,
-          minigameStartRound: planContext.state.minigameStartRound,
-          minigamePlayCount: 0,
-          jankenStagePlays: {},
-          jankenClearedStageUids: planContext.jankenClearedStageUids,
-          minigameConfig: planContext.minigameConfig,
-          overriddenRequiredQuantities: planContext.state.overriddenRequiredQuantities,
-        })
-      : null;
-  const linkedShopCurrencyRequired = shopUid ? (linkedShopCurrencyLedger?.remainingToFarm[shopUid] ?? 0) : 0;
-  const linkedShopCurrencyTotal = shopUid ? (linkedShopCurrencyLedger?.requiredTotals[shopUid] ?? 0) : 0;
-  const linkedShopCurrencyOwned = shopUid ? (linkedShopCurrencyLedger?.existing[shopUid] ?? 0) : 0;
+  const linkedShopCurrencyRequired = planContext.jankenShopCurrency.required;
+  const linkedShopCurrencyOwned = planContext.jankenShopCurrency.owned;
   const growthNeeded = available
     ? (getJankenStudentGrowthRequired(progress.currentTier, goals.targetTier, progress.heldEleph) ?? 0)
     : 0;
-  const growthTotalRequired =
-    available && goals.targetTier != null && goals.targetTier > progress.currentTier
-      ? calculateCumulativeTierEleph(progress.currentTier, goals.targetTier)
-      : 0;
-  const canPlan = available && shopUid !== null;
-  const planned = useMemo(
-    () =>
-      canPlan
-        ? planJanken(config, {
-            progress,
-            goals,
-            shopCurrencyRequired: linkedShopCurrencyRequired,
-            studentGrowthTotalRequired: growthTotalRequired,
-            shopCurrencyResourceUid: shopUid,
-            ...(studentUid ? { studentGrowthResourceUid: studentUid } : {}),
-          })
-        : null,
-    [canPlan, config, progress, goals, growthTotalRequired, shopUid, studentUid, linkedShopCurrencyRequired],
-  );
-
-  useEffect(() => {
-    planContext.setJankenScore({
-      currentScore: entry.progress.cumulativeScore,
-      averageScore: entry.goals.averageScore,
-    });
-  }, [entry.progress.cumulativeScore, entry.goals.averageScore, planContext.setJankenScore]);
-
-  useEffect(() => {
-    if (loaderData.signedIn) return;
-    const snapshot = readGuestPlanner();
-    if (snapshot.status === "ready") {
-      const stored = snapshot.envelope.document.jankenProgress[loaderData.shopStateUid];
-      if (stored) {
-        setEntry(stored);
-        planContext.setJankenClearedStageUids(stored.progress.clearedStageUids);
-        planContext.setJankenScore({
-          currentScore: stored.progress.cumulativeScore,
-          averageScore: stored.goals.averageScore,
-        });
-        setHasSavedEntry(true);
-        baseRef.current = stored;
-      }
-    } else setSaveError(t.guestSaveFailed);
-  }, [
-    loaderData.shopStateUid,
-    loaderData.signedIn,
-    planContext.setJankenClearedStageUids,
-    planContext.setJankenScore,
-  ]);
-
-  useEffect(() => {
-    if (!hasEdited || isApplying || isConflict || fetcher.state !== "idle" || entriesEqual(entry, baseRef.current)) return;
-    const timeout = setTimeout(() => {
-      if (loaderData.signedIn) {
-        void submitAccountEntry(entry).catch(() => undefined);
-      } else {
-        void saveGuestEntry(entry).catch(() => setSaveError(t.guestSaveFailed));
-      }
-    }, 800);
-    return () => clearTimeout(timeout);
-  }, [
-    entry,
-    entriesEqual,
-    fetcher.state,
-    hasEdited,
-    isApplying,
-    isConflict,
-    loaderData.signedIn,
-    saveGuestEntry,
-    submitAccountEntry,
-  ]);
-
-  useEffect(() => {
-    const response = fetcher.data;
-    if (!response || handledResponseRef.current === response) return;
-    handledResponseRef.current = response;
-    const pendingSave = pendingSaveRef.current;
-    pendingSaveRef.current = null;
-    if (response.success && response.entry) {
-      baseRef.current = response.entry;
-      setHasSavedEntry(true);
-      setIsConflict(false);
-      setSaveError(null);
-      setHasEdited(!entriesEqual(entryRef.current, submittedEntryRef.current ?? response.entry));
-      submittedEntryRef.current = null;
-      pendingSave?.resolve();
-    }
-    if (response.conflict) {
-      setLatestConflict(response.latest ?? null);
-      setIsConflict(true);
-      pendingSave?.reject(new Error("Planner save conflict."));
-    } else if (response.error) {
-      setSaveError(response.error);
-      pendingSave?.reject(new Error("Planner save failed."));
-    } else if (!response.success) {
-      setSaveError(t.saveFailed);
-      pendingSave?.reject(new Error("Planner save failed."));
-    }
-  }, [entriesEqual, fetcher.data]);
+  const planned = planContext.jankenPlan;
 
   const updateProgress = (patch: Partial<JankenPlannerEntry["progress"]>) => {
-    if (patch.clearedStageUids) planContext.setJankenClearedStageUids(patch.clearedStageUids);
-    if ("cumulativeScore" in patch) {
-      planContext.setJankenScore({
-        currentScore: patch.cumulativeScore ?? entryRef.current.progress.cumulativeScore,
-        averageScore: entryRef.current.goals.averageScore,
-      });
-    }
-    setHasEdited(true);
-    setEntry((current) => ({ ...current, progress: { ...current.progress, ...patch } }));
+    const next = { ...entryRef.current, progress: { ...entryRef.current.progress, ...patch } };
+    entryRef.current = next;
+    planContext.setJankenEntry(next);
   };
   const updateGoals = (patch: Partial<JankenPlannerEntry["goals"]>) => {
-    if ("averageScore" in patch) {
-      planContext.setJankenScore({
-        currentScore: entryRef.current.progress.cumulativeScore,
-        averageScore: patch.averageScore ?? null,
-      });
-    }
-    setHasEdited(true);
-    setEntry((current) => ({ ...current, goals: { ...current.goals, ...patch } }));
+    const next = { ...entryRef.current, goals: { ...entryRef.current.goals, ...patch } };
+    entryRef.current = next;
+    planContext.setJankenEntry(next);
   };
-  const apply = async () => {
-    if (planned?.status !== "available" || isConflict) return;
-    const applyGeneration = ++applyGenerationRef.current;
-    const entrySnapshot = entryRef.current;
-    const playsSnapshot = planned.stagePlays;
-    const shouldPersist = hasEdited || pendingSaveRef.current !== null || pendingGuestSaveRef.current !== null;
-    setIsApplying(true);
-    try {
-      if (shouldPersist) {
-        const pendingSave = loaderData.signedIn ? pendingSaveRef.current?.promise : pendingGuestSaveRef.current;
-        if (pendingSave) {
-          await pendingSave;
-          if (applyGenerationRef.current !== applyGeneration) return;
-        }
-        if (!entriesEqual(entrySnapshot, baseRef.current)) {
-          if (loaderData.signedIn) await submitAccountEntry(entrySnapshot);
-          else await saveGuestEntry(entrySnapshot);
-          if (applyGenerationRef.current !== applyGeneration) return;
-        }
-      }
-      if (applyGenerationRef.current === applyGeneration) planContext.actions.setJankenStagePlays(playsSnapshot);
-    } catch {
-      // The existing save or conflict notice communicates why the plan was not applied.
-    } finally {
-      if (applyGenerationRef.current === applyGeneration) setIsApplying(false);
-    }
-  };
-  const serializePlays = (plays: Record<string, number>) =>
-    JSON.stringify(Object.fromEntries(Object.entries(plays).sort(([a], [b]) => a.localeCompare(b))));
-  const applied =
-    planned?.status === "available" &&
-    serializePlays(planContext.state.jankenStagePlays) === serializePlays(planned.stagePlays);
-  const hasUnsavedPlannerEntry =
-    (hasEdited || pendingSaveRef.current !== null) && !entriesEqual(entry, baseRef.current);
-  const ap = useMemo(() => {
-    if (planned?.status !== "available") return null;
-    return calculateShopApRequirement({
-      state: { ...planContext.state, minigamePlayCount: 0, jankenStagePlays: planned.stagePlays },
-      stages: planContext.stages,
-      shopResources: planContext.shopResources,
-      appliedBonusRatio: planContext.appliedBonusRatio,
-      minigameConfig: planContext.minigameConfig,
-      jankenClearedStageUids: progress.clearedStageUids,
-      jankenScore: planContext.jankenScore,
-    }).totalApWithExtras;
-  }, [planned, planContext, progress.clearedStageUids]);
-  const rewardTotals = planned?.status === "available" ? planned.rewards : {};
+  const apPending = planned.status === "available" && planContext.isCalculating;
+  const ap = planned.status === "available" && !apPending ? planContext.stageCalculations.totalApWithExtras : null;
   const targetEquipmentTier = goals.targetEquipmentTier;
+  const shopCurrencyGoal = goals.shopCurrencyMode === "linked" || goals.manualShopCurrency > 0;
+  const hasExplicitGoals =
+    goals.targetTier != null ||
+    goals.targetScore != null ||
+    goals.targetEquipmentTier != null ||
+    goals.shopCurrencyMode === "manual";
+  const missingAverageScore = planned.status === "score-input-required";
   const equipmentRequired =
     config.status === "available" && targetEquipmentTier != null
       ? config.equipmentUpgrade.tierCosts
           .filter(({ tier }) => tier > progress.equipmentTier && tier <= targetEquipmentTier)
           .reduce((sum, item) => sum + item.quantity, 0)
       : 0;
-  const goalRows = useMemo(() => {
-    if (!available) return [];
-    const rows: { label: string; iconUid?: string; iconKind?: "score"; have: number; need: number; done: boolean }[] =
-      [];
-    if (studentUid && goals.targetTier != null) {
-      const have = progress.heldEleph + (rewardTotals[studentUid] ?? 0);
-      rows.push({
-        label: t.studentGrowth,
-        iconUid: studentUid,
-        have,
-        need: growthTotalRequired,
-        done: have >= growthTotalRequired,
-      });
-    }
-    if (shopUid && goals.shopCurrencyMode === "linked") {
-      const owned = planContext.state.existingPaymentItemQuantities[shopUid] ?? 0;
-      const need = owned + linkedShopCurrencyRequired;
-      const have = owned + (rewardTotals[shopUid] ?? 0);
-      rows.push({ label: t.shopCurrency, iconUid: shopUid, have, need, done: have >= need });
-    } else if (shopUid && goals.manualShopCurrency > 0) {
-      const have = rewardTotals[shopUid] ?? 0;
-      rows.push({
-        label: t.shopCurrency,
-        iconUid: shopUid,
-        have,
-        need: goals.manualShopCurrency,
-        done: have >= goals.manualShopCurrency,
-      });
-    }
-    if (goals.targetScore != null)
-      rows.push({
-        label: t.scoreGoal,
-        iconKind: "score",
-        have: planned?.projectedScore ?? progress.cumulativeScore,
-        need: goals.targetScore,
-        done: (planned?.projectedScore ?? progress.cumulativeScore) >= goals.targetScore,
-      });
-    if (targetEquipmentTier != null && config.status === "available" && config.equipmentUpgrade.costResource) {
-      const uid = config.equipmentUpgrade.costResource.resourceUid;
-      const have = progress.heldEquipmentCurrency + (rewardTotals[uid] ?? 0);
-      rows.push({
-        label: t.equipmentGoalTier(targetEquipmentTier),
-        iconUid: uid,
-        have,
-        need: equipmentRequired,
-        done: have >= equipmentRequired,
-      });
-    }
-    return rows;
-  }, [
-    available,
-    studentUid,
-    goals.targetTier,
-    goals.shopCurrencyMode,
-    goals.manualShopCurrency,
-    goals.targetScore,
-    targetEquipmentTier,
-    progress,
-    rewardTotals,
-    shopUid,
-    planContext.state.existingPaymentItemQuantities,
-    linkedShopCurrencyRequired,
-    planned?.projectedScore,
-    equipmentRequired,
-    growthTotalRequired,
-    config,
-  ]);
-  const achievedCount = goalRows.filter(({ done }) => done).length;
   const visibleScoreRewards = showAllScoreRewards
-    ? (config.status === "available" ? config.scoreRewards : [])
+    ? config.status === "available"
+      ? config.scoreRewards
+      : []
     : config.status === "available"
       ? getJankenScoreRewardWindow(config.scoreRewards, progress.cumulativeScore, goals.targetScore)
       : [];
@@ -584,20 +243,14 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     <>
       <PageMain>
         <div className={`space-y-v2-section-gap ${stacked ? "pb-24" : ""}`}>
-          <header>
-            <p className="text-xs text-v2-fg-tertiary">
-              {loaderData.eventName} › {t.shopBreadcrumb}
-            </p>
-            <h1 className="mt-1 text-xl font-semibold text-v2-fg">{t.pageTitle}</h1>
-            <p className="mt-1 text-sm text-v2-fg-secondary">{t.lead}</p>
-          </header>
+          <p className="text-sm text-v2-fg-secondary">{t.lead}</p>
           {!available ? (
             <StatusNotice tone={config.status === "invalid" ? "danger" : "neutral"}>
               {config.status === "invalid" ? t.invalid : t.unavailable}
             </StatusNotice>
           ) : null}
           {available && !shopUid ? <StatusNotice tone="danger">{t.invalid}</StatusNotice> : null}
-          {isConflict ? (
+          {persistence.isConflict ? (
             <StatusNotice
               tone="danger"
               action={
@@ -605,178 +258,440 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                   <Button
                     size="sm"
                     variant="secondary"
-                    onClick={() => {
-                      const latest = latestConflict ?? defaultEntry;
-                      setEntry(latest);
-                      submittedEntryRef.current = null;
-                      planContext.setJankenClearedStageUids(latest.progress.clearedStageUids);
-                      planContext.setJankenScore({
-                        currentScore: latest.progress.cumulativeScore,
-                        averageScore: latest.goals.averageScore,
-                      });
-                      baseRef.current = latestConflict;
-                      setLatestConflict(null);
-                      setIsConflict(false);
-                      setHasEdited(false);
-                    }}
+                    onClick={persistence.reloadLatest}
                   >
                     {t.reload}
                   </Button>
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      baseRef.current = latestConflict;
-                      setLatestConflict(null);
-                      setIsConflict(false);
-                      void submitAccountEntry(entry, latestConflict).catch(() => undefined);
-                    }}
-                  >
+                  <Button size="sm" onClick={persistence.overwrite}>
                     {t.overwrite}
                   </Button>
                 </div>
               }
             >
-              {fetcher.data?.error ?? t.conflict}
+              {persistence.conflictError ?? t.conflict}
             </StatusNotice>
           ) : null}
-          {fetcher.data?.error && !fetcher.data.conflict ? (
-            <StatusNotice tone="danger">{fetcher.data.error}</StatusNotice>
-          ) : null}
-          {saveError ? <StatusNotice tone="danger">{saveError}</StatusNotice> : null}
           {available ? (
             <>
-              <ShopSection
-                title={t.progress}
-                persistenceKey="event-shop-section::janken-progress"
-                variant="shop"
-                action={
-                  <span className="text-xs font-normal text-v2-fg-tertiary">
-                    {loaderData.signedIn ? t.savedAccount : t.savedGuest}
-                  </span>
-                }
-              >
-                <div className="grid gap-3 sm:grid-cols-2">
+              {!hasExplicitGoals ? <StatusNotice tone="neutral">{t.firstVisitNotice}</StatusNotice> : null}
+              <ShopSection title={t.goals} persistenceKey="event-shop-section::janken-goals" variant="shop">
+                <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
                   {studentUid ? (
-                    <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                      <h3 className="mb-3 flex items-center gap-2 font-semibold">
-                        <ResourceThumb itemUid={studentUid} name={t.studentGrowth} size="sm" />
-                        {t.studentGrowth}
-                      </h3>
-                      <p className="text-xs text-v2-fg-secondary">{t.currentTier}</p>
-                      <fieldset
-                        aria-label={t.currentTier}
-                        className="m-0 mt-2 flex min-w-0 flex-wrap gap-1 border-0 p-0"
-                      >
-                        {Array.from({ length: 9 }, (_, i) => i + 1).map((tier) => (
-                          <ToggleChip
-                            key={tier}
-                            pressed={progress.currentTier === tier}
-                            ariaLabel={`${t.currentTier} ${t.tierLabel(tier)}`}
-                            onPressedChange={() => updateProgress({ currentTier: tier })}
+                    <article className="p-v2-block-p">
+                      <header className="flex items-center justify-between gap-3">
+                        <h3 className="flex min-w-0 items-center gap-2 font-semibold">
+                          <span aria-hidden="true">
+                            <ResourceThumb itemUid={studentUid} name="" size="sm" />
+                          </span>
+                          <span>{t.studentGrowth}</span>
+                        </h3>
+                        {goals.targetTier != null ? (
+                          <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
+                            <strong>{t.remainingCount(growthNeeded)}</strong>
+                            <span className="ml-1 text-v2-fg-tertiary">{t.remainingCountSuffix}</span>
+                          </span>
+                        ) : null}
+                      </header>
+                      <div className="mt-3 space-y-3">
+                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <fieldset
+                              aria-label={t.currentTier}
+                              className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
+                            >
+                              {Array.from({ length: 9 }, (_, index) => index + 1).map((tier) => (
+                                <ToggleChip
+                                  key={tier}
+                                  pressed={progress.currentTier === tier}
+                                  ariaLabel={`${t.currentTier} ${t.tierLabel(tier)}`}
+                                  onPressedChange={() => updateProgress({ currentTier: tier })}
+                                >
+                                  <span className="flex items-center gap-1">
+                                    {tier <= 5 ? (
+                                      <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
+                                    ) : (
+                                      <img
+                                        src="/icons/exclusive_weapon.png"
+                                        alt=""
+                                        className="size-3.5 object-contain"
+                                      />
+                                    )}
+                                    {tier <= 5 ? tier : tier - 5}
+                                  </span>
+                                </ToggleChip>
+                              ))}
+                            </fieldset>
+                            <label
+                              htmlFor="janken-held-student"
+                              className="inline-flex items-center gap-2 whitespace-nowrap text-xs text-v2-fg-secondary"
+                            >
+                              {t.owned}
+                              <NumberInput
+                                id="janken-held-student"
+                                aria-label={`${t.studentGrowth} · ${t.heldCount}`}
+                                className="w-28"
+                                grouped
+                                min={0}
+                                value={progress.heldEleph}
+                                onValueChange={(value) => updateProgress({ heldEleph: Math.max(0, Math.trunc(value)) })}
+                              />
+                            </label>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                          <fieldset
+                            aria-label={t.targetTier}
+                            className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                           >
-                            <span className="flex items-center gap-1">
-                              {tier <= 5 ? (
-                                <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
-                              ) : (
-                                <SparklesIcon className="size-3.5 text-v2-fg-secondary" aria-hidden="true" />
-                              )}
-                              {tier <= 5 ? tier : tier - 5}
-                            </span>
-                          </ToggleChip>
-                        ))}
-                      </fieldset>
-                      {!hasSavedEntry ? (
-                        <p className="mt-2 text-xs text-v2-fg-tertiary">
-                          {loaderData.recruitedStudent ? (
-                            <>
-                              <Link className="text-v2-link" to={`/students/${studentUid}`}>
-                                {t.recruitedSourceLabel}
-                              </Link>
-                              {t.recruitedSourceSuffix}
-                            </>
-                          ) : (
-                            t.initialTierNotice
-                          )}
-                        </p>
-                      ) : null}
-                      <label htmlFor="janken-held-student" className="mt-4 block text-xs text-v2-fg-secondary">
-                        {t.heldCount}
-                      </label>
-                      <NumberInput
-                        id="janken-held-student"
-                        aria-label={`${t.studentGrowth} · ${t.heldCount}`}
-                        className="mt-1 w-full"
-                        grouped
-                        min={0}
-                        value={progress.heldEleph}
-                        onValueChange={(heldEleph) => updateProgress({ heldEleph: Math.max(0, Math.trunc(heldEleph)) })}
-                      />
-                      {!hasSavedEntry && loaderData.signedIn ? (
-                        <p className="mt-2 text-xs text-v2-fg-tertiary">
-                          <Link className="text-v2-link" to="/utils/resources/inventory">
-                            {t.inventoryPlanner}
-                          </Link>
-                          {t.inventorySourceSuffix(loaderData.inventoryDate)}
-                        </p>
-                      ) : null}
+                            <ToggleChip
+                              pressed={goals.targetTier === null}
+                              ariaLabel={t.noGoal}
+                              onPressedChange={() => updateGoals({ targetTier: null })}
+                            >
+                              {t.noGoal}
+                            </ToggleChip>
+                            {[3, 4, 6, 7, 8, 9].map((tier) => (
+                              <ToggleChip
+                                key={tier}
+                                disabled={tier <= progress.currentTier && goals.targetTier !== tier}
+                                pressed={goals.targetTier === tier}
+                                ariaLabel={`${t.targetTier} ${t.tierLabel(tier)}`}
+                                onPressedChange={() =>
+                                  updateGoals({ targetTier: goals.targetTier === tier ? null : tier })
+                                }
+                              >
+                                <span className="flex items-center gap-1">
+                                  {tier <= 5 ? (
+                                    <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
+                                  ) : (
+                                    <img src="/icons/exclusive_weapon.png" alt="" className="size-3.5 object-contain" />
+                                  )}
+                                  {tier <= 5 ? tier : tier - 5}
+                                </span>
+                              </ToggleChip>
+                            ))}
+                          </fieldset>
+                        </div>
+                        {!persistence.hasSavedEntry ? (
+                          <p className="ml-[3.25rem] text-xs text-v2-fg-tertiary sm:ml-16">
+                            {planContext.recruitedStudentUids.includes(studentUid) ? (
+                              <>
+                                <Link className="text-v2-link" to={`/students/${studentUid}`}>
+                                  {t.recruitedSourceLabel}
+                                </Link>
+                                {t.recruitedSourceSuffix}
+                              </>
+                            ) : (
+                              t.initialTierNotice
+                            )}
+                            {planContext.signedIn ? (
+                              <>
+                                {" · "}
+                                <Link className="text-v2-link" to="/utils/resources/inventory">
+                                  {t.inventoryPlanner}
+                                </Link>
+                                {t.inventorySourceSuffix(loaderData.inventoryDate)}
+                              </>
+                            ) : null}
+                          </p>
+                        ) : null}
+                      </div>
                     </article>
                   ) : (
-                    <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                      <h3 className="mb-3 font-semibold">{t.studentGrowth}</h3>
+                    <article className="p-v2-block-p">
+                      <h3 className="font-semibold">{t.studentGrowth}</h3>
                       <StatusNotice tone="neutral">{t.studentGrowthUnavailable}</StatusNotice>
                     </article>
                   )}
-                  <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                    <h3 className="mb-3 font-semibold">{t.scoreEquipment}</h3>
-                    <label htmlFor="janken-current-score" className="block text-xs text-v2-fg-secondary">
-                      {t.challengeScore}
-                    </label>
-                    <NumberInput
-                      id="janken-current-score"
-                      aria-label={t.challengeScore}
-                      className="mt-1 w-full"
-                      grouped
-                      formatThousands
-                      min={0}
-                      value={progress.cumulativeScore}
-                      onValueChange={(cumulativeScore) =>
-                        updateProgress({ cumulativeScore: Math.max(0, Math.trunc(cumulativeScore)) })
-                      }
-                    />
-                    <p className="mt-3 text-xs text-v2-fg-secondary">{t.currentEquipmentTier}</p>
-                    <fieldset
-                      aria-label={t.currentEquipmentTier}
-                      className="m-0 mt-2 flex min-w-0 flex-wrap gap-1 border-0 p-0"
-                    >
-                      {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, i) => i + 1).map((tier) => (
-                        <ToggleChip
-                          key={tier}
-                          pressed={progress.equipmentTier === tier}
-                          ariaLabel={t.equipmentGoalTier(tier)}
-                          onPressedChange={() => updateProgress({ equipmentTier: tier })}
-                        >
-                          T{tier}
-                        </ToggleChip>
-                      ))}
-                    </fieldset>
-                    <label htmlFor="janken-held-equipment-currency" className="mt-4 block text-xs text-v2-fg-secondary">
-                      {t.heldEquipmentCurrency}
-                    </label>
-                    <NumberInput
-                      id="janken-held-equipment-currency"
-                      aria-label={t.heldEquipmentCurrency}
-                      className="mt-1 w-full"
-                      grouped
-                      min={0}
-                      value={progress.heldEquipmentCurrency}
-                      onValueChange={(heldEquipmentCurrency) =>
-                        updateProgress({ heldEquipmentCurrency: Math.max(0, Math.trunc(heldEquipmentCurrency)) })
-                      }
-                    />
+
+                  {shopUid ? (
+                    <article className="p-v2-block-p">
+                      <header className="flex items-center justify-between gap-3">
+                        <h3 className="flex min-w-0 items-center gap-2 font-semibold">
+                          <span aria-hidden="true">
+                            <ResourceThumb itemUid={shopUid} name="" size="sm" />
+                          </span>
+                          <span>{t.shopCurrency}</span>
+                        </h3>
+                        {shopCurrencyGoal ? (
+                          <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
+                            <strong>
+                              {t.remainingCount(
+                                goals.shopCurrencyMode === "linked"
+                                  ? linkedShopCurrencyRequired
+                                  : goals.manualShopCurrency,
+                              )}
+                            </strong>
+                            <span className="ml-1 text-v2-fg-tertiary">{t.remainingCountSuffix}</span>
+                          </span>
+                        ) : null}
+                      </header>
+                      <div className="mt-3 space-y-3">
+                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
+                          <span className="inline-flex items-center gap-2 text-sm tabular-nums">
+                            <span className="text-xs text-v2-fg-tertiary">{t.owned}</span>
+                            <strong>{linkedShopCurrencyOwned.toLocaleString()}</strong>
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                          <div className="flex min-w-0 flex-wrap items-center gap-2">
+                            <div className="flex flex-wrap gap-1">
+                              <ToggleChip
+                                pressed={goals.shopCurrencyMode === "linked"}
+                                ariaLabel={t.shopLinked}
+                                onPressedChange={() => updateGoals({ shopCurrencyMode: "linked" })}
+                              >
+                                {t.shopLinked}
+                              </ToggleChip>
+                              <ToggleChip
+                                pressed={goals.shopCurrencyMode === "manual"}
+                                ariaLabel={t.shopManual}
+                                onPressedChange={() => updateGoals({ shopCurrencyMode: "manual" })}
+                              >
+                                {t.shopManual}
+                              </ToggleChip>
+                            </div>
+                            {goals.shopCurrencyMode === "linked" ? (
+                              <span className="text-sm font-medium tabular-nums">
+                                {linkedShopCurrencyRequired.toLocaleString()}
+                              </span>
+                            ) : (
+                              <NumberInput
+                                id="janken-manual-shop-currency"
+                                aria-label={t.manualShopCurrency}
+                                className="w-28"
+                                grouped
+                                min={0}
+                                value={goals.manualShopCurrency}
+                                onValueChange={(value) =>
+                                  updateGoals({ manualShopCurrency: Math.max(0, Math.trunc(value)) })
+                                }
+                              />
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </article>
+                  ) : null}
+
+                  <article className="p-v2-block-p">
+                    <header className="flex items-center justify-between gap-3">
+                      <h3 className="flex items-center gap-2 font-semibold">
+                        <FlagIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
+                        <span>{t.scoreGoal}</span>
+                      </h3>
+                      {missingAverageScore ? (
+                        <span role="status" className="whitespace-nowrap text-xs font-medium text-v2-warning">
+                          {t.scoreAverageNeeded}
+                        </span>
+                      ) : goals.targetScore != null ? (
+                        <span className="whitespace-nowrap text-sm text-v2-fg-secondary">
+                          <strong>
+                            {Math.floor(
+                              Math.max(0, goals.targetScore - progress.cumulativeScore) / 10_000,
+                            ).toLocaleString()}
+                          </strong>
+                          <span className="text-xs text-v2-fg-tertiary">만 점 {t.remainingCountSuffix}</span>
+                        </span>
+                      ) : null}
+                    </header>
+                    <p className="mt-1 text-xs text-v2-fg-tertiary">{t.scoreGoalHelp}</p>
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                        <label htmlFor="janken-current-score" className="pt-1 text-xs font-medium text-v2-fg-secondary">
+                          {t.current}
+                        </label>
+                        <NumberInput
+                          id="janken-current-score"
+                          aria-label={`${t.current} ${t.scoreGoal}`}
+                          className="w-full max-w-40"
+                          grouped
+                          formatThousands
+                          min={0}
+                          value={progress.cumulativeScore}
+                          onValueChange={(value) => updateProgress({ cumulativeScore: Math.max(0, Math.trunc(value)) })}
+                        />
+                      </div>
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <fieldset aria-label={t.targetScore} className="m-0 flex flex-wrap gap-1 border-0 p-0">
+                            <ToggleChip
+                              pressed={goals.targetScore === null}
+                              ariaLabel={t.noGoal}
+                              onPressedChange={() => updateGoals({ targetScore: null })}
+                            >
+                              {t.noGoal}
+                            </ToggleChip>
+                            {scorePresets(config, studentUid).map(({ score, tier, rewardUid }) => (
+                              <ToggleChip
+                                key={score}
+                                pressed={goals.targetScore === score}
+                                ariaLabel={t.scorePreset(score, tier)}
+                                onPressedChange={() =>
+                                  updateGoals({ targetScore: goals.targetScore === score ? null : score })
+                                }
+                              >
+                                <span className="inline-flex items-center gap-1">
+                                  {rewardUid ? (
+                                    <span aria-hidden="true">
+                                      <ResourceThumb itemUid={rewardUid} name="" size="sm" />
+                                    </span>
+                                  ) : null}
+                                  {t.scorePreset(score, tier)}
+                                </span>
+                              </ToggleChip>
+                            ))}
+                          </fieldset>
+                          {goals.targetScore != null ? (
+                            <NumberInput
+                              id="janken-target-score"
+                              aria-label={t.targetScore}
+                              className="w-full max-w-40"
+                              grouped
+                              formatThousands
+                              min={0}
+                              value={goals.targetScore}
+                              onValueChange={(value) =>
+                                updateGoals({ targetScore: Math.max(0, Math.trunc(value)) || null })
+                              }
+                            />
+                          ) : null}
+                        </div>
+                      </div>
+                      {goals.targetScore != null ? (
+                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                          <label
+                            htmlFor="janken-average-score"
+                            className="pt-1 text-xs font-medium text-v2-fg-secondary"
+                          >
+                            {t.averageScoreShort}
+                          </label>
+                          <div
+                            className={`w-full max-w-40 rounded-md p-1 ${missingAverageScore ? "bg-v2-warning-subtle" : ""}`}
+                          >
+                            <NumberInput
+                              id="janken-average-score"
+                              aria-label={t.averageScore}
+                              className="w-full"
+                              grouped
+                              formatThousands
+                              min={0}
+                              value={goals.averageScore ?? ""}
+                              onValueChange={(value) =>
+                                updateGoals({ averageScore: Math.max(0, Math.trunc(value)) || null })
+                              }
+                            />
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
                   </article>
-                  <article className="rounded-lg bg-v2-surface p-v2-block-p sm:col-span-2">
-                    <h3 className="font-semibold">{t.clearedStages}</h3>
-                    <div className="mt-2 flex flex-wrap gap-1">
+
+                  <article className="p-v2-block-p">
+                    <header className="flex items-center justify-between gap-3">
+                      <h3 className="flex min-w-0 items-center gap-2 font-semibold">
+                        {config.equipmentUpgrade.costResource ? (
+                          <span aria-hidden="true">
+                            <ResourceThumb
+                              itemUid={config.equipmentUpgrade.costResource.resourceUid}
+                              name=""
+                              size="sm"
+                            />
+                          </span>
+                        ) : null}
+                        <span>{t.equipmentGoal}</span>
+                      </h3>
+                      {goals.targetEquipmentTier != null ? (
+                        <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
+                          <strong>
+                            {t.remainingCount(Math.max(0, equipmentRequired - progress.heldEquipmentCurrency))}
+                          </strong>
+                          <span className="ml-1 text-v2-fg-tertiary">{t.remainingCountSuffix}</span>
+                        </span>
+                      ) : null}
+                    </header>
+                    <p className="mt-1 text-xs text-v2-fg-tertiary">{t.equipmentGoalHint(config.equipments.length)}</p>
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <fieldset
+                            aria-label={t.currentEquipmentTier}
+                            className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
+                          >
+                            {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
+                              (tier) => (
+                                <ToggleChip
+                                  key={tier}
+                                  pressed={progress.equipmentTier === tier}
+                                  ariaLabel={t.equipmentGoalTier(tier)}
+                                  onPressedChange={() => updateProgress({ equipmentTier: tier })}
+                                >
+                                  T{tier}
+                                </ToggleChip>
+                              ),
+                            )}
+                          </fieldset>
+                          <label
+                            htmlFor="janken-held-equipment-currency"
+                            className="inline-flex items-center gap-2 whitespace-nowrap text-xs text-v2-fg-secondary"
+                          >
+                            {t.heldEquipmentCurrency}
+                            <NumberInput
+                              id="janken-held-equipment-currency"
+                              aria-label={t.heldEquipmentCurrency}
+                              className="w-28"
+                              grouped
+                              min={0}
+                              value={progress.heldEquipmentCurrency}
+                              onValueChange={(value) =>
+                                updateProgress({ heldEquipmentCurrency: Math.max(0, Math.trunc(value)) })
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
+                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                        <fieldset
+                          aria-label={t.equipmentGoal}
+                          className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
+                        >
+                          <ToggleChip
+                            pressed={goals.targetEquipmentTier === null}
+                            ariaLabel={t.noGoal}
+                            onPressedChange={() => updateGoals({ targetEquipmentTier: null })}
+                          >
+                            {t.noGoal}
+                          </ToggleChip>
+                          {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
+                            (tier) => (
+                              <ToggleChip
+                                key={tier}
+                                disabled={tier <= progress.equipmentTier && goals.targetEquipmentTier !== tier}
+                                pressed={goals.targetEquipmentTier === tier}
+                                ariaLabel={t.equipmentGoalTier(tier)}
+                                onPressedChange={() =>
+                                  updateGoals({ targetEquipmentTier: goals.targetEquipmentTier === tier ? null : tier })
+                                }
+                              >
+                                T{tier}
+                              </ToggleChip>
+                            ),
+                          )}
+                        </fieldset>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article className="p-v2-block-p">
+                    <header className="font-semibold">{t.clearedStages}</header>
+                    <div className="mt-3 flex flex-wrap gap-1">
                       {config.stages.map((stage) => {
                         const label = stageLabel(config, stage.uid) ?? t.challengeStage;
                         const cleared = progress.clearedStageUids.includes(stage.uid);
@@ -806,204 +721,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         );
                       })}
                     </div>
-                    <p className="mt-2 text-xs text-v2-fg-tertiary">{t.firstClearHelp}</p>
-                  </article>
-                </div>
-              </ShopSection>
-              <ShopSection title={t.goals} persistenceKey="event-shop-section::janken-goals" variant="shop">
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {studentUid ? (
-                    <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                      <h3 className="flex items-center gap-2 font-semibold">
-                        <ResourceThumb itemUid={studentUid} name={t.studentGrowth} size="sm" />
-                        {t.studentGoal}
-                      </h3>
-                      <p className="mt-3 text-xs text-v2-fg-secondary">{t.targetTier}</p>
-                      <fieldset
-                        aria-label={t.targetTier}
-                        className="m-0 mt-2 flex min-w-0 flex-wrap gap-1 border-0 p-0"
-                      >
-                        {[3, 4, 6, 7, 8, 9].map((tier) => (
-                          <ToggleChip
-                            key={tier}
-                            disabled={tier <= progress.currentTier && goals.targetTier !== tier}
-                            pressed={goals.targetTier === tier}
-                            ariaLabel={`${t.targetTier} ${t.tierLabel(tier)}`}
-                            onPressedChange={() => updateGoals({ targetTier: goals.targetTier === tier ? null : tier })}
-                          >
-                            <span className="flex items-center gap-1">
-                              {tier <= 5 ? (
-                                <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
-                              ) : (
-                                <SparklesIcon className="size-3.5 text-v2-fg-secondary" aria-hidden="true" />
-                              )}
-                              {tier <= 5 ? tier : tier - 5}
-                            </span>
-                          </ToggleChip>
-                        ))}
-                      </fieldset>
-                      {goals.targetTier != null ? (
-                        <div className="mt-3 rounded-md bg-v2-inset px-3 py-2">
-                          <p className="flex items-center gap-2 text-xs text-v2-fg-secondary">
-                            <ResourceThumb itemUid={studentUid} name={t.studentGrowth} size="sm" />
-                            {t.studentGrowthGoalDetail(
-                              t.tierLabel(progress.currentTier),
-                              growthTotalRequired,
-                              progress.heldEleph,
-                            )}
-                          </p>
-                          <p className="mt-1 text-xs text-v2-fg-tertiary">{t.remainingCount(growthNeeded)}</p>
-                        </div>
-                      ) : null}
-                    </article>
-                  ) : null}
-                  <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                    <h3 className="flex items-center gap-2 font-semibold">
-                      {shopUid ? <ResourceThumb itemUid={shopUid} name={t.shopCurrency} size="sm" /> : null}
-                      {t.shopGoal}
-                    </h3>
-                    <Switch
-                      id="janken-shop-linked"
-                      checked={goals.shopCurrencyMode === "linked"}
-                      onCheckedChange={(on) => updateGoals({ shopCurrencyMode: on ? "linked" : "manual" })}
-                      label={t.shopLinkedSwitch}
-                    />
-                    {shopUid && goals.shopCurrencyMode === "linked" ? (
-                      <p className="mt-2 rounded-md bg-v2-inset px-3 py-2 text-xs text-v2-fg-secondary">
-                        {t.shopLinkedBalance(
-                          linkedShopCurrencyTotal,
-                          linkedShopCurrencyOwned,
-                          linkedShopCurrencyRequired,
-                        )}
-                      </p>
-                    ) : null}
-                    {goals.shopCurrencyMode === "manual" ? (
-                      <>
-                        <label
-                          htmlFor="janken-manual-shop-currency"
-                          className="mt-3 block text-xs text-v2-fg-secondary"
-                        >
-                          {t.manualShopCurrency}
-                        </label>
-                        <NumberInput
-                          id="janken-manual-shop-currency"
-                          aria-label={t.manualShopCurrency}
-                          className="mt-1 w-full"
-                          grouped
-                          min={0}
-                          value={goals.manualShopCurrency}
-                          onValueChange={(manualShopCurrency) =>
-                            updateGoals({ manualShopCurrency: Math.max(0, Math.trunc(manualShopCurrency)) })
-                          }
-                        />
-                      </>
-                    ) : null}
-                  </article>
-                  <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                    <h3 className="font-semibold">{t.scoreGoal}</h3>
-                    <label htmlFor="janken-target-score" className="mt-2 block text-xs text-v2-fg-secondary">
-                      {t.targetScore}
-                    </label>
-                    <NumberInput
-                      id="janken-target-score"
-                      aria-label={t.targetScore}
-                      className="mt-1 w-full"
-                      grouped
-                      formatThousands
-                      min={0}
-                      value={goals.targetScore ?? 0}
-                      onValueChange={(targetScore) =>
-                        updateGoals({ targetScore: Math.max(0, Math.trunc(targetScore)) || null })
-                      }
-                    />
-                    <div className="mt-2 flex flex-wrap gap-1">
-                      {scorePresets(config, studentUid).map(({ score, tier }) => (
-                        <ToggleChip
-                          key={score}
-                          pressed={goals.targetScore === score}
-                          ariaLabel={t.scorePreset(score, tier)}
-                          onPressedChange={() =>
-                            updateGoals({ targetScore: goals.targetScore === score ? null : score })
-                          }
-                        >
-                          {t.scorePreset(score, tier)}
-                        </ToggleChip>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex items-center justify-between gap-2">
-                      <label htmlFor="janken-average-score" className="text-xs text-v2-fg-secondary">
-                        {t.averageScore}
-                      </label>
-                      {planned?.status === "score-input-required" ? (
-                        <span
-                          id="janken-average-score-required"
-                          role="status"
-                          className="text-xs font-medium text-v2-warning"
-                        >
-                          {t.scoreInputRequired}
-                        </span>
-                      ) : null}
-                    </div>
-                    <NumberInput
-                      id="janken-average-score"
-                      aria-label={t.averageScore}
-                      aria-describedby={
-                        planned?.status === "score-input-required" ? "janken-average-score-required" : undefined
-                      }
-                      className="mt-1 w-full"
-                      grouped
-                      formatThousands
-                      min={0}
-                      value={goals.averageScore ?? ""}
-                      onValueChange={(averageScore) =>
-                        updateGoals({ averageScore: Math.max(0, Math.trunc(averageScore)) || null })
-                      }
-                    />
-                    <p className="mt-2 rounded-md bg-v2-inset px-3 py-2 text-xs text-v2-fg-tertiary">
-                      {t.scoreProgress(
-                        progress.cumulativeScore,
-                        Math.max(0, (goals.targetScore ?? 0) - progress.cumulativeScore),
-                      )}
-                    </p>
-                  </article>
-                  <article className="rounded-lg bg-v2-surface p-v2-block-p">
-                    <h3 className="font-semibold">{t.equipmentGoal}</h3>
-                    <p className="mt-3 text-xs text-v2-fg-secondary">{t.equipmentTargetTier}</p>
-                    <fieldset
-                      aria-label={t.equipmentTargetTier}
-                      className="m-0 mt-2 flex min-w-0 flex-wrap gap-1 border-0 p-0"
-                    >
-                      {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, i) => i + 1).map((tier) => (
-                        <ToggleChip
-                          key={tier}
-                          disabled={tier <= progress.equipmentTier && goals.targetEquipmentTier !== tier}
-                          pressed={goals.targetEquipmentTier === tier}
-                          ariaLabel={t.equipmentGoalTier(tier)}
-                          onPressedChange={() =>
-                            updateGoals({ targetEquipmentTier: goals.targetEquipmentTier === tier ? null : tier })
-                          }
-                        >
-                          T{tier}
-                        </ToggleChip>
-                      ))}
-                    </fieldset>
-                    <p className="mt-2 text-xs text-v2-fg-tertiary">{t.equipmentBatchHelp}</p>
-                    {goals.targetEquipmentTier != null ? (
-                      <div className="mt-2 flex items-center gap-2 rounded-md bg-v2-inset px-3 py-2 text-xs text-v2-fg-secondary">
-                        {config.equipmentUpgrade.costResource ? (
-                          <ResourceThumb
-                            itemUid={config.equipmentUpgrade.costResource.resourceUid}
-                            name={t.equipmentCurrency}
-                            size="sm"
-                          />
-                        ) : null}
-                        {t.equipmentRequirement(
-                          equipmentRequired,
-                          progress.heldEquipmentCurrency,
-                          Math.max(0, equipmentRequired - progress.heldEquipmentCurrency),
-                        )}
-                      </div>
-                    ) : null}
+                    <p className="mt-2 text-xs text-v2-fg-tertiary">{t.clearedStagesHelp}</p>
                   </article>
                 </div>
               </ShopSection>
@@ -1012,8 +730,6 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                   <StatusNotice tone="neutral">{t.scoreAverageRequired}</StatusNotice>
                 ) : planned?.status === "invalid" ? (
                   <StatusNotice tone="danger">{t.invalid}</StatusNotice>
-                ) : planned?.status === "available" && planned.planSteps.length === 0 ? (
-                  <StatusNotice tone="neutral">{t.allGoalsMet}</StatusNotice>
                 ) : planned?.status === "available" ? (
                   <ol className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
                     <li className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 p-3">
@@ -1257,93 +973,93 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       <PageAside>
         <PanelSheet panelId="janken-summary" title={t.summary} Icon={FlagIcon} defaultExpanded>
           <p className="text-xs text-v2-fg-tertiary">{t.entryCurrencyRequired}</p>
-          <p className="text-2xl font-bold tabular-nums">
-            {planned?.status === "available" ? planned.entryCost.toLocaleString() : "—"}
+          <p className="flex items-center gap-2 text-2xl font-bold tabular-nums">
+            {planned.entryResourceUid ? (
+              <ResourceThumb itemUid={planned.entryResourceUid} name={t.entryCurrency} size="sm" />
+            ) : null}
+            {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"}
           </p>
           <p className="mt-3 text-xs text-v2-fg-tertiary">{t.requiredApTitle}</p>
-          <p className="mt-1 text-lg font-semibold">{ap == null ? "—" : t.approximateAp(ap)}</p>
-          <div className="mt-3 border-t border-v2-divider pt-3">
-            {goalRows.map((row) => (
-              <div key={row.label} className="flex items-center justify-between gap-2 py-1 text-sm">
-                <span className="flex items-center gap-2 break-keep">
-                  {row.iconUid ? (
-                    <ResourceThumb itemUid={row.iconUid} name={row.label} size="sm" />
-                  ) : row.iconKind === "score" ? (
-                    <FlagIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
-                  ) : null}
-                  {row.label}
-                </span>
-                <span className="flex items-center gap-1 whitespace-nowrap font-semibold tabular-nums">
-                  {row.iconKind === "score" ? t.scoreInMan(row.have) : row.have.toLocaleString()} /{" "}
-                  {row.iconKind === "score" ? t.scoreInMan(row.need) : row.need.toLocaleString()}{" "}
-                  {row.done ? (
-                    <span role="img" className="whitespace-nowrap text-v2-success" aria-label={t.achieved}>
-                      ✓
-                    </span>
-                  ) : (
-                    <span
-                      role="img"
-                      aria-label={t.notAchieved}
-                      className="inline-flex items-center gap-1 whitespace-nowrap text-v2-danger"
-                    >
-                      <ExclamationCircleIcon className="size-4" aria-hidden="true" />
-                      <span>{t.notAchieved}</span>
-                    </span>
-                  )}
-                </span>
-              </div>
-            ))}
-            <p className="mt-2 text-xs text-v2-fg-tertiary">{t.goalBalanceHelp}</p>
-          </div>
-          <Button
-            variant="primary"
-            className="mt-4 w-full"
-            disabled={planned?.status !== "available" || (applied && !hasUnsavedPlannerEntry) || isApplying}
-            onClick={apply}
+          <p className="mt-1 text-lg font-semibold">
+            {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
+          </p>
+          <p className="mt-3 text-xs text-v2-fg-secondary">
+            {missingAverageScore ? t.scoreAverageSummary : t.summarySync}
+          </p>
+          <Link
+            className={`${v2ButtonClassName({ variant: "secondary" })} mt-3 w-full`}
+            to={`/events/${loaderData.eventUid}/shop`}
           >
-            {applied && !hasUnsavedPlannerEntry ? t.applied : t.applyPlan}
-          </Button>
-          <p className="mt-2 text-xs text-v2-fg-tertiary">{t.applyPlanHelp}</p>
+            {t.shopCalculatorLink}
+          </Link>
+          {persistence.isSaving ? (
+            <p role="status" className="mt-3 text-xs text-v2-fg-tertiary">
+              {t.saving}
+            </p>
+          ) : null}
+          {persistence.saveError ? (
+            <StatusNotice
+              className="mt-3"
+              tone="danger"
+              action={
+                <Button
+                  size="sm"
+                  onClick={persistence.retrySave}
+                >
+                  {t.retrySave}
+                </Button>
+              }
+            >
+              {t.saveFailed}
+            </StatusNotice>
+          ) : null}
+          {!planContext.signedIn ? (
+            <p className="mt-3 text-xs text-v2-fg-tertiary">
+              {t.guestLoginHelp}{" "}
+              <Button variant="link" size="sm" className="inline-flex" onClick={showSignIn}>
+                {t.login}
+              </Button>
+            </p>
+          ) : null}
         </PanelSheet>
-        <div className="mt-3">
-          <AsideLinks
-            items={[
-              {
-                key: "shop",
-                title: t.shopCalculator,
-                description: t.shopCalculatorDescription,
-                to: `/events/${loaderData.eventUid}/shop`,
-                Icon: FlagIcon,
-              },
-            ]}
-          />
-        </div>
       </PageAside>
       {stacked ? (
         <PageActionBar
           placement="fixed"
+          className="janken-mobile-action-bar"
           summary={
-            <span className="text-sm font-semibold">
-              <span className="flex items-center gap-1">
-                {planned?.entryResourceUid ? (
+            <div className="space-y-1">
+              <span className="flex items-center gap-1 text-sm font-semibold tabular-nums">
+                {planned.entryResourceUid ? (
                   <ResourceThumb itemUid={planned.entryResourceUid} name={t.entryCurrency} size="sm" />
                 ) : null}
-                {planned?.status === "available" ? planned.entryCost.toLocaleString() : "—"} ·{" "}
-                {ap == null ? "—" : t.approximateAp(ap)}
+                {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"} ·{" "}
+                {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
               </span>
-              <span className="text-xs font-normal text-v2-fg-tertiary">
-                {t.goalCountSummary(goalRows.length, achievedCount)}
+              <span className="block text-xs font-normal text-v2-fg-tertiary">
+                {persistence.saveError
+                  ? t.saveFailed
+                  : persistence.isSaving
+                    ? t.saving
+                    : missingAverageScore
+                      ? t.scoreAverageSummary
+                      : t.mobileSync}
               </span>
-            </span>
+            </div>
           }
         >
-          <Button
-            variant={applied ? "secondary" : "primary"}
-            disabled={planned?.status !== "available" || (applied && !hasUnsavedPlannerEntry) || isApplying}
-            onClick={apply}
-          >
-            {applied && !hasUnsavedPlannerEntry ? t.applied : t.applyPlan}
-          </Button>
+          {persistence.saveError ? (
+            <Button
+              variant="secondary"
+              onClick={persistence.retrySave}
+            >
+              {t.retrySave}
+            </Button>
+          ) : (
+            <Link className={v2ButtonClassName({ variant: "secondary" })} to={`/events/${loaderData.eventUid}/shop`}>
+              {t.mobileShopCalculatorLink}
+            </Link>
+          )}
         </PageActionBar>
       ) : null}
     </>

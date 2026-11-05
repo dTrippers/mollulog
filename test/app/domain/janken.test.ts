@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
 import {
+  deriveJankenPlan,
   evaluateJankenPlan,
   getJankenResourceRoles,
   getJankenScoreRewardWindow,
@@ -8,6 +9,7 @@ import {
   getJankenStudentGrowthUid,
   planJanken,
 } from "~/domain/event-shop/janken";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { janken860Fixture } from "./fixtures/janken-860";
 
@@ -57,6 +59,121 @@ describe("janken score reward window", () => {
 });
 
 describe("event 860 janken planning", () => {
+  it("derives an available plan from the planner entry", () => {
+    const entry: JankenPlannerEntry = {
+      progress: { ...progress, cumulativeScore: 100_000 },
+      goals: {
+        ...goals,
+        targetTier: 6,
+        shopCurrencyMode: "manual",
+        manualShopCurrency: 20,
+        targetScore: 500_000,
+        averageScore: 200_000,
+        targetEquipmentTier: 3,
+      },
+    };
+    const input = {
+      shopCurrencyRequired: 0,
+      shopCurrencyResourceUid: "80863",
+      studentGrowthResourceUid: "26016",
+    };
+    const derived = deriveJankenPlan(janken860Fixture, entry, { currentTier: 1, heldEleph: 0 }, input);
+    const planned = planJanken(janken860Fixture, {
+      progress: entry.progress,
+      goals: entry.goals,
+      shopCurrencyRequired: input.shopCurrencyRequired,
+      studentGrowthTotalRequired: 220,
+      shopCurrencyResourceUid: input.shopCurrencyResourceUid,
+      studentGrowthResourceUid: input.studentGrowthResourceUid,
+    });
+    const evaluated = evaluateJankenPlan(janken860Fixture, {
+      stagePlays: derived.stagePlays,
+      clearedStageUids: entry.progress.clearedStageUids,
+      currentScore: entry.progress.cumulativeScore,
+      averageScore: entry.goals.averageScore,
+      targetScore: entry.goals.targetScore,
+    });
+
+    expect({
+      status: derived.status,
+      stagePlays: derived.stagePlays,
+      entryCost: derived.entryCost,
+      rewards: derived.rewards,
+    }).toEqual({
+      status: "available",
+      stagePlays: planned.stagePlays,
+      entryCost: planned.entryCost,
+      rewards: planned.rewards,
+    });
+    expect({ entryCost: evaluated.entryCost, rewards: evaluated.rewards }).toEqual({
+      entryCost: derived.entryCost,
+      rewards: derived.rewards,
+    });
+  });
+
+  it("uses the shared default entry when no planner entry exists", () => {
+    const defaults = { currentTier: 3, heldEleph: 45 };
+    const derived = deriveJankenPlan(janken860Fixture, null, defaults, {
+      shopCurrencyRequired: 20,
+      shopCurrencyResourceUid: "80863",
+      studentGrowthResourceUid: "26016",
+    });
+    const defaultEntry = {
+      progress: {
+        ...progress,
+        ...defaults,
+        cumulativeScore: 0,
+        equipmentTier: 1,
+        heldEquipmentCurrency: 0,
+        clearedStageUids: [],
+      },
+      goals,
+    };
+    const planned = planJanken(janken860Fixture, {
+      progress: defaultEntry.progress,
+      goals: defaultEntry.goals,
+      shopCurrencyRequired: 20,
+      studentGrowthTotalRequired: 0,
+      shopCurrencyResourceUid: "80863",
+      studentGrowthResourceUid: "26016",
+    });
+
+    expect(derived).toMatchObject({
+      status: "available",
+      stagePlays: planned.stagePlays,
+      entryCost: planned.entryCost,
+      rewards: planned.rewards,
+      planSteps: planned.planSteps,
+    });
+    expect(derived.stagePlays["100860101"]).toBe(1);
+  });
+
+  it("clears all derived plays while a score goal is missing its average", () => {
+    const entry: JankenPlannerEntry = {
+      progress,
+      goals: { ...goals, targetScore: 1_000_000, averageScore: null },
+    };
+    const derived = deriveJankenPlan(
+      janken860Fixture,
+      entry,
+      { currentTier: 1, heldEleph: 0 },
+      {
+        shopCurrencyRequired: 20,
+        shopCurrencyResourceUid: "80863",
+        studentGrowthResourceUid: "26016",
+      },
+    );
+
+    expect(derived).toMatchObject({
+      status: "score-input-required",
+      stagePlays: {},
+      entryCost: 0,
+      entryResourceUid: null,
+      rewards: {},
+      planSteps: [],
+    });
+  });
+
   it("uses expected default rewards and adds an uncleared stage first-clear once", () => {
     const result = evaluateJankenPlan(janken860Fixture, {
       stagePlays: { "100860204": 2 },

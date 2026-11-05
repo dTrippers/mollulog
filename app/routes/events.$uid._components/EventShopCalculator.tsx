@@ -30,7 +30,7 @@ import {
   buildResourceBreakdownLines,
 } from "~/domain/event-shop/calculations/resource-breakdown-lines";
 import { calculateBoughtResourceQuantities } from "~/domain/event-shop/calculations/shop-rewards";
-import { evaluateJankenPlan, getJankenResourceRoles } from "~/domain/event-shop/janken";
+import { getJankenResourceRoles } from "~/domain/event-shop/janken";
 import { calculateMinigameRewards, hasVariableMinigamePayment, resourceCountLabel } from "~/domain/event-shop/utils";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
@@ -465,15 +465,48 @@ export default function EventShopCalculator() {
 
 function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; config: MinigameConfig }) {
   const janken = config.janken ?? { status: "unavailable" as const };
-  if (janken.status === "unavailable") return <StatusNotice tone="neutral">{jankenLocale.unavailable}</StatusNotice>;
-  if (janken.status === "invalid") return <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice>;
-  const plays = plan.state.jankenStagePlays;
-  const evaluated = evaluateJankenPlan(janken, {
-    stagePlays: plays,
-    clearedStageUids: plan.jankenClearedStageUids,
-    currentScore: plan.jankenScore.currentScore,
-    averageScore: plan.jankenScore.averageScore,
-  });
+  const liveEntry = plan.jankenEntry;
+  const goals = liveEntry.goals;
+  const planned = plan.jankenPlan;
+  const hasGoals =
+    goals.targetTier != null ||
+    goals.targetScore != null ||
+    goals.targetEquipmentTier != null ||
+    goals.shopCurrencyMode === "manual";
+  const settings = (
+    <AsideLinks
+      items={[
+        {
+          key: "janken-planner",
+          title: jankenLocale.shopPlanner,
+          description: hasGoals ? jankenLocale.shopPlannerDescription : jankenLocale.shopPlannerFirstVisitDescription,
+          Icon: CalculatorIcon,
+          to: `/events/${plan.eventUid}/shop/janken`,
+        },
+      ]}
+    />
+  );
+  if (planned.status === "score-input-required") {
+    return (
+      <div className="space-y-v2-group-gap">
+        <StatusNotice tone="warning">{jankenLocale.shopAverageMissingWarning}</StatusNotice>
+        {settings}
+      </div>
+    );
+  }
+  if (janken.status !== "available" || planned.status !== "available") {
+    return (
+      <div className="space-y-v2-group-gap">
+        <StatusNotice tone={janken.status === "invalid" || planned.status === "invalid" ? "danger" : "neutral"}>
+          {janken.status === "invalid" || planned.status === "invalid"
+            ? jankenLocale.invalid
+            : jankenLocale.unavailable}
+        </StatusNotice>
+        {settings}
+      </div>
+    );
+  }
+
   const roles = getJankenResourceRoles(
     janken,
     plan.shopResources.map(({ paymentResource }) => paymentResource.uid),
@@ -485,123 +518,112 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
       : stage.stageType === "normal"
         ? jankenLocale.normalStage(stage.stageNumber)
         : jankenLocale.challengeStage;
-  const challengePlays = janken.stages.find(({ stageType }) => stageType === "challenge");
-  const challengePlayCount = challengePlays ? (plays[challengePlays.uid] ?? 0) : 0;
-  const resourceLabel = (uid: string) =>
-    uid === roles.entryUid
-      ? jankenLocale.entryCurrency
-      : uid === roles.shopUid
-        ? jankenLocale.shopCurrency
-        : uid === roles.equipmentUid
-          ? jankenLocale.equipmentCurrency
-          : uid === roles.studentUid
-            ? jankenLocale.studentGrowth
-            : jankenLocale.otherReward;
+  const playedStages = janken.stages.filter((stage) => (planned.stagePlays[stage.uid] ?? 0) > 0);
+  const challenge = janken.stages.find(({ stageType }) => stageType === "challenge");
+  const challengePlayCount = challenge ? (planned.stagePlays[challenge.uid] ?? 0) : 0;
+  const targetLabels = [
+    ...(goals.shopCurrencyMode === "linked"
+      ? [jankenLocale.shopCurrencyTarget]
+      : goals.manualShopCurrency > 0
+        ? [jankenLocale.shopCurrencyTargetAmount(goals.manualShopCurrency)]
+        : []),
+    ...(goals.targetTier == null ? [] : [jankenLocale.studentGoalTarget(jankenLocale.tierLabel(goals.targetTier))]),
+    ...(goals.targetScore == null ? [] : [jankenLocale.scoreGoalTarget(goals.targetScore)]),
+    ...(goals.targetEquipmentTier == null ? [] : [jankenLocale.equipmentGoalTarget(goals.targetEquipmentTier)]),
+  ];
+  const rewardItems = [
+    ...janken.stages.flatMap((stage) => stage.rewards),
+    ...janken.scoreRewards.flatMap((tier) => tier.rewards),
+  ];
+  const firstRewardByUid = new Map<string, (typeof rewardItems)[number]>();
+  for (const reward of rewardItems)
+    if (!firstRewardByUid.has(reward.resourceUid)) firstRewardByUid.set(reward.resourceUid, reward);
+  const roleOrder = [roles.studentUid, roles.shopUid, roles.equipmentUid].filter((uid): uid is string => uid !== null);
+  const rewards = Object.entries(planned.rewards)
+    .filter(([, quantity]) => quantity > 0)
+    .sort(([left], [right]) => {
+      const leftRole = roleOrder.indexOf(left);
+      const rightRole = roleOrder.indexOf(right);
+      if (leftRole >= 0 || rightRole >= 0)
+        return (leftRole < 0 ? Infinity : leftRole) - (rightRole < 0 ? Infinity : rightRole);
+      return (
+        rewardItems.findIndex(({ resourceUid }) => resourceUid === left) -
+        rewardItems.findIndex(({ resourceUid }) => resourceUid === right)
+      );
+    });
+  const score = liveEntry.progress.cumulativeScore;
+  const projectedScore = score + challengePlayCount * (goals.averageScore ?? 0);
+  const formatQuantity = (quantity: number) =>
+    new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity);
+
   return (
     <div className="space-y-v2-group-gap">
-      <div className="overflow-x-auto rounded-md bg-v2-surface">
-        <table className="w-full min-w-[32rem] text-left text-sm">
-          <thead className="text-xs text-v2-fg-tertiary">
-            <tr>
-              <th className="p-2">{jankenLocale.shopStage}</th>
-              <th className="p-2 text-right">{jankenLocale.shopEntryCost}</th>
-              <th className="w-48 p-2 text-right">{jankenLocale.playCount}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {janken.stages.map((stage) => (
-              <tr key={stage.uid} className="border-t border-v2-divider">
-                <th scope="row" className="p-2">
-                  <span className="rounded bg-v2-inset px-2 py-1">{stageLabel(stage)}</span>
-                </th>
-                <td className="p-2 text-right tabular-nums text-v2-fg-secondary">
-                  {stage.entryCost.quantity.toLocaleString()}
-                </td>
-                <td className="p-2">
-                  <NumberInput
-                    id={`janken-play-${stage.uid}`}
-                    aria-label={jankenLocale.stagePlayCount(stageLabel(stage))}
-                    grouped
-                    min={0}
-                    value={plays[stage.uid] ?? 0}
-                    onValueChange={(value) => {
-                      const next = { ...plays };
-                      const count = Math.max(0, Math.trunc(value));
-                      if (count === 0) delete next[stage.uid];
-                      else next[stage.uid] = count;
-                      plan.actions.setJankenStagePlays(next);
-                    }}
-                  />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <section className="rounded-lg bg-v2-surface p-v2-block-p">
+        <header className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold">{jankenLocale.playCount}</h3>
+          <span className="text-xs text-v2-fg-tertiary">{jankenLocale.shopPlanCalculated}</span>
+        </header>
+        <p className="mt-2 text-xs text-v2-fg-secondary">
+          {jankenLocale.shopTargetSummary(targetLabels.length > 0 ? targetLabels : [jankenLocale.shopCurrencyTarget])}
+        </p>
+        <ul className="mt-3 divide-y divide-v2-divider">
+          {playedStages.map((stage) => (
+            <li key={stage.uid} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+              <span className="whitespace-nowrap rounded-md bg-v2-inset px-2 py-1 text-sm font-medium">
+                {stageLabel(stage)}
+              </span>
+              <span className="flex items-center gap-3 text-sm tabular-nums">
+                <span>{jankenLocale.playCountBadge(planned.stagePlays[stage.uid] ?? 0)}</span>
+                <span className="flex items-center gap-1 text-v2-fg-secondary">
+                  <ResourceThumb itemUid={stage.entryCost.resourceUid} name={jankenLocale.entryCurrency} size="sm" />
+                  {(stage.entryCost.quantity * (planned.stagePlays[stage.uid] ?? 0)).toLocaleString()}
+                </span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      {settings}
       {challengePlayCount > 0 ? (
-        plan.jankenScore.averageScore != null && plan.jankenScore.averageScore > 0 ? (
-          <div>
-            <p className="text-sm font-medium">
-              {jankenLocale.shopScoreBasis(
-                plan.jankenScore.currentScore,
-                plan.jankenScore.currentScore + challengePlayCount * plan.jankenScore.averageScore,
-              )}
-            </p>
-            <p className="mt-1 text-xs text-v2-fg-tertiary">{jankenLocale.shopScoreBasisHelp}</p>
-          </div>
-        ) : (
-          <StatusNotice tone="neutral">{jankenLocale.shopScoreAverageMissing}</StatusNotice>
-        )
+        <p className="text-sm font-medium">{jankenLocale.shopScoreBasis(score, projectedScore)}</p>
       ) : null}
-      {evaluated.status === "invalid" ? <StatusNotice tone="danger">{jankenLocale.invalid}</StatusNotice> : null}
-      <p className="text-xs text-v2-fg-tertiary">{jankenLocale.shopFirstClearHelp}</p>
-      {Object.keys(plays).length > 0 && evaluated.status === "available" ? (
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div className="rounded-md bg-v2-inset p-3">
+      {playedStages.length > 0 ? (
+        <div className="grid items-start gap-3 sm:grid-cols-2">
+          <div className="rounded-lg bg-v2-surface p-v2-block-p">
             <p className="text-xs text-v2-fg-secondary">{jankenLocale.entryCurrencyRequired}</p>
-            <p className="mt-1 text-lg font-semibold tabular-nums">{evaluated.entryCost.toLocaleString()}</p>
+            <p className="mt-1 flex items-center gap-2 text-lg font-semibold tabular-nums">
+              {planned.entryResourceUid ? (
+                <ResourceThumb itemUid={planned.entryResourceUid} name={jankenLocale.entryCurrency} size="sm" />
+              ) : null}
+              {planned.entryCost.toLocaleString()}
+            </p>
           </div>
-          <div className="rounded-md bg-v2-inset p-3">
+          <div className="rounded-lg bg-v2-surface p-v2-block-p">
             <p className="text-xs text-v2-fg-secondary">{jankenLocale.expectedRewards}</p>
-            <ul className="mt-2 space-y-2">
-              {Object.entries(evaluated.rewards)
-                .filter(([, quantity]) => quantity > 0)
-                .map(([uid, quantity]) => (
-                  <li key={uid} className="flex items-center justify-between gap-2">
-                    <span className="flex items-center gap-2">
-                      <ResourceThumb
-                        itemUid={uid}
-                        resourceType={
-                          [
-                            ...janken.stages.flatMap((stage) => stage.rewards),
-                            ...janken.scoreRewards.flatMap((tier) => tier.rewards),
-                          ].find((reward) => reward.resourceUid === uid)?.resourceType
-                        }
-                        name={resourceLabel(uid)}
-                        size="sm"
-                      />
-                      {resourceLabel(uid)}
-                    </span>
-                    <span className="tabular-nums">
-                      {new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity)}
-                    </span>
+            <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {rewards.map(([uid, quantity]) => {
+                const reward = firstRewardByUid.get(uid);
+                if (!reward) return null;
+                return (
+                  <li key={uid} className="flex items-center justify-center rounded-md bg-v2-inset p-2">
+                    <ResourceThumb
+                      itemUid={uid}
+                      resourceType={reward.resourceType}
+                      name={reward.resourceName}
+                      imageUrl={reward.imageUrl ?? undefined}
+                      rarity={reward.rarity ?? null}
+                      label={formatQuantity(quantity)}
+                      tooltip
+                      nameTooltip
+                      size="lg"
+                    />
                   </li>
-                ))}
+                );
+              })}
             </ul>
           </div>
         </div>
       ) : null}
-      <AsideLinks
-        items={[
-          {
-            key: "janken-planner",
-            title: jankenLocale.shopPlanner,
-            description: jankenLocale.shopPlannerDescription,
-            Icon: CalculatorIcon,
-            to: `/events/${plan.eventUid}/shop/janken`,
-          },
-        ]}
-      />
     </div>
   );
 }

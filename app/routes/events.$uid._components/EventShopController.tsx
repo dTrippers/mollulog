@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Outlet, useLoaderData, useRevalidator } from "react-router";
 import { PageMain } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
@@ -9,6 +9,7 @@ import type { JankenPlannerEntry } from "~/domain/planner-state";
 import { useEventShopPlan } from "~/lib/event-shop/useEventShopPlan";
 import { type GuestPlannerSnapshot, readGuestPlanner, subscribeGuestPlanner } from "~/lib/guest-planner.client";
 import type { loader } from "../events.$uid.shop";
+import { useJankenPlannerPersistence } from "./useJankenPlannerPersistence";
 
 export default function EventShopController() {
   const data = useLoaderData<typeof loader>();
@@ -82,13 +83,6 @@ export default function EventShopController() {
 
 type ReadyEventShopData = Extract<Awaited<ReturnType<typeof loader>>, { status: "ready" }>;
 
-function scoreForJankenEntry(entry: JankenPlannerEntry | null) {
-  return {
-    currentScore: entry?.progress.cumulativeScore ?? 0,
-    averageScore: entry?.goals.averageScore ?? null,
-  };
-}
-
 function ReadyEventShopController({
   data,
   savedShopState,
@@ -100,46 +94,12 @@ function ReadyEventShopController({
   savedJankenEntry: JankenPlannerEntry | null;
   guestPlannerStatus: "ready" | "memory" | "conflict" | "corrupt" | "unavailable" | "loading" | "none";
 }) {
-  const [jankenClearedStageUids, setJankenClearedStageUids] = useState<string[]>(
-    savedJankenEntry?.progress.clearedStageUids ?? [],
-  );
-  const [jankenScore, setJankenScore] = useState(() => scoreForJankenEntry(savedJankenEntry));
-  const localJankenScoreRef = useRef(jankenScore);
-  const savedJankenScoreRef = useRef(scoreForJankenEntry(savedJankenEntry));
-  const scoreShopStateUidRef = useRef(data.shopStateUid);
-  const setLiveJankenScore = useCallback((score: typeof jankenScore) => {
-    localJankenScoreRef.current = score;
-    setJankenScore(score);
-  }, []);
-  const savedCurrentScore = savedJankenEntry?.progress.cumulativeScore ?? 0;
-  const savedAverageScore = savedJankenEntry?.goals.averageScore ?? null;
-  const savedJankenProgress = useMemo(
-    () => ({
-      shopStateUid: data.shopStateUid,
-      clearedStageUids: savedJankenEntry?.progress.clearedStageUids ?? [],
-    }),
-    [data.shopStateUid, savedJankenEntry],
-  );
-  useEffect(() => {
-    setJankenClearedStageUids(savedJankenProgress.clearedStageUids);
-  }, [savedJankenProgress]);
-  useEffect(() => {
-    const nextSavedScore = { currentScore: savedCurrentScore, averageScore: savedAverageScore };
-    const previousSavedScore = savedJankenScoreRef.current;
-    const localMatchesPrevious =
-      localJankenScoreRef.current.currentScore === previousSavedScore.currentScore &&
-      localJankenScoreRef.current.averageScore === previousSavedScore.averageScore;
-    const localMatchesNext =
-      localJankenScoreRef.current.currentScore === nextSavedScore.currentScore &&
-      localJankenScoreRef.current.averageScore === nextSavedScore.averageScore;
-    const shopChanged = scoreShopStateUidRef.current !== data.shopStateUid;
-    scoreShopStateUidRef.current = data.shopStateUid;
-    savedJankenScoreRef.current = nextSavedScore;
-    if (shopChanged || localMatchesPrevious || localMatchesNext) {
-      localJankenScoreRef.current = nextSavedScore;
-      setJankenScore(nextSavedScore);
-    }
-  }, [data.shopStateUid, savedCurrentScore, savedAverageScore]);
+  const jankenPersistence = useJankenPlannerPersistence({
+    shopStateUid: data.shopStateUid,
+    signedIn: data.signedIn,
+    defaultProgress: data.jankenDefaultProgress,
+    savedEntry: savedJankenEntry,
+  });
   const controller = useEventShopPlan({
     stages: data.stages,
     shopResources: data.shopResources,
@@ -155,10 +115,11 @@ function ReadyEventShopController({
     guestPlannerStatus,
     minigameConfig: data.minigameConfig,
     jankenStudentGrowthUid: data.jankenStudentGrowthUid,
-    jankenClearedStageUids,
-    jankenScore,
-    setJankenScore: setLiveJankenScore,
-    setJankenClearedStageUids,
+    jankenEntry: jankenPersistence.entry,
+    savedJankenEntry: jankenPersistence.savedEntry,
+    setJankenEntry: jankenPersistence.setEntry,
+    jankenDefaultProgress: data.jankenDefaultProgress,
+    jankenPersistence: jankenPersistence.persistence,
   });
   return <Outlet context={controller.plan} />;
 }

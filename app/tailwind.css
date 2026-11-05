@@ -997,6 +997,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     display: flex;
   }
 
+  .janken-mobile-action-bar {
+    display: none;
+  }
+
   .v2-action-bar {
     display: none;
   }

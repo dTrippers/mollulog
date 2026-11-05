@@ -75,9 +75,10 @@ describe("PostgreSQL event shop state", () => {
     const savedState = {
       ...createDefaultEventShopState([], ["student-1"]),
       itemQuantities: { "daily-ticket": 60 },
-      jankenStagePlays: { "100860204": 2 },
     };
-    const client = createProjectionClient([{ uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...savedState }]);
+    const client = createProjectionClient([
+      { uid: "shop-state-1", userId: 7, eventUid: "shop-1", ...savedState, jankenStagePlays: { "100860204": 2 } },
+    ]);
 
     const states = await getEventShopStates(env, 7, ["shop-1", "shop-2", "shop-1"], {
       createClient: () => client as unknown as Client,
@@ -95,7 +96,6 @@ describe("PostgreSQL event shop state", () => {
       itemQuantities: { "daily-ticket": 60 },
       itemPurchaseDays: { "daily-ticket": 1 },
       minigamePlayCount: 3,
-      jankenStagePlays: { "100860204": 3, "100860301": 1 },
     };
 
     await upsertPostgresEventShopState(env, 7, "event-1", state, {
@@ -142,7 +142,6 @@ describe("PostgreSQL event shop state", () => {
       itemPurchaseDays: { "daily-ticket": 2 },
       existingPaymentItemQuantities: { "currency-1": 10 },
       minigamePlayCount: 3,
-      jankenStagePlays: {},
     };
     const client = createProjectionClient([
       { uid: "fallback-state", userId: 7, eventUid: fallbackEventUid, ...baseState },
@@ -167,7 +166,6 @@ describe("PostgreSQL event shop state", () => {
       itemPurchaseDays: { "daily-ticket": 2 },
       existingPaymentItemQuantities: { "currency-1": 42 },
       minigamePlayCount: 3,
-      jankenStagePlays: {},
     });
     expect(document.eventShops[fallbackEventUid]).toEqual(baseState);
     expectNoLegacyShopStateStatements(client);
@@ -247,7 +245,6 @@ describe("PostgreSQL event shop state", () => {
       itemPurchaseDays: { "daily-ticket": 4 },
       enabledStages: { "stage-fallback": false },
       minigamePlayCount: 7,
-      jankenStagePlays: {},
       existingPaymentItemQuantities: { "currency-1": 10 },
     };
     const defaultState: EventShopState = {
@@ -272,7 +269,6 @@ describe("PostgreSQL event shop state", () => {
       selectedBonusStudentUids: ["student-fallback"],
       enabledStages: { "stage-fallback": false },
       minigamePlayCount: 7,
-      jankenStagePlays: {},
       existingPaymentItemQuantities: { "currency-1": 42 },
     });
     expect(document.eventShops[fallbackEventUid]).toEqual(fallbackState);
@@ -318,7 +314,6 @@ describe("PostgreSQL event shop state", () => {
       itemQuantities: { "daily-ticket": 60 },
       itemPurchaseDays: { "daily-ticket": 1 },
       minigamePlayCount: 3,
-      jankenStagePlays: {},
     };
 
     await upsertPostgresEventShopState(env, 7, "event-1", state, { createClient: () => client });

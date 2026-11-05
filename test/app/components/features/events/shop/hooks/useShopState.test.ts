@@ -49,7 +49,6 @@ function createSavedShopState(overrides: Partial<EventShopState> = {}): EventSho
     extraStageRuns: {},
     minigameStartRound: 1,
     minigamePlayCount: 0,
-    jankenStagePlays: {},
     minigamePaymentQuantityMode: "expected",
     cardFlipStrategy: "all-open",
     overriddenRequiredQuantities: {},

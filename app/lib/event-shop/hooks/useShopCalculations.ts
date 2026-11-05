@@ -16,6 +16,7 @@ type UseShopCalculationsParams = {
   excludedShopResourceUids?: readonly string[];
   minigameConfig?: MinigameConfig | null;
   jankenClearedStageUids: readonly string[];
+  jankenStagePlays: Record<string, number>;
   jankenScore: JankenScoreProgress;
   holdCalculations?: boolean;
 };
@@ -73,6 +74,7 @@ export function buildShopCalculationInputSets({
   excludedShopResourceUids,
   minigameConfig,
   jankenClearedStageUids,
+  jankenStagePlays,
   jankenScore,
 }: ShopCalculationInputParams): ShopCalculationInputSets {
   return {
@@ -83,7 +85,7 @@ export function buildShopCalculationInputSets({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
-      state.jankenStagePlays,
+      jankenStagePlays,
       jankenClearedStageUids,
       jankenScore.currentScore,
       jankenScore.averageScore,
@@ -104,7 +106,7 @@ export function buildShopCalculationInputSets({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
-      state.jankenStagePlays,
+      jankenStagePlays,
       jankenClearedStageUids,
       jankenScore.currentScore,
       jankenScore.averageScore,
@@ -131,6 +133,7 @@ export function buildShopCalculationInputSets({
       excludedShopResourceUids,
       minigameConfig,
       jankenClearedStageUids,
+      jankenStagePlays,
       jankenScore,
     },
   };
@@ -151,6 +154,7 @@ export function useShopCalculations({
   excludedShopResourceUids,
   minigameConfig,
   jankenClearedStageUids,
+  jankenStagePlays,
   jankenScore,
   holdCalculations = false,
 }: UseShopCalculationsParams) {
@@ -176,7 +180,6 @@ export function useShopCalculations({
           extraStageRuns: state.extraStageRuns,
           minigameStartRound: state.minigameStartRound,
           minigamePlayCount: state.minigamePlayCount,
-          jankenStagePlays: state.jankenStagePlays,
           minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
           cardFlipStrategy: state.cardFlipStrategy,
           overriddenRequiredQuantities: state.overriddenRequiredQuantities,
@@ -189,6 +192,7 @@ export function useShopCalculations({
         excludedShopResourceUids,
         minigameConfig,
         jankenClearedStageUids,
+        jankenStagePlays,
         jankenScore: { currentScore: jankenCurrentScore, averageScore: jankenAverageScore },
       }),
     [
@@ -198,7 +202,7 @@ export function useShopCalculations({
       state.includeFirstClear,
       state.minigameStartRound,
       state.minigamePlayCount,
-      state.jankenStagePlays,
+      jankenStagePlays,
       jankenClearedStageUids,
       jankenCurrentScore,
       jankenAverageScore,
@@ -248,6 +252,7 @@ export function useShopCalculations({
       excludedShopResourceUids: calculationExcludedShopResourceUids,
       minigameConfig: calculationMinigameConfig,
       jankenClearedStageUids: calculationJankenClearedStageUids,
+      jankenStagePlays: calculationJankenStagePlays,
       jankenScore: calculationJankenScore,
     } = currentInputSets.effect;
 
@@ -277,6 +282,7 @@ export function useShopCalculations({
           excludedShopResourceUids: calculationExcludedShopResourceUids,
           minigameConfig: calculationMinigameConfig,
           jankenClearedStageUids: calculationJankenClearedStageUids,
+          jankenStagePlays: calculationJankenStagePlays,
           jankenScore: calculationJankenScore,
         }),
       );

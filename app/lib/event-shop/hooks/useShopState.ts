@@ -23,7 +23,6 @@ export type ShopState = {
   extraStageRuns: Record<string, number>;
   minigameStartRound: number;
   minigamePlayCount: number;
-  jankenStagePlays: Record<string, number>;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   cardFlipStrategy: CardFlipStrategy;
   overriddenRequiredQuantities: Record<string, number>;
@@ -46,7 +45,6 @@ export type ShopActions = {
   setIncludeFirstClear: (value: boolean) => void;
   setMinigameStartRound: (round: number) => void;
   setMinigamePlayCount: (count: number) => void;
-  setJankenStagePlays: (plays: Record<string, number>) => void;
   setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => void;
   setCardFlipStrategy: (strategy: CardFlipStrategy) => void;
   updateExistingQuantity: (uid: string, value: number) => void;
@@ -115,7 +113,6 @@ export function toEventShopState(state: ShopState): EventShopState {
     extraStageRuns: state.extraStageRuns,
     minigameStartRound: state.minigameStartRound,
     minigamePlayCount: state.minigamePlayCount,
-    jankenStagePlays: state.jankenStagePlays,
     minigamePaymentQuantityMode: state.minigamePaymentQuantityMode,
     cardFlipStrategy: state.cardFlipStrategy,
     overriddenRequiredQuantities: state.overriddenRequiredQuantities,
@@ -167,7 +164,6 @@ export function getPostSignInState({
     extraStageRuns: savedShopState?.extraStageRuns ?? {},
     minigameStartRound: getInitialMinigameStartRound(savedShopState),
     minigamePlayCount: savedShopState?.minigamePlayCount ?? 0,
-    jankenStagePlays: savedShopState?.jankenStagePlays ?? {},
     minigamePaymentQuantityMode: savedShopState?.minigamePaymentQuantityMode ?? "expected",
     cardFlipStrategy: savedShopState?.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: savedShopState?.overriddenRequiredQuantities ?? {},
@@ -213,7 +209,6 @@ export function useShopState({
   const [extraStageRuns, setExtraStageRuns] = useState<Record<string, number>>(savedShopState?.extraStageRuns ?? {});
   const [minigameStartRound, setMinigameStartRound] = useState<number>(getInitialMinigameStartRound(savedShopState));
   const [minigamePlayCount, setMinigamePlayCount] = useState<number>(savedShopState?.minigamePlayCount ?? 0);
-  const [jankenStagePlays, setJankenStagePlays] = useState<Record<string, number>>(savedShopState?.jankenStagePlays ?? {});
   const [minigamePaymentQuantityMode, setMinigamePaymentQuantityMode] = useState<MinigamePaymentQuantityMode>(
     savedShopState?.minigamePaymentQuantityMode ?? "expected",
   );
@@ -252,7 +247,6 @@ export function useShopState({
     setExtraStageRuns(syncedState.extraStageRuns);
     setMinigameStartRound(syncedState.minigameStartRound);
     setMinigamePlayCount(syncedState.minigamePlayCount);
-    setJankenStagePlays(syncedState.jankenStagePlays);
     setMinigamePaymentQuantityMode(syncedState.minigamePaymentQuantityMode);
     setCardFlipStrategy(syncedState.cardFlipStrategy);
     setOverriddenRequiredQuantities(syncedState.overriddenRequiredQuantities);
@@ -361,8 +355,6 @@ export function useShopState({
       setMinigamePlayCount: (count: number) => {
         setMinigamePlayCount(count);
       },
-      setJankenStagePlays: (plays: Record<string, number>) => setJankenStagePlays(plays),
-
       setMinigamePaymentQuantityMode: (mode: MinigamePaymentQuantityMode) => {
         setMinigamePaymentQuantityMode(mode);
       },
@@ -403,7 +395,6 @@ export function useShopState({
     extraStageRuns,
     minigameStartRound,
     minigamePlayCount,
-    jankenStagePlays,
     minigamePaymentQuantityMode,
     cardFlipStrategy,
     overriddenRequiredQuantities,

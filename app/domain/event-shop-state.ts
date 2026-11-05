@@ -20,7 +20,6 @@ export type EventShopState = {
   extraStageRuns: Record<string, number>;
   minigameStartRound: number;
   minigamePlayCount: number;
-  jankenStagePlays: Record<string, number>;
   minigamePaymentQuantityMode: MinigamePaymentQuantityMode;
   cardFlipStrategy: CardFlipStrategy;
   overriddenRequiredQuantities: Record<string, number>;
@@ -124,7 +123,6 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
   const enabledStages = normalizeBooleanMap(value.enabledStages);
   const existingPaymentItemQuantities = normalizeNumberMap(value.existingPaymentItemQuantities, true);
   const extraStageRuns = normalizeNumberMap(value.extraStageRuns, true);
-  const jankenStagePlays = normalizeNumberMap(value.jankenStagePlays ?? {}, true);
   const overriddenRequiredQuantities = normalizeNumberMap(value.overriddenRequiredQuantities);
   const bonusStudentSelectionMode = value.bonusStudentSelectionMode;
   const minigamePaymentQuantityMode = value.minigamePaymentQuantityMode;
@@ -138,7 +136,6 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
     !enabledStages ||
     !existingPaymentItemQuantities ||
     !extraStageRuns ||
-    !jankenStagePlays ||
     !overriddenRequiredQuantities ||
     (bonusStudentSelectionMode !== "shared" && bonusStudentSelectionMode !== "perItem") ||
     typeof value.includeRecruitedStudents !== "boolean" ||
@@ -168,7 +165,6 @@ export function normalizeEventShopState(value: unknown): EventShopState | null {
     extraStageRuns,
     minigameStartRound: value.minigameStartRound as number,
     minigamePlayCount: value.minigamePlayCount as number,
-    jankenStagePlays,
     minigamePaymentQuantityMode,
     cardFlipStrategy: cardFlipStrategy as CardFlipStrategy,
     overriddenRequiredQuantities,
@@ -197,7 +193,6 @@ export function createDefaultEventShopState(
     extraStageRuns: {},
     minigameStartRound: 1,
     minigamePlayCount: 0,
-    jankenStagePlays: {},
     minigamePaymentQuantityMode: "expected",
     cardFlipStrategy: DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: {},
@@ -233,9 +228,7 @@ export function mergeEventShopStateChanges(
     const submittedValue = submitted[key];
     const latestValue = latest[key];
 
-    if (key === "jankenStagePlays") {
-      if (JSON.stringify(baseValue) !== JSON.stringify(submittedValue)) Object.assign(merged, { [key]: submittedValue });
-    } else if (isRecord(baseValue) && isRecord(submittedValue) && isRecord(latestValue)) {
+    if (isRecord(baseValue) && isRecord(submittedValue) && isRecord(latestValue)) {
       Object.assign(merged, {
         [key]: mergeRecordChanges(baseValue, submittedValue, latestValue),
       });

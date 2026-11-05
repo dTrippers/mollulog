@@ -169,7 +169,6 @@ describe("planner state projection", () => {
           extraStageRuns: { "stage-1": 2 },
           minigameStartRound: 4,
           minigamePlayCount: 5,
-          jankenStagePlays: {},
           minigamePaymentQuantityMode: "max",
           cardFlipStrategy: "sr-reset",
           overriddenRequiredQuantities: { "item-1": 11 },

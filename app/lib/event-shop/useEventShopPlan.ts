@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { calculateCardFlipStrategyComparison } from "~/domain/card-flip-strategy";
 import type { MinigameConfig, RoadPuzzleMap } from "~/domain/event-shop";
+import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
 import { buildCollectableResources } from "~/domain/event-shop/calculations/collectable-resources";
 import {
   convertClueSearchCostsToPoints,
@@ -14,6 +15,8 @@ import {
   type TreasureHuntEstimate,
 } from "~/domain/event-shop/treasure-hunt";
 import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
+import { deriveJankenPlan, getJankenResourceRoles } from "~/domain/event-shop/janken";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { SavedShopStateSource } from "~/domain/event-shop-state-key";
 import { getRoadPuzzleTotalCost, getRoadPuzzleTotalRewards } from "~/domain/road-puzzle/calculator";
 import type { GuestPlannerStatus } from "~/lib/event-shop/hooks";
@@ -24,6 +27,7 @@ import type { EventShopPlanContext, TreasureHuntSectionState } from "~/lib/event
 import type { EventShopState } from "~/models/event-shop-state";
 
 const EMPTY_ROAD_PUZZLE_MAPS: RoadPuzzleMap[] = [];
+const EMPTY_JANKEN_STAGE_PLAYS: Record<string, number> = {};
 
 export type EventShopControllerInput = {
   stages: EventShopPlanContext["stages"];
@@ -40,10 +44,11 @@ export type EventShopControllerInput = {
   guestPlannerStatus: GuestPlannerStatus;
   minigameConfig: MinigameConfig | null;
   jankenStudentGrowthUid?: string | null;
-  jankenClearedStageUids: string[];
-  jankenScore: EventShopPlanContext["jankenScore"];
-  setJankenScore: EventShopPlanContext["setJankenScore"];
-  setJankenClearedStageUids: (stageUids: string[]) => void;
+  jankenEntry: JankenPlannerEntry;
+  savedJankenEntry: JankenPlannerEntry | null;
+  setJankenEntry: EventShopPlanContext["setJankenEntry"];
+  jankenDefaultProgress: EventShopPlanContext["jankenDefaultProgress"];
+  jankenPersistence: EventShopPlanContext["jankenPersistence"];
 };
 
 export function useEventShopPlan(input: EventShopControllerInput) {
@@ -62,10 +67,11 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     guestPlannerStatus,
     minigameConfig,
     jankenStudentGrowthUid,
-    jankenClearedStageUids,
-    jankenScore,
-    setJankenScore,
-    setJankenClearedStageUids,
+    jankenEntry,
+    savedJankenEntry,
+    setJankenEntry,
+    jankenDefaultProgress,
+    jankenPersistence,
   } = input;
   const clueSearchExchange = useMemo(
     () => resolveClueSearchExchange(minigameConfig, shopResources),
@@ -94,6 +100,85 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     stages,
     signedIn,
   });
+  const jankenConfig = (minigameConfig?.minigameType === "janken" ? minigameConfig.janken : null) ?? null;
+  const jankenResourceRoles = useMemo(
+    () =>
+      jankenConfig?.status === "available"
+        ? getJankenResourceRoles(
+            jankenConfig,
+            visibleShopResources.map(({ paymentResource }) => paymentResource.uid),
+            jankenStudentGrowthUid ?? null,
+          )
+        : { entryUid: null, shopUid: null, studentUid: null, equipmentUid: null },
+    [jankenConfig, jankenStudentGrowthUid, visibleShopResources],
+  );
+  const linkedJankenShopLedger = useMemo(
+    () =>
+      jankenConfig?.status === "available"
+        ? calculateResourceLedger({
+            shopResources: visibleShopResources,
+            itemQuantities: state.itemQuantities,
+            itemPurchaseDays: state.itemPurchaseDays,
+            existingPaymentItemQuantities: state.existingPaymentItemQuantities,
+            stages,
+            includeFirstClear: state.includeFirstClear,
+            minigameStartRound: state.minigameStartRound,
+            minigamePlayCount: 0,
+            jankenStagePlays: EMPTY_JANKEN_STAGE_PLAYS,
+            jankenClearedStageUids: jankenEntry.progress.clearedStageUids,
+            jankenScore: {
+              currentScore: jankenEntry.progress.cumulativeScore,
+              averageScore: jankenEntry.goals.averageScore,
+            },
+            minigameConfig,
+            overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+          })
+        : null,
+    [
+      jankenConfig,
+      jankenEntry.goals.averageScore,
+      jankenEntry.progress.clearedStageUids,
+      jankenEntry.progress.cumulativeScore,
+      minigameConfig,
+      stages,
+      state.existingPaymentItemQuantities,
+      state.includeFirstClear,
+      state.itemPurchaseDays,
+      state.itemQuantities,
+      state.minigameStartRound,
+      state.overriddenRequiredQuantities,
+      visibleShopResources,
+    ],
+  );
+  const jankenPlan = useMemo(
+    () =>
+      deriveJankenPlan(jankenConfig, jankenEntry, jankenDefaultProgress, {
+        shopCurrencyRequired: jankenResourceRoles.shopUid
+          ? (linkedJankenShopLedger?.remainingToFarm[jankenResourceRoles.shopUid] ?? 0)
+          : 0,
+        shopCurrencyResourceUid: jankenResourceRoles.shopUid ?? undefined,
+        studentGrowthResourceUid: jankenStudentGrowthUid,
+      }),
+    [
+      jankenConfig,
+      jankenDefaultProgress,
+      jankenEntry,
+      jankenResourceRoles.shopUid,
+      jankenStudentGrowthUid,
+      linkedJankenShopLedger,
+    ],
+  );
+  const jankenShopCurrency = {
+    uid: jankenResourceRoles.shopUid,
+    required: jankenResourceRoles.shopUid
+      ? (linkedJankenShopLedger?.remainingToFarm[jankenResourceRoles.shopUid] ?? 0)
+      : 0,
+    total: jankenResourceRoles.shopUid
+      ? (linkedJankenShopLedger?.requiredTotals[jankenResourceRoles.shopUid] ?? 0)
+      : 0,
+    owned: jankenResourceRoles.shopUid ? (linkedJankenShopLedger?.existing[jankenResourceRoles.shopUid] ?? 0) : 0,
+  };
+  const jankenStagePlays = jankenPlan.status === "available" ? jankenPlan.stagePlays : EMPTY_JANKEN_STAGE_PLAYS;
   const cardFlipComparison = useMemo(() => {
     if (minigameConfig?.minigameType !== "card_flip" || minigameConfig.cardFlip?.status !== "available") return null;
     return calculateCardFlipStrategyComparison(minigameConfig.cardFlip, state.minigamePlayCount);
@@ -258,8 +343,12 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     minigameRewards,
     excludedShopResourceUids: clueSearchExchange?.hiddenShopResourceUids,
     minigameConfig: minigameConfigForCalculations,
-    jankenClearedStageUids,
-    jankenScore,
+    jankenClearedStageUids: jankenEntry.progress.clearedStageUids,
+    jankenStagePlays,
+    jankenScore: {
+      currentScore: jankenEntry.progress.cumulativeScore,
+      averageScore: jankenEntry.goals.averageScore,
+    },
     holdCalculations: holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput,
   });
   const holdRoadPuzzleCalculations =
@@ -285,10 +374,13 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     savedShopStateSource,
     availablePurchaseDays,
     signedIn,
-    jankenClearedStageUids,
-    jankenScore,
-    setJankenScore,
-    setJankenClearedStageUids,
+    jankenEntry,
+    setJankenEntry,
+    savedJankenEntry,
+    jankenDefaultProgress,
+    jankenPlan,
+    jankenShopCurrency,
+    jankenPersistence,
     state,
     actions,
     minigameConfig,

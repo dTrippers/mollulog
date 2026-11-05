@@ -6,9 +6,9 @@ import { describe, expect, it, jest } from "@jest/globals";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useMatches, useOutletContext } from "react-router";
-import { fireEvent, render as renderDom, screen, within } from "@testing-library/react";
+import { fireEvent, render as renderDom, screen } from "@testing-library/react";
 import type { EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
-import { evaluateJankenPlan } from "~/domain/event-shop/janken";
+import { deriveJankenPlan } from "~/domain/event-shop/janken";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculation";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
@@ -309,7 +309,7 @@ describe("event shop v2 calculator", () => {
     expect(render()).toContain("항상 4장을 모두 열어요");
   });
 
-  it("truncates fractional janken stage counts and keeps the stage editor visible for invalid saved counts", () => {
+  it("shows the planner-derived janken stage counts as a read-only summary", () => {
     const empty = createEventShopPlan();
     const config: MinigameConfig = {
       minigameType: "janken",
@@ -318,27 +318,131 @@ describe("event shop v2 calculator", () => {
       rewardGroups: [],
       janken: janken860Fixture,
     };
-    const setJankenStagePlays = jest.fn<(plays: Record<string, number>) => void>();
-    const overrides = {
+    const entry = {
+      ...empty.jankenEntry,
+      goals: { ...empty.jankenEntry.goals, targetScore: 100_000, averageScore: 100_000 },
+    };
+    const planned = deriveJankenPlan(config.janken!, entry, { currentTier: 1, heldEleph: 0 }, {
+      shopCurrencyRequired: 0,
+      shopCurrencyResourceUid: "80863",
+      studentGrowthResourceUid: "26016",
+    });
+    mockPlan = createEventShopPlan({
       minigameConfig: config,
       minigameConfigForCalculations: config,
-      actions: { ...empty.actions, setJankenStagePlays },
-    };
-    mockPlan = createEventShopPlan({ ...overrides, state: { ...empty.state, jankenStagePlays: {} } });
-    const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    const input = screen.getByRole("spinbutton", { name: "노말 4 플레이 횟수" });
+      jankenEntry: entry,
+      jankenPlan: planned,
+    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    fireEvent.change(input, { target: { value: "1.5" } });
-
-    expect(setJankenStagePlays).toHaveBeenCalledWith({ "100860204": 1 });
-    mockPlan = createEventShopPlan({ ...overrides, state: { ...empty.state, jankenStagePlays: { "100860204": 1.5 } } });
-    view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-
-    expect(screen.getByRole("spinbutton", { name: "노말 4 플레이 횟수" })).toBeTruthy();
-    expect(screen.getByText("무술대회 설정을 확인하지 못했어요.")).toBeTruthy();
+    expect(screen.getByText("플레이 횟수")).toBeTruthy();
+    expect(screen.getByText("노말 4")).toBeTruthy();
+    expect(screen.getByText("챌린지")).toBeTruthy();
+    expect(screen.queryByRole("spinbutton", { name: /플레이 횟수/ })).toBeNull();
   });
 
-  it("shows the saved-score basis or missing-average notice for challenge plays", () => {
+  it("shows the total entry currency for each planned stage row", () => {
+    const normalFour = janken860Fixture.stages.find(({ stageType, stageNumber }) => stageType === "normal" && stageNumber === 4);
+    if (!normalFour) throw new Error("The event 860 fixture must include normal stage 4.");
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const empty = createEventShopPlan();
+    mockPlan = createEventShopPlan({
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      jankenPlan: {
+        status: "available",
+        stagePlays: { [normalFour.uid]: 98 },
+        entryCost: 39_200,
+        entryResourceUid: "80860",
+        rewards: {},
+        projectedScore: 0,
+        achievedGoals: 0,
+        totalGoals: 0,
+        planSteps: [],
+      },
+      jankenEntry: empty.jankenEntry,
+    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+
+    const row = screen.getByText("노말 4").closest("li");
+    expect(row?.textContent).toContain("×98");
+    expect(row?.textContent).toContain("39,200");
+  });
+
+  it("formats score and equipment goals in the shop goal line", () => {
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const empty = createEventShopPlan();
+    const entry = {
+      ...empty.jankenEntry,
+      goals: {
+        ...empty.jankenEntry.goals,
+        targetTier: 6,
+        targetScore: 4_000_000,
+        averageScore: 100_000,
+        targetEquipmentTier: 5,
+      },
+    };
+    mockPlan = createEventShopPlan({
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      jankenEntry: entry,
+      jankenPlan: deriveJankenPlan(janken860Fixture, entry, empty.jankenDefaultProgress, {
+        shopCurrencyRequired: 10,
+        shopCurrencyResourceUid: "80863",
+        studentGrowthResourceUid: "26016",
+      }),
+    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+
+    expect(screen.getByText("목표 · 상점 재화 부족분 · 학생 성장 고유무기 1 · 누적 스코어 400만 점 · 무술대회 장비 T5")).toBeTruthy();
+  });
+
+  it("uses the live plain-star student goal in the shop goal line", () => {
+    const config: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const empty = createEventShopPlan();
+    const liveEntry = {
+      ...empty.jankenEntry,
+      goals: { ...empty.jankenEntry.goals, targetTier: 4 },
+    };
+    const staleSavedEntry = {
+      ...empty.jankenEntry,
+      goals: { ...empty.jankenEntry.goals, targetTier: null },
+    };
+    mockPlan = createEventShopPlan({
+      minigameConfig: config,
+      minigameConfigForCalculations: config,
+      jankenEntry: liveEntry,
+      savedJankenEntry: staleSavedEntry,
+      jankenPlan: deriveJankenPlan(janken860Fixture, liveEntry, empty.jankenDefaultProgress, {
+        shopCurrencyRequired: 0,
+        shopCurrencyResourceUid: "80863",
+        studentGrowthResourceUid: "26016",
+      }),
+    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+
+    expect(screen.getByText("목표 · 상점 재화 부족분 · 학생 성장 4성")).toBeTruthy();
+  });
+
+  it("shows the planner score basis or missing-average notice for challenge plays", () => {
     const empty = createEventShopPlan();
     const config: MinigameConfig = {
       minigameType: "janken",
@@ -350,8 +454,12 @@ describe("event shop v2 calculator", () => {
     const base = createEventShopPlan({
       minigameConfig: config,
       minigameConfigForCalculations: config,
-      state: { ...empty.state, jankenStagePlays: { "100860301": 2 } },
-      jankenClearedStageUids: [
+      jankenEntry: {
+        ...empty.jankenEntry,
+        progress: {
+          ...empty.jankenEntry.progress,
+          cumulativeScore: 1_200_000,
+          clearedStageUids: [
         "100860101",
         "100860102",
         "100860103",
@@ -361,18 +469,40 @@ describe("event shop v2 calculator", () => {
         "100860202",
         "100860203",
         "100860204",
-      ],
+          ],
+        },
+        goals: { ...empty.jankenEntry.goals, targetScore: 1_700_000, averageScore: 250_000 },
+      },
     });
 
-    mockPlan = createEventShopPlan({ ...base, jankenScore: { currentScore: 1_200_000, averageScore: 250_000 } });
+    const scoredEntry = base.jankenEntry;
+    mockPlan = createEventShopPlan({
+      ...base,
+      jankenPlan: deriveJankenPlan(janken860Fixture, scoredEntry, base.jankenDefaultProgress, {
+        shopCurrencyRequired: 0,
+        shopCurrencyResourceUid: "80863",
+        studentGrowthResourceUid: "26016",
+      }),
+    });
     const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
     expect(document.body.textContent).toContain("누적 스코어 보상 포함 · 현재 120만 점 → 예상 170만 점");
-    expect(document.body.textContent).toContain("스코어는 무술대회 플래너의 진행 상황을 기준으로 계산해요.");
 
-    mockPlan = createEventShopPlan({ ...base, jankenScore: { currentScore: 1_200_000, averageScore: null } });
+    const missingAverageEntry = {
+      ...base.jankenEntry,
+      goals: { ...base.jankenEntry.goals, averageScore: null },
+    };
+    mockPlan = createEventShopPlan({
+      ...base,
+      jankenEntry: missingAverageEntry,
+      jankenPlan: deriveJankenPlan(janken860Fixture, missingAverageEntry, base.jankenDefaultProgress, {
+        shopCurrencyRequired: 0,
+        shopCurrencyResourceUid: "80863",
+        studentGrowthResourceUid: "26016",
+      }),
+    });
     view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
     expect(document.body.textContent).toContain(
-      "1회 평균 스코어가 없어 누적 스코어 보상은 계산하지 않았어요. 무술대회 플래너에서 입력해 주세요.",
+      "세부 설정에 1회 평균 스코어가 없어서 플레이 횟수를 계산하지 못했어요.",
     );
   });
 
@@ -388,6 +518,7 @@ describe("event shop v2 calculator", () => {
                 {
                   resourceType: ResourceTypeEnum.Item,
                   resourceUid: "zero-reward",
+                  resourceName: "zero reward",
                   quantity: 0,
                   probability: 1,
                   tag: "default" as const,
@@ -404,25 +535,32 @@ describe("event shop v2 calculator", () => {
       rewardGroups: [],
       janken,
     };
-    const evaluation = evaluateJankenPlan(janken, {
-      stagePlays: { "100860301": 1 },
-      currentScore: 6_500_000,
-      averageScore: 500_000,
-    });
-    expect(evaluation.rewards["zero-reward"]).toBe(0);
-
     const empty = createEventShopPlan();
     mockPlan = createEventShopPlan({
       minigameConfig: config,
       minigameConfigForCalculations: config,
-      jankenScore: { currentScore: 6_500_000, averageScore: 500_000 },
-      state: { ...empty.state, jankenStagePlays: { "100860301": 1 } },
+      jankenEntry: {
+        ...empty.jankenEntry,
+        progress: { ...empty.jankenEntry.progress, cumulativeScore: 6_500_000 },
+      },
+      jankenPlan: {
+        status: "available",
+        stagePlays: { "100860301": 1 },
+        entryCost: 400,
+        entryResourceUid: "80860",
+        rewards: { "80863": 5, "zero-reward": 0 },
+        projectedScore: 7_000_000,
+        achievedGoals: 1,
+        totalGoals: 1,
+        planSteps: [],
+      },
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    const rewardsList = within(screen.getByRole("list"));
-    expect(rewardsList.queryByText("0", { exact: true })).toBeNull();
-    expect(rewardsList.getByText("5", { exact: true })).toBeTruthy();
+    const rewardsTitle = screen.getByText("기대 획득량");
+    const rewardsList = rewardsTitle.parentElement?.querySelector("ul");
+    expect(rewardsList?.querySelector('[aria-label="zero reward 이름 표시"], img[alt="zero reward"]')).toBeNull();
+    expect(rewardsList?.textContent).toContain("5");
   });
 
   it("renders event search and results directly in the mobile sheet", () => {

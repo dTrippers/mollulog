@@ -10,7 +10,8 @@ import type {
   Stage,
 } from "~/domain/event-shop";
 import type { CalculationResult } from "~/domain/event-shop/calculations";
-import type { JankenScoreProgress } from "~/domain/event-shop/janken";
+import type { JankenDefaultProgress, JankenEvaluation } from "~/domain/event-shop/janken";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { ClueSearchExchange } from "~/domain/event-shop/clue-search";
 import type {
   TreasureHuntCalculationStatus,
@@ -32,6 +33,17 @@ export type TreasureHuntSectionState = {
   retry: () => void;
 };
 
+export type JankenPlannerPersistenceState = {
+  hasSavedEntry: boolean;
+  isSaving: boolean;
+  saveError: string | null;
+  isConflict: boolean;
+  conflictError: string | null;
+  reloadLatest: () => void;
+  overwrite: () => void;
+  retrySave: () => void;
+};
+
 export type EventShopPlanContext = {
   stages: Stage[];
   shopResources: ShopResource[];
@@ -45,10 +57,13 @@ export type EventShopPlanContext = {
   savedShopStateSource: SavedShopStateSource;
   availablePurchaseDays: number;
   signedIn: boolean;
-  jankenClearedStageUids: string[];
-  jankenScore: JankenScoreProgress;
-  setJankenClearedStageUids: (stageUids: string[]) => void;
-  setJankenScore: (score: JankenScoreProgress) => void;
+  jankenEntry: JankenPlannerEntry;
+  setJankenEntry: (entry: JankenPlannerEntry) => void;
+  savedJankenEntry: JankenPlannerEntry | null;
+  jankenDefaultProgress: JankenDefaultProgress;
+  jankenPlan: JankenEvaluation;
+  jankenShopCurrency: { uid: string | null; required: number; total: number; owned: number };
+  jankenPersistence: JankenPlannerPersistenceState;
   state: ShopState;
   actions: ShopActions;
   minigameConfig: MinigameConfig | null;

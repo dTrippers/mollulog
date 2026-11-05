@@ -12,6 +12,7 @@ import { getPlannerState } from "~/models/planner-state";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { getTimelineContentDatesByContentUid } from "~/models/timeline-content.server";
+import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { getEventShopOwnedQuantities } from "~/views/event-shop-owned-quantities";
 import EventShopController from "./events.$uid._components/EventShopController";
 import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
@@ -48,13 +49,15 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     }
 
     const janken = shopContent.minigameConfig?.minigameType === "janken" ? shopContent.minigameConfig.janken : null;
+    const allStudents =
+      shopContent.minigameConfig?.minigameType === "janken" && janken?.status === "available"
+        ? await getAllStudents(env, true)
+        : [];
     const jankenStudentGrowthUid =
       janken?.status === "available"
-        ? getJankenStudentGrowthUid(
-            janken,
-            (await getAllStudents(env, true)).map(({ uid }) => uid),
-          )
+        ? getJankenStudentGrowthUid(janken, allStudents.map(({ uid }) => uid))
         : null;
+    const jankenStudent = allStudents.find(({ uid }) => uid === jankenStudentGrowthUid);
 
     const shopSince = shopSchedule?.startAt ?? canonicalShopDates?.startAt ?? metadata.since;
     const shopUntil = shopSchedule?.endAt ?? canonicalShopDates?.endAt ?? metadata.until;
@@ -67,18 +70,27 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     let savedShopState: EventShopState | null = null;
     let savedShopStateSource: SavedShopStateSource = "none";
     let savedJankenEntry: JankenPlannerEntry | null = null;
+    let jankenDefaultProgress = { currentTier: jankenStudent?.initialTier ?? 1, heldEleph: 0 };
     if (currentUser) {
       const plannerStatePromise =
         shopContent.minigameConfig?.minigameType === "janken"
           ? getPlannerState(env, currentUser.id, { ctx })
           : Promise.resolve(null);
-      const [recruitedStudents, userOwnedQuantities, primaryShopState, plannerState] = await Promise.all([
+      const [recruitedStudents, userOwnedQuantities, primaryShopState, plannerState, jankenInventory] = await Promise.all([
         getRecruitedStudents(env, currentUser.id),
         getEventShopOwnedQuantities(env, currentUser.id, shopContent.shopResources),
         getEventShopState(env, currentUser.id, stateIdentity.shopStateUid),
         plannerStatePromise,
+        jankenStudentGrowthUid
+          ? getUserResourceInventoryMapByItemUids(env, currentUser.id, [jankenStudentGrowthUid])
+          : Promise.resolve({} as Record<string, number>),
       ]);
       recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
+      const recruitedJankenStudent = recruitedStudents.find(({ studentUid }) => studentUid === jankenStudentGrowthUid);
+      jankenDefaultProgress = {
+        currentTier: recruitedJankenStudent?.tier ?? jankenStudent?.initialTier ?? 1,
+        heldEleph: jankenStudentGrowthUid ? (jankenInventory[jankenStudentGrowthUid] ?? 0) : 0,
+      };
       ownedQuantities = userOwnedQuantities;
       savedShopState = primaryShopState;
       savedJankenEntry = plannerState?.jankenProgress[stateIdentity.shopStateUid] ?? null;
@@ -100,6 +112,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       recruitedStudentUids,
       savedShopState,
       savedJankenEntry,
+      jankenDefaultProgress,
       savedShopStateSource,
       availablePurchaseDays: calculateShopPurchaseDays(shopSince, shopUntil),
       eventUid,

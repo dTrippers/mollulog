@@ -6,13 +6,15 @@ import type { JankenPlannerEntry } from "~/domain/planner-state";
 
 let mockLoaderData: unknown;
 let mockGuestSnapshot: unknown;
-const mockUseEventShopPlan = jest.fn<(input: unknown) => { plan: { jankenScore: unknown } }>();
+const mockFetcherSubmit = jest.fn();
+const mockUseEventShopPlan = jest.fn<(input: unknown) => { plan: { jankenEntry: unknown } }>();
 
 jest.mock("react-router", () => ({
-  Outlet: ({ context }: { context: { jankenScore: unknown } }) =>
-    createElement("output", null, JSON.stringify(context.jankenScore)),
+  Outlet: ({ context }: { context: { jankenEntry: unknown } }) =>
+    createElement("output", null, JSON.stringify(context.jankenEntry)),
   useLoaderData: () => mockLoaderData,
   useRevalidator: () => ({ revalidate: jest.fn() }),
+  useFetcher: () => ({ state: "idle", data: undefined, submit: mockFetcherSubmit }),
 }));
 jest.mock("~/components/v2/layout", () => ({ PageMain: ({ children }: { children: unknown }) => children }));
 jest.mock("~/components/v2/primitives/Button", () => ({ Button: () => null }));
@@ -53,9 +55,8 @@ const entryWithAverageScore = (averageScore: number): JankenPlannerEntry => ({
   goals: { ...entry.goals, averageScore },
 });
 
-const shopData = (signedIn: boolean) => ({
+const shopData = (signedIn: boolean, savedJankenEntry: JankenPlannerEntry | null = entry) => ({
   status: "ready",
-  eventName: "Event",
   stages: [],
   shopResources: [],
   ownedQuantities: null,
@@ -64,7 +65,8 @@ const shopData = (signedIn: boolean) => ({
   jankenStudentGrowthUid: null,
   recruitedStudentUids: [],
   savedShopState: null,
-  savedJankenEntry: signedIn ? entry : null,
+  savedJankenEntry: signedIn ? savedJankenEntry : null,
+  jankenDefaultProgress: { currentTier: 2, heldEleph: 9 },
   savedShopStateSource: "none",
   availablePurchaseDays: 1,
   eventUid: "event-1",
@@ -79,54 +81,72 @@ beforeEach(() => {
     envelope: { document: { jankenProgress: { "shop-1": entry } } },
   };
   mockUseEventShopPlan.mockImplementation((input) => ({
-    plan: { jankenScore: (input as { jankenScore: unknown }).jankenScore },
+    plan: { jankenEntry: (input as { jankenEntry: unknown }).jankenEntry },
   }));
 });
 
-describe("event shop janken score context", () => {
-  it.each([true, false])("passes the saved score progress for %s signed-in", (signedIn) => {
+describe("event shop janken entry context", () => {
+  it.each([true, false])("uses the saved full planner entry for %s signed-in", (signedIn) => {
     mockLoaderData = shopData(signedIn);
 
     render(createElement(EventShopController));
 
-    expect(screen.getByText('{"currentScore":1200000,"averageScore":250000}')).toBeTruthy();
-    expect(mockUseEventShopPlan).toHaveBeenCalledWith(
-      expect.objectContaining({
-        jankenClearedStageUids: ["stage-1"],
-        jankenScore: { currentScore: 1_200_000, averageScore: 250_000 },
-      }),
-    );
+    expect(screen.getByText(JSON.stringify(entry))).toBeTruthy();
+    expect(mockUseEventShopPlan).toHaveBeenCalledWith(expect.objectContaining({
+      savedJankenEntry: entry,
+      jankenEntry: entry,
+      jankenDefaultProgress: { currentTier: 2, heldEleph: 9 },
+    }));
   });
 
-  it("uses empty score progress when the planner has no saved entry", () => {
-    mockLoaderData = { ...shopData(true), savedJankenEntry: null };
+  it("uses the parent loader defaults when there is no saved entry", () => {
+    mockLoaderData = shopData(true, null);
 
     render(createElement(EventShopController));
 
-    expect(screen.getByText('{"currentScore":0,"averageScore":null}')).toBeTruthy();
+    expect(mockUseEventShopPlan).toHaveBeenCalledWith(expect.objectContaining({ savedJankenEntry: null }));
+    expect(screen.getByText(JSON.stringify({
+      progress: {
+        currentTier: 2,
+        heldEleph: 9,
+        cumulativeScore: 0,
+        equipmentTier: 1,
+        heldEquipmentCurrency: 0,
+        clearedStageUids: [],
+      },
+      goals: {
+        targetTier: null,
+        shopCurrencyMode: "linked",
+        manualShopCurrency: 0,
+        targetScore: null,
+        averageScore: null,
+        targetEquipmentTier: null,
+      },
+    }))).toBeTruthy();
   });
 
-  it("accepts refreshed saved scores when the shop id is unchanged", () => {
+  it("accepts refreshed saved entries when the shop id is unchanged", () => {
     mockLoaderData = shopData(true);
     const view = render(createElement(EventShopController));
 
     mockLoaderData = { ...shopData(true), savedJankenEntry: entryWithAverageScore(1_000_000) };
     view.rerender(createElement(EventShopController));
 
-    expect(screen.getByText('{"currentScore":1200000,"averageScore":1000000}')).toBeTruthy();
+    expect(screen.getByText(JSON.stringify(entryWithAverageScore(1_000_000)))).toBeTruthy();
   });
 
-  it("preserves a local score edit when saved scores refresh", () => {
+  it("preserves unsaved local entry edits when saved data refreshes", () => {
     mockLoaderData = shopData(true);
     const view = render(createElement(EventShopController));
     const latestInput = mockUseEventShopPlan.mock.calls.at(-1)?.[0] as {
-      setJankenScore: (score: { currentScore: number; averageScore: number | null }) => void;
+      setJankenEntry: (next: JankenPlannerEntry) => void;
     };
+    const localEdit = entryWithAverageScore(500_000);
 
-    act(() => latestInput.setJankenScore({ currentScore: 1_200_000, averageScore: 500_000 }));
+    act(() => latestInput.setJankenEntry(localEdit));
     mockLoaderData = { ...shopData(true), savedJankenEntry: entryWithAverageScore(1_000_000) };
     view.rerender(createElement(EventShopController));
 
-    expect(screen.getByText('{"currentScore":1200000,"averageScore":500000}')).toBeTruthy();
+    expect(screen.getByText(JSON.stringify(localEdit))).toBeTruthy();
   });
 });

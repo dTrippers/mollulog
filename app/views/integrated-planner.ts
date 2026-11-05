@@ -1,6 +1,8 @@
 import type { ApPlannerState } from "~/domain/ap-planner";
 import type { EventShopState } from "~/domain/event-shop-state";
 import { buildEventShopStateIdentity } from "~/domain/event-shop-state-key";
+import { getJankenStudentGrowthUid, type JankenDefaultProgress } from "~/domain/event-shop/janken";
+import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import type { ShopAvailableEvent } from "~/models/event-content";
@@ -16,6 +18,8 @@ import { getPlannerState } from "~/models/planner-state";
 import type { PyroxeneEventData, PyroxeneTimelineItem } from "~/models/pyroxene-planner";
 import { getPyroxeneUserState } from "~/models/pyroxene-planner";
 import { getRecruitedStudents } from "~/models/recruited-student";
+import { getAllStudents } from "~/models/student";
+import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import type { RecruitmentGroup } from "~/models/recruitment";
 import { getRecruitmentGroupsByUids } from "~/models/recruitment";
 import { getRecruitmentResultsByRecruitmentGroupUids } from "~/models/recruitment-result.server";
@@ -41,6 +45,8 @@ export type IntegratedPlannerAccountState = {
   collectedSourceKeys: string[];
   favoritedStudents: { contentUid: string; studentUid: string }[];
   recruitedStudentUids: string[] | null;
+  recruitedStudentTiers: Record<string, number> | null;
+  jankenProgress: PlannerStateDocumentV1["jankenProgress"];
   recruitmentCompletions: { eventUid: string; recruitmentGroupUid: string }[];
   apPlanner: ApPlannerState | null;
 };
@@ -75,6 +81,8 @@ export type IntegratedPlannerShopEvent = {
   content: EventShopContent | null;
   accountState: EventShopState | null;
   accountStateStatus: SourceStatus;
+  jankenStudentGrowthUid: string | null;
+  jankenDefaultProgress: JankenDefaultProgress | null;
 };
 
 export type IntegratedPlannerTimelineEvent = Pick<
@@ -173,6 +181,13 @@ export async function getIntegratedPlannerData(
       : Promise.resolve(null),
   ]);
 
+  const shopEvents = await addJankenDefaultProgress(
+    env,
+    shopEventsResult?.events ?? [],
+    userId,
+    accountStateResult?.state ?? null,
+  );
+
   return {
     pyroxeneSchedules,
     pyroxeneSchedulesStatus,
@@ -182,7 +197,7 @@ export async function getIntegratedPlannerData(
     recruitmentGroupsStatus,
     accountState: accountStateResult?.state ?? null,
     accountStateStatus: userId === null ? "available" : (accountStateResult?.status ?? "unavailable"),
-    shopEvents: shopEventsResult?.events ?? [],
+    shopEvents,
     shopEventsStatus:
       shopAvailableEventsResult.status === "fulfilled" && shopEventsResult ? "available" : "unavailable",
   };
@@ -233,6 +248,10 @@ async function loadAccountState(
           studentUid: studentId,
         })),
         recruitedStudentUids: recruitedStudents?.map(({ studentUid }) => studentUid) ?? null,
+        recruitedStudentTiers: recruitedStudents
+          ? Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier]))
+          : null,
+        jankenProgress: plannerState.jankenProgress,
         recruitmentCompletions,
         apPlanner: plannerState.ap,
       },
@@ -240,6 +259,65 @@ async function loadAccountState(
   } catch {
     return { status: "unavailable", state: null };
   }
+}
+
+async function addJankenDefaultProgress(
+  env: Env,
+  events: IntegratedPlannerShopEvent[],
+  userId: number | null,
+  accountState: IntegratedPlannerAccountState | null,
+): Promise<IntegratedPlannerShopEvent[]> {
+  const hasJanken = events.some(
+    ({ content }) =>
+      content?.minigameConfig?.minigameType === "janken" && content.minigameConfig.janken?.status === "available",
+  );
+  if (!hasJanken) return events;
+
+  let students: Awaited<ReturnType<typeof getAllStudents>>;
+  try {
+    students = await getAllStudents(env, true);
+  } catch {
+    return events.map((event) => ({ ...event, jankenStudentGrowthUid: null, jankenDefaultProgress: null }));
+  }
+
+  const growthUids = events.flatMap(({ content }) => {
+    const config = content?.minigameConfig;
+    if (config?.minigameType !== "janken" || config.janken?.status !== "available") return [];
+    const uid = getJankenStudentGrowthUid(config.janken, students.map(({ uid: studentUid }) => studentUid));
+    return uid ? [uid] : [];
+  });
+  let inventory: Record<string, number> = {};
+  let inventoryAvailable = true;
+  if (userId !== null && growthUids.length > 0) {
+    try {
+      inventory = await getUserResourceInventoryMapByItemUids(env, userId, growthUids);
+    } catch {
+      inventoryAvailable = false;
+    }
+  }
+
+  return events.map((event) => {
+    const config = event.content?.minigameConfig;
+    if (config?.minigameType !== "janken" || config.janken?.status !== "available") {
+      return { ...event, jankenStudentGrowthUid: null, jankenDefaultProgress: null };
+    }
+    const studentUid = getJankenStudentGrowthUid(config.janken, students.map(({ uid }) => uid));
+    const student = students.find(({ uid }) => uid === studentUid);
+    if (userId !== null && (!accountState?.recruitedStudentTiers || !inventoryAvailable)) {
+      return { ...event, jankenStudentGrowthUid: studentUid, jankenDefaultProgress: null };
+    }
+    return {
+      ...event,
+      jankenStudentGrowthUid: studentUid,
+      jankenDefaultProgress: {
+        currentTier:
+          userId === null
+            ? (student?.initialTier ?? 1)
+            : (accountState?.recruitedStudentTiers?.[studentUid ?? ""] ?? student?.initialTier ?? 1),
+        heldEleph: userId === null || !studentUid ? 0 : (inventory[studentUid] ?? 0),
+      },
+    };
+  });
 }
 
 async function loadShopEvents(
@@ -321,6 +399,8 @@ async function loadShopEvents(
         content,
         accountState,
         accountStateStatus,
+        jankenStudentGrowthUid: null,
+        jankenDefaultProgress: null,
       };
     }),
   };
@@ -337,5 +417,7 @@ function unavailableShopEvent(event: ShopAvailableEvent): IntegratedPlannerShopE
     content: null,
     accountState: null,
     accountStateStatus: "unavailable",
+    jankenStudentGrowthUid: null,
+    jankenDefaultProgress: null,
   };
 }

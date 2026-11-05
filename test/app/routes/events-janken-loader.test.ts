@@ -1,6 +1,4 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { ResourceTypeEnum } from "~/graphql/graphql";
-import { janken860Fixture } from "../domain/fixtures/janken-860";
 
 const mockGetActiveSensei = jest.fn<(...args: unknown[]) => Promise<{ id: number } | null>>();
 const mockGetEventMetadata = jest.fn<(...args: unknown[]) => Promise<unknown>>();
@@ -35,29 +33,21 @@ beforeEach(() => {
   mockGetActiveSensei.mockResolvedValue({ id: 1 });
   mockGetEventMetadata.mockResolvedValue({ name: "Event", contentType: "event", shopContentUid: "shop-1" });
   mockGetEventMinigameType.mockResolvedValue("janken");
-  mockGetEventShopContent.mockResolvedValue({
-    minigameConfig: {
-      minigameType: "janken",
-      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
-      payments: [],
-      rewardGroups: [],
-      janken: janken860Fixture,
-    },
-  });
-  mockGetPlannerState.mockResolvedValue({ jankenProgress: {} });
-  mockGetAllStudents.mockResolvedValue([{ uid: "26016", initialTier: 3 }]);
-  mockGetRecruitedStudents.mockResolvedValue([]);
-  mockGetUserResourceInventoryMapByItemUids.mockResolvedValue({});
 });
 
-describe("janken planner loader", () => {
-  it("identifies a reward student absent from the roster as unrecruited", async () => {
+describe("janken planner child loader", () => {
+  it("leaves saved progress and defaults to the shop parent context", async () => {
     const result = await loader({
       params: { uid: "event-1" },
       context: { cloudflare: { env, ctx } },
       request: new Request("https://mollulog.test/events/event-1/shop/janken"),
     } as never);
 
-    expect(result).toMatchObject({ recruitedStudent: false, defaultProgress: { currentTier: 3 } });
+    expect(result).toMatchObject({ eventUid: "event-1", eventName: "Event", signedIn: true });
+    expect(mockGetEventShopContent).not.toHaveBeenCalled();
+    expect(mockGetPlannerState).not.toHaveBeenCalled();
+    expect(mockGetAllStudents).not.toHaveBeenCalled();
+    expect(mockGetRecruitedStudents).not.toHaveBeenCalled();
+    expect(mockGetUserResourceInventoryMapByItemUids).not.toHaveBeenCalled();
   });
 });

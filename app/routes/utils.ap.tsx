@@ -5,6 +5,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react
 import { data, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
+import { calculateResourceLedger } from "~/domain/event-shop/calculations/ledger";
 import {
   convertClueSearchCostsToPoints,
   filterClueSearchShopResources,
@@ -14,6 +15,7 @@ import { calculateBonusSummary } from "~/lib/event-shop/hooks/useBonusCalculatio
 import type { ShopState } from "~/lib/event-shop/hooks/useShopState";
 import { calculateMinigamePaymentCosts } from "~/domain/event-shop/utils";
 import { DEFAULT_CARD_FLIP_STRATEGY } from "~/domain/event-shop";
+import { createDefaultJankenPlannerEntry, deriveJankenPlan, getJankenResourceRoles } from "~/domain/event-shop/janken";
 import { resolveCardFlipMinigameInputs } from "~/domain/card-flip-strategy";
 import { useGuestPlanner } from "~/components/features/futures";
 import Page from "~/components/features/layout/Page";
@@ -43,6 +45,7 @@ import {
   setGuestPlannerApChargeCount,
 } from "~/domain/guest-planner";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { PyroxeneApChargeException } from "~/domain/pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import dayjs from "~/lib/dayjs";
@@ -65,6 +68,7 @@ import type { IntegratedPlannerShopEvent, IntegratedPlannerTimelineEvent } from 
 import { getIntegratedPlannerData } from "~/views/integrated-planner";
 
 const KST = "Asia/Seoul";
+const EMPTY_JANKEN_STAGE_PLAYS: Record<string, number> = {};
 const AP_CHARGE_EXCEPTION_OVERLAP_MESSAGE =
   "기간이 기존 AP 충전 예외와 겹쳐 적용하지 못했어요. 청휘석 플래너에서 기존 예외를 먼저 수정해주세요.";
 
@@ -508,6 +512,7 @@ function isUsableGuestSnapshot(snapshot: ReturnType<typeof useGuestPlanner>["sna
 function calculateShopRequiredAp(
   shop: IntegratedPlannerShopEvent,
   state: PlannerStateDocumentV1["eventShops"][string],
+  savedJankenEntry: JankenPlannerEntry | null,
 ): {
   requiredAp: number;
   breakdown: { firstClearAp: number; questSweepAp: number; extraSweepAp: number };
@@ -520,6 +525,51 @@ function calculateShopRequiredAp(
   if (minigameConfig?.minigameType === "treasure_hunt" && state.minigamePlayCount > 0) return null;
   const clueExchange = resolveClueSearchExchange(minigameConfig, shopResources);
   const visibleShopResources = filterClueSearchShopResources(shopResources, clueExchange);
+  let jankenStagePlays: Record<string, number> | undefined;
+  let jankenClearedStageUids: readonly string[] | undefined;
+  let jankenScore: { currentScore: number; averageScore: number | null } | undefined;
+  if (minigameConfig?.minigameType === "janken") {
+    if (!shop.jankenDefaultProgress || minigameConfig.janken?.status !== "available") {
+      throw new Error("Janken progress is unavailable");
+    }
+    const jankenEntry = savedJankenEntry ?? createDefaultJankenPlannerEntry(shop.jankenDefaultProgress);
+    const resourceRoles = getJankenResourceRoles(
+      minigameConfig.janken,
+      visibleShopResources.map(({ paymentResource }) => paymentResource.uid),
+      shop.jankenStudentGrowthUid,
+    );
+    const linkedShopLedger = calculateResourceLedger({
+      shopResources: visibleShopResources,
+      itemQuantities: state.itemQuantities,
+      itemPurchaseDays: state.itemPurchaseDays,
+      existingPaymentItemQuantities: state.existingPaymentItemQuantities,
+      stages,
+      includeFirstClear: state.includeFirstClear,
+      minigameStartRound: state.minigameStartRound,
+      minigamePlayCount: 0,
+      jankenStagePlays: EMPTY_JANKEN_STAGE_PLAYS,
+      jankenClearedStageUids: jankenEntry.progress.clearedStageUids,
+      jankenScore: {
+        currentScore: jankenEntry.progress.cumulativeScore,
+        averageScore: jankenEntry.goals.averageScore,
+      },
+      minigameConfig,
+      overriddenRequiredQuantities: state.overriddenRequiredQuantities,
+    });
+    const plan = deriveJankenPlan(minigameConfig.janken, jankenEntry, shop.jankenDefaultProgress, {
+      shopCurrencyRequired: resourceRoles.shopUid
+        ? (linkedShopLedger.remainingToFarm[resourceRoles.shopUid] ?? 0)
+        : 0,
+      shopCurrencyResourceUid: resourceRoles.shopUid ?? undefined,
+      studentGrowthResourceUid: shop.jankenStudentGrowthUid,
+    });
+    jankenStagePlays = plan.status === "available" ? plan.stagePlays : EMPTY_JANKEN_STAGE_PLAYS;
+    jankenClearedStageUids = jankenEntry.progress.clearedStageUids;
+    jankenScore = {
+      currentScore: jankenEntry.progress.cumulativeScore,
+      averageScore: jankenEntry.goals.averageScore,
+    };
+  }
   const bonusSummary = calculateBonusSummary({
     eventRewardBonus,
     selectedStudentUids: state.selectedBonusStudentUids,
@@ -561,6 +611,9 @@ function calculateShopRequiredAp(
     appliedBonusRatio,
     minigamePaymentCosts,
     minigameRewards,
+    jankenStagePlays,
+    jankenClearedStageUids,
+    jankenScore,
     excludedShopResourceUids: clueExchange?.hiddenShopResourceUids,
     minigameConfig,
   });
@@ -581,6 +634,13 @@ function getGuestShopState(plans: ReturnType<typeof guestPlannerEventShopPlans>,
     plans.find((plan) => plan.shopStateUid === shop.shopStateUid && plan.timelineUid === shop.timelineUid)?.state ??
     null
   );
+}
+
+function getJankenEntry(
+  shop: IntegratedPlannerShopEvent,
+  progress: PlannerStateDocumentV1["jankenProgress"] | undefined,
+): JankenPlannerEntry | null {
+  return shop.shopStateUid ? (progress?.[shop.shopStateUid] ?? null) : null;
 }
 
 function updateCondition(state: ApPlannerState, field: ApConditionField, value: number | null): ApPlannerState {
@@ -648,6 +708,9 @@ export default function ApPlannerRoute() {
       ? guestPlanner.snapshot.envelope
       : null;
   const guestPlans = useMemo(() => (guestEnvelope ? guestPlannerEventShopPlans(guestEnvelope) : []), [guestEnvelope]);
+  const jankenProgress = loaderData.signedIn
+    ? loaderData.accountState?.jankenProgress
+    : guestEnvelope?.document.jankenProgress;
   const guestApState = guestEnvelope?.document.ap ?? null;
   const apState = loaderData.signedIn ? (loaderData.accountState?.apPlanner ?? null) : guestApState;
   const effectiveApState = apState ?? createEmptyApPlannerState();
@@ -728,7 +791,7 @@ export default function ApPlannerRoute() {
         const shopState = loaderData.signedIn ? entry.shop.accountState : getGuestShopState(guestPlans, entry.shop);
         if (!shopState) return [];
         try {
-          const required = calculateShopRequiredAp(entry.shop, shopState);
+          const required = calculateShopRequiredAp(entry.shop, shopState, getJankenEntry(entry.shop, jankenProgress));
           return !required || required.hasUnobtainableTargets ? [entry.timelineUid] : [];
         } catch {
           return [];
@@ -767,7 +830,7 @@ export default function ApPlannerRoute() {
       let calculationError = shopError ?? guestStorageError;
       if (!calculationError && shopState) {
         try {
-          const required = calculateShopRequiredAp(entry.shop, shopState);
+          const required = calculateShopRequiredAp(entry.shop, shopState, getJankenEntry(entry.shop, jankenProgress));
           shopTargetExists = !required || required.hasUnobtainableTargets || hasApShopTarget(required.requiredAp);
           if (!required) {
             calculationError = "보물찾기가 포함된 AP는 이벤트 상점 계산기에서 확인해주세요.";
@@ -821,6 +884,7 @@ export default function ApPlannerRoute() {
     guestErrors,
     guestPlanner.snapshot,
     guestPlans,
+    jankenProgress,
     loaderData.accountStateStatus,
     loaderData.now,
     loaderData.signedIn,

@@ -35,12 +35,17 @@ jest.mock("~/routes/utils.ap._components/ApTimelineEvent", () => ({
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useLoaderData } from "react-router";
-import type { MinigameConfig, Stage } from "~/domain/event-shop";
+import type { MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
+import { calculateShopApRequirement } from "~/domain/event-shop/calculations/calculate-shop-ap";
 import { createDefaultEventShopState } from "~/domain/event-shop-state";
+import { createDefaultJankenPlannerEntry, deriveJankenPlan } from "~/domain/event-shop/janken";
 import { type ApPlannerCalculation, calculateApPlannerEvent } from "~/domain/ap-planner";
+import type { JankenPlannerEntry } from "~/domain/planner-state";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { janken860Fixture } from "../domain/fixtures/janken-860";
 import ApPlannerRoute from "~/routes/utils.ap";
+import type { IntegratedPlannerShopEvent } from "~/views/integrated-planner";
 
 const mockUseLoaderData = useLoaderData as unknown as jest.Mock;
 
@@ -84,6 +89,7 @@ function loaderData(overriddenRequiredQuantities: Record<string, number> = {}) {
         { uid: "ap-package", source: "package_ap", eventAt: "2026-09-30T04:00:00+09:00", autoRepurchase: false },
         { uid: "other-record", source: "buy", eventAt: "2026-09-30T04:00:00+09:00", autoRepurchase: false },
       ],
+      jankenProgress: {},
     },
     shopEvents: [previous, next].map((event) => ({
       timelineUid: event.uid,
@@ -94,6 +100,8 @@ function loaderData(overriddenRequiredQuantities: Record<string, number> = {}) {
       startAt: event.startAt,
       endAt: event.endAt,
       accountState: shopState,
+      jankenStudentGrowthUid: null,
+      jankenDefaultProgress: null,
       content: { stages, shopResources: [], eventRewardBonus: [], minigameConfig: null as MinigameConfig | null },
     })),
   };
@@ -154,6 +162,108 @@ describe("AP planner route", () => {
     expect(card?.shopTargetExists).toBe(true);
     expect(card?.rewardDataPending).toBe(true);
     expect(card?.calculationError).toBe("해당 이벤트의 퀘스트/미니게임 보상 데이터를 준비중이에요. 조금만 기다려주세요.");
+  });
+
+  it("uses the derived janken plan so AP matches the shop calculator", () => {
+    const data = loaderData();
+    const shop = data.shopEvents[1] as unknown as IntegratedPlannerShopEvent;
+    const quest: Stage = {
+      uid: "janken-entry-quest",
+      entryAp: 12,
+      index: "1-1",
+      difficulty: 1,
+      rewards: [
+        {
+          amount: 100_000,
+          rewardRequirement: null,
+          chance: null,
+          item: {
+            uid: "80860",
+            name: "entry-token",
+            category: "coin",
+            rarity: 1,
+            resourceType: ResourceTypeEnum.Item,
+          },
+        },
+        {
+          amount: 10_000,
+          rewardRequirement: null,
+          chance: null,
+          item: {
+            uid: "80863",
+            name: "shop-currency",
+            category: "coin",
+            rarity: 1,
+            resourceType: ResourceTypeEnum.Item,
+          },
+        },
+      ],
+    };
+    const shopCurrency = { type: ResourceTypeEnum.Item, uid: "80863", name: "shop-currency" };
+    const shopResource: ShopResource = {
+      uid: "janken-shop-item",
+      resource: { type: ResourceTypeEnum.Item, uid: "shop-item", name: "shop-item", rarity: 1 },
+      resourceAmount: 1,
+      paymentResource: shopCurrency,
+      purchaseTiers: [{ tierIndex: 1, startQuantity: 0, quantity: 1, unitPrice: 100, paymentResource: shopCurrency }],
+      shopAmount: 1,
+    };
+    const entry: JankenPlannerEntry = {
+      ...createDefaultJankenPlannerEntry({ currentTier: 1, heldEleph: 0 }),
+      goals: {
+        ...createDefaultJankenPlannerEntry({ currentTier: 1, heldEleph: 0 }).goals,
+        targetScore: 100_000,
+        averageScore: 100_000,
+      },
+    };
+    const minigameConfig: MinigameConfig = {
+      minigameType: "janken",
+      payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
+      payments: [],
+      rewardGroups: [],
+      janken: janken860Fixture,
+    };
+    const defaultProgress = { currentTier: 1, heldEleph: 0 };
+    const shopState = shop.accountState;
+    if (!shop || !shopState) throw new Error("Expected AP shop fixture.");
+    shop.shopStateUid = "next-shop";
+    shop.jankenStudentGrowthUid = "26016";
+    shop.jankenDefaultProgress = defaultProgress;
+    shop.content = {
+      stages: [quest as never],
+      shopResources: [shopResource],
+      eventRewardBonus: [],
+      minigameConfig,
+    };
+    const apShopState = {
+      ...shopState,
+      itemQuantities: { [shopResource.uid]: 1 },
+      enabledStages: { [quest.uid]: true },
+    };
+    shop.accountState = apShopState;
+    (data.accountState.jankenProgress as Record<string, JankenPlannerEntry>)["next-shop"] = entry;
+    const plan = deriveJankenPlan(janken860Fixture, entry, defaultProgress, {
+      shopCurrencyRequired: 100,
+      shopCurrencyResourceUid: "80863",
+      studentGrowthResourceUid: "26016",
+    });
+    const expected = calculateShopApRequirement({
+      state: apShopState,
+      stages: [quest],
+      shopResources: [shopResource],
+      appliedBonusRatio: {},
+      jankenStagePlays: plan.stagePlays,
+      jankenClearedStageUids: entry.progress.clearedStageUids,
+      jankenScore: {
+        currentScore: entry.progress.cumulativeScore,
+        averageScore: entry.goals.averageScore,
+      },
+      minigameConfig,
+    });
+    const card = renderNextCard(data);
+
+    expect(card?.calculation?.requiredAp).toBe(expected.totalApWithExtras);
+    expect(card?.calculation?.requiredAp).toBeGreaterThan(0);
   });
 
   it.each([false, true])("does not undercount a treasure-hunt plan with first-clear AP %s", (includeFirstClear) => {

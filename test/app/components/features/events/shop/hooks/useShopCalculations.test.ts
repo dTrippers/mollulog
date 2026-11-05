@@ -51,7 +51,6 @@ const state: ShopState = {
   extraStageRuns: {},
   minigameStartRound: 1,
   minigamePlayCount: 6,
-  jankenStagePlays: {},
   minigamePaymentQuantityMode: "expected",
   cardFlipStrategy: "all-open",
   overriddenRequiredQuantities: {},
@@ -60,6 +59,7 @@ const state: ShopState = {
 const stages: Stage[] = [];
 const shopResources: ShopResource[] = [];
 const noClearedJankenStages: string[] = [];
+const noJankenStagePlays: Record<string, number> = {};
 
 describe("useShopCalculations input tracking", () => {
   it("does not treat simulation-only result updates as user calculation changes", () => {
@@ -69,6 +69,7 @@ describe("useShopCalculations input tracking", () => {
       shopResources: [],
       appliedBonusRatio: {},
       jankenClearedStageUids: [],
+      jankenStagePlays: {},
       jankenScore: { currentScore: 0, averageScore: null },
     };
     const pendingInputs = buildShopCalculationInputSets(inputs);
@@ -122,6 +123,7 @@ describe("useShopCalculations input tracking", () => {
         shopResources,
         appliedBonusRatio,
         jankenClearedStageUids: noClearedJankenStages,
+        jankenStagePlays: noJankenStagePlays,
         jankenScore: { currentScore: 0, averageScore: null },
       }),
     );

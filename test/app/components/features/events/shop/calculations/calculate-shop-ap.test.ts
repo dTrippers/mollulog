@@ -73,13 +73,13 @@ describe("calculateShopApRequirement", () => {
     };
     const state = createDefaultEventShopState([entryStage], []);
     state.enabledStages[entryStage.uid] = true;
-    state.jankenStagePlays = { "100860204": 2 };
 
     const result = calculateShopApRequirement({
       state,
       stages: [entryStage],
       shopResources: [],
       appliedBonusRatio: {},
+      jankenStagePlays: { "100860204": 2 },
       jankenClearedStageUids: [
         "100860101",
         "100860102",

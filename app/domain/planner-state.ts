@@ -246,7 +246,6 @@ function parseEventShop(value: unknown): { eventUid: string; state: EventShopSta
     extraStageRuns: jsonValue(row.extraStageRuns, "event_shop_states.extra_stage_runs"),
     minigameStartRound: row.minigameStartRound,
     minigamePlayCount: row.minigamePlayCount,
-    jankenStagePlays: jsonValue(row.jankenStagePlays, "event_shop_states.janken_stage_plays"),
     minigamePaymentQuantityMode: row.minigamePaymentQuantityMode,
     cardFlipStrategy: row.cardFlipStrategy ?? DEFAULT_CARD_FLIP_STRATEGY,
     overriddenRequiredQuantities: jsonValue(
