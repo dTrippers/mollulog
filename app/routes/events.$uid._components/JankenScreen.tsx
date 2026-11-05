@@ -1,5 +1,5 @@
-import { FlagIcon, StarIcon } from "@heroicons/react/16/solid";
-import { useMemo, useRef, useState } from "react";
+import { CheckIcon, FlagIcon, StarIcon } from "@heroicons/react/16/solid";
+import { type ComponentProps, type ReactNode, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router";
 import { ShopSection } from "~/components/v2/features/events/ShopSection";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
@@ -21,6 +21,7 @@ import {
 } from "~/domain/event-shop/janken";
 import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
+import { cn } from "~/lib/utils";
 import { jankenLocale as t } from "~/locales/ko";
 import type { loader } from "../events.$uid.shop.janken";
 
@@ -36,6 +37,57 @@ const resourceLabel = (uid: string, roles: JankenResourceRoles) =>
         : uid === roles.studentUid
           ? t.studentGrowth
           : t.otherReward;
+
+type AvailableConfig = Extract<JankenConfig, { status: "available" }>;
+
+// Resource display names come from the event data; whitespace (BAQL names may contain line breaks) is collapsed.
+function collectResourceNames(config: AvailableConfig): Map<string, string> {
+  const names = new Map<string, string>();
+  const add = (uid: string, name: string | undefined) => {
+    const normalized = name?.replace(/\s+/g, " ").trim();
+    if (normalized && !names.has(uid)) names.set(uid, normalized);
+  };
+  for (const stage of config.stages) {
+    add(stage.entryCost.resourceUid, stage.entryCost.resourceName);
+    for (const reward of stage.rewards) add(reward.resourceUid, reward.resourceName);
+  }
+  for (const row of config.scoreRewards) for (const reward of row.rewards) add(reward.resourceUid, reward.resourceName);
+  if (config.equipmentUpgrade.costResource) {
+    add(config.equipmentUpgrade.costResource.resourceUid, config.equipmentUpgrade.costResource.resourceName);
+  }
+  return names;
+}
+
+function Chip({ className, ...props }: ComponentProps<typeof ToggleChip>) {
+  return <ToggleChip {...props} className={cn("min-h-8 text-sm", className)} />;
+}
+
+function BlockIcon({ children }: { children: ReactNode }) {
+  return (
+    <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-md bg-v2-inset">
+      {children}
+    </span>
+  );
+}
+
+const goalBlockClassName = "rounded-lg bg-v2-surface p-v2-block-p";
+const rowClassName = "grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]";
+const rowLabelClassName = "pt-1.5 text-xs font-medium text-v2-fg-secondary";
+const expectedFormat = new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 });
+const formatExpected = (amount: number) => expectedFormat.format(amount);
+
+function TierMark({ tier }: { tier: number }) {
+  return (
+    <span className="flex items-center gap-1">
+      {tier <= 5 ? (
+        <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
+      ) : (
+        <img src="/icons/exclusive_weapon.png" alt="" className="size-3.5 object-contain" />
+      )}
+      {tier <= 5 ? tier : tier - 5}
+    </span>
+  );
+}
 
 const stageLabel = (config: Extract<JankenConfig, { status: "available" }>, stageUid: string) => {
   const stage = config.stages.find(({ uid }) => uid === stageUid);
@@ -66,7 +118,7 @@ function summarizeStepResult(
   averageScore: number | null,
   roles: JankenResourceRoles,
   equipmentGoal: { have: number; need: number; tier: number } | null,
-): { summary: string; nextScore: number; equipmentReward: number } {
+): { rewards: { uid: string; quantity: number }[]; notes: string[]; nextScore: number; equipmentReward: number } {
   const evaluated = evaluateJankenPlan(config, {
     stagePlays: { [step.stageUid]: step.plays },
     clearedStageUids: [...cleared],
@@ -78,11 +130,10 @@ function summarizeStepResult(
     ...new Set([roles.studentUid, roles.shopUid, roles.equipmentUid].filter((uid): uid is string => Boolean(uid))),
   ]
     .map((uid) => ({ uid, quantity: evaluated.rewards[uid] ?? 0 }))
-    .filter(({ quantity }) => quantity > 0)
-    .slice(0, 2)
-    .map(({ uid, quantity }) => t.expectedResourceResult(resourceLabel(uid, roles), quantity));
+    .filter(({ quantity }) => quantity > 0);
+  const notes: string[] = [];
   if (step.kind === "equipment" && equipmentGoal && roles.equipmentUid) {
-    rewards.push(
+    notes.push(
       t.equipmentStepResult(
         equipmentGoal.have + (evaluated.rewards[roles.equipmentUid] ?? 0),
         equipmentGoal.need,
@@ -90,9 +141,11 @@ function summarizeStepResult(
       ),
     );
   }
-  const score = step.kind === "score" && nextScore > currentScore ? [t.scoreResult(nextScore - currentScore)] : [];
+  if (step.kind === "score" && nextScore > currentScore) notes.unshift(t.scoreResult(nextScore - currentScore));
+  if (rewards.length === 0 && notes.length === 0) notes.push(t.firstClearResult);
   return {
-    summary: [...score, ...rewards].join(" · ") || t.firstClearResult,
+    rewards,
+    notes,
     nextScore,
     equipmentReward: roles.equipmentUid ? (evaluated.rewards[roles.equipmentUid] ?? 0) : 0,
   };
@@ -163,6 +216,13 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     [available, config, planContext.shopResources, studentUid],
   );
   const shopUid = resourceRoles.shopUid;
+  const resourceNames = useMemo(
+    () => (config.status === "available" ? collectResourceNames(config) : new Map<string, string>()),
+    [config],
+  );
+  const nameOf = (uid: string | null | undefined, fallback: string) => (uid ? resourceNames.get(uid) : undefined) ?? fallback;
+  const labelOf = (uid: string) => resourceNames.get(uid) ?? resourceLabel(uid, resourceRoles);
+  const equipmentCostUid = config.status === "available" ? (config.equipmentUpgrade.costResource?.resourceUid ?? null) : null;
   const linkedShopCurrencyRequired = planContext.jankenShopCurrency.required;
   const linkedShopCurrencyOwned = planContext.jankenShopCurrency.owned;
   const growthNeeded = available
@@ -224,7 +284,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       currentScore = result.nextScore;
       equipmentHave += result.equipmentReward;
       for (const uid of stageClearChain(config, step.stageUid)) cleared.add(uid);
-      return { ...step, name, result: result.summary };
+      return { ...step, name, rewards: result.rewards, notes: result.notes };
     });
   }, [
     available,
@@ -273,17 +333,19 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           ) : null}
           {available ? (
             <>
-              {!hasExplicitGoals ? <StatusNotice tone="neutral">{t.firstVisitNotice}</StatusNotice> : null}
+              {!hasExplicitGoals ? (
+                <StatusNotice tone="neutral">{t.firstVisitNotice(nameOf(shopUid, t.shopCurrency))}</StatusNotice>
+              ) : null}
               <ShopSection title={t.goals} persistenceKey="event-shop-section::janken-goals" variant="shop">
-                <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
+                <div className="space-y-v2-group-gap">
                   {studentUid ? (
-                    <article className="p-v2-block-p">
+                    <article className={goalBlockClassName}>
                       <header className="flex items-center justify-between gap-3">
                         <h3 className="flex min-w-0 items-center gap-2 font-semibold">
                           <span aria-hidden="true">
                             <ResourceThumb itemUid={studentUid} name="" size="sm" />
                           </span>
-                          <span>{t.studentGrowth}</span>
+                          <span>{nameOf(studentUid, t.studentGrowth)}</span>
                         </h3>
                         {goals.targetTier != null ? (
                           <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
@@ -293,38 +355,27 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         ) : null}
                       </header>
                       <div className="mt-3 space-y-3">
-                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
+                        <div className={rowClassName}>
+                          <span className={rowLabelClassName}>{t.current}</span>
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <fieldset
                               aria-label={t.currentTier}
                               className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                             >
                               {Array.from({ length: 9 }, (_, index) => index + 1).map((tier) => (
-                                <ToggleChip
+                                <Chip
                                   key={tier}
                                   pressed={progress.currentTier === tier}
                                   ariaLabel={`${t.currentTier} ${t.tierLabel(tier)}`}
                                   onPressedChange={() => updateProgress({ currentTier: tier })}
                                 >
-                                  <span className="flex items-center gap-1">
-                                    {tier <= 5 ? (
-                                      <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
-                                    ) : (
-                                      <img
-                                        src="/icons/exclusive_weapon.png"
-                                        alt=""
-                                        className="size-3.5 object-contain"
-                                      />
-                                    )}
-                                    {tier <= 5 ? tier : tier - 5}
-                                  </span>
-                                </ToggleChip>
+                                  <TierMark tier={tier} />
+                                </Chip>
                               ))}
                             </fieldset>
                             <label
                               htmlFor="janken-held-student"
-                              className="inline-flex items-center gap-2 whitespace-nowrap text-xs text-v2-fg-secondary"
+                              className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-v2-fg-secondary"
                             >
                               {t.owned}
                               <NumberInput
@@ -339,21 +390,21 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             </label>
                           </div>
                         </div>
-                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                        <div className={rowClassName}>
+                          <span className={rowLabelClassName}>{t.goal}</span>
                           <fieldset
                             aria-label={t.targetTier}
                             className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                           >
-                            <ToggleChip
+                            <Chip
                               pressed={goals.targetTier === null}
                               ariaLabel={t.noGoal}
                               onPressedChange={() => updateGoals({ targetTier: null })}
                             >
                               {t.noGoal}
-                            </ToggleChip>
+                            </Chip>
                             {[3, 4, 6, 7, 8, 9].map((tier) => (
-                              <ToggleChip
+                              <Chip
                                 key={tier}
                                 disabled={tier <= progress.currentTier && goals.targetTier !== tier}
                                 pressed={goals.targetTier === tier}
@@ -362,15 +413,8 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                   updateGoals({ targetTier: goals.targetTier === tier ? null : tier })
                                 }
                               >
-                                <span className="flex items-center gap-1">
-                                  {tier <= 5 ? (
-                                    <StarIcon className="size-3.5 text-v2-warning" aria-hidden="true" />
-                                  ) : (
-                                    <img src="/icons/exclusive_weapon.png" alt="" className="size-3.5 object-contain" />
-                                  )}
-                                  {tier <= 5 ? tier : tier - 5}
-                                </span>
-                              </ToggleChip>
+                                <TierMark tier={tier} />
+                              </Chip>
                             ))}
                           </fieldset>
                         </div>
@@ -400,20 +444,20 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                       </div>
                     </article>
                   ) : (
-                    <article className="p-v2-block-p">
+                    <article className={goalBlockClassName}>
                       <h3 className="font-semibold">{t.studentGrowth}</h3>
                       <StatusNotice tone="neutral">{t.studentGrowthUnavailable}</StatusNotice>
                     </article>
                   )}
 
                   {shopUid ? (
-                    <article className="p-v2-block-p">
+                    <article className={goalBlockClassName}>
                       <header className="flex items-center justify-between gap-3">
                         <h3 className="flex min-w-0 items-center gap-2 font-semibold">
                           <span aria-hidden="true">
                             <ResourceThumb itemUid={shopUid} name="" size="sm" />
                           </span>
-                          <span>{t.shopCurrency}</span>
+                          <span>{nameOf(shopUid, t.shopCurrency)}</span>
                         </h3>
                         {shopCurrencyGoal ? (
                           <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
@@ -429,31 +473,31 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         ) : null}
                       </header>
                       <div className="mt-3 space-y-3">
-                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
+                        <div className={rowClassName}>
+                          <span className={rowLabelClassName}>{t.current}</span>
                           <span className="inline-flex items-center gap-2 text-sm tabular-nums">
-                            <span className="text-xs text-v2-fg-tertiary">{t.owned}</span>
+                            <span className="text-v2-fg-secondary">{t.owned}</span>
                             <strong>{linkedShopCurrencyOwned.toLocaleString()}</strong>
                           </span>
                         </div>
-                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                          <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                        <div className={rowClassName}>
+                          <span className={rowLabelClassName}>{t.goal}</span>
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <div className="flex flex-wrap gap-1">
-                              <ToggleChip
+                              <Chip
                                 pressed={goals.shopCurrencyMode === "linked"}
                                 ariaLabel={t.shopLinked}
                                 onPressedChange={() => updateGoals({ shopCurrencyMode: "linked" })}
                               >
                                 {t.shopLinked}
-                              </ToggleChip>
-                              <ToggleChip
+                              </Chip>
+                              <Chip
                                 pressed={goals.shopCurrencyMode === "manual"}
                                 ariaLabel={t.shopManual}
                                 onPressedChange={() => updateGoals({ shopCurrencyMode: "manual" })}
                               >
                                 {t.shopManual}
-                              </ToggleChip>
+                              </Chip>
                             </div>
                             {goals.shopCurrencyMode === "linked" ? (
                               <span className="text-sm font-medium tabular-nums">
@@ -478,10 +522,105 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                     </article>
                   ) : null}
 
-                  <article className="p-v2-block-p">
+                  <article className={goalBlockClassName}>
                     <header className="flex items-center justify-between gap-3">
-                      <h3 className="flex items-center gap-2 font-semibold">
-                        <FlagIcon className="size-4 text-v2-fg-tertiary" aria-hidden="true" />
+                      <h3 className="flex min-w-0 items-center gap-2 font-semibold">
+                        {equipmentCostUid ? (
+                          <span aria-hidden="true">
+                            <ResourceThumb itemUid={equipmentCostUid} name="" size="sm" />
+                          </span>
+                        ) : null}
+                        <span>{nameOf(equipmentCostUid, t.equipmentGoal)}</span>
+                      </h3>
+                      {goals.targetEquipmentTier != null ? (
+                        <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
+                          <strong>
+                            {t.remainingCount(Math.max(0, equipmentRequired - progress.heldEquipmentCurrency))}
+                          </strong>
+                          <span className="ml-1 text-v2-fg-tertiary">{t.remainingCountSuffix}</span>
+                        </span>
+                      ) : null}
+                    </header>
+                    <p className="mt-1 text-xs text-v2-fg-tertiary">{t.equipmentGoalHint(config.equipments.length)}</p>
+                    <div className="mt-3 space-y-3">
+                      <div className={rowClassName}>
+                        <span className={rowLabelClassName}>{t.current}</span>
+                        <div className="flex min-w-0 flex-wrap items-center gap-2">
+                          <fieldset
+                            aria-label={t.currentEquipmentTier}
+                            className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
+                          >
+                            {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
+                              (tier) => (
+                                <Chip
+                                  key={tier}
+                                  pressed={progress.equipmentTier === tier}
+                                  ariaLabel={t.equipmentGoalTier(tier)}
+                                  onPressedChange={() => updateProgress({ equipmentTier: tier })}
+                                >
+                                  T{tier}
+                                </Chip>
+                              ),
+                            )}
+                          </fieldset>
+                          <label
+                            htmlFor="janken-held-equipment-currency"
+                            className="inline-flex items-center gap-2 whitespace-nowrap text-sm text-v2-fg-secondary"
+                          >
+                            {t.owned}
+                            <NumberInput
+                              id="janken-held-equipment-currency"
+                              aria-label={t.heldEquipmentCurrency}
+                              className="w-28"
+                              grouped
+                              min={0}
+                              value={progress.heldEquipmentCurrency}
+                              onValueChange={(value) =>
+                                updateProgress({ heldEquipmentCurrency: Math.max(0, Math.trunc(value)) })
+                              }
+                            />
+                          </label>
+                        </div>
+                      </div>
+                      <div className={rowClassName}>
+                        <span className={rowLabelClassName}>{t.goal}</span>
+                        <fieldset
+                          aria-label={t.equipmentGoal}
+                          className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
+                        >
+                          <Chip
+                            pressed={goals.targetEquipmentTier === null}
+                            ariaLabel={t.noGoal}
+                            onPressedChange={() => updateGoals({ targetEquipmentTier: null })}
+                          >
+                            {t.noGoal}
+                          </Chip>
+                          {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
+                            (tier) => (
+                              <Chip
+                                key={tier}
+                                disabled={tier <= progress.equipmentTier && goals.targetEquipmentTier !== tier}
+                                pressed={goals.targetEquipmentTier === tier}
+                                ariaLabel={t.equipmentGoalTier(tier)}
+                                onPressedChange={() =>
+                                  updateGoals({ targetEquipmentTier: goals.targetEquipmentTier === tier ? null : tier })
+                                }
+                              >
+                                T{tier}
+                              </Chip>
+                            ),
+                          )}
+                        </fieldset>
+                      </div>
+                    </div>
+                  </article>
+
+                  <article className={goalBlockClassName}>
+                    <header className="flex items-center justify-between gap-3">
+                      <h3 className="flex min-w-0 items-center gap-2 font-semibold">
+                        <BlockIcon>
+                          <FlagIcon className="size-4 text-v2-fg-secondary" />
+                        </BlockIcon>
                         <span>{t.scoreGoal}</span>
                       </h3>
                       {missingAverageScore ? (
@@ -501,8 +640,8 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                     </header>
                     <p className="mt-1 text-xs text-v2-fg-tertiary">{t.scoreGoalHelp}</p>
                     <div className="mt-3 space-y-3">
-                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                        <label htmlFor="janken-current-score" className="pt-1 text-xs font-medium text-v2-fg-secondary">
+                      <div className={rowClassName}>
+                        <label htmlFor="janken-current-score" className={rowLabelClassName}>
                           {t.current}
                         </label>
                         <NumberInput
@@ -516,19 +655,19 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           onValueChange={(value) => updateProgress({ cumulativeScore: Math.max(0, Math.trunc(value)) })}
                         />
                       </div>
-                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
+                      <div className={rowClassName}>
+                        <span className={rowLabelClassName}>{t.goal}</span>
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <fieldset aria-label={t.targetScore} className="m-0 flex flex-wrap gap-1 border-0 p-0">
-                            <ToggleChip
+                            <Chip
                               pressed={goals.targetScore === null}
                               ariaLabel={t.noGoal}
                               onPressedChange={() => updateGoals({ targetScore: null })}
                             >
                               {t.noGoal}
-                            </ToggleChip>
+                            </Chip>
                             {scorePresets(config, studentUid).map(({ score, tier, rewardUid }) => (
-                              <ToggleChip
+                              <Chip
                                 key={score}
                                 pressed={goals.targetScore === score}
                                 ariaLabel={t.scorePreset(score, tier)}
@@ -544,7 +683,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                   ) : null}
                                   {t.scorePreset(score, tier)}
                                 </span>
-                              </ToggleChip>
+                              </Chip>
                             ))}
                           </fieldset>
                           {goals.targetScore != null ? (
@@ -564,11 +703,8 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         </div>
                       </div>
                       {goals.targetScore != null ? (
-                        <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                          <label
-                            htmlFor="janken-average-score"
-                            className="pt-1 text-xs font-medium text-v2-fg-secondary"
-                          >
+                        <div className={rowClassName}>
+                          <label htmlFor="janken-average-score" className={rowLabelClassName}>
                             {t.averageScoreShort}
                           </label>
                           <div
@@ -592,111 +728,22 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                     </div>
                   </article>
 
-                  <article className="p-v2-block-p">
-                    <header className="flex items-center justify-between gap-3">
+                  <article className={goalBlockClassName}>
+                    <header>
                       <h3 className="flex min-w-0 items-center gap-2 font-semibold">
-                        {config.equipmentUpgrade.costResource ? (
-                          <span aria-hidden="true">
-                            <ResourceThumb
-                              itemUid={config.equipmentUpgrade.costResource.resourceUid}
-                              name=""
-                              size="sm"
-                            />
-                          </span>
-                        ) : null}
-                        <span>{t.equipmentGoal}</span>
+                        <BlockIcon>
+                          <CheckIcon className="size-4 text-v2-fg-secondary" />
+                        </BlockIcon>
+                        <span>{t.clearedStages}</span>
                       </h3>
-                      {goals.targetEquipmentTier != null ? (
-                        <span className="whitespace-nowrap text-xs font-medium text-v2-fg-secondary">
-                          <strong>
-                            {t.remainingCount(Math.max(0, equipmentRequired - progress.heldEquipmentCurrency))}
-                          </strong>
-                          <span className="ml-1 text-v2-fg-tertiary">{t.remainingCountSuffix}</span>
-                        </span>
-                      ) : null}
                     </header>
-                    <p className="mt-1 text-xs text-v2-fg-tertiary">{t.equipmentGoalHint(config.equipments.length)}</p>
-                    <div className="mt-3 space-y-3">
-                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.current}</span>
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <fieldset
-                            aria-label={t.currentEquipmentTier}
-                            className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
-                          >
-                            {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
-                              (tier) => (
-                                <ToggleChip
-                                  key={tier}
-                                  pressed={progress.equipmentTier === tier}
-                                  ariaLabel={t.equipmentGoalTier(tier)}
-                                  onPressedChange={() => updateProgress({ equipmentTier: tier })}
-                                >
-                                  T{tier}
-                                </ToggleChip>
-                              ),
-                            )}
-                          </fieldset>
-                          <label
-                            htmlFor="janken-held-equipment-currency"
-                            className="inline-flex items-center gap-2 whitespace-nowrap text-xs text-v2-fg-secondary"
-                          >
-                            {t.heldEquipmentCurrency}
-                            <NumberInput
-                              id="janken-held-equipment-currency"
-                              aria-label={t.heldEquipmentCurrency}
-                              className="w-28"
-                              grouped
-                              min={0}
-                              value={progress.heldEquipmentCurrency}
-                              onValueChange={(value) =>
-                                updateProgress({ heldEquipmentCurrency: Math.max(0, Math.trunc(value)) })
-                              }
-                            />
-                          </label>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-[2.75rem_minmax(0,1fr)] items-start gap-2 sm:grid-cols-[3.5rem_minmax(0,1fr)]">
-                        <span className="pt-1 text-xs font-medium text-v2-fg-secondary">{t.goal}</span>
-                        <fieldset
-                          aria-label={t.equipmentGoal}
-                          className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
-                        >
-                          <ToggleChip
-                            pressed={goals.targetEquipmentTier === null}
-                            ariaLabel={t.noGoal}
-                            onPressedChange={() => updateGoals({ targetEquipmentTier: null })}
-                          >
-                            {t.noGoal}
-                          </ToggleChip>
-                          {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
-                            (tier) => (
-                              <ToggleChip
-                                key={tier}
-                                disabled={tier <= progress.equipmentTier && goals.targetEquipmentTier !== tier}
-                                pressed={goals.targetEquipmentTier === tier}
-                                ariaLabel={t.equipmentGoalTier(tier)}
-                                onPressedChange={() =>
-                                  updateGoals({ targetEquipmentTier: goals.targetEquipmentTier === tier ? null : tier })
-                                }
-                              >
-                                T{tier}
-                              </ToggleChip>
-                            ),
-                          )}
-                        </fieldset>
-                      </div>
-                    </div>
-                  </article>
-
-                  <article className="p-v2-block-p">
-                    <header className="font-semibold">{t.clearedStages}</header>
+                    <p className="mt-1 text-xs text-v2-fg-tertiary">{t.clearedStagesHelp}</p>
                     <div className="mt-3 flex flex-wrap gap-1">
                       {config.stages.map((stage) => {
                         const label = stageLabel(config, stage.uid) ?? t.challengeStage;
                         const cleared = progress.clearedStageUids.includes(stage.uid);
                         return (
-                          <ToggleChip
+                          <Chip
                             key={stage.uid}
                             pressed={cleared}
                             className={
@@ -711,17 +758,12 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                               })
                             }
                           >
-                            {cleared ? (
-                              <span className="mr-1" aria-hidden="true">
-                                ✓
-                              </span>
-                            ) : null}
+                            {cleared ? <CheckIcon className="mr-1 size-3.5" aria-hidden="true" /> : null}
                             {label}
-                          </ToggleChip>
+                          </Chip>
                         );
                       })}
                     </div>
-                    <p className="mt-2 text-xs text-v2-fg-tertiary">{t.clearedStagesHelp}</p>
                   </article>
                 </div>
               </ShopSection>
@@ -731,25 +773,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                 ) : planned?.status === "invalid" ? (
                   <StatusNotice tone="danger">{t.invalid}</StatusNotice>
                 ) : planned?.status === "available" ? (
-                  <ol className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
-                    <li className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 p-3">
-                      <span
-                        className="grid size-6 place-items-center rounded-full bg-v2-success-subtle text-sm text-v2-success"
-                        aria-hidden="true"
-                      >
-                        ✓
-                      </span>
-                      <div>
-                        <p className="font-semibold">{t.clearedStagesSummary(progress.clearedStageUids.length)}</p>
-                        <p className="text-xs text-v2-fg-tertiary">
-                          {progress.clearedStageUids
-                            .map((uid) => stageLabel(config, uid))
-                            .filter(Boolean)
-                            .join(" · ") || t.noClearedStages}
-                        </p>
-                      </div>
-                      <span className="text-sm text-v2-fg-tertiary">—</span>
-                    </li>
+                  <ol className="space-y-1 rounded-lg bg-v2-surface p-1">
                     {recommendationRows.map((step, index) => {
                       const stage = config.stages.find(({ uid }) => uid === step.stageUid);
                       if (!stage) return null;
@@ -769,9 +793,9 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           className="grid grid-cols-[2rem_1fr_auto] items-center gap-3 p-3"
                         >
                           <span className="grid size-6 place-items-center rounded-full bg-v2-inset text-xs">
-                            {index + 2}
+                            {index + 1}
                           </span>
-                          <div>
+                          <div className="min-w-0">
                             <p className="font-semibold">
                               {title}
                               <span className="ml-2 whitespace-nowrap rounded bg-v2-inset px-2 text-xs">
@@ -783,7 +807,17 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                 </span>
                               ) : null}
                             </p>
-                            <p className="text-xs text-v2-fg-tertiary">{step.result}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-v2-fg-secondary">
+                              {step.notes.map((note) => (
+                                <span key={note}>{note}</span>
+                              ))}
+                              {step.rewards.map(({ uid, quantity }) => (
+                                <span key={uid} className="inline-flex items-center gap-1 tabular-nums">
+                                  <ResourceThumb itemUid={uid} name={labelOf(uid)} size="sm" />
+                                  {formatExpected(quantity)}
+                                </span>
+                              ))}
+                            </div>
                             {multiplierRecommended ? (
                               <p className="mt-1 text-xs text-v2-fg-tertiary">
                                 {t.multiplierSplit(step.plays, config.multipleMax)}
@@ -791,7 +825,11 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             ) : null}
                           </div>
                           <span className="flex items-center gap-1 text-sm tabular-nums">
-                            <ResourceThumb itemUid={stage.entryCost.resourceUid} name={t.entryCurrency} size="sm" />
+                            <ResourceThumb
+                              itemUid={stage.entryCost.resourceUid}
+                              name={labelOf(stage.entryCost.resourceUid)}
+                              size="sm"
+                            />
                             {(stage.entryCost.quantity * step.plays).toLocaleString()}
                           </span>
                         </li>
@@ -819,9 +857,9 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           <th className="p-2 text-left">{t.stageColumn}</th>
                           <th className="p-2 text-right">{t.entryCurrency}</th>
                           {[
-                            [shopUid, t.shopCurrency],
-                            [studentUid, t.studentGrowth],
-                            [config.equipmentUpgrade.costResource?.resourceUid ?? null, t.equipmentCurrency],
+                            [studentUid, nameOf(studentUid, t.studentGrowth)],
+                            [shopUid, nameOf(shopUid, t.shopCurrency)],
+                            [equipmentCostUid, nameOf(equipmentCostUid, t.equipmentCurrency)],
                           ].map(([uid, label]) => (
                             <th key={label as string} className="p-2 text-right">
                               <span className="inline-flex items-center justify-end gap-1">
@@ -839,13 +877,13 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         {config.stages
                           .filter(({ stageType }) => stageType === "normal" || stageType === "challenge")
                           .map((stage) => (
-                            <tr key={stage.uid} className="border-t border-v2-divider">
+                            <tr key={stage.uid}>
                               <th className="p-2 text-left font-medium">{stageLabel(config, stage.uid)}</th>
                               <td className="p-2 text-right tabular-nums">{stage.entryCost.quantity}</td>
                               {[
-                                [shopUid, t.shopCurrency],
-                                [studentUid, t.studentGrowth],
-                                [config.equipmentUpgrade.costResource?.resourceUid ?? null, t.equipmentCurrency],
+                                [studentUid, nameOf(studentUid, t.studentGrowth)],
+                                [shopUid, nameOf(shopUid, t.shopCurrency)],
+                                [equipmentCostUid, nameOf(equipmentCostUid, t.equipmentCurrency)],
                               ].map(([uid, label], index) => {
                                 const amount = uid
                                   ? stage.rewards
@@ -885,10 +923,10 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                       <ResourceThumb
                                         itemUid={reward.resourceUid}
                                         resourceType={reward.resourceType}
-                                        name={resourceLabel(reward.resourceUid, resourceRoles)}
+                                        name={labelOf(reward.resourceUid)}
                                         size="sm"
                                       />
-                                      {resourceLabel(reward.resourceUid, resourceRoles)} {reward.quantity}
+                                      <span className="tabular-nums">{reward.quantity.toLocaleString()}</span>
                                     </span>
                                   ))}
                               </td>
@@ -901,7 +939,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                 ) : null}
                 {tab === "score" ? (
                   <>
-                    <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
+                    <div className="rounded-lg bg-v2-surface py-1">
                       {visibleScoreRewards.map((reward) => (
                         <div
                           key={reward.tier}
@@ -919,7 +957,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                 <ResourceThumb
                                   itemUid={item.resourceUid}
                                   resourceType={item.resourceType}
-                                  name={resourceLabel(item.resourceUid, resourceRoles)}
+                                  name={labelOf(item.resourceUid)}
                                   size="sm"
                                 />
                                 {item.quantity.toLocaleString()}
@@ -942,14 +980,14 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                   </>
                 ) : null}
                 {tab === "equipment" ? (
-                  <div className="divide-y divide-v2-divider rounded-lg bg-v2-surface">
+                  <div className="rounded-lg bg-v2-surface py-1">
                     {config.equipmentUpgrade.tierCosts.map(({ tier, quantity }) => (
                       <div key={tier} className="flex items-center justify-between px-3 py-2 text-sm">
                         <span className="flex items-center gap-2">
                           {config.equipmentUpgrade.costResource ? (
                             <ResourceThumb
                               itemUid={config.equipmentUpgrade.costResource.resourceUid}
-                              name={t.equipmentCurrency}
+                              name={nameOf(equipmentCostUid, t.equipmentCurrency)}
                               size="sm"
                             />
                           ) : null}
@@ -975,7 +1013,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <p className="text-xs text-v2-fg-tertiary">{t.entryCurrencyRequired}</p>
           <p className="flex items-center gap-2 text-2xl font-bold tabular-nums">
             {planned.entryResourceUid ? (
-              <ResourceThumb itemUid={planned.entryResourceUid} name={t.entryCurrency} size="sm" />
+              <ResourceThumb itemUid={planned.entryResourceUid} name={nameOf(planned.entryResourceUid, t.entryCurrency)} size="sm" />
             ) : null}
             {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"}
           </p>
@@ -983,9 +1021,9 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <p className="mt-1 text-lg font-semibold">
             {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
           </p>
-          <p className="mt-3 text-xs text-v2-fg-secondary">
-            {missingAverageScore ? t.scoreAverageSummary : t.summarySync}
-          </p>
+          {missingAverageScore ? (
+            <p className="mt-3 text-xs text-v2-fg-secondary">{t.scoreAverageSummary}</p>
+          ) : null}
           <Link
             className={`${v2ButtonClassName({ variant: "secondary" })} mt-3 w-full`}
             to={`/events/${loaderData.eventUid}/shop`}
@@ -1031,20 +1069,20 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
             <div className="space-y-1">
               <span className="flex items-center gap-1 text-sm font-semibold tabular-nums">
                 {planned.entryResourceUid ? (
-                  <ResourceThumb itemUid={planned.entryResourceUid} name={t.entryCurrency} size="sm" />
+                  <ResourceThumb itemUid={planned.entryResourceUid} name={nameOf(planned.entryResourceUid, t.entryCurrency)} size="sm" />
                 ) : null}
                 {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"} ·{" "}
                 {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
               </span>
-              <span className="block text-xs font-normal text-v2-fg-tertiary">
-                {persistence.saveError
-                  ? t.saveFailed
-                  : persistence.isSaving
-                    ? t.saving
-                    : missingAverageScore
-                      ? t.scoreAverageSummary
-                      : t.mobileSync}
-              </span>
+              {persistence.saveError || persistence.isSaving || missingAverageScore ? (
+                <span className="block text-xs font-normal text-v2-fg-tertiary">
+                  {persistence.saveError
+                    ? t.saveFailed
+                    : persistence.isSaving
+                      ? t.saving
+                      : t.scoreAverageSummary}
+                </span>
+              ) : null}
             </div>
           }
         >

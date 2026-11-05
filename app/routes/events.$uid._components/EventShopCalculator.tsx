@@ -521,16 +521,6 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
   const playedStages = janken.stages.filter((stage) => (planned.stagePlays[stage.uid] ?? 0) > 0);
   const challenge = janken.stages.find(({ stageType }) => stageType === "challenge");
   const challengePlayCount = challenge ? (planned.stagePlays[challenge.uid] ?? 0) : 0;
-  const targetLabels = [
-    ...(goals.shopCurrencyMode === "linked"
-      ? [jankenLocale.shopCurrencyTarget]
-      : goals.manualShopCurrency > 0
-        ? [jankenLocale.shopCurrencyTargetAmount(goals.manualShopCurrency)]
-        : []),
-    ...(goals.targetTier == null ? [] : [jankenLocale.studentGoalTarget(jankenLocale.tierLabel(goals.targetTier))]),
-    ...(goals.targetScore == null ? [] : [jankenLocale.scoreGoalTarget(goals.targetScore)]),
-    ...(goals.targetEquipmentTier == null ? [] : [jankenLocale.equipmentGoalTarget(goals.targetEquipmentTier)]),
-  ];
   const rewardItems = [
     ...janken.stages.flatMap((stage) => stage.rewards),
     ...janken.scoreRewards.flatMap((tier) => tier.rewards),
@@ -538,6 +528,28 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
   const firstRewardByUid = new Map<string, (typeof rewardItems)[number]>();
   for (const reward of rewardItems)
     if (!firstRewardByUid.has(reward.resourceUid)) firstRewardByUid.set(reward.resourceUid, reward);
+  const nameOf = (uid: string | null, fallback: string) => {
+    const name = uid ? firstRewardByUid.get(uid)?.resourceName?.replace(/\s+/g, " ").trim() : undefined;
+    return name || fallback;
+  };
+  const shopCurrencyName = nameOf(roles.shopUid, jankenLocale.shopCurrency);
+  const entryName = (stage: (typeof janken.stages)[number]) =>
+    stage.entryCost.resourceName?.replace(/\s+/g, " ").trim() || jankenLocale.entryCurrency;
+  const targetLabels = [
+    ...(goals.shopCurrencyMode === "linked"
+      ? [jankenLocale.shopCurrencyTarget(shopCurrencyName)]
+      : goals.manualShopCurrency > 0
+        ? [jankenLocale.shopCurrencyTargetAmount(shopCurrencyName, goals.manualShopCurrency)]
+        : []),
+    ...(goals.targetTier == null ? [] : [
+          jankenLocale.studentGoalTarget(
+            nameOf(roles.studentUid, jankenLocale.studentGrowth),
+            jankenLocale.tierLabel(goals.targetTier),
+          ),
+        ]),
+    ...(goals.targetScore == null ? [] : [jankenLocale.scoreGoalTarget(goals.targetScore)]),
+    ...(goals.targetEquipmentTier == null ? [] : [jankenLocale.equipmentGoalTarget(goals.targetEquipmentTier)]),
+  ];
   const roleOrder = [roles.studentUid, roles.shopUid, roles.equipmentUid].filter((uid): uid is string => uid !== null);
   const rewards = Object.entries(planned.rewards)
     .filter(([, quantity]) => quantity > 0)
@@ -564,18 +576,18 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
           <span className="text-xs text-v2-fg-tertiary">{jankenLocale.shopPlanCalculated}</span>
         </header>
         <p className="mt-2 text-xs text-v2-fg-secondary">
-          {jankenLocale.shopTargetSummary(targetLabels.length > 0 ? targetLabels : [jankenLocale.shopCurrencyTarget])}
+          {jankenLocale.shopTargetSummary(targetLabels.length > 0 ? targetLabels : [jankenLocale.shopCurrencyTarget(shopCurrencyName)])}
         </p>
-        <ul className="mt-3 divide-y divide-v2-divider">
+        <ul className="mt-3 space-y-2">
           {playedStages.map((stage) => (
-            <li key={stage.uid} className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <li key={stage.uid} className="flex items-center justify-between gap-3">
               <span className="whitespace-nowrap rounded-md bg-v2-inset px-2 py-1 text-sm font-medium">
                 {stageLabel(stage)}
               </span>
               <span className="flex items-center gap-3 text-sm tabular-nums">
                 <span>{jankenLocale.playCountBadge(planned.stagePlays[stage.uid] ?? 0)}</span>
                 <span className="flex items-center gap-1 text-v2-fg-secondary">
-                  <ResourceThumb itemUid={stage.entryCost.resourceUid} name={jankenLocale.entryCurrency} size="sm" />
+                  <ResourceThumb itemUid={stage.entryCost.resourceUid} name={entryName(stage)} size="sm" />
                   {(stage.entryCost.quantity * (planned.stagePlays[stage.uid] ?? 0)).toLocaleString()}
                 </span>
               </span>
