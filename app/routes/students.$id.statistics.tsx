@@ -15,7 +15,7 @@ import { canonicalLink } from "~/lib/seo";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudents } from "~/models/recruited-student";
-import { getAllStudentsMap } from "~/models/student";
+import { getAllStudentsMap, getStudentForms } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
 import type { StudentDetailPageContext } from "./students.$id";
 import { StudentRaidRecordList } from "./students.$id._components/StudentRaidRecordList";
@@ -64,10 +64,12 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const currentUserPromise = getActiveSensei(env, request);
   const allStudentsPromise = getAllStudentsMap(env, true);
   const allRaidsPromise = getAllRaidSchedules(env);
-  const [currentUser, rawAllStudents, allRaids] = await Promise.all([
+  const studentFormsPromise = getStudentForms(env);
+  const [currentUser, rawAllStudents, allRaids, studentForms] = await Promise.all([
     currentUserPromise,
     allStudentsPromise,
     allRaidsPromise,
+    studentFormsPromise,
   ]);
   const recruitedStudents = currentUser ? await getRecruitedStudents(env, currentUser.id) : [];
   const studentMeta = rawAllStudents[uid] ?? null;
@@ -81,6 +83,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
           familyName: studentMeta.familyName,
         }
       : null,
+    primaryStudentUid: studentForms[uid]?.primaryUid ?? uid,
     recruitedStudentTiers: Object.fromEntries(
       recruitedStudents.map((recruitedStudent) => [recruitedStudent.studentUid, recruitedStudent.tier]),
     ),
@@ -93,7 +96,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
 export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data?.studentMeta) {
-    return [{ title: "학생 통계 | 몰루로그" }, canonicalLink(location.pathname)];
+    const canonicalPath = data ? `/students/${data.primaryStudentUid}/statistics` : location.pathname;
+    return [{ title: "학생 통계 | 몰루로그" }, canonicalLink(canonicalPath)];
   }
   const studentFullName = formatStudentFullName(data.studentMeta);
   const title = `${studentFullName} - 총력전/대결전 통계`;
@@ -105,9 +109,21 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
     { name: "og:description", content: description },
     { name: "twitter:title", content: title },
     { name: "twitter:description", content: description },
-    canonicalLink(location.pathname),
+    canonicalLink(`/students/${data.primaryStudentUid}/statistics`),
   ];
 };
+
+export function shouldShowMergedStatisticsNote({
+  pageUid,
+  primaryUid,
+  statistics,
+}: {
+  pageUid: string;
+  primaryUid: string;
+  statistics: Pick<RaidStatistics, "studentUid">[];
+}) {
+  return pageUid !== primaryUid && statistics.length > 0 && statistics.every(({ studentUid }) => studentUid === primaryUid);
+}
 
 export default function StudentStatisticsPage() {
   const { student } = useOutletContext<StudentDetailPageContext>();
@@ -238,9 +254,14 @@ export default function StudentStatisticsPage() {
   );
 
   const statsState = statisticsLoading ? "loading" : statisticsFailed ? "failed" : rawStatistics.length === 0 ? "empty" : null;
+  const showMergedStatisticsNote = shouldShowMergedStatisticsNote({
+    pageUid: student.uid,
+    primaryUid: student.studentVariant.primaryStudent.uid,
+    statistics: rawStatistics,
+  });
   return (
     <section>
-      <div ref={scopeInfoAnchorRef} className="-mt-1.5 mb-3 flex min-h-8 items-center gap-0.5 text-[13px] leading-[1.43] text-v2-fg-secondary">
+      <div ref={scopeInfoAnchorRef} className={`-mt-1.5 ${showMergedStatisticsNote ? "mb-0" : "mb-3"} flex min-h-8 items-center gap-0.5 text-[13px] leading-[1.43] text-v2-fg-secondary`}>
         <span>총력전/대결전 통계만 포함되어 있어요</span>
         <span className="relative -ml-1 inline-flex">
           <IconButton
@@ -256,6 +277,7 @@ export default function StudentStatisticsPage() {
           </Popover>
         </span>
       </div>
+      {showMergedStatisticsNote ? <p className="-mt-1 mb-3 text-[13px] leading-[1.43] text-v2-fg-secondary">모든 폼의 기록을 합친 통계예요</p> : null}
       {statsState ? (
         <StudentStatisticsState state={statsState} onRetry={() => setStatisticsAttempt((value) => value + 1)} />
       ) : (
@@ -287,6 +309,8 @@ export default function StudentStatisticsPage() {
             sortDirection={sort}
             onSortDirectionChange={setSort}
             onShowMoreChange={setRaidShowMore}
+            forms={student.studentVariant.isMulticlass ? student.studentVariant.students : []}
+            currentStudentUid={student.uid}
           />
         </>
       )}

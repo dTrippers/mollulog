@@ -5,15 +5,16 @@ import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { raidTypeToParam } from "~/domain/raid";
 import type { Defense } from "~/graphql/graphql";
 import { formatInstant, type UtcIsoString } from "~/lib/date-time";
-import { defenseTypeLocale, difficultyLocale, raidTypeLocale, terrainLocale } from "~/locales/ko";
+import { defenseTypeLocale, difficultyLocale, raidTypeLocale, tacticRoleLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import { useImageFailure } from "~/components/v2/primitives/use-image-failure";
-import type { RaidType, Terrain } from "~/models/content.d";
+import type { RaidType, TacticRole, Terrain } from "~/models/content.d";
 import { getMaxTierAt } from "~/models/student-tier";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { SortControl } from "~/components/v2/primitives/SortControl";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { cn } from "~/lib/utils";
+import { formatUsagePercent } from "./formatUsagePercent";
 import { formatTierKey, TIER_COLORS } from "./raidTierVisual";
 
 export type StudentRaidRecord = {
@@ -21,6 +22,7 @@ export type StudentRaidRecord = {
   slotsByTier: { tier: number; count: number }[];
   assistsCount: number;
   assistsByTier: { tier: number; count: number }[];
+  formUsage: { studentUid: string; partyCount: number; ratio: number }[];
   raid: {
     raidType: RaidType;
     seasonIndex: number;
@@ -35,6 +37,41 @@ export type StudentRaidRecord = {
 };
 
 type RecordMode = "all" | "own" | "assist";
+export type StudentFormLabel = { uid: string; name: string; tacticRole: TacticRole };
+
+export function buildFormUsageItems({
+  forms,
+  usage,
+  currentStudentUid,
+}: {
+  forms: StudentFormLabel[];
+  usage: StudentRaidRecord["formUsage"];
+  currentStudentUid: string;
+}) {
+  if (forms.length < 2) return [];
+
+  const sameName = forms.every(({ name }) => name === forms[0]?.name);
+  const usageByStudentUid = new Map(usage.map((item) => [item.studentUid, item]));
+  const usedForms = forms.flatMap((form) => {
+    const formUsage = usageByStudentUid.get(form.uid);
+    return formUsage && formUsage.partyCount > 0
+      ? [{
+          studentUid: form.uid,
+          label: sameName ? tacticRoleLocale[form.tacticRole] : form.name,
+          ratio: formUsage.ratio,
+          current: form.uid === currentStudentUid,
+        }]
+      : [];
+  });
+  return usedForms.map((form) => ({
+    ...form,
+    percent:
+      usedForms.some((otherForm) => otherForm.studentUid !== form.studentUid && otherForm.ratio > 0) &&
+      Math.round(form.ratio * 1000) >= 1000
+        ? ">99.9%"
+        : formatUsagePercent(form.ratio),
+  }));
+}
 
 export function formatRaidRecordDateRange(startAt: UtcIsoString, endAt: UtcIsoString, timeZone: string): string {
   const startDate = formatInstant(startAt, { timeZone, format: "YYYY/MM/DD" });
@@ -50,12 +87,16 @@ export function StudentRaidRecordList({
   sortDirection,
   onSortDirectionChange,
   onShowMoreChange,
+  forms,
+  currentStudentUid,
 }: {
   records: StudentRaidRecord[];
   showMore: boolean;
   sortDirection: "recent" | "old";
   onSortDirectionChange: (direction: "recent" | "old") => void;
   onShowMoreChange: (showMore: boolean) => void;
+  forms: StudentFormLabel[];
+  currentStudentUid: string;
 }) {
   const timeZone = useDisplayTimeZone();
   const visible = showMore ? records : records.slice(0, 5);
@@ -75,7 +116,7 @@ export function StudentRaidRecordList({
       ) : (
         <div className="grid gap-2 md:grid-cols-2 md:gap-3">
           {visible.map((record) => (
-            <RaidRecordCard key={`${record.raid.raidType}-${record.raid.seasonIndex}-${record.raid.defenseType}`} record={record} timeZone={timeZone} detailHref={detailHref(record)} />
+            <RaidRecordCard key={`${record.raid.raidType}-${record.raid.seasonIndex}-${record.raid.defenseType}`} record={record} timeZone={timeZone} detailHref={detailHref(record)} forms={forms} currentStudentUid={currentStudentUid} />
           ))}
         </div>
       )}
@@ -88,7 +129,7 @@ export function StudentRaidRecordList({
   );
 }
 
-function RaidRecordCard({ record, timeZone, detailHref }: { record: StudentRaidRecord; timeZone: string; detailHref: string }) {
+function RaidRecordCard({ record, timeZone, detailHref, forms, currentStudentUid }: { record: StudentRaidRecord; timeZone: string; detailHref: string; forms: StudentFormLabel[]; currentStudentUid: string }) {
   const [mode, setMode] = useState<RecordMode>("all");
   const { raid } = record;
   const recordEyebrow = [raidTypeLocale[raid.raidType], raid.difficulty ? difficultyLocale[raid.difficulty] : null].filter(Boolean).join(" · ");
@@ -109,6 +150,7 @@ function RaidRecordCard({ record, timeZone, detailHref }: { record: StudentRaidR
   };
   const href = detailHref + (raid.raidType === "elimination" && !detailHref.includes("?") ? `?${new URLSearchParams({ defenseType: raid.defenseType })}` : "");
   const maxCount = Math.max(...tierCounts.values(), 1);
+  const formUsageItems = buildFormUsageItems({ forms, usage: record.formUsage, currentStudentUid });
 
   return (
     <article className="flex min-w-0 flex-col gap-3 rounded-lg bg-v2-surface p-v2-block-p">
@@ -122,6 +164,18 @@ function RaidRecordCard({ record, timeZone, detailHref }: { record: StudentRaidR
           <p className="text-xs leading-[1.43] text-v2-fg-tertiary tabular-nums">{recordMetadata}</p>
         </div>
       </div>
+      {formUsageItems.length > 0 ? (
+        <p className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs leading-[1.43] tabular-nums">
+          <span className="text-v2-fg-tertiary">폼</span>
+          <span className="flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            {formUsageItems.map((item, index) => (
+              <span key={item.studentUid} className={cn("whitespace-nowrap text-v2-fg-secondary", item.current && "font-medium text-v2-fg")}>
+                {item.label} {item.percent}{item.current ? <span className="sr-only"> 현재 폼</span> : null}{index < formUsageItems.length - 1 ? <span className="text-v2-fg-tertiary"> · </span> : null}
+              </span>
+            ))}
+          </span>
+        </p>
+      ) : null}
       <fieldset className="min-w-0 border-0 p-0">
         <legend className="sr-only">집계 대상</legend>
         <div className="inline-flex max-w-full gap-0.5 rounded-md bg-v2-inset p-0.5">

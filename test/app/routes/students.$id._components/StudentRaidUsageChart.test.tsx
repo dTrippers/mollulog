@@ -30,6 +30,7 @@ describe("StudentRaidUsageChart", () => {
             {
               raid: { raidType: "total_assault", season: 101, defenseType: Defense.Heavy },
               studentUid: "16014",
+              formUsage: [],
               slotsCount: 10,
               slotsByTier: [{ tier: 2, count: 4 }, { tier: 8, count: 6 }],
               assistsCount: 0,
@@ -38,6 +39,7 @@ describe("StudentRaidUsageChart", () => {
             {
               raid: { raidType: "total_assault", season: 102, defenseType: Defense.Heavy },
               studentUid: "16014",
+              formUsage: [],
               slotsCount: 5,
               slotsByTier: [{ tier: 8, count: 5 }],
               assistsCount: 0,
