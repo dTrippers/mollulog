@@ -11,79 +11,7 @@ import {
   treasureHuntCompositionSignature,
 } from "~/domain/treasure-hunt";
 
-const compositions = [
-  {
-    label: "1·4",
-    composition: {
-      boardWidth: 9,
-      boardHeight: 5,
-      pieces: [
-        { width: 3, height: 2, count: 2 },
-        { width: 3, height: 1, count: 5 },
-        { width: 1, height: 2, count: 2 },
-      ],
-    },
-    arrangements: 2_662_809_982,
-    p10: 33,
-    p50: 35,
-    p90: 38,
-  },
-  {
-    label: "2·5",
-    composition: {
-      boardWidth: 9,
-      boardHeight: 5,
-      pieces: [
-        { width: 4, height: 2, count: 1 },
-        { width: 1, height: 4, count: 2 },
-        { width: 3, height: 1, count: 5 },
-      ],
-    },
-    arrangements: 69_964_148,
-    p10: 32,
-    p50: 33,
-    p90: 35,
-  },
-  {
-    label: "3·6",
-    composition: {
-      boardWidth: 9,
-      boardHeight: 5,
-      pieces: [
-        { width: 3, height: 3, count: 1 },
-        { width: 2, height: 2, count: 4 },
-        { width: 1, height: 2, count: 3 },
-      ],
-    },
-    arrangements: 16_921_054,
-    p10: 33,
-    p50: 36,
-    p90: 38,
-  },
-  {
-    label: "7+",
-    composition: {
-      boardWidth: 9,
-      boardHeight: 5,
-      pieces: [
-        { width: 4, height: 2, count: 2 },
-        { width: 3, height: 1, count: 3 },
-        { width: 1, height: 2, count: 6 },
-      ],
-    },
-    arrangements: 2_532_321_650,
-    p10: 38,
-    p50: 40,
-    p90: 41,
-  },
-] satisfies {
-  label: string;
-  composition: TreasureHuntComposition;
-  arrangements: number;
-  p10: number;
-  p50: number;
-  p90: number;
-}[];
+import { compositions } from "./compositions";
 
 describe("treasure hunt composition signatures and arrangement counts", () => {
   it("canonicalizes board rotation, piece rotation, and piece ordering", () => {
@@ -194,47 +122,4 @@ describe("treasure hunt round economics compatibility", () => {
       ]),
     ).toBe(false);
   });
-});
-
-describe("10847 composition sample results (C5)", () => {
-  it.each(compositions)("$label produces 1,000 deterministic games within the prototype percentile tolerance", ({
-    label,
-    composition,
-    p10: expectedP10,
-    p50: expectedP50,
-    p90: expectedP90,
-  }) => {
-    const start = performance.now();
-    const simulator = createTreasureHuntSimulator(composition);
-    const counts = Array(simulator.boardCells - simulator.minCells + 1).fill(0) as number[];
-    for (let gameIndex = 0; gameIndex < 1000; gameIndex++) {
-      const openedCells = simulator.simulateGame(gameIndex);
-      const index = openedCells - simulator.minCells;
-      const count = counts[index];
-      if (count === undefined) {
-        throw new Error(`Game ${gameIndex} returned an out-of-range cell count ${openedCells}.`);
-      }
-      counts[index] = count + 1;
-    }
-    const histogram = { minCells: simulator.minCells, counts };
-    const p10 = histogramPercentile(histogram, 0.1);
-    const p50 = histogramPercentile(histogram, 0.5);
-    const p90 = histogramPercentile(histogram, 0.9);
-    const wallClockMs = performance.now() - start;
-
-    console.info(
-      `[C5] ${JSON.stringify({
-        composition: label,
-        games: 1000,
-        histogram,
-        cells: { p10, p50, p90 },
-        cost: { p10: p10 * 200, p50: p50 * 200, p90: p90 * 200 },
-        wallClockMs: Number(wallClockMs.toFixed(1)),
-      })}`,
-    );
-    expect(Math.abs(p10 - expectedP10)).toBeLessThanOrEqual(1);
-    expect(Math.abs(p50 - expectedP50)).toBeLessThanOrEqual(1);
-    expect(Math.abs(p90 - expectedP90)).toBeLessThanOrEqual(1);
-    expect(counts.reduce((sum, count) => sum + count, 0)).toBe(1000);
-  }, 180_000);
 });

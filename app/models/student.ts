@@ -235,7 +235,7 @@ const studentHeaderQuery = graphql(`
         uid
         isMulticlass
         primaryStudent { uid name }
-        students { uid name }
+        students { uid name tacticRole }
       }
     }
   }

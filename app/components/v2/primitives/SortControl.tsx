@@ -19,23 +19,51 @@ import { Popover } from "./Popover";
 const publicSorts = STUDENT_DIRECTORY_SORTS.filter((sort) => !sort.startsWith("my"));
 const personalSorts = STUDENT_DIRECTORY_SORTS.filter((sort) => sort.startsWith("my"));
 
-export function SortControl({
-  sort,
-  direction,
-  personalStatus,
-  onChange,
-  onRequestSignIn,
-  disabled = false,
-}: {
+type DirectorySortControlProps = {
+  mode?: "directory";
   sort: StudentDirectorySort;
   direction: StudentDirectorySortDirection;
   personalStatus: StudentDirectoryPersonalState["status"];
   onChange: (sort: StudentDirectorySort, direction: StudentDirectorySortDirection) => void;
   onRequestSignIn: () => void;
   disabled?: boolean;
-}) {
+};
+
+type DirectionSortControlProps = {
+  mode: "direction";
+  direction: "recent" | "old";
+  onDirectionChange: (direction: "recent" | "old") => void;
+  disabled?: boolean;
+};
+
+export function SortControl(props: DirectorySortControlProps | DirectionSortControlProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  if (props.mode === "direction") {
+    const { direction: currentDirection, onDirectionChange, disabled: directionDisabled = false } = props;
+    const label = currentDirection === "recent" ? "최신순" : "과거순";
+    return (
+      <button
+        type="button"
+        aria-label={`정렬 방향: ${label}`}
+        disabled={directionDisabled}
+        onClick={() => onDirectionChange(currentDirection === "recent" ? "old" : "recent")}
+        className={cn(
+          "inline-flex min-h-v2-control-min shrink-0 items-center gap-1 rounded-md bg-v2-inset px-3 text-sm text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover disabled:text-v2-fg-disabled disabled:hover:bg-v2-inset",
+          v2FocusRing,
+        )}
+      >
+        {currentDirection === "recent" ? (
+          <ArrowDownIcon className="size-4" aria-hidden="true" />
+        ) : (
+          <ArrowUpIcon className="size-4" aria-hidden="true" />
+        )}
+        <span>{label}</span>
+      </button>
+    );
+  }
+
+  const { sort, direction, personalStatus, onChange, onRequestSignIn, disabled = false } = props;
   const directionLabel = getStudentDirectorySortLabel(sort, direction);
   const toggleDirection = () => onChange(sort, direction === "desc" ? "asc" : "desc");
   const chooseSort = (nextSort: StudentDirectorySort) => {

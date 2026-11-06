@@ -106,12 +106,15 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 | `p-v2-tile-p` / `--spacing-v2-tile-p` | 0.75rem | same | same | Padding for shop tiles and compact surface blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
 | `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | same | same | Minimum row height (36px). List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
-| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
+| `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact; do not size visible controls, chips, or rows to a 44px touch target. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
 | `min-h-v2-input-min` / `--spacing-v2-input-min` | 1.75rem | same | same | Number and text inputs are 28px on every layout, the same height as `ToggleChip`, so they line up in one row. `Select` and `SearchInput` follow the 32px control token. Keep mobile text inputs at `text-base` to avoid iOS zoom |
 
 ## Button variants
 
 - `text` is a secondary action with a hover background. `link` is an inline add or secondary action aligned to a field edge: it has no horizontal padding or hover background, and hover changes only the text color.
+- An action must look pressable at rest. `text` and `link` show no boundary until hover, so they read as plain text; do not use them for a row's or panel's own actions (for example 되돌리기, 삭제, 수급 완료, 저장). Use `secondary` (or `primary`, `danger`, `danger-subtle` by meaning), or `IconButton` with an accessible name. Keep `text` and `link` for actions placed next to a label or field edge, as above.
+- Buttons that sit together in a row or repeat across rows share one width or one size, so their edges line up; do not let each label set its own width.
+- Use the v2 `Select`, `Checkbox`, `Switch`, and `NumberInput` primitives. Do not render the browser's native select, checkbox, or number input in v2 screens.
 
 ## Numeric and date formats
 
@@ -135,6 +138,7 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - Among recruitment labels, only `new` (신규) is colored. Other labels such as 한정 복각, 복각, and 배포 stay as `text-v2-on-media` text on the scrim.
 - In dark mode, `live` and `attr-red` share the same value. Always show them with their labels.
 - The light `attr-yellow` stripe has low contrast (about 1.68:1). The text label carries the meaning, so the stripe stays.
+- Show terrain adaptation ranks with the rank icons (`TerrainRanks`, `terrainAdaptationIconUrl`), not `SS` / `S` / `A` text. The icon carries `적성 <rank>` as its accessible name.
 
 ## Motion
 
@@ -216,6 +220,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
 - `PageHeader` takes `titleHidden` to keep its title and meta in the screen-reader tree while visually hiding them.
 - `V2Page` takes `toolbarSpan="full"` to put the toolbar on its own full-width row above the Aside and Main, so a toolbar shared by several screens (such as the event detail tabs) stays in place whether or not a screen has an Aside. It also adds a full-width notice row for `PageNotice`, which renders a page-level `StatusNotice` between the toolbar and the content. `PageNotice` has no area without `toolbarSpan="full"`.
+- `PageHeader stackedOnly` hides the Header at 48rem and wider beside an Aside, and the page grid drops the header row so the Aside and the Toolbar start at the top. The page renders the same header first in `PageAside` with `PageAsideHeader`, which keeps the back link, media, title, and meta. The Aside then sticks at the content's top padding, level with the Toolbar. The student detail page uses it so its tabs and body are not pushed down by a header that only fills the Aside's width.
 
 ### Width rules
 

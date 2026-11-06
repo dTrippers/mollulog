@@ -64,8 +64,10 @@ jest.mock("~/lib/observability.server", () => ({
 
 import { StaleStudentStateRequestError } from "~/domain/student-state-errors";
 import { StudentSkillSelectionCondition } from "~/graphql/graphql";
-import { shouldShowStickyFooterSurface } from "~/routes/students.$id._components/GrowthEditorSheet";
-import { getGrowthProgressPercent } from "~/routes/students.$id._components/GrowthFieldRow";
+import {
+  getGrowthProgressPercent,
+  shouldShowStickyFooterSurface,
+} from "~/routes/students.$id._components/GrowthEditorSheet";
 import {
   getAbilityReleaseDisabledReason,
   getSkillSelectionConditionLabel,

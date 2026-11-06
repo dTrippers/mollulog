@@ -8,9 +8,10 @@ export {
 } from "./MobileActionBar";
 export { PageActionBar, type PageActionBarProps } from "./PageActionBar";
 export { PageAside } from "./PageAside";
-export { PageHeader, type PageHeaderBack, type PageHeaderProps } from "./PageHeader";
+export { PageAsideHeader, PageHeader, type PageHeaderBack, type PageHeaderProps } from "./PageHeader";
 export { PageMain } from "./PageMain";
 export { PageNotice } from "./PageNotice";
+export { PageStackedSummary } from "./PageStackedSummary";
 export { PageToolbar, type PageToolbarProps } from "./PageToolbar";
 export { PanelAction, type PanelActionProps } from "./PanelAction";
 export { PanelSheet, type PanelSheetProps } from "./PanelSheet";

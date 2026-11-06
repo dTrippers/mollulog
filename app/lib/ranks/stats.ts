@@ -23,6 +23,13 @@ message StudentStatistics {
   string student_uid = 1;
   repeated TierStatistics statistics = 2;
   RaidInfo raid = 3;
+  repeated StudentFormUsage form_usage = 4;
+}
+
+message StudentFormUsage {
+  string student_uid = 1;
+  int64 party_count = 2;
+  double ratio = 3;
 }
 
 message TierStatistics {
@@ -51,6 +58,7 @@ type ServerRaidInfo = {
 type ServerStudentStatistics = {
   studentUid: string;
   statistics: ServerTierStatistics[];
+  formUsage?: { studentUid: string; partyCount: string | number; ratio: number }[];
   raid: ServerRaidInfo;
 };
 
@@ -61,6 +69,7 @@ type ServerStudentStatisticsResponse = {
 export type RaidStatistics = {
   raid: { raidType: RaidType; season: number; defenseType: Defense };
   studentUid: string;
+  formUsage: { studentUid: string; partyCount: number; ratio: number }[];
   slotsCount: number;
   slotsByTier: { tier: number; count: number }[];
   assistsCount: number;
@@ -105,7 +114,7 @@ export async function fetchRaidStatisticsByRaid(
   return convertToRaidStatistics(await fetchStudentStatistics({ raidType, season, defenseType }));
 }
 
-function convertToRaidStatistics(response: ServerStudentStatisticsResponse): RaidStatistics[] {
+export function convertToRaidStatistics(response: ServerStudentStatisticsResponse): RaidStatistics[] {
   return response.students.map((rawStat) => {
     const slotsByTierMap = new Map<number, number>();
     const assistsByTierMap = new Map<number, number>();
@@ -134,6 +143,11 @@ function convertToRaidStatistics(response: ServerStudentStatisticsResponse): Rai
         defenseType: rawStat.raid.defenseType as Defense,
       },
       studentUid: rawStat.studentUid,
+      formUsage: (rawStat.formUsage ?? []).map(({ studentUid, partyCount, ratio }) => ({
+        studentUid,
+        partyCount: Number(partyCount),
+        ratio,
+      })),
       slotsCount: Array.from(slotsByTierMap.values()).reduce((sum, count) => sum + count, 0),
       slotsByTier,
       assistsCount: Array.from(assistsByTierMap.values()).reduce((sum, count) => sum + count, 0),

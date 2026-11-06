@@ -2,17 +2,17 @@ import { describe, expect, it } from "@jest/globals";
 import type { ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import StudentInfo from "~/components/features/students/StudentInfo";
+import { StudentProfileFacts } from "~/components/v2/features/students/StudentProfileFacts";
 import {
   clickPopoverButtonProgrammatically,
   shouldOpenPopoverFromFocus,
 } from "~/components/features/furniture/FurnitureInteractionStudentsPopover";
 
-type StudentInfoStudent = ComponentProps<typeof StudentInfo>["student"];
+type StudentProfileStudent = ComponentProps<typeof StudentProfileFacts>["student"];
 
 function studentWithInteractionFurnitures(
-  interactionFurnitures: StudentInfoStudent["interactionFurnitures"],
-): StudentInfoStudent {
+  interactionFurnitures: StudentProfileStudent["interactionFurnitures"],
+): StudentProfileStudent {
   return {
     uid: "student-1",
     name: "학생",
@@ -32,13 +32,13 @@ function studentWithInteractionFurnitures(
       students: [],
     },
     interactionFurnitures,
-  } as StudentInfoStudent;
+  } as StudentProfileStudent;
 }
 
-function renderStudentInfo(interactionFurnitures: StudentInfoStudent["interactionFurnitures"]) {
+function renderProfileFacts(interactionFurnitures: StudentProfileStudent["interactionFurnitures"]) {
   return renderToStaticMarkup(
     <MemoryRouter>
-      <StudentInfo student={studentWithInteractionFurnitures(interactionFurnitures)} />
+      <StudentProfileFacts student={studentWithInteractionFurnitures(interactionFurnitures)} />
     </MemoryRouter>,
   );
 }
@@ -112,9 +112,9 @@ describe("Furniture interaction students popover input modality", () => {
   });
 });
 
-describe("StudentInfo interaction furniture section", () => {
-  it("renders the label and icon without an inline furniture name", () => {
-    const markup = renderStudentInfo([
+describe("Student profile interaction furniture section", () => {
+  it("renders the label and icon without inline furniture-name text", () => {
+    const markup = renderProfileFacts([
       {
         uid: "beach-chair",
         name: "해변 의자 세트",
@@ -124,12 +124,13 @@ describe("StudentInfo interaction furniture section", () => {
     ]);
 
     expect(markup).toContain("상호작용 가구");
-    expect(markup).not.toContain("해변 의자 세트");
-    expect(markup).toContain('src="https://assets.test/furniture.webp"');
+    expect(markup).toContain('alt="해변 의자 세트"');
+    expect(markup).not.toMatch(/>해변 의자 세트</);
+    expect(markup).toContain("/furnitures/beach-chair.webp");
   });
 
   it("omits the section when the student has no interaction furniture", () => {
-    const markup = renderStudentInfo([]);
+    const markup = renderProfileFacts([]);
 
     expect(markup).not.toContain("상호작용 가구");
   });
