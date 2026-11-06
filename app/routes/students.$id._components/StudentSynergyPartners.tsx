@@ -1,101 +1,77 @@
+import { ArrowPathIcon, XCircleIcon } from "@heroicons/react/24/outline";
 import { Link } from "react-router";
-import { LoadingSkeleton, ProfileImage, SectionCard } from "~/components/primitives";
+import { RoundStudentImage } from "~/components/v2/features/students/RoundStudentImage";
+import { Button } from "~/components/v2/primitives/Button";
+import { Skeleton } from "~/components/v2/primitives/Skeleton";
+import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import type { StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
 import { formatTierLabel } from "./raidTierVisual";
 
 type StudentSynergyPartnersProps = {
   partners: StudentAnalysisSynergyPartner[];
   loading: boolean;
+  failed?: boolean;
+  onRetry?: () => void;
+  signedIn: boolean;
   allStudents: Record<string, { name: string }>;
   recruitedStudentTiers: Record<string, number>;
   className?: string;
 };
 
-const percentFormatter = new Intl.NumberFormat("ko-KR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-});
+const percentFormatter = new Intl.NumberFormat("ko-KR", { style: "percent", maximumFractionDigits: 1 });
 
-export default function StudentSynergyPartners({
-  partners,
-  loading,
-  allStudents,
-  recruitedStudentTiers,
-  className,
-}: StudentSynergyPartnersProps) {
-  if (loading) {
-    return (
-      <SectionCard title="함께 쓰는 학생" description="함께 편성된 횟수가 많은 학생이에요." className={className}>
-        <LoadingSkeleton noOuterMargin />
-      </SectionCard>
-    );
-  }
-
+export default function StudentSynergyPartners({ partners, loading, failed = false, onRetry, signedIn, allStudents, recruitedStudentTiers, className }: StudentSynergyPartnersProps) {
   const visiblePartners = partners.flatMap((partner) => {
     const student = allStudents[partner.partnerUid];
     return student ? [{ partner, student }] : [];
   });
-  if (visiblePartners.length === 0) {
-    return null;
-  }
+  const unresolvedPartnerCount = partners.length - visiblePartners.length;
+  if (!loading && !failed && visiblePartners.length === 0 && unresolvedPartnerCount === 0) return null;
 
   return (
-    <SectionCard title="함께 쓰는 학생" description="함께 편성된 횟수가 많은 학생이에요." className={className}>
-      <div className="grid gap-3 md:grid-cols-3">
-        {visiblePartners.map(({ partner, student }, index) => {
-          const tier = recruitedStudentTiers[partner.partnerUid] ?? null;
-          const barWidth = Math.min(Math.max(partner.coRate, 0), 1) * 100;
-
-          return (
-            <Link
-              key={partner.partnerUid}
-              to={`/students/${partner.partnerUid}`}
-              className="flex h-full flex-col rounded-md border border-neutral-200 p-3 transition hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-700 dark:hover:border-neutral-600 dark:hover:bg-neutral-800"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2">
-                  <span className="shrink-0 text-xs font-semibold tabular-nums text-blue-600 dark:text-blue-300">
-                    {index + 1}
-                  </span>
-                  <p className="truncate text-sm font-semibold text-neutral-900 dark:text-neutral-100">
-                    {student.name}
-                  </p>
-                </div>
-                <p className="shrink-0 text-sm font-bold tabular-nums text-neutral-900 dark:text-neutral-100">
-                  {percentFormatter.format(partner.coRate)}
-                </p>
-              </div>
-
-              <div className="mt-3 flex items-center gap-3">
-                <div className="shrink-0">
-                  <ProfileImage studentUid={partner.partnerUid} imageSize={10} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="space-y-1">
-                    <p className="truncate text-xs text-neutral-500 dark:text-neutral-400">
-                      내 학생{" "}
-                      {tier !== null ? (
-                        <span className="font-semibold text-blue-600 dark:text-blue-300">{formatTierLabel(tier)}</span>
-                      ) : (
-                        <span className="font-semibold text-blue-600 dark:text-blue-300">미모집</span>
-                      )}
-                    </p>
-                    <p className="mt-1 text-xs tabular-nums text-neutral-500 dark:text-neutral-400">
-                      함께 출전{" "}
-                      <span className="font-medium text-neutral-700 dark:text-neutral-300">
-                        {partner.coCount.toLocaleString()}회
+    <section className={`min-w-0 ${className ?? ""}`} aria-label="함께 쓰는 학생">
+      <div className="mb-2 flex min-h-7 items-center"><h3 className="text-base leading-[1.4] font-semibold text-v2-fg">함께 쓰는 학생</h3></div>
+      <div className="rounded-lg bg-v2-surface p-v2-block-p">
+        {loading ? (
+          <div className="space-y-2" aria-busy="true">{["skeleton-partner-1", "skeleton-partner-2", "skeleton-partner-3"].map((key) => <Skeleton key={key} className="h-10 w-full" />)}</div>
+        ) : null}
+        {!loading && (failed || unresolvedPartnerCount > 0) ? (
+          <StatusNotice className="[&>svg]:hidden [&>div:last-child]:-my-1" tone="danger" action={onRetry ? <Button variant="text" size="sm" onClick={onRetry}><ArrowPathIcon className="size-3.5" aria-hidden="true" />다시 시도</Button> : undefined}>
+            <span className="relative block pl-6 leading-[1.43]"><XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />분석 정보를 불러오지 못했어요</span>
+          </StatusNotice>
+        ) : null}
+        {!loading && visiblePartners.length > 0 ? (
+          <ol className="flex flex-col gap-4">
+            {visiblePartners.map(({ partner, student }, index) => {
+              const tier = signedIn ? recruitedStudentTiers[partner.partnerUid] ?? null : null;
+              const ratioWidth = Math.min(Math.max(partner.coRate, 0), 1) * 100;
+              return (
+                <li key={partner.partnerUid}>
+                  <Link
+                    to={`/students/${partner.partnerUid}`}
+                    {...getV2LinkTransitionProps("crossfade")}
+                    className="group grid grid-cols-[1.25rem_36px_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1"
+                  >
+                    <span className="text-center text-[13px] leading-[1.43] font-semibold text-v2-fg-tertiary tabular-nums">{index + 1}</span>
+                    <RoundStudentImage studentUid={partner.partnerUid} size={10} className="!h-auto !w-9 !aspect-[5/6] !rounded-md" />
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm leading-[1.43] font-medium text-v2-fg group-hover:underline">{student.name}</span>
+                      <span className="block truncate text-xs leading-[1.43] text-v2-fg-tertiary">
+                        함께 출전 {partner.coCount.toLocaleString()}회{signedIn ? <> · 내 학생 {tier === null ? <span>미모집</span> : <span>{formatTierLabel(tier)}</span>}</> : null}
                       </span>
-                    </p>
-                  </div>
-                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-700">
-                    <div className="h-full rounded-full bg-blue-500" style={{ width: `${barWidth}%` }} />
-                  </div>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+                    </span>
+                    <span className="text-right text-sm leading-[1.43] font-semibold text-v2-fg tabular-nums">{percentFormatter.format(partner.coRate)}</span>
+                    <span className="col-start-3 col-end-5 block h-1.5 overflow-hidden rounded-full bg-v2-inset" aria-hidden="true">
+                      <span className="block h-full rounded-full bg-v2-fg-secondary" style={{ width: `${ratioWidth}%` }} />
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        ) : null}
       </div>
-    </SectionCard>
+    </section>
   );
 }

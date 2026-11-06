@@ -558,6 +558,15 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-banner-pink-fg: var(--v2-banner-pink-fg);
   --color-v2-banner-black: var(--v2-banner-black);
   --color-v2-banner-black-fg: var(--v2-banner-black-fg);
+  --color-v2-viz-tier-1: var(--v2-viz-tier-1);
+  --color-v2-viz-tier-2: var(--v2-viz-tier-2);
+  --color-v2-viz-tier-3: var(--v2-viz-tier-3);
+  --color-v2-viz-tier-4: var(--v2-viz-tier-4);
+  --color-v2-viz-tier-5: var(--v2-viz-tier-5);
+  --color-v2-viz-tier-6: var(--v2-viz-tier-6);
+  --color-v2-viz-tier-7: var(--v2-viz-tier-7);
+  --color-v2-viz-tier-8: var(--v2-viz-tier-8);
+  --color-v2-viz-tier-9: var(--v2-viz-tier-9);
   --background-image-v2-ai-gradient: linear-gradient(135deg, var(--v2-ai-from), var(--v2-ai-to));
   --shadow-v2-ai-glow: 0 0 1.25rem var(--v2-ai-glow);
   --animate-v2-ai-working: v2-ai-working 2s ease-in-out infinite;
@@ -650,6 +659,15 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-banner-pink-fg: oklch(0.4 0.12 340);
   --v2-banner-black: oklch(0.89 0 0);
   --v2-banner-black-fg: oklch(0.35 0 0);
+  --v2-viz-tier-1: #ef4444;
+  --v2-viz-tier-2: #f97316;
+  --v2-viz-tier-3: #eab308;
+  --v2-viz-tier-4: #22c55e;
+  --v2-viz-tier-5: #06b6d4;
+  --v2-viz-tier-6: #3b82f6;
+  --v2-viz-tier-7: #8b5cf6;
+  --v2-viz-tier-8: #d946ef;
+  --v2-viz-tier-9: #ec4899;
   /* Fixed, not theme-dependent: a game screenshot keeps its own colors in both themes. */
   --v2-marker-shade: oklch(0.2 0 0 / 80%);
   --v2-marker-light: oklch(1 0 0 / 90%);
@@ -741,6 +759,15 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-banner-pink-fg: oklch(0.86 0.08 340);
   --v2-banner-black: oklch(0.30 0 0);
   --v2-banner-black-fg: oklch(0.90 0 0);
+  --v2-viz-tier-1: #ef4444;
+  --v2-viz-tier-2: #f97316;
+  --v2-viz-tier-3: #eab308;
+  --v2-viz-tier-4: #22c55e;
+  --v2-viz-tier-5: #06b6d4;
+  --v2-viz-tier-6: #3b82f6;
+  --v2-viz-tier-7: #8b5cf6;
+  --v2-viz-tier-8: #d946ef;
+  --v2-viz-tier-9: #ec4899;
   --v2-dev-accent: oklch(0.623 0.214 259.815);
   --v2-dev-accent-strong: oklch(0.515 0.215 263.6);
   --v2-dev-on-accent: oklch(0.985 0 0);
@@ -860,9 +887,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     "header"
+    "summary"
     "toolbar"
     "main";
 }
@@ -870,6 +898,10 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 .v2-header {
   grid-area: header;
   padding-top: var(--spacing-v2-group-gap);
+}
+
+.v2-stacked-summary {
+  grid-area: summary;
 }
 
 .v2-toolbar,
@@ -893,6 +925,47 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
 .v2-main {
   grid-area: main;
+}
+
+.v2-range-slider {
+  --v2-range-progress: 0%;
+}
+
+.v2-range-slider::-webkit-slider-runnable-track {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--v2-fg) 0 var(--v2-range-progress), var(--v2-inset) var(--v2-range-progress) 100%);
+}
+
+.v2-range-slider::-moz-range-track {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--v2-inset);
+}
+
+.v2-range-slider::-moz-range-progress {
+  height: 0.25rem;
+  border-radius: 999px;
+  background: var(--v2-fg);
+}
+
+.v2-range-slider::-webkit-slider-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  margin-top: -0.3125rem;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--v2-surface);
+  box-shadow: 0 0 0 2px var(--v2-fg);
+}
+
+.v2-range-slider::-moz-range-thumb {
+  width: 0.875rem;
+  height: 0.875rem;
+  border: 0;
+  border-radius: 999px;
+  background: var(--v2-surface);
+  box-shadow: 0 0 0 2px var(--v2-fg);
 }
 
 .v2-aside {
@@ -963,6 +1036,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 }
 
 @container page-available (width >= 48rem) {
+  .v2-stacked-summary,
   /* The header action also renders in Sheet's portal, outside this container. */
   .v2-chat-new-conversation-stacked {
     display: none;
@@ -970,6 +1044,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
   [data-v2-layout]:has(> .v2-aside) {
     grid-template-columns: var(--v2-aside-w) minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
     grid-template-areas:
       "header header"
       "aside toolbar"
@@ -988,6 +1063,24 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
       "aside main";
   }
 
+  [data-v2-layout]:has(> .v2-aside):has(.v2-header[data-stacked-only="true"]) {
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      "aside toolbar"
+      "aside main";
+  }
+
+  /* The aside starts the page, so it sticks at the content's top padding (pt-2 lg:pt-6 in root.tsx) and stays level with
+     the toolbar. */
+  [data-v2-layout]:has(.v2-header[data-stacked-only="true"]) > .v2-aside {
+    top: 0.5rem;
+
+    @media (width >= 64rem) {
+      top: 1.5rem;
+    }
+  }
+
+  .v2-header[data-stacked-only="true"],
   .v2-toolbar[data-stacked-only="true"],
   .v2-toolbar-sentinel[data-stacked-only="true"] {
     display: none;

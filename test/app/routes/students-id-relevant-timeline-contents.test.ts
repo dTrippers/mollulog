@@ -2,11 +2,6 @@ import { describe, expect, it, jest } from "@jest/globals";
 import type { TimelineContent } from "~/models/timeline-content.server";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
-jest.mock("~/components/features/layout", () => ({
-  Page: jest.fn(() => null),
-  createPageErrorBoundary: jest.fn(() => null),
-}));
-jest.mock("~/components/features/students", () => ({ StudentInfo: jest.fn(() => null) }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn(() => ({ error: jest.fn() })) }));
 jest.mock("~/models/raid", () => ({ getAllRaidSchedules: jest.fn() }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudentTiers: jest.fn() }));

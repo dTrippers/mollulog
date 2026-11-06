@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { StudentGradingTimeline } from "~/components/features/students";
+import StudentGradingTimeline from "~/components/v2/features/students/StudentGradingTimeline";
 import { routeError } from "~/lib/http-errors";
 import { getStudentGradingsByStudentWithUsers } from "~/models/student-grading.server";
 import { getTagCountsByStudent } from "~/models/student-grading-tag.server";
@@ -39,7 +39,7 @@ export default function StudentGradingsPage() {
   );
 
   return (
-    <section className="my-4 space-y-4">
+    <section className="flex flex-col gap-2 md:gap-3">
       <StudentGradingChart
         student={student}
         tagCounts={tagCounts}

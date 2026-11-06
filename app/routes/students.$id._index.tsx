@@ -1,10 +1,12 @@
-import { ChartBarIcon } from "@heroicons/react/24/outline";
+import { ArrowRightIcon } from "@heroicons/react/24/outline";
 import { useEffect, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
-import { data, useLoaderData } from "react-router";
+import { data, Link, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { RecruitmentHistories } from "~/components/features/students";
-import { Button, Callout, EmptyView, LoadingSkeleton, SubTitle } from "~/components/primitives";
+import { RecruitmentHistoryList } from "~/components/v2/features/students/RecruitmentHistoryList";
+import { StudentPreparingState } from "~/components/v2/features/students/StudentPreparingState";
+import { StudentStatisticsState } from "~/components/v2/features/raids/StudentStatisticsState";
+import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { validateStudentEquipmentLevels } from "~/domain/student-calculator";
 import {
   isStaleStudentStateRequestError,
@@ -270,7 +272,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   }
 
   let tier: number | undefined;
-  let requestMode: "legacy" | "nullable";
+  let requestMode: "legacy" | "nullable" = "legacy";
   let currentState: Partial<RecruitedStudentCurrentStateInput>;
   let relationshipBonds: Record<string, number | null>;
   try {
@@ -324,7 +326,7 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
       stateStudentUid,
       { tier, currentState, relationshipBonds },
       {
-        requestMode: requestMode!,
+        requestMode,
         ...(requestMode === "nullable"
           ? { equipmentValidation: { student, catalog: studentDetailData?.studentCatalog } }
           : {}),
@@ -372,9 +374,14 @@ export default function StudentDetail() {
   const [writeMode] = useState(initialWriteMode);
   const [statisticsLoading, setStatisticsLoading] = useState(true);
   const [rawStatistics, setRawStatistics] = useState<RaidStatistics[]>([]);
+  const [statisticsFailed, setStatisticsFailed] = useState(false);
+  const [statisticsAttempt, setStatisticsAttempt] = useState(0);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the attempt counter is the explicit retry trigger for this request.
   useEffect(() => {
     let cancelled = false;
     const loadStatistics = async () => {
+      setStatisticsLoading(true);
+      setStatisticsFailed(false);
       try {
         const rawStatistics = await fetchRaidStatisticsByStudent(student.uid);
         if (cancelled) {
@@ -382,7 +389,7 @@ export default function StudentDetail() {
         }
         setRawStatistics(rawStatistics);
       } catch {
-        // Keep the existing graceful empty-state behavior without alerting.
+        if (!cancelled) setStatisticsFailed(true);
       } finally {
         if (!cancelled) {
           setStatisticsLoading(false);
@@ -393,18 +400,19 @@ export default function StudentDetail() {
     return () => {
       cancelled = true;
     };
-  }, [student.uid]);
+  }, [student.uid, statisticsAttempt]);
 
   const recentReview = allGradings[0];
   const currentUserReview = allGradings.find(
     (grading) => currentUser && grading.user.username === currentUser.username,
   );
+  const studentInfoReady = Boolean(studentCatalog && student.catalog);
 
   return (
     <>
-      <div className="mt-6 md:mt-8">
+      <div className={studentInfoReady ? undefined : "space-y-6"}>
         <StudentKnowledgePopoverProvider>
-          {studentCatalog && student.catalog ? (
+          {studentInfoReady && studentCatalog && student.catalog ? (
             <StudentBasicInfo
               key={student.uid}
               student={student}
@@ -456,45 +464,61 @@ export default function StudentDetail() {
               }}
             />
           ) : (
-            <Callout tone="warning" title="학생 기본 정보를 준비하고 있어요" />
+            <div className="flex flex-col gap-6">
+              <StudentPreparingState />
+              <section>
+                <div className="mb-2 flex min-h-7 items-center justify-between gap-2">
+                  <h2 className="text-base leading-[1.4] font-semibold text-v2-fg">학생 평가 요약</h2>
+                  <Link to={`/students/${student.uid}/gradings`} className="inline-flex min-h-7 shrink-0 items-center rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg">
+                    전체 평가 보기
+                  </Link>
+                </div>
+                <StudentGradingChart
+                  student={student}
+                  tagCounts={tagCounts}
+                  noGrading={allGradings.length === 0}
+                  signedIn={currentUser !== null}
+                  recentReview={recentReview}
+                  currentUserReview={currentUserReview}
+                  variant="embedded"
+                />
+              </section>
+            </div>
           )}
         </StudentKnowledgePopoverProvider>
       </div>
 
-      <div className="mt-8 md:mt-10">
-        <SubTitle text="역대 편성 통계" />
-        <div className="mt-3 md:mt-4">
+      <div className="mt-6">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-base leading-[1.4] font-semibold text-v2-fg">역대 편성 통계</h2>
+          <Link
+            to={`/students/${student.uid}/statistics`}
+            {...getV2LinkTransitionProps("crossfade")}
+            className="inline-flex min-h-7 shrink-0 items-center gap-1 rounded-md px-2 text-xs font-medium text-v2-fg-secondary hover:bg-v2-hover hover:text-v2-fg"
+          >
+            상세 통계 보기<ArrowRightIcon className="size-3.5" aria-hidden="true" />
+          </Link>
+        </div>
+        <div>
           {statisticsLoading ? (
-            <LoadingSkeleton />
+            <StudentStatisticsState state="loading" onRetry={() => setStatisticsAttempt((value) => value + 1)} />
+          ) : statisticsFailed ? (
+            <StudentStatisticsState state="failed" onRetry={() => setStatisticsAttempt((value) => value + 1)} />
           ) : rawStatistics.length === 0 ? (
-            <EmptyView text="편성된 총력전/대결전 정보가 없어요" />
+            <StudentStatisticsState state="empty" onRetry={() => setStatisticsAttempt((value) => value + 1)} />
           ) : (
-            <>
-              <StudentRaidUsageChart
-                releaseAt={student.releaseAt}
-                raids={allRaids}
-                statistics={rawStatistics}
-                title={null}
-              />
-              <div className="mt-3 flex justify-end">
-                <Button
-                  text="상세 통계 보기"
-                  icon={ChartBarIcon}
-                  variant="primary"
-                  size="sm"
-                  to={`/students/${student.uid}/statistics`}
-                />
-              </div>
-            </>
+            <StudentRaidUsageChart
+              releaseAt={student.releaseAt}
+              raids={allRaids}
+              statistics={rawStatistics}
+              title={null}
+            />
           )}
         </div>
       </div>
 
       {recruitments.length > 0 && (
-        <div className="mt-8 md:mt-10">
-          <SubTitle text="모집 일정" />
-          <RecruitmentHistories recruitments={recruitments} />
-        </div>
+        <RecruitmentHistoryList recruitments={recruitments} />
       )}
     </>
   );

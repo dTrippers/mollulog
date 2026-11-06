@@ -7,6 +7,7 @@ import {
   aggregateDifficultyUsage,
   buildStudentAnalysisScopeLookup,
   getStudentAnalysisEnvironmentKey,
+  getStudentAnalysisFailedAreas,
   getStudentAnalysisScopeKey,
   type StudentAnalysisScopeMetadata,
 } from "~/routes/students.$id._components/StudentDifficultyUsageModel";
@@ -93,6 +94,51 @@ describe("buildStudentAnalysisScopeLookup", () => {
     expect(result.has(getStudentAnalysisScopeKey({ raidType: "allied", season: 1, defenseType: Defense.Heavy }))).toBe(
       false,
     );
+  });
+});
+
+describe("getStudentAnalysisFailedAreas", () => {
+  it("marks only areas backed by an unloaded raid scope", () => {
+    const scopeLookup = new Map([makeScopeMetadata({ jpSeasonIndex: 31, bossName: "헤세드" })]);
+    const response: StudentAnalysisResponse = {
+      totalEntries: 2,
+      synergy: [{ partnerUid: "student-b", coCount: 1, coRate: 0.5 }],
+      scopes: [
+        {
+          raid: { raidType: "total_assault", season: 31, defenseType: Defense.Heavy },
+          loaded: false,
+          bands: [],
+        },
+        {
+          raid: { raidType: "total_assault", season: 99, defenseType: Defense.Heavy },
+          loaded: false,
+          bands: [],
+        },
+      ],
+    };
+
+    expect(getStudentAnalysisFailedAreas({ response, scopeLookup })).toEqual({
+      bossUsage: true,
+      difficultyUsage: true,
+      synergy: false,
+    });
+  });
+
+  it("marks an unknown failed scope for difficulty aggregation", () => {
+    const scopeLookup = new Map([makeScopeMetadata({ jpSeasonIndex: 31, bossName: "헤세드" })]);
+    const response: StudentAnalysisResponse = {
+      totalEntries: 1,
+      synergy: [],
+      scopes: [
+        { raid: { raidType: "total_assault", season: 99, defenseType: Defense.Heavy }, loaded: false, bands: [] },
+      ],
+    };
+
+    expect(getStudentAnalysisFailedAreas({ response, scopeLookup })).toEqual({
+      bossUsage: false,
+      difficultyUsage: true,
+      synergy: false,
+    });
   });
 });
 

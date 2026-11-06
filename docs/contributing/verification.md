@@ -14,13 +14,50 @@ the direction. After the direction is settled, run the appropriate final checks
 and rerun affected checks after concrete fixes; do not run broad checks after
 every small visual adjustment.
 
-The package scripts currently include `typecheck`, `lint`, and `test`:
+## During implementation
+
+Run commands below from `web/`. For ordinary code changes, run the affected
+tests while iterating instead of repeating the full lint, typecheck, and test
+suite after every edit. Select a test directly or use Jest's dependency graph:
+
+```sh
+mise exec -- pnpm test --runTestsByPath test/path/to/affected.test.ts
+mise exec -- pnpm test --findRelatedTests app/path/to/changed.ts
+mise exec -- pnpm test --changedSince=origin/main
+```
+
+Use an available, up-to-date base ref for `--changedSince`; use explicit paths
+when the base ref is unavailable. Inspect the selected tests: dependency-based
+selection does not cover every file read at runtime, generated input, or other
+indirect dependency. No matching tests is not evidence that a change is safe.
+For shared setup, test configuration, or dependency changes, run the full regular
+suite and any affected slow tests. Choose lint or typecheck during iteration when
+the change or a diagnostic calls for it.
+
+## Completion checks
+
+For code or verification-configuration changes, run the following once when the
+work is complete, before committing or opening a PR. After a concrete fix, rerun
+the affected checks; repeat broad checks only when the fix's scope requires it.
+The documentation-only and UI-iteration rules above still apply.
 
 ```sh
 mise exec -- pnpm typecheck
 mise exec -- pnpm lint
 mise exec -- pnpm test
 ```
+
+`test` excludes `*.slow.test.ts`. The four 1,000-game treasure-hunt simulation
+cases run separately, with their original sample sizes and assertions:
+
+```sh
+mise exec -- pnpm test:slow
+```
+
+Run `test:slow` locally when changing treasure-hunt simulation, arrangement
+counting, percentile calculations, their dependencies or fixtures, or test
+configuration that affects the slow suite. Unrelated local work does not require
+it. CI runs both `test` and `test:slow` on every applicable workflow run.
 
 Use `mise exec -- pnpm lint` for its package-scoped migration and app/test checks.
 When a full-tree check is specifically relevant, run

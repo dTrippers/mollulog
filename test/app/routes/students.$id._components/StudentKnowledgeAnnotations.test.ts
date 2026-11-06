@@ -1,14 +1,16 @@
+/** @jest-environment jsdom */
+import "../../components/v2/layout/layout-test-polyfills";
 import { describe, expect, it } from "@jest/globals";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   getKnowledgePopoverVisibleTop,
   getVisibleFixedHeaderBottom,
-  handleKeyboardTermClick,
   KnowledgeAnnotatedText,
   StudentKnowledgePopoverProvider,
-  toggleKeyboardPopoverKey,
 } from "~/routes/students.$id._components/StudentKnowledgeAnnotations";
+import { installLayoutTestEnv } from "../../components/v2/layout/layout-test-env";
 
 describe("KnowledgeAnnotatedText", () => {
   it("links only the registered alias and leaves following letters as plain text", () => {
@@ -29,20 +31,73 @@ describe("KnowledgeAnnotatedText", () => {
   });
 });
 
-describe("handleKeyboardTermClick", () => {
-  it("reopens after Escape and toggles closed on the next keyboard activation", () => {
-    let activeKey: string | null = "term-1";
-    const toggle = () => {
-      activeKey = toggleKeyboardPopoverKey(activeKey, "term-1");
-    };
+describe("KnowledgeTermTrigger keyboard dismissal", () => {
+  it("opens on trigger focus without moving focus into the panel, stays focused on hover, and reopens after Escape", async () => {
+    installLayoutTestEnv();
+    render(
+      createElement(
+        "div",
+        null,
+        createElement(KnowledgeAnnotatedText, {
+          text: "공포를 부여",
+          entries: [{ title: "공포", aliases: ["공포"], body: "공포 설명" }],
+        }),
+      ),
+    );
 
-    activeKey = null;
-    handleKeyboardTermClick(0, toggle);
-    expect(activeKey).toBe("term-1");
-    handleKeyboardTermClick(0, toggle);
-    expect(activeKey).toBeNull();
-    handleKeyboardTermClick(1, toggle);
-    expect(activeKey).toBeNull();
+    const trigger = screen.getByRole("button", { name: "공포" });
+    const nativeMatches = trigger.matches.bind(trigger);
+    Object.defineProperty(trigger, "matches", {
+      configurable: true,
+      value: (selector: string) => selector === ":focus-visible" || nativeMatches(selector),
+    });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    act(() => trigger.focus());
+    const panel = await screen.findByRole("dialog", { name: "공포" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(trigger);
+    expect(panel.contains(document.activeElement)).toBe(false);
+
+    const activeBeforeHover = document.activeElement;
+    const pointerOver = new Event("pointerover", { bubbles: true });
+    Object.defineProperty(pointerOver, "pointerType", { value: "mouse" });
+    fireEvent(trigger, pointerOver);
+    expect(document.activeElement).toBe(activeBeforeHover);
+
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(trigger.getAttribute("aria-expanded")).toBe("false");
+    expect(document.activeElement).toBe(trigger);
+
+    fireEvent.click(trigger, { detail: 0 });
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it("opens on pointer hover without moving focus", () => {
+    installLayoutTestEnv();
+    render(
+      createElement(
+        "div",
+        null,
+        createElement("button", { type: "button" }, "Previous control"),
+        createElement(KnowledgeAnnotatedText, {
+          text: "공포를 부여",
+          entries: [{ title: "공포", aliases: ["공포"], body: "공포 설명" }],
+        }),
+        createElement("button", { type: "button" }, "Next control"),
+      ),
+    );
+    const previousControl = screen.getByRole("button", { name: "Previous control" });
+    const trigger = screen.getByRole("button", { name: "공포" });
+    act(() => previousControl.focus());
+    const previousActiveElement = document.activeElement;
+    expect(previousActiveElement).toBe(previousControl);
+    const pointerOver = new Event("pointerover", { bubbles: true });
+    Object.defineProperty(pointerOver, "pointerType", { value: "mouse" });
+    fireEvent(trigger, pointerOver);
+
+    expect(trigger.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(previousActiveElement);
   });
 });
 
