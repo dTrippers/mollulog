@@ -35,7 +35,6 @@ export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
 export const meta: MetaFunction<typeof loader> = ({ data }) => [
   { title: `${data?.eventName ?? "이벤트"} - ${jankenLocale.pageTitle} | 몰루로그` },
 ];
-export const handle = { v2Width: "wide" } as const;
 
 export default function EventJankenRoute() {
   const data = useLoaderData<typeof loader>();

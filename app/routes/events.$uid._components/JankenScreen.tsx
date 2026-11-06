@@ -1,5 +1,5 @@
 import { CheckIcon, FlagIcon, StarIcon } from "@heroicons/react/16/solid";
-import { type ComponentProps, type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { Link, useOutletContext } from "react-router";
 import { ShopSection } from "~/components/v2/features/events/ShopSection";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
@@ -21,7 +21,6 @@ import {
 } from "~/domain/event-shop/janken";
 import type { JankenPlannerEntry } from "~/domain/planner-state";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
-import { cn } from "~/lib/utils";
 import { jankenLocale as t } from "~/locales/ko";
 import type { loader } from "../events.$uid.shop.janken";
 
@@ -56,10 +55,6 @@ function collectResourceNames(config: AvailableConfig): Map<string, string> {
     add(config.equipmentUpgrade.costResource.resourceUid, config.equipmentUpgrade.costResource.resourceName);
   }
   return names;
-}
-
-function Chip({ className, ...props }: ComponentProps<typeof ToggleChip>) {
-  return <ToggleChip {...props} className={cn("min-h-8 text-sm", className)} />;
 }
 
 function BlockIcon({ children }: { children: ReactNode }) {
@@ -220,9 +215,11 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     () => (config.status === "available" ? collectResourceNames(config) : new Map<string, string>()),
     [config],
   );
-  const nameOf = (uid: string | null | undefined, fallback: string) => (uid ? resourceNames.get(uid) : undefined) ?? fallback;
+  const nameOf = (uid: string | null | undefined, fallback: string) =>
+    (uid ? resourceNames.get(uid) : undefined) ?? fallback;
   const labelOf = (uid: string) => resourceNames.get(uid) ?? resourceLabel(uid, resourceRoles);
-  const equipmentCostUid = config.status === "available" ? (config.equipmentUpgrade.costResource?.resourceUid ?? null) : null;
+  const equipmentCostUid =
+    config.status === "available" ? (config.equipmentUpgrade.costResource?.resourceUid ?? null) : null;
   const linkedShopCurrencyRequired = planContext.jankenShopCurrency.required;
   const linkedShopCurrencyOwned = planContext.jankenShopCurrency.owned;
   const growthNeeded = available
@@ -315,11 +312,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
               tone="danger"
               action={
                 <div className="flex gap-2">
-                  <Button
-                    size="sm"
-                    variant="secondary"
-                    onClick={persistence.reloadLatest}
-                  >
+                  <Button size="sm" variant="secondary" onClick={persistence.reloadLatest}>
                     {t.reload}
                   </Button>
                   <Button size="sm" onClick={persistence.overwrite}>
@@ -363,14 +356,14 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                               className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                             >
                               {Array.from({ length: 9 }, (_, index) => index + 1).map((tier) => (
-                                <Chip
+                                <ToggleChip
                                   key={tier}
                                   pressed={progress.currentTier === tier}
                                   ariaLabel={`${t.currentTier} ${t.tierLabel(tier)}`}
                                   onPressedChange={() => updateProgress({ currentTier: tier })}
                                 >
                                   <TierMark tier={tier} />
-                                </Chip>
+                                </ToggleChip>
                               ))}
                             </fieldset>
                             <label
@@ -380,6 +373,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                               {t.owned}
                               <NumberInput
                                 id="janken-held-student"
+                                compact
                                 aria-label={`${t.studentGrowth} · ${t.heldCount}`}
                                 className="w-28"
                                 grouped
@@ -396,15 +390,15 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             aria-label={t.targetTier}
                             className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                           >
-                            <Chip
+                            <ToggleChip
                               pressed={goals.targetTier === null}
                               ariaLabel={t.noGoal}
                               onPressedChange={() => updateGoals({ targetTier: null })}
                             >
                               {t.noGoal}
-                            </Chip>
+                            </ToggleChip>
                             {[3, 4, 6, 7, 8, 9].map((tier) => (
-                              <Chip
+                              <ToggleChip
                                 key={tier}
                                 disabled={tier <= progress.currentTier && goals.targetTier !== tier}
                                 pressed={goals.targetTier === tier}
@@ -414,7 +408,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                 }
                               >
                                 <TierMark tier={tier} />
-                              </Chip>
+                              </ToggleChip>
                             ))}
                           </fieldset>
                         </div>
@@ -484,20 +478,20 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           <span className={rowLabelClassName}>{t.goal}</span>
                           <div className="flex min-w-0 flex-wrap items-center gap-2">
                             <div className="flex flex-wrap gap-1">
-                              <Chip
+                              <ToggleChip
                                 pressed={goals.shopCurrencyMode === "linked"}
                                 ariaLabel={t.shopLinked}
                                 onPressedChange={() => updateGoals({ shopCurrencyMode: "linked" })}
                               >
                                 {t.shopLinked}
-                              </Chip>
-                              <Chip
+                              </ToggleChip>
+                              <ToggleChip
                                 pressed={goals.shopCurrencyMode === "manual"}
                                 ariaLabel={t.shopManual}
                                 onPressedChange={() => updateGoals({ shopCurrencyMode: "manual" })}
                               >
                                 {t.shopManual}
-                              </Chip>
+                              </ToggleChip>
                             </div>
                             {goals.shopCurrencyMode === "linked" ? (
                               <span className="text-sm font-medium tabular-nums">
@@ -506,6 +500,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             ) : (
                               <NumberInput
                                 id="janken-manual-shop-currency"
+                                compact
                                 aria-label={t.manualShopCurrency}
                                 className="w-28"
                                 grouped
@@ -552,14 +547,14 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           >
                             {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
                               (tier) => (
-                                <Chip
+                                <ToggleChip
                                   key={tier}
                                   pressed={progress.equipmentTier === tier}
                                   ariaLabel={t.equipmentGoalTier(tier)}
                                   onPressedChange={() => updateProgress({ equipmentTier: tier })}
                                 >
                                   T{tier}
-                                </Chip>
+                                </ToggleChip>
                               ),
                             )}
                           </fieldset>
@@ -570,6 +565,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                             {t.owned}
                             <NumberInput
                               id="janken-held-equipment-currency"
+                              compact
                               aria-label={t.heldEquipmentCurrency}
                               className="w-28"
                               grouped
@@ -588,16 +584,16 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           aria-label={t.equipmentGoal}
                           className="m-0 flex flex-wrap gap-1 border-0 p-0 md:flex-nowrap"
                         >
-                          <Chip
+                          <ToggleChip
                             pressed={goals.targetEquipmentTier === null}
                             ariaLabel={t.noGoal}
                             onPressedChange={() => updateGoals({ targetEquipmentTier: null })}
                           >
                             {t.noGoal}
-                          </Chip>
+                          </ToggleChip>
                           {Array.from({ length: config.equipmentUpgrade.maxTier }, (_, index) => index + 1).map(
                             (tier) => (
-                              <Chip
+                              <ToggleChip
                                 key={tier}
                                 disabled={tier <= progress.equipmentTier && goals.targetEquipmentTier !== tier}
                                 pressed={goals.targetEquipmentTier === tier}
@@ -607,7 +603,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                 }
                               >
                                 T{tier}
-                              </Chip>
+                              </ToggleChip>
                             ),
                           )}
                         </fieldset>
@@ -646,6 +642,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         </label>
                         <NumberInput
                           id="janken-current-score"
+                          compact
                           aria-label={`${t.current} ${t.scoreGoal}`}
                           className="w-full max-w-40"
                           grouped
@@ -659,15 +656,15 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         <span className={rowLabelClassName}>{t.goal}</span>
                         <div className="flex min-w-0 flex-wrap items-center gap-2">
                           <fieldset aria-label={t.targetScore} className="m-0 flex flex-wrap gap-1 border-0 p-0">
-                            <Chip
+                            <ToggleChip
                               pressed={goals.targetScore === null}
                               ariaLabel={t.noGoal}
                               onPressedChange={() => updateGoals({ targetScore: null })}
                             >
                               {t.noGoal}
-                            </Chip>
+                            </ToggleChip>
                             {scorePresets(config, studentUid).map(({ score, tier, rewardUid }) => (
-                              <Chip
+                              <ToggleChip
                                 key={score}
                                 pressed={goals.targetScore === score}
                                 ariaLabel={t.scorePreset(score, tier)}
@@ -683,12 +680,13 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                                   ) : null}
                                   {t.scorePreset(score, tier)}
                                 </span>
-                              </Chip>
+                              </ToggleChip>
                             ))}
                           </fieldset>
                           {goals.targetScore != null ? (
                             <NumberInput
                               id="janken-target-score"
+                              compact
                               aria-label={t.targetScore}
                               className="w-full max-w-40"
                               grouped
@@ -712,6 +710,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           >
                             <NumberInput
                               id="janken-average-score"
+                              compact
                               aria-label={t.averageScore}
                               className="w-full"
                               grouped
@@ -743,7 +742,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                         const label = stageLabel(config, stage.uid) ?? t.challengeStage;
                         const cleared = progress.clearedStageUids.includes(stage.uid);
                         return (
-                          <Chip
+                          <ToggleChip
                             key={stage.uid}
                             pressed={cleared}
                             className={
@@ -760,7 +759,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
                           >
                             {cleared ? <CheckIcon className="mr-1 size-3.5" aria-hidden="true" /> : null}
                             {label}
-                          </Chip>
+                          </ToggleChip>
                         );
                       })}
                     </div>
@@ -1013,7 +1012,11 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <p className="text-xs text-v2-fg-tertiary">{t.entryCurrencyRequired}</p>
           <p className="flex items-center gap-2 text-2xl font-bold tabular-nums">
             {planned.entryResourceUid ? (
-              <ResourceThumb itemUid={planned.entryResourceUid} name={nameOf(planned.entryResourceUid, t.entryCurrency)} size="sm" />
+              <ResourceThumb
+                itemUid={planned.entryResourceUid}
+                name={nameOf(planned.entryResourceUid, t.entryCurrency)}
+                size="sm"
+              />
             ) : null}
             {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"}
           </p>
@@ -1021,9 +1024,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
           <p className="mt-1 text-lg font-semibold">
             {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
           </p>
-          {missingAverageScore ? (
-            <p className="mt-3 text-xs text-v2-fg-secondary">{t.scoreAverageSummary}</p>
-          ) : null}
+          {missingAverageScore ? <p className="mt-3 text-xs text-v2-fg-secondary">{t.scoreAverageSummary}</p> : null}
           <Link
             className={`${v2ButtonClassName({ variant: "secondary" })} mt-3 w-full`}
             to={`/events/${loaderData.eventUid}/shop`}
@@ -1040,10 +1041,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
               className="mt-3"
               tone="danger"
               action={
-                <Button
-                  size="sm"
-                  onClick={persistence.retrySave}
-                >
+                <Button size="sm" onClick={persistence.retrySave}>
                   {t.retrySave}
                 </Button>
               }
@@ -1069,28 +1067,25 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
             <div className="space-y-1">
               <span className="flex items-center gap-1 text-sm font-semibold tabular-nums">
                 {planned.entryResourceUid ? (
-                  <ResourceThumb itemUid={planned.entryResourceUid} name={nameOf(planned.entryResourceUid, t.entryCurrency)} size="sm" />
+                  <ResourceThumb
+                    itemUid={planned.entryResourceUid}
+                    name={nameOf(planned.entryResourceUid, t.entryCurrency)}
+                    size="sm"
+                  />
                 ) : null}
                 {planned.status === "available" ? planned.entryCost.toLocaleString() : "—"} ·{" "}
                 {ap == null ? (apPending ? t.calculationPending : "—") : t.approximateAp(ap)}
               </span>
               {persistence.saveError || persistence.isSaving || missingAverageScore ? (
                 <span className="block text-xs font-normal text-v2-fg-tertiary">
-                  {persistence.saveError
-                    ? t.saveFailed
-                    : persistence.isSaving
-                      ? t.saving
-                      : t.scoreAverageSummary}
+                  {persistence.saveError ? t.saveFailed : persistence.isSaving ? t.saving : t.scoreAverageSummary}
                 </span>
               ) : null}
             </div>
           }
         >
           {persistence.saveError ? (
-            <Button
-              variant="secondary"
-              onClick={persistence.retrySave}
-            >
+            <Button variant="secondary" onClick={persistence.retrySave}>
               {t.retrySave}
             </Button>
           ) : (

@@ -223,7 +223,7 @@ export const meta: MetaFunction<typeof loader> = ({ data, params, location }) =>
   ];
 };
 
-export const handle = { ownsOpenGraphImage: true, v2Width: "reading", v2HeaderTitleHidden: true } as const;
+export const handle = { ownsOpenGraphImage: true, v2HeaderTitleHidden: true } as const;
 
 export default function EventIndex() {
   const data = useLoaderData<typeof loader>();

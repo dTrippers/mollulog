@@ -1,6 +1,8 @@
 import { ArrowPathIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
-import { Button, NumberInput, ResourceCard } from "~/components/primitives";
+import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
+import { Button } from "~/components/v2/primitives/Button";
+import { NumberInput } from "~/components/v2/primitives/NumberInput";
 import type { MinigamePayment, RoadPuzzleMap } from "~/domain/event-shop";
 import type { RailCounts, RoadPuzzleInteractiveAnalysis, RoadPuzzleSolution } from "~/domain/road-puzzle/solver";
 import { roadPuzzleLocale } from "~/locales/ko";
@@ -29,11 +31,11 @@ function RailGlyph({ kind }: { kind: RailKind }) {
 
   return (
     <svg aria-hidden="true" className="size-6 shrink-0" viewBox="-10 -10 20 20">
-      <polygon points="-5,-8 5,-8 10,0 5,8 -5,8 -10,0" fill="var(--muted)" />
+      <polygon points="-5,-8 5,-8 10,0 5,8 -5,8 -10,0" fill="var(--v2-inset)" />
       <path
         d={path}
         fill="none"
-        stroke="var(--primary)"
+        stroke="var(--v2-accent)"
         strokeLinecap="round"
         strokeLinejoin="round"
         strokeWidth="2.2"
@@ -97,24 +99,26 @@ export function RoadPuzzleRouteSummary({
     { label: roadPuzzleLocale.maximum, value: noRoute ? undefined : (maximum ?? undefined) },
   ];
   const resetButton = hasState ? (
-    <Button text={roadPuzzleLocale.reset} size="xs" variant="secondary" onClick={onReset} className="ml-auto" />
+    <Button size="sm" onClick={onReset} className="ml-auto">
+      {roadPuzzleLocale.reset}
+    </Button>
   ) : null;
 
   return (
-    <div className="rounded-md bg-card p-3">
+    <div className="rounded-md bg-v2-surface p-v2-tile-p">
       <table className="w-full border-collapse text-sm">
         <caption className="sr-only">
           {isProgress ? roadPuzzleLocale.progressTableCaption : roadPuzzleLocale.planTableCaption}
         </caption>
         <thead>
-          <tr className="border-b border-border text-muted-foreground">
+          <tr className="border-b border-v2-divider text-v2-fg-secondary">
             <th className="whitespace-nowrap py-2 text-left font-medium" scope="col">
               <span className="sr-only">레일 종류</span>
             </th>
             <th className="w-[1%] whitespace-nowrap py-2 pl-1.5 text-right font-medium" scope="col">
               {isProgress ? roadPuzzleLocale.drawnRequired : roadPuzzleLocale.routeCount}
             </th>
-            <th className="w-16 whitespace-nowrap py-2 pl-1.5 text-right font-medium" scope="col">
+            <th className="w-[4.5rem] whitespace-nowrap py-2 pl-1.5 text-right font-medium" scope="col">
               {roadPuzzleLocale.remainingCount}
             </th>
           </tr>
@@ -123,13 +127,13 @@ export function RoadPuzzleRouteSummary({
           {RAIL_KINDS.map((kind) => {
             const selected = selectedRailKind === kind;
             return (
-              <tr key={kind} className={selected ? "bg-muted text-foreground" : "text-muted-foreground"}>
+              <tr key={kind} className={selected ? "bg-v2-inset text-v2-fg" : "text-v2-fg-secondary"}>
                 <th className="whitespace-nowrap text-left font-normal" scope="row">
                   <button
                     type="button"
                     aria-pressed={selected}
                     aria-label={`${roadPuzzleLocale.railTypes[kind]} 레일 강조`}
-                    className="flex w-full items-center gap-1 rounded-sm py-2 text-left text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+                    className="flex w-full items-center gap-1 rounded-sm py-2 text-left text-v2-fg focus-visible:outline-2 focus-visible:outline-v2-focus"
                     onClick={() => onSelectRailKind(kind)}
                   >
                     <RailGlyph kind={kind} />
@@ -160,21 +164,17 @@ export function RoadPuzzleRouteSummary({
                     required[kind]
                   )}
                 </td>
-                <td className="w-16 whitespace-nowrap py-2 pl-1.5 text-right tabular-nums">
+                <td className="w-[4.5rem] whitespace-nowrap py-2 pl-1.5 text-right tabular-nums">
                   <NumberInput
-                    size="sm"
-                    minValue={0}
-                    maxValue={map.deck[kind]}
+                    grouped
+                    showMin={false}
+                    showMax={false}
+                    min={0}
+                    max={map.deck[kind]}
                     value={remaining?.[kind] ?? map.deck[kind]}
-                    showDecrease
-                    showIncrease
-                    fullWidth
-                    controlClassName="ml-auto w-[3.5rem]"
-                    inputProps={{
-                      "aria-label": `${roadPuzzleLocale.railTypes[kind]} ${roadPuzzleLocale.remainingCount}`,
-                      className: "w-7",
-                    }}
-                    onChange={(value) => onRemainingChange(kind, value)}
+                    aria-label={`${roadPuzzleLocale.railTypes[kind]} ${roadPuzzleLocale.remainingCount}`}
+                    className="ml-auto w-16"
+                    onValueChange={(value) => onRemainingChange(kind, value)}
                   />
                 </td>
               </tr>
@@ -185,7 +185,7 @@ export function RoadPuzzleRouteSummary({
 
       {completable ? (
         <div className="mt-3 flex min-h-7 items-center gap-1.5">
-          <CheckCircleIcon className={`size-5 text-primary ${isStale ? "opacity-50" : ""}`} aria-hidden="true" />
+          <CheckCircleIcon className={`size-5 text-v2-accent ${isStale ? "opacity-50" : ""}`} aria-hidden="true" />
           <span className={`text-sm font-semibold ${isStale ? "opacity-50" : ""}`}>
             {roadPuzzleLocale.canCompleteNow}
           </span>
@@ -196,13 +196,13 @@ export function RoadPuzzleRouteSummary({
           <div className="mt-3 flex min-h-7 items-center gap-1">
             <span className="sr-only">{payment.resourceName}</span>
             <div className="relative top-0.5 -mr-1 shrink-0">
-              <ResourceCard
+              <ResourceThumb
                 resourceType={payment.resourceType}
                 itemUid={payment.resourceUid}
                 imageUrl={payment.imageUrl ?? undefined}
-                imageAlt={payment.resourceName}
                 name={payment.resourceName}
                 size="sm"
+                bare
               />
             </div>
             <span className="text-sm font-medium">
@@ -218,8 +218,8 @@ export function RoadPuzzleRouteSummary({
                 index === 0 ? delta?.minimumStickers : index === 1 ? delta?.expectedStickers : undefined;
               return (
                 <div key={label}>
-                  <dt className="text-muted-foreground">{label}</dt>
-                  <dd className="mt-0.5 font-semibold tabular-nums text-foreground">
+                  <dt className="text-v2-fg-secondary">{label}</dt>
+                  <dd className="mt-0.5 font-semibold tabular-nums text-v2-fg">
                     {isCalculating ? (
                       <ArrowPathIcon
                         className="mx-auto size-4 animate-spin motion-reduce:animate-none"
@@ -232,7 +232,7 @@ export function RoadPuzzleRouteSummary({
                       `${expected ? "≈" : ""}${value.toLocaleString()}`
                     )}
                     {deltaValue !== undefined && !isCalculating && (
-                      <span className="mt-0.5 block font-normal text-muted-foreground">
+                      <span className="mt-0.5 block font-normal text-v2-fg-secondary">
                         <span aria-hidden="true">
                           {expected ? "≈+" : "+"}
                           {deltaValue.toLocaleString()}
@@ -245,7 +245,7 @@ export function RoadPuzzleRouteSummary({
               );
             })}
           </dl>
-          <p className="mt-2 text-xs text-muted-foreground">
+          <p className="mt-2 text-xs text-v2-fg-secondary">
             {isProgress ? roadPuzzleLocale.progressCostHelp : roadPuzzleLocale.viewerCostHelp}
           </p>
         </>

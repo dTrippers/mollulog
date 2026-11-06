@@ -14,7 +14,7 @@ describe("NumberInput grouped stepper", () => {
 
     const group = screen.getByRole("group", { name: "수량" });
     expect(group).toBeTruthy();
-    expect(group.className.split(/\s+/)).toContain("h-[26px]");
+    expect(group.className.split(/\s+/)).toContain("h-7");
     expect(group.className.split(/\s+/)).toContain("items-stretch");
     expect(group.className.split(/\s+/)).not.toContain("overflow-hidden");
     expect(group.className).toContain("border-v2-control-border-strong");
@@ -145,6 +145,6 @@ describe("NumberInput grouped stepper", () => {
     const input = container.querySelector("input");
 
     expect(input?.className.split(/\s+/)).toContain("min-h-v2-input-min");
-    expect(input?.className.split(/\s+/)).not.toContain("h-[26px]");
+    expect(input?.className.split(/\s+/)).not.toContain("h-7");
   });
 });

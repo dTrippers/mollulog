@@ -30,7 +30,7 @@ type GroupedNumberInputProps = NumberInputBaseProps & {
   onValueChange: (value: number) => void;
 };
 
-// Height follows the input token: 2rem on desktop, 2.25rem on mobile and coarse pointers.
+// Height follows the input token: 1.75rem on every layout, the same as ToggleChip.
 export const NumberInput = forwardRef<HTMLInputElement, NumberInputProps>(function NumberInput(
   {
     warning = false,
@@ -148,7 +148,7 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
     <fieldset
       aria-label={accessibleLabel}
       className={cn(
-        "m-0 flex h-[26px] min-w-0 items-stretch rounded-md border border-v2-control-border-strong bg-v2-surface p-0 text-sm text-v2-fg dark:border-v2-control-border",
+        "m-0 flex h-7 min-w-0 items-stretch rounded-md border border-v2-control-border-strong bg-v2-surface p-0 text-sm text-v2-fg dark:border-v2-control-border",
         warning && "bg-v2-warning-subtle",
         v2FocusRing,
         className,

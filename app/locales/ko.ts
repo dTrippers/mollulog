@@ -294,13 +294,6 @@ export function remainingTime(
   return { text: `${remainingHours}시간 남음`, finishSoon: true };
 }
 
-export function formatResourceAmount(amount: number): string {
-  if (amount >= 10000) {
-    return `${(amount / 1000).toLocaleString()}k`;
-  }
-  return amount.toLocaleString();
-}
-
 export const jankenLocale = {
   pageTitle: "천하게일 무술대회 세부 설정",
   menuTitle: "천하게일 무술대회",
@@ -310,7 +303,8 @@ export const jankenLocale = {
   goal: "목표",
   owned: "보유",
   noGoal: "없음",
-  firstVisitNotice: (shopCurrency: string) => `지금은 ${shopCurrency} 부족분만 계산해요. 다른 목표를 고르면 함께 계산해요.`,
+  firstVisitNotice: (shopCurrency: string) =>
+    `지금은 ${shopCurrency} 부족분만 계산해요. 다른 목표를 고르면 함께 계산해요.`,
   shopLinked: "상점 계산기 기준",
   shopManual: "직접 입력",
   scoreGoalHelp: "챌린지 스코어가 쌓이면 단계별 보상을 받아요",

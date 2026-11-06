@@ -290,7 +290,7 @@ describe("corr-6 status tokens, PanelAction, and docs", () => {
   it("C16: mobile and coarse layouts keep the shared compact density-token values", () => {
     expect(css).toContain("--spacing-v2-row-min: 2.25rem;");
     expect(css).toContain("--spacing-v2-control-min: 2rem;");
-    expect(css).toContain("--spacing-v2-input-min: 2rem;");
+    expect(css).toContain("--spacing-v2-input-min: 1.75rem;");
     const mobileStart = css.indexOf("@media (max-width: 767px)");
     const mobileBlock = css.slice(mobileStart, css.indexOf("\n}", mobileStart));
     expect(mobileBlock).not.toMatch(/--spacing-v2-(?:row|control|input)-min/);

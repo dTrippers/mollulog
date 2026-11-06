@@ -1,5 +1,6 @@
 import { type ReactNode, useId, useRef, useState } from "react";
 import { ResourceTypeEnum } from "~/graphql/graphql";
+import { resourceCountLabel } from "~/domain/event-shop/utils";
 import { cn } from "~/lib/utils";
 import { type ResourceImageType, resourceImageUrl } from "~/models/assets";
 
@@ -12,6 +13,8 @@ export type ResourceThumbProps = {
   size?: ResourceThumbSize;
   imageUrl?: string;
   label?: ReactNode;
+  // Listed quantity. Rendered as the chip with K·M abbreviation; the exact count goes into the name tooltip.
+  quantity?: number;
   rarity?: number | null;
   bare?: boolean;
   tooltip?: boolean;
@@ -31,7 +34,8 @@ export function ResourceThumb({
   name,
   size = "md",
   imageUrl,
-  label,
+  label: labelProp,
+  quantity,
   rarity,
   bare = false,
   tooltip = false,
@@ -43,6 +47,10 @@ export function ResourceThumb({
   const imageType = getResourceImageType(resourceType);
   const src = imageUrl ?? (imageType ? resourceImageUrl(imageType, itemUid) : null);
   const rarityClassName = rarityClass(rarity);
+  const label = labelProp ?? (quantity == null ? undefined : resourceCountLabel(quantity));
+  const exactQuantity = quantity == null ? null : quantity.toLocaleString(undefined, { maximumFractionDigits: 2 });
+  const tooltipText =
+    name && exactQuantity && labelProp == null && exactQuantity !== label ? `${name} ×${exactQuantity}` : name;
   const image = src ? (
     <img alt={name ?? ""} src={src} loading="lazy" className="size-full object-contain" />
   ) : (
@@ -85,7 +93,7 @@ export function ResourceThumb({
           aria-label={`${name} 이름 표시`}
           aria-expanded={nameTooltipOpen}
           aria-describedby={nameTooltipOpen ? nameTooltipId : undefined}
-          title={tooltip ? name : undefined}
+          title={tooltip ? tooltipText : undefined}
           onClick={() => {
             lastPointerType.current = null;
             setNameTooltipOpen((open) => !open);
@@ -129,13 +137,13 @@ export function ResourceThumb({
               role="tooltip"
               className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md"
             >
-              {name}
+              {tooltipText}
             </span>
           ) : null}
         </button>
       ) : (
         <span
-          title={tooltip ? name : undefined}
+          title={tooltip ? tooltipText : undefined}
           className={cn(
             "flex shrink-0 items-center justify-center overflow-hidden",
             !bare && "rounded-md",

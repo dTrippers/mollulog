@@ -64,8 +64,6 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   ];
 };
 
-export const handle = { v2Width: "reading" } as const;
-
 function countPulls(rows: SimulatorRow[]) {
   return rows.reduce((count, row) => count + (row.type === "pull" ? row.results.length : 0), 0);
 }
@@ -307,12 +305,7 @@ export default function EventRecruitmentSimulator() {
             <Button size="sm" onClick={stopUntilTarget} disabled={!runningUntilTarget}>
               중지
             </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={handleReset}
-              disabled={totalCount === 0 && !targetChooserOpen}
-            >
+            <Button variant="danger" size="sm" onClick={handleReset} disabled={totalCount === 0 && !targetChooserOpen}>
               초기화
             </Button>
           </PageActionBar>

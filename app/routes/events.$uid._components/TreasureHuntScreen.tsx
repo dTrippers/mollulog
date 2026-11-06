@@ -5,8 +5,8 @@ import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb"
 import { PageMain } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import type { TreasureHuntConfig, TreasureHuntRoundConfig } from "~/domain/event-shop";
-import { resourceCountLabel } from "~/domain/event-shop/utils";
 import type { TreasureHuntBoardCoordinate, TreasureHuntBoardOrientation } from "~/domain/treasure-hunt";
 import {
   loadTreasureHuntBoard,
@@ -247,7 +247,7 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
           persistenceKey="event-treasure-hunt-section::board"
           variant="shop"
         >
-          <section className="space-y-v2-block-gap rounded-lg bg-v2-surface p-v2-tile-p">
+          <section className="space-y-v2-block-gap">
             <p className="text-sm text-v2-fg-secondary">{treasureHuntLocale.boardCaption}</p>
 
             <div className="flex min-w-0 items-center gap-2">
@@ -265,15 +265,13 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
                     const label =
                       value === config.loopRound ? treasureHuntLocale.roundAfter(config.loopRound) : `${value}회차`;
                     return (
-                      <Button
+                      <ToggleChip
                         key={value}
-                        size="sm"
-                        variant={persisted.board.round === value ? "primary" : "secondary"}
-                        aria-pressed={persisted.board.round === value}
-                        onClick={() => changeRound(value)}
+                        pressed={persisted.board.round === value}
+                        onPressedChange={() => changeRound(value)}
                       >
                         {label}
-                      </Button>
+                      </ToggleChip>
                     );
                   })}
                 </div>
@@ -313,212 +311,235 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
               </p>
             ) : null}
 
-            <div className="relative mx-auto w-full max-w-[34rem] rounded-lg bg-v2-inset p-2">
-              {/* biome-ignore lint/a11y/useSemanticElements: The custom treasure board is an interactive, keyboard-navigable ARIA grid. */}
-              <div
-                ref={gridRef}
-                role="grid"
-                aria-label={treasureHuntLocale.boardTitle}
-                aria-rowcount={composition.boardHeight}
-                aria-colcount={composition.boardWidth}
-                className={`grid gap-1 transition-opacity duration-v2-base motion-reduce:transition-none ${isCalculating && probabilityReady ? "opacity-60" : ""}`}
-                style={{
-                  gridTemplateColumns: `repeat(${composition.boardWidth}, minmax(0, 1fr))`,
-                  aspectRatio: `${composition.boardWidth} / ${composition.boardHeight}`,
-                }}
-              >
-                {rows.map(({ x, y }) => {
-                  const key = `${x},${y}`;
-                  const treasure = occupied.get(key);
-                  if (treasure && (treasure.x !== x || treasure.y !== y)) return null;
-                  if (treasure) {
-                    const size = placementSize(treasure.width, treasure.height, treasure.orientation);
-                    const isSelected = selectedId === treasure.id;
-                    return (
-                      // biome-ignore lint/a11y/useSemanticElements: Interactive board controls use gridcell semantics for the grid keyboard model.
-                      <button
-                        key={`treasure-${treasure.id}`}
-                        type="button"
-                        role="gridcell"
-                        aria-rowindex={y + 1}
-                        aria-colindex={x + 1}
-                        aria-label={`${y + 1}행 ${x + 1}열, ${treasure.width}×${treasure.height} 보물`}
-                        aria-selected={isSelected}
-                        tabIndex={focusedCell.x === x && focusedCell.y === y ? 0 : -1}
-                        data-board-x={x}
-                        data-board-y={y}
-                        onFocus={() => {
-                          setKeyboardCoordinate({ x, y });
-                          setCellPointer({ x, y });
-                        }}
-                        onBlur={() => setCellPointer(null)}
-                        onMouseEnter={() => setCellPointer({ x, y })}
-                        onMouseLeave={() => setCellPointer(null)}
-                        onKeyDown={handleBoardKeyDown}
-                        onClick={() => (placement ? handleCell(x, y) : setSelectedId(treasure.id))}
-                        className={`z-10 flex min-h-0 items-center justify-center rounded-sm bg-v2-fg text-xs font-semibold text-v2-canvas outline-none focus-visible:ring-2 focus-visible:ring-v2-focus ${isSelected ? "ring-2 ring-inset ring-v2-focus" : ""}`}
-                        style={{
-                          gridColumn: `${x + 1} / span ${Math.min(size.width, composition.boardWidth - x)}`,
-                          gridRow: `${y + 1} / span ${Math.min(size.height, composition.boardHeight - y)}`,
-                        }}
-                      >
-                        {treasure.width}×{treasure.height}
-                      </button>
-                    );
-                  }
-                  const probability = analysis.result?.cells?.[y]?.[x];
-                  const showProbability = !complete && probabilityReady && !empty.has(key) && probability != null;
-                  const recommended =
-                    analysis.status === "ok" &&
-                    Boolean(analysis.result?.recommended.some((cell) => cell.x === x && cell.y === y));
-                  return (
-                    // biome-ignore lint/a11y/useSemanticElements: Interactive board controls use gridcell semantics for the grid keyboard model.
-                    <button
-                      key={key}
-                      type="button"
-                      role="gridcell"
-                      aria-rowindex={y + 1}
-                      aria-colindex={x + 1}
-                      aria-label={getCellLabel(x, y, showProbability ? probability : null, recommended, empty.has(key))}
-                      disabled={complete}
-                      tabIndex={focusedCell.x === x && focusedCell.y === y ? 0 : -1}
-                      data-board-x={x}
-                      data-board-y={y}
-                      onFocus={() => {
-                        setKeyboardCoordinate({ x, y });
-                        setCellPointer({ x, y });
-                      }}
-                      onBlur={() => setCellPointer(null)}
-                      onMouseEnter={() => setCellPointer({ x, y })}
-                      onMouseLeave={() => setCellPointer(null)}
-                      onKeyDown={handleBoardKeyDown}
-                      onClick={() => handleCell(x, y)}
-                      className={`flex min-h-0 items-center justify-center rounded-sm text-xs tabular-nums text-v2-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-v2-focus ${getHeatClass(showProbability ? Math.round(probability * 100) : empty.has(key) ? -1 : 0)} ${recommended ? "ring-2 ring-inset ring-v2-fg font-bold" : ""} ${placement ? "cursor-crosshair" : ""}`}
-                      style={{ gridColumn: x + 1, gridRow: y + 1 }}
-                    >
-                      {showProbability ? (
-                        Math.round(probability * 100)
-                      ) : empty.has(key) ? (
-                        <CheckIcon className="size-4" aria-label="빈 칸" />
-                      ) : null}
-                    </button>
-                  );
-                })}
-                {placementPreview && cellPointer ? (
+            {/* Wide pages put the remaining treasures beside the board instead of below it. */}
+            <div className="@container">
+              <div className="grid items-start gap-v2-group-gap @min-[48rem]:grid-cols-[minmax(0,34rem)_minmax(0,1fr)]">
+                <div className="relative mx-auto w-full max-w-[34rem] rounded-lg bg-v2-surface p-2">
+                  {/* biome-ignore lint/a11y/useSemanticElements: The custom treasure board is an interactive, keyboard-navigable ARIA grid. */}
                   <div
-                    aria-hidden="true"
-                    className={`pointer-events-none z-20 rounded-sm border-2 border-dashed ${placementPreview.valid ? "border-v2-focus bg-v2-highlight" : "border-v2-danger bg-v2-danger-subtle"}`}
+                    ref={gridRef}
+                    role="grid"
+                    aria-label={treasureHuntLocale.boardTitle}
+                    aria-rowcount={composition.boardHeight}
+                    aria-colcount={composition.boardWidth}
+                    className={`grid gap-1 transition-opacity duration-v2-base motion-reduce:transition-none ${isCalculating && probabilityReady ? "opacity-60" : ""}`}
                     style={{
-                      gridColumn: `${cellPointer.x + 1} / span ${Math.max(1, Math.min(placementPreview.size.width, composition.boardWidth - cellPointer.x))}`,
-                      gridRow: `${cellPointer.y + 1} / span ${Math.max(1, Math.min(placementPreview.size.height, composition.boardHeight - cellPointer.y))}`,
-                    }}
-                  />
-                ) : null}
-              </div>
-              {isCalculating && analysis.showSpinner ? (
-                <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-v2-surface/60">
-                  <span
-                    role="status"
-                    className="inline-flex items-center gap-2 rounded-md bg-v2-elevated px-3 py-2 text-sm font-medium text-v2-fg shadow-lg"
-                  >
-                    <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
-                    {treasureHuntLocale.boardCalculating}
-                  </span>
-                </div>
-              ) : null}
-            </div>
-
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-              <p className="text-sm text-v2-fg-secondary" role={invalidMessage ? "alert" : "status"} aria-live="polite">
-                {invalidMessage ??
-                  (selected
-                    ? `${selected.width}×${selected.height} 보물을 선택했어요.`
-                    : placement
-                      ? `${placement.width}×${placement.height} 보물을 놓을 칸을 선택해주세요.`
-                      : "칸을 선택해 빈 칸 또는 보물 위치를 기록하세요.")}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {selected ? (
-                  <Button variant="danger-subtle" size="sm" onClick={removeSelected}>
-                    보물 기록 지우기
-                  </Button>
-                ) : null}
-                {placement || selected ? (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setPlacement(null);
-                      setSelectedId(null);
-                      setInvalidMessage(null);
+                      gridTemplateColumns: `repeat(${composition.boardWidth}, minmax(0, 1fr))`,
+                      aspectRatio: `${composition.boardWidth} / ${composition.boardHeight}`,
                     }}
                   >
-                    취소
-                  </Button>
-                ) : null}
-                <Button size="sm" onClick={undo} disabled={persisted.undoStack.length === 0}>
-                  {treasureHuntLocale.undo}
-                </Button>
-                <Button size="sm" onClick={reset}>
-                  {treasureHuntLocale.reset}
-                </Button>
-                <Button size="sm" variant={complete ? "primary" : "secondary"} onClick={() => startNextRound(nextRound)}>
-                  {complete ? treasureHuntLocale.nextRoundLabel(nextRoundLabel) : treasureHuntLocale.nextRound}
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold text-v2-fg">
-                {treasureHuntLocale.remainingTreasures} · {remainingCount}
-              </h3>
-              {remaining.map((shape) => (
-                <div
-                  key={shapeKey(shape.width, shape.height)}
-                  className="flex flex-wrap items-center gap-2 rounded-md bg-v2-inset px-3 py-2"
-                >
-                  <TreasureShapeGlyph width={shape.width} height={shape.height} />
-                  <span className="font-medium text-v2-fg">
-                    {shape.width}×{shape.height}
-                  </span>
-                  <span className="text-xs text-v2-fg-secondary">
-                    {treasureHuntLocale.remainingCount(shape.remaining, shape.total)}
-                  </span>
-                  <div className="ml-auto flex gap-2">
-                    {(
-                      [
-                        "horizontal",
-                        ...(shape.width === shape.height ? [] : ["vertical"]),
-                      ] as TreasureHuntBoardOrientation[]
-                    ).map((orientation) => {
-                      const active =
-                        placement?.width === shape.width &&
-                        placement.height === shape.height &&
-                        placement.orientation === orientation;
-                      const label =
-                        shape.width === shape.height
-                          ? treasureHuntLocale.place
-                          : orientation === "horizontal"
-                            ? treasureHuntLocale.horizontal
-                            : treasureHuntLocale.vertical;
+                    {rows.map(({ x, y }) => {
+                      const key = `${x},${y}`;
+                      const treasure = occupied.get(key);
+                      if (treasure && (treasure.x !== x || treasure.y !== y)) return null;
+                      if (treasure) {
+                        const size = placementSize(treasure.width, treasure.height, treasure.orientation);
+                        const isSelected = selectedId === treasure.id;
+                        return (
+                          // biome-ignore lint/a11y/useSemanticElements: Interactive board controls use gridcell semantics for the grid keyboard model.
+                          <button
+                            key={`treasure-${treasure.id}`}
+                            type="button"
+                            role="gridcell"
+                            aria-rowindex={y + 1}
+                            aria-colindex={x + 1}
+                            aria-label={`${y + 1}행 ${x + 1}열, ${treasure.width}×${treasure.height} 보물`}
+                            aria-selected={isSelected}
+                            tabIndex={focusedCell.x === x && focusedCell.y === y ? 0 : -1}
+                            data-board-x={x}
+                            data-board-y={y}
+                            onFocus={() => {
+                              setKeyboardCoordinate({ x, y });
+                              setCellPointer({ x, y });
+                            }}
+                            onBlur={() => setCellPointer(null)}
+                            onMouseEnter={() => setCellPointer({ x, y })}
+                            onMouseLeave={() => setCellPointer(null)}
+                            onKeyDown={handleBoardKeyDown}
+                            onClick={() => (placement ? handleCell(x, y) : setSelectedId(treasure.id))}
+                            className={`z-10 flex min-h-0 items-center justify-center rounded-sm bg-v2-fg text-xs font-semibold text-v2-canvas outline-none focus-visible:ring-2 focus-visible:ring-v2-focus ${isSelected ? "ring-2 ring-inset ring-v2-focus" : ""}`}
+                            style={{
+                              gridColumn: `${x + 1} / span ${Math.min(size.width, composition.boardWidth - x)}`,
+                              gridRow: `${y + 1} / span ${Math.min(size.height, composition.boardHeight - y)}`,
+                            }}
+                          >
+                            {treasure.width}×{treasure.height}
+                          </button>
+                        );
+                      }
+                      const probability = analysis.result?.cells?.[y]?.[x];
+                      const showProbability = !complete && probabilityReady && !empty.has(key) && probability != null;
+                      const recommended =
+                        analysis.status === "ok" &&
+                        Boolean(analysis.result?.recommended.some((cell) => cell.x === x && cell.y === y));
                       return (
-                        <Button
-                          key={orientation}
-                          variant={active ? "primary" : "secondary"}
-                          size="sm"
-                          aria-pressed={active}
-                          disabled={shape.remaining === 0 || complete}
-                          onClick={() => {
-                            setSelectedId(null);
-                            setPlacement(active ? null : { width: shape.width, height: shape.height, orientation });
+                        // biome-ignore lint/a11y/useSemanticElements: Interactive board controls use gridcell semantics for the grid keyboard model.
+                        <button
+                          key={key}
+                          type="button"
+                          role="gridcell"
+                          aria-rowindex={y + 1}
+                          aria-colindex={x + 1}
+                          aria-label={getCellLabel(
+                            x,
+                            y,
+                            showProbability ? probability : null,
+                            recommended,
+                            empty.has(key),
+                          )}
+                          disabled={complete}
+                          tabIndex={focusedCell.x === x && focusedCell.y === y ? 0 : -1}
+                          data-board-x={x}
+                          data-board-y={y}
+                          onFocus={() => {
+                            setKeyboardCoordinate({ x, y });
+                            setCellPointer({ x, y });
                           }}
+                          onBlur={() => setCellPointer(null)}
+                          onMouseEnter={() => setCellPointer({ x, y })}
+                          onMouseLeave={() => setCellPointer(null)}
+                          onKeyDown={handleBoardKeyDown}
+                          onClick={() => handleCell(x, y)}
+                          className={`flex min-h-0 items-center justify-center rounded-sm text-xs tabular-nums text-v2-fg outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-v2-focus ${getHeatClass(showProbability ? Math.round(probability * 100) : empty.has(key) ? -1 : 0)} ${recommended ? "ring-2 ring-inset ring-v2-fg font-bold" : ""} ${placement ? "cursor-crosshair" : ""}`}
+                          style={{ gridColumn: x + 1, gridRow: y + 1 }}
                         >
-                          {label}
-                        </Button>
+                          {showProbability ? (
+                            Math.round(probability * 100)
+                          ) : empty.has(key) ? (
+                            <CheckIcon className="size-4" aria-label="빈 칸" />
+                          ) : null}
+                        </button>
                       );
                     })}
+                    {placementPreview && cellPointer ? (
+                      <div
+                        aria-hidden="true"
+                        className={`pointer-events-none z-20 rounded-sm border-2 border-dashed ${placementPreview.valid ? "border-v2-focus bg-v2-highlight" : "border-v2-danger bg-v2-danger-subtle"}`}
+                        style={{
+                          gridColumn: `${cellPointer.x + 1} / span ${Math.max(1, Math.min(placementPreview.size.width, composition.boardWidth - cellPointer.x))}`,
+                          gridRow: `${cellPointer.y + 1} / span ${Math.max(1, Math.min(placementPreview.size.height, composition.boardHeight - cellPointer.y))}`,
+                        }}
+                      />
+                    ) : null}
+                  </div>
+                  {isCalculating && analysis.showSpinner ? (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-v2-surface/60">
+                      <span
+                        role="status"
+                        className="inline-flex items-center gap-2 rounded-md bg-v2-elevated px-3 py-2 text-sm font-medium text-v2-fg shadow-lg"
+                      >
+                        <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+                        {treasureHuntLocale.boardCalculating}
+                      </span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="min-w-0 space-y-v2-group-gap">
+                  <div className="flex flex-col gap-2">
+                    <p
+                      className="text-sm text-v2-fg-secondary"
+                      role={invalidMessage ? "alert" : "status"}
+                      aria-live="polite"
+                    >
+                      {invalidMessage ??
+                        (selected
+                          ? `${selected.width}×${selected.height} 보물을 선택했어요.`
+                          : placement
+                            ? `${placement.width}×${placement.height} 보물을 놓을 칸을 선택해주세요.`
+                            : "칸을 선택해 빈 칸 또는 보물 위치를 기록하세요.")}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selected ? (
+                        <Button variant="danger-subtle" size="sm" onClick={removeSelected}>
+                          보물 기록 지우기
+                        </Button>
+                      ) : null}
+                      {placement || selected ? (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setPlacement(null);
+                            setSelectedId(null);
+                            setInvalidMessage(null);
+                          }}
+                        >
+                          취소
+                        </Button>
+                      ) : null}
+                      <Button size="sm" onClick={undo} disabled={persisted.undoStack.length === 0}>
+                        {treasureHuntLocale.undo}
+                      </Button>
+                      <Button size="sm" onClick={reset}>
+                        {treasureHuntLocale.reset}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={complete ? "primary" : "secondary"}
+                        onClick={() => startNextRound(nextRound)}
+                      >
+                        {complete ? treasureHuntLocale.nextRoundLabel(nextRoundLabel) : treasureHuntLocale.nextRound}
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <h3 className="text-sm font-semibold text-v2-fg">
+                      {treasureHuntLocale.remainingTreasures} · {remainingCount}
+                    </h3>
+                    {remaining.map((shape) => (
+                      <div
+                        key={shapeKey(shape.width, shape.height)}
+                        className="flex flex-wrap items-center gap-2 rounded-md bg-v2-surface px-3 py-2"
+                      >
+                        <TreasureShapeGlyph width={shape.width} height={shape.height} />
+                        <span className="font-medium text-v2-fg">
+                          {shape.width}×{shape.height}
+                        </span>
+                        <span className="text-xs text-v2-fg-secondary">
+                          {treasureHuntLocale.remainingCount(shape.remaining, shape.total)}
+                        </span>
+                        <div className="ml-auto flex gap-2">
+                          {(
+                            [
+                              "horizontal",
+                              ...(shape.width === shape.height ? [] : ["vertical"]),
+                            ] as TreasureHuntBoardOrientation[]
+                          ).map((orientation) => {
+                            const active =
+                              placement?.width === shape.width &&
+                              placement.height === shape.height &&
+                              placement.orientation === orientation;
+                            const label =
+                              shape.width === shape.height
+                                ? treasureHuntLocale.place
+                                : orientation === "horizontal"
+                                  ? treasureHuntLocale.horizontal
+                                  : treasureHuntLocale.vertical;
+                            return (
+                              <Button
+                                key={orientation}
+                                variant={active ? "primary" : "secondary"}
+                                size="sm"
+                                aria-pressed={active}
+                                disabled={shape.remaining === 0 || complete}
+                                onClick={() => {
+                                  setSelectedId(null);
+                                  setPlacement(
+                                    active ? null : { width: shape.width, height: shape.height, orientation },
+                                  );
+                                }}
+                              >
+                                {label}
+                              </Button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              ))}
+              </div>
             </div>
             <p className="sr-only" aria-live="polite">
               {foundCount}개 보물 기록
@@ -532,9 +553,7 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
           storageKey="event-treasure-hunt-section::round-details"
           variant="shop"
         >
-          <div className="rounded-lg bg-v2-surface p-v2-tile-p">
-            <TreasureRoundDetails config={config} />
-          </div>
+          <TreasureRoundDetails config={config} />
         </ShopSection>
       </div>
     </PageMain>
@@ -544,8 +563,8 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
 function TreasureRoundDetails({ config }: { config: TreasureHuntConfig }) {
   const firstRound = getRoundConfig(config, 1);
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-x-6 gap-y-3 rounded-md bg-v2-inset p-3">
+    <div className="@container space-y-v2-group-gap">
+      <div className="flex flex-wrap gap-x-6 gap-y-3">
         <div>
           <p className="mb-2 text-xs font-medium text-v2-fg-secondary">{treasureHuntLocale.boardSize}</p>
           <div className="flex h-10 items-center text-sm font-medium tabular-nums text-v2-fg">
@@ -571,51 +590,53 @@ function TreasureRoundDetails({ config }: { config: TreasureHuntConfig }) {
           </div>
         </div>
       </div>
-      {config.rounds.map((round) => {
-        const occupiedCells = round.treasures.reduce(
-          (sum, treasure) => sum + treasure.width * treasure.height * treasure.count,
-          0,
-        );
-        const label =
-          round.round === config.loopRound ? treasureHuntLocale.roundAfter(config.loopRound) : `${round.round}회차`;
-        return (
-          <div key={round.round} className="rounded-md bg-v2-inset p-3">
-            <div className="flex flex-wrap justify-between gap-2 text-sm">
-              <strong className="text-v2-fg">
-                {label} · {round.boardWidth}×{round.boardHeight}
-              </strong>
-              <span className="text-xs tabular-nums text-v2-fg-secondary">
-                이론상 {(occupiedCells * round.cellCost.quantity).toLocaleString()}~
-                {(round.boardWidth * round.boardHeight * round.cellCost.quantity).toLocaleString()}
-              </span>
-            </div>
-            <div className="mt-2 space-y-3">
-              {round.treasures.map((treasure) => (
-                <div
-                  key={treasure.uid}
-                  className="grid grid-cols-1 gap-y-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start sm:gap-x-2"
-                >
-                  <div className="flex min-w-0 items-center gap-2 sm:h-10">
-                    <TreasureShapeGlyph width={treasure.width} height={treasure.height} />
-                    <span className="min-w-0 whitespace-nowrap text-xs text-v2-fg-secondary">
-                      {treasure.width}×{treasure.height} · {treasure.count.toLocaleString()}개
-                    </span>
+      <div className="grid items-start gap-v2-block-gap @min-[48rem]:grid-cols-2">
+        {config.rounds.map((round) => {
+          const occupiedCells = round.treasures.reduce(
+            (sum, treasure) => sum + treasure.width * treasure.height * treasure.count,
+            0,
+          );
+          const label =
+            round.round === config.loopRound ? treasureHuntLocale.roundAfter(config.loopRound) : `${round.round}회차`;
+          return (
+            <div key={round.round} className="min-w-0 rounded-md bg-v2-surface p-v2-tile-p">
+              <div className="flex flex-wrap justify-between gap-2 text-sm">
+                <strong className="text-v2-fg">
+                  {label} · {round.boardWidth}×{round.boardHeight}
+                </strong>
+                <span className="text-xs tabular-nums text-v2-fg-secondary">
+                  이론상 {(occupiedCells * round.cellCost.quantity).toLocaleString()}~
+                  {(round.boardWidth * round.boardHeight * round.cellCost.quantity).toLocaleString()}
+                </span>
+              </div>
+              <div className="mt-2 space-y-3">
+                {round.treasures.map((treasure) => (
+                  <div
+                    key={treasure.uid}
+                    className="grid grid-cols-1 gap-y-1 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-start sm:gap-x-2"
+                  >
+                    <div className="flex min-w-0 items-center gap-2 sm:h-10">
+                      <TreasureShapeGlyph width={treasure.width} height={treasure.height} />
+                      <span className="min-w-0 whitespace-nowrap text-xs text-v2-fg-secondary">
+                        {treasure.width}×{treasure.height} · {treasure.count.toLocaleString()}개
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {treasure.rewards.map((reward) => (
+                        <TreasureResourceThumb
+                          key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
+                          reward={reward}
+                          quantity={reward.quantity * treasure.count}
+                        />
+                      ))}
+                    </div>
                   </div>
-                  <div className="flex flex-wrap gap-1">
-                    {treasure.rewards.map((reward) => (
-                      <TreasureResourceThumb
-                        key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
-                        reward={reward}
-                        quantity={reward.quantity * treasure.count}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -653,7 +674,7 @@ function TreasureResourceThumb({
       resourceType={reward.resourceType}
       imageUrl={reward.imageUrl ?? undefined}
       rarity={reward.rarity ?? 1}
-      label={resourceCountLabel(quantity)}
+      quantity={quantity}
       name={reward.resourceName}
       size="md"
       tooltip

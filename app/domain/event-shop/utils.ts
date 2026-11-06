@@ -13,6 +13,8 @@ import type {
  * Formats resource count labels with K/M suffixes for large numbers.
  * Shared utility used across multiple shop components.
  */
+// Quantity chip text: K·M from 10,000, whole numbers from 100, otherwise at most one decimal place.
+// Tables and summaries show full digits instead.
 export function resourceCountLabel(count: number): string {
   if (count >= 1000000) {
     return `${(count / 1000000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
@@ -20,7 +22,7 @@ export function resourceCountLabel(count: number): string {
   if (count >= 10000) {
     return `${(count / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
   }
-  return count.toLocaleString(undefined, { maximumFractionDigits: 1 });
+  return count.toLocaleString(undefined, { maximumFractionDigits: count >= 100 ? 0 : 1 });
 }
 
 /**

@@ -558,7 +558,7 @@ describe("event shop v2 calculator", () => {
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
     const rewardsTitle = screen.getByText("기대 획득량");
-    const rewardsList = rewardsTitle.parentElement?.querySelector("ul");
+    const rewardsList = rewardsTitle.closest("section")?.querySelector(":scope > div");
     expect(rewardsList?.querySelector('[aria-label="zero reward 이름 표시"], img[alt="zero reward"]')).toBeNull();
     expect(rewardsList?.textContent).toContain("5");
   });

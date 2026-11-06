@@ -10,7 +10,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   if (!eventUid) throw new Response("Not Found", { status: 404 });
   const { env, ctx } = context.cloudflare;
   const metadata = await getEventMetadata(env, eventUid, ctx);
-  if (metadata?.contentType === "live") return redirect(`/lives/${eventUid}${new URL(request.url).search}`, { status: 301 });
+  if (metadata?.contentType === "live")
+    return redirect(`/lives/${eventUid}${new URL(request.url).search}`, { status: 301 });
   if (!metadata || (await getEventMinigameType(env, metadata)) !== "card_flip") {
     throw new Response("Not Found", { status: 404 });
   }
@@ -25,8 +26,6 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const title = `${data?.eventName ?? "이벤트"} - ${cardFlipLocale.menuTitle}`;
   return [{ title: `${title} | 몰루로그` }];
 };
-
-export const handle = { v2Width: "wide" } as const;
 
 export default function EventCardFlipDetailRoute() {
   useLoaderData<typeof loader>();

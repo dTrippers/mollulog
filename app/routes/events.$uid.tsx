@@ -18,8 +18,7 @@ import {
   useParams,
   useRevalidator,
 } from "react-router";
-import type { V2PageWidth } from "~/components/v2/layout";
-import { PageHeader, PageToolbar, ScreenTabs, V2Page } from "~/components/v2/layout";
+import { PageHeader, PageNotice, PageToolbar, ScreenTabs, V2Page } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
@@ -101,7 +100,7 @@ export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopStateSubmission(args) &&
   (isShopPath(args.currentUrl.pathname) !== isShopPath(args.nextUrl.pathname) || args.defaultShouldRevalidate);
 
-type DetailHandle = { v2Width?: V2PageWidth; v2HeaderTitleHidden?: boolean };
+type DetailHandle = { v2HeaderTitleHidden?: boolean };
 
 type EventDetailTabKey = "overview" | "shop" | "simulator" | "card-flip" | "treasure-hunt" | "road-puzzle" | "janken";
 
@@ -124,11 +123,12 @@ function headerMeta(metadata: NonNullable<Awaited<ReturnType<typeof getEventMeta
   const period = `${formatInstant(metadata.since, { timeZone, format: "MM/DD" })} ~ ${metadata.until ? formatInstant(metadata.until, { timeZone, format: "MM/DD" }) : "—"}`;
   if (metadata.until && !isInstantAfter(metadata.until, now)) {
     parts.push(period, "종료");
+  } else if (isInstantAfter(metadata.since, now)) {
+    const days = Math.max(1, calendarDayDifference(now, metadata.since, timeZone));
+    parts.push(period, `${days}일 후 시작`);
   } else if (metadata.until) {
     const days = Math.max(1, calendarDayDifference(now, metadata.until, timeZone));
     parts.push(period, `${days}일 남음`);
-  } else if (isInstantAfter(metadata.since, now)) {
-    parts.push(period, "시작 예정");
   } else {
     parts.push(period);
   }
@@ -170,10 +170,6 @@ export default function EventPage() {
   const { eventMetadata, minigameType, minigameUnavailable, shopAvailability } = loaderData;
   const pathname = location.pathname;
   const activeTab = getActiveEventDetailTab(pathname, uid ?? "");
-  const matchWidth = matches.reduce<V2PageWidth>(
-    (width, match) => (match.handle as DetailHandle | undefined)?.v2Width ?? width,
-    "reading",
-  );
   const headerTitleHidden = matches.some((match) => (match.handle as DetailHandle | undefined)?.v2HeaderTitleHidden);
   const futureLinkState = navigationState ? location.state : undefined;
   const back = verifiedFutureReturn
@@ -225,16 +221,19 @@ export default function EventPage() {
         ]
       : []),
     ...(minigameType === "janken"
-      ? [{
-          key: "janken",
-          text: jankenLocale.menuTitle,
-          Icon: RectangleStackIcon,
-          link: `/events/${uid}/shop/janken`,
-          active: activeTab === "janken",
-          disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
-          disabledReason: shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
-          linkState: futureLinkState,
-        }]
+      ? [
+          {
+            key: "janken",
+            text: jankenLocale.menuTitle,
+            Icon: RectangleStackIcon,
+            link: `/events/${uid}/shop/janken`,
+            active: activeTab === "janken",
+            disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
+            disabledReason:
+              shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
+            linkState: futureLinkState,
+          },
+        ]
       : []),
     ...(minigameType === "treasure_hunt"
       ? [
@@ -264,7 +263,8 @@ export default function EventPage() {
   const statusMessage = shopAvailability === "unavailable" || loaderData.shopEventsUnavailable || minigameUnavailable;
 
   return (
-    <V2Page width={matchWidth}>
+    // Every tab uses the same width and a full-width toolbar row, so switching tabs never moves the tabs or the content.
+    <V2Page width="wide" toolbarSpan="full">
       <PageHeader
         title={eventMetadata.name}
         meta={headerMeta(eventMetadata, timeZone)}
@@ -275,7 +275,7 @@ export default function EventPage() {
         <ScreenTabs items={tabs} />
       </PageToolbar>
       {statusMessage ? (
-        <div className="mb-v2-block-gap">
+        <PageNotice>
           <StatusNotice
             tone="danger"
             action={
@@ -286,7 +286,7 @@ export default function EventPage() {
           >
             정보를 불러오지 못했어요.
           </StatusNotice>
-        </div>
+        </PageNotice>
       ) : null}
       <Outlet />
     </V2Page>

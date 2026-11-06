@@ -100,14 +100,14 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 | `gap-v2-media-gap` / `--spacing-v2-media-gap` | 0.75rem | same | same | Thumbnail to text |
 | `gap-v2-list-gap` / `--spacing-v2-list-gap` | 0.125rem | same | same | Between items |
 | `gap-v2-group-gap` / `--spacing-v2-group-gap` | 1rem | same | same | Between groups inside a block |
-| `p-v2-block-p` / `--spacing-v2-block-p` | 1.25rem | 1rem | same | Block padding |
+| `p-v2-block-p` / `--spacing-v2-block-p` | 1rem | 0.875rem | same | Block padding |
 | `gap-v2-block-gap` / `--spacing-v2-block-gap` | 0.75rem | 0.5rem | same | Between blocks |
 | `gap-v2-section-gap` / `--spacing-v2-section-gap` | 2rem | same | same | Between unboxed page sections |
 | `p-v2-tile-p` / `--spacing-v2-tile-p` | 0.75rem | same | same | Padding for shop tiles and compact surface blocks |
 | `gap-x-v2-column-gap` / `--spacing-v2-column-gap` | 2rem | same | same | Between columns (narrow layouts stack vertically) |
 | `min-h-v2-row-min` / `--spacing-v2-row-min` | 2.25rem | same | same | Minimum row height (36px). List rows only (futures, home, panels, tabs, switches). Do not use it for controls |
 | `min-h-v2-control-min` / `--spacing-v2-control-min` | 2rem | same | same | Default button height (32px) on every layout; `size="sm"` stays 28px. Keep controls compact. An invisible hit-area extension may be used only if it adds no layout space, does not overlap adjacent controls, and is not based on a fixed touch height. Render button-styled links with `v2ButtonClassName` instead of copying the classes, and use `size` instead of height overrides |
-| `min-h-v2-input-min` / `--spacing-v2-input-min` | 2rem | same | same | Number and select inputs stay 32px on every layout. Keep mobile text inputs at `text-base` to avoid iOS zoom |
+| `min-h-v2-input-min` / `--spacing-v2-input-min` | 1.75rem | same | same | Number and text inputs are 28px on every layout, the same height as `ToggleChip`, so they line up in one row. `Select` and `SearchInput` follow the 32px control token. Keep mobile text inputs at `text-base` to avoid iOS zoom |
 
 ## Button variants
 
@@ -215,6 +215,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
 - `PageHeader` takes `titleHidden` to keep its title and meta in the screen-reader tree while visually hiding them.
+- `V2Page` takes `toolbarSpan="full"` to put the toolbar on its own full-width row above the Aside and Main, so a toolbar shared by several screens (such as the event detail tabs) stays in place whether or not a screen has an Aside. It also adds a full-width notice row for `PageNotice`, which renders a page-level `StatusNotice` between the toolbar and the content. `PageNotice` has no area without `toolbarSpan="full"`.
 
 ### Width rules
 
@@ -343,6 +344,17 @@ Each recipe shows the parts that matter. Omit `PageAside` for a recipe with no A
 </V2Page>
 ```
 
+### Event detail tabs (wide, shared toolbar)
+
+Every event detail tab uses `width="wide"` with `toolbarSpan="full"`, so the tabs and the content start at the same x on every tab.
+
+- Section titles sit outside cards. Only a work unit (one shop item, one stage, one round, one goal) gets a `bg-v2-surface` card with `p-v2-tile-p`, and cards nest at most one level.
+- Listed resources use `ResourceThumb` with `quantity` in a `gap-1` row. A resource that is the subject of its own design may keep that design.
+- The shop grid keeps its tile, which mirrors the in-game shop: 2 columns on mobile and 4 from a 40rem container. From a 48rem container the currency tabs (`SectionTabs verticalWhenWide`) become a left column, as in the game.
+- Student bonus pickers keep one card size in every view: 7 portrait-only columns on mobile, and more named columns as the page widens.
+- Buttons have four roles: `primary` for the one main action on a screen, `secondary`, `danger`, and `link` for navigation. A report action under a notice is a full-width `secondary` button on its own row.
+- Chips and number inputs are 28px.
+
 ### Form (reading, no Aside)
 
 ```tsx
@@ -388,17 +400,17 @@ The scanner screen (`/scanner`) is the first 2.0 screen that uses these parts. E
 
 - `primitives/ProgressBar`: a native `progress` with a status tone (`default`, `warning`, `danger`). Its visible value text belongs to the parent.
 - `primitives/Checkbox`: a labeled native checkbox with the 2.0 focus ring.
-- `primitives/NumberInput`: a numeric input at `min-h-v2-input-min`, with a 28px `compact` size for grouped scanner review fields. `warning` sets the subtle warning background, and the text keeps the default color. Flow navigation props from `use-number-input-flow-navigation` spread onto it. The opt-in `grouped` variant takes `onValueChange` and renders one clamped minimum/decrement/value/increment/maximum control; `showMin` and `showMax` control the endpoint buttons.
+- `primitives/NumberInput`: a numeric input at `min-h-v2-input-min` (28px). `compact` keeps the same 28px as a fixed minimum for grouped scanner review fields. `warning` sets the subtle warning background, and the text keeps the default color. Flow navigation props from `use-number-input-flow-navigation` spread onto it. The opt-in `grouped` variant is 28px high, takes `onValueChange`, and renders one clamped minimum/decrement/value/increment/maximum control; `showMin` and `showMax` control the endpoint buttons.
 - `primitives/use-number-input-flow-navigation`: a copy of the 1.x hook for 2.0 code. The 1.x hook stays for the screens that still use it.
 - `primitives/HintChip`: a short warning label whose detail opens in a `Popover`. Hover opens it and the pointer can move onto the panel, a touch toggles it on tap, and focus or Enter opens it from the keyboard. Do not place it inside a link.
 - `primitives/StatusNotice`: one status line with an icon and text. `danger` is announced as an alert, and `warning` and `neutral` as a status. Color is never the only signal.
 - `primitives/Dialog`: a modal on Headless UI with the 2.0 backdrop, for a full-size image or a confirmation.
 - `layout/PageActionBar`: a bottom action bar for a step's primary and secondary actions. It uses the surface, control border, and shadow; sticky placement is a rounded card, while fixed placement spans the viewport with a top border. `placement="sticky"` (the default) stays at the bottom of `PageMain` on desktop. `placement="fixed"` pins it on stacked layouts above the mobile navigation bar (`--mobile-nav-height`, and at the viewport bottom from `lg`), and the screen then adds bottom padding so the bar does not cover the last content. Its first summary line is emphasized; following lines are smaller and tertiary. `expandActions` makes the actions fill the row on mobile, with the last (primary) action taking the rest.
 - `features/scanner/*`: the scanner's presentation parts. `ScannerQuota` (the quota block and its meter, with loading, error, exhausted, low, and normal states), `ScannerStepHeader` (the four-step indicator, its title line, and an optional action), `ScannerFileStatusList`, `ScannerJobList`, `ScannerEndBlock`, `ScannerCompletionSummary`, `ScannerFailureNotice` (a failed file during recognition: a danger icon and secondary text, with a divider above), and `ScannerJobStatusNotice` (a failed job status read: a transient failure offers a retry, a missing job offers only a new upload).
-- `features/resources/ResourceThumb`: an item image with a labeled neutral placeholder when there is no image. Opt-in `label` adds a bottom-right quantity chip, `rarity` selects a rarity background (1–4), and `bare` removes the background for inline currency icons. `tooltip` shows the resource name on hover; image alt text keeps the name accessible.
+- `features/resources/ResourceThumb`: an item image with a labeled neutral placeholder when there is no image. Opt-in `quantity` adds a bottom-right quantity chip formatted by `resourceCountLabel` (K and M from 10,000, whole numbers from 100, otherwise at most one decimal place) and adds the exact quantity to the tooltip; `label` sets custom chip content instead. Tables and summaries show full digits, not chip abbreviations. Listed thumbnails sit in a `flex flex-wrap gap-1` row. `rarity` selects a rarity background (1–4), and `bare` removes the background for inline currency icons. `tooltip` shows the resource name on hover; image alt text keeps the name accessible.
 - `features/students/StudentThumb`: the portrait with its favorite label. `onOpen` is optional: with it the thumbnail is a button for the quick panel, and without it the thumbnail is a non-interactive element with no button role and no focus. `showCaption={false}` hides the name below it for layouts that show the name beside the portrait. Opt-in `fluid` fills its grid cell, `captionPlacement="overlay"` puts the name and variant on a desktop image band, and `grayscaleWhenUnselected` grays out selectable unselected portraits.
 - `features/students/StudentThumbList`: the list around student thumbnails, and the only place their spacing is defined. Every v2 student thumbnail list (the futures timeline and schedule, the scanner completion lists) renders its `li` items inside it instead of its own `ul`. `size="default"` goes with the 60px `StudentThumb`: 8px across and 12px down on mobile, 12px both ways from md. `size="large"` goes with the `large` thumbnail: 10px across and 12px down on mobile, so four students fit in one row of a 375px screen, and 12px across and 16px down from md.
-- `primitives/SectionTabs`: an in-section, horizontally scrolling underline tab group. Each tab can show an `imageUrl` or custom `icon`, and uses `aria-pressed` to expose selection without changing the page's main screen.
+- `primitives/SectionTabs`: an in-section, horizontally scrolling underline tab group. Each tab can show an `imageUrl` or custom `icon`, and uses `aria-pressed` to expose selection without changing the page's main screen. `verticalWhenWide` turns it into a left column of tabs from a 48rem container width; wrap the tabs and their content in an `@container` element and place them in a two-column grid, as the event shop does with its currency tabs.
 - `features/events/ShopSection`: the existing boxed presentation stays the default. `variant="shop"` opts into the unboxed event-shop section with its 1.x `panel::event-shop-section::*` persistence keys and JSON boolean values. Set `storageKey` only when an existing non-shop key must be preserved exactly.
 - Scanner completion lists use v2 `StudentThumb` cards without recruitment labels; clicking a student opens a popover with the detail-page link. Item completion uses v2 `ResourceThumb` with a quantity label and a popover for the full item name and exact quantity.
 - `features/students/TierInput`: a growth-tier control. The visible face is "★n" up to 5, and the exclusive weapon icon with its level after 5 (the `GrowthTier` pattern), in a box with the `NumberInput` size, border, and warning background. Its button joins the `use-number-input-flow-navigation` flow and opens a v2 popover for tier selection. Tiers below the initial tier are disabled.

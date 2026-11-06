@@ -10,7 +10,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const { env, ctx } = context.cloudflare;
   const metadata = await getEventMetadata(env, timelineUid, ctx);
-  if (metadata?.contentType === "live") return redirect(`/lives/${timelineUid}${new URL(request.url).search}`, { status: 301 });
+  if (metadata?.contentType === "live")
+    return redirect(`/lives/${timelineUid}${new URL(request.url).search}`, { status: 301 });
   if (!metadata) throw new Response("Not Found", { status: 404 });
 
   const eventContent = await getEventShopContentForMetadata(env, metadata);
@@ -28,8 +29,6 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const title = `${loaderData?.eventName ?? "이벤트"} - ${treasureHuntLocale.simulatorTitle}`;
   return [{ title: `${title} | 몰루로그` }, { name: "description", content: treasureHuntLocale.simulatorDescription }];
 };
-
-export const handle = { v2Width: "reading" } as const;
 
 export default function EventTreasureHuntSimulatorRoute() {
   const { eventUid, treasureHunt } = useLoaderData<typeof loader>();

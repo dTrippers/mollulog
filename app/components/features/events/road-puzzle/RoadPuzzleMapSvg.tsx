@@ -191,16 +191,16 @@ export function RoadPuzzleMapSvg({
             const routeStep = witnessByCoordinate.get(key(tile));
             const fill =
               tile.type === 1 || tile.type === 2
-                ? "var(--foreground)"
+                ? "var(--v2-fg)"
                 : tile.type === 3
-                  ? "color-mix(in oklab, var(--foreground) 22%, var(--card))"
+                  ? "color-mix(in oklab, var(--v2-fg) 22%, var(--v2-surface))"
                   : routeStep
                     ? highlightedRailKind === null
-                      ? "color-mix(in oklab, var(--primary) 15%, var(--card))"
+                      ? "color-mix(in oklab, var(--v2-accent) 15%, var(--v2-surface))"
                       : highlightedRailKind === routeStep.railKind
-                        ? "color-mix(in oklab, var(--primary) 30%, var(--card))"
-                        : "color-mix(in oklab, var(--primary) 6%, var(--card))"
-                    : "var(--muted)";
+                        ? "color-mix(in oklab, var(--v2-accent) 30%, var(--v2-surface))"
+                        : "color-mix(in oklab, var(--v2-accent) 6%, var(--v2-surface))"
+                    : "var(--v2-inset)";
             const isMarkable = tile.type === 5;
             const isMarked = markKeys.has(key(tile));
             const routeLabel = routeStep ? `, ${roadPuzzleLocale.routePassesCell}` : "";
@@ -209,7 +209,7 @@ export function RoadPuzzleMapSvg({
                 key={`tile:${key(tile)}`}
                 points={polygonPoints(center)}
                 fill={fill}
-                stroke="var(--border)"
+                stroke="var(--v2-divider)"
                 strokeWidth="0.8"
                 {...(isMarkable
                   ? {
@@ -244,7 +244,7 @@ export function RoadPuzzleMapSvg({
         </g>
         <g
           fill="none"
-          stroke="var(--foreground)"
+          stroke="var(--v2-fg)"
           strokeLinecap="round"
           strokeLinejoin="round"
           strokeWidth="1.8"
@@ -267,7 +267,7 @@ export function RoadPuzzleMapSvg({
               <path
                 key={`route:${key(step)}`}
                 d={railPath(centerFor(step), step.entryIndex, step.exitIndex)}
-                className={muted ? "text-muted-foreground" : "text-primary"}
+                className={muted ? "text-v2-fg-tertiary" : "text-v2-accent"}
                 stroke="currentColor"
                 opacity={muted ? 0.25 : 1}
               />
@@ -287,8 +287,8 @@ export function RoadPuzzleMapSvg({
                     cx={center.x}
                     cy={center.y}
                     r="3.3"
-                    fill="var(--card)"
-                    stroke="var(--foreground)"
+                    fill="var(--v2-surface)"
+                    stroke="var(--v2-fg)"
                     strokeWidth="1.7"
                   />
                 );
@@ -305,7 +305,7 @@ export function RoadPuzzleMapSvg({
                     width={7}
                     height={7}
                     className="size-[7px]"
-                    style={{ color: "var(--card)" }}
+                    style={{ color: "var(--v2-surface)" }}
                     aria-hidden="true"
                   />
                 </g>
@@ -324,8 +324,8 @@ export function RoadPuzzleMapSvg({
                   y={center.y - 9.2}
                   width={9}
                   height={9}
-                  fill="var(--foreground)"
-                  stroke="var(--card)"
+                  fill="var(--v2-fg)"
+                  stroke="var(--v2-surface)"
                   strokeWidth={3}
                   style={{ paintOrder: "stroke" }}
                   aria-hidden="true"

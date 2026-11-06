@@ -764,7 +764,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --spacing-v2-column-gap: 2rem;
   --spacing-v2-row-min: 2.25rem;
   --spacing-v2-control-min: 2rem;
-  --spacing-v2-input-min: 2rem;
+  --spacing-v2-input-min: 1.75rem;
 
   --transition-duration-v2-fast: 120ms;
   --transition-duration-v2-base: 200ms;
@@ -895,6 +895,21 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   grid-area: main;
 }
 
+/* A full-width toolbar layout (V2Page toolbarSpan="full") adds a notice row between the toolbar and the content. */
+[data-v2-layout][data-toolbar-span="full"] {
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  grid-template-areas:
+    "header"
+    "toolbar"
+    "notice"
+    "main";
+}
+
+.v2-notice {
+  grid-area: notice;
+  margin-bottom: var(--spacing-v2-block-gap);
+}
+
 .v2-aside {
   grid-area: aside;
   display: none;
@@ -975,6 +990,15 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
       "aside toolbar"
       "aside main";
     column-gap: var(--spacing-v2-column-gap);
+  }
+
+  [data-v2-layout][data-toolbar-span="full"]:has(> .v2-aside) {
+    grid-template-rows: auto auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "header header"
+      "toolbar toolbar"
+      "notice notice"
+      "aside main";
   }
 
   [data-v2-layout][data-width="reading"]:has(> .v2-aside) {

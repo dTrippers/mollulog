@@ -170,14 +170,17 @@ export default function CardFlipScreen() {
                 persistenceKey="event-shop-section::card-flip-cards"
                 variant="shop"
               >
-                <ul aria-label="카드별 보상" className="grid gap-3 sm:grid-cols-2">
+                <ul aria-label="카드별 보상" className="grid gap-v2-block-gap sm:grid-cols-2">
                   {cardFlip.cards.map((card) => {
                     const rarity = getCardFlipRarity(card.rarity);
                     return (
-                      <li key={card.uid} className="flex min-w-0 items-start gap-3 rounded-lg bg-v2-inset p-3">
+                      <li
+                        key={card.uid}
+                        className="flex min-w-0 items-start gap-3 rounded-md bg-v2-surface p-v2-tile-p"
+                      >
                         <span className="sr-only">{cardFlipCardAccessibleName(card)}</span>
                         {card.imageUrl ? (
-                          <span className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-v2-surface">
+                          <span className="relative flex h-16 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-v2-inset">
                             <img src={card.imageUrl} alt="" loading="lazy" className="size-full object-contain" />
                             {rarity ? (
                               <span className="absolute right-0 bottom-0 rounded-tl bg-v2-scrim px-1 text-[0.625rem] font-semibold leading-4 text-v2-on-media">
@@ -192,7 +195,7 @@ export default function CardFlipScreen() {
                               {rarity.text}
                             </span>
                           ) : null}
-                          <div className="flex flex-wrap gap-2">
+                          <div className="flex flex-wrap gap-1">
                             {keyedRewards(card.rewards).map(({ key, reward }) => (
                               <RewardChip key={key} reward={reward} />
                             ))}
@@ -405,8 +408,8 @@ function ComparisonRow({
 function ResourceSummary({ label, resources }: { label: string; resources: RewardItem[] }) {
   return (
     <div>
-      <h3 className="text-xs font-medium text-v2-fg-tertiary">{label}</h3>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <h3 className="text-sm font-semibold text-v2-fg">{label}</h3>
+      <div className="mt-2 flex flex-wrap gap-1">
         {resources.map((resource) => (
           <RewardChip key={rewardKey(resource)} reward={resource} />
         ))}
@@ -423,7 +426,7 @@ function RewardChip({ reward }: { reward: RewardItem }) {
       name={reward.resourceName}
       imageUrl={reward.imageUrl ?? undefined}
       rarity={reward.rarity}
-      label={formatCardFlipAmount(reward.quantity)}
+      quantity={Math.round(reward.quantity)}
       size="md"
     />
   );

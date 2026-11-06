@@ -33,6 +33,11 @@ const mockUseRoadPuzzleMapAnalysis = jest.fn<RoadPuzzleMapAnalysisHook>();
 jest.mock("~/lib/event-shop/hooks/useRoadPuzzleStats", () => ({
   useRoadPuzzleStats: (...args: unknown[]) => mockUseRoadPuzzleStats(...args),
 }));
+jest.mock("~/components/v2/layout", () => ({
+  ...(jest.requireActual("~/components/v2/layout") as object),
+  PageMain: ({ children }: { children: import("react").ReactNode }) =>
+    (require("react") as typeof import("react")).createElement("main", null, children),
+}));
 jest.mock("~/components/features/events/road-puzzle/useRoadPuzzleMapAnalysis", () => ({
   useRoadPuzzleMapAnalysis: (...args: Parameters<RoadPuzzleMapAnalysisHook>) => mockUseRoadPuzzleMapAnalysis(...args),
 }));
@@ -200,7 +205,7 @@ describe("RoadPuzzleViewerPage", () => {
       expect(glyph.getAttribute("y")).toBe("0");
       expect(glyph.getAttribute("width")).toBe("7");
       expect(glyph.getAttribute("height")).toBe("7");
-      expect((glyph as SVGElement).style.color).toBe("var(--card)");
+      expect((glyph as SVGElement).style.color).toBe("var(--v2-surface)");
     }
   });
 
@@ -254,7 +259,7 @@ describe("RoadPuzzleViewerPage", () => {
     const view = renderViewer("/events/10846/road-puzzle?round=1&map=1");
 
     expect(screen.getByRole("group", { name: "1회차 맵" })).toBeTruthy();
-    expect(view.container.querySelectorAll("path.text-primary")).toHaveLength(0);
+    expect(view.container.querySelectorAll("path.text-v2-accent")).toHaveLength(0);
     expect(screen.queryByText("계산 중")).toBeNull();
 
     act(() => jest.advanceTimersByTime(300));
@@ -321,11 +326,11 @@ describe("RoadPuzzleViewerPage", () => {
     expect(shortCurveLabel?.classList.contains("whitespace-nowrap")).toBe(true);
     expect(shortCurveLabel?.parentElement?.classList.contains("gap-1")).toBe(true);
     expect(within(table).getAllByRole("cell").every((cell) => cell.classList.contains("whitespace-nowrap"))).toBe(true);
-    const input = screen.getByRole("textbox", { name: "직선 남은 수" });
+    const input = screen.getByRole("spinbutton", { name: "직선 남은 수" });
     expect((input as HTMLInputElement).value).toBe("1");
     const cells = within(input.closest("tr") as HTMLElement).getAllByRole("cell");
     expect(cells[0]?.classList.contains("pr-1.5")).toBe(true);
-    expect(cells[1]?.classList.contains("w-16")).toBe(true);
+    expect(cells[1]?.classList.contains("w-[4.5rem]")).toBe(true);
     expect(cells[1]?.classList.contains("pl-1.5")).toBe(true);
 
     const summary = table.closest("div.rounded-md") as HTMLElement;
@@ -333,8 +338,8 @@ describe("RoadPuzzleViewerPage", () => {
     expect(
       screen
         .getByRole("img", { name: "하이랜더 기념 스티커" })
-        .closest(".group")
-        ?.parentElement?.classList.contains("top-0.5"),
+        .closest("div")
+        ?.classList.contains("top-0.5"),
     ).toBe(true);
     expect(roadPuzzleLocale.viewerCostHelp).toBe(
       "기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요.",
@@ -346,7 +351,7 @@ describe("RoadPuzzleViewerPage", () => {
     expect(within(summary).getByText("150")).toBeTruthy();
     expect(within(summary).getByText("≈375")).toBeTruthy();
     expect(within(summary).getByText("900")).toBeTruthy();
-    expect(summary.querySelector("svg.size-4.text-muted-foreground")).toBeNull();
+    expect(summary.querySelector("svg.size-4.text-v2-fg-tertiary")).toBeNull();
 
     fireEvent.change(input, { target: { value: "0" } });
 
@@ -361,24 +366,24 @@ describe("RoadPuzzleViewerPage", () => {
     expect(
       screen
         .getByRole("img", { name: "하이랜더 기념 스티커" })
-        .closest(".group")
-        ?.parentElement?.classList.contains("top-0.5"),
+        .closest("div")
+        ?.classList.contains("top-0.5"),
     ).toBe(true);
     expect(screen.getByText("필요 1개, 1개 배치")).toBeTruthy();
     expect(screen.getByText(roadPuzzleLocale.progressExpectationLive(300))).toBeTruthy();
     expect(within(summary).getByText("150")).toBeTruthy();
     expect(within(summary).getByText("≈300")).toBeTruthy();
     expect(within(summary).getByText("450")).toBeTruthy();
-    expect(summary.querySelector("svg.size-4.text-muted-foreground")).toBeNull();
+    expect(summary.querySelector("svg.size-4.text-v2-fg-tertiary")).toBeNull();
     expect(screen.getByRole("button", { name: "초기화" })).toBeTruthy();
     const row = screen.getByRole("button", { name: "직선 레일 강조" }).closest("tr")!;
-    expect(within(row).getByRole("button", { name: "감소" })).toBeTruthy();
-    expect(within(row).getByRole("button", { name: "증가" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "직선 남은 수 감소" })).toBeTruthy();
+    expect(within(row).getByRole("button", { name: "직선 남은 수 증가" })).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "초기화" }));
 
     expect(screen.getByRole("columnheader", { name: "필요 수" })).toBeTruthy();
-    expect((screen.getByRole("textbox", { name: "직선 남은 수" }) as HTMLInputElement).value).toBe("1");
+    expect((screen.getByRole("spinbutton", { name: "직선 남은 수" }) as HTMLInputElement).value).toBe("1");
     expect(screen.queryByRole("button", { name: "초기화" })).toBeNull();
   });
 
@@ -390,9 +395,9 @@ describe("RoadPuzzleViewerPage", () => {
     expect(roadPuzzleLocale.progressTableCaption).toBe("레일 종류별 배치한 수와 필요한 수, 남은 수");
     expect(roadPuzzleLocale.drawnRequiredLabel(3, 2)).toBe("필요 3개, 2개 배치");
 
-    fireEvent.change(screen.getByRole("textbox", { name: "직선 남은 수" }), { target: { value: "0" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "큰 곡선 남은 수" }), { target: { value: "0" } });
-    fireEvent.change(screen.getByRole("textbox", { name: "작은 곡선 남은 수" }), { target: { value: "0" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "직선 남은 수" }), { target: { value: "0" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "큰 곡선 남은 수" }), { target: { value: "0" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "작은 곡선 남은 수" }), { target: { value: "0" } });
 
     expect(roadPuzzleLocale.canCompleteNow).toBe("지금 배치한 레일로 완성할 수 있어요");
     expect(screen.getByText(roadPuzzleLocale.canCompleteNow, { selector: "span" })).toBeTruthy();
@@ -407,7 +412,7 @@ describe("RoadPuzzleViewerPage", () => {
     expect(screen.getAllByText("획득 보상")).toHaveLength(7);
     expect(screen.getAllByText("경로 보상")).toHaveLength(6);
 
-    const roundRows = view.container.querySelectorAll<HTMLElement>(".rounded-md.bg-muted.p-2");
+    const roundRows = view.container.querySelectorAll<HTMLElement>(".space-y-2.rounded-md.bg-v2-surface.p-v2-tile-p");
     expect(roundRows).toHaveLength(7);
     const firstRound = roundRows[0] as HTMLElement;
     const alignedRewardRows = firstRound.querySelectorAll("div.grid");
@@ -452,10 +457,11 @@ describe("RoadPuzzleViewerPage", () => {
     const cell = container.querySelector('polygon[role="button"]') as SVGPolygonElement;
     fireEvent.click(cell);
 
-    expect(screen.getByRole("alert").textContent).toContain(
+    expect(screen.getAllByText(roadPuzzleLocale.noRouteThroughMarks).find((node) => node.closest('[role="status"]'))).toBeTruthy();
+    expect(roadPuzzleLocale.noRouteThroughMarks).toContain(
       "표시한 칸을 모두 지나는 경로가 없어요. 회차와 맵이 맞는지 확인해보세요",
     );
-    expect(container.querySelector('svg[role="group"][aria-labelledby]')?.querySelectorAll("path.text-primary")).toHaveLength(0);
+    expect(container.querySelector('svg[role="group"][aria-labelledby]')?.querySelectorAll("path.text-v2-accent")).toHaveLength(0);
     expect(
       screen.getByRole("group", { name: "1회차 맵, 보상 칸 1개: 경로 없음" }),
     ).toBeTruthy();
@@ -463,7 +469,7 @@ describe("RoadPuzzleViewerPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "되돌리기" }));
 
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryAllByText(roadPuzzleLocale.noRouteThroughMarks)).toHaveLength(0);
     expect(cell.getAttribute("aria-pressed")).toBe("false");
   });
 
@@ -472,7 +478,7 @@ describe("RoadPuzzleViewerPage", () => {
     const view = renderViewer(path);
     const cell = view.container.querySelector('polygon[role="button"]') as SVGPolygonElement;
     fireEvent.click(cell);
-    fireEvent.change(screen.getByRole("textbox", { name: "직선 남은 수" }), { target: { value: "0" } });
+    fireEvent.change(screen.getByRole("spinbutton", { name: "직선 남은 수" }), { target: { value: "0" } });
     const key = "road-puzzle-viewer::v1::10846::r7::m2";
     await waitFor(() => expect(window.localStorage.getItem(key)).toContain('"straight":0'));
     view.unmount();
@@ -482,6 +488,6 @@ describe("RoadPuzzleViewerPage", () => {
     expect((restored.container.querySelector('polygon[role="button"]') as SVGPolygonElement).getAttribute("aria-pressed")).toBe(
       "true",
     );
-    expect((screen.getByRole("textbox", { name: "직선 남은 수" }) as HTMLInputElement).value).toBe("0");
+    expect((screen.getByRole("spinbutton", { name: "직선 남은 수" }) as HTMLInputElement).value).toBe("0");
   });
 });

@@ -36,18 +36,15 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import { formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import { futuresRevealedSpoilerKey, parseRevealedSpoilerContentUids } from "~/lib/future-spoilers";
-import {
-  cardFlipLocale,
-  formatResourceAmount,
-  jankenLocale,
-  minigameDescription,
-  roadPuzzleLocale,
-  treasureHuntLocale,
-} from "~/locales/ko";
+import { cn } from "~/lib/utils";
+import { cardFlipLocale, jankenLocale, minigameDescription, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import type { ShopAvailableEvent } from "~/models/event-content";
 import { RoadPuzzleShopSection } from "./RoadPuzzleShopSection";
 import { ShopMobileResultBar } from "./ShopMobileResultBar";
 
+// Student picker cards keep one size in every bonus view. Mobile shows seven portrait-only columns;
+// wider pages show names and add columns instead of growing cards.
+const STUDENT_PICK_GRID = "grid grid-cols-7 gap-v2-block-gap md:grid-cols-[repeat(auto-fill,minmax(3.5rem,1fr))]";
 const noFavorite = { visible: false, icon: "unfavorited" as const, countText: null, accessibleName: "관심 학생" };
 
 type EventRouteData = {
@@ -92,6 +89,7 @@ export default function EventShopCalculator() {
   const hasBonusSelection =
     plan.state.selectedBonusStudentUids.length > 0 ||
     Object.values(plan.state.selectedBonusStudentUidsByItem).some((uids) => uids.length > 0);
+
   const hasVisibleShopSelection = visibleShopResources.some(
     ({ uid }) => (plan.state.itemQuantities[uid] ?? 0) > 0 || (plan.state.itemPurchaseDays[uid] ?? 0) > 0,
   );
@@ -153,7 +151,7 @@ export default function EventShopCalculator() {
                   >
                     모집 학생 반영
                   </Button>
-                  <Button size="sm" variant="primary" onClick={chooseAllBonusStudents}>
+                  <Button size="sm" onClick={chooseAllBonusStudents}>
                     모두 선택
                   </Button>
                   {hasBonusSelection ? (
@@ -181,7 +179,7 @@ export default function EventShopCalculator() {
                         아이템마다 서로 다른 보너스 학생을 선택했어요. 아이템별 탭에서 확인해주세요.
                       </p>
                     ) : null}
-                    <div className="grid grid-cols-8 gap-v2-block-gap md:grid-cols-12">
+                    <div className={STUDENT_PICK_GRID}>
                       {bonusStudents.map(({ uid, name }) => {
                         const selected =
                           plan.state.bonusStudentSelectionMode === "shared"
@@ -241,11 +239,7 @@ export default function EventShopCalculator() {
             persistenceKey="event-shop-section::shop-resource-selector"
             footer={
               <>
-                <Button
-                  size="sm"
-                  variant="primary"
-                  onClick={() => setVisibleShopResources(visibleShopResources, true, plan)}
-                >
+                <Button size="sm" onClick={() => setVisibleShopResources(visibleShopResources, true, plan)}>
                   모두 선택
                 </Button>
                 {hasVisibleShopSelection ? (
@@ -260,31 +254,35 @@ export default function EventShopCalculator() {
               </>
             }
           >
-            <div>
-              <SectionTabs
-                label="상점 결제 재화"
-                selectedId={activeCurrencyUid}
-                onChange={setCurrencyUid}
-                items={paymentResources.map((resource) => ({
-                  id: resource.uid,
-                  label: resource.name,
-                  icon: (
-                    <ResourceThumb
-                      itemUid={resource.uid}
-                      resourceType={resource.type}
-                      name={resource.name}
-                      imageUrl={resource.imageUrl ?? undefined}
-                      size="sm"
-                      bare
-                      tooltip
-                    />
-                  ),
-                }))}
-              />
-              <div className="grid grid-cols-2 gap-v2-block-gap lg:grid-cols-4">
-                {visibleShopResources.map((item) => (
-                  <ShopItemTile key={item.uid} item={item} plan={plan} />
-                ))}
+            {/* Wide pages move the currency tabs into a left column, as the in-game shop does. */}
+            <div className="@container">
+              <div className="grid gap-v2-block-gap @min-[48rem]:grid-cols-[9rem_minmax(0,1fr)]">
+                <SectionTabs
+                  verticalWhenWide
+                  label="상점 결제 재화"
+                  selectedId={activeCurrencyUid}
+                  onChange={setCurrencyUid}
+                  items={paymentResources.map((resource) => ({
+                    id: resource.uid,
+                    label: resource.name,
+                    icon: (
+                      <ResourceThumb
+                        itemUid={resource.uid}
+                        resourceType={resource.type}
+                        name={resource.name}
+                        imageUrl={resource.imageUrl ?? undefined}
+                        size="sm"
+                        bare
+                        tooltip
+                      />
+                    ),
+                  }))}
+                />
+                <div className="grid content-start grid-cols-2 gap-v2-block-gap @min-[40rem]:grid-cols-4">
+                  {visibleShopResources.map((item) => (
+                    <ShopItemTile key={item.uid} item={item} plan={plan} />
+                  ))}
+                </div>
               </div>
             </div>
           </ShopSection>
@@ -541,7 +539,9 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
       : goals.manualShopCurrency > 0
         ? [jankenLocale.shopCurrencyTargetAmount(shopCurrencyName, goals.manualShopCurrency)]
         : []),
-    ...(goals.targetTier == null ? [] : [
+    ...(goals.targetTier == null
+      ? []
+      : [
           jankenLocale.studentGoalTarget(
             nameOf(roles.studentUid, jankenLocale.studentGrowth),
             jankenLocale.tierLabel(goals.targetTier),
@@ -565,20 +565,20 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
     });
   const score = liveEntry.progress.cumulativeScore;
   const projectedScore = score + challengePlayCount * (goals.averageScore ?? 0);
-  const formatQuantity = (quantity: number) =>
-    new Intl.NumberFormat("ko-KR", { maximumFractionDigits: 2 }).format(quantity);
 
   return (
     <div className="space-y-v2-group-gap">
-      <section className="rounded-lg bg-v2-surface p-v2-block-p">
-        <header className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold">{jankenLocale.playCount}</h3>
+      <section className="min-w-0">
+        <header className="mb-2 flex min-h-6 items-center justify-between gap-3">
+          <h3 className="text-sm font-semibold text-v2-fg">{jankenLocale.playCount}</h3>
           <span className="text-xs text-v2-fg-tertiary">{jankenLocale.shopPlanCalculated}</span>
         </header>
-        <p className="mt-2 text-xs text-v2-fg-secondary">
-          {jankenLocale.shopTargetSummary(targetLabels.length > 0 ? targetLabels : [jankenLocale.shopCurrencyTarget(shopCurrencyName)])}
+        <p className="mb-v2-block-gap text-xs text-v2-fg-secondary">
+          {jankenLocale.shopTargetSummary(
+            targetLabels.length > 0 ? targetLabels : [jankenLocale.shopCurrencyTarget(shopCurrencyName)],
+          )}
         </p>
-        <ul className="mt-3 space-y-2">
+        <ul className="space-y-2 rounded-md bg-v2-surface p-v2-tile-p">
           {playedStages.map((stage) => (
             <li key={stage.uid} className="flex items-center justify-between gap-3">
               <span className="whitespace-nowrap rounded-md bg-v2-inset px-2 py-1 text-sm font-medium">
@@ -600,41 +600,36 @@ function JankenShopSection({ plan, config }: { plan: EventShopPlanContext; confi
         <p className="text-sm font-medium">{jankenLocale.shopScoreBasis(score, projectedScore)}</p>
       ) : null}
       {playedStages.length > 0 ? (
-        <div className="grid items-start gap-3 sm:grid-cols-2">
-          <div className="rounded-lg bg-v2-surface p-v2-block-p">
-            <p className="text-xs text-v2-fg-secondary">{jankenLocale.entryCurrencyRequired}</p>
-            <p className="mt-1 flex items-center gap-2 text-lg font-semibold tabular-nums">
+        <ResourceBlock
+          title={jankenLocale.expectedRewards}
+          aside={
+            <p className="flex items-center gap-1.5 text-sm text-v2-fg-secondary">
+              {jankenLocale.entryCurrencyRequired}
               {planned.entryResourceUid ? (
                 <ResourceThumb itemUid={planned.entryResourceUid} name={jankenLocale.entryCurrency} size="sm" />
               ) : null}
-              {planned.entryCost.toLocaleString()}
+              <span className="font-semibold tabular-nums text-v2-fg">{planned.entryCost.toLocaleString()}</span>
             </p>
-          </div>
-          <div className="rounded-lg bg-v2-surface p-v2-block-p">
-            <p className="text-xs text-v2-fg-secondary">{jankenLocale.expectedRewards}</p>
-            <ul className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {rewards.map(([uid, quantity]) => {
-                const reward = firstRewardByUid.get(uid);
-                if (!reward) return null;
-                return (
-                  <li key={uid} className="flex items-center justify-center rounded-md bg-v2-inset p-2">
-                    <ResourceThumb
-                      itemUid={uid}
-                      resourceType={reward.resourceType}
-                      name={reward.resourceName}
-                      imageUrl={reward.imageUrl ?? undefined}
-                      rarity={reward.rarity ?? null}
-                      label={formatQuantity(quantity)}
-                      tooltip
-                      nameTooltip
-                      size="lg"
-                    />
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        </div>
+          }
+        >
+          {rewards.map(([uid, quantity]) => {
+            const reward = firstRewardByUid.get(uid);
+            if (!reward) return null;
+            return (
+              <ResourceThumb
+                key={uid}
+                itemUid={uid}
+                resourceType={reward.resourceType}
+                name={reward.resourceName}
+                imageUrl={reward.imageUrl ?? undefined}
+                rarity={reward.rarity ?? null}
+                quantity={quantity}
+                tooltip
+                nameTooltip
+              />
+            );
+          })}
+        </ResourceBlock>
       ) : null}
     </div>
   );
@@ -745,7 +740,7 @@ function BonusRoleRow({
   return (
     <div className="flex min-w-0 flex-col gap-2 md:flex-row md:items-start">
       <p className="text-xs font-medium text-v2-fg-secondary md:w-20 md:shrink-0 md:pt-1">{label}</p>
-      <div className="grid min-w-0 flex-1 grid-cols-8 gap-v2-block-gap md:grid-cols-8">
+      <div className={cn(STUDENT_PICK_GRID, "min-w-0 flex-1")}>
         {students.map(({ student, ratio }) => {
           const selected =
             plan.state.bonusStudentSelectionMode === "shared"
@@ -771,7 +766,6 @@ function BonusRoleRow({
                 selected={selected}
                 selectedIndicatorPosition="mobile-bottom-left"
                 fluid
-                compact
                 captionPlacement="overlay"
                 grayscaleWhenUnselected
                 showRecruitmentLabel={recruited}
@@ -942,7 +936,7 @@ function ShopItemTile({
   const maxQuantity = item.shopAmount ?? undefined;
   const owned = plan.ownedQuantities?.[item.uid];
   const students = item.resource.type === ResourceTypeEnum.Furniture ? (item.resource.interactionStudents ?? []) : [];
-  const amountLabel = item.resourceAmount === 1 ? undefined : formatResourceAmount(item.resourceAmount);
+  const amountLabel = item.resourceAmount === 1 ? undefined : resourceCountLabel(item.resourceAmount);
   const label =
     students.length > 0 ? (
       <>
@@ -1134,7 +1128,7 @@ function MinigameResourceBlocks({ plan }: { plan: EventShopPlanContext }) {
               name={cost.resourceName}
               imageUrl={cost.imageUrl ?? undefined}
               size="md"
-              label={resourceCountLabel(cost.quantity)}
+              quantity={cost.quantity}
               tooltip
             />
           ))
@@ -1153,7 +1147,7 @@ function MinigameResourceBlocks({ plan }: { plan: EventShopPlanContext }) {
               imageUrl={reward.imageUrl ?? undefined}
               rarity={reward.rarity}
               size="md"
-              label={resourceCountLabel(reward.quantity)}
+              quantity={reward.quantity}
               tooltip
             />
           ))
@@ -1165,12 +1159,16 @@ function MinigameResourceBlocks({ plan }: { plan: EventShopPlanContext }) {
   );
 }
 
-function ResourceBlock({ title, children }: { title: string; children: ReactNode }) {
+// A listed set of resources: the title sits outside, and the thumbnails flow without a card.
+function ResourceBlock({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
   return (
-    <div className="rounded-md bg-v2-surface p-v2-tile-p">
-      <h3 className="mb-v2-group-gap text-xs font-semibold text-v2-fg">{title}</h3>
-      <div className="flex flex-wrap items-start gap-v2-block-gap">{children}</div>
-    </div>
+    <section className="min-w-0">
+      <header className="mb-2 flex min-h-6 items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold text-v2-fg">{title}</h3>
+        {aside}
+      </header>
+      <div className="flex flex-wrap items-start gap-1">{children}</div>
+    </section>
   );
 }
 
@@ -1211,7 +1209,7 @@ function StageCard({ stage, plan }: { stage: EventShopPlanContext["stages"][numb
         </div>
       </div>
       {rewards.length > 0 ? (
-        <div className="mt-v2-group-gap flex flex-wrap items-start gap-v2-block-gap">
+        <div className="mt-v2-group-gap flex flex-wrap items-start gap-1">
           {coinRewards.map(({ item, amount, chance, rewardRequirement }) =>
             item ? (
               <ResourceThumb
@@ -1222,7 +1220,7 @@ function StageCard({ stage, plan }: { stage: EventShopPlanContext["stages"][numb
                 imageUrl={item.imageUrl ?? undefined}
                 rarity={item.rarity}
                 size="md"
-                label={amount.toLocaleString()}
+                quantity={amount}
                 tooltip
               />
             ) : null,
@@ -1239,7 +1237,7 @@ function StageCard({ stage, plan }: { stage: EventShopPlanContext["stages"][numb
                 imageUrl={item.imageUrl ?? undefined}
                 rarity={item.rarity}
                 size="md"
-                label={<span className="text-v2-perk-on-media">+{bonus.toLocaleString()}</span>}
+                label={<span className="text-v2-perk-on-media">+{resourceCountLabel(bonus)}</span>}
                 tooltip
               />
             ) : null;
@@ -1254,7 +1252,7 @@ function StageCard({ stage, plan }: { stage: EventShopPlanContext["stages"][numb
                 imageUrl={item.imageUrl ?? undefined}
                 rarity={item.rarity}
                 size="md"
-                label={amount.toLocaleString()}
+                quantity={amount}
                 tooltip
               />
             ) : null,
@@ -1338,18 +1336,16 @@ export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
       </div>
       <hr className="border-v2-divider" />
       <div className="space-y-v2-group-gap">
-        <StatusNotice
-          tone="neutral"
-          action={
-            plan.signedIn ? (
-              <Button size="sm" variant="text" onClick={() => setReportOpen(true)}>
-                오류 제보
-              </Button>
-            ) : undefined
-          }
-        >
-          <span title="게임 데이터가 일본 서비스와 다를 수 있어요">데이터가 부정확할 수 있어요</span>
-        </StatusNotice>
+        <div className="space-y-v2-block-gap">
+          <StatusNotice tone="neutral">
+            <span title="게임 데이터가 일본 서비스와 다를 수 있어요">데이터가 부정확할 수 있어요</span>
+          </StatusNotice>
+          {plan.signedIn ? (
+            <Button size="sm" className="w-full" onClick={() => setReportOpen(true)}>
+              오류 제보
+            </Button>
+          ) : null}
+        </div>
         {!plan.signedIn ? (
           <StatusNotice
             tone="neutral"
@@ -1602,24 +1598,21 @@ function ResourceResults({ plan }: { plan: EventShopPlanContext }) {
         <StatusNotice tone="neutral">결과 재화 정보가 없어요.</StatusNotice>
       )}
       {collected.size > 0 ? (
-        <div className="rounded-md bg-v2-surface p-v2-tile-p">
-          <h3 className="text-sm font-medium text-v2-fg">획득 보상</h3>
-          <div className="mt-v2-group-gap flex flex-wrap gap-v2-block-gap">
-            {[...collected.values()].map((reward) => (
-              <ResourceThumb
-                key={`${reward.type}:${reward.uid}`}
-                itemUid={reward.uid}
-                resourceType={reward.type}
-                name={reward.name}
-                imageUrl={reward.imageUrl ?? undefined}
-                rarity={reward.rarity}
-                size="md"
-                label={resourceCountLabel(reward.quantity)}
-                tooltip
-              />
-            ))}
-          </div>
-        </div>
+        <ResourceBlock title="획득 보상">
+          {[...collected.values()].map((reward) => (
+            <ResourceThumb
+              key={`${reward.type}:${reward.uid}`}
+              itemUid={reward.uid}
+              resourceType={reward.type}
+              name={reward.name}
+              imageUrl={reward.imageUrl ?? undefined}
+              rarity={reward.rarity}
+              size="md"
+              quantity={reward.quantity}
+              tooltip
+            />
+          ))}
+        </ResourceBlock>
       ) : null}
     </div>
   );

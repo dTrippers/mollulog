@@ -129,8 +129,7 @@ export function RoadPuzzleShopSection({ plan, config }: { plan: EventShopPlanCon
   if (!roadPuzzle) return <StatusNotice tone="neutral">{roadPuzzleLocale.noData}</StatusNotice>;
   if (!resourceColumns) return <StatusNotice tone="neutral">{roadPuzzleLocale.rewardDataMissing}</StatusNotice>;
 
-  const formatCost = (value: number, approximate: boolean) =>
-    `${approximate ? "≈" : ""}${resourceCountLabel(value)}`;
+  const formatCost = (value: number, approximate: boolean) => `${approximate ? "≈" : ""}${resourceCountLabel(value)}`;
   const pendingLabel = calculationFailed ? "–" : calculation.status === "pending" ? roadPuzzleLocale.calculating : "–";
 
   return (
@@ -233,7 +232,7 @@ export function RoadPuzzleShopSection({ plan, config }: { plan: EventShopPlanCon
                 imageUrl={reward.imageUrl ?? undefined}
                 rarity={reward.rarity}
                 size="md"
-                label={resourceCountLabel(reward.quantity)}
+                quantity={reward.quantity}
                 tooltip
               />
             ))}
@@ -380,7 +379,7 @@ function ResourceBlock({ title, children }: { title: string; children: ReactNode
   return (
     <div className="rounded-md bg-v2-surface p-v2-tile-p">
       <h3 className="mb-v2-group-gap text-xs font-semibold text-v2-fg">{title}</h3>
-      <div className="flex flex-wrap items-start gap-v2-block-gap">{children}</div>
+      <div className="flex flex-wrap items-start gap-1">{children}</div>
     </div>
   );
 }
@@ -392,7 +391,7 @@ function RewardList({ title, description, rewards }: { title: string; descriptio
         {title}
         {description ? <span className="ml-1 font-normal text-v2-fg-tertiary">{description}</span> : null}
       </p>
-      <div className="mt-2 flex flex-wrap items-start gap-v2-block-gap">
+      <div className="mt-2 flex flex-wrap items-start gap-1">
         {rewards.map((reward) => (
           <ResourceThumb
             key={`${reward.resourceType}:${reward.resourceUid}:${reward.rarity ?? ""}`}
@@ -402,7 +401,7 @@ function RewardList({ title, description, rewards }: { title: string; descriptio
             imageUrl={reward.imageUrl ?? undefined}
             rarity={reward.rarity}
             size="md"
-            label={resourceCountLabel(reward.quantity)}
+            quantity={reward.quantity}
             tooltip
           />
         ))}
