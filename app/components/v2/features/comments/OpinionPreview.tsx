@@ -1,4 +1,4 @@
-import { ChatBubbleOvalLeftIcon, ChevronRightIcon } from "@heroicons/react/16/solid";
+import { ChevronRightIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
 import { formatThousands } from "~/domain/futures/futures-view-model";
 import type { UtcIsoString } from "~/lib/date-time";
@@ -41,9 +41,6 @@ export function OpinionPreview({
             <span className="ml-1 text-sm font-normal tabular-nums text-v2-fg-tertiary">{formatThousands(count)}</span>
           ) : null}
         </h2>
-        <Button type="button" variant="text" size="sm" onClick={onOpen}>
-          모두 보기 <ChevronRightIcon className="size-4" aria-hidden="true" />
-        </Button>
       </header>
       <div className="rounded-lg bg-v2-surface p-v2-block-p">
         {loading ? (
@@ -95,18 +92,63 @@ export function OpinionPreview({
                   <p className="mt-1 line-clamp-3 wrap-break-word whitespace-pre-line text-sm leading-[1.375rem] text-v2-fg">
                     {comment.body}
                   </p>
-                  {(comment.subcomments?.length ?? 0) > 0 ? (
-                    <span className="mt-1 inline-flex items-center gap-1 text-xs text-v2-fg-tertiary">
-                      <ChatBubbleOvalLeftIcon className="size-3.5" aria-hidden="true" />
-                      답글 {comment.subcomments?.length}
-                    </span>
-                  ) : null}
+                  <ReplyPreview replies={comment.subcomments ?? []} now={now} onOpen={onOpen} />
                 </div>
               </li>
             ))}
           </ol>
         )}
+        {/* The way into every opinion sits below the list, where reading ends, instead of in the header corner. */}
+        {!loading && !unavailable ? (
+          <Button className="mt-v2-group-gap w-full" onClick={onOpen}>
+            {count ? `의견 ${formatThousands(count)}개 모두 보기` : "의견 모두 보기"}
+            <ChevronRightIcon className="size-4" aria-hidden="true" />
+          </Button>
+        ) : null}
       </div>
     </section>
+  );
+}
+
+// The first reply previews the conversation; any further replies open the full opinion sheet.
+function ReplyPreview({
+  replies,
+  now,
+  onOpen,
+}: {
+  replies: readonly NestedComment[];
+  now: UtcIsoString;
+  onOpen: () => void;
+}) {
+  const [first, ...rest] = sortByCreatedAt(replies);
+  if (!first) return null;
+  return (
+    <div className="mt-2 grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2">
+      <Link
+        to={`/@${first.sensei.username}`}
+        aria-label={`@${first.sensei.username} 프로필`}
+        className="self-start rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      >
+        <SenseiAvatar profileStudentId={first.sensei.profileStudentId} labels={first.sensei.labels} size="compact" />
+      </Link>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-1.5 text-xs leading-4">
+          <Link to={`/@${first.sensei.username}`} className="font-semibold text-v2-fg hover:underline">
+            {first.sensei.username}
+          </Link>
+          <time dateTime={first.createdAt} className="tabular-nums text-v2-fg-tertiary">
+            {formatRelativePast(first.createdAt as UtcIsoString, now)}
+          </time>
+        </div>
+        <p className="mt-1 line-clamp-2 wrap-break-word whitespace-pre-line text-sm leading-[1.375rem] text-v2-fg">
+          {first.body}
+        </p>
+        {rest.length > 0 ? (
+          <Button variant="link" size="sm" className="mt-1 min-h-6" onClick={onOpen}>
+            답글 {rest.length}개 더 보기
+          </Button>
+        ) : null}
+      </div>
+    </div>
   );
 }
