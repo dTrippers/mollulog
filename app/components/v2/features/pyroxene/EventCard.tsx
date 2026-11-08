@@ -129,7 +129,6 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
   const delta = entry.resourceDelta;
   const after = entry.accumulatedResources;
   const range = getBalanceRange(entry);
-  const status = getPyroxeneEventStatus(entry);
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
   const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @lg:justify-self-end";
   return (
@@ -154,7 +153,6 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
             {formatAmount(range.low)}~{formatAmount(range.high)}
           </span>
         ) : null}
-        {status ? <StatusPill status={status} /> : null}
       </span>
       {tickets.map((resource) => (
         <Fragment key={resource}>
@@ -353,7 +351,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       ref={ref}
       tabIndex={selected ? -1 : undefined}
       className={cn(
-        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
+        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
         selected && "ring-2 ring-v2-focus",
       )}
     >
@@ -369,12 +367,19 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums @lg:hidden">
-            {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
-            <span className="text-v2-fg">
-              {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
-            </span>
-            {pills}
+          <div className="flex items-start gap-2 @lg:hidden">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums">
+              {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
+              <span className="text-v2-fg">
+                {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
+              </span>
+              {pills}
+            </div>
+            {status ? (
+              <span className="shrink-0">
+                <StatusPill status={status} />
+              </span>
+            ) : null}
           </div>
           {pills ? <div className="hidden flex-wrap items-center gap-2 @lg:flex">{pills}</div> : null}
           <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
@@ -451,7 +456,9 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         {plan ? (
           <div className="text-[0.8125rem] text-v2-fg-secondary tabular-nums">
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
-              <span className="font-semibold whitespace-nowrap text-v2-fg">{plan.pulls.toLocaleString()}회</span>
+              <span className="whitespace-nowrap text-v2-fg-secondary">
+                예상 모집 <span className="font-semibold text-v2-fg">{plan.pulls.toLocaleString()}회</span>
+              </span>
               {plan.basis === "manual" ? (
                 <span className="inline-flex items-center gap-0.5 text-v2-fg-tertiary">
                   <PencilIcon className="size-3" aria-hidden="true" />
@@ -463,8 +470,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 </span>
               ) : null}
               {plan.pullRange ? (
-                <span className="text-v2-fg-tertiary">
-                  ({plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()})
+                <span className="whitespace-nowrap text-v2-fg-tertiary">
+                  · {plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()}회 사이
                 </span>
               ) : null}
               {plan.basis === "manual" || plan.basisOverridden ? (
@@ -525,7 +532,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @lg:block">—</span>
       )}
       {plan ? null : <span className="hidden @lg:block" />}
-      <span className="hidden @lg:block" />
+      <span className="hidden justify-self-end pt-0.5 @lg:block">{status ? <StatusPill status={status} /> : null}</span>
       {dialogs}
     </div>
   );

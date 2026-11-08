@@ -67,7 +67,7 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
  * they line up across separate rows.
  */
 export const SCHEDULE_GRID_CLASS_NAME =
-  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:gap-x-3";
+  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:gap-x-3";
 
 /** Start date in bold and the end date muted; on narrow layouts a same-month end drops its month. */
 export function ScheduleDateRange({ from, to }: { from: Dayjs; to: Dayjs | null }) {
