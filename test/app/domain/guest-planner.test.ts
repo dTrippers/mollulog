@@ -10,6 +10,7 @@ import {
   createGuestPlannerFromLegacySources,
   createGuestPlannerLegacyMirror,
   guestPlannerHasData,
+  guestPlannerHasImportableData,
   hasUnresolvedGuestPlannerOptions,
   mergeGuestPlannerLegacyChanges,
   normalizeGuestPlanner,
@@ -823,5 +824,30 @@ describe("guest planner envelope", () => {
     expect(result.envelope.document.eventShops["shop-1"].itemQuantities).toEqual({ item: 2 });
     expect(result.conflict?.keys.eventShopUids).toEqual(["shop-1"]);
     expect(result.conflict?.eventShops?.data.plans["shop-1"].state.itemQuantities).toEqual({ item: 3 });
+  });
+});
+
+describe("guestPlannerHasImportableData", () => {
+  it("ignores minigame progress, which the import screen does not offer", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.jankenProgress = { "shop-1": {} as never };
+
+    expect(guestPlannerHasData(envelope)).toBe(true);
+    expect(guestPlannerHasImportableData(envelope, new Set())).toBe(false);
+  });
+
+  it("ignores received-reward keys the account already has", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.collectedSourceKeys = ["reward-1", "reward-2"];
+
+    expect(guestPlannerHasImportableData(envelope, new Set(["reward-1", "reward-2"]))).toBe(false);
+    expect(guestPlannerHasImportableData(envelope, new Set(["reward-1"]))).toBe(true);
+  });
+
+  it("reports guest resources as importable", () => {
+    const envelope = createEmptyGuestPlanner();
+    envelope.document.pyroxene.resources = { pyroxene: 100, oneTimeTicket: 0, tenTimeTicket: 0 } as never;
+
+    expect(guestPlannerHasImportableData(envelope, new Set())).toBe(true);
   });
 });

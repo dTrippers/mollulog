@@ -1074,6 +1074,27 @@ export function guestPlannerHasPrimaryData(envelope: GuestPlannerEnvelope): bool
   );
 }
 
+// What the import screen offers as items. Minigame progress is not importable, and received-reward keys the account
+// already has are hidden there, so neither alone is a reason to send a signed-in user to the import screen.
+export function guestPlannerHasImportableData(
+  envelope: GuestPlannerEnvelope,
+  accountCollectedSourceKeys: ReadonlySet<string>,
+): boolean {
+  const { pyroxene } = envelope.document;
+  return (
+    Boolean(
+      pyroxene.resources ||
+        pyroxene.records.length ||
+        envelope.pyroxeneOptionsChanged ||
+        pyroxene.collectedSourceKeys.some((key) => !accountCollectedSourceKeys.has(key)) ||
+        Object.keys(pyroxene.eventData).length ||
+        Object.keys(envelope.document.eventShops).length ||
+        apPlannerStateHasData(envelope.document.ap) ||
+        envelope.favorites.length,
+    ) || envelope.legacyConflicts.some(guestPlannerLegacyConflictHasData)
+  );
+}
+
 export function guestPlannerLegacyConflictHasData(conflict: GuestPlannerLegacyConflict): boolean {
   return Boolean(
     (conflict.pyroxene &&

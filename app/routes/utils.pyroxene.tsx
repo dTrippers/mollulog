@@ -45,7 +45,7 @@ import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
-  guestPlannerHasData,
+  guestPlannerHasImportableData,
   removeGuestPlannerApChargeException,
   updateGuestPlannerOptions,
 } from "~/domain/guest-planner";
@@ -1174,7 +1174,7 @@ export default function PyroxenePlanner() {
     "envelope" in guestPlanner.snapshot
       ? guestPlanner.snapshot.legacySources.pyroxeneCorrupt ||
         guestPlanner.snapshot.legacySources.eventShopsCorrupt ||
-        guestPlannerHasData(guestPlanner.snapshot.envelope)
+        guestPlannerHasImportableData(guestPlanner.snapshot.envelope, new Set(localCollectedSourceKeys))
       : false;
   const revisionConflictError =
     fetcher.data &&
