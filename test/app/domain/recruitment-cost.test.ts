@@ -180,9 +180,22 @@ describe("call charge carry-over and copies", () => {
     });
     const distribution = simulateRecruitmentCost(copies, "call_charge_v1");
     expect(distribution.length - 1).toBe(600);
-    expect(expectedPulls(distribution)).toBeCloseTo(
+    // Every copy can come from the same ten-pull, so the copies cost less than three separate periods.
+    expect(distribution[10]).toBeGreaterThan(0);
+    expect(expectedPulls(distribution)).toBeLessThan(
       3 * expectedPulls(simulateRecruitmentCost(period(), "call_charge_v1")),
-      0,
     );
+  });
+
+  it("acquires every copy within one ten-pull under the legacy rules too", () => {
+    const copies = period(1, {
+      targets: [0, 1].map((index) => ({
+        key: `student#${index}`,
+        studentKey: "student",
+        initialTier: 3,
+        recruitmentType: RecruitmentTypeEnum.Usual,
+      })),
+    });
+    expect(simulateRecruitmentCost(copies, "legacy_points")[10]).toBeGreaterThan(0);
   });
 });

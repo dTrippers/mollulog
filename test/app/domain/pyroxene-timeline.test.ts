@@ -1034,6 +1034,17 @@ describe("buildTimeline recruitment rework planning", () => {
     expect(eventCost(timeline, "event-a")).toBe(-15_600);
   });
 
+  it("spends a one-time ticket for the last pull a carried stack leaves", () => {
+    const timeline = buildTestTimeline({
+      initialResources: { pyroxene: 1_000, oneTimeTicket: 1, tenTimeTicket: 0 },
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 199, limited: 0 },
+    });
+    const entry = timeline.find((item) => item.source.event?.uid === "event-a");
+    expect(entry?.resourceDelta).toEqual({ pyroxene: 0, oneTimeTicket: -1, tenTimeTicket: 0 });
+  });
+
   it("carries a manual count over to the next event of the same scope", () => {
     const timeline = buildTestTimeline({
       eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 60 }]]),

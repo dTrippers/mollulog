@@ -152,6 +152,21 @@ type OtherStudentSlot = {
   acquiredBit: number;
 };
 
+// Bit of the active student's next unacquired copy, so repeated hits within one ten-pull each add a copy.
+function activeStudentNextCopyBit(
+  period: RecruitmentCostPeriod,
+  acquiredMask: number,
+  activeTargetIndex: number,
+): number {
+  const studentKey = targetStudentKey(period.targets[activeTargetIndex]!);
+  for (let index = 0; index < period.targets.length; index += 1) {
+    if (targetStudentKey(period.targets[index]!) === studentKey && (acquiredMask & (1 << index)) === 0) {
+      return 1 << index;
+    }
+  }
+  return 0;
+}
+
 // One entry per other student; copies of a student are acquired in list order.
 function otherStudentSlots(
   period: RecruitmentCostPeriod,
@@ -190,7 +205,7 @@ function normalSlotOutcomes(
   const activeTier = targetTier(activeTarget);
   const activeProbability = directPickupRate(activeTarget);
   mergeSlotOutcome(outcomes, {
-    acquiredBit: 1 << activeTargetIndex,
+    acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
     activePickup: true,
     probability: activeProbability,
   });
@@ -228,7 +243,7 @@ function midpointSlotOutcomes(
 
   const outcomes = new Map<string, SlotOutcome>();
   mergeSlotOutcome(outcomes, {
-    acquiredBit: 1 << activeTargetIndex,
+    acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
     activePickup: true,
     probability: 0.5,
   });
@@ -253,8 +268,18 @@ function midpointSlotOutcomes(
   return [...outcomes.values()];
 }
 
-function ceilingSlotOutcomes(activeTargetIndex: number): SlotOutcome[] {
-  return [{ acquiredBit: 1 << activeTargetIndex, activePickup: true, probability: 1 }];
+function ceilingSlotOutcomes(
+  period: RecruitmentCostPeriod,
+  acquiredMask: number,
+  activeTargetIndex: number,
+): SlotOutcome[] {
+  return [
+    {
+      acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
+      activePickup: true,
+      probability: 1,
+    },
+  ];
 }
 
 // Slot outcomes depend only on the acquired copies, the active target, and the slot kind, so they are
@@ -277,7 +302,7 @@ function cachedSlotOutcomes(
   if (cached) return cached;
   const outcomes =
     kind === "ceiling"
-      ? ceilingSlotOutcomes(activeTargetIndex)
+      ? ceilingSlotOutcomes(period, acquiredMask, activeTargetIndex)
       : kind === "midpoint"
         ? midpointSlotOutcomes(period, acquiredMask, activeTargetIndex)
         : normalSlotOutcomes(period, acquiredMask, activeTargetIndex, kind === "normal-last" ? PULLS_PER_BATCH - 1 : 0);

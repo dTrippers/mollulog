@@ -249,7 +249,7 @@ function resolvePickupResourceDelta(
       resourceDelta.tenTimeTicket = spentTenTimeTickets > 0 ? -1 * spentTenTimeTickets : 0;
       remainingTrial -= spentTenTimeTickets * 10;
     }
-    if (remainingTrial > 1) {
+    if (remainingTrial > 0) {
       const spentOneTimeTickets = Math.min(remainingTrial, state.currentResources.oneTimeTicket);
       resourceDelta.oneTimeTicket = spentOneTimeTickets > 0 ? -1 * spentOneTimeTickets : 0;
       remainingTrial -= spentOneTimeTickets;
