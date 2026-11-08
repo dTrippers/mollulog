@@ -37,8 +37,6 @@ import {
   PlannerDialog,
   RECRUITMENT_STACK_LABELS,
   ResourceIcon,
-  SCHEDULE_GRID_CLASS_NAME,
-  ScheduleDateRange,
   StatusPill,
 } from "./pyroxene-ui";
 
@@ -317,37 +315,44 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     </>
   );
 
+  const recruitedButton = (
+    <button
+      type="button"
+      onClick={() => setShowRecruited(true)}
+      className={cn(
+        "inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-xs whitespace-nowrap text-v2-fg-tertiary hover:text-v2-fg",
+        v2FocusRing,
+      )}
+    >
+      모집한 학생 {recruited.length}/{students.length}
+      <ChevronDownIcon className="hidden size-3.5 @lg:block" aria-hidden="true" />
+    </button>
+  );
+
   if (compact) {
+    // An event with nothing to choose keeps the card surface, so it still reads as an event among income rows.
     return (
       <div
         ref={ref}
         tabIndex={selected ? -1 : undefined}
         className={cn(
-          SCHEDULE_GRID_CLASS_NAME,
-          "min-h-9 items-center rounded-md py-1.5 pr-3 pl-7 text-[0.8125rem] focus:outline-none @lg:px-4",
+          "flex flex-col gap-1 rounded-lg bg-v2-surface px-4 py-3 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
           selected && "ring-2 ring-v2-focus",
         )}
       >
-        <ScheduleDateRange from={since} to={until} />
-        <span className="flex min-w-0 items-center gap-2">
-          <span className="min-w-8 truncate text-v2-fg-secondary">{event.name}</span>
-          {recruited.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setShowRecruited(true)}
-              className={cn(
-                "inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-xs whitespace-nowrap text-v2-fg-tertiary hover:text-v2-fg",
-                v2FocusRing,
-              )}
-            >
-              모집한 학생 {recruited.length}/{students.length}
-              <ChevronDownIcon className="hidden size-3.5 @lg:block" aria-hidden="true" />
-            </button>
-          ) : null}
+        <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @lg:flex">
+          <span className="text-v2-fg">{since.tz(KST).format("MM/DD")}</span>
+          <span className="text-xs font-normal text-v2-fg-tertiary">~{until.tz(KST).format("MM/DD")}</span>
+        </div>
+        <span className="text-[0.8125rem] font-semibold text-v2-fg tabular-nums @lg:hidden">
+          {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
         </span>
-        <span className="text-right text-v2-fg-tertiary">—</span>
-        <span />
-        <span />
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <h3 className="text-sm leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg-secondary">
+            {event.name}
+          </h3>
+          {recruited.length > 0 ? recruitedButton : null}
+        </div>
         {dialogs}
       </div>
     );
@@ -386,7 +391,9 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
             </div>
           </div>
           {pills ? <div className="hidden flex-wrap items-center gap-2 @lg:flex">{pills}</div> : null}
-          <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
+          <h3 className="text-base leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg">
+            {event.name}
+          </h3>
         </div>
 
         <div className="flex flex-wrap items-start gap-2.5">

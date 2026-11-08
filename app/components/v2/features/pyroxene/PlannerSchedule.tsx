@@ -24,7 +24,13 @@ import {
   formatSigned,
   KST,
   ResourceIcon,
+  SCHEDULE_ACTION_CELL,
+  SCHEDULE_BALANCE_CELL,
+  SCHEDULE_CHANGE_CELL,
+  SCHEDULE_DATE_CELL,
+  SCHEDULE_DETAIL_CELL,
   SCHEDULE_GRID_CLASS_NAME,
+  SCHEDULE_TITLE_CELL,
 } from "./pyroxene-ui";
 
 export function PlannerSummary({ summary }: { summary: PyroxenePlannerSummary }) {
@@ -164,26 +170,41 @@ function deltaClassName(value: number): string {
 
 function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: ScheduleIncomeHandlers }) {
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => row.delta[resource] !== 0);
+  const ticketDeltas = tickets.map((resource) => (
+    <span key={resource} className="inline-flex items-center gap-0.5 text-xs text-v2-fg-secondary tabular-nums">
+      <ResourceIcon resource={resource} className="size-5.5" />
+      {formatSigned(row.delta[resource])}
+    </span>
+  ));
   return (
-    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-9 items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:px-4")}>
-      <span className="font-semibold text-v2-fg tabular-nums">
+    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:min-h-9 @lg:px-4")}>
+      <span className={cn(SCHEDULE_DATE_CELL, "font-semibold text-v2-fg tabular-nums")}>
         {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
         {row.date.tz(KST).format("MM/DD")}
       </span>
-      <span className="flex min-w-0 flex-wrap items-center gap-x-2">
+      <span className={cn(SCHEDULE_TITLE_CELL, "flex min-w-0 flex-wrap items-center gap-x-2")}>
         <span className="truncate text-v2-fg">{row.label}</span>
-        {tickets.map((resource) => (
-          <span key={resource} className="inline-flex items-center gap-0.5 text-xs text-v2-fg-secondary tabular-nums">
-            <ResourceIcon resource={resource} className="size-5.5" />
-            {formatSigned(row.delta[resource])}
-          </span>
-        ))}
+        <span className="hidden items-center gap-x-2 @lg:inline-flex">{ticketDeltas}</span>
       </span>
-      <span className={cn("text-right font-semibold tabular-nums", deltaClassName(row.delta.pyroxene))}>
+      <span className={cn(SCHEDULE_DETAIL_CELL, "flex min-w-0 items-center gap-x-2")}>{ticketDeltas}</span>
+      <span
+        className={cn(
+          SCHEDULE_CHANGE_CELL,
+          "text-right font-semibold tabular-nums",
+          deltaClassName(row.delta.pyroxene),
+        )}
+      >
         {row.delta.pyroxene === 0 ? "—" : formatSigned(row.delta.pyroxene)}
       </span>
-      <span className="text-right text-v2-fg-secondary tabular-nums">{formatAmount(row.balance)}</span>
-      <span className="flex flex-col items-end justify-center gap-0.5 @lg:flex-row @lg:justify-end">
+      <span className={cn(SCHEDULE_BALANCE_CELL, "text-right text-v2-fg-secondary tabular-nums")}>
+        {formatAmount(row.balance)}
+      </span>
+      <span
+        className={cn(
+          SCHEDULE_ACTION_CELL,
+          "-my-1.5 flex flex-col items-end justify-center gap-0.5 @lg:my-0 @lg:flex-row @lg:justify-end",
+        )}
+      >
         {row.collectedSourceKey && row.collectable ? (
           <IconButton
             icon={row.collected ? SolidCheckCircleIcon : CheckCircleIcon}

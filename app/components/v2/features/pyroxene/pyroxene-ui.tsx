@@ -1,5 +1,4 @@
 import { CheckIcon, ExclamationCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
-import type { Dayjs } from "dayjs";
 import type { ReactNode } from "react";
 import type { PyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
@@ -65,29 +64,18 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
 /**
  * Shared columns for the schedule: date, content, change, balance, actions. Mobile keeps the numbers in fixed widths so
  * they line up across separate rows.
+ *
+ * A mobile row takes two lines so the title gets the full width: the title spans the first line, and the details,
+ * change, balance, and actions sit on the second. The date cell spans both lines.
  */
 export const SCHEDULE_GRID_CLASS_NAME =
-  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:gap-x-3";
-
-/** Start date in bold and the end date muted; on narrow layouts a same-month end drops its month. */
-export function ScheduleDateRange({ from, to }: { from: Dayjs; to: Dayjs | null }) {
-  const start = from.tz(KST);
-  const end = to?.tz(KST) ?? null;
-  const showEnd = end && !end.isSame(start, "day");
-  return (
-    <span className="font-semibold text-v2-fg tabular-nums">
-      {start.format("MM/DD")}
-      {showEnd ? (
-        <>
-          <span className="text-xs font-normal text-v2-fg-tertiary @lg:hidden">
-            ~{end.isSame(start, "month") ? end.format("DD") : end.format("MM/DD")}
-          </span>
-          <span className="hidden font-normal text-v2-fg-tertiary @lg:inline"> ~{end.format("MM/DD")}</span>
-        </>
-      ) : null}
-    </span>
-  );
-}
+  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 gap-y-0.5 @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:gap-x-3 @lg:gap-y-0";
+export const SCHEDULE_DATE_CELL = "row-span-2 self-stretch @lg:row-span-1 @lg:self-auto";
+export const SCHEDULE_TITLE_CELL = "col-span-4 @lg:col-span-1";
+export const SCHEDULE_DETAIL_CELL = "col-start-2 row-start-2 @lg:hidden";
+export const SCHEDULE_CHANGE_CELL = "col-start-3 row-start-2 @lg:col-start-auto @lg:row-start-auto";
+export const SCHEDULE_BALANCE_CELL = "col-start-4 row-start-2 @lg:col-start-auto @lg:row-start-auto";
+export const SCHEDULE_ACTION_CELL = "col-start-5 row-start-2 @lg:col-start-auto @lg:row-start-auto";
 
 export function balanceClassName(value: number): string {
   return value < 0 ? "text-v2-danger" : "text-v2-fg";
