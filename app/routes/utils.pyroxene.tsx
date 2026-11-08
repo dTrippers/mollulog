@@ -30,7 +30,7 @@ import {
   type OwnedResourceValues,
 } from "~/components/v2/features/pyroxene/OwnedResources";
 import { CalculationMethodDialog, PickupBasisPanel } from "~/components/v2/features/pyroxene/PickupBasis";
-import { PlannerSchedule, PlannerSummary } from "~/components/v2/features/pyroxene/PlannerSchedule";
+import { PlannerSchedule } from "~/components/v2/features/pyroxene/PlannerSchedule";
 import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
 import { formatAmount, ResourceIcon } from "~/components/v2/features/pyroxene/pyroxene-ui";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
@@ -65,7 +65,6 @@ import {
   buildPlannerTimelineRows,
   getActivePyroxenePackages,
   numberTargetEvents,
-  summarizePyroxeneTimeline,
 } from "~/domain/pyroxene-planner-view";
 import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import { buildPyroxeneDisplayTimeline } from "~/domain/pyroxene-schedule";
@@ -1081,7 +1080,6 @@ export default function PyroxenePlanner() {
     [initialDate, initialResources, scheduleItems, timeline],
   );
   const markers = useMemo(() => numberTargetEvents(timeline), [timeline]);
-  const summary = useMemo(() => summarizePyroxeneTimeline(timeline, markers), [timeline, markers]);
 
   const sourceSets = useMemo(() => {
     const now = dayjs();
@@ -1275,7 +1273,6 @@ export default function PyroxenePlanner() {
       <PageMain>
         <div className="@container flex flex-col gap-v2-block-gap">
           {notice}
-          <PlannerSummary summary={summary} />
           <section aria-label="청휘석 변화" className="rounded-lg bg-v2-surface p-3">
             <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 className="text-sm font-semibold text-v2-fg">청휘석 변화</h2>

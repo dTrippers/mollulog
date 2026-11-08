@@ -232,32 +232,6 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
   return rows;
 }
 
-export type PyroxenePlannerSummary = {
-  targetCount: number;
-  statusCounts: Record<PyroxeneEventStatus, number>;
-  firstShort: { entry: TimelineEntry; marker: number | null } | null;
-  last: TimelineEntry | null;
-};
-
-export function summarizePyroxeneTimeline(
-  timeline: Timeline,
-  markers: ReadonlyMap<string, number>,
-): PyroxenePlannerSummary {
-  const statusCounts: Record<PyroxeneEventStatus, number> = { enough: 0, uncertain: 0, short: 0 };
-  let firstShort: PyroxenePlannerSummary["firstShort"] = null;
-  let targetCount = 0;
-  for (const entry of timeline) {
-    if (!isTargetEventEntry(entry)) continue;
-    targetCount += 1;
-    const status = getPyroxeneEventStatus(entry);
-    statusCounts[status] += 1;
-    if (status === "short" && !firstShort) {
-      firstShort = { entry, marker: markers.get(entry.source.event?.uid ?? "") ?? null };
-    }
-  }
-  return { targetCount, statusCounts, firstShort, last: timeline.at(-1) ?? null };
-}
-
 export type ActivePyroxenePackage = {
   uid: string;
   date: Date;

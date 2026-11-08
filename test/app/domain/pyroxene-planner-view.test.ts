@@ -5,7 +5,6 @@ import {
   getPyroxeneEventStatus,
   numberTargetEvents,
   type PlannerTimelineRowOptions,
-  summarizePyroxeneTimeline,
 } from "~/domain/pyroxene-planner-view";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { createOptimisticAttendanceTimelineItems, getAttendanceStartDate } from "~/domain/pyroxene-sources";
@@ -98,7 +97,7 @@ describe("pyroxene planner view", () => {
     expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: 0 }))).toBe("enough");
   });
 
-  it("numbers only planned events and summarizes the first shortfall", () => {
+  it("numbers only planned events", () => {
     const timeline = [
       eventEntry("a", "2026-12-01", 500),
       eventEntry("b", "2026-12-05", 0, { planned: false }),
@@ -109,10 +108,6 @@ describe("pyroxene planner view", () => {
       ["a", 1],
       ["c", 2],
     ]);
-    const summary = summarizePyroxeneTimeline(timeline, markers);
-    expect(summary.targetCount).toBe(2);
-    expect(summary.statusCounts).toEqual({ enough: 1, uncertain: 0, short: 1 });
-    expect(summary.firstShort?.marker).toBe(2);
   });
 
   it("groups income between events and folds hidden or unnamed sources into one row", () => {

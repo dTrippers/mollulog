@@ -107,6 +107,8 @@ export function OwnedResourcesDialog({
               <NumberInput
                 id={`${idPrefix}-${key}`}
                 grouped
+                showMin={false}
+                showMax={false}
                 formatThousands
                 min={0}
                 step={key === "pyroxene" ? 120 : 1}
@@ -129,7 +131,8 @@ export function OwnedResourcesDialog({
               <NumberInput
                 id={`${idPrefix}-${scope}`}
                 grouped
-                showMax
+                showMin={false}
+                showMax={false}
                 min={0}
                 max={MAX_RECRUITMENT_STACK}
                 value={values.stacks[scope]}

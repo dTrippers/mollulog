@@ -72,8 +72,23 @@ type EventCardProps = {
   handlers: EventCardHandlers;
 };
 
-function tierLabel(tier: RecruitmentTargetTier): string {
-  return tier <= 5 ? `★${tier}` : `전무${tier - 5}`;
+/** The accessible meaning of a tier: "3성" for a star tier, "고유무기 2" for an exclusive weapon level. */
+function tierMeaning(tier: RecruitmentTargetTier): string {
+  return tier <= 5 ? `${tier}성` : `고유무기 ${tier - 5}`;
+}
+
+/** A yellow star with the tier up to 5, then the exclusive weapon icon with its level. */
+function TierFace({ tier, iconClassName = "size-3.5" }: { tier: RecruitmentTargetTier; iconClassName?: string }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 tabular-nums">
+      {tier <= 5 ? (
+        <StarIcon className={cn(iconClassName, "shrink-0 text-v2-star")} aria-hidden="true" />
+      ) : (
+        <img src="/icons/exclusive_weapon.png" alt="" className={cn(iconClassName, "shrink-0")} />
+      )}
+      {tier <= 5 ? tier : tier - 5}
+    </span>
+  );
 }
 
 export function MarkerBadge({ marker, short }: { marker: number; short: boolean }) {
@@ -96,7 +111,7 @@ function StackBar({ stack }: { stack: TimelinePickupStack }) {
   return (
     <div className="flex items-center justify-end gap-1.5 text-xs text-v2-fg-secondary">
       <span className="whitespace-nowrap">{label}</span>
-      <span aria-hidden="true" className="relative h-1.5 w-12 overflow-hidden rounded-full bg-v2-inset">
+      <span aria-hidden="true" className="relative h-1.5 w-10 overflow-hidden rounded-full bg-v2-inset">
         <span
           className="absolute inset-y-0 left-0 rounded-full bg-v2-fg-secondary"
           style={{ width: `${(stack.after / 200) * 100}%` }}
@@ -129,16 +144,16 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
   const range = getBalanceRange(entry);
   const status = getPyroxeneEventStatus(entry);
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
-  const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @lg:justify-self-end";
+  const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @2xl:justify-self-end";
   return (
     <div
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @lg:grid-cols-[6.5rem_11rem] @lg:items-start",
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @2xl:grid-cols-[6rem_8.5rem] @2xl:items-start",
         className,
       )}
     >
-      <span className="text-xs text-v2-fg-tertiary @lg:hidden">변화</span>
-      <span className="justify-self-end text-xs text-v2-fg-tertiary @lg:hidden">남은 재화</span>
+      <span className="text-xs text-v2-fg-tertiary @2xl:hidden">변화</span>
+      <span className="justify-self-end text-xs text-v2-fg-tertiary @2xl:hidden">남은 재화</span>
       <span className={cn(changeClassName, "self-start pt-0.5")}>
         <ResourceIcon resource="pyroxene" className="size-6" />
         {delta.pyroxene === 0 ? "—" : formatSigned(delta.pyroxene)}
@@ -147,7 +162,7 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         <span className="flex items-center gap-2">
           {/* Desktop shows the status in the actions column instead. */}
           {status ? (
-            <span className="@lg:hidden">
+            <span className="@2xl:hidden">
               <StatusPill status={status} />
             </span>
           ) : null}
@@ -170,16 +185,19 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
           <span className="justify-self-end text-sm font-semibold text-v2-fg">{formatAmount(after[resource])}</span>
         </Fragment>
       ))}
-      {plan.stacks.map((stack) => (
-        <Fragment key={stack.scope}>
-          <span className="@lg:justify-self-end">
-            {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
-          </span>
-          <span className="justify-self-end">
-            <StackBar stack={stack} />
-          </span>
-        </Fragment>
-      ))}
+      {/* An automatic basis assumes the targets are acquired, so the stack returns to 0; show only a stack that is not. */}
+      {plan.stacks
+        .filter((stack) => stack.before !== 0 || stack.after !== 0)
+        .map((stack) => (
+          <Fragment key={stack.scope}>
+            <span className="@2xl:justify-self-end">
+              {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
+            </span>
+            <span className="justify-self-end">
+              <StackBar stack={stack} />
+            </span>
+          </Fragment>
+        ))}
     </div>
   );
 }
@@ -259,7 +277,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         ) : null}
         {freeLabel ? (
           <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-v2-perk">
-            <StarIcon className="size-3.5" aria-hidden="true" />
+            <StarIcon className="size-3.5 text-v2-star" aria-hidden="true" />
             무료 {freeLabel}회
           </span>
         ) : null}
@@ -325,7 +343,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       )}
     >
       모집한 학생 {recruited.length}/{students.length}
-      <ChevronDownIcon className="hidden size-3.5 @lg:block" aria-hidden="true" />
+      <ChevronDownIcon className="hidden size-3.5 @2xl:block" aria-hidden="true" />
     </button>
   );
 
@@ -336,15 +354,15 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         ref={ref}
         tabIndex={selected ? -1 : undefined}
         className={cn(
-          "flex flex-col gap-1 rounded-lg bg-v2-surface px-4 py-3 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
+          "flex flex-col gap-1 rounded-lg bg-v2-surface px-4 py-3 focus:outline-none @2xl:grid @2xl:grid-cols-[4.5rem_minmax(0,1fr)_6rem_8.5rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
           selected && "ring-2 ring-v2-focus",
         )}
       >
-        <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @lg:flex">
+        <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @2xl:flex">
           <span className="text-v2-fg">{since.tz(KST).format("MM/DD")}</span>
           <span className="text-xs font-normal text-v2-fg-tertiary">~{until.tz(KST).format("MM/DD")}</span>
         </div>
-        <span className="text-[0.8125rem] font-semibold text-v2-fg tabular-nums @lg:hidden">
+        <span className="text-[0.8125rem] font-semibold text-v2-fg tabular-nums @2xl:hidden">
           {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
         </span>
         <div className="flex min-w-0 flex-col items-start gap-1">
@@ -365,11 +383,11 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       ref={ref}
       tabIndex={selected ? -1 : undefined}
       className={cn(
-        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_4.5rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
+        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @2xl:grid @2xl:grid-cols-[4.5rem_minmax(0,1fr)_6rem_8.5rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
         selected && "ring-2 ring-v2-focus",
       )}
     >
-      <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @lg:flex">
+      <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @2xl:flex">
         <span className="flex items-center gap-1.5 text-v2-fg">
           {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
           {since.tz(KST).format("MM/DD")}
@@ -381,7 +399,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-2 @lg:hidden">
+          <div className="flex items-start gap-2 @2xl:hidden">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums">
               {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
               <span className="text-v2-fg">
@@ -390,7 +408,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               {pills}
             </div>
           </div>
-          {pills ? <div className="hidden flex-wrap items-center gap-2 @lg:flex">{pills}</div> : null}
+          {pills ? <div className="hidden flex-wrap items-center gap-2 @2xl:flex">{pills}</div> : null}
           <h3 className="text-base leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg">
             {event.name}
           </h3>
@@ -424,14 +442,14 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                     countText: null,
                     accessibleName: "관심 학생",
                   }}
-                  scrimAriaLabel={student.favorited ? `목표 ${tierLabel(tier)}` : undefined}
+                  scrimAriaLabel={student.favorited ? `목표 ${tierMeaning(tier)}` : undefined}
                 />
                 {student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? (
                   <span
                     aria-hidden="true"
                     className="pointer-events-none absolute top-1 left-1 rounded-sm bg-v2-scrim px-1 text-[0.625rem] leading-4 font-semibold text-v2-on-media"
                   >
-                    {tierLabel(tier)}
+                    <TierFace tier={tier} iconClassName="size-3" />
                   </span>
                 ) : null}
               </div>
@@ -455,10 +473,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   <span className="text-[0.625rem] leading-none">접기</span>
                 </>
               ) : (
-                <>
-                  <span className="text-sm leading-none font-semibold tabular-nums">+{recruited.length}</span>
-                  <span className="text-[0.625rem] leading-none">모집함</span>
-                </>
+                <span className="text-sm leading-none font-semibold tabular-nums">+{recruited.length}</span>
               )}
             </button>
           ) : null}
@@ -480,11 +495,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   {PICKUP_BASIS_SHORT_LABELS[plan.basis]} 기준
                 </span>
               ) : null}
-              {plan.pullRange ? (
-                <span className="whitespace-nowrap text-v2-fg-tertiary">
-                  · {plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()}회 사이
-                </span>
-              ) : null}
               {plan.basis === "manual" || plan.basisOverridden ? (
                 <>
                   <span className="text-v2-fg-tertiary">·</span>
@@ -503,8 +513,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           </div>
         ) : null}
 
-        <ResourceLedger entry={entry} className="border-t border-v2-divider pt-3 @lg:hidden" />
-        <div className="grid grid-cols-2 gap-1.5 empty:hidden @lg:flex">
+        <ResourceLedger entry={entry} className="border-t border-v2-divider pt-3 @2xl:hidden" />
+        <div className="grid grid-cols-2 gap-1.5 empty:hidden @2xl:flex">
           {plan ? (
             <Button size="sm" onClick={() => setDialog("target")}>
               <PencilIcon className="size-3" aria-hidden="true" />
@@ -538,12 +548,14 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       </div>
 
       {plan ? (
-        <ResourceLedger entry={entry} className="hidden @lg:col-span-2 @lg:grid" />
+        <ResourceLedger entry={entry} className="hidden @2xl:col-span-2 @2xl:grid" />
       ) : (
-        <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @lg:block">—</span>
+        <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @2xl:block">—</span>
       )}
-      {plan ? null : <span className="hidden @lg:block" />}
-      <span className="hidden justify-self-end pt-0.5 @lg:block">{status ? <StatusPill status={status} /> : null}</span>
+      {plan ? null : <span className="hidden @2xl:block" />}
+      <span className="hidden justify-self-end pt-0.5 @2xl:block">
+        {status ? <StatusPill status={status} /> : null}
+      </span>
       {dialogs}
     </div>
   );
@@ -680,21 +692,22 @@ function TierDialog({
         onChange={(next) => setValue(Number(next) as RecruitmentTargetTier)}
         options={RECRUITMENT_TARGET_TIERS.map((option) => ({
           value: String(option),
-          label:
-            option <= 5 ? (
-              <>
-                <StarIcon className="size-3.5" aria-hidden="true" />
-                {option}
-              </>
-            ) : (
-              `전무 ${option - 5}`
-            ),
+          label: (
+            <>
+              <span aria-hidden="true">
+                <TierFace tier={option} iconClassName="size-4" />
+              </span>
+              <span className="sr-only">{tierMeaning(option)}</span>
+            </>
+          ),
         }))}
       />
       <p className="text-xs text-v2-fg-secondary tabular-nums">
         필요 엘레프 {getRecruitmentTargetEleph(value).toLocaleString()}개 · 같은 학생을 {copies}번 모집해야 해요
       </p>
-      <p className="text-xs text-v2-fg-tertiary">갖고 있지 않은 학생을 ★3부터 모집만으로 키운다고 보고 계산해요.</p>
+      <p className="text-xs text-v2-fg-tertiary">
+        아직 모집하지 않은 학생을 기준으로, 모집에서 얻는 엘레프만 계산에 넣어요.
+      </p>
     </PlannerDialog>
   );
 }

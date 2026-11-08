@@ -3,12 +3,7 @@ import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as SolidCheckCircleIcon } from "@heroicons/react/24/solid";
 import { type Ref, useId, useRef, useState } from "react";
 import type { PyroxenePickupChance, TimelineSourceType } from "~/domain/pyroxene-planner";
-import {
-  getBalanceRange,
-  type PlannerIncomeRow,
-  type PlannerTimelineRow,
-  type PyroxenePlannerSummary,
-} from "~/domain/pyroxene-planner-view";
+import type { PlannerIncomeRow, PlannerTimelineRow } from "~/domain/pyroxene-planner-view";
 import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import { cn } from "~/lib/utils";
@@ -17,9 +12,8 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { IconButton } from "../../primitives/IconButton";
 import { Popover } from "../../primitives/Popover";
 import { Switch } from "../../primitives/Switch";
-import { EventCard, type EventCardHandlers, MarkerBadge, type PlannerEventData } from "./EventCard";
+import { EventCard, type EventCardHandlers, type PlannerEventData } from "./EventCard";
 import {
-  balanceClassName,
   formatAmount,
   formatSigned,
   KST,
@@ -32,73 +26,6 @@ import {
   SCHEDULE_GRID_CLASS_NAME,
   SCHEDULE_TITLE_CELL,
 } from "./pyroxene-ui";
-
-export function PlannerSummary({ summary }: { summary: PyroxenePlannerSummary }) {
-  const { targetCount, statusCounts, firstShort, last } = summary;
-  const lastRange = last ? getBalanceRange(last) : null;
-  return (
-    <div className="grid grid-cols-2 gap-2 @md:grid-cols-3">
-      <div className="rounded-lg bg-v2-surface p-3">
-        <p className="text-xs text-v2-fg-secondary tabular-nums">
-          목표 <span className="hidden @md:inline">이벤트</span>
-          <span className="@md:hidden">{targetCount}개</span>
-        </p>
-        <p className="hidden text-xl font-semibold text-v2-fg tabular-nums @md:block">{targetCount}개</p>
-        {targetCount > 0 ? (
-          <p className="mt-1.5 text-sm font-semibold tabular-nums @md:mt-0 @md:text-xs @md:font-medium">
-            <span className="text-v2-success">충분 {statusCounts.enough}</span>
-            <span className="text-v2-fg-tertiary"> · </span>
-            <span className="text-v2-warning">불확실 {statusCounts.uncertain}</span>
-            <span className="text-v2-fg-tertiary"> · </span>
-            <span className="text-v2-danger">부족 {statusCounts.short}</span>
-          </p>
-        ) : (
-          <p className="text-xs text-v2-fg-tertiary">일정에서 학생을 눌러 목표로 추가해주세요</p>
-        )}
-      </div>
-      <div className="order-first col-span-2 rounded-lg bg-v2-surface p-3 @md:order-none @md:col-span-1">
-        <p className="text-xs text-v2-fg-secondary">처음 부족한 모집</p>
-        {firstShort ? (
-          <>
-            <p className="text-xl font-semibold text-v2-danger tabular-nums">
-              {Math.abs(firstShort.entry.accumulatedResources.pyroxene).toLocaleString()} 부족
-            </p>
-            <p className="flex min-w-0 items-center gap-1 text-xs text-v2-fg-secondary tabular-nums">
-              {firstShort.marker !== null ? <MarkerBadge marker={firstShort.marker} short /> : null}
-              <span className="shrink-0">{firstShort.entry.date.tz(KST).format("MM/DD")}</span>
-              <span className="truncate">{firstShort.entry.source.event?.name}</span>
-            </p>
-          </>
-        ) : (
-          <p className="text-xl font-semibold text-v2-fg">없음</p>
-        )}
-      </div>
-      <div className="rounded-lg bg-v2-surface p-3">
-        <p className="text-xs text-v2-fg-secondary tabular-nums">
-          <span className="hidden @md:inline">마지막 일정 후 </span>
-          {last ? last.date.tz(KST).format("MM/DD") : null}
-          <span className="@md:hidden">{last ? " 이후" : "마지막 일정 후"}</span>
-        </p>
-        {last ? (
-          <>
-            <p
-              className={cn("text-xl font-semibold tabular-nums", balanceClassName(last.accumulatedResources.pyroxene))}
-            >
-              {formatAmount(last.accumulatedResources.pyroxene)}
-            </p>
-            {lastRange ? (
-              <p className="hidden text-xs text-v2-fg-secondary tabular-nums @md:block">
-                상하위 10% 이내 {formatAmount(lastRange.low)} ~ {formatAmount(lastRange.high)}
-              </p>
-            ) : null}
-          </>
-        ) : (
-          <p className="text-xl font-semibold text-v2-fg-tertiary">—</p>
-        )}
-      </div>
-    </div>
-  );
-}
 
 const FILTERABLE_SOURCES = PYROXENE_SOURCE_DEFINITIONS.filter((source) => source.type !== "event");
 
@@ -177,14 +104,16 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
     </span>
   ));
   return (
-    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:min-h-9 @lg:px-4")}>
+    <li
+      className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @2xl:min-h-9 @2xl:px-4")}
+    >
       <span className={cn(SCHEDULE_DATE_CELL, "font-semibold text-v2-fg tabular-nums")}>
         {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
         {row.date.tz(KST).format("MM/DD")}
       </span>
       <span className={cn(SCHEDULE_TITLE_CELL, "flex min-w-0 flex-wrap items-center gap-x-2")}>
         <span className="truncate text-v2-fg">{row.label}</span>
-        <span className="hidden items-center gap-x-2 @lg:inline-flex">{ticketDeltas}</span>
+        <span className="hidden items-center gap-x-2 @2xl:inline-flex">{ticketDeltas}</span>
       </span>
       <span className={cn(SCHEDULE_DETAIL_CELL, "flex min-w-0 items-center gap-x-2")}>{ticketDeltas}</span>
       <span
@@ -202,7 +131,7 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
       <span
         className={cn(
           SCHEDULE_ACTION_CELL,
-          "-my-1.5 flex flex-col items-end justify-center gap-0.5 @lg:my-0 @lg:flex-row @lg:justify-end",
+          "-my-1.5 flex flex-col items-end justify-center gap-0.5 @2xl:my-0 @2xl:flex-row @2xl:justify-end",
         )}
       >
         {row.collectedSourceKey && row.collectable ? (
@@ -299,7 +228,7 @@ export function PlannerSchedule({
           표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해주세요.
         </p>
       ) : null}
-      <div className={cn(SCHEDULE_GRID_CLASS_NAME, "hidden px-4 text-xs font-medium text-v2-fg-tertiary @lg:grid")}>
+      <div className={cn(SCHEDULE_GRID_CLASS_NAME, "hidden px-4 text-xs font-medium text-v2-fg-tertiary @2xl:grid")}>
         <span>날짜</span>
         <span>내용</span>
         <span className="text-right">변화</span>
@@ -310,7 +239,7 @@ export function PlannerSchedule({
         {rows.map((row) => {
           if (row.kind === "year") {
             return (
-              <p key={row.key} className="px-3 pt-3 pb-1 @lg:px-4 text-xs font-bold text-v2-fg-tertiary tabular-nums">
+              <p key={row.key} className="px-3 pt-3 pb-1 @2xl:px-4 text-xs font-bold text-v2-fg-tertiary tabular-nums">
                 {row.year}
               </p>
             );
@@ -348,9 +277,9 @@ export function PlannerSchedule({
               {visible.map((income) => (
                 <IncomeRowView key={income.key} row={income} handlers={incomeHandlers} />
               ))}
-              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @lg:px-4")}>
+              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @2xl:px-4")}>
                 <span />
-                <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @lg:col-span-1">
+                <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @2xl:col-span-1">
                   <button
                     type="button"
                     aria-expanded={open}
