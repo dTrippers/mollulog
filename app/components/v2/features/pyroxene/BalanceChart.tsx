@@ -82,7 +82,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
     <div className="rounded-md bg-v2-popover-surface px-3 py-2 text-xs shadow-lg ring-1 ring-v2-divider tabular-nums">
       <p className="font-semibold text-v2-fg">{dayjs(point.ts).tz("Asia/Seoul").format("MM/DD")}</p>
       {point.events.map((event) => (
-        <p key={event.marker} className="text-v2-fg-secondary">
+        <p key={event.marker} className="whitespace-pre-line text-v2-fg-secondary">
           {event.marker}. {event.name}
         </p>
       ))}

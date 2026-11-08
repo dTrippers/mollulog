@@ -35,7 +35,7 @@ export function Checkbox({ id, checked, onCheckedChange, disabled = false, child
           )}
         />
         <CheckIcon
-          className="pointer-events-none absolute inset-0 m-auto size-3.5 text-v2-on-accent opacity-0 peer-checked:opacity-100"
+          className="pointer-events-none absolute inset-0 m-auto size-3.5 text-v2-on-media opacity-0 peer-checked:opacity-100"
           aria-hidden="true"
         />
       </span>

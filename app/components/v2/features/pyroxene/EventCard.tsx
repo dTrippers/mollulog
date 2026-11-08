@@ -18,6 +18,7 @@ import {
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { TimelineEntry, TimelinePickupStack } from "~/domain/pyroxene-timeline";
+import { STUDENT_ACQUISITION_LABELS } from "~/domain/student-directory";
 import dayjs from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
@@ -169,10 +170,13 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
           </span>
         </span>
         {range ? (
-          <span className="text-xs text-v2-fg-tertiary">
-            {/* A low end below zero means bad luck can run the balance short. */}
-            <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
-            {formatAmount(range.high)}
+          <span className="flex flex-col items-end text-xs text-v2-fg-tertiary">
+            <span className="text-[0.625rem] leading-3">예상 범위</span>
+            <span>
+              {/* A low end below zero means bad luck can run the balance short. */}
+              <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
+              {formatAmount(range.high)}
+            </span>
           </span>
         ) : null}
       </span>
@@ -396,28 +400,35 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         <div className="flex flex-col gap-1.5">
           <div className="flex items-start gap-2 @2xl:hidden">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums">
-              {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
               <span className="text-v2-fg">
                 {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
               </span>
               {pills}
             </div>
           </div>
-          {marker !== null || pills ? (
-            <div className="hidden flex-wrap items-center gap-2 @2xl:flex">
-              {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
-              {pills}
-            </div>
-          ) : null}
-          <h3 className="text-base leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg">
-            {event.name}
-          </h3>
+          {pills ? <div className="hidden flex-wrap items-center gap-2 @2xl:flex">{pills}</div> : null}
+          {/* The marker always leads the title; tags sit on their own line above. */}
+          <div className="flex items-start gap-2">
+            {marker !== null ? (
+              <span className="inline-flex pt-px">
+                <MarkerBadge marker={marker} short={status === "short"} />
+              </span>
+            ) : null}
+            <h3 className="min-w-0 text-base leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg">
+              {event.name}
+            </h3>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-start gap-2.5">
           {visibleStudents.map((student) => {
             const names = splitVisibleStudentName(student.name);
             const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
+            const acquisitionLabel = getAcquisitionLabel(student.acquisitionType);
+            const showTier = student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER;
+            const thumbDescription = [acquisitionLabel, student.favorited ? `목표 ${tierMeaning(tier)}` : null]
+              .filter(Boolean)
+              .join(", ");
             return (
               <div key={student.uid} className={cn("relative", thumbWidth, !student.favorited && "opacity-45")}>
                 <StudentThumb
@@ -442,14 +453,24 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                     countText: null,
                     accessibleName: "관심 학생",
                   }}
-                  scrimAriaLabel={student.favorited ? `목표 ${tierMeaning(tier)}` : undefined}
+                  scrimAriaLabel={thumbDescription || undefined}
                 />
-                {student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? (
+                {/* The favorite heart owns the top-right corner, so the badges stack at the top-left. */}
+                {acquisitionLabel || showTier ? (
                   <span
                     aria-hidden="true"
-                    className="pointer-events-none absolute top-1 left-1 rounded-sm bg-v2-scrim px-1 text-[0.625rem] leading-4 font-semibold text-v2-on-media"
+                    className="pointer-events-none absolute top-0.5 left-0.5 flex flex-col items-start gap-0.5"
                   >
-                    <TierFace tier={tier} iconClassName="size-3" />
+                    {acquisitionLabel ? (
+                      <span className="rounded-sm bg-v2-scrim px-1 text-[0.5625rem] leading-4 font-medium text-v2-on-media">
+                        {acquisitionLabel}
+                      </span>
+                    ) : null}
+                    {showTier ? (
+                      <span className="rounded-sm bg-v2-scrim px-1 text-[0.625rem] leading-4 font-semibold text-v2-on-media">
+                        <TierFace tier={tier} iconClassName="size-3" />
+                      </span>
+                    ) : null}
                   </span>
                 ) : null}
               </div>
@@ -667,15 +688,16 @@ function TierDialog({
   onSave: (tier: RecruitmentTargetTier) => void;
 }) {
   const [value, setValue] = useState(tier);
+  const names = splitVisibleStudentName(studentName);
   return (
     <PlannerDialog
       open={open}
-      title={`${splitVisibleStudentName(studentName).name} 목표 성급`}
+      title={`${names.variant ? `${names.name}(${names.variant})` : names.name} 목표 성급`}
       onClose={onClose}
       footer={
         <>
           <Button variant="danger-subtle" className="mr-auto" onClick={onRemove}>
-            목표 해제
+            관심 학생에서 제외
           </Button>
           <Button onClick={onClose}>취소</Button>
           <Button variant="primary" onClick={() => onSave(value)}>
@@ -691,6 +713,8 @@ function TierDialog({
         onChange={(next) => setValue(Number(next) as RecruitmentTargetTier)}
         options={RECRUITMENT_TARGET_TIERS.map((option) => ({
           value: String(option),
+          // Stars fill the first row and exclusive weapon tiers start the second; every tile keeps the same width.
+          className: option === 6 ? "col-start-1" : undefined,
           label: (
             <>
               <span aria-hidden="true">
@@ -703,4 +727,9 @@ function TierDialog({
       />
     </PlannerDialog>
   );
+}
+
+function getAcquisitionLabel(acquisitionType: string | null | undefined): string | null {
+  if (!acquisitionType) return null;
+  return (STUDENT_ACQUISITION_LABELS as Record<string, string>)[acquisitionType] ?? null;
 }

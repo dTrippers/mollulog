@@ -133,7 +133,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         tenTimeTicket: 0,
         inputAt: null,
         recruitmentStacks: EMPTY_RECRUITMENT_STACKS,
-        stacksEntered: false,
       },
       timelineItems: [],
       calcOptions: defaultPyroxenePlannerOptions,
@@ -170,7 +169,6 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       tenTimeTicket: pyroxeneState.latestResources?.tenTimeTicket ?? 0,
       inputAt: pyroxeneState.latestResources?.inputAt ?? null,
       recruitmentStacks: pyroxeneState.latestResources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS,
-      stacksEntered: pyroxeneState.latestResources?.recruitmentStacks !== undefined,
     },
     timelineItems: pyroxeneState.timelineItems,
     calcOptions: pyroxeneState.options,
@@ -526,7 +524,6 @@ export default function PyroxenePlanner() {
     toPickupResources(loaderData.latestResources),
   );
   const [stacks, setStacks] = useState<RecruitmentStacks>(loaderData.latestResources.recruitmentStacks);
-  const [stacksEntered, setStacksEntered] = useState(loaderData.latestResources.stacksEntered);
   const [localTimelineItems, setLocalTimelineItems] = useState<PyroxeneTimelineItem[]>(loaderData.timelineItems ?? []);
   const [localEventData, setLocalEventData] = useState<LocalEventData[]>(toLocalEventData(loaderData.eventData ?? []));
   const [localCompletions, setLocalCompletions] = useState(loaderData.recruitmentResultCompletions ?? []);
@@ -571,7 +568,6 @@ export default function PyroxenePlanner() {
     (pendingSave: PendingOwnedResourceSave, savedAt?: string | null) => {
       setInitialResources(pendingSave.values.resources);
       setStacks(pendingSave.values.stacks);
-      setStacksEntered(true);
       setInitialDate(savedAt ? new Date(savedAt) : new Date());
       if (pendingSave.collectedSourceKeys.length > 0) {
         setLocalCollectedSourceKeys((prev) => [...new Set([...prev, ...pendingSave.collectedSourceKeys])]);
@@ -597,7 +593,6 @@ export default function PyroxenePlanner() {
     setInitialDate(loaderData.latestResources.inputAt ? new Date(loaderData.latestResources.inputAt) : null);
     setInitialResources(toPickupResources(loaderData.latestResources));
     setStacks(loaderData.latestResources.recruitmentStacks);
-    setStacksEntered(loaderData.latestResources.stacksEntered);
   }, [loaderData.latestResources]);
   useEffect(() => setLocalTimelineItems(loaderData.timelineItems ?? []), [loaderData.timelineItems]);
   useEffect(() => setLocalEventData(toLocalEventData(loaderData.eventData ?? [])), [loaderData.eventData]);
@@ -621,7 +616,6 @@ export default function PyroxenePlanner() {
     setInitialDate(pyroxene.resources ? new Date(pyroxene.resources.inputAt) : null);
     setInitialResources(pyroxene.resources ? toPickupResources(pyroxene.resources) : ZERO_RESOURCES);
     setStacks(pyroxene.resources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS);
-    setStacksEntered(pyroxene.resources?.recruitmentStacks !== undefined);
     setLocalTimelineItems(pyroxene.records.map((item) => ({ ...item, userId: 0 })));
     setLocalEventData(
       Object.entries(pyroxene.eventData).map(([eventUid, state]) => ({
@@ -1322,7 +1316,7 @@ export default function PyroxenePlanner() {
           Icon={WalletIcon}
           headerAction={<OwnedResourcesHeaderAction onEdit={() => setResourcesDialogOpen(true)} />}
         >
-          <OwnedResourceList values={ownedValues} stacksEntered={stacksEntered} />
+          <OwnedResourceList values={ownedValues} />
         </PanelSheet>
         <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon}>
           {basisPanel}

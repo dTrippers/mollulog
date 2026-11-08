@@ -12,8 +12,8 @@ import {
   tacticRoleLocale,
 } from "~/locales/ko";
 import type { Position, TacticRole } from "~/models/content.d";
-import type { StudentDirectoryStudent } from "~/models/student-directory";
 import type { Role } from "~/models/student";
+import type { StudentDirectoryStudent } from "~/models/student-directory";
 
 export const STUDENT_DIRECTORY_SORTS = [
   "release",
@@ -79,8 +79,26 @@ export const STUDENT_DIRECTORY_SKILL_EFFECTS = [
   "summon",
   "obstacle",
 ] as const;
-export const STUDENT_DIRECTORY_ACQUISITION_TYPES = ["regular", "limited", "festival", "event_reward", "archive"] as const;
-export const STUDENT_DIRECTORY_WEAPON_TYPES = ["sg", "smg", "ar", "gl", "hg", "rl", "sr", "mg", "rg", "mt", "ft"] as const;
+export const STUDENT_DIRECTORY_ACQUISITION_TYPES = [
+  "regular",
+  "limited",
+  "festival",
+  "event_reward",
+  "archive",
+] as const;
+export const STUDENT_DIRECTORY_WEAPON_TYPES = [
+  "sg",
+  "smg",
+  "ar",
+  "gl",
+  "hg",
+  "rl",
+  "sr",
+  "mg",
+  "rg",
+  "mt",
+  "ft",
+] as const;
 export const STUDENT_DIRECTORY_TERRAIN_RANKS = ["SS", "S", "A", "B", "C", "D"] as const;
 export const STUDENT_DIRECTORY_INITIAL_TIERS = [1, 2, 3] as const;
 
@@ -182,8 +200,20 @@ export const studentDirectoryGroupOptions: { value: StudentDirectoryGroupBy; lab
 ];
 export const STUDENT_DIRECTORY_GROUP_OPTIONS = studentDirectoryGroupOptions.map(({ value }) => value);
 
-export const STUDENT_DIRECTORY_ATTACK_TYPES = [Attack.Explosive, Attack.Piercing, Attack.Mystic, Attack.Sonic, Attack.Chemical] as const;
-export const STUDENT_DIRECTORY_DEFENSE_TYPES = [Defense.Light, Defense.Heavy, Defense.Special, Defense.Elastic, Defense.Composite] as const;
+export const STUDENT_DIRECTORY_ATTACK_TYPES = [
+  Attack.Explosive,
+  Attack.Piercing,
+  Attack.Mystic,
+  Attack.Sonic,
+  Attack.Chemical,
+] as const;
+export const STUDENT_DIRECTORY_DEFENSE_TYPES = [
+  Defense.Light,
+  Defense.Heavy,
+  Defense.Special,
+  Defense.Elastic,
+  Defense.Composite,
+] as const;
 export const STUDENT_DIRECTORY_CLASSES: Role[] = ["striker", "special"];
 export const STUDENT_DIRECTORY_ROLES: TacticRole[] = ["attacker", "tank", "healer", "support", "tactical_support"];
 export const STUDENT_DIRECTORY_POSITIONS: Position[] = ["front", "middle", "back"];
@@ -200,7 +230,7 @@ const skillEffectLabels: Record<(typeof STUDENT_DIRECTORY_SKILL_EFFECTS)[number]
   summon: "소환",
   obstacle: "장애물",
 };
-const acquisitionLabels: Record<(typeof STUDENT_DIRECTORY_ACQUISITION_TYPES)[number], string> = {
+export const STUDENT_ACQUISITION_LABELS: Record<(typeof STUDENT_DIRECTORY_ACQUISITION_TYPES)[number], string> = {
   regular: "통상",
   limited: "한정",
   festival: "페스",
@@ -225,7 +255,9 @@ const attackOrder = new Map(allAttackTypes.map((value, index) => [value, index])
 const defenseOrder = new Map(allDefenseTypes.map((value, index) => [value, index]));
 const roleOrder = new Map(STUDENT_DIRECTORY_CLASSES.map((value, index) => [value, index]));
 const positionOrder = new Map(STUDENT_DIRECTORY_POSITIONS.map((value, index) => [value, index]));
-const rankOrder = new Map(STUDENT_DIRECTORY_TERRAIN_RANKS.map((value, index) => [value, STUDENT_DIRECTORY_TERRAIN_RANKS.length - index]));
+const rankOrder = new Map(
+  STUDENT_DIRECTORY_TERRAIN_RANKS.map((value, index) => [value, STUDENT_DIRECTORY_TERRAIN_RANKS.length - index]),
+);
 
 // The costume (이격) name is the parenthesized suffix of a student's name, such as 수영복 in 히나(수영복). BAQL has no
 // separate field for it. A name without the suffix is the student's base costume.
@@ -253,14 +285,22 @@ export function getStudentDirectoryFilterOptions(students: StudentDirectoryStude
       if (previous?.school === club.school) {
         previous.clubs.push({ uid: club.uid, label: club.name });
       } else {
-        groups.push({ school: club.school, label: schoolShortLocale[club.school], clubs: [{ uid: club.uid, label: club.name }] });
+        groups.push({
+          school: club.school,
+          label: schoolShortLocale[club.school],
+          clubs: [{ uid: club.uid, label: club.name }],
+        });
       }
       return groups;
     }, []);
-  const costumes = [...new Set(students.flatMap(({ name }) => getStudentCostumeName(name) ?? []))].sort((a, b) => a.localeCompare(b, "ko"));
+  const costumes = [...new Set(students.flatMap(({ name }) => getStudentCostumeName(name) ?? []))].sort((a, b) =>
+    a.localeCompare(b, "ko"),
+  );
   const weaponValues = new Set(students.map(({ weaponType }) => weaponType).filter(isKnownWeaponType));
   const equipmentSlots = [0, 1, 2].map((slot) => {
-    const values = new Set(students.map(({ equipments }) => equipments[slot]).filter((value) => Boolean(equipmentTypeLocale[value])));
+    const values = new Set(
+      students.map(({ equipments }) => equipments[slot]).filter((value) => Boolean(equipmentTypeLocale[value])),
+    );
     return equipmentTypeOrder
       .filter((value) => values.has(value))
       .map((value) => ({ value, label: equipmentTypeLocale[value] }));
@@ -327,18 +367,21 @@ export function hasStudentDirectoryFilters(state: StudentDirectoryFilterState): 
 }
 
 export function countStudentDirectoryFilterGroup(
-  group: keyof Pick<
-    StudentDirectoryFilterState,
-    | "schools"
-    | "clubUids"
-    | "costumes"
-    | "positions"
-    | "weaponTypes"
-    | "cover"
-    | "skillEffects"
-    | "acquisitionTypes"
-    | "initialTiers"
-  > | "terrain" | "equipmentSlots",
+  group:
+    | keyof Pick<
+        StudentDirectoryFilterState,
+        | "schools"
+        | "clubUids"
+        | "costumes"
+        | "positions"
+        | "weaponTypes"
+        | "cover"
+        | "skillEffects"
+        | "acquisitionTypes"
+        | "initialTiers"
+      >
+    | "terrain"
+    | "equipmentSlots",
   state: StudentDirectoryFilterState,
 ): number {
   if (group === "clubUids") return state.clubUids.length + Number(state.unaffiliatedClub);
@@ -359,7 +402,8 @@ export function filterAndSortStudentDirectory(
     if (state.defenseTypes.length && !state.defenseTypes.includes(student.defenseType)) return false;
     if (state.classes.length && !state.classes.includes(student.role)) return false;
     if (state.roles.length && !state.roles.includes(student.tacticRole)) return false;
-    if (state.schools.length && (!isKnownSchool(student.school) || !state.schools.includes(student.school))) return false;
+    if (state.schools.length && (!isKnownSchool(student.school) || !state.schools.includes(student.school)))
+      return false;
     if (state.positions.length && !state.positions.includes(student.position)) return false;
     if (state.clubUids.length || state.unaffiliatedClub) {
       const club = student.club;
@@ -370,13 +414,21 @@ export function filterAndSortStudentDirectory(
     }
     if (state.costumes.length || state.baseCostume) {
       const costume = getStudentCostumeName(student.name);
-      if (!(costume !== null && state.costumes.includes(costume)) && !(costume === null && state.baseCostume)) return false;
+      if (!(costume !== null && state.costumes.includes(costume)) && !(costume === null && state.baseCostume))
+        return false;
     }
-    if (state.terrain.street.length && !state.terrain.street.includes(student.catalog?.terrainAdaptations.street ?? "")) return false;
-    if (state.terrain.outdoor.length && !state.terrain.outdoor.includes(student.catalog?.terrainAdaptations.outdoor ?? "")) return false;
-    if (state.terrain.indoor.length && !state.terrain.indoor.includes(student.catalog?.terrainAdaptations.indoor ?? "")) return false;
+    if (state.terrain.street.length && !state.terrain.street.includes(student.catalog?.terrainAdaptations.street ?? ""))
+      return false;
+    if (
+      state.terrain.outdoor.length &&
+      !state.terrain.outdoor.includes(student.catalog?.terrainAdaptations.outdoor ?? "")
+    )
+      return false;
+    if (state.terrain.indoor.length && !state.terrain.indoor.includes(student.catalog?.terrainAdaptations.indoor ?? ""))
+      return false;
     if (state.weaponTypes.length && !state.weaponTypes.includes(student.weaponType ?? "")) return false;
-    if (state.cover.length && (student.canUseCover === null || !state.cover.includes(student.canUseCover))) return false;
+    if (state.cover.length && (student.canUseCover === null || !state.cover.includes(student.canUseCover)))
+      return false;
     if (
       state.skillEffects.length &&
       !(student.skillEffectTags ?? []).some((effect) => state.skillEffects.includes(effect))
@@ -385,7 +437,8 @@ export function filterAndSortStudentDirectory(
     }
     if (state.acquisitionTypes.length && !state.acquisitionTypes.includes(student.acquisitionType ?? "")) return false;
     if (state.initialTiers.length && !state.initialTiers.includes(student.initialTier)) return false;
-    if (state.equipmentSlots.some((slot, index) => slot.length && !slot.includes(student.equipments[index] ?? ""))) return false;
+    if (state.equipmentSlots.some((slot, index) => slot.length && !slot.includes(student.equipments[index] ?? "")))
+      return false;
     if (state.recruitment.length) {
       if (personal.status !== "loaded") return false;
       const status = getStudentPersonalRecord(student, personal).status;
@@ -394,7 +447,9 @@ export function filterAndSortStudentDirectory(
     }
     if (
       normalizedSearch &&
-      ![student.name, student.familyName ?? "", ...student.altNames].some((name) => hangul.search(name, normalizedSearch) >= 0)
+      ![student.name, student.familyName ?? "", ...student.altNames].some(
+        (name) => hangul.search(name, normalizedSearch) >= 0,
+      )
     ) {
       return false;
     }
@@ -461,13 +516,19 @@ function personalSortGroup(record: StudentDirectoryPersonalRecord, sort: "myTier
   return personalSortValue(record, sort) === null ? 1 : 0;
 }
 
-function personalSortValue(record: StudentDirectoryPersonalRecord, sort: "myTier" | "myLevel" | "myBond"): number | null {
+function personalSortValue(
+  record: StudentDirectoryPersonalRecord,
+  sort: "myTier" | "myLevel" | "myBond",
+): number | null {
   if (sort === "myTier") return record.tier;
   if (sort === "myLevel") return record.level;
   return record.bondLevel;
 }
 
-function publicSortValue(student: StudentDirectoryStudent, sort: Exclude<StudentDirectorySort, "myTier" | "myLevel" | "myBond">): number | string | null {
+function publicSortValue(
+  student: StudentDirectoryStudent,
+  sort: Exclude<StudentDirectorySort, "myTier" | "myLevel" | "myBond">,
+): number | string | null {
   // 최신순 and 과거순 follow `order`, not `releaseAt`.
   if (sort === "release") return student.order;
   if (sort === "name") return student.name.trim() || null;
@@ -500,11 +561,18 @@ export function groupStudentDirectoryStudents(
     groups.set(key, [...(groups.get(key) ?? []), student]);
   }
   return [...groups.entries()]
-    .map(([key, items]) => ({ key, label: key === "__unknown__" ? "알 수 없음" : groupLabel(key, groupBy), students: items }))
+    .map(([key, items]) => ({
+      key,
+      label: key === "__unknown__" ? "알 수 없음" : groupLabel(key, groupBy),
+      students: items,
+    }))
     .sort((a, b) => compareGroupKeys(a.key, b.key, groupBy));
 }
 
-function groupValue(student: StudentDirectoryStudent, groupBy: Exclude<StudentDirectoryGroupBy, "none">): string | null {
+function groupValue(
+  student: StudentDirectoryStudent,
+  groupBy: Exclude<StudentDirectoryGroupBy, "none">,
+): string | null {
   if (groupBy === "school") return isKnownSchool(student.school) ? student.school : null;
   if (groupBy === "attackType") return attackTypeLocale[student.attackType] ? student.attackType : null;
   if (groupBy === "defenseType") return defenseTypeShortLocale[student.defenseType] ? student.defenseType : null;
@@ -523,8 +591,20 @@ function groupLabel(key: string, groupBy: Exclude<StudentDirectoryGroupBy, "none
 function compareGroupKeys(a: string, b: string, groupBy: Exclude<StudentDirectoryGroupBy, "none">): number {
   if (a === "__unknown__") return b === "__unknown__" ? 0 : 1;
   if (b === "__unknown__") return -1;
-  const order = groupBy === "school" ? schoolOrder : groupBy === "attackType" ? attackOrder : groupBy === "defenseType" ? defenseOrder : groupBy === "role" ? roleOrder : positionOrder;
-  return (order.get(a as never) ?? Number.MAX_SAFE_INTEGER) - (order.get(b as never) ?? Number.MAX_SAFE_INTEGER) || a.localeCompare(b);
+  const order =
+    groupBy === "school"
+      ? schoolOrder
+      : groupBy === "attackType"
+        ? attackOrder
+        : groupBy === "defenseType"
+          ? defenseOrder
+          : groupBy === "role"
+            ? roleOrder
+            : positionOrder;
+  return (
+    (order.get(a as never) ?? Number.MAX_SAFE_INTEGER) - (order.get(b as never) ?? Number.MAX_SAFE_INTEGER) ||
+    a.localeCompare(b)
+  );
 }
 
 export type StudentDirectoryLabel = {
@@ -563,10 +643,11 @@ export function getStudentDirectoryLabel(
     if (sort === "initialTier") return initialTierLabel(student.initialTier);
     if (sort === "street" || sort === "outdoor" || sort === "indoor") return terrainLabel(student, sort);
     if (sort === "school") return textLabel(isKnownSchool(student.school) ? schoolShortLocale[student.school] : null);
-    return textLabel(student.club === null ? "없음" : student.club?.name ?? null);
+    return textLabel(student.club === null ? "없음" : (student.club?.name ?? null));
   }
 
-  if (displayBy === "school") return textLabel(isKnownSchool(student.school) ? schoolShortLocale[student.school] : null);
+  if (displayBy === "school")
+    return textLabel(isKnownSchool(student.school) ? schoolShortLocale[student.school] : null);
   if (displayBy === "attackType") return attributeLabel(student.attackType, "attackType");
   if (displayBy === "defenseType") return attributeLabel(student.defenseType, "defenseType");
   if (displayBy === "role") return attributeLabel(student.role, "class");
@@ -615,7 +696,12 @@ function terrainLabel(student: StudentDirectoryStudent, field: "street" | "outdo
 }
 
 function attributeLabel(value: string, kind: "attackType" | "defenseType" | "class"): StudentDirectoryLabel {
-  const label = kind === "attackType" ? attackTypeLocale[value as Attack] : kind === "defenseType" ? defenseTypeShortLocale[value as Defense] : roleLocale[value as Role];
+  const label =
+    kind === "attackType"
+      ? attackTypeLocale[value as Attack]
+      : kind === "defenseType"
+        ? defenseTypeShortLocale[value as Defense]
+        : roleLocale[value as Role];
   return label ? { kind, value: label, ariaLabel: label } : textLabel("알 수 없음");
 }
 
@@ -633,7 +719,10 @@ export function formatStudentReleaseDate(
   return formatInstant(releaseAt, { timeZone, format });
 }
 
-export function getStudentDirectorySortLabel(sort: StudentDirectorySort, direction: StudentDirectorySortDirection): string {
+export function getStudentDirectorySortLabel(
+  sort: StudentDirectorySort,
+  direction: StudentDirectorySortDirection,
+): string {
   if (sort === "release") return direction === "desc" ? "최신순" : "과거순";
   if (sort === "name" || sort === "school" || sort === "club") return direction === "desc" ? "역순" : "가나다순";
   return direction === "desc" ? "높은 순" : "낮은 순";
@@ -676,7 +765,12 @@ export function getStudentDirectoryAppliedFilters(
 ): StudentDirectoryAppliedFilter[] {
   const options = getStudentDirectoryFilterOptions(students);
   const chips: StudentDirectoryAppliedFilter[] = [];
-  const addValues = <T extends string>(key: string, selected: T[], labels: object, field: keyof StudentDirectoryFilterState) => {
+  const addValues = <T extends string>(
+    key: string,
+    selected: T[],
+    labels: object,
+    field: keyof StudentDirectoryFilterState,
+  ) => {
     for (const value of selected) {
       const label = (labels as Record<string, string>)[value];
       if (!label) continue;
@@ -692,31 +786,61 @@ export function getStudentDirectoryAppliedFilters(
   addValues("class", state.classes, roleLocale, "classes");
   addValues("role", state.roles, tacticRoleLocale, "roles");
   addValues("position", state.positions, positionLocale, "positions");
-  addValues("school", state.schools, Object.fromEntries(options.schools.map(({ value, label }) => [value, label])), "schools");
+  addValues(
+    "school",
+    state.schools,
+    Object.fromEntries(options.schools.map(({ value, label }) => [value, label])),
+    "schools",
+  );
   addValues("weapon", state.weaponTypes, weaponLabels, "weaponTypes");
   addValues("skill", state.skillEffects, skillEffectLabels, "skillEffects");
-  addValues("acquisition", state.acquisitionTypes, acquisitionLabels, "acquisitionTypes");
+  addValues("acquisition", state.acquisitionTypes, STUDENT_ACQUISITION_LABELS, "acquisitionTypes");
   for (const value of state.initialTiers) {
-    chips.push({ key: `tier:${value}`, label: `${value}성`, ariaLabel: `초기 성급 ${value}성`, tier: value, remove: (current) => ({ ...current, initialTiers: current.initialTiers.filter((tier) => tier !== value) }) });
+    chips.push({
+      key: `tier:${value}`,
+      label: `${value}성`,
+      ariaLabel: `초기 성급 ${value}성`,
+      tier: value,
+      remove: (current) => ({ ...current, initialTiers: current.initialTiers.filter((tier) => tier !== value) }),
+    });
   }
   for (const value of state.recruitment) {
-    chips.push({ key: `recruitment:${value}`, label: value === "recruited" ? "모집함" : "미모집", remove: (current) => ({ ...current, recruitment: current.recruitment.filter((item) => item !== value) }) });
+    chips.push({
+      key: `recruitment:${value}`,
+      label: value === "recruited" ? "모집함" : "미모집",
+      remove: (current) => ({ ...current, recruitment: current.recruitment.filter((item) => item !== value) }),
+    });
   }
   for (const value of state.clubUids) {
-    const club = options.clubGroups.flatMap(({ school, clubs }) => clubs.map((item) => ({ ...item, school }))).find((item) => item.uid === value);
+    const club = options.clubGroups
+      .flatMap(({ school, clubs }) => clubs.map((item) => ({ ...item, school })))
+      .find((item) => item.uid === value);
     if (!club) continue;
-    const sameNameAcrossSchools = options.clubGroups.some(({ school, clubs }) => school !== club.school && clubs.some((item) => item.label === club.label));
+    const sameNameAcrossSchools = options.clubGroups.some(
+      ({ school, clubs }) => school !== club.school && clubs.some((item) => item.label === club.label),
+    );
     chips.push({
       key: `club:${value}`,
       label: `${sameNameAcrossSchools ? `${schoolShortLocale[club.school]} ` : ""}${club.label}`,
       remove: (current) => ({ ...current, clubUids: current.clubUids.filter((uid) => uid !== value) }),
     });
   }
-  if (state.unaffiliatedClub) chips.push({ key: "club:none", label: "없음", remove: (current) => ({ ...current, unaffiliatedClub: false }) });
-  if (state.baseCostume) chips.push({ key: "costume:base", label: "기본", ariaLabel: "기본 이격", remove: (current) => ({ ...current, baseCostume: false }) });
+  if (state.unaffiliatedClub)
+    chips.push({ key: "club:none", label: "없음", remove: (current) => ({ ...current, unaffiliatedClub: false }) });
+  if (state.baseCostume)
+    chips.push({
+      key: "costume:base",
+      label: "기본",
+      ariaLabel: "기본 이격",
+      remove: (current) => ({ ...current, baseCostume: false }),
+    });
   for (const value of state.costumes) {
     if (!options.costumes.includes(value)) continue;
-    chips.push({ key: `costume:${value}`, label: value, remove: (current) => ({ ...current, costumes: current.costumes.filter((item) => item !== value) }) });
+    chips.push({
+      key: `costume:${value}`,
+      label: value,
+      remove: (current) => ({ ...current, costumes: current.costumes.filter((item) => item !== value) }),
+    });
   }
   for (const field of ["street", "outdoor", "indoor"] as const) {
     const title = field === "street" ? "시가지" : field === "outdoor" ? "야외" : "실내";
@@ -727,17 +851,33 @@ export function getStudentDirectoryAppliedFilters(
         label: title,
         ariaLabel: `${title} 적성 ${rank}`,
         terrainRank: rank,
-        remove: (current) => ({ ...current, terrain: { ...current.terrain, [field]: current.terrain[field].filter((value) => value !== rank) } }),
+        remove: (current) => ({
+          ...current,
+          terrain: { ...current.terrain, [field]: current.terrain[field].filter((value) => value !== rank) },
+        }),
       });
     }
   }
   for (const cover of state.cover) {
-    chips.push({ key: `cover:${cover}`, label: cover ? "엄폐 가능" : "엄폐 불가", remove: (current) => ({ ...current, cover: current.cover.filter((value) => value !== cover) }) });
+    chips.push({
+      key: `cover:${cover}`,
+      label: cover ? "엄폐 가능" : "엄폐 불가",
+      remove: (current) => ({ ...current, cover: current.cover.filter((value) => value !== cover) }),
+    });
   }
   for (const [slotIndex, selected] of state.equipmentSlots.entries()) {
     for (const value of selected) {
       const label = equipmentTypeLocale[value] ?? "알 수 없음";
-      chips.push({ key: `equipment:${slotIndex}:${value}`, label: `장비${slotIndex + 1} ${label}`, remove: (current) => ({ ...current, equipmentSlots: current.equipmentSlots.map((slot, index) => index === slotIndex ? slot.filter((item) => item !== value) : slot) as StudentDirectoryFilterState["equipmentSlots"] }) });
+      chips.push({
+        key: `equipment:${slotIndex}:${value}`,
+        label: `장비${slotIndex + 1} ${label}`,
+        remove: (current) => ({
+          ...current,
+          equipmentSlots: current.equipmentSlots.map((slot, index) =>
+            index === slotIndex ? slot.filter((item) => item !== value) : slot,
+          ) as StudentDirectoryFilterState["equipmentSlots"],
+        }),
+      });
     }
   }
   return chips;

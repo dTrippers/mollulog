@@ -13,19 +13,7 @@ import { IconButton } from "../../primitives/IconButton";
 import { Popover } from "../../primitives/Popover";
 import { Switch } from "../../primitives/Switch";
 import { EventCard, type EventCardHandlers, type PlannerEventData } from "./EventCard";
-import {
-  formatAmount,
-  formatSigned,
-  KST,
-  ResourceIcon,
-  SCHEDULE_ACTION_CELL,
-  SCHEDULE_BALANCE_CELL,
-  SCHEDULE_CHANGE_CELL,
-  SCHEDULE_DATE_CELL,
-  SCHEDULE_DETAIL_CELL,
-  SCHEDULE_GRID_CLASS_NAME,
-  SCHEDULE_TITLE_CELL,
-} from "./pyroxene-ui";
+import { formatAmount, formatSigned, KST, ResourceIcon, SCHEDULE_GRID_CLASS_NAME } from "./pyroxene-ui";
 
 const FILTERABLE_SOURCES = PYROXENE_SOURCE_DEFINITIONS.filter((source) => source.type !== "event");
 
@@ -104,51 +92,50 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
     </span>
   ));
   return (
+    // Stacked layouts keep a short title on one line with the amounts and wrap the amounts below only when the title
+    // needs the room. The wrappers dissolve into the shared grid on wide containers.
     <li
-      className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-4 text-[0.8125rem] @2xl:min-h-9 @2xl:px-4")}
+      className={cn(
+        SCHEDULE_GRID_CLASS_NAME,
+        "flex items-start py-1.5 pr-3 pl-4 text-[0.8125rem] @2xl:grid @2xl:min-h-9 @2xl:items-center @2xl:px-4",
+      )}
     >
-      <span className={cn(SCHEDULE_DATE_CELL, "font-semibold text-v2-fg tabular-nums")}>
+      <span className="w-12 shrink-0 py-0.5 font-semibold text-v2-fg tabular-nums @2xl:w-auto @2xl:py-0">
         {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
         {row.date.tz(KST).format("MM/DD")}
       </span>
-      <span className={cn(SCHEDULE_TITLE_CELL, "flex min-w-0 flex-wrap items-center gap-x-2")}>
-        <span className="truncate text-v2-fg">{row.label}</span>
-        <span className="hidden items-center gap-x-2 @2xl:inline-flex">{ticketDeltas}</span>
-      </span>
-      <span className={cn(SCHEDULE_DETAIL_CELL, "flex min-w-0 items-center gap-x-2")}>{ticketDeltas}</span>
-      <span
-        className={cn(
-          SCHEDULE_CHANGE_CELL,
-          "text-right font-semibold tabular-nums",
-          deltaClassName(row.delta.pyroxene),
-        )}
-      >
-        {row.delta.pyroxene === 0 ? "—" : formatSigned(row.delta.pyroxene)}
-      </span>
-      <span className={cn(SCHEDULE_BALANCE_CELL, "text-right text-v2-fg-secondary tabular-nums")}>
-        {formatAmount(row.balance)}
-      </span>
-      <span
-        className={cn(
-          SCHEDULE_ACTION_CELL,
-          "-my-1.5 flex flex-col items-end justify-center gap-0.5 @2xl:my-0 @2xl:flex-row @2xl:justify-end",
-        )}
-      >
-        {row.collectedSourceKey && row.collectable ? (
-          <IconButton
-            icon={row.collected ? SolidCheckCircleIcon : CheckCircleIcon}
-            label={`${row.label} 받은 보상으로 표시`}
-            pressed={row.collected}
-            onClick={() => handlers.onCollectedSourceChange(row.collectedSourceKey as string, !row.collected)}
-          />
-        ) : null}
-        {row.itemUid ? (
-          <IconButton
-            icon={TrashIcon}
-            label={`${row.label} 삭제`}
-            onClick={() => handlers.onDeleteItem(row.itemUid as string)}
-          />
-        ) : null}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 @2xl:contents">
+        <span className="flex min-w-0 grow flex-wrap items-center gap-x-2 py-0.5 @2xl:py-0">
+          <span className="min-w-0 break-keep whitespace-pre-line text-v2-fg">{row.label}</span>
+          {ticketDeltas.length > 0 ? <span className="inline-flex items-center gap-x-2">{ticketDeltas}</span> : null}
+        </span>
+        <span className="ml-auto flex shrink-0 items-center gap-x-1.5 @2xl:contents">
+          <span
+            className={cn("w-14 text-right font-semibold tabular-nums @2xl:w-auto", deltaClassName(row.delta.pyroxene))}
+          >
+            {row.delta.pyroxene === 0 ? "—" : formatSigned(row.delta.pyroxene)}
+          </span>
+          <span className="w-14 text-right text-v2-fg-secondary tabular-nums @2xl:w-auto">
+            {formatAmount(row.balance)}
+          </span>
+          <span className="-my-1.5 flex w-7 flex-col items-end justify-center gap-0.5 @2xl:my-0 @2xl:w-auto @2xl:flex-row @2xl:justify-end">
+            {row.collectedSourceKey && row.collectable ? (
+              <IconButton
+                icon={row.collected ? SolidCheckCircleIcon : CheckCircleIcon}
+                label={`${row.label} 받은 보상으로 표시`}
+                pressed={row.collected}
+                onClick={() => handlers.onCollectedSourceChange(row.collectedSourceKey as string, !row.collected)}
+              />
+            ) : null}
+            {row.itemUid ? (
+              <IconButton
+                icon={TrashIcon}
+                label={`${row.label} 삭제`}
+                onClick={() => handlers.onDeleteItem(row.itemUid as string)}
+              />
+            ) : null}
+          </span>
+        </span>
       </span>
     </li>
   );

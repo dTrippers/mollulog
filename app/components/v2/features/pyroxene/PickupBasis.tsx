@@ -26,7 +26,7 @@ export function SegmentedChoice<T extends string>({
   variant = "segmented",
 }: {
   label: string;
-  options: { value: T; label: ReactNode }[];
+  options: { value: T; label: ReactNode; className?: string }[];
   value: T | null;
   onChange: (value: T) => void;
   variant?: "segmented" | "tiles";
@@ -52,6 +52,7 @@ export function SegmentedChoice<T extends string>({
                 : selected
                   ? "bg-v2-selected text-v2-on-selected"
                   : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover",
+              option.className,
             )}
           >
             <input

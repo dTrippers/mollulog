@@ -64,17 +64,10 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
  * Shared columns for the schedule: date, content, change, balance, actions. Mobile keeps the numbers in fixed widths so
  * they line up across separate rows.
  *
- * A mobile row takes two lines so the title gets the full width: the title spans the first line, and the details,
- * change, balance, and actions sit on the second. The date cell spans both lines.
+ * Income rows use their own flex layout on stacked containers (see IncomeRowView) and join this grid when wide.
  */
 export const SCHEDULE_GRID_CLASS_NAME =
   "grid grid-cols-[3rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 gap-y-0.5 @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:gap-x-3 @2xl:gap-y-0";
-export const SCHEDULE_DATE_CELL = "row-span-2 self-stretch @2xl:row-span-1 @2xl:self-auto";
-export const SCHEDULE_TITLE_CELL = "col-span-4 @2xl:col-span-1";
-export const SCHEDULE_DETAIL_CELL = "col-start-2 row-start-2 @2xl:hidden";
-export const SCHEDULE_CHANGE_CELL = "col-start-3 row-start-2 @2xl:col-start-auto @2xl:row-start-auto";
-export const SCHEDULE_BALANCE_CELL = "col-start-4 row-start-2 @2xl:col-start-auto @2xl:row-start-auto";
-export const SCHEDULE_ACTION_CELL = "col-start-5 row-start-2 @2xl:col-start-auto @2xl:row-start-auto";
 
 export function balanceClassName(value: number): string {
   return value < 0 ? "text-v2-danger" : "text-v2-fg";

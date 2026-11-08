@@ -20,24 +20,22 @@ const RESOURCE_ORDER: PyroxeneResourceKey[] = ["pyroxene", "tenTimeTicket", "one
 const STACK_ORDER = ["regular", "limited"] as const;
 
 /** Owned resources and stacks, read-only, as a list. */
-export function OwnedResourceList({ values, stacksEntered }: { values: OwnedResourceValues; stacksEntered: boolean }) {
+export function OwnedResourceList({ values }: { values: OwnedResourceValues }) {
   return (
-    <dl className="flex flex-col gap-2.5 text-sm">
+    <dl className="flex flex-col gap-2 text-sm">
       {RESOURCE_ORDER.map((key) => (
         <div key={key} className="flex items-center gap-2">
           <ResourceIcon resource={key} />
           <dt className="min-w-0 flex-1 text-v2-fg-secondary">{PYROXENE_RESOURCE_LABELS[key]}</dt>
-          <dd className="font-semibold tabular-nums text-v2-fg">{formatAmount(values.resources[key])}</dd>
+          <dd className="font-medium tabular-nums text-v2-fg">{formatAmount(values.resources[key])}</dd>
         </div>
       ))}
-      {STACK_ORDER.map((scope) => (
+      {/* A stack of 0 is the common case and adds nothing, so only a stack in progress shows. */}
+      {STACK_ORDER.filter((scope) => values.stacks[scope] !== 0).map((scope) => (
         <div key={scope} className="flex items-center gap-2">
           <Square3Stack3DIcon className="-my-1 size-6 shrink-0 p-1 text-v2-fg-tertiary" aria-hidden="true" />
           <dt className="min-w-0 flex-1 text-v2-fg-secondary">{RECRUITMENT_STACK_LABELS[scope]}</dt>
-          <dd className="font-semibold tabular-nums text-v2-fg">
-            {values.stacks[scope]}
-            {stacksEntered ? null : <span className="sr-only"> (입력 전, 0으로 계산)</span>}
-          </dd>
+          <dd className="font-medium tabular-nums text-v2-fg">{values.stacks[scope]}</dd>
         </div>
       ))}
     </dl>
