@@ -1,4 +1,5 @@
 import {
+  AdjustmentsHorizontalIcon,
   ArrowTrendingUpIcon,
   CalendarIcon,
   ChartBarIcon,
@@ -30,6 +31,7 @@ import {
 } from "~/components/v2/features/pyroxene/OwnedResources";
 import { CalculationMethodDialog, PickupBasisPanel } from "~/components/v2/features/pyroxene/PickupBasis";
 import { PlannerSchedule, PlannerSummary } from "~/components/v2/features/pyroxene/PlannerSchedule";
+import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
 import { formatAmount, ResourceIcon } from "~/components/v2/features/pyroxene/pyroxene-ui";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
 import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
@@ -1239,6 +1241,24 @@ export default function PyroxenePlanner() {
     onSaveOther: handleSaveOther,
   };
 
+  const basisPanel = (
+    <PickupBasisPanel
+      value={options.event.pickupChance}
+      onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
+      onShowMethod={() => setMethodDialogOpen(true)}
+    />
+  );
+  const incomeAddButton = <IncomePlanAddButton onClick={() => setIncomeAddOpen(true)} />;
+  const incomePanel = (
+    <IncomePlanPanel
+      options={options}
+      activePackages={activePackages}
+      attendanceStart={attendanceStart}
+      saving={saving}
+      handlers={incomeHandlers}
+    />
+  );
+
   return (
     <V2Page width="wide">
       <PageHeader
@@ -1312,25 +1332,10 @@ export default function PyroxenePlanner() {
           <OwnedResourceList values={ownedValues} stacksEntered={stacksEntered} />
         </PanelSheet>
         <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon}>
-          <PickupBasisPanel
-            value={options.event.pickupChance}
-            onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
-            onShowMethod={() => setMethodDialogOpen(true)}
-          />
+          {basisPanel}
         </PanelSheet>
-        <PanelSheet
-          panelId="income"
-          title="수급 계획"
-          Icon={ArrowTrendingUpIcon}
-          headerAction={<IncomePlanAddButton onClick={() => setIncomeAddOpen(true)} />}
-        >
-          <IncomePlanPanel
-            options={options}
-            activePackages={activePackages}
-            attendanceStart={attendanceStart}
-            saving={saving}
-            handlers={incomeHandlers}
-          />
+        <PanelSheet panelId="income" title="수급 계획" Icon={ArrowTrendingUpIcon} headerAction={incomeAddButton}>
+          {incomePanel}
         </PanelSheet>
         <AsideLinks
           items={[
@@ -1351,17 +1356,17 @@ export default function PyroxenePlanner() {
             )}
           >
             <span className="flex min-w-0 flex-1 flex-col items-start">
-              <span className="flex items-center gap-3 text-sm font-semibold text-v2-fg tabular-nums">
-                <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="pyroxene" className="size-5.5" />
+              <span className="flex items-center gap-3 text-base font-semibold text-v2-fg tabular-nums">
+                <span className="inline-flex items-center gap-0.5">
+                  <ResourceIcon resource="pyroxene" className="size-7" />
                   {formatAmount(initialResources.pyroxene)}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="tenTimeTicket" className="size-5.5" />
+                <span className="inline-flex items-center gap-0.5">
+                  <ResourceIcon resource="tenTimeTicket" className="size-7" />
                   {formatAmount(initialResources.tenTimeTicket)}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="oneTimeTicket" className="size-5.5" />
+                <span className="inline-flex items-center gap-0.5">
+                  <ResourceIcon resource="oneTimeTicket" className="size-7" />
                   {formatAmount(initialResources.oneTimeTicket)}
                 </span>
               </span>
@@ -1370,9 +1375,20 @@ export default function PyroxenePlanner() {
             <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
           </button>
         }
-        panels={[
-          { panelId: "basis", title: "계산 기준", shortTitle: "기준", Icon: ChartBarIcon },
-          { panelId: "income", title: "수급 계획", shortTitle: "수급", Icon: ArrowTrendingUpIcon },
+        panels={[{ panelId: PLAN_SHEET_PANEL_ID, title: "계획", Icon: AdjustmentsHorizontalIcon }]}
+      />
+      <PlanSheet
+        title="계획"
+        Icon={AdjustmentsHorizontalIcon}
+        sections={[
+          { key: "basis", title: "계산 기준", Icon: ChartBarIcon, content: basisPanel },
+          {
+            key: "income",
+            title: "수급 계획",
+            Icon: ArrowTrendingUpIcon,
+            headerAction: incomeAddButton,
+            content: incomePanel,
+          },
         ]}
       />
       <OwnedResourcesDialog
