@@ -148,7 +148,7 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
   return (
     <div
       className={cn(
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @2xl:grid-cols-[6rem_8.5rem] @2xl:items-start",
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @2xl:grid-cols-[6rem_7rem] @2xl:items-start",
         className,
       )}
     >
@@ -277,7 +277,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         ) : null}
         {freeLabel ? (
           <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-v2-perk">
-            <StarIcon className="size-3.5 text-v2-star" aria-hidden="true" />
+            <StarIcon className="size-3.5" aria-hidden="true" />
             무료 {freeLabel}회
           </span>
         ) : null}
@@ -354,7 +354,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         ref={ref}
         tabIndex={selected ? -1 : undefined}
         className={cn(
-          "flex flex-col gap-1 rounded-lg bg-v2-surface px-4 py-3 focus:outline-none @2xl:grid @2xl:grid-cols-[4.5rem_minmax(0,1fr)_6rem_8.5rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
+          "flex flex-col gap-1 rounded-lg bg-v2-surface px-4 py-3 focus:outline-none @2xl:grid @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
           selected && "ring-2 ring-v2-focus",
         )}
       >
@@ -383,16 +383,13 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       ref={ref}
       tabIndex={selected ? -1 : undefined}
       className={cn(
-        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @2xl:grid @2xl:grid-cols-[4.5rem_minmax(0,1fr)_6rem_8.5rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
+        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @2xl:grid @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:items-start @2xl:gap-x-3 @2xl:gap-y-0",
         selected && "ring-2 ring-v2-focus",
       )}
     >
       <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @2xl:flex">
-        <span className="flex items-center gap-1.5 text-v2-fg">
-          {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
-          {since.tz(KST).format("MM/DD")}
-        </span>
-        <span className={cn("text-xs font-normal text-v2-fg-tertiary", marker !== null && "pl-5.5")}>
+        <span className="text-v2-fg">{since.tz(KST).format("MM/DD")}</span>
+        <span className="text-xs font-normal text-v2-fg-tertiary">
           ~{until.tz(KST).format("MM/DD")}
         </span>
       </div>
@@ -408,7 +405,12 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               {pills}
             </div>
           </div>
-          {pills ? <div className="hidden flex-wrap items-center gap-2 @2xl:flex">{pills}</div> : null}
+          {marker !== null || pills ? (
+            <div className="hidden flex-wrap items-center gap-2 @2xl:flex">
+              {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
+              {pills}
+            </div>
+          ) : null}
           <h3 className="text-base leading-snug font-semibold break-keep whitespace-pre-line text-v2-fg">
             {event.name}
           </h3>
