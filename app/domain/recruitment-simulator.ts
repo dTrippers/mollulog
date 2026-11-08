@@ -450,6 +450,29 @@ function drawRecruitmentSlot({
   };
 }
 
+export function drawRecruitmentSingleSlot({
+  snapshot,
+  activePickupStudentUid,
+  rateTable,
+  guaranteed = false,
+  random = Math.random,
+}: {
+  snapshot: RecruitmentPoolSnapshot;
+  activePickupStudentUid: string | null;
+  rateTable?: RecruitmentRateTable;
+  guaranteed?: boolean;
+  random?: () => number;
+}): RecruitmentDrawResult {
+  const effectiveRateTable = rateTable ?? createDefaultRecruitmentRateTable(snapshot, activePickupStudentUid);
+  return drawRecruitmentSlot({
+    snapshot,
+    slotRate: guaranteed ? effectiveRateTable.guaranteedSlot : effectiveRateTable.normalSlot,
+    pickupRates: effectiveRateTable.pickupRates,
+    activePickupStudentUid,
+    random,
+  });
+}
+
 export function drawRecruitmentTenPull({
   snapshot,
   activePickupStudentUid,
