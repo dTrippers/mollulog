@@ -4,10 +4,9 @@ import {
   ChevronDownIcon,
   ChevronUpIcon,
   PencilIcon,
-  Square3Stack3DIcon,
   StarIcon,
 } from "@heroicons/react/16/solid";
-import { Fragment, forwardRef, useId, useMemo, useState } from "react";
+import { forwardRef, type ReactNode, useId, useMemo, useState } from "react";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import {
@@ -34,6 +33,7 @@ import {
   formatSigned,
   KST,
   PlannerDialog,
+  type PyroxeneResourceKey,
   RECRUITMENT_STACK_LABELS,
   ResourceIcon,
   StatusPill,
@@ -125,16 +125,47 @@ function StackBar({ stack }: { stack: TimelinePickupStack }) {
   );
 }
 
-function StackDelta({ stack }: { stack: TimelinePickupStack }) {
+function usageText(delta: number): string | null {
+  if (delta < 0) return `${Math.abs(delta).toLocaleString()}개 사용`;
+  if (delta > 0) return `${delta.toLocaleString()}개 획득`;
+  return null;
+}
+
+/** One resource as what is left, with how much this event uses right below it. */
+function ResourceUnit({
+  resource,
+  amount,
+  delta,
+  large = false,
+  children,
+}: {
+  resource: PyroxeneResourceKey;
+  amount: number;
+  delta: number;
+  large?: boolean;
+  children?: ReactNode;
+}) {
+  const usage = usageText(delta);
   return (
-    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-v2-fg-secondary tabular-nums">
-      <Square3Stack3DIcon className="size-3.5" aria-label={RECRUITMENT_STACK_LABELS[stack.scope]} />
-      {formatSigned(stack.after - stack.before)}
-    </span>
+    <div className="flex flex-col items-end">
+      <span className="flex items-center gap-1">
+        <ResourceIcon resource={resource} className={cn("my-0", large ? "size-6" : "size-5")} />
+        <span
+          className={cn(
+            large ? "text-lg leading-tight font-bold" : "text-sm leading-5 font-semibold",
+            balanceClassName(amount),
+          )}
+        >
+          {formatAmount(amount)}
+        </span>
+      </span>
+      {usage ? <span className="text-xs text-v2-fg-tertiary">{usage}</span> : null}
+      {children}
+    </div>
   );
 }
 
-/** Every resource the recruitment changes, as change and what is left, in one place. */
+/** What is left of each resource after the recruitment, grouped by resource. */
 function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?: string }) {
   const plan = entry.pickupPlan;
   if (!plan) return null;
@@ -143,65 +174,44 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
   const range = getBalanceRange(entry);
   const status = getPyroxeneEventStatus(entry);
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
-  const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @2xl:justify-self-end";
+  // An automatic basis assumes the targets are acquired, so the stack returns to 0; show only a stack that is not.
+  const stacks = plan.stacks.filter((stack) => stack.before !== 0 || stack.after !== 0);
   return (
-    <div
-      className={cn(
-        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @2xl:grid-cols-[6rem_7rem] @2xl:items-start",
-        className,
-      )}
-    >
-      <span className="text-xs text-v2-fg-tertiary @2xl:hidden">변화</span>
-      <span className="justify-self-end text-xs text-v2-fg-tertiary @2xl:hidden">남은 재화</span>
-      <span className={cn(changeClassName, "self-start pt-0.5")}>
-        <ResourceIcon resource="pyroxene" className="size-6" />
-        {delta.pyroxene === 0 ? "—" : formatSigned(delta.pyroxene)}
+    <div className={cn("flex items-start justify-between gap-3 tabular-nums @2xl:justify-end", className)}>
+      <span className="flex items-center gap-2 @2xl:hidden">
+        <span className="text-xs text-v2-fg-tertiary">남은 재화</span>
+        {/* Desktop shows the status in the actions column instead. */}
+        {status ? <StatusPill status={status} /> : null}
       </span>
-      <span className="flex flex-col items-end gap-1">
-        <span className="flex items-center gap-2">
-          {/* Desktop shows the status in the actions column instead. */}
-          {status ? (
-            <span className="@2xl:hidden">
-              <StatusPill status={status} />
+      <div className="flex flex-col items-end gap-2.5">
+        <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} large>
+          {range ? (
+            <span className="mt-0.5 flex flex-col items-end text-xs text-v2-fg-tertiary">
+              <span className="text-[0.625rem] leading-3">예상 범위</span>
+              <span>
+                {/* A low end below zero means bad luck can run the balance short. */}
+                <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
+                {formatAmount(range.high)}
+              </span>
             </span>
           ) : null}
-          <span className={cn("text-lg leading-tight font-bold", balanceClassName(after.pyroxene))}>
-            {formatAmount(after.pyroxene)}
-          </span>
-        </span>
-        {range ? (
-          <span className="flex flex-col items-end text-xs text-v2-fg-tertiary">
-            <span className="text-[0.625rem] leading-3">예상 범위</span>
-            <span>
-              {/* A low end below zero means bad luck can run the balance short. */}
-              <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
-              {formatAmount(range.high)}
-            </span>
-          </span>
+        </ResourceUnit>
+        {tickets.length > 0 ? (
+          <div className="flex flex-wrap justify-end gap-x-4 gap-y-2.5">
+            {tickets.map((resource) => (
+              <ResourceUnit key={resource} resource={resource} amount={after[resource]} delta={delta[resource]} />
+            ))}
+          </div>
         ) : null}
-      </span>
-      {tickets.map((resource) => (
-        <Fragment key={resource}>
-          <span className={changeClassName}>
-            <ResourceIcon resource={resource} className="size-6" />
-            {formatSigned(delta[resource])}
-          </span>
-          <span className="justify-self-end text-sm font-semibold text-v2-fg">{formatAmount(after[resource])}</span>
-        </Fragment>
-      ))}
-      {/* An automatic basis assumes the targets are acquired, so the stack returns to 0; show only a stack that is not. */}
-      {plan.stacks
-        .filter((stack) => stack.before !== 0 || stack.after !== 0)
-        .map((stack) => (
-          <Fragment key={stack.scope}>
-            <span className="@2xl:justify-self-end">
-              {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
-            </span>
-            <span className="justify-self-end">
-              <StackBar stack={stack} />
-            </span>
-          </Fragment>
+        {stacks.map((stack) => (
+          <div key={stack.scope} className="flex flex-col items-end">
+            <StackBar stack={stack} />
+            {stack.after !== stack.before ? (
+              <span className="text-xs text-v2-fg-tertiary">{formatSigned(stack.after - stack.before)}</span>
+            ) : null}
+          </div>
         ))}
+      </div>
     </div>
   );
 }
@@ -569,7 +579,11 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       </div>
 
       {plan ? (
-        <ResourceLedger entry={entry} className="hidden @2xl:col-span-2 @2xl:grid" />
+        <>
+          {/* The change column stays empty: each resource shows its usage under what is left. */}
+          <span className="hidden @2xl:block" />
+          <ResourceLedger entry={entry} className="hidden @2xl:flex" />
+        </>
       ) : (
         <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @2xl:block">—</span>
       )}
