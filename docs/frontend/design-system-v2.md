@@ -68,6 +68,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
 | `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
 | `text-v2-perk` | `oklch(0.52 0.105 223.128)` | `oklch(0.865 0.127 207.078)` | Benefit, such as a free-recruit special case. Pair with a star icon and text, semibold |
+| `text-v2-star` | `oklch(0.795 0.184 86.047)` | `oklch(0.852 0.199 91.936)` | Star-tier icons (★ marks in tier pickers and target tier faces). A non-text marker like `attr-yellow`; always paired with the tier number or an accessible tier name |
 | `text-v2-ap` | `oklch(0.448 0.119 151.328)` | `oklch(0.871 0.15 154.449)` | AP totals and stage costs; measured contrast is 17.0:1 light and 11.7:1 dark on surface |
 | `text-v2-perk-on-media` | `#fdba74` | same | Bonus label on a `bg-v2-scrim`; fixed orange-300 in both themes so it stays legible over the dark image scrim |
 | `bg-v2-item-rarity-1…4` | `#f5f5f5` / `#bfdbfe` / `#fed7aa` / `#e9d5ff` | `#737373` / `#93c5fd` / `#fdba74` / `#d8b4fe` | Resource thumbnail backgrounds, copied from the 1.x neutral-100/neutral-500, blue-200/blue-300, orange-200/orange-300, and purple-200/purple-300 values |

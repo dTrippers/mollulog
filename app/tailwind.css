@@ -509,6 +509,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-warning: var(--v2-warning);
   --color-v2-warning-subtle: var(--v2-warning-subtle);
   --color-v2-perk: var(--v2-perk);
+  --color-v2-star: var(--v2-star);
   --color-v2-ap: var(--v2-ap);
   --color-v2-perk-on-media: var(--v2-perk-on-media);
   --color-v2-item-rarity-1: var(--v2-item-rarity-1);
@@ -612,6 +613,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-warning: oklch(0.55 0.163 48.998);
   --v2-warning-subtle: oklch(0.965 0.05 95);
   --v2-perk: oklch(0.52 0.105 223.128);
+  --v2-star: oklch(0.795 0.184 86.047);
   --v2-ap: oklch(0.448 0.119 151.328);
   --v2-perk-on-media: #fdba74;
   --v2-item-rarity-1: #f5f5f5;
@@ -713,6 +715,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-warning: oklch(0.828 0.189 84.429);
   --v2-warning-subtle: oklch(0.33 0.07 75);
   --v2-perk: oklch(0.865 0.127 207.078);
+  --v2-star: oklch(0.852 0.199 91.936);
   --v2-ap: oklch(0.871 0.15 154.449);
   --v2-item-rarity-1: #737373;
   --v2-item-rarity-2: #93c5fd;

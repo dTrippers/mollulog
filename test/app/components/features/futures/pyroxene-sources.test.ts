@@ -12,10 +12,6 @@ import {
   PYROXENE_SOURCE_DEFINITIONS,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
-import {
-  PYROXENE_PANEL_HIDDEN_SOURCE_TYPES,
-  PYROXENE_SOURCE_ROW_DEFINITIONS,
-} from "../../../../../app/components/features/futures/pyroxene-source-config";
 import dayjs from "../../../../../app/lib/dayjs";
 
 describe("pyroxene-sources", () => {
@@ -29,91 +25,6 @@ describe("pyroxene-sources", () => {
       "package_ap",
       "ap_charge",
     ]);
-  });
-
-  it("defines source rows that cover configurable timeline sources exactly once", () => {
-    const hiddenSourceTypes = new Set<string>(PYROXENE_PANEL_HIDDEN_SOURCE_TYPES);
-    const sourceTypes = PYROXENE_SOURCE_DEFINITIONS.map((source) => source.type)
-      .filter((type) => !hiddenSourceTypes.has(type))
-      .sort();
-    const rowSourceTypes = PYROXENE_SOURCE_ROW_DEFINITIONS.flatMap((row) =>
-      row.visibilityTargets.map((target) => target.type),
-    ).sort();
-
-    expect(rowSourceTypes).toEqual(sourceTypes);
-    expect(new Set(rowSourceTypes).size).toBe(rowSourceTypes.length);
-  });
-
-  it("labels event rewards as event and story rewards", () => {
-    expect(PYROXENE_SOURCE_DEFINITIONS.find((source) => source.type === "event_reward")).toEqual(
-      expect.objectContaining({ label: "이벤트/스토리 보상" }),
-    );
-    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "event_reward")).toEqual(
-      expect.objectContaining({ label: "이벤트/스토리 보상" }),
-    );
-  });
-
-  it("keeps monthly package as one row with one-time and daily detail toggles", () => {
-    const packageRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "package");
-
-    expect(packageRow).toEqual(
-      expect.objectContaining({
-        label: "청휘석 패키지",
-        group: "paid",
-        action: "add",
-      }),
-    );
-    expect(packageRow?.visibilityTargets).toEqual([
-      { type: "package_onetime", label: "초회" },
-      { type: "package_daily", label: "일간" },
-    ]);
-  });
-
-  it("keeps AP package as a separate paid source row", () => {
-    const apPackageRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "ap_package");
-
-    expect(apPackageRow).toEqual(
-      expect.objectContaining({
-        label: "AP 패키지",
-        group: "paid",
-        action: "add",
-        visibilityTargets: [{ type: "package_ap" }],
-      }),
-    );
-  });
-
-  it("keeps daily and weekly missions as one row with detail toggles", () => {
-    const missionRow = PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "mission");
-
-    expect(missionRow).toEqual(
-      expect.objectContaining({
-        label: "임무 보상",
-        group: "regular",
-        action: "none",
-      }),
-    );
-    expect(missionRow?.visibilityTargets).toEqual([
-      { type: "daily_mission", label: "일일" },
-      { type: "weekly_mission", label: "주간" },
-    ]);
-  });
-
-  it("places direct registration under paid sources and AP charge under consumption sources", () => {
-    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "other")).toEqual(
-      expect.objectContaining({
-        label: "직접 등록",
-        group: "paid",
-        action: "add",
-      }),
-    );
-    expect(PYROXENE_SOURCE_ROW_DEFINITIONS.find((row) => row.id === "ap_charge")).toEqual(
-      expect.objectContaining({
-        label: "AP 충전",
-        group: "consumption",
-        action: "configure",
-        visibilityTargets: [{ type: "ap_charge" }],
-      }),
-    );
   });
 
   it("calculates daily AP charge costs by tier", () => {

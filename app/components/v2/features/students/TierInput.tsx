@@ -106,7 +106,7 @@ export function TierInput({
                 className={cn(
                   "inline-flex size-7 cursor-pointer items-center justify-center rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus disabled:cursor-default disabled:opacity-40",
                   tier === 5 && "mr-1",
-                  tier <= 5 ? "text-v2-warning" : "text-v2-perk",
+                  tier <= 5 ? "text-v2-star" : "text-v2-perk",
                   value === null || tier > value ? "opacity-50 hover:opacity-100" : "",
                 )}
               >
