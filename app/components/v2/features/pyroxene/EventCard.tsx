@@ -7,7 +7,7 @@ import {
   Square3Stack3DIcon,
   StarIcon,
 } from "@heroicons/react/16/solid";
-import { forwardRef, useId, useMemo, useState } from "react";
+import { Fragment, forwardRef, useId, useMemo, useState } from "react";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import {
@@ -97,7 +97,6 @@ function StackBar({ stack }: { stack: TimelinePickupStack }) {
   const label = RECRUITMENT_STACK_LABELS[stack.scope];
   return (
     <div className="flex items-center justify-end gap-1.5 text-xs text-v2-fg-secondary">
-      <Square3Stack3DIcon className="size-3.5" aria-hidden="true" />
       <span className="whitespace-nowrap">{label}</span>
       <span aria-hidden="true" className="relative h-1.5 w-12 overflow-hidden rounded-full bg-v2-inset">
         <span
@@ -120,6 +119,63 @@ function StackDelta({ stack }: { stack: TimelinePickupStack }) {
       <Square3Stack3DIcon className="size-3.5" aria-label={RECRUITMENT_STACK_LABELS[stack.scope]} />
       {formatSigned(stack.after - stack.before)}
     </span>
+  );
+}
+
+/** Every resource the recruitment changes, as change and what is left, in one place. */
+function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?: string }) {
+  const plan = entry.pickupPlan;
+  if (!plan) return null;
+  const delta = entry.resourceDelta;
+  const after = entry.accumulatedResources;
+  const range = getBalanceRange(entry);
+  const status = getPyroxeneEventStatus(entry);
+  const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
+  const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @lg:justify-self-end";
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 tabular-nums @lg:grid-cols-[6.5rem_11rem] @lg:items-start",
+        className,
+      )}
+    >
+      <span className="text-xs text-v2-fg-tertiary @lg:hidden">변화</span>
+      <span className="justify-self-end text-xs text-v2-fg-tertiary @lg:hidden">남은 재화</span>
+      <span className={cn(changeClassName, "self-start pt-0.5")}>
+        <ResourceIcon resource="pyroxene" className="size-6" />
+        {delta.pyroxene === 0 ? "—" : formatSigned(delta.pyroxene)}
+      </span>
+      <span className="flex flex-col items-end gap-1">
+        <span className={cn("text-lg leading-tight font-bold", balanceClassName(after.pyroxene))}>
+          {formatAmount(after.pyroxene)}
+        </span>
+        {range ? (
+          <span className="text-xs text-v2-fg-tertiary">
+            {formatAmount(range.low)}~{formatAmount(range.high)}
+          </span>
+        ) : null}
+        {status ? <StatusPill status={status} /> : null}
+      </span>
+      {tickets.map((resource) => (
+        <Fragment key={resource}>
+          <span className={changeClassName}>
+            <ResourceIcon resource={resource} className="size-6" />
+            {formatSigned(delta[resource])}
+          </span>
+          <span className="justify-self-end text-sm font-semibold text-v2-fg">{formatAmount(after[resource])}</span>
+        </Fragment>
+      ))}
+      {plan.stacks.map((stack) => (
+        <Fragment key={stack.scope}>
+          <span className="@lg:justify-self-end">
+            {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
+          </span>
+          <span className="justify-self-end">
+            <StackBar stack={stack} />
+          </span>
+        </Fragment>
+      ))}
+    </div>
   );
 }
 
@@ -160,8 +216,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   const recruited = students.filter((student) => !student.favorited && recruitedStudentUids.has(student.uid));
   const visibleStudents = showRecruited ? students : students.filter((student) => !recruited.includes(student));
   const status = plan ? getPyroxeneEventStatus(entry) : null;
-  const range = plan ? getBalanceRange(entry) : null;
-  const delta = entry.resourceDelta;
   const since = dayjs(event.since);
   const canComplete = canRecordCompletion && !completed && since.isBefore(dayjs());
   const freeLabel = plan && plan.freePulls > 0 ? plan.freePulls : null;
@@ -180,9 +234,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   };
 
   const tierStudent = typeof dialog === "object" && dialog ? students.find((s) => s.uid === dialog.tier) : undefined;
-  const balance = entry.accumulatedResources.pyroxene;
   const until = dayjs(event.until);
-  const changedStacks = plan ? plan.stacks.filter((stack) => stack.after !== stack.before) : [];
   // An event with nothing left to choose reads as one line, like the income rows around it.
   const compact = !plan && !completed && !showRecruited && visibleStudents.length === 0;
 
@@ -265,7 +317,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         tabIndex={selected ? -1 : undefined}
         className={cn(
           SCHEDULE_GRID_CLASS_NAME,
-          "min-h-9 items-center rounded-md py-1.5 pr-3 pl-7 text-[0.8125rem] focus:outline-none @lg:px-3",
+          "min-h-9 items-center rounded-md py-1.5 pr-3 pl-7 text-[0.8125rem] focus:outline-none @lg:px-4",
           selected && "ring-2 ring-v2-focus",
         )}
       >
@@ -301,7 +353,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       ref={ref}
       tabIndex={selected ? -1 : undefined}
       className={cn(
-        "flex flex-col gap-3 rounded-lg bg-v2-surface px-3 py-3.5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
+        "flex flex-col gap-4 rounded-lg bg-v2-surface px-4 py-5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
         selected && "ring-2 ring-v2-focus",
       )}
     >
@@ -315,8 +367,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         </span>
       </div>
 
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-col gap-1">
+      <div className="flex min-w-0 flex-col gap-4">
+        <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums @lg:hidden">
             {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
             <span className="text-v2-fg">
@@ -328,7 +380,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
         </div>
 
-        <div className="flex flex-wrap items-start gap-2">
+        <div className="flex flex-wrap items-start gap-2.5">
           {visibleStudents.map((student) => {
             const names = splitVisibleStudentName(student.name);
             const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
@@ -397,7 +449,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         </div>
 
         {plan ? (
-          <div className="flex flex-col gap-2 text-[0.8125rem] text-v2-fg-secondary tabular-nums">
+          <div className="text-[0.8125rem] text-v2-fg-secondary tabular-nums">
             <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
               <span className="font-semibold whitespace-nowrap text-v2-fg">{plan.pulls.toLocaleString()}회</span>
               {plan.basis === "manual" ? (
@@ -430,62 +482,10 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 </>
               ) : null}
             </p>
-            <p className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-sm font-semibold text-v2-fg">
-              {plan.freePulls > 0 ? (
-                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <StarIcon className="size-5 text-v2-perk" aria-label="무료 모집" />
-                  {plan.freePulls}회
-                </span>
-              ) : null}
-              {delta.tenTimeTicket < 0 ? (
-                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="tenTimeTicket" className="size-6" />×{-delta.tenTimeTicket}
-                </span>
-              ) : null}
-              {delta.oneTimeTicket < 0 ? (
-                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="oneTimeTicket" className="size-6" />×{-delta.oneTimeTicket}
-                </span>
-              ) : null}
-              {delta.pyroxene < 0 ? (
-                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="pyroxene" className="size-6" />
-                  {formatAmount(-delta.pyroxene)}
-                </span>
-              ) : null}
-            </p>
           </div>
         ) : null}
 
-        {plan ? (
-          <div className="flex flex-col gap-1.5 tabular-nums @lg:hidden">
-            <p className="text-xs text-v2-fg-tertiary">
-              모집 후<span className="ml-2 font-semibold text-v2-fg-secondary">{formatSigned(delta.pyroxene)}</span>
-            </p>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className={cn("text-xl leading-tight font-bold", balanceClassName(balance))}>
-                {formatAmount(balance)}
-              </span>
-              {range ? (
-                <span className="text-xs text-v2-fg-tertiary">
-                  {formatAmount(range.low)}~{formatAmount(range.high)}
-                </span>
-              ) : null}
-              {status ? (
-                <span className="ml-auto">
-                  <StatusPill status={status} />
-                </span>
-              ) : null}
-            </div>
-            {plan.stacks.map((stack) => (
-              <div key={stack.scope} className="flex items-center justify-between gap-2">
-                <StackBar stack={stack} />
-                {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
-              </div>
-            ))}
-          </div>
-        ) : null}
-
+        <ResourceLedger entry={entry} className="border-t border-v2-divider pt-3 @lg:hidden" />
         <div className="grid grid-cols-2 gap-1.5 empty:hidden @lg:flex">
           {plan ? (
             <Button size="sm" onClick={() => setDialog("target")}>
@@ -519,41 +519,13 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         </div>
       </div>
 
-      <div className="hidden flex-col items-end gap-1.5 pt-px text-sm font-semibold text-v2-fg tabular-nums @lg:flex">
-        {plan ? (
-          <span className="inline-flex items-center gap-1">
-            <ResourceIcon resource="pyroxene" className="size-6" />
-            {formatSigned(delta.pyroxene)}
-          </span>
-        ) : (
-          <span className="text-v2-fg-tertiary">—</span>
-        )}
-        {changedStacks.map((stack) => (
-          <StackDelta key={stack.scope} stack={stack} />
-        ))}
-      </div>
-
-      <div className="hidden flex-col items-end gap-1 tabular-nums @lg:flex">
-        {plan ? (
-          <>
-            <span className={cn("text-lg leading-tight font-bold", balanceClassName(balance))}>
-              {formatAmount(balance)}
-            </span>
-            {range ? (
-              <span className="text-xs text-v2-fg-tertiary">
-                {formatAmount(range.low)}~{formatAmount(range.high)}
-              </span>
-            ) : null}
-            {status ? <StatusPill status={status} /> : null}
-            {plan.stacks.map((stack) => (
-              <div key={stack.scope} className="mt-1">
-                <StackBar stack={stack} />
-              </div>
-            ))}
-          </>
-        ) : null}
-      </div>
-      <div className="hidden @lg:block" />
+      {plan ? (
+        <ResourceLedger entry={entry} className="hidden @lg:col-span-2 @lg:grid" />
+      ) : (
+        <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @lg:block">—</span>
+      )}
+      {plan ? null : <span className="hidden @lg:block" />}
+      <span className="hidden @lg:block" />
       {dialogs}
     </div>
   );

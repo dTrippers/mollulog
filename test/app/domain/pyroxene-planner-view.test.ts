@@ -127,11 +127,13 @@ describe("pyroxene planner view", () => {
     expect(rows.map((row) => row.kind)).toEqual(["year", "income-group", "event", "year", "income"]);
     const group = rows[1];
     if (group.kind !== "income-group") throw new Error("expected a group");
-    expect(group.rows.map((row) => [row.label, row.delta.pyroxene, row.itemUid])).toEqual([
-      ["청휘석 구매", 6600, "buy-1"],
-      ["총력전", 1200, undefined],
-      ["반복 수급", 20, undefined],
+    // The repeated-income row sits at its last entry, so the balances read in time order.
+    expect(group.rows.map((row) => [row.label, row.delta.pyroxene, row.itemUid, row.balance])).toEqual([
+      ["청휘석 구매", 6600, "buy-1", 6600],
+      ["반복 수급", 20, undefined, 6620],
+      ["총력전", 1200, undefined, 7820],
     ]);
+    expect(group.leadIndex).toBe(0);
     expect(group.delta).toBe(7820);
     expect(group.balance).toBe(7820);
     const single = rows[4];

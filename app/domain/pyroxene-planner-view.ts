@@ -131,16 +131,18 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
     if (pending.length === 0) return;
     const entries = pending;
     pending = [];
-    const incomeRows: PlannerIncomeRow[] = [];
-    let aggregate: { first: TimelineEntry; last: TimelineEntry; delta: PickupResources } | null = null;
+    // Each row keeps the timeline position its balance belongs to, so balances read in time order.
+    const positioned: { row: PlannerIncomeRow; position: number }[] = [];
+    let aggregate: { first: TimelineEntry; last: TimelineEntry; lastIndex: number; delta: PickupResources } | null =
+      null;
     entries.forEach((entry, index) => {
       const { source } = entry;
       const itemUid = source.uid && DELETABLE_SOURCE_TYPES.has(source.type) ? source.uid : undefined;
       const ownRow = display.has(source.type) && (!!source.description || !!itemUid);
       if (!ownRow) {
         aggregate = aggregate
-          ? { ...aggregate, last: entry, delta: addResources(aggregate.delta, entry.resourceDelta) }
-          : { first: entry, last: entry, delta: entry.resourceDelta };
+          ? { ...aggregate, last: entry, lastIndex: index, delta: addResources(aggregate.delta, entry.resourceDelta) }
+          : { first: entry, last: entry, lastIndex: index, delta: entry.resourceDelta };
         return;
       }
       const collectedSourceKey =
@@ -148,38 +150,51 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
           ? source.collectedSourceKey
           : undefined;
       const collected = collectedSourceKey ? options.collectedSourceKeys.has(collectedSourceKey) : false;
-      incomeRows.push({
-        key: `${source.uid ?? source.description ?? source.type}-${entry.date.valueOf()}-${index}`,
-        date: entry.date,
-        label: source.description || pyroxeneSourceLabel(source.type),
-        type: source.type,
-        delta:
-          collected && collectedSourceKey
-            ? (options.collectedSourceResources.get(collectedSourceKey) ?? entry.resourceDelta)
-            : entry.resourceDelta,
-        balance: entry.accumulatedResources.pyroxene,
-        itemUid,
-        collectedSourceKey,
-        collectable: collectedSourceKey ? options.collectableSourceKeys.has(collectedSourceKey) : false,
-        collected,
+      positioned.push({
+        position: index,
+        row: {
+          key: `${source.uid ?? source.description ?? source.type}-${entry.date.valueOf()}-${index}`,
+          date: entry.date,
+          label: source.description || pyroxeneSourceLabel(source.type),
+          type: source.type,
+          delta:
+            collected && collectedSourceKey
+              ? (options.collectedSourceResources.get(collectedSourceKey) ?? entry.resourceDelta)
+              : entry.resourceDelta,
+          balance: entry.accumulatedResources.pyroxene,
+          itemUid,
+          collectedSourceKey,
+          collectable: collectedSourceKey ? options.collectableSourceKeys.has(collectedSourceKey) : false,
+          collected,
+        },
       });
     });
-    const repeated = aggregate as { first: TimelineEntry; last: TimelineEntry; delta: PickupResources } | null;
+    const repeated = aggregate as {
+      first: TimelineEntry;
+      last: TimelineEntry;
+      lastIndex: number;
+      delta: PickupResources;
+    } | null;
     if (
       repeated &&
       (repeated.delta.pyroxene !== 0 || repeated.delta.oneTimeTicket !== 0 || repeated.delta.tenTimeTicket !== 0)
     ) {
-      incomeRows.push({
-        key: `aggregate-${repeated.first.date.valueOf()}`,
-        date: repeated.last.date,
-        label: "반복 수급",
-        type: "aggregate",
-        delta: repeated.delta,
-        balance: repeated.last.accumulatedResources.pyroxene,
-        collectable: false,
-        collected: false,
+      positioned.push({
+        // The aggregate sits where its last entry is: its balance is the balance at that moment.
+        position: repeated.lastIndex,
+        row: {
+          key: `aggregate-${repeated.first.date.valueOf()}`,
+          date: repeated.last.date,
+          label: "반복 수급",
+          type: "aggregate",
+          delta: repeated.delta,
+          balance: repeated.last.accumulatedResources.pyroxene,
+          collectable: false,
+          collected: false,
+        },
       });
     }
+    const incomeRows = positioned.sort((a, b) => a.position - b.position).map(({ row }) => row);
     if (incomeRows.length === 0) return;
     const first = entries[0];
     const last = entries[entries.length - 1];

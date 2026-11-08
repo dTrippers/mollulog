@@ -165,7 +165,7 @@ function deltaClassName(value: number): string {
 function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: ScheduleIncomeHandlers }) {
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => row.delta[resource] !== 0);
   return (
-    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-9 items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:px-3")}>
+    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-9 items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:px-4")}>
       <span className="font-semibold text-v2-fg tabular-nums">
         {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
         {row.date.tz(KST).format("MM/DD")}
@@ -278,18 +278,18 @@ export function PlannerSchedule({
           표시할 일정이 없어요. 미래시에서 관심 학생을 등록하거나 수급 계획을 추가해주세요.
         </p>
       ) : null}
-      <div className={cn(SCHEDULE_GRID_CLASS_NAME, "hidden px-3 text-xs font-medium text-v2-fg-tertiary @lg:grid")}>
+      <div className={cn(SCHEDULE_GRID_CLASS_NAME, "hidden px-4 text-xs font-medium text-v2-fg-tertiary @lg:grid")}>
         <span>날짜</span>
         <span>내용</span>
         <span className="text-right">변화</span>
         <span className="text-right">남은 재화</span>
         <span />
       </div>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         {rows.map((row) => {
           if (row.kind === "year") {
             return (
-              <p key={row.key} className="px-3 pt-3 pb-1 text-xs font-bold text-v2-fg-tertiary tabular-nums">
+              <p key={row.key} className="px-3 pt-3 pb-1 @lg:px-4 text-xs font-bold text-v2-fg-tertiary tabular-nums">
                 {row.year}
               </p>
             );
@@ -327,7 +327,7 @@ export function PlannerSchedule({
               {visible.map((income) => (
                 <IncomeRowView key={income.key} row={income} handlers={incomeHandlers} />
               ))}
-              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @lg:px-3")}>
+              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @lg:px-4")}>
                 <span />
                 <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @lg:col-span-1">
                   <button
