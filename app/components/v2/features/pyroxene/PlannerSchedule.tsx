@@ -1,4 +1,4 @@
-import { ChevronDownIcon, ChevronRightIcon, FunnelIcon, TrashIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, ChevronUpIcon, FunnelIcon, TrashIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as SolidCheckCircleIcon } from "@heroicons/react/24/solid";
 import { type Ref, useId, useRef, useState } from "react";
@@ -25,7 +25,6 @@ import {
   KST,
   ResourceIcon,
   SCHEDULE_GRID_CLASS_NAME,
-  ScheduleDateRange,
 } from "./pyroxene-ui";
 
 export function PlannerSummary({ summary }: { summary: PyroxenePlannerSummary }) {
@@ -163,40 +162,19 @@ function deltaClassName(value: number): string {
   return value > 0 ? "text-v2-success" : value < 0 ? "text-v2-danger" : "text-v2-fg-tertiary";
 }
 
-function IncomeRowView({
-  row,
-  nested,
-  handlers,
-}: {
-  row: PlannerIncomeRow;
-  nested: boolean;
-  handlers: ScheduleIncomeHandlers;
-}) {
+function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: ScheduleIncomeHandlers }) {
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => row.delta[resource] !== 0);
   return (
-    <li
-      className={cn(
-        SCHEDULE_GRID_CLASS_NAME,
-        "items-center pr-3 pl-7 text-[0.8125rem] @lg:px-3",
-        nested ? "min-h-8 py-1" : "min-h-9 py-1.5",
-      )}
-    >
-      {nested ? (
-        <span className="text-v2-fg-secondary tabular-nums">
-          {row.type === "aggregate" ? "~" : ""}
-          {row.date.tz(KST).format("MM/DD")}
-        </span>
-      ) : (
-        <span className="font-semibold text-v2-fg tabular-nums">
-          {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
-          {row.date.tz(KST).format("MM/DD")}
-        </span>
-      )}
-      <span className={cn("flex min-w-0 flex-wrap items-center gap-x-2", nested && "@lg:pl-5.5")}>
+    <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-9 items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @lg:px-3")}>
+      <span className="font-semibold text-v2-fg tabular-nums">
+        {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
+        {row.date.tz(KST).format("MM/DD")}
+      </span>
+      <span className="flex min-w-0 flex-wrap items-center gap-x-2">
         <span className="truncate text-v2-fg">{row.label}</span>
         {tickets.map((resource) => (
           <span key={resource} className="inline-flex items-center gap-0.5 text-xs text-v2-fg-secondary tabular-nums">
-            <ResourceIcon resource={resource} className="size-3.5" />
+            <ResourceIcon resource={resource} className="size-5.5" />
             {formatSigned(row.delta[resource])}
           </span>
         ))}
@@ -338,69 +316,40 @@ export function PlannerSchedule({
           if (row.kind === "income") {
             return (
               <ul key={row.key}>
-                <IncomeRowView row={row.row} nested={false} handlers={incomeHandlers} />
+                <IncomeRowView row={row.row} handlers={incomeHandlers} />
               </ul>
             );
           }
           const open = expanded.has(row.key);
+          const visible = open ? row.rows : [row.rows[row.leadIndex]];
           return (
-            <div key={row.key}>
-              <button
-                type="button"
-                aria-expanded={open}
-                onClick={() => toggle(row.key)}
-                className={cn(
-                  SCHEDULE_GRID_CLASS_NAME,
-                  "min-h-9 w-full cursor-pointer items-center rounded-md py-1.5 pr-3 pl-7 text-left text-[0.8125rem] hover:bg-v2-hover @lg:px-3",
-                  v2FocusRing,
-                )}
-              >
-                <span className="-ml-4.5 flex min-w-0 items-center gap-1 @lg:ml-0">
-                  {open ? (
-                    <ChevronDownIcon className="size-3.5 shrink-0 text-v2-fg-tertiary @lg:hidden" aria-hidden="true" />
-                  ) : (
-                    <ChevronRightIcon className="size-3.5 shrink-0 text-v2-fg-tertiary @lg:hidden" aria-hidden="true" />
-                  )}
-                  <ScheduleDateRange from={row.from} to={row.to} />
-                </span>
-                <span className="flex min-w-0 items-center gap-1.5">
-                  {open ? (
-                    <ChevronDownIcon
-                      className="hidden size-3.5 shrink-0 text-v2-fg-tertiary @lg:block"
-                      aria-hidden="true"
-                    />
-                  ) : (
-                    <ChevronRightIcon
-                      className="hidden size-3.5 shrink-0 text-v2-fg-tertiary @lg:block"
-                      aria-hidden="true"
-                    />
-                  )}
-                  <span className="shrink-0 text-v2-fg">
-                    <span className="hidden @lg:inline">수급 </span>
-                    {row.rows.length}건
-                  </span>
-                  <span className="truncate text-xs text-v2-fg-tertiary">
-                    {row.breakdown
-                      .map(({ label, count }) => (count === null ? label : `${label} ${count}`))
-                      .join(" · ")}
-                  </span>
-                </span>
-                <span className={cn("text-right font-semibold tabular-nums", deltaClassName(row.delta))}>
-                  {formatSigned(row.delta)}
-                </span>
-                <span className={cn("text-right tabular-nums", balanceClassName(row.balance))}>
-                  {formatAmount(row.balance)}
-                </span>
+            <ul key={row.key} className="flex flex-col">
+              {visible.map((income) => (
+                <IncomeRowView key={income.key} row={income} handlers={incomeHandlers} />
+              ))}
+              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @lg:px-3")}>
                 <span />
-              </button>
-              {open ? (
-                <ul className="flex flex-col">
-                  {row.rows.map((income) => (
-                    <IncomeRowView key={income.key} row={income} nested handlers={incomeHandlers} />
-                  ))}
-                </ul>
-              ) : null}
-            </div>
+                <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @lg:col-span-1">
+                  <button
+                    type="button"
+                    aria-expanded={open}
+                    onClick={() => toggle(row.key)}
+                    className={cn(
+                      "inline-flex cursor-pointer items-center gap-0.5 rounded font-medium text-v2-fg-secondary hover:text-v2-fg",
+                      v2FocusRing,
+                    )}
+                  >
+                    {open ? "접기" : `${row.rows.length - 1}개 일정 더 보기`}
+                    {open ? (
+                      <ChevronUpIcon className="size-3.5" aria-hidden="true" />
+                    ) : (
+                      <ChevronDownIcon className="size-3.5" aria-hidden="true" />
+                    )}
+                  </button>
+                  <span className="truncate text-v2-fg-tertiary tabular-nums">· 합계 {formatSigned(row.delta)}</span>
+                </span>
+              </li>
+            </ul>
           );
         })}
       </div>

@@ -45,26 +45,6 @@ export function pyroxeneSourceLabel(type: TimelineSourceType): string {
   return SOURCE_LABELS.get(type) ?? type;
 }
 
-// Short names for a collapsed income group's summary line.
-const SOURCE_SHORT_LABELS: Partial<Record<TimelineSourceType, string>> = {
-  event_reward: "이벤트·스토리",
-  raid: "총력전·대결전",
-  buy: "청휘석 구매",
-  package_onetime: "패키지",
-  package_daily: "패키지",
-  package_ap: "패키지",
-  daily_mission: "임무",
-  weekly_mission: "임무",
-  ap_charge: "AP 충전",
-  tactical: "전술대회",
-  attendance: "출석",
-  other: "기타",
-};
-
-export function pyroxeneSourceShortLabel(type: TimelineSourceType): string {
-  return SOURCE_SHORT_LABELS[type] ?? pyroxeneSourceLabel(type);
-}
-
 export type PlannerIncomeRow = {
   key: string;
   date: Dayjs;
@@ -90,8 +70,8 @@ export type PlannerTimelineRow =
       rows: PlannerIncomeRow[];
       delta: number;
       balance: number;
-      // The repeated-income aggregate has no count.
-      breakdown: { label: string; count: number | null }[];
+      // The row shown while the group is collapsed: the first named income, or the first row when all are repeated.
+      leadIndex: number;
     };
 
 export type PlannerTimelineRowOptions = {
@@ -208,15 +188,7 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
       rows.push({ kind: "income", key: `income-${incomeRows[0].key}`, row: incomeRows[0] });
       return;
     }
-    const counts = new Map<string, number | null>();
-    for (const row of incomeRows) {
-      if (row.type === "aggregate") {
-        counts.set("반복", null);
-        continue;
-      }
-      const label = pyroxeneSourceShortLabel(row.type);
-      counts.set(label, (counts.get(label) ?? 0) + 1);
-    }
+    const namedIndex = incomeRows.findIndex((row) => row.type !== "aggregate");
     rows.push({
       kind: "income-group",
       key: `group-${first.date.valueOf()}-${incomeRows[0].key}`,
@@ -226,7 +198,7 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
       // The actual balance change: a collected row shows its original reward, which is already counted.
       delta: entries.reduce((sum, entry) => sum + entry.resourceDelta.pyroxene, 0),
       balance: last.accumulatedResources.pyroxene,
-      breakdown: [...counts].map(([label, count]) => ({ label, count })),
+      leadIndex: Math.max(0, namedIndex),
     });
   };
 

@@ -22,7 +22,7 @@ const STACK_ORDER = ["regular", "limited"] as const;
 /** Owned resources and stacks, read-only, as a list. */
 export function OwnedResourceList({ values, stacksEntered }: { values: OwnedResourceValues; stacksEntered: boolean }) {
   return (
-    <dl className="flex flex-col gap-1.5 text-sm">
+    <dl className="flex flex-col gap-2.5 text-sm">
       {RESOURCE_ORDER.map((key) => (
         <div key={key} className="flex items-center gap-2">
           <ResourceIcon resource={key} />
@@ -31,8 +31,8 @@ export function OwnedResourceList({ values, stacksEntered }: { values: OwnedReso
         </div>
       ))}
       {STACK_ORDER.map((scope) => (
-        <div key={scope} className="flex items-center gap-2">
-          <Square3Stack3DIcon className="size-5 shrink-0 p-0.5 text-v2-fg-tertiary" aria-hidden="true" />
+        <div key={scope} className={`flex items-center gap-2${scope === "regular" ? " mt-1" : ""}`}>
+          <Square3Stack3DIcon className="size-6 shrink-0 p-1 text-v2-fg-tertiary" aria-hidden="true" />
           <dt className="min-w-0 flex-1 text-v2-fg-secondary">{RECRUITMENT_STACK_LABELS[scope]}</dt>
           <dd className="font-semibold tabular-nums text-v2-fg">
             {values.stacks[scope]}

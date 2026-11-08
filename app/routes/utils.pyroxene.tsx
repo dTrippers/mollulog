@@ -1257,7 +1257,19 @@ export default function PyroxenePlanner() {
           {notice}
           <PlannerSummary summary={summary} />
           <section aria-label="청휘석 변화" className="rounded-lg bg-v2-surface p-3">
-            <h2 className="mb-1 text-sm font-semibold text-v2-fg">청휘석 변화</h2>
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <h2 className="text-sm font-semibold text-v2-fg">청휘석 변화</h2>
+              <p className="flex items-center gap-3 text-xs text-v2-fg-secondary">
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-0.5 w-4 rounded-full bg-v2-accent" />
+                  예상 잔액
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-2.5 w-3 rounded-sm bg-v2-accent/15" />
+                  상하위 10% 이내 (10번 중 8번은 이 안)
+                </span>
+              </p>
+            </div>
             <Suspense fallback={<div className="h-56" />}>
               <BalanceChart timeline={timeline} markers={markers} />
             </Suspense>
@@ -1341,15 +1353,15 @@ export default function PyroxenePlanner() {
             <span className="flex min-w-0 flex-1 flex-col items-start">
               <span className="flex items-center gap-3 text-sm font-semibold text-v2-fg tabular-nums">
                 <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="pyroxene" className="size-4" />
+                  <ResourceIcon resource="pyroxene" className="size-5.5" />
                   {formatAmount(initialResources.pyroxene)}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="tenTimeTicket" className="size-4" />
+                  <ResourceIcon resource="tenTimeTicket" className="size-5.5" />
                   {formatAmount(initialResources.tenTimeTicket)}
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <ResourceIcon resource="oneTimeTicket" className="size-4" />
+                  <ResourceIcon resource="oneTimeTicket" className="size-5.5" />
                   {formatAmount(initialResources.oneTimeTicket)}
                 </span>
               </span>

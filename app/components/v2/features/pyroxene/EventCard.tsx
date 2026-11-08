@@ -2,6 +2,7 @@ import {
   ArrowUturnLeftIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
   PencilIcon,
   Square3Stack3DIcon,
   StarIcon,
@@ -34,15 +35,12 @@ import {
   formatSigned,
   KST,
   PlannerDialog,
-  RangeTag,
   RECRUITMENT_STACK_LABELS,
   ResourceIcon,
   SCHEDULE_GRID_CLASS_NAME,
   ScheduleDateRange,
   StatusPill,
 } from "./pyroxene-ui";
-
-const PYROXENE_PER_PULL = 120;
 
 export type PlannerEventData = {
   completed: boolean;
@@ -164,7 +162,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   const status = plan ? getPyroxeneEventStatus(entry) : null;
   const range = plan ? getBalanceRange(entry) : null;
   const delta = entry.resourceDelta;
-  const pyroxenePulls = Math.max(0, Math.round(-delta.pyroxene / PYROXENE_PER_PULL));
   const since = dayjs(event.since);
   const canComplete = canRecordCompletion && !completed && since.isBefore(dayjs());
   const freeLabel = plan && plan.freePulls > 0 ? plan.freePulls : null;
@@ -297,7 +294,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     );
   }
 
-  const thumbWidth = plan ? "w-15" : "w-11";
+  const thumbWidth = plan ? "w-15" : "w-12";
 
   return (
     <div
@@ -331,12 +328,12 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
         </div>
 
-        <div className="flex flex-wrap items-start gap-2.5">
+        <div className="flex flex-wrap items-start gap-2">
           {visibleStudents.map((student) => {
             const names = splitVisibleStudentName(student.name);
             const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
             return (
-              <div key={student.uid} className={cn(thumbWidth, !student.favorited && "opacity-45")}>
+              <div key={student.uid} className={cn("relative", thumbWidth, !student.favorited && "opacity-45")}>
                 <StudentThumb
                   studentUid={student.imageUid ?? student.uid}
                   name={names.name}
@@ -350,6 +347,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   }
                   selected={student.favorited}
                   showSelectedIndicator={false}
+                  captionPlacement="overlay"
+                  overlayOnMobile
                   selectionActionLabel={student.favorited ? "목표 성급 설정" : "목표로 추가"}
                   favorite={{
                     visible: student.favorited,
@@ -357,26 +356,42 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                     countText: null,
                     accessibleName: "관심 학생",
                   }}
-                  scrimLabel={
-                    student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? tierLabel(tier) : undefined
-                  }
                   scrimAriaLabel={student.favorited ? `목표 ${tierLabel(tier)}` : undefined}
                 />
+                {student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? (
+                  <span
+                    aria-hidden="true"
+                    className="pointer-events-none absolute top-1 left-1 rounded-sm bg-v2-scrim px-1 text-[0.625rem] leading-4 font-semibold text-v2-on-media"
+                  >
+                    {tierLabel(tier)}
+                  </span>
+                ) : null}
               </div>
             );
           })}
-          {recruited.length > 0 && !showRecruited ? (
+          {recruited.length > 0 ? (
             <button
               type="button"
-              onClick={() => setShowRecruited(true)}
+              aria-expanded={showRecruited}
+              aria-label={showRecruited ? "모집한 학생 접기" : `모집한 학생 ${recruited.length}명 보기`}
+              onClick={() => setShowRecruited((current) => !current)}
               className={cn(
-                "inline-flex min-h-7 cursor-pointer items-center gap-0.5 self-start rounded-full bg-v2-inset px-2.5 text-xs text-v2-fg-secondary hover:bg-v2-filled-hover",
-                plan ? "mt-4" : "mt-2",
+                "flex aspect-[5/6] cursor-pointer flex-col items-center justify-center gap-0.5 rounded-md bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover",
+                thumbWidth,
                 v2FocusRing,
               )}
             >
-              모집한 학생 {recruited.length}
-              <ChevronDownIcon className="size-3.5" aria-hidden="true" />
+              {showRecruited ? (
+                <>
+                  <ChevronUpIcon className="size-4" aria-hidden="true" />
+                  <span className="text-[0.625rem] leading-none">접기</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm leading-none font-semibold tabular-nums">+{recruited.length}</span>
+                  <span className="text-[0.625rem] leading-none">모집함</span>
+                </>
+              )}
             </button>
           ) : null}
         </div>
@@ -396,10 +411,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 </span>
               ) : null}
               {plan.pullRange ? (
-                <span className="inline-flex items-center text-v2-fg-tertiary">
-                  {plan.basisOverridden ? <span className="mr-1.5">·</span> : null}
-                  <RangeTag />
-                  {plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()}회
+                <span className="text-v2-fg-tertiary">
+                  ({plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()})
                 </span>
               ) : null}
               {plan.basis === "manual" || plan.basisOverridden ? (
@@ -417,27 +430,27 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 </>
               ) : null}
             </p>
-            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] font-semibold text-v2-fg">
+            <p className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-sm font-semibold text-v2-fg">
               {plan.freePulls > 0 ? (
                 <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <StarIcon className="size-3.5 text-v2-perk" aria-label="무료 모집" />
+                  <StarIcon className="size-5 text-v2-perk" aria-label="무료 모집" />
                   {plan.freePulls}회
                 </span>
               ) : null}
               {delta.tenTimeTicket < 0 ? (
                 <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="tenTimeTicket" className="size-4" />×{-delta.tenTimeTicket}
+                  <ResourceIcon resource="tenTimeTicket" className="size-6" />×{-delta.tenTimeTicket}
                 </span>
               ) : null}
               {delta.oneTimeTicket < 0 ? (
                 <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="oneTimeTicket" className="size-4" />×{-delta.oneTimeTicket}
+                  <ResourceIcon resource="oneTimeTicket" className="size-6" />×{-delta.oneTimeTicket}
                 </span>
               ) : null}
-              {pyroxenePulls > 0 ? (
+              {delta.pyroxene < 0 ? (
                 <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
-                  <ResourceIcon resource="pyroxene" className="size-4" />
-                  {pyroxenePulls.toLocaleString()}회
+                  <ResourceIcon resource="pyroxene" className="size-6" />
+                  {formatAmount(-delta.pyroxene)}
                 </span>
               ) : null}
             </p>
@@ -454,8 +467,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 {formatAmount(balance)}
               </span>
               {range ? (
-                <span className="inline-flex items-center text-xs text-v2-fg-tertiary">
-                  <RangeTag />
+                <span className="text-xs text-v2-fg-tertiary">
                   {formatAmount(range.low)}~{formatAmount(range.high)}
                 </span>
               ) : null}
@@ -510,7 +522,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       <div className="hidden flex-col items-end gap-1.5 pt-px text-sm font-semibold text-v2-fg tabular-nums @lg:flex">
         {plan ? (
           <span className="inline-flex items-center gap-1">
-            <ResourceIcon resource="pyroxene" className="size-4" />
+            <ResourceIcon resource="pyroxene" className="size-6" />
             {formatSigned(delta.pyroxene)}
           </span>
         ) : (
@@ -528,11 +540,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               {formatAmount(balance)}
             </span>
             {range ? (
-              <span className="flex flex-col items-end gap-0.5 text-xs text-v2-fg-tertiary">
-                <RangeTag />
-                <span>
-                  {formatAmount(range.low)} ~ {formatAmount(range.high)}
-                </span>
+              <span className="text-xs text-v2-fg-tertiary">
+                {formatAmount(range.low)}~{formatAmount(range.high)}
               </span>
             ) : null}
             {status ? <StatusPill status={status} /> : null}

@@ -77,10 +77,14 @@ export type IncomePlanHandlers = {
 
 type IncomeDialog = "ap" | "attendance" | null;
 
+// Plan rows read as text with a chevron; the fill appears only on hover, so the panel is not a stack of boxes.
+const QUIET_SELECT_CLASS_NAME =
+  "-mr-1.5 [&>select]:min-h-8 [&>select]:min-w-0 [&>select]:bg-transparent [&>select]:py-1 [&>select]:pr-7 [&>select]:pl-2 [&>select]:text-right [&>select]:font-medium [&>select]:hover:bg-v2-hover";
+
 function PlanRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-h-8 items-center justify-between gap-2 text-sm">
-      <span className="shrink-0 text-v2-fg">{label}</span>
+    <div className="flex min-h-10 items-center justify-between gap-3 text-sm">
+      <span className="shrink-0 text-v2-fg-secondary">{label}</span>
       {children}
     </div>
   );
@@ -93,7 +97,7 @@ function RowButton({ children, onClick, label }: { children: React.ReactNode; on
       aria-label={label}
       onClick={onClick}
       className={cn(
-        "inline-flex min-h-7 min-w-0 cursor-pointer items-center gap-1 rounded-md bg-v2-inset pr-1.5 pl-3 text-xs text-v2-fg tabular-nums hover:bg-v2-filled-hover",
+        "-mr-1.5 inline-flex min-h-8 min-w-0 cursor-pointer items-center gap-1 rounded-md pr-1.5 pl-2 text-sm font-medium text-v2-fg tabular-nums hover:bg-v2-hover",
         v2FocusRing,
       )}
     >
@@ -129,12 +133,13 @@ export function IncomePlanPanel({
   const exceptionCount = options.consumption.apChargeExceptions.length;
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col">
       <PlanRow label="임무">
-        <span className="text-xs text-v2-fg-secondary tabular-nums">매일 +20 · 매주 +120</span>
+        <span className="text-sm font-medium text-v2-fg tabular-nums">매일 +20 · 매주 +120</span>
       </PlanRow>
       <PlanRow label="총력전·대결전">
         <Select
+          className={QUIET_SELECT_CLASS_NAME}
           label="총력전·대결전 등급"
           value={options.raid.tier}
           options={raidTierOptions}
@@ -143,6 +148,7 @@ export function IncomePlanPanel({
       </PlanRow>
       <PlanRow label="전술대회">
         <Select
+          className={QUIET_SELECT_CLASS_NAME}
           label="전술대회 순위"
           value={options.tactical.level}
           options={tacticalLevelOptions}
@@ -161,7 +167,7 @@ export function IncomePlanPanel({
         </RowButton>
       </PlanRow>
       {activePackages.length > 0 ? (
-        <ul className="mt-1 flex flex-col gap-1 border-t border-v2-divider pt-2" aria-label="적용 중인 패키지">
+        <ul className="mt-2 flex flex-col gap-2.5 border-t border-v2-divider pt-3" aria-label="적용 중인 패키지">
           {activePackages.map((item) => (
             <li key={item.uid} className="flex items-center gap-2 text-sm">
               <span className="min-w-0 flex-1">
@@ -170,7 +176,7 @@ export function IncomePlanPanel({
                   {dayjs(item.date).tz(KST).format("MM/DD")}~ · {item.activeDays}일
                 </span>
               </span>
-              <span className="text-xs text-v2-fg-secondary tabular-nums">{formatSigned(item.pyroxeneDelta)}</span>
+              <span className="text-sm font-medium text-v2-fg tabular-nums">{formatSigned(item.pyroxeneDelta)}</span>
               <IconButton
                 icon={TrashIcon}
                 label={`${item.description} 삭제`}

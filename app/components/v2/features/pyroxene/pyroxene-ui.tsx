@@ -35,7 +35,7 @@ export function ResourceIcon({ resource, className }: { resource: PyroxeneResour
     <img
       src={resourceImageUrl(resource === "pyroxene" ? "currency" : "item", PYROXENE_RESOURCE_UIDS[resource])}
       alt={PYROXENE_RESOURCE_LABELS[resource]}
-      className={cn("inline-block size-5 shrink-0 object-contain", className)}
+      className={cn("-my-1 inline-block size-6 shrink-0 object-contain", className)}
       loading="lazy"
     />
   );
@@ -60,11 +60,6 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
       {label}
     </span>
   );
-}
-
-/** The "상하위 10% 이내" label in front of a range, muted like the numbers it qualifies. */
-export function RangeTag() {
-  return <span className="mr-1 shrink-0 text-v2-fg-tertiary">상하위 10% 이내</span>;
 }
 
 /**

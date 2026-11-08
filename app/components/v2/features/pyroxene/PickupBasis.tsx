@@ -86,9 +86,9 @@ export function PickupBasisPanel({
 }) {
   const description = PYROXENE_PICKUP_CHANCE_OPTIONS.find((option) => option.value === value)?.description;
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-3">
       <SegmentedChoice label="계산 기준" options={basisOptions} value={value} onChange={onChange} />
-      <p className="text-xs text-v2-fg-secondary">{description} 이벤트마다 기준을 바꿀 수 있어요.</p>
+      <p className="text-xs leading-relaxed text-v2-fg-tertiary">{description} 이벤트마다 기준을 바꿀 수 있어요.</p>
       <Button variant="link" size="sm" className="self-start" onClick={onShowMethod}>
         <InformationCircleIcon className="size-3.5" aria-hidden="true" />
         계산 방식 보기
