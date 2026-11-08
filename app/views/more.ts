@@ -1,5 +1,5 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
-import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
+import { buildTimeline, type PickupResources, type PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
 import { isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
 import { countUnregisteredActiveCoupons } from "~/models/coupon";
@@ -133,6 +133,7 @@ function buildCurrentUserSummary(sensei: Sensei, personalSummary: MorePersonalSu
           undefined,
           [...collectedSourceKeys],
           new Date(nextFavoritedRecruitment.since),
+          latestPyroxeneResources.recruitmentStacks,
         )
       : [];
   const nextPyroxeneTimelineEntry = nextFavoritedRecruitment
@@ -277,11 +278,13 @@ function buildPyroxeneEventDataMap(
   contents: MorePyroxeneContent[],
   recruitmentResults: Awaited<ReturnType<typeof getRecruitmentResultsByRecruitmentGroupUids>>,
 ) {
-  const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
+  const map = new Map<string, PyroxeneTimelineEventData>();
   for (const data of eventData) {
     map.set(data.eventUid, {
       completed: false,
       expectedTrials: data.expectedTrials,
+      pickupChance: data.pickupChance,
+      targetTiers: data.targetTiers,
     });
   }
 
@@ -309,6 +312,7 @@ function buildPyroxeneEventDataMap(
     }
     const existing = map.get(content.uid);
     map.set(content.uid, {
+      ...existing,
       completed: true,
       expectedTrials: existing?.expectedTrials ?? null,
     });

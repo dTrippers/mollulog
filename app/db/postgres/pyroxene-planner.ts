@@ -1,12 +1,19 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { nanoid } from "nanoid/non-secure";
 import { withPlannerStateUpdate } from "~/db/postgres/planner-states";
-import { type PlannerStateDocumentV1, sortPlannerStateTimelineRecords } from "~/domain/planner-state";
+import {
+  applyPyroxeneEventDataPatch,
+  type PlannerStateDocumentV1,
+  type PyroxeneEventDataPatch,
+  sortPlannerStateTimelineRecords,
+} from "~/domain/planner-state";
+import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
   type TimelineSourceType,
 } from "~/domain/pyroxene-planner";
+import type { RecruitmentStacks, RecruitmentTargetTiers } from "~/domain/pyroxene-recruitment-goal";
 import {
   extractPyroxeneTimelineBaseUid,
   normalizePyroxeneTimelineEventAt,
@@ -34,6 +41,15 @@ export type PyroxeneOwnedResource = {
   pyroxene: number;
   oneTimeTicket: number;
   tenTimeTicket: number;
+  recruitmentStacks?: RecruitmentStacks;
+};
+
+/** A snapshot to save; recruitmentStacks is omitted when the user did not enter stacks. */
+export type OwnedResourceInput = {
+  pyroxene: number;
+  oneTimeTicket: number;
+  tenTimeTicket: number;
+  recruitmentStacks?: RecruitmentStacks;
 };
 
 export type PyroxeneTimelineRepeatType = "fixed_days" | "monthly_first";
@@ -58,7 +74,11 @@ export type PyroxeneEventData = {
   eventUid: string;
   completed: boolean;
   expectedTrials: number | null;
+  pickupChance?: PyroxenePickupChance;
+  targetTiers?: RecruitmentTargetTiers;
 };
+
+export type { PyroxeneEventDataPatch } from "~/domain/planner-state";
 
 type PlannerStateTimelineRecord = Omit<PyroxeneTimelineItem, "userId">;
 
@@ -201,15 +221,16 @@ function updatePyroxenePlannerDocument(
 /** Keeps the latest owned-resource snapshot; an older input never replaces a newer one. */
 export function withPyroxeneOwnedResource(
   document: PlannerStateDocumentV1,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
+  resources: OwnedResourceInput,
   inputAt: string = nowUtcIso(),
 ): PlannerStateDocumentV1 {
-  const next = {
+  const next: PlannerStateDocumentV1["pyroxene"]["resources"] & object = {
     inputAt: normalizeInstant(inputAt),
     pyroxene: resources.pyroxene,
     oneTimeTicket: resources.oneTimeTicket,
     tenTimeTicket: resources.tenTimeTicket,
   };
+  if (resources.recruitmentStacks) next.recruitmentStacks = { ...resources.recruitmentStacks };
   const current = document.pyroxene.resources;
   if (current && next.inputAt < current.inputAt) return document;
   return { ...document, pyroxene: { ...document.pyroxene, resources: next } };
@@ -218,7 +239,7 @@ export function withPyroxeneOwnedResource(
 export function createPostgresPyroxeneOwnedResource(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
-  resources: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number },
+  resources: OwnedResourceInput,
   options: { inputAt?: string } & PostgresPyroxeneOptions = {},
 ): Promise<void> {
   return updatePyroxenePlannerDocument(
@@ -300,7 +321,11 @@ export async function createPostgresBuyPyroxene(
   userId: number,
   date: Date | string,
   quantity: number,
-  options: { uid?: string; repeatType?: PyroxeneTimelineRepeatType; monthlyCount?: number } & PostgresPyroxeneOptions = {},
+  options: {
+    uid?: string;
+    repeatType?: PyroxeneTimelineRepeatType;
+    monthlyCount?: number;
+  } & PostgresPyroxeneOptions = {},
 ): Promise<void> {
   const { repeatType, monthlyCount } = options;
   if (repeatType !== undefined && repeatType !== "fixed_days" && repeatType !== "monthly_first") {
@@ -554,7 +579,7 @@ export function upsertPostgresPyroxeneEventData(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
   eventUid: string,
-  data: { completed?: boolean; expectedTrials?: number | null },
+  data: PyroxeneEventDataPatch,
   options: PostgresPyroxeneOptions = {},
 ): Promise<void> {
   return updatePyroxenePlannerDocument(
@@ -569,10 +594,7 @@ export function upsertPostgresPyroxeneEventData(
           ...document.pyroxene,
           eventData: {
             ...document.pyroxene.eventData,
-            [eventUid]: {
-              completed: data.completed ?? current.completed,
-              expectedTrials: data.expectedTrials !== undefined ? data.expectedTrials : current.expectedTrials,
-            },
+            [eventUid]: applyPyroxeneEventDataPatch(current, data),
           },
         },
       };

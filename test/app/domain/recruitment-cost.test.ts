@@ -155,3 +155,34 @@ describe("getRecruitmentRuleSet", () => {
     expect(getRecruitmentRuleSet("2026-11-25T02:00:00.000Z", anchor)).toBe("call_charge_v1");
   });
 });
+
+describe("call charge carry-over and copies", () => {
+  it("starts the period from a carried charge", () => {
+    const fresh = simulateRecruitmentCost(period(), "call_charge_v1");
+    const carried = simulateRecruitmentCost(period(), "call_charge_v1", { initialCharge: 120 });
+    expect(carried.length - 1).toBe(80);
+    expect(expectedPulls(carried)).toBeLessThan(expectedPulls(fresh));
+  });
+
+  it("guarantees the pickup on the first pull of a charge carried to 199", () => {
+    const distribution = simulateRecruitmentCost(period(), "call_charge_v1", { initialCharge: 199 });
+    expect(distribution[10]).toBeCloseTo(1, 10);
+  });
+
+  it("acquires copies of one student in order and caps every copy at the ceiling", () => {
+    const copies = period(1, {
+      targets: [0, 1, 2].map((index) => ({
+        key: `student#${index}`,
+        studentKey: "student",
+        initialTier: 3,
+        recruitmentType: RecruitmentTypeEnum.Usual,
+      })),
+    });
+    const distribution = simulateRecruitmentCost(copies, "call_charge_v1");
+    expect(distribution.length - 1).toBe(600);
+    expect(expectedPulls(distribution)).toBeCloseTo(
+      3 * expectedPulls(simulateRecruitmentCost(period(), "call_charge_v1")),
+      0,
+    );
+  });
+});

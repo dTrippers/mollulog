@@ -151,6 +151,48 @@ describe("Pyroxene action payload", () => {
     expect(decodePyroxeneActionPayload({ intent, payload }, method)).toMatchObject({ intent, payload });
   });
 
+  it("decodes recruitment stacks, the event basis, and target tiers", () => {
+    expect(
+      decodePyroxeneActionPayload(
+        {
+          intent: "save-owned-resources",
+          payload: {
+            resources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+            recruitmentStacks: { regular: 10, limited: 199 },
+          },
+        },
+        "POST",
+      ),
+    ).toMatchObject({ payload: { recruitmentStacks: { regular: 10, limited: 199 } } });
+    expect(
+      decodePyroxeneActionPayload(
+        {
+          intent: "update-event-data",
+          payload: { eventUid: "event-1", pickupChance: null, targetTiers: { "student-1": 7 } },
+        },
+        "POST",
+      ),
+    ).toMatchObject({ payload: { eventUid: "event-1", pickupChance: null, targetTiers: { "student-1": 7 } } });
+    expect(() =>
+      decodePyroxeneActionPayload(
+        {
+          intent: "save-owned-resources",
+          payload: {
+            resources: { pyroxene: 0, oneTimeTicket: 0, tenTimeTicket: 0 },
+            recruitmentStacks: { regular: -1, limited: 0 },
+          },
+        },
+        "POST",
+      ),
+    ).toThrow();
+    expect(() =>
+      decodePyroxeneActionPayload(
+        { intent: "update-event-data", payload: { eventUid: "event-1", pickupChance: "lucky" } },
+        "POST",
+      ),
+    ).toThrow();
+  });
+
   it("accepts owned-resource loader metadata while returning only mutation fields", () => {
     expect(
       decodePyroxeneActionPayload(

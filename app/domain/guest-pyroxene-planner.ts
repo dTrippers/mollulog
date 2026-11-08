@@ -5,6 +5,7 @@ import {
   type PyroxenePlannerOptions,
   type StoredPyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import {
   createOptimisticApPackageTimelineItems,
   createOptimisticAttendanceTimelineItems,
@@ -21,7 +22,8 @@ import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/
 export const GUEST_PYROXENE_PLANNER_VERSION = 1 as const;
 export const GUEST_PYROXENE_PLANNER_STORAGE_KEY = "mollulog::guest-pyroxene-planner::v1";
 
-export type GuestPyroxeneResources = PickupResources & { inputAt: string };
+// recruitmentStacks is absent when the user has not entered stacks; the planner then counts them as 0.
+export type GuestPyroxeneResources = PickupResources & { inputAt: string; recruitmentStacks?: RecruitmentStacks };
 export type GuestPyroxeneFavorite = { contentUid: string; studentUid: string };
 
 type GuestRecordBase = { recordId: string; createdAt: string };

@@ -1,8 +1,15 @@
 import {
   normalizePyroxeneApChargeExceptions,
   PYROXENE_PICKUP_CHANCES,
+  type PyroxenePickupChance,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import {
+  normalizeRecruitmentStacks,
+  normalizeRecruitmentTargetTiers,
+  type RecruitmentStacks,
+  type RecruitmentTargetTiers,
+} from "~/domain/pyroxene-recruitment-goal";
 import {
   PYROXENE_SOURCE_DEFINITIONS,
   type PyroxeneMonthlyPackageType,
@@ -17,6 +24,7 @@ type SaveOwnedResourcesAction = {
   intent: "save-owned-resources";
   payload: {
     resources: PickupResources;
+    recruitmentStacks?: RecruitmentStacks;
     eventUid?: string | null;
     collectedSourceKeys?: string[];
   };
@@ -60,7 +68,12 @@ type SaveOtherAction = {
 
 type UpdateEventDataAction = {
   intent: "update-event-data";
-  payload: { eventUid: string; expectedTrials?: number | null };
+  payload: {
+    eventUid: string;
+    expectedTrials?: number | null;
+    pickupChance?: PyroxenePickupChance | null;
+    targetTiers?: RecruitmentTargetTiers;
+  };
 };
 
 type SaveOptionsAction = { intent: "save-options"; payload: { options: PyroxenePlannerOptions } };
@@ -197,6 +210,29 @@ function readResources(value: unknown): PickupResources {
   };
 }
 
+function readOptionalRecruitmentStacks(record: JsonRecord): RecruitmentStacks | undefined {
+  if (record.recruitmentStacks === undefined) return undefined;
+  const stacks = normalizeRecruitmentStacks(record.recruitmentStacks);
+  if (!stacks) throw new Error("요청 필드 recruitmentStacks가 올바르지 않아요");
+  return stacks;
+}
+
+function readOptionalPickupChance(record: JsonRecord): PyroxenePickupChance | null | undefined {
+  const value = record.pickupChance;
+  if (value === undefined || value === null) return value;
+  if (!PYROXENE_PICKUP_CHANCES.includes(value as PyroxenePickupChance)) {
+    throw new Error("요청 필드 pickupChance가 올바르지 않아요");
+  }
+  return value as PyroxenePickupChance;
+}
+
+function readOptionalTargetTiers(record: JsonRecord): RecruitmentTargetTiers | undefined {
+  if (record.targetTiers === undefined) return undefined;
+  const targetTiers = normalizeRecruitmentTargetTiers(record.targetTiers);
+  if (!targetTiers) throw new Error("요청 필드 targetTiers가 올바르지 않아요");
+  return targetTiers;
+}
+
 function readSourceKeys(record: JsonRecord, key: string): string[] | undefined {
   const value = record[key];
   if (value === undefined) return undefined;
@@ -278,6 +314,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
         intent,
         payload: {
           resources: readResources(payload.resources),
+          recruitmentStacks: readOptionalRecruitmentStacks(payload),
           eventUid,
           collectedSourceKeys: readSourceKeys(payload, "collectedSourceKeys"),
         },
@@ -354,6 +391,8 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
         payload: {
           eventUid: readString(payload, "eventUid"),
           expectedTrials: readOptionalNumber(payload, "expectedTrials", 0),
+          pickupChance: readOptionalPickupChance(payload),
+          targetTiers: readOptionalTargetTiers(payload),
         },
       };
     case "save-options":

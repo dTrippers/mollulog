@@ -2,8 +2,16 @@ import type { Dayjs } from "dayjs";
 import {
   getPyroxeneApChargeCountForDate,
   type PyroxeneCalculationOptions,
+  type PyroxenePickupChance,
   type TimelineSourceType,
 } from "~/domain/pyroxene-planner";
+import {
+  DEFAULT_RECRUITMENT_TARGET_TIER,
+  EMPTY_RECRUITMENT_STACKS,
+  getRecruitmentTargetCopies,
+  type RecruitmentStacks,
+  type RecruitmentTargetTiers,
+} from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import {
@@ -11,10 +19,11 @@ import {
   convolvePullCostDistributions,
   getFundedRecruitmentPulls,
   getRecruitmentChargeScope,
+  normalizeRecruitmentCharge,
   type PullCostDistribution,
+  type RecruitmentChargeScope,
   type RecruitmentCostPeriod,
   simulateRecruitmentCost,
-  splitRecruitmentCostPeriodByChargeScope,
 } from "~/domain/recruitment-cost";
 import { getTaggedFreeRecruitmentPulls, withoutFreeRecruitmentTags } from "~/domain/recruitment-notice";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
@@ -45,6 +54,14 @@ export type TimelineDelta = {
   tenTimeTicketLotId?: string;
   tenTimeTicketExpiresAt?: Dayjs;
   priority?: number;
+};
+
+// Per-event planner data. pickupChance overrides the global basis; targetTiers maps student uid to target tier.
+export type PyroxeneTimelineEventData = {
+  completed: boolean;
+  expectedTrials: number | null;
+  pickupChance?: PyroxenePickupChance | null;
+  targetTiers?: RecruitmentTargetTiers;
 };
 
 export type TimelineEntry = {
@@ -491,9 +508,11 @@ function applySparkExchange(acquiredMask: number, targetCount: number, sparkPoin
   return result;
 }
 
+// Copies of one student are the same recruitment object repeated in the target list and are acquired in order.
 function getTargetSlotDistribution(
   targetRecruitments: PickupRecruitment[],
   currentTargetIndex: number,
+  acquiredMask: number,
   event: PickupEvent,
 ): PickupTargetDistributionEntry[] {
   const currentTarget = targetRecruitments[currentTargetIndex];
@@ -511,14 +530,20 @@ function getTargetSlotDistribution(
     const offRateProbability = Math.max(0, getRecruitmentTierSlotRate(currentTarget) - directProbability);
     const spookProbability = offRateProbability / poolCount;
 
+    const seen = new Set<PickupRecruitment>([currentTarget]);
     for (let targetIndex = 0; targetIndex < targetRecruitments.length; targetIndex++) {
-      if (targetIndex === currentTargetIndex) {
+      const target = targetRecruitments[targetIndex];
+      if (seen.has(target)) {
         continue;
       }
-      if (getRecruitmentStudentTier(targetRecruitments[targetIndex]) !== currentTier) {
+      seen.add(target);
+      if (getRecruitmentStudentTier(target) !== currentTier) {
         continue;
       }
-      entries.push({ acquiredMask: 1 << targetIndex, probability: spookProbability });
+      const nextCopyIndex = targetRecruitments.findIndex(
+        (candidate, index) => index >= targetIndex && candidate === target && (acquiredMask & (1 << index)) === 0,
+      );
+      entries.push({ acquiredMask: nextCopyIndex === -1 ? 0 : 1 << nextCopyIndex, probability: spookProbability });
     }
   }
 
@@ -532,6 +557,7 @@ function getPickupTrialCostDistributionCacheKey(
   event: PickupEvent,
   pickupRecruitments: PickupRecruitment[],
   mode: PickupTrialCostDistributionMode,
+  stacks: RecruitmentStacks,
 ): string {
   const recruitmentKey = pickupRecruitments
     .map((recruitment) =>
@@ -551,93 +577,72 @@ function getPickupTrialCostDistributionCacheKey(
     `free${getFreeRecruitmentPulls(event)}`,
     event.recruitmentPool?.tier2Count ?? "",
     event.recruitmentPool?.tier3Count ?? "",
+    `stack${stacks.regular}:${stacks.limited}`,
     recruitmentKey,
   ].join("::");
 }
 
-function getPickupTrialCostDistribution(
+function groupTargetsByChargeScope(
+  pickupRecruitments: PickupRecruitment[],
+): Map<RecruitmentChargeScope | null, PickupRecruitment[]> {
+  const groups = new Map<RecruitmentChargeScope | null, PickupRecruitment[]>();
+  for (const recruitment of pickupRecruitments) {
+    const scope = getRecruitmentChargeScope(recruitment.recruitmentType);
+    const group = groups.get(scope) ?? [];
+    group.push(recruitment);
+    groups.set(scope, group);
+  }
+  return groups;
+}
+
+// Copies of one student share a student key; distinct students without a listed student get their own key.
+function getTargetStudentKeys(pickupRecruitments: PickupRecruitment[]): string[] {
+  const keys = new Map<PickupRecruitment, string>();
+  return pickupRecruitments.map((recruitment, index) => {
+    const existing = keys.get(recruitment);
+    if (existing) {
+      return existing;
+    }
+    const key = recruitment.student?.uid ?? `unlisted-${index}`;
+    keys.set(recruitment, key);
+    return key;
+  });
+}
+
+function countDistinctStudentsByTier(pickupRecruitments: PickupRecruitment[], tier: 2 | 3): number {
+  return new Set(pickupRecruitments.filter((recruitment) => getRecruitmentStudentTier(recruitment) === tier)).size;
+}
+
+function simulateCallChargeScope(
+  event: PickupEvent,
+  scopeRecruitments: PickupRecruitment[],
+  initialCharge: number,
+): TrialDistribution {
+  const studentKeys = getTargetStudentKeys(scopeRecruitments);
+  const recruitmentPeriod: RecruitmentCostPeriod = {
+    uid: event.uid,
+    recruitmentType: scopeRecruitments[0]?.recruitmentType ?? "usual",
+    targets: scopeRecruitments.map((recruitment, index) => ({
+      key: `${studentKeys[index]}#${index}`,
+      studentKey: studentKeys[index],
+      initialTier: getRecruitmentStudentTier(recruitment),
+      recruitmentType: recruitment.recruitmentType,
+    })),
+    tier2PoolCount: Math.max(event.recruitmentPool?.tier2Count ?? 1, countDistinctStudentsByTier(scopeRecruitments, 2)),
+    tier3PoolCount: Math.max(event.recruitmentPool?.tier3Count ?? 1, countDistinctStudentsByTier(scopeRecruitments, 3)),
+  };
+  return simulateRecruitmentCost(recruitmentPeriod, "call_charge_v1", { initialCharge });
+}
+
+// Pull count distribution until every target copy is acquired, before free pulls and mileage tickets.
+function simulatePickupTrialDistribution(
   event: PickupEvent,
   pickupRecruitments: PickupRecruitment[],
   mode: PickupTrialCostDistributionMode,
 ): TrialDistribution {
   const targetCount = pickupRecruitments.length;
-  if (targetCount === 0) {
-    return [1];
-  }
-
-  const cacheKey = getPickupTrialCostDistributionCacheKey(event, pickupRecruitments, mode);
-  const cached = pickupTrialCostDistributionCache.get(cacheKey);
-  if (cached) {
-    return cached;
-  }
-
-  if (event.recruitmentRuleSet === "call_charge_v1") {
-    const eligibleRecruitments = pickupRecruitments.filter(
-      (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) !== null,
-    );
-    const excludedRecruitments = pickupRecruitments.filter(
-      (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) === null,
-    );
-    if (eligibleRecruitments.length > 0 && excludedRecruitments.length > 0) {
-      const eligibleDistribution = getPickupTrialCostDistribution(event, eligibleRecruitments, mode);
-      const excludedDistribution = getPickupTrialCostDistribution(
-        {
-          ...event,
-          recruitmentRuleSet: "legacy_points",
-          tags: withoutFreeRecruitmentTags(event.tags),
-        },
-        excludedRecruitments,
-        mode,
-      );
-      const distribution = convolvePullCostDistributions(eligibleDistribution, excludedDistribution);
-      cachePickupTrialCostDistribution(cacheKey, distribution);
-      return distribution;
-    }
-    if (eligibleRecruitments.length === 0) {
-      const distribution = getPickupTrialCostDistribution(
-        {
-          ...event,
-          recruitmentRuleSet: "legacy_points",
-          tags: withoutFreeRecruitmentTags(event.tags),
-        },
-        excludedRecruitments,
-        mode,
-      );
-      cachePickupTrialCostDistribution(cacheKey, distribution);
-      return distribution;
-    }
-  }
-
-  if (mode === "with_pity" && event.recruitmentRuleSet === "call_charge_v1") {
-    const tier2TargetCount = pickupRecruitments.filter(
-      (recruitment) => getRecruitmentStudentTier(recruitment) === 2,
-    ).length;
-    const tier3TargetCount = pickupRecruitments.length - tier2TargetCount;
-    const recruitmentPeriod: RecruitmentCostPeriod = {
-      uid: event.uid,
-      recruitmentType: pickupRecruitments[0]?.recruitmentType ?? "usual",
-      targets: pickupRecruitments.map((recruitment) => ({
-        key: recruitment.student?.uid ?? "unlisted",
-        initialTier: getRecruitmentStudentTier(recruitment),
-        recruitmentType: recruitment.recruitmentType,
-      })),
-      tier2PoolCount: Math.max(event.recruitmentPool?.tier2Count ?? 1, tier2TargetCount),
-      tier3PoolCount: Math.max(event.recruitmentPool?.tier3Count ?? 1, tier3TargetCount),
-    };
-    const totalPullDistribution = splitRecruitmentCostPeriodByChargeScope(recruitmentPeriod).reduce(
-      (combined, scopedPeriod) =>
-        convolvePullCostDistributions(combined, simulateRecruitmentCost(scopedPeriod, "call_charge_v1")),
-      [1] as PullCostDistribution,
-    );
-    const distribution = applyRecruitmentFunding(totalPullDistribution, {
-      freePulls: getFreeRecruitmentPulls(event),
-      recruitmentPerks: true,
-    });
-    cachePickupTrialCostDistribution(cacheKey, distribution);
-    return distribution;
-  }
-
   const distribution: TrialDistribution = [];
+  const slotDistributionCache = new Map<string, PickupTargetDistributionEntry[]>();
   let activeStates = new Map<string, { state: PickupDpState; probability: number }>();
   const initialState = { targetIndex: 0, acquiredMask: 0, sparkPoints: 0 };
   activeStates.set(getPickupDpStateKey(initialState), { state: initialState, probability: 1 });
@@ -658,7 +663,13 @@ function getPickupTrialCostDistribution(
         continue;
       }
 
-      for (const result of getTargetSlotDistribution(pickupRecruitments, targetIndex, event)) {
+      const slotKey = `${targetIndex}:${state.acquiredMask}`;
+      let slotDistribution = slotDistributionCache.get(slotKey);
+      if (!slotDistribution) {
+        slotDistribution = getTargetSlotDistribution(pickupRecruitments, targetIndex, state.acquiredMask, event);
+        slotDistributionCache.set(slotKey, slotDistribution);
+      }
+      for (const result of slotDistribution) {
         const sparkPoints = state.sparkPoints + 1;
         const acquiredMask = state.acquiredMask | result.acquiredMask;
         const nextTargetIndex = getNextTargetIndex(pickupRecruitments, targetIndex, acquiredMask);
@@ -676,25 +687,71 @@ function getPickupTrialCostDistribution(
 
     activeStates = nextStates;
   }
+  return distribution;
+}
 
-  if (event.recruitmentRuleSet === "call_charge_v1") {
-    const fundedDistribution = applyRecruitmentFunding(distribution, {
-      freePulls: getFreeRecruitmentPulls(event),
-      recruitmentPerks: true,
-    });
-    cachePickupTrialCostDistribution(cacheKey, fundedDistribution);
-    return fundedDistribution;
+// Paid pull distribution for one event. Under the call charge rules each scope starts from its carried
+// stack and earns its own mileage tickets; free pulls are subtracted from the combined total.
+function getPickupTrialCostDistribution(
+  event: PickupEvent,
+  pickupRecruitments: PickupRecruitment[],
+  mode: PickupTrialCostDistributionMode,
+  stacks: RecruitmentStacks = EMPTY_RECRUITMENT_STACKS,
+): TrialDistribution {
+  if (pickupRecruitments.length === 0) {
+    return [1];
   }
 
+  const cacheKey = getPickupTrialCostDistributionCacheKey(event, pickupRecruitments, mode, stacks);
+  const cached = pickupTrialCostDistributionCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  if (event.recruitmentRuleSet === "call_charge_v1") {
+    let distribution: TrialDistribution = [1];
+    let hasScopedTargets = false;
+    for (const [scope, scopeRecruitments] of groupTargetsByChargeScope(pickupRecruitments)) {
+      if (scope === null) {
+        continue;
+      }
+      hasScopedTargets = true;
+      const pulls =
+        mode === "with_pity"
+          ? simulateCallChargeScope(event, scopeRecruitments, stacks[scope])
+          : simulatePickupTrialDistribution(event, scopeRecruitments, "without_pity");
+      distribution = convolvePullCostDistributions(
+        distribution,
+        applyRecruitmentFunding(pulls, { recruitmentPerks: true }),
+      );
+    }
+    if (hasScopedTargets) {
+      distribution = applyRecruitmentFunding(distribution, { freePulls: getFreeRecruitmentPulls(event) });
+    }
+
+    const excludedRecruitments = pickupRecruitments.filter(
+      (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) === null,
+    );
+    if (excludedRecruitments.length > 0) {
+      distribution = convolvePullCostDistributions(
+        distribution,
+        getPickupTrialCostDistribution(
+          { ...event, recruitmentRuleSet: "legacy_points", tags: withoutFreeRecruitmentTags(event.tags) },
+          excludedRecruitments,
+          mode,
+        ),
+      );
+    }
+    cachePickupTrialCostDistribution(cacheKey, distribution);
+    return distribution;
+  }
+
+  const distribution = simulatePickupTrialDistribution(event, pickupRecruitments, mode);
   const freePulls = getFreeRecruitmentPulls(event);
   if (freePulls > 0) {
     const paidDistribution: TrialDistribution = [];
     for (let trials = 0; trials < distribution.length; trials++) {
-      addTrialProbability(
-        paidDistribution,
-        subtractFreeRecruitmentTrial(trials, freePulls),
-        distribution[trials] ?? 0,
-      );
+      addTrialProbability(paidDistribution, subtractFreeRecruitmentTrial(trials, freePulls), distribution[trials] ?? 0);
     }
     cachePickupTrialCostDistribution(cacheKey, paidDistribution);
     return paidDistribution;
@@ -919,6 +976,120 @@ function getResourcePyroxeneQuantiles(distribution: ResourceStateDistribution): 
   };
 }
 
+function getScheduleItemEventStartTime(item: PyroxeneScheduleItem): number {
+  return item.event ? dayjs(item.event.since).valueOf() : Number.NEGATIVE_INFINITY;
+}
+
+/** Repeats each pickup recruitment once per copy its target tier needs; ★2 students always need one copy. */
+export function expandPickupTargetCopies(
+  pickupRecruitments: PickupRecruitment[],
+  targetTiers: RecruitmentTargetTiers | undefined,
+): PickupRecruitment[] {
+  return pickupRecruitments.flatMap((recruitment) => {
+    const studentUid = recruitment.student?.uid;
+    const targetTier = (studentUid && targetTiers?.[studentUid]) || DEFAULT_RECRUITMENT_TARGET_TIER;
+    const copies = getRecruitmentStudentTier(recruitment) === 3 ? getRecruitmentTargetCopies(targetTier) : 1;
+    return Array.from({ length: copies }, () => recruitment);
+  });
+}
+
+type EventPickupTrial = {
+  pickupTrial: number;
+  pickupTrialCostDistribution?: TrialDistribution;
+};
+
+// Splits a manual pull count across scopes in proportion to the target copies each scope needs.
+function allocateManualPulls(
+  manualPulls: number,
+  groups: Map<RecruitmentChargeScope | null, PickupRecruitment[]>,
+): Map<RecruitmentChargeScope | null, number> {
+  const totalCopies = [...groups.values()].reduce((sum, group) => sum + group.length, 0);
+  const allocation = new Map<RecruitmentChargeScope | null, number>();
+  let allocated = 0;
+  const entries = [...groups.entries()];
+  entries.forEach(([scope, group], index) => {
+    const pulls =
+      index === entries.length - 1 ? manualPulls - allocated : Math.floor((manualPulls * group.length) / totalCopies);
+    allocation.set(scope, pulls);
+    allocated += pulls;
+  });
+  return allocation;
+}
+
+/**
+ * Paid pulls planned for one event and, for automatic bases, their distribution. Updates the carried
+ * stacks: an automatic basis assumes every target is acquired (stack 0), while a manual count assumes
+ * the targets are not acquired and carries the whole count over.
+ */
+function resolveEventPickupTrial(
+  event: PickupEvent,
+  targets: PickupRecruitment[],
+  eventData: PyroxeneTimelineEventData | undefined,
+  pickupChance: PyroxenePickupChance,
+  stacks: RecruitmentStacks,
+): EventPickupTrial {
+  const isCallCharge = event.recruitmentRuleSet === "call_charge_v1";
+  const groups = groupTargetsByChargeScope(targets);
+  const scopedGroups = isCallCharge
+    ? [...groups.entries()].filter((entry): entry is [RecruitmentChargeScope, PickupRecruitment[]] => entry[0] !== null)
+    : [];
+  const excludedCopyCount = isCallCharge ? (groups.get(null)?.length ?? 0) : targets.length;
+  const freePulls = getFreeRecruitmentPulls(event);
+
+  const manualPulls = eventData?.expectedTrials ?? null;
+  if (manualPulls !== null) {
+    if (!isCallCharge) {
+      return { pickupTrial: subtractFreeRecruitmentTrial(manualPulls, freePulls) };
+    }
+    const allocation = allocateManualPulls(manualPulls, groups);
+    let scopedPaidPulls = 0;
+    for (const [scope] of scopedGroups) {
+      const pulls = allocation.get(scope) ?? 0;
+      scopedPaidPulls += getFundedRecruitmentPulls(pulls, { recruitmentPerks: true });
+      stacks[scope] = normalizeRecruitmentCharge(stacks[scope] + pulls);
+    }
+    const scopedPulls = scopedGroups.length > 0 ? Math.max(0, scopedPaidPulls - freePulls) : 0;
+    return { pickupTrial: scopedPulls + (allocation.get(null) ?? 0) };
+  }
+
+  const startStacks: RecruitmentStacks = { ...stacks };
+  for (const [scope] of scopedGroups) {
+    stacks[scope] = 0;
+  }
+
+  const ceil = PYROXENE.PICKUP_TRIAL.ceil;
+  if (pickupChance === "ceil") {
+    if (!isCallCharge) {
+      return { pickupTrial: subtractFreeRecruitmentTrial(targets.length * ceil, freePulls) };
+    }
+    let scopedPaidPulls = 0;
+    for (const [scope, group] of scopedGroups) {
+      const pulls = Math.max(0, group.length * ceil - startStacks[scope]);
+      scopedPaidPulls += getFundedRecruitmentPulls(pulls, { recruitmentPerks: true });
+    }
+    const scopedPulls = scopedGroups.length > 0 ? Math.max(0, scopedPaidPulls - freePulls) : 0;
+    return { pickupTrial: scopedPulls + excludedCopyCount * ceil };
+  }
+
+  const pickupTrialCostDistribution = getPickupTrialCostDistribution(
+    event,
+    targets,
+    pickupChance === "average" ? "without_pity" : "with_pity",
+    startStacks,
+  );
+  if (pickupChance === "average_pity" || scopedGroups.length > 0) {
+    return {
+      pickupTrial: Math.round(calculateExpectedTrial(pickupTrialCostDistribution)),
+      pickupTrialCostDistribution,
+    };
+  }
+  const averagePulls = targets.length * PYROXENE.PICKUP_TRIAL.average;
+  return {
+    pickupTrial: isCallCharge ? averagePulls : subtractFreeRecruitmentTrial(averagePulls, freePulls),
+    pickupTrialCostDistribution,
+  };
+}
+
 // The free recruit count usable for the event, or 0 when it has none or any recruitment has no future end.
 export function getFreeRecruitmentPulls(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): number {
   const freePulls = getTaggedFreeRecruitmentPulls(event.tags);
@@ -929,14 +1100,20 @@ export function getFreeRecruitmentPulls(event: NonNullable<PyroxeneScheduleItem[
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,
-  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>,
+  eventDataMap: Map<string, PyroxeneTimelineEventData>,
   scheduleItems: PyroxeneScheduleItem[],
   options: PyroxeneCalculationOptions,
   bandMode: PyroxeneTimelineBandMode = "central_ticket_discount",
   collectedSourceKeys: string[] = [],
   endDate?: Date,
+  initialRecruitmentStacks: RecruitmentStacks = EMPTY_RECRUITMENT_STACKS,
 ): Timeline {
   const collectedSources = new Set(collectedSourceKeys);
+  // Call charge stacks carried between events of the same scope, in event start order.
+  const stacks: RecruitmentStacks = {
+    regular: normalizeRecruitmentCharge(initialRecruitmentStacks.regular),
+    limited: normalizeRecruitmentCharge(initialRecruitmentStacks.limited),
+  };
   const scheduleMaxDate = scheduleItems.reduce((max, item) => {
     if (!item.event) {
       return max;
@@ -947,7 +1124,11 @@ export function buildTimeline(
   const maxDate = endDate ? dayjs(endDate) : scheduleMaxDate;
 
   const timelineDeltas: TimelineDelta[] = [];
-  for (const scheduleItem of scheduleItems) {
+  // Stacks carry over in event start order, so events are visited chronologically.
+  const orderedScheduleItems = [...scheduleItems].sort(
+    (left, right) => getScheduleItemEventStartTime(left) - getScheduleItemEventStartTime(right),
+  );
+  for (const scheduleItem of orderedScheduleItems) {
     if (scheduleItem.event) {
       const { event } = scheduleItem;
 
@@ -966,8 +1147,7 @@ export function buildTimeline(
       const pickupRecruitments = event.recruitments.filter(
         ({ pickup, favorited, recruitmentType }) => pickup && favorited && recruitmentType !== "given",
       );
-      const pickupCount = pickupRecruitments.length;
-      if (pickupCount === 0) {
+      if (pickupRecruitments.length === 0) {
         continue;
       }
 
@@ -982,64 +1162,19 @@ export function buildTimeline(
         continue;
       }
 
-      const manualExpectedTrials = eventData?.expectedTrials ?? null;
-      const callChargePickupCount = pickupRecruitments.filter(
-        (recruitment) => getRecruitmentChargeScope(recruitment.recruitmentType) !== null,
-      ).length;
-      const hasCallChargeRecruitments = event.recruitmentRuleSet === "call_charge_v1" && callChargePickupCount > 0;
-      const allRecruitmentsUseCallCharge = hasCallChargeRecruitments && callChargePickupCount === pickupCount;
-      const recruitmentFundingOptions = {
-        freePulls: getFreeRecruitmentPulls(event),
-        recruitmentPerks: true,
-      };
-      let pickupTrial: number;
-      let pickupTrialCostDistribution: TrialDistribution | undefined;
-      if (manualExpectedTrials !== null) {
-        pickupTrial = allRecruitmentsUseCallCharge
-          ? getFundedRecruitmentPulls(manualExpectedTrials, recruitmentFundingOptions)
-          : manualExpectedTrials;
-      } else {
-        // 이벤트별 직접 입력이 없으면 관심 등록된 픽업 학생 수와 전역 모집 목표로 계산합니다.
-        if (options.event.pickupChance !== "ceil") {
-          pickupTrialCostDistribution = getPickupTrialCostDistribution(
-            event,
-            pickupRecruitments,
-            options.event.pickupChance === "average" ? "without_pity" : "with_pity",
-          );
-        }
-        if (
-          options.event.pickupChance === "average_pity" ||
-          (hasCallChargeRecruitments && options.event.pickupChance === "average")
-        ) {
-          pickupTrial = Math.round(calculateExpectedTrial(pickupTrialCostDistribution ?? [1]));
-        } else {
-          pickupTrial =
-            pickupCount *
-            (options.event.pickupChance === "ceil" ? PYROXENE.PICKUP_TRIAL.ceil : PYROXENE.PICKUP_TRIAL.average);
-        }
-        if (hasCallChargeRecruitments && options.event.pickupChance === "ceil") {
-          const callChargeTotalPulls = callChargePickupCount * PYROXENE.PICKUP_TRIAL.ceil;
-          const excludedTotalPulls = (pickupCount - callChargePickupCount) * PYROXENE.PICKUP_TRIAL.ceil;
-          pickupTrial = getFundedRecruitmentPulls(callChargeTotalPulls, recruitmentFundingOptions) + excludedTotalPulls;
-        }
-      }
-
-      const { freePulls } = recruitmentFundingOptions;
-      if (
-        event.recruitmentRuleSet !== "call_charge_v1" &&
-        freePulls > 0 &&
-        (manualExpectedTrials !== null ||
-          options.event.pickupChance === "average" ||
-          options.event.pickupChance === "ceil")
-      ) {
-        pickupTrial = subtractFreeRecruitmentTrial(pickupTrial, freePulls);
-      }
-
+      const pickup = resolveEventPickupTrial(
+        event,
+        expandPickupTargetCopies(pickupRecruitments, eventData?.targetTiers),
+        eventData,
+        eventData?.pickupChance ?? options.event.pickupChance,
+        // Events that already ended before the start date neither consume nor move the stacks.
+        dayjs(event.until).isAfter(initialDate) ? stacks : { ...stacks },
+      );
       timelineDeltas.push({
         date: dayjs(event.since),
         source: { type: "event", event },
-        pickupTrial,
-        pickupTrialCostDistribution,
+        pickupTrial: pickup.pickupTrial,
+        pickupTrialCostDistribution: pickup.pickupTrialCostDistribution,
       });
     } else if (scheduleItem.raid) {
       const { raid } = scheduleItem;
@@ -1178,7 +1313,7 @@ export function buildTimeline(
 
   const timeline: Timeline = [];
   const centralState = createTimelineAccumulationState(initialResources);
-  const shouldBuildProbabilityBand = options.event.pickupChance !== "ceil";
+  const shouldBuildProbabilityBand = filteredDeltas.some((delta) => delta.pickupTrialCostDistribution !== undefined);
   // 직접 입력이 아닌 픽업 이벤트만 실제 확률분포에 누적합니다.
   // 밴드는 중앙선 ± 폭이 아니라 누적 자원 상태 분포의 10/90 분위수로 계산합니다.
   let bandTrialDistribution: TrialDistribution | null = null;

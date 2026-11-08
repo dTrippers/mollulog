@@ -4,12 +4,14 @@ import {
   normalizePyroxenePlannerOptions,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import { getRecruitmentTargetCopies, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import {
   buildTimeline,
   calculatePickupTrialMoments,
   type PickupResources,
   type PyroxeneTimelineBandMode,
+  type PyroxeneTimelineEventData,
 } from "~/domain/pyroxene-timeline";
 import type { RecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
@@ -47,12 +49,14 @@ const defaultOptions: PyroxenePlannerOptions = {
 function pickupRecruitment({
   initialTier = 3,
   name = "픽업 학생",
+  recruitmentType = RecruitmentTypeEnum.Usual,
 }: {
   initialTier?: number;
   name?: string;
+  recruitmentType?: RecruitmentTypeEnum;
 } = {}): NonNullable<PyroxeneScheduleItem["event"]>["recruitments"][number] {
   return {
-    recruitmentType: RecruitmentTypeEnum.Usual,
+    recruitmentType,
     pickup: true,
     rerun: false,
     until: "2026-07-05T00:00:00.000Z",
@@ -125,19 +129,21 @@ function raidItem({
 function buildTestTimeline({
   initialResources = { pyroxene: 100_000, oneTimeTicket: 0, tenTimeTicket: 0 },
   initialDate = new Date("2026-07-01T00:00:00.000Z"),
-  eventDataMap = new Map<string, { completed: boolean; expectedTrials: number | null }>(),
+  eventDataMap = new Map<string, PyroxeneTimelineEventData>(),
   scheduleItems = [eventItem({ uid: "event-a" })],
   options = defaultOptions,
   bandMode,
   collectedSourceKeys = [],
+  recruitmentStacks,
 }: {
   initialResources?: PickupResources;
   initialDate?: Date;
-  eventDataMap?: Map<string, { completed: boolean; expectedTrials: number | null }>;
+  eventDataMap?: Map<string, PyroxeneTimelineEventData>;
   scheduleItems?: PyroxeneScheduleItem[];
   options?: PyroxenePlannerOptions;
   bandMode?: PyroxeneTimelineBandMode;
   collectedSourceKeys?: string[];
+  recruitmentStacks?: RecruitmentStacks;
 } = {}) {
   return buildTimeline(
     initialResources,
@@ -147,6 +153,8 @@ function buildTestTimeline({
     options,
     bandMode,
     collectedSourceKeys,
+    undefined,
+    recruitmentStacks,
   );
 }
 
@@ -995,5 +1003,142 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(77_080);
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(61_240);
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeGreaterThan(56_560);
+  });
+});
+
+describe("buildTimeline recruitment rework planning", () => {
+  const ceilOptions = { ...defaultOptions, event: { pickupChance: "ceil" as const } };
+  const limitedRecruitment = pickupRecruitment({ name: "한정 학생", recruitmentType: RecruitmentTypeEnum.Limited });
+
+  function callChargeEvent(uid: string, since: string, recruitments = [pickupRecruitment()]) {
+    const until = new Date(new Date(since).getTime() + 86_400_000).toISOString();
+    return eventItem({ uid, since, until, recruitmentRuleSet: "call_charge_v1", recruitments });
+  }
+
+  function eventCost(timeline: ReturnType<typeof buildTestTimeline>, uid: string): number | undefined {
+    return timeline.find((entry) => entry.source.type === "event" && entry.source.event?.uid === uid)?.resourceDelta
+      .pyroxene;
+  }
+
+  it("maps target tiers to the copies an unowned student needs", () => {
+    expect([3, 4, 5, 6, 7, 8, 9].map((tier) => getRecruitmentTargetCopies(tier as 3))).toEqual([1, 1, 3, 3, 4, 6, 8]);
+  });
+
+  it("starts the first event of a scope from the entered stack", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 50, limited: 0 },
+    });
+    // 150 pulls earn the 70 and 130 mileage tickets, leaving 130 paid pulls.
+    expect(eventCost(timeline, "event-a")).toBe(-15_600);
+  });
+
+  it("carries a manual count over to the next event of the same scope", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 60 }]]),
+      scheduleItems: [
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(-7_200);
+    // 140 pulls from a carried stack of 60; the 70 and 130 tickets leave 120 paid pulls.
+    expect(eventCost(timeline, "event-b")).toBe(-14_400);
+  });
+
+  it("resets the stack after an automatic event and keeps scopes independent", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 80 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z", [limitedRecruitment]),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+        callChargeEvent("event-c", "2026-07-06T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 100, limited: 0 },
+    });
+    // The limited event leaves the regular stack at 100: 100 pulls, one 70 ticket, 90 paid.
+    expect(eventCost(timeline, "event-b")).toBe(-10_800);
+    expect(eventCost(timeline, "event-c")).toBe(-19_200);
+  });
+
+  it("does not move the stack for a completed event", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: true, expectedTrials: 150 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(0);
+    expect(eventCost(timeline, "event-b")).toBe(-19_200);
+  });
+
+  it("wraps a carried stack past the 200th pull guarantee", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 100 }]]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+        callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+      ],
+      options: ceilOptions,
+      recruitmentStacks: { regular: 150, limited: 0 },
+    });
+    // 150 + 100 passes the guaranteed 200th pull, so event-b starts from 50: 150 pulls, 130 paid.
+    expect(eventCost(timeline, "event-b")).toBe(-15_600);
+  });
+
+  it("earns mileage tickets separately for each scope", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([
+        ["event-a", { completed: false, expectedTrials: null, targetTiers: { "student-3-한정 학생": 5 } }],
+      ]),
+      scheduleItems: [
+        callChargeEvent("event-a", "2026-07-02T00:00:00.000Z", [pickupRecruitment(), limitedRecruitment]),
+      ],
+      options: ceilOptions,
+    });
+    // Regular: 200 pulls, 4 tickets. Limited ★5: 3 copies × 200 = 600 pulls, 8 tickets.
+    expect(eventCost(timeline, "event-a")).toBe(-(160 + 520) * 120);
+  });
+
+  it("plans every copy a target tier needs under the legacy rules", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([
+        ["event-a", { completed: false, expectedTrials: null, targetTiers: { "student-3-픽업 학생": 9 } }],
+      ]),
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "legacy_points" })],
+      options: ceilOptions,
+    });
+    expect(eventCost(timeline, "event-a")).toBe(-8 * 200 * 120);
+  });
+
+  it("uses the event's own basis over the global basis", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: null, pickupChance: "ceil" }]]),
+      scheduleItems: [callChargeEvent("event-a", "2026-07-02T00:00:00.000Z")],
+      options: { ...defaultOptions, event: { pickupChance: "average_pity" } },
+    });
+    const entry = timeline.find((item) => item.source.event?.uid === "event-a");
+    expect(entry?.resourceDelta.pyroxene).toBe(-19_200);
+    expect(entry?.accumulatedResourcesBand).toBeUndefined();
+  });
+
+  it("lowers the expected cost of a later event when an earlier manual count carries a stack", () => {
+    const options = { ...defaultOptions, event: { pickupChance: "average_pity" as const } };
+    const scheduleItems = [
+      callChargeEvent("event-a", "2026-07-02T00:00:00.000Z"),
+      callChargeEvent("event-b", "2026-07-04T00:00:00.000Z"),
+    ];
+    const withoutCarry = buildTestTimeline({ scheduleItems, options });
+    const withCarry = buildTestTimeline({
+      scheduleItems,
+      options,
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 90 }]]),
+    });
+    expect(eventCost(withCarry, "event-b")!).toBeGreaterThan(eventCost(withoutCarry, "event-b")!);
   });
 });

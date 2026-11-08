@@ -36,6 +36,7 @@ import {
   type PlannerStateTimelineRecord,
   projectPlannerStateDocument,
   sortPlannerStateTimelineRecords,
+  withPyroxeneEventDataPatch,
 } from "~/domain/planner-state";
 import {
   defaultPyroxenePlannerOptions,
@@ -902,10 +903,9 @@ export function mergeGuestPlannerLegacyChanges(
       continue;
     }
     const expectedTrials = pyroxeneMerge.data.eventTrials[eventUid] ?? null;
-    const existing = nextEventData[eventUid];
-    if (existing?.completed) nextEventData[eventUid] = { ...existing, expectedTrials };
-    else if (expectedTrials === null) delete nextEventData[eventUid];
-    else nextEventData[eventUid] = { completed: false, expectedTrials };
+    const merged = withPyroxeneEventDataPatch(nextEventData, eventUid, { expectedTrials })[eventUid];
+    if (merged) nextEventData[eventUid] = merged;
+    else delete nextEventData[eventUid];
   }
   const document: GuestPlannerDocument = {
     ...current.document,

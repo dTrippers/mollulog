@@ -189,10 +189,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   try {
     switch (actionData.intent) {
       case "save-owned-resources": {
-        const { resources, eventUid, collectedSourceKeys } = actionData.payload;
+        const { resources, recruitmentStacks, eventUid, collectedSourceKeys } = actionData.payload;
         const savedAt = new Date().toISOString();
         try {
-          await createPyroxeneOwnedResource(env, currentUser.id, resources, { inputAt: savedAt });
+          await createPyroxeneOwnedResource(
+            env,
+            currentUser.id,
+            recruitmentStacks ? { ...resources, recruitmentStacks } : resources,
+            { inputAt: savedAt },
+          );
           if (eventUid) {
             const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
               (content) => content.kind === "event" && content.uid === eventUid,
@@ -302,6 +307,8 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       case "update-event-data":
         await upsertPyroxeneEventData(env, currentUser.id, actionData.payload.eventUid, {
           expectedTrials: actionData.payload.expectedTrials,
+          pickupChance: actionData.payload.pickupChance,
+          targetTiers: actionData.payload.targetTiers,
         });
         break;
       case "save-options":
