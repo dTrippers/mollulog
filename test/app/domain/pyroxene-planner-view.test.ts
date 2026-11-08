@@ -91,9 +91,9 @@ function rowOptions(overrides: Partial<PlannerTimelineRowOptions> = {}): Planner
 }
 
 describe("pyroxene planner view", () => {
-  it("rates a balance short when negative and uncertain when only its low end is", () => {
+  it("rates a balance short only when the expected balance is negative", () => {
     expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", -1))).toBe("short");
-    expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: -1 }))).toBe("uncertain");
+    expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: -1 }))).toBe("enough");
     expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: 0 }))).toBe("enough");
   });
 
@@ -125,7 +125,7 @@ describe("pyroxene planner view", () => {
     // The repeated-income row sits at its last entry, so the balances read in time order.
     expect(group.rows.map((row) => [row.label, row.delta.pyroxene, row.itemUid, row.balance])).toEqual([
       ["청휘석 구매", 6600, "buy-1", 6600],
-      ["반복 수급", 20, undefined, 6620],
+      ["미표시 수급처", 20, undefined, 6620],
       ["총력전", 1200, undefined, 7820],
     ]);
     expect(group.leadIndex).toBe(0);
@@ -133,7 +133,7 @@ describe("pyroxene planner view", () => {
     expect(group.balance).toBe(7820);
     const single = rows[4];
     if (single.kind !== "income") throw new Error("expected a single row");
-    expect(single.row.label).toBe("반복 수급");
+    expect(single.row.label).toBe("미표시 수급처");
   });
 
   it("hides events without favorites unless selected or completed", () => {

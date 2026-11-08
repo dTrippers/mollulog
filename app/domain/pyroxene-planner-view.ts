@@ -5,14 +5,11 @@ import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline, TimelineEntry } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 
-export type PyroxeneEventStatus = "enough" | "uncertain" | "short";
+export type PyroxeneEventStatus = "enough" | "short";
 
-/** Short when the expected balance is negative, uncertain when only the low end of its range is. */
+/** Short when the expected balance is negative. A negative low end of the range shows on the range itself. */
 export function getPyroxeneEventStatus(entry: TimelineEntry): PyroxeneEventStatus {
-  if (entry.accumulatedResources.pyroxene < 0) return "short";
-  const low = entry.accumulatedResourcesBand?.pessimistic.pyroxene;
-  if (low !== undefined && low < 0) return "uncertain";
-  return "enough";
+  return entry.accumulatedResources.pyroxene < 0 ? "short" : "enough";
 }
 
 /** The balance range shown next to a balance: the 10th and 90th percentile, low first. */
@@ -185,7 +182,7 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
         row: {
           key: `aggregate-${repeated.first.date.valueOf()}`,
           date: repeated.last.date,
-          label: "반복 수급",
+          label: "미표시 수급처",
           type: "aggregate",
           delta: repeated.delta,
           balance: repeated.last.accumulatedResources.pyroxene,

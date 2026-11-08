@@ -105,7 +105,7 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
   ));
   return (
     <li
-      className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-7 text-[0.8125rem] @2xl:min-h-9 @2xl:px-4")}
+      className={cn(SCHEDULE_GRID_CLASS_NAME, "items-center py-1.5 pr-3 pl-4 text-[0.8125rem] @2xl:min-h-9 @2xl:px-4")}
     >
       <span className={cn(SCHEDULE_DATE_CELL, "font-semibold text-v2-fg tabular-nums")}>
         {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
@@ -239,7 +239,7 @@ export function PlannerSchedule({
         {rows.map((row) => {
           if (row.kind === "year") {
             return (
-              <p key={row.key} className="px-3 pt-3 pb-1 @2xl:px-4 text-xs font-bold text-v2-fg-tertiary tabular-nums">
+              <p key={row.key} className="px-4 pt-3 pb-1 text-xs font-bold text-v2-fg-tertiary tabular-nums">
                 {row.year}
               </p>
             );
@@ -277,7 +277,7 @@ export function PlannerSchedule({
               {visible.map((income) => (
                 <IncomeRowView key={income.key} row={income} handlers={incomeHandlers} />
               ))}
-              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-7 text-xs @2xl:px-4")}>
+              <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-4 text-xs @2xl:px-4")}>
                 <span />
                 <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @2xl:col-span-1">
                   <button

@@ -12,8 +12,6 @@ import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import {
   DEFAULT_RECRUITMENT_TARGET_TIER,
-  getRecruitmentTargetCopies,
-  getRecruitmentTargetEleph,
   RECRUITMENT_TARGET_TIERS,
   type RecruitmentStacks,
   type RecruitmentTargetTier,
@@ -172,7 +170,9 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         </span>
         {range ? (
           <span className="text-xs text-v2-fg-tertiary">
-            {formatAmount(range.low)}~{formatAmount(range.high)}
+            {/* A low end below zero means bad luck can run the balance short. */}
+            <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
+            {formatAmount(range.high)}
           </span>
         ) : null}
       </span>
@@ -389,9 +389,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     >
       <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @2xl:flex">
         <span className="text-v2-fg">{since.tz(KST).format("MM/DD")}</span>
-        <span className="text-xs font-normal text-v2-fg-tertiary">
-          ~{until.tz(KST).format("MM/DD")}
-        </span>
+        <span className="text-xs font-normal text-v2-fg-tertiary">~{until.tz(KST).format("MM/DD")}</span>
       </div>
 
       <div className="flex min-w-0 flex-col gap-4">
@@ -669,7 +667,6 @@ function TierDialog({
   onSave: (tier: RecruitmentTargetTier) => void;
 }) {
   const [value, setValue] = useState(tier);
-  const copies = getRecruitmentTargetCopies(value);
   return (
     <PlannerDialog
       open={open}
@@ -704,12 +701,6 @@ function TierDialog({
           ),
         }))}
       />
-      <p className="text-xs text-v2-fg-secondary tabular-nums">
-        필요 엘레프 {getRecruitmentTargetEleph(value).toLocaleString()}개 · 같은 학생을 {copies}번 모집해야 해요
-      </p>
-      <p className="text-xs text-v2-fg-tertiary">
-        아직 모집하지 않은 학생을 기준으로, 모집에서 얻는 엘레프만 계산에 넣어요.
-      </p>
     </PlannerDialog>
   );
 }

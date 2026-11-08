@@ -1,4 +1,4 @@
-import { CheckIcon, ExclamationCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { CheckIcon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
 import type { ReactNode } from "react";
 import type { PyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
@@ -42,7 +42,6 @@ export function ResourceIcon({ resource, className }: { resource: PyroxeneResour
 
 const statusContent: Record<PyroxeneEventStatus, { label: string; className: string; Icon: typeof CheckIcon }> = {
   enough: { label: "충분", className: "bg-v2-success-subtle text-v2-success", Icon: CheckIcon },
-  uncertain: { label: "불확실", className: "bg-v2-warning-subtle text-v2-warning", Icon: ExclamationTriangleIcon },
   short: { label: "부족", className: "bg-v2-danger-subtle text-v2-danger", Icon: ExclamationCircleIcon },
 };
 
@@ -69,7 +68,7 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
  * change, balance, and actions sit on the second. The date cell spans both lines.
  */
 export const SCHEDULE_GRID_CLASS_NAME =
-  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 gap-y-0.5 @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:gap-x-3 @2xl:gap-y-0";
+  "grid grid-cols-[3rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 gap-y-0.5 @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:gap-x-3 @2xl:gap-y-0";
 export const SCHEDULE_DATE_CELL = "row-span-2 self-stretch @2xl:row-span-1 @2xl:self-auto";
 export const SCHEDULE_TITLE_CELL = "col-span-4 @2xl:col-span-1";
 export const SCHEDULE_DETAIL_CELL = "col-start-2 row-start-2 @2xl:hidden";
