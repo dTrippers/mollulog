@@ -109,8 +109,8 @@ queues, and workflows) from Wrangler configuration; environment variables
 provide only the values that are not bindings.
 
 For authorized schema work, use `dev:db:migrate` for the task's new SQL and
-check `dev:db:status` afterward. Starting or stopping services and production
-operations remain separate actions.
+check `dev:db:status` afterward. Starting or stopping PostgreSQL itself and
+production operations remain separate actions.
 
 ## Tests
 
