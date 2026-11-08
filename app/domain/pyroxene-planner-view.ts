@@ -60,7 +60,6 @@ export type PlannerIncomeRow = {
 
 export type PlannerTimelineRow =
   | { kind: "year"; key: string; year: number }
-  | { kind: "rework"; key: string }
   | { kind: "event"; key: string; entry: TimelineEntry; marker: number | null }
   | { kind: "income"; key: string; row: PlannerIncomeRow }
   | {
@@ -119,7 +118,6 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
   const rows: PlannerTimelineRow[] = [];
   const display = new Set(options.display);
   let year: number | null = null;
-  let reworkShown = false;
   let pending: TimelineEntry[] = [];
 
   const pushYear = (date: Dayjs) => {
@@ -216,10 +214,6 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
     if (!isEventShown(entry, options)) continue;
     flushIncome();
     pushYear(entry.date);
-    if (!reworkShown && event.recruitmentRuleSet === "call_charge_v1") {
-      reworkShown = true;
-      rows.push({ kind: "rework", key: "rework" });
-    }
     rows.push({ kind: "event", key: `event-${event.uid}`, entry, marker: options.markers.get(event.uid) ?? null });
   }
   flushIncome();

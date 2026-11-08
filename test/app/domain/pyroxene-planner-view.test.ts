@@ -124,7 +124,7 @@ describe("pyroxene planner view", () => {
       incomeEntry("2027-01-02", "weekly_mission", 120, 620),
     ];
     const rows = buildPlannerTimelineRows(timeline, rowOptions({ markers: numberTargetEvents(timeline) }));
-    expect(rows.map((row) => row.kind)).toEqual(["year", "income-group", "rework", "event", "year", "income"]);
+    expect(rows.map((row) => row.kind)).toEqual(["year", "income-group", "event", "year", "income"]);
     const group = rows[1];
     if (group.kind !== "income-group") throw new Error("expected a group");
     expect(group.rows.map((row) => [row.label, row.delta.pyroxene, row.itemUid])).toEqual([
@@ -134,7 +134,7 @@ describe("pyroxene planner view", () => {
     ]);
     expect(group.delta).toBe(7820);
     expect(group.balance).toBe(7820);
-    const single = rows[5];
+    const single = rows[4];
     if (single.kind !== "income") throw new Error("expected a single row");
     expect(single.row.label).toBe("반복 수급");
   });

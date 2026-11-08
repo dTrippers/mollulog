@@ -1,5 +1,11 @@
-import { ArrowUturnLeftIcon, CheckIcon, ChevronDownIcon, PencilIcon, StarIcon } from "@heroicons/react/16/solid";
-import { Square3Stack3DIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowUturnLeftIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  PencilIcon,
+  Square3Stack3DIcon,
+  StarIcon,
+} from "@heroicons/react/16/solid";
 import { forwardRef, useId, useMemo, useState } from "react";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
@@ -178,7 +184,9 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
           {since.tz("Asia/Seoul").format("MM/DD")}
         </span>
-        <span className="text-xs text-v2-fg-tertiary">~{dayjs(event.until).tz("Asia/Seoul").format("MM/DD")}</span>
+        <span className={cn("text-xs text-v2-fg-tertiary", marker !== null && "pl-5")}>
+          ~{dayjs(event.until).tz("Asia/Seoul").format("MM/DD")}
+        </span>
       </div>
 
       <div className="flex min-w-0 flex-col gap-2">
@@ -473,8 +481,8 @@ function TargetDialog({
       }
     >
       <div className="flex flex-col gap-1.5">
-        <span className="text-xs font-medium text-v2-fg-secondary">이 이벤트의 ★3 모집 기준</span>
-        <SegmentedChoice label="이 이벤트의 ★3 모집 기준" options={options} value={basis} onChange={setBasis} />
+        <span className="text-xs font-medium text-v2-fg-secondary">이 이벤트의 계산 기준</span>
+        <SegmentedChoice label="이 이벤트의 계산 기준" options={options} value={basis} onChange={setBasis} />
       </div>
       {basis === "manual" ? (
         <div className="flex flex-col gap-1">

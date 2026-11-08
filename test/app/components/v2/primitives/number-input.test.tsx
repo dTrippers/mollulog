@@ -20,6 +20,8 @@ describe("NumberInput grouped stepper", () => {
     expect(group.className).toContain("border-v2-control-border-strong");
     expect(group.className).toContain("dark:border-v2-control-border");
     expect(container.querySelector("input")?.className).toContain("appearance-none");
+    // Firefox keeps its spin buttons unless the number input renders as a text field.
+    expect(container.querySelector("input")?.className).toContain("[appearance:textfield]");
     expect(container.querySelector("input")?.className).toContain("h-full");
     expect(container.querySelector("input")?.className).toContain("flex-1");
     expect(container.querySelector("input")?.className).toContain("min-w-0");

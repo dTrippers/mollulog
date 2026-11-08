@@ -295,14 +295,6 @@ export function PlannerSchedule({
               </p>
             );
           }
-          if (row.kind === "rework") {
-            return (
-              <div key={row.key} className="flex items-center gap-2 px-3 pt-2">
-                <span className="text-xs font-semibold text-v2-fg">여기부터 개편 규칙</span>
-                <span className="h-px flex-1 bg-v2-divider" />
-              </div>
-            );
-          }
           if (row.kind === "event") {
             const uid = row.entry.source.event?.uid ?? "";
             const selected = uid === selectedEventUid;

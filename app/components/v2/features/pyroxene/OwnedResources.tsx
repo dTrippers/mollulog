@@ -1,5 +1,4 @@
-import { PencilIcon } from "@heroicons/react/16/solid";
-import { Square3Stack3DIcon } from "@heroicons/react/24/outline";
+import { PencilIcon, Square3Stack3DIcon } from "@heroicons/react/16/solid";
 import { useEffect, useId, useState } from "react";
 import { MAX_RECRUITMENT_STACK, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import type { PickupResources } from "~/domain/pyroxene-timeline";

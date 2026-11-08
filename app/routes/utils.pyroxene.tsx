@@ -1,10 +1,4 @@
-import {
-  ArrowTrendingUpIcon,
-  CalendarIcon,
-  ChartBarIcon,
-  Squares2X2Icon,
-  WalletIcon,
-} from "@heroicons/react/24/outline";
+import { ArrowTrendingUpIcon, CalendarIcon, ChartBarIcon, Squares2X2Icon, WalletIcon } from "@heroicons/react/16/solid";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
@@ -1296,7 +1290,7 @@ export default function PyroxenePlanner() {
         >
           <OwnedResourceList values={ownedValues} stacksEntered={stacksEntered} />
         </PanelSheet>
-        <PanelSheet panelId="basis" title="★3 모집 기준" Icon={ChartBarIcon}>
+        <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon}>
           <PickupBasisPanel
             value={options.event.pickupChance}
             onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
@@ -1339,7 +1333,7 @@ export default function PyroxenePlanner() {
           </button>
         }
         panels={[
-          { panelId: "basis", title: "★3 모집 기준", shortTitle: "기준", Icon: ChartBarIcon },
+          { panelId: "basis", title: "계산 기준", shortTitle: "기준", Icon: ChartBarIcon },
           { panelId: "income", title: "수급 계획", shortTitle: "수급", Icon: ArrowTrendingUpIcon },
         ]}
       />
