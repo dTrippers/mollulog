@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { buildBalanceChartPoints } from "~/components/v2/features/pyroxene/BalanceChart";
 import {
   buildPlannerTimelineRows,
   getPyroxeneEventStatus,
@@ -7,6 +8,7 @@ import {
   summarizePyroxeneTimeline,
 } from "~/domain/pyroxene-planner-view";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
+import { createOptimisticAttendanceTimelineItems, getAttendanceStartDate } from "~/domain/pyroxene-sources";
 import type { TimelineEntry, TimelinePickupPlan } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 
@@ -148,5 +150,42 @@ describe("pyroxene planner view", () => {
       rowOptions({ hideUntargeted: true, selectedEventUid: "b", completedEventUids: new Set(["c"]) }),
     );
     expect(rows.flatMap((row) => (row.kind === "event" ? [row.entry.source.event?.uid] : []))).toEqual(["b", "c"]);
+  });
+
+  it("sums a group from the actual balance change, not a collected row's shown reward", () => {
+    const timeline = [
+      incomeEntry("2026-11-10", "raid", 0, 0, { description: "총력전", collectedSourceKey: "raid-key" }),
+      incomeEntry("2026-11-11", "daily_mission", 20, 20),
+    ];
+    const rows = buildPlannerTimelineRows(
+      timeline,
+      rowOptions({
+        collectedSourceKeys: new Set(["raid-key"]),
+        collectedSourceResources: new Map([["raid-key", resources(1000)]]),
+      }),
+    );
+    const group = rows.find((row) => row.kind === "income-group");
+    if (group?.kind !== "income-group") throw new Error("expected a group");
+    expect(group.delta).toBe(20);
+  });
+
+  it("recovers the attendance start date from its reward dates", () => {
+    const start = new Date("2026-11-01T04:00:00+09:00");
+    const items = createOptimisticAttendanceTimelineItems(start, "att");
+    expect(getAttendanceStartDate(items.map((item) => new Date(item.eventAt)))?.toISOString()).toBe(
+      start.toISOString(),
+    );
+    expect(getAttendanceStartDate([])).toBeNull();
+  });
+
+  it("keeps every target event of the same day on the chart", () => {
+    const timeline = [eventEntry("a", "2026-12-01T02:00:00Z", 500), eventEntry("b", "2026-12-01T03:00:00Z", 100)];
+    const points = buildBalanceChartPoints(timeline, numberTargetEvents(timeline));
+    expect(points).toHaveLength(1);
+    expect(points[0].balance).toBe(100);
+    expect(points[0].events.map((event) => [event.marker, event.students.map((student) => student.uid)])).toEqual([
+      [1, ["s-a"]],
+      [2, ["s-b"]],
+    ]);
   });
 });

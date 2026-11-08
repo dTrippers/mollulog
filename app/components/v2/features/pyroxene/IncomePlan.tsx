@@ -75,7 +75,7 @@ export type IncomePlanHandlers = {
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
 };
 
-type IncomeDialog = "ap" | "attendance" | "add" | null;
+type IncomeDialog = "ap" | "attendance" | null;
 
 function PlanRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -116,22 +116,16 @@ export function IncomePlanPanel({
   options,
   activePackages,
   attendanceStart,
-  addRequest,
   saving,
   handlers,
 }: {
   options: PyroxenePlannerOptions;
   activePackages: ActivePyroxenePackage[];
   attendanceStart: Date | null;
-  // Increments when the panel header's add button is pressed.
-  addRequest: number;
   saving: boolean;
   handlers: IncomePlanHandlers;
 }) {
   const [dialog, setDialog] = useState<IncomeDialog>(null);
-  useEffect(() => {
-    if (addRequest > 0) setDialog("add");
-  }, [addRequest]);
   const exceptionCount = options.consumption.apChargeExceptions.length;
 
   return (
@@ -213,7 +207,6 @@ export function IncomePlanPanel({
         }}
         saving={saving}
       />
-      <AddIncomeDialog open={dialog === "add"} onClose={() => setDialog(null)} saving={saving} handlers={handlers} />
     </div>
   );
 }
@@ -361,7 +354,8 @@ const addTabs: { id: AddTab; label: string }[] = [
   { id: "other", label: "기타" },
 ];
 
-function AddIncomeDialog({
+/** Rendered by the route so a closing panel sheet cannot remount and reopen it. */
+export function AddIncomeDialog({
   open,
   onClose,
   saving,

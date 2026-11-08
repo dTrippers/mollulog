@@ -9,7 +9,6 @@ import {
   createOptimisticOtherTimelineItems,
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   normalizePyroxeneTimelineEventAt,
-  PYROXENE_SOURCE_DEFINITIONS,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
 import dayjs from "../../../../../app/lib/dayjs";

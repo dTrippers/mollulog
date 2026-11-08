@@ -19,7 +19,7 @@ import { useGuestPlanner } from "~/components/features/futures/useGuestPlanner";
 import { usePyroxeneScheduleItems } from "~/components/features/futures/usePyroxeneScheduleItems";
 import { usePyroxeneTimeline } from "~/components/features/futures/usePyroxeneTimeline";
 import type { PlannerEventData, PlannerEventDataPatch } from "~/components/v2/features/pyroxene/EventCard";
-import { IncomePlanAddButton, IncomePlanPanel } from "~/components/v2/features/pyroxene/IncomePlan";
+import { AddIncomeDialog, IncomePlanAddButton, IncomePlanPanel } from "~/components/v2/features/pyroxene/IncomePlan";
 import {
   formatInputAt,
   OwnedResourceList,
@@ -73,6 +73,7 @@ import {
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
   extractPyroxeneTimelineBaseUid,
+  getAttendanceStartDate,
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources, PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
@@ -537,7 +538,7 @@ export default function PyroxenePlanner() {
   const [hideUntargeted, setHideUntargeted] = useState(false);
   const [resourcesDialogOpen, setResourcesDialogOpen] = useState(false);
   const [methodDialogOpen, setMethodDialogOpen] = useState(false);
-  const [incomeAddRequest, setIncomeAddRequest] = useState(0);
+  const [incomeAddOpen, setIncomeAddOpen] = useState(false);
   const [selectedEventMissing, setSelectedEventMissing] = useState(false);
   const selectedEventRef = useRef<HTMLDivElement>(null);
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
@@ -1125,10 +1126,10 @@ export default function PyroxenePlanner() {
     [scheduleItems, initialDate],
   );
   const attendanceStart = useMemo(() => {
-    const dates = localTimelineItems
+    const rewardDates = localTimelineItems
       .filter((item) => item.source === "attendance")
       .map((item) => new Date(item.eventAt));
-    return dates.length > 0 ? new Date(Math.min(...dates.map((date) => date.getTime()))) : null;
+    return getAttendanceStartDate(rewardDates);
   }, [localTimelineItems]);
   const assumptions = useMemo(
     () => buildPyroxeneCalculationAssumptions(scheduleItems, options.event.pickupChance, initialDate ?? new Date()),
@@ -1306,13 +1307,12 @@ export default function PyroxenePlanner() {
           panelId="income"
           title="수급 계획"
           Icon={ArrowTrendingUpIcon}
-          headerAction={<IncomePlanAddButton onClick={() => setIncomeAddRequest((request) => request + 1)} />}
+          headerAction={<IncomePlanAddButton onClick={() => setIncomeAddOpen(true)} />}
         >
           <IncomePlanPanel
             options={options}
             activePackages={activePackages}
             attendanceStart={attendanceStart}
-            addRequest={incomeAddRequest}
             saving={saving}
             handlers={incomeHandlers}
           />
@@ -1353,6 +1353,12 @@ export default function PyroxenePlanner() {
           handleSaveOwnedResources(null, values);
           setResourcesDialogOpen(false);
         }}
+      />
+      <AddIncomeDialog
+        open={incomeAddOpen}
+        onClose={() => setIncomeAddOpen(false)}
+        saving={saving}
+        handlers={incomeHandlers}
       />
       <CalculationMethodDialog
         open={methodDialogOpen}

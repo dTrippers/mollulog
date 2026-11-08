@@ -200,7 +200,8 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
       from: first.date,
       to: last.date,
       rows: incomeRows,
-      delta: incomeRows.reduce((sum, row) => sum + row.delta.pyroxene, 0),
+      // The actual balance change: a collected row shows its original reward, which is already counted.
+      delta: entries.reduce((sum, entry) => sum + entry.resourceDelta.pyroxene, 0),
       balance: last.accumulatedResources.pyroxene,
       breakdown: [...counts].map(([label, count]) => ({ label, count })),
     });

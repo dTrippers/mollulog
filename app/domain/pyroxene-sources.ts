@@ -313,6 +313,16 @@ export function createOptimisticAttendanceTimelineItems(startDate: Date, baseUid
   );
 }
 
+/** The day-1 date that created the given attendance reward dates (the inverse of the items above). */
+export function getAttendanceStartDate(rewardDates: Date[]): Date | null {
+  if (rewardDates.length === 0) return null;
+  const firstRewardDay = Math.min(...PYROXENE_ATTENDANCE_CONFIG.map(({ day }) => day));
+  const earliest = Math.min(...rewardDates.map((date) => date.getTime()));
+  return dayjs(earliest)
+    .subtract(firstRewardDay - 1, "day")
+    .toDate();
+}
+
 export function createOptimisticOtherTimelineItems(
   resources: PickupResources,
   description: string,
