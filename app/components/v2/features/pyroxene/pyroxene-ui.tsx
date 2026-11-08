@@ -1,4 +1,5 @@
 import { CheckIcon, ExclamationCircleIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import type { Dayjs } from "dayjs";
 import type { ReactNode } from "react";
 import type { PyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
@@ -7,6 +8,8 @@ import { resourceImageUrl } from "~/models/assets";
 import { useV2Page } from "../../layout/V2Page";
 import { Dialog } from "../../primitives/Dialog";
 import { Sheet } from "../../primitives/Sheet";
+
+export const KST = "Asia/Seoul";
 
 export type PyroxeneResourceKey = keyof typeof PYROXENE_RESOURCE_UIDS;
 
@@ -48,10 +51,45 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
   const { label, className, Icon } = statusContent[status];
   return (
     <span
-      className={cn("inline-flex items-center gap-0.5 rounded-full px-1.5 text-xs leading-5 font-medium", className)}
+      className={cn(
+        "inline-flex h-5.5 items-center gap-1 rounded-full px-2 text-xs font-semibold whitespace-nowrap",
+        className,
+      )}
     >
-      <Icon className="size-3" aria-hidden="true" />
+      <Icon className="size-3.5" aria-hidden="true" />
       {label}
+    </span>
+  );
+}
+
+/** The "상하위 10% 이내" label in front of a range, muted like the numbers it qualifies. */
+export function RangeTag() {
+  return <span className="mr-1 shrink-0 text-v2-fg-tertiary">상하위 10% 이내</span>;
+}
+
+/**
+ * Shared columns for the schedule: date, content, change, balance, actions. Mobile keeps the numbers in fixed widths so
+ * they line up across separate rows.
+ */
+export const SCHEDULE_GRID_CLASS_NAME =
+  "grid grid-cols-[4.75rem_minmax(0,1fr)_3.5rem_3.5rem_1.75rem] gap-x-1.5 @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:gap-x-3";
+
+/** Start date in bold and the end date muted; on narrow layouts a same-month end drops its month. */
+export function ScheduleDateRange({ from, to }: { from: Dayjs; to: Dayjs | null }) {
+  const start = from.tz(KST);
+  const end = to?.tz(KST) ?? null;
+  const showEnd = end && !end.isSame(start, "day");
+  return (
+    <span className="font-semibold text-v2-fg tabular-nums">
+      {start.format("MM/DD")}
+      {showEnd ? (
+        <>
+          <span className="text-xs font-normal text-v2-fg-tertiary @lg:hidden">
+            ~{end.isSame(start, "month") ? end.format("DD") : end.format("MM/DD")}
+          </span>
+          <span className="hidden font-normal text-v2-fg-tertiary @lg:inline"> ~{end.format("MM/DD")}</span>
+        </>
+      ) : null}
     </span>
   );
 }

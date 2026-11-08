@@ -32,8 +32,13 @@ import {
   balanceClassName,
   formatAmount,
   formatSigned,
+  KST,
   PlannerDialog,
+  RangeTag,
   RECRUITMENT_STACK_LABELS,
+  ResourceIcon,
+  SCHEDULE_GRID_CLASS_NAME,
+  ScheduleDateRange,
   StatusPill,
 } from "./pyroxene-ui";
 
@@ -96,7 +101,7 @@ function StackBar({ stack }: { stack: TimelinePickupStack }) {
     <div className="flex items-center justify-end gap-1.5 text-xs text-v2-fg-secondary">
       <Square3Stack3DIcon className="size-3.5" aria-hidden="true" />
       <span className="whitespace-nowrap">{label}</span>
-      <span aria-hidden="true" className="relative h-1.5 w-10 overflow-hidden rounded-full bg-v2-inset">
+      <span aria-hidden="true" className="relative h-1.5 w-12 overflow-hidden rounded-full bg-v2-inset">
         <span
           className="absolute inset-y-0 left-0 rounded-full bg-v2-fg-secondary"
           style={{ width: `${(stack.after / 200) * 100}%` }}
@@ -108,6 +113,15 @@ function StackBar({ stack }: { stack: TimelinePickupStack }) {
         <span className="sr-only">/200</span>
       </span>
     </div>
+  );
+}
+
+function StackDelta({ stack }: { stack: TimelinePickupStack }) {
+  return (
+    <span className="inline-flex items-center gap-0.5 text-xs font-medium text-v2-fg-secondary tabular-nums">
+      <Square3Stack3DIcon className="size-3.5" aria-label={RECRUITMENT_STACK_LABELS[stack.scope]} />
+      {formatSigned(stack.after - stack.before)}
+    </span>
   );
 }
 
@@ -169,213 +183,37 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   };
 
   const tierStudent = typeof dialog === "object" && dialog ? students.find((s) => s.uid === dialog.tier) : undefined;
+  const balance = entry.accumulatedResources.pyroxene;
+  const until = dayjs(event.until);
+  const changedStacks = plan ? plan.stacks.filter((stack) => stack.after !== stack.before) : [];
+  // An event with nothing left to choose reads as one line, like the income rows around it.
+  const compact = !plan && !completed && !showRecruited && visibleStudents.length === 0;
 
-  return (
-    <div
-      ref={ref}
-      tabIndex={selected ? -1 : undefined}
-      className={cn(
-        "grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 rounded-lg bg-v2-surface p-3 @lg:grid-cols-[4.5rem_minmax(0,1fr)_8.5rem] focus:outline-none",
-        selected && "ring-2 ring-v2-focus",
-      )}
-    >
-      <div className="flex flex-col text-sm tabular-nums">
-        <span className="flex items-center gap-1 font-semibold text-v2-fg">
-          {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
-          {since.tz("Asia/Seoul").format("MM/DD")}
-        </span>
-        <span className={cn("text-xs text-v2-fg-tertiary", marker !== null && "pl-5")}>
-          ~{dayjs(event.until).tz("Asia/Seoul").format("MM/DD")}
-        </span>
-      </div>
-
-      <div className="flex min-w-0 flex-col gap-2">
-        <div className="flex flex-col gap-1">
-          {ruleIsLegacy || freeLabel || completed ? (
-            <div className="flex flex-wrap gap-1 text-xs">
-              {completed ? (
-                <span className="inline-flex items-center gap-0.5 rounded bg-v2-success-subtle px-1.5 leading-5 text-v2-success">
-                  <CheckIcon className="size-3" aria-hidden="true" />
-                  완료
-                </span>
-              ) : null}
-              {ruleIsLegacy ? (
-                <span className="rounded bg-v2-inset px-1.5 leading-5 text-v2-fg-secondary">개편 전 규칙</span>
-              ) : null}
-              {freeLabel ? (
-                <span className="inline-flex items-center gap-0.5 rounded bg-v2-accent-subtle px-1.5 leading-5 text-v2-accent">
-                  <StarIcon className="size-3" aria-hidden="true" />
-                  무료 {freeLabel}회
-                </span>
-              ) : null}
-            </div>
-          ) : null}
-          <h3 className="text-sm font-semibold break-keep text-v2-fg">{event.name}</h3>
-        </div>
-
-        <div className="flex flex-wrap items-start gap-2">
-          {visibleStudents.map((student) => {
-            const names = splitVisibleStudentName(student.name);
-            const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
-            return (
-              <div key={student.uid} className="w-14">
-                <StudentThumb
-                  studentUid={student.imageUid ?? student.uid}
-                  name={names.name}
-                  variant={names.variant}
-                  small
-                  fluid
-                  onSelect={() =>
-                    student.favorited
-                      ? setDialog({ tier: student.uid })
-                      : handlers.onFavoriteChange(student.contentUid, student.uid, true)
-                  }
-                  selected={student.favorited}
-                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "목표로 추가"}
-                  grayscaleWhenUnselected
-                  favorite={{
-                    visible: student.favorited,
-                    icon: "favorited",
-                    countText: null,
-                    accessibleName: "관심 학생",
-                  }}
-                  scrimLabel={
-                    student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? tierLabel(tier) : undefined
-                  }
-                  scrimAriaLabel={student.favorited ? `목표 ${tierLabel(tier)}` : undefined}
-                />
-              </div>
-            );
-          })}
-          {recruited.length > 0 && !showRecruited ? (
-            <button
-              type="button"
-              onClick={() => setShowRecruited(true)}
-              className={cn(
-                "mt-3 inline-flex min-h-7 cursor-pointer items-center gap-0.5 rounded-full bg-v2-inset px-2.5 text-xs text-v2-fg-secondary hover:bg-v2-filled-hover",
-                v2FocusRing,
-              )}
-            >
-              모집한 학생 {recruited.length}
-              <ChevronDownIcon className="size-3.5" aria-hidden="true" />
-            </button>
-          ) : null}
-        </div>
-
-        {plan ? (
-          <div className="flex flex-col gap-1 text-xs text-v2-fg-secondary tabular-nums">
-            <p className="flex flex-wrap items-center gap-x-1.5">
-              <span className="text-sm font-semibold text-v2-fg">{plan.pulls.toLocaleString()}회</span>
-              {plan.basis === "manual" ? (
-                <span className="inline-flex items-center gap-0.5">
-                  <PencilIcon className="size-3" aria-hidden="true" />
-                  직접 입력
-                </span>
-              ) : plan.basisOverridden ? (
-                <span className="rounded bg-v2-accent-subtle px-1 text-v2-accent">
-                  {PICKUP_BASIS_SHORT_LABELS[plan.basis]} 기준
-                </span>
-              ) : null}
-              {plan.pullRange ? (
-                <span>
-                  상하위 10% 이내 {plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()}회
-                </span>
-              ) : null}
-              {plan.basis === "manual" || plan.basisOverridden ? (
-                <Button
-                  variant="link"
-                  size="sm"
-                  className="min-h-0 text-v2-link"
-                  onClick={() => handlers.onUpdateEventData(event.uid, { expectedTrials: null, pickupChance: null })}
-                >
-                  <ArrowUturnLeftIcon className="size-3" aria-hidden="true" />
-                  기본으로
-                </Button>
-              ) : null}
-            </p>
-            <p className="flex flex-wrap gap-x-3">
-              {plan.freePulls > 0 ? <span>무료 {plan.freePulls}회</span> : null}
-              {delta.tenTimeTicket < 0 ? <span>10회 티켓 ×{-delta.tenTimeTicket}</span> : null}
-              {delta.oneTimeTicket < 0 ? <span>1회 티켓 ×{-delta.oneTimeTicket}</span> : null}
-              {pyroxenePulls > 0 ? <span>청휘석 {pyroxenePulls.toLocaleString()}회</span> : null}
-            </p>
-          </div>
-        ) : !completed ? (
-          <p className="text-xs text-v2-fg-tertiary">학생을 눌러 목표로 추가하면 모집 비용을 계산해요.</p>
+  const pills =
+    completed || ruleIsLegacy || freeLabel ? (
+      <>
+        {completed ? (
+          <span className="inline-flex h-5.5 items-center gap-0.5 rounded-full bg-v2-success-subtle px-2 text-xs font-semibold text-v2-success">
+            <CheckIcon className="size-3.5" aria-hidden="true" />
+            완료
+          </span>
         ) : null}
-
-        <div className="flex flex-wrap gap-1.5">
-          {plan ? (
-            <Button size="sm" onClick={() => setDialog("target")}>
-              <PencilIcon className="size-3" aria-hidden="true" />
-              목표 설정
-            </Button>
-          ) : null}
-          {canComplete ? (
-            <Button size="sm" onClick={() => setDialog("complete")}>
-              <CheckIcon className="size-3" aria-hidden="true" />
-              완료 기록
-            </Button>
-          ) : null}
-          {completed && canRecordCompletion ? (
-            <Button
-              size="sm"
-              variant={confirmingDelete ? "danger" : "text"}
-              onClick={() => {
-                if (!confirmingDelete) {
-                  setConfirmingDelete(true);
-                  window.setTimeout(() => setConfirmingDelete(false), 3000);
-                  return;
-                }
-                setConfirmingDelete(false);
-                handlers.onDeleteCompletion(event.uid);
-              }}
-            >
-              {confirmingDelete ? "정말 삭제할까요?" : "완료 기록 삭제"}
-            </Button>
-          ) : null}
-        </div>
-      </div>
-
-      <div
-        className={cn(
-          "col-start-2 flex-col items-start gap-1 tabular-nums @lg:col-start-3 @lg:row-start-1 @lg:flex @lg:items-end",
-          plan ? "flex" : "hidden",
-        )}
-      >
-        <span className="text-sm text-v2-fg-secondary">{plan ? formatSigned(delta.pyroxene) : "—"}</span>
-        {plan
-          ? plan.stacks
-              .filter((stack) => stack.after !== stack.before)
-              .map((stack) => (
-                <span key={stack.scope} className="inline-flex items-center gap-0.5 text-xs text-v2-fg-tertiary">
-                  <Square3Stack3DIcon className="size-3" aria-label={RECRUITMENT_STACK_LABELS[stack.scope]} />
-                  {formatSigned(stack.after - stack.before)}
-                </span>
-              ))
-          : null}
-        {plan ? (
-          <>
-            <span
-              className={cn("text-lg leading-6 font-semibold", balanceClassName(entry.accumulatedResources.pyroxene))}
-            >
-              {formatAmount(entry.accumulatedResources.pyroxene)}
-            </span>
-            {range ? (
-              <span className="text-xs text-v2-fg-tertiary @lg:text-right">
-                상하위 10% 이내
-                <br />
-                {formatAmount(range.low)} ~ {formatAmount(range.high)}
-              </span>
-            ) : null}
-            {status ? <StatusPill status={status} /> : null}
-            {plan.stacks.map((stack) => (
-              <StackBar key={stack.scope} stack={stack} />
-            ))}
-          </>
+        {ruleIsLegacy ? (
+          <span className="inline-flex h-5.5 items-center rounded-full bg-v2-inset px-2 text-xs font-semibold text-v2-fg-secondary">
+            개편 전 규칙
+          </span>
         ) : null}
-      </div>
+        {freeLabel ? (
+          <span className="inline-flex items-center gap-0.5 text-xs font-semibold text-v2-perk">
+            <StarIcon className="size-3.5" aria-hidden="true" />
+            무료 {freeLabel}회
+          </span>
+        ) : null}
+      </>
+    ) : null;
 
+  const dialogs = (
+    <>
       <TargetDialog
         key={dialog === "target" ? "target-open" : "target-closed"}
         open={dialog === "target"}
@@ -420,6 +258,294 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           setDialog(null);
         }}
       />
+    </>
+  );
+
+  if (compact) {
+    return (
+      <div
+        ref={ref}
+        tabIndex={selected ? -1 : undefined}
+        className={cn(
+          SCHEDULE_GRID_CLASS_NAME,
+          "min-h-9 items-center rounded-md py-1.5 pr-3 pl-7 text-[0.8125rem] focus:outline-none @lg:px-3",
+          selected && "ring-2 ring-v2-focus",
+        )}
+      >
+        <ScheduleDateRange from={since} to={until} />
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="min-w-8 truncate text-v2-fg-secondary">{event.name}</span>
+          {recruited.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => setShowRecruited(true)}
+              className={cn(
+                "inline-flex shrink-0 cursor-pointer items-center gap-0.5 rounded text-xs whitespace-nowrap text-v2-fg-tertiary hover:text-v2-fg",
+                v2FocusRing,
+              )}
+            >
+              모집한 학생 {recruited.length}/{students.length}
+              <ChevronDownIcon className="hidden size-3.5 @lg:block" aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
+        <span className="text-right text-v2-fg-tertiary">—</span>
+        <span />
+        <span />
+        {dialogs}
+      </div>
+    );
+  }
+
+  const thumbWidth = plan ? "w-15" : "w-11";
+
+  return (
+    <div
+      ref={ref}
+      tabIndex={selected ? -1 : undefined}
+      className={cn(
+        "flex flex-col gap-3 rounded-lg bg-v2-surface px-3 py-3.5 focus:outline-none @lg:grid @lg:grid-cols-[5.75rem_minmax(0,1fr)_6.5rem_11rem_3.75rem] @lg:items-start @lg:gap-x-3 @lg:gap-y-0",
+        selected && "ring-2 ring-v2-focus",
+      )}
+    >
+      <div className="hidden flex-col pt-px text-[0.8125rem] font-semibold tabular-nums @lg:flex">
+        <span className="flex items-center gap-1.5 text-v2-fg">
+          {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
+          {since.tz(KST).format("MM/DD")}
+        </span>
+        <span className={cn("text-xs font-normal text-v2-fg-tertiary", marker !== null && "pl-5.5")}>
+          ~{until.tz(KST).format("MM/DD")}
+        </span>
+      </div>
+
+      <div className="flex min-w-0 flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[0.8125rem] font-semibold tabular-nums @lg:hidden">
+            {marker !== null ? <MarkerBadge marker={marker} short={status === "short"} /> : null}
+            <span className="text-v2-fg">
+              {since.tz(KST).format("MM/DD")} ~ {until.tz(KST).format("MM/DD")}
+            </span>
+            {pills}
+          </div>
+          {pills ? <div className="hidden flex-wrap items-center gap-2 @lg:flex">{pills}</div> : null}
+          <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
+        </div>
+
+        <div className="flex flex-wrap items-start gap-2.5">
+          {visibleStudents.map((student) => {
+            const names = splitVisibleStudentName(student.name);
+            const tier = (targetTiers[student.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier;
+            return (
+              <div key={student.uid} className={cn(thumbWidth, !student.favorited && "opacity-45")}>
+                <StudentThumb
+                  studentUid={student.imageUid ?? student.uid}
+                  name={names.name}
+                  variant={names.variant}
+                  small
+                  fluid
+                  onSelect={() =>
+                    student.favorited
+                      ? setDialog({ tier: student.uid })
+                      : handlers.onFavoriteChange(student.contentUid, student.uid, true)
+                  }
+                  selected={student.favorited}
+                  showSelectedIndicator={false}
+                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "목표로 추가"}
+                  favorite={{
+                    visible: student.favorited,
+                    icon: "favorited",
+                    countText: null,
+                    accessibleName: "관심 학생",
+                  }}
+                  scrimLabel={
+                    student.favorited && tier !== DEFAULT_RECRUITMENT_TARGET_TIER ? tierLabel(tier) : undefined
+                  }
+                  scrimAriaLabel={student.favorited ? `목표 ${tierLabel(tier)}` : undefined}
+                />
+              </div>
+            );
+          })}
+          {recruited.length > 0 && !showRecruited ? (
+            <button
+              type="button"
+              onClick={() => setShowRecruited(true)}
+              className={cn(
+                "inline-flex min-h-7 cursor-pointer items-center gap-0.5 self-start rounded-full bg-v2-inset px-2.5 text-xs text-v2-fg-secondary hover:bg-v2-filled-hover",
+                plan ? "mt-4" : "mt-2",
+                v2FocusRing,
+              )}
+            >
+              모집한 학생 {recruited.length}
+              <ChevronDownIcon className="size-3.5" aria-hidden="true" />
+            </button>
+          ) : null}
+        </div>
+
+        {plan ? (
+          <div className="flex flex-col gap-2 text-[0.8125rem] text-v2-fg-secondary tabular-nums">
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+              <span className="font-semibold whitespace-nowrap text-v2-fg">{plan.pulls.toLocaleString()}회</span>
+              {plan.basis === "manual" ? (
+                <span className="inline-flex items-center gap-0.5 text-v2-fg-tertiary">
+                  <PencilIcon className="size-3" aria-hidden="true" />
+                  직접
+                </span>
+              ) : plan.basisOverridden ? (
+                <span className="rounded bg-v2-accent-subtle px-1 text-xs leading-5 font-medium text-v2-accent">
+                  {PICKUP_BASIS_SHORT_LABELS[plan.basis]} 기준
+                </span>
+              ) : null}
+              {plan.pullRange ? (
+                <span className="inline-flex items-center text-v2-fg-tertiary">
+                  {plan.basisOverridden ? <span className="mr-1.5">·</span> : null}
+                  <RangeTag />
+                  {plan.pullRange.low.toLocaleString()}~{plan.pullRange.high.toLocaleString()}회
+                </span>
+              ) : null}
+              {plan.basis === "manual" || plan.basisOverridden ? (
+                <>
+                  <span className="text-v2-fg-tertiary">·</span>
+                  <Button
+                    variant="link"
+                    size="sm"
+                    className="min-h-0 text-v2-link"
+                    onClick={() => handlers.onUpdateEventData(event.uid, { expectedTrials: null, pickupChance: null })}
+                  >
+                    <ArrowUturnLeftIcon className="size-3" aria-hidden="true" />
+                    기본으로
+                  </Button>
+                </>
+              ) : null}
+            </p>
+            <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] font-semibold text-v2-fg">
+              {plan.freePulls > 0 ? (
+                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                  <StarIcon className="size-3.5 text-v2-perk" aria-label="무료 모집" />
+                  {plan.freePulls}회
+                </span>
+              ) : null}
+              {delta.tenTimeTicket < 0 ? (
+                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                  <ResourceIcon resource="tenTimeTicket" className="size-4" />×{-delta.tenTimeTicket}
+                </span>
+              ) : null}
+              {delta.oneTimeTicket < 0 ? (
+                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                  <ResourceIcon resource="oneTimeTicket" className="size-4" />×{-delta.oneTimeTicket}
+                </span>
+              ) : null}
+              {pyroxenePulls > 0 ? (
+                <span className="inline-flex items-center gap-0.5 whitespace-nowrap">
+                  <ResourceIcon resource="pyroxene" className="size-4" />
+                  {pyroxenePulls.toLocaleString()}회
+                </span>
+              ) : null}
+            </p>
+          </div>
+        ) : null}
+
+        {plan ? (
+          <div className="flex flex-col gap-1.5 tabular-nums @lg:hidden">
+            <p className="text-xs text-v2-fg-tertiary">
+              모집 후<span className="ml-2 font-semibold text-v2-fg-secondary">{formatSigned(delta.pyroxene)}</span>
+            </p>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className={cn("text-xl leading-tight font-bold", balanceClassName(balance))}>
+                {formatAmount(balance)}
+              </span>
+              {range ? (
+                <span className="inline-flex items-center text-xs text-v2-fg-tertiary">
+                  <RangeTag />
+                  {formatAmount(range.low)}~{formatAmount(range.high)}
+                </span>
+              ) : null}
+              {status ? (
+                <span className="ml-auto">
+                  <StatusPill status={status} />
+                </span>
+              ) : null}
+            </div>
+            {plan.stacks.map((stack) => (
+              <div key={stack.scope} className="flex items-center justify-between gap-2">
+                <StackBar stack={stack} />
+                {stack.after !== stack.before ? <StackDelta stack={stack} /> : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="grid grid-cols-2 gap-1.5 empty:hidden @lg:flex">
+          {plan ? (
+            <Button size="sm" onClick={() => setDialog("target")}>
+              <PencilIcon className="size-3" aria-hidden="true" />
+              목표 설정
+            </Button>
+          ) : null}
+          {canComplete ? (
+            <Button size="sm" onClick={() => setDialog("complete")}>
+              <CheckIcon className="size-3" aria-hidden="true" />
+              완료 기록
+            </Button>
+          ) : null}
+          {completed && canRecordCompletion ? (
+            <Button
+              size="sm"
+              variant={confirmingDelete ? "danger" : "text"}
+              onClick={() => {
+                if (!confirmingDelete) {
+                  setConfirmingDelete(true);
+                  window.setTimeout(() => setConfirmingDelete(false), 3000);
+                  return;
+                }
+                setConfirmingDelete(false);
+                handlers.onDeleteCompletion(event.uid);
+              }}
+            >
+              {confirmingDelete ? "정말 삭제할까요?" : "완료 기록 삭제"}
+            </Button>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="hidden flex-col items-end gap-1.5 pt-px text-sm font-semibold text-v2-fg tabular-nums @lg:flex">
+        {plan ? (
+          <span className="inline-flex items-center gap-1">
+            <ResourceIcon resource="pyroxene" className="size-4" />
+            {formatSigned(delta.pyroxene)}
+          </span>
+        ) : (
+          <span className="text-v2-fg-tertiary">—</span>
+        )}
+        {changedStacks.map((stack) => (
+          <StackDelta key={stack.scope} stack={stack} />
+        ))}
+      </div>
+
+      <div className="hidden flex-col items-end gap-1 tabular-nums @lg:flex">
+        {plan ? (
+          <>
+            <span className={cn("text-lg leading-tight font-bold", balanceClassName(balance))}>
+              {formatAmount(balance)}
+            </span>
+            {range ? (
+              <span className="flex flex-col items-end gap-0.5 text-xs text-v2-fg-tertiary">
+                <RangeTag />
+                <span>
+                  {formatAmount(range.low)} ~ {formatAmount(range.high)}
+                </span>
+              </span>
+            ) : null}
+            {status ? <StatusPill status={status} /> : null}
+            {plan.stacks.map((stack) => (
+              <div key={stack.scope} className="mt-1">
+                <StackBar stack={stack} />
+              </div>
+            ))}
+          </>
+        ) : null}
+      </div>
+      <div className="hidden @lg:block" />
+      {dialogs}
     </div>
   );
 });

@@ -1,4 +1,11 @@
-import { ArrowTrendingUpIcon, CalendarIcon, ChartBarIcon, Squares2X2Icon, WalletIcon } from "@heroicons/react/16/solid";
+import {
+  ArrowTrendingUpIcon,
+  CalendarIcon,
+  ChartBarIcon,
+  ChevronRightIcon,
+  Squares2X2Icon,
+  WalletIcon,
+} from "@heroicons/react/16/solid";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   type ActionFunctionArgs,
@@ -23,13 +30,14 @@ import {
 } from "~/components/v2/features/pyroxene/OwnedResources";
 import { CalculationMethodDialog, PickupBasisPanel } from "~/components/v2/features/pyroxene/PickupBasis";
 import { PlannerSchedule, PlannerSummary } from "~/components/v2/features/pyroxene/PlannerSchedule";
-import { formatAmount } from "~/components/v2/features/pyroxene/pyroxene-ui";
+import { formatAmount, ResourceIcon } from "~/components/v2/features/pyroxene/pyroxene-ui";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
 import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
 import { PageAside } from "~/components/v2/layout/PageAside";
 import { PageHeader } from "~/components/v2/layout/PageHeader";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { v2FocusRing } from "~/components/v2/layout/styles";
 import { V2Page } from "~/components/v2/layout/V2Page";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
@@ -75,6 +83,7 @@ import dayjs from "~/lib/dayjs";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
+import { cn } from "~/lib/utils";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -1323,13 +1332,30 @@ export default function PyroxenePlanner() {
           <button
             type="button"
             onClick={() => setResourcesDialogOpen(true)}
-            aria-label={`보유 재화 수정, 청휘석 ${formatAmount(initialResources.pyroxene)}`}
-            className="flex min-h-12 min-w-0 flex-col items-start justify-center rounded-md px-3 text-left hover:bg-v2-hover"
+            aria-label={`보유 재화 수정, 청휘석 ${formatAmount(initialResources.pyroxene)}, 10회 모집 티켓 ${initialResources.tenTimeTicket}, 1회 모집 티켓 ${initialResources.oneTimeTicket}`}
+            className={cn(
+              "flex h-full min-h-12 w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg bg-v2-elevated px-4 py-1.5 text-left shadow-lg hover:bg-v2-hover",
+              v2FocusRing,
+            )}
           >
-            <span className="text-xs text-v2-fg-secondary">보유 청휘석</span>
-            <span className="text-sm font-semibold text-v2-fg tabular-nums">
-              {formatAmount(initialResources.pyroxene)}
+            <span className="flex min-w-0 flex-1 flex-col items-start">
+              <span className="flex items-center gap-3 text-sm font-semibold text-v2-fg tabular-nums">
+                <span className="inline-flex items-center gap-1">
+                  <ResourceIcon resource="pyroxene" className="size-4" />
+                  {formatAmount(initialResources.pyroxene)}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ResourceIcon resource="tenTimeTicket" className="size-4" />
+                  {formatAmount(initialResources.tenTimeTicket)}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <ResourceIcon resource="oneTimeTicket" className="size-4" />
+                  {formatAmount(initialResources.oneTimeTicket)}
+                </span>
+              </span>
+              <span className="text-xs text-v2-fg-tertiary tabular-nums">{formatInputAt(initialDate)}</span>
             </span>
+            <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
           </button>
         }
         panels={[

@@ -27,6 +27,8 @@ export type StudentThumbProps = {
   selectionActionLabel?: string;
   // Mobile-only alternative for compact grids with another top-edge badge.
   selectedIndicatorPosition?: "top-left" | "mobile-bottom-left";
+  // Off when another badge (such as the favorite heart) already shows the selection.
+  showSelectedIndicator?: boolean;
   mutedWhenUnselected?: boolean;
   grayscaleWhenUnselected?: boolean;
   // Shows the quick panel as the popover anchor.
@@ -74,6 +76,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     selected = false,
     selectionActionLabel,
     selectedIndicatorPosition = "top-left",
+    showSelectedIndicator = true,
     mutedWhenUnselected = false,
     grayscaleWhenUnselected = false,
     expanded = false,
@@ -147,7 +150,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         </span>
       ) : null}
       {favorite ? <FavoriteLabel state={favorite} personalStatePending={personalStatePending} /> : null}
-      {onSelect && selected ? (
+      {onSelect && selected && showSelectedIndicator ? (
         <span
           className={cn(
             "absolute left-1 flex size-5 items-center justify-center rounded-full bg-v2-fg text-v2-canvas",
