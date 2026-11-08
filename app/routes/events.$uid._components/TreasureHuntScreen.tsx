@@ -302,7 +302,7 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
               </StatusNotice>
             ) : complete ? (
               <StatusNotice tone="success">{treasureHuntLocale.noRemainingTreasure}</StatusNotice>
-            ) : analysis.result?.status === "ok" ? (
+            ) : analysis.status === "ok" && analysis.result?.status === "ok" ? (
               <p className="text-sm font-medium text-v2-fg-secondary">
                 {treasureHuntLocale.recommendation(
                   analysis.result.recommended.length,

@@ -5,6 +5,7 @@ import { ResourceTypeEnum } from "~/graphql/graphql";
 import { TreasureHuntScreen } from "~/routes/events.$uid._components/TreasureHuntScreen";
 import { useTreasureHuntBoardAnalysis } from "~/lib/treasure-hunt/useTreasureHuntBoardAnalysis";
 import type { TreasureHuntConfig } from "~/domain/event-shop";
+import { treasureHuntLocale } from "~/locales/ko";
 
 jest.mock("~/components/v2/layout", () => ({
   PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children),
@@ -78,6 +79,33 @@ describe("treasure hunt v2 screen", () => {
 
     expect(markup).toContain("보물 확률을 계산하지 못했어요");
     expect(markup).toContain("다시 시도");
+  });
+
+  it("hides the previous board's recommendation while the analysis recalculates", () => {
+    const previousResult = {
+      status: "ok" as const,
+      cells: [[0.8]],
+      recommended: [{ x: 0, y: 0 }],
+      remaining: [],
+    };
+    mockedUseTreasureHuntBoardAnalysis.mockReturnValue({
+      status: "ok",
+      result: previousResult,
+      showSpinner: false,
+      retry: jest.fn(),
+    });
+    const ready = renderToStaticMarkup(createElement(TreasureHuntScreen, { eventUid: "event-1", config }));
+    expect(ready).toContain(treasureHuntLocale.recommendation(1, 80));
+
+    // Recalculation keeps the old result; it belongs to the previous board, so it stays hidden.
+    mockedUseTreasureHuntBoardAnalysis.mockReturnValue({
+      status: "calculating",
+      result: previousResult,
+      showSpinner: false,
+      retry: jest.fn(),
+    });
+    const calculating = renderToStaticMarkup(createElement(TreasureHuntScreen, { eventUid: "event-1", config }));
+    expect(calculating).not.toContain(treasureHuntLocale.recommendation(1, 80));
   });
 
   it("maps treasure probability to the six 1.x heat steps", () => {
