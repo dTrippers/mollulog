@@ -129,6 +129,7 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
   const delta = entry.resourceDelta;
   const after = entry.accumulatedResources;
   const range = getBalanceRange(entry);
+  const status = getPyroxeneEventStatus(entry);
   const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
   const changeClassName = "inline-flex items-center gap-1 text-sm font-semibold text-v2-fg @lg:justify-self-end";
   return (
@@ -145,8 +146,16 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         {delta.pyroxene === 0 ? "—" : formatSigned(delta.pyroxene)}
       </span>
       <span className="flex flex-col items-end gap-1">
-        <span className={cn("text-lg leading-tight font-bold", balanceClassName(after.pyroxene))}>
-          {formatAmount(after.pyroxene)}
+        <span className="flex items-center gap-2">
+          {/* Desktop shows the status in the actions column instead. */}
+          {status ? (
+            <span className="@lg:hidden">
+              <StatusPill status={status} />
+            </span>
+          ) : null}
+          <span className={cn("text-lg leading-tight font-bold", balanceClassName(after.pyroxene))}>
+            {formatAmount(after.pyroxene)}
+          </span>
         </span>
         {range ? (
           <span className="text-xs text-v2-fg-tertiary">
@@ -375,11 +384,6 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               </span>
               {pills}
             </div>
-            {status ? (
-              <span className="shrink-0">
-                <StatusPill status={status} />
-              </span>
-            ) : null}
           </div>
           {pills ? <div className="hidden flex-wrap items-center gap-2 @lg:flex">{pills}</div> : null}
           <h3 className="text-base leading-snug font-semibold break-keep text-v2-fg">{event.name}</h3>
