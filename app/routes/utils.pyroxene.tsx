@@ -3,7 +3,6 @@ import {
   ArrowTrendingUpIcon,
   CalendarIcon,
   ChartBarIcon,
-  ChevronRightIcon,
   Squares2X2Icon,
   WalletIcon,
 } from "@heroicons/react/16/solid";
@@ -32,14 +31,12 @@ import {
 import { CalculationMethodDialog, PickupBasisPanel } from "~/components/v2/features/pyroxene/PickupBasis";
 import { PlannerSchedule } from "~/components/v2/features/pyroxene/PlannerSchedule";
 import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
-import { formatAmount, ResourceIcon } from "~/components/v2/features/pyroxene/pyroxene-ui";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
 import { MobileActionBar } from "~/components/v2/layout/MobileActionBar";
 import { PageAside } from "~/components/v2/layout/PageAside";
 import { PageHeader } from "~/components/v2/layout/PageHeader";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { PanelSheet } from "~/components/v2/layout/PanelSheet";
-import { v2FocusRing } from "~/components/v2/layout/styles";
 import { V2Page } from "~/components/v2/layout/V2Page";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
@@ -84,7 +81,6 @@ import dayjs from "~/lib/dayjs";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink } from "~/lib/seo";
-import { cn } from "~/lib/utils";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -1342,37 +1338,10 @@ export default function PyroxenePlanner() {
         />
       </PageAside>
       <MobileActionBar
-        leading={
-          <button
-            type="button"
-            onClick={() => setResourcesDialogOpen(true)}
-            aria-label={`보유 재화 수정, 청휘석 ${formatAmount(initialResources.pyroxene)}, 10회 모집 티켓 ${initialResources.tenTimeTicket}, 1회 모집 티켓 ${initialResources.oneTimeTicket}`}
-            className={cn(
-              "flex h-full min-h-12 w-full min-w-0 cursor-pointer items-center gap-2 rounded-lg bg-v2-elevated px-4 py-1.5 text-left shadow-lg hover:bg-v2-hover",
-              v2FocusRing,
-            )}
-          >
-            <span className="flex min-w-0 flex-1 flex-col items-start">
-              <span className="flex items-center gap-3 text-base font-semibold text-v2-fg tabular-nums">
-                <span className="inline-flex items-center gap-0.5">
-                  <ResourceIcon resource="pyroxene" className="size-7" />
-                  {formatAmount(initialResources.pyroxene)}
-                </span>
-                <span className="inline-flex items-center gap-0.5">
-                  <ResourceIcon resource="tenTimeTicket" className="size-7" />
-                  {formatAmount(initialResources.tenTimeTicket)}
-                </span>
-                <span className="inline-flex items-center gap-0.5">
-                  <ResourceIcon resource="oneTimeTicket" className="size-7" />
-                  {formatAmount(initialResources.oneTimeTicket)}
-                </span>
-              </span>
-              <span className="text-xs text-v2-fg-tertiary tabular-nums">{formatInputAt(initialDate)}</span>
-            </span>
-            <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-          </button>
-        }
-        panels={[{ panelId: PLAN_SHEET_PANEL_ID, title: "계획", Icon: AdjustmentsHorizontalIcon }]}
+        panels={[
+          { panelId: RESOURCES_DIALOG_PANEL, title: "보유 재화", Icon: WalletIcon },
+          { panelId: PLAN_SHEET_PANEL_ID, title: "계획", Icon: AdjustmentsHorizontalIcon },
+        ]}
       />
       <PlanSheet
         title="계획"
