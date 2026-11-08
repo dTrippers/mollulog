@@ -1,7 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PyroxeneCalculationOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { buildTimeline, type PickupResources, type Timeline } from "~/domain/pyroxene-timeline";
+import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import {
+  buildTimeline,
+  type PickupResources,
+  type PyroxeneTimelineEventData,
+  type Timeline,
+} from "~/domain/pyroxene-timeline";
 import {
   type PyroxeneTimelineWorkerRequest,
   type PyroxeneTimelineWorkerResponse,
@@ -11,11 +17,12 @@ import {
 type UsePyroxeneTimelineArgs = {
   initialResources: PickupResources;
   initialDate: Date | null;
-  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
+  eventDataMap: Map<string, PyroxeneTimelineEventData>;
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
   endDate?: Date;
+  recruitmentStacks: RecruitmentStacks;
 };
 
 /**
@@ -32,6 +39,7 @@ export function usePyroxeneTimeline({
   options,
   collectedSourceKeys,
   endDate,
+  recruitmentStacks,
 }: UsePyroxeneTimelineArgs): { timeline: Timeline; pending: boolean; error: boolean } {
   const computeSync = useCallback(
     () =>
@@ -44,8 +52,9 @@ export function usePyroxeneTimeline({
         undefined,
         collectedSourceKeys,
         endDate,
+        recruitmentStacks,
       ),
-    [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate],
+    [initialResources, initialDate, eventDataMap, scheduleItems, options, collectedSourceKeys, endDate, recruitmentStacks],
   );
 
   const [timeline, setTimeline] = useState<Timeline>([]);
@@ -126,6 +135,7 @@ export function usePyroxeneTimeline({
       options,
       collectedSourceKeys,
       endDate,
+      recruitmentStacks,
     };
     try {
       worker.postMessage(request);
@@ -142,6 +152,7 @@ export function usePyroxeneTimeline({
     options,
     collectedSourceKeys,
     endDate,
+    recruitmentStacks,
     calculateSynchronously,
   ]);
 

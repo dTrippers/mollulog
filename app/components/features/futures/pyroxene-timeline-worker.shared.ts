@@ -1,7 +1,14 @@
 import dayjs from "dayjs";
 import type { PyroxeneCalculationOptions } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import type { PickupResources, Timeline, TimelineSource } from "~/domain/pyroxene-timeline";
+import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import type {
+  PickupResources,
+  PyroxeneTimelineEventData,
+  Timeline,
+  TimelinePickupPlan,
+  TimelineSource,
+} from "~/domain/pyroxene-timeline";
 
 // dayjs 인스턴스는 구조화 복제로 워커 경계를 넘길 수 없으므로
 // 날짜를 epoch ms로 직렬화해 주고받습니다.
@@ -14,17 +21,19 @@ export type SerializedTimelineEntry = {
     pessimistic: PickupResources;
   };
   resourceDelta: PickupResources;
+  pickupPlan?: TimelinePickupPlan;
 };
 
 export type PyroxeneTimelineWorkerRequest = {
   id: number;
   initialResources: PickupResources;
   initialDate: Date | null;
-  eventDataMap: Map<string, { completed: boolean; expectedTrials: number | null }>;
+  eventDataMap: Map<string, PyroxeneTimelineEventData>;
   scheduleItems: PyroxeneScheduleItem[];
   options: PyroxeneCalculationOptions;
   collectedSourceKeys: string[];
   endDate?: Date;
+  recruitmentStacks: RecruitmentStacks;
 };
 
 export type PyroxeneTimelineWorkerResponse = {
@@ -39,6 +48,7 @@ export function serializeTimeline(timeline: Timeline): SerializedTimelineEntry[]
     accumulatedResources: entry.accumulatedResources,
     accumulatedResourcesBand: entry.accumulatedResourcesBand,
     resourceDelta: entry.resourceDelta,
+    pickupPlan: entry.pickupPlan,
   }));
 }
 
@@ -49,5 +59,6 @@ export function rehydrateTimeline(entries: SerializedTimelineEntry[]): Timeline 
     accumulatedResources: entry.accumulatedResources,
     accumulatedResourcesBand: entry.accumulatedResourcesBand,
     resourceDelta: entry.resourceDelta,
+    ...(entry.pickupPlan ? { pickupPlan: entry.pickupPlan } : {}),
   }));
 }

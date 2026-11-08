@@ -46,7 +46,9 @@ import {
   type PyroxeneCalculationOptions,
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
+import { EMPTY_RECRUITMENT_STACKS } from "~/domain/pyroxene-recruitment-goal";
 import { extractPyroxeneTimelineBaseUid } from "~/domain/pyroxene-sources";
+import type { PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
 import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
 import { eventIconImageUrl } from "~/models/assets";
 import { saveIntegratedPlannerRecruitmentPlan } from "~/models/integrated-planner";
@@ -623,16 +625,19 @@ export default function IntegratedPlannerRoute() {
   }, [accountState?.timelineItems, displayTimeZone, guestData?.records, isSignedIn]);
 
   const eventDataMap = useMemo(() => {
-    const map = new Map<string, { completed: boolean; expectedTrials: number | null }>();
-    for (const event of eventTrials) {
-      map.set(event.eventUid, { completed: false, expectedTrials: event.expectedTrials });
+    const map = new Map<string, PyroxeneTimelineEventData>();
+    const savedEventData = isSignedIn
+      ? (accountState?.eventData ?? [])
+      : Object.entries(guestData?.eventData ?? {}).map(([eventUid, state]) => ({ eventUid, ...state }));
+    for (const { eventUid, expectedTrials, pickupChance, targetTiers } of savedEventData) {
+      map.set(eventUid, { completed: false, expectedTrials, pickupChance, targetTiers });
     }
     for (const completion of recruitmentCompletions) {
       const existing = map.get(completion.eventUid);
-      map.set(completion.eventUid, { completed: true, expectedTrials: existing?.expectedTrials ?? null });
+      map.set(completion.eventUid, { ...existing, completed: true, expectedTrials: existing?.expectedTrials ?? null });
     }
     return map;
-  }, [eventTrials, recruitmentCompletions]);
+  }, [accountState?.eventData, guestData?.eventData, isSignedIn, recruitmentCompletions]);
 
   const pyroxeneScheduleContents = useMemo(
     () => (loaderData.pyroxeneSchedulesStatus === "available" ? loaderData.pyroxeneSchedules : []),
@@ -817,6 +822,7 @@ export default function IntegratedPlannerRoute() {
     options: calculationOptions,
     collectedSourceKeys,
     endDate: timelineEndDate,
+    recruitmentStacks: currentResources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS,
   });
 
   const pyroxeneInputAvailable = isSignedIn

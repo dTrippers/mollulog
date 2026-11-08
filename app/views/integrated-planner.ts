@@ -5,6 +5,7 @@ import { getJankenStudentGrowthUid, type JankenDefaultProgress } from "~/domain/
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { defaultPyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import type { ShopAvailableEvent } from "~/models/event-content";
 import {
   getEventContentSchedule,
@@ -38,6 +39,7 @@ export type IntegratedPlannerAccountState = {
     oneTimeTicket: number;
     tenTimeTicket: number;
     inputAt: string | null;
+    recruitmentStacks: RecruitmentStacks;
   };
   timelineItems: PyroxeneTimelineItem[];
   options: PyroxenePlannerOptions;
@@ -238,6 +240,7 @@ async function loadAccountState(
           oneTimeTicket: pyroxeneState.latestResources?.oneTimeTicket ?? 0,
           tenTimeTicket: pyroxeneState.latestResources?.tenTimeTicket ?? 0,
           inputAt: pyroxeneState.latestResources?.inputAt ?? null,
+          recruitmentStacks: pyroxeneState.latestResources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS,
         },
         timelineItems: pyroxeneState.timelineItems,
         options: pyroxeneState.options ?? defaultPyroxenePlannerOptions,
