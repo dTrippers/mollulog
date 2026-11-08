@@ -129,8 +129,8 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
             overlayOnMobile ? "block" : "hidden md:block",
           )}
         >
-          {variant ? <span className="block truncate text-[0.5625rem] text-v2-on-media/80">{variant}</span> : null}
           <span className="block truncate font-medium">{name}</span>
+          {variant ? <span className="block truncate text-[0.5625rem] text-v2-on-media/80">{variant}</span> : null}
         </span>
       ) : null}
       {overlayCaption && showRecruitmentLabel && recruitmentLabel ? (
