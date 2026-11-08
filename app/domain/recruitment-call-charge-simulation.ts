@@ -35,6 +35,8 @@ export function simulateCallChargeTenPull({
 }): CallChargeTenPullResult {
   const pickup = snapshot.pickupStudents.find((student) => student.uid === activePickupStudentUid);
   if (!pickup) throw new Error("Active pickup student is missing from the recruitment snapshot");
+  // The charge guarantees grant a three-star pickup; other pickups are not modeled.
+  if (pickup.initialTier !== 3) throw new Error("Call-charge simulation supports only three-star pickups");
 
   const rateTable = createDefaultRecruitmentRateTable(snapshot, activePickupStudentUid);
   const results: RecruitmentDrawResult[] = [];

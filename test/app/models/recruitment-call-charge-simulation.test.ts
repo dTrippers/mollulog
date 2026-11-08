@@ -2,11 +2,11 @@ import { describe, expect, it } from "@jest/globals";
 import { simulateCallChargeTenPull } from "~/domain/recruitment-call-charge-simulation";
 import type { RecruitmentPoolSnapshot, SimulationStudent } from "~/domain/recruitment-simulator";
 
-function student(uid: string): SimulationStudent {
+function student(uid: string, initialTier: SimulationStudent["initialTier"] = 3): SimulationStudent {
   return {
     uid,
     name: uid,
-    initialTier: 3,
+    initialTier,
     attackType: "explosive" as SimulationStudent["attackType"],
     defenseType: "heavy_armor" as SimulationStudent["defenseType"],
     role: "striker" as SimulationStudent["role"],
@@ -76,5 +76,55 @@ describe("simulateCallChargeTenPull", () => {
 
     expect(results[0]).toEqual({ rarity: 3, pickup: true, student: pickup });
     expect(charge).toBe(9);
+  });
+
+  it("draws the active pickup at charge 100 only below the 50% threshold", () => {
+    const below = simulateCallChargeTenPull({
+      snapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 90,
+      random: seededRandom(seededValues({ 27: 0.49 })),
+    });
+    expect(below.results[9]).toEqual({ rarity: 3, pickup: true, student: pickup });
+
+    const atThreshold = simulateCallChargeTenPull({
+      snapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 90,
+      random: seededRandom(seededValues({ 27: 0.5 })),
+    });
+    expect(atThreshold.results[9]).toEqual({ rarity: 3, pickup: false, student: nonPickup });
+  });
+
+  it("keeps the two-star-or-better guarantee on the tenth slot between charge guarantees", () => {
+    const mixedSnapshot: RecruitmentPoolSnapshot = {
+      ...snapshot,
+      nonPickupStudentsByTier: {
+        tier1: [student("one-star", 1)],
+        tier2: [student("two-star", 2)],
+        tier3: [nonPickup],
+      },
+    };
+    const { results, charge } = simulateCallChargeTenPull({
+      snapshot: mixedSnapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 0,
+      random: () => 0.999,
+    });
+
+    expect(results.slice(0, 9).every((result) => result.rarity === 1)).toBe(true);
+    expect(results[9]?.rarity).toBe(2);
+    expect(charge).toBe(10);
+  });
+
+  it("rejects an active pickup that is not a three-star student", () => {
+    const twoStarPickup = student("two-star-pickup", 2);
+    expect(() =>
+      simulateCallChargeTenPull({
+        snapshot: { ...snapshot, pickupStudents: [twoStarPickup] },
+        activePickupStudentUid: twoStarPickup.uid,
+        startingCharge: 190,
+      }),
+    ).toThrow("Call-charge simulation supports only three-star pickups");
   });
 });
