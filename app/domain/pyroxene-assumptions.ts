@@ -1,6 +1,6 @@
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { isFreeRecruitment100Event } from "~/domain/pyroxene-timeline";
+import { getFreeRecruitmentPulls } from "~/domain/pyroxene-timeline";
 import { getRecruitmentChargeScope, RECRUITMENT_PERK_TEN_PULL_THRESHOLDS } from "~/domain/recruitment-cost";
 import dayjs from "~/lib/dayjs";
 
@@ -90,7 +90,7 @@ export function buildPyroxeneCalculationAssumptions(
           ({ pickup, recruitmentType }) => pickup && getRecruitmentChargeScope(recruitmentType) !== null,
         ),
     ),
-    freeRecruitment: targetEvents.some((event) => isFreeRecruitment100Event(event, displayStart)),
+    freeRecruitment: targetEvents.some((event) => getFreeRecruitmentPulls(event, displayStart) > 0),
   };
 }
 

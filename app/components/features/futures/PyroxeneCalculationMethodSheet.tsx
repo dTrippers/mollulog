@@ -116,7 +116,7 @@ export function PyroxeneCalculationMethodContent({
             </p>
           ) : null}
           {assumptions.freeRecruitment ? (
-            <p>무료 모집 100회가 있는 이벤트는 그만큼 청휘석을 덜 쓰는 것으로 계산해요.</p>
+            <p>무료 모집이 있는 이벤트는 무료 모집 횟수만큼 청휘석을 덜 쓰는 것으로 계산해요.</p>
           ) : null}
           {!assumptions.recruitmentPerks && !assumptions.freeRecruitment ? (
             <p>지금 일정에는 모집 특전이나 무료 모집이 없어요.</p>

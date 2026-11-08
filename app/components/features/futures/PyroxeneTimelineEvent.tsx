@@ -7,7 +7,7 @@ import { Button, NumberInput, ResourceCard, SectionCard } from "~/components/pri
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
 import { PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
-import { isFreeRecruitment100Event, type PickupResources } from "~/domain/pyroxene-timeline";
+import { getFreeRecruitmentPulls, type PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import ResourcesInput from "./planner-input/ResourcesInput";
 
@@ -69,7 +69,7 @@ export default function PyroxeneTimelineEvent({
 
   const canComplete = allowPickupCompletion && !completed && dayjs(event.since).isBefore(dayjs());
   const selectedStudentCount = pickupStudents.filter((student) => student.state.favorited).length;
-  const freeRecruitment100 = isFreeRecruitment100Event(event);
+  const freeRecruitmentPulls = getFreeRecruitmentPulls(event);
   const expectedTrialsLabel =
     expectedTrials !== null
       ? `총 ${expectedTrials}회`
@@ -99,10 +99,10 @@ export default function PyroxeneTimelineEvent({
                 <span>
                   {dayjs(event.since).format("MM/DD")} ~ {dayjs(event.until).format("MM/DD")}
                 </span>
-                {freeRecruitment100 && (
+                {freeRecruitmentPulls > 0 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                     <StarIcon className="mr-1 size-3.5" />
-                    100회 무료
+                    {freeRecruitmentPulls}회 무료
                   </span>
                 )}
               </div>
@@ -137,10 +137,10 @@ export default function PyroxeneTimelineEvent({
                 <span>
                   {dayjs(event.since).format("MM/DD")} ~ {dayjs(event.until).format("MM/DD")}
                 </span>
-                {freeRecruitment100 && (
+                {freeRecruitmentPulls > 0 && (
                   <span className="inline-flex items-center rounded-full bg-yellow-100 px-2 py-0.5 font-medium text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
                     <StarIcon className="mr-1 size-3.5" />
-                    100회 무료
+                    {freeRecruitmentPulls}회 무료
                   </span>
                 )}
               </div>

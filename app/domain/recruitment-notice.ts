@@ -1,9 +1,39 @@
 import { isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 
-export const FREE_RECRUITMENT_NOTICE = {
-  label: "이월 불가",
-  description: "100회 무료 모집은 픽업 기간 종료 시 소멸되며 이월되지 않아요. 기간 내 사용해주세요.",
+// Timeline tags that grant free recruits, mapped to the number of free recruits each grants.
+// Every rule other than the count is the same for all of them.
+export const FREE_RECRUITMENT_TAG_PULLS = {
+  recruit_free_100: 100,
+  recruit_free_200: 200,
 } as const;
+
+type FreeRecruitmentTag = keyof typeof FREE_RECRUITMENT_TAG_PULLS;
+
+const FREE_RECRUITMENT_TAGS = Object.keys(FREE_RECRUITMENT_TAG_PULLS) as FreeRecruitmentTag[];
+
+function isFreeRecruitmentTag(tag: string): tag is FreeRecruitmentTag {
+  return Object.hasOwn(FREE_RECRUITMENT_TAG_PULLS, tag);
+}
+
+export function getFreeRecruitmentNotice(freePulls: number) {
+  return {
+    label: "이월 불가",
+    description: `${freePulls}회 무료 모집은 픽업 기간 종료 시 소멸되며 이월되지 않아요. 기간 내 사용해주세요.`,
+  } as const;
+}
+
+// The free recruit count granted by the tags, or 0 when no free recruitment tag is set.
+// When several free recruitment tags are set, the largest grant applies.
+export function getTaggedFreeRecruitmentPulls(tags: readonly string[]): number {
+  return FREE_RECRUITMENT_TAGS.reduce(
+    (max, tag) => (tags.includes(tag) ? Math.max(max, FREE_RECRUITMENT_TAG_PULLS[tag]) : max),
+    0,
+  );
+}
+
+export function withoutFreeRecruitmentTags(tags: readonly string[]): string[] {
+  return tags.filter((tag) => !isFreeRecruitmentTag(tag));
+}
 
 export const PICKUP_UNAVAILABLE_NOTICE = {
   label: "픽업 불가",
@@ -11,7 +41,8 @@ export const PICKUP_UNAVAILABLE_NOTICE = {
 } as const;
 
 // The free recruits last only while every recruitment of the content is still open.
-export function isFreeRecruitmentAvailable({
+// Returns the free recruit count still available, or 0 when there is none.
+export function getAvailableFreeRecruitmentPulls({
   tags,
   recruitments,
   now,
@@ -19,11 +50,12 @@ export function isFreeRecruitmentAvailable({
   tags: readonly string[];
   recruitments: readonly { until: UtcIsoString | null }[];
   now: UtcIsoString;
-}): boolean {
-  return (
-    tags.includes("recruit_free_100") &&
-    recruitments.every((recruitment) => recruitment.until !== null && isInstantAfter(recruitment.until, now))
+}): number {
+  const freePulls = getTaggedFreeRecruitmentPulls(tags);
+  const open = recruitments.every(
+    (recruitment) => recruitment.until !== null && isInstantAfter(recruitment.until, now),
   );
+  return open ? freePulls : 0;
 }
 
 // A given student is handed out rather than recruited, so the pickup restriction does not apply to it.

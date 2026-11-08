@@ -1,21 +1,49 @@
 import { describe, expect, it } from "@jest/globals";
-import { isFreeRecruitmentAvailable, isPickupUnavailableRecruitment } from "~/domain/recruitment-notice";
+import {
+  getAvailableFreeRecruitmentPulls,
+  getFreeRecruitmentNotice,
+  getTaggedFreeRecruitmentPulls,
+  isPickupUnavailableRecruitment,
+  withoutFreeRecruitmentTags,
+} from "~/domain/recruitment-notice";
 import { toUtcIso } from "~/lib/date-time";
 
 const now = toUtcIso("2026-11-01T00:00:00Z");
 const open = { until: toUtcIso("2026-11-10T00:00:00Z") };
 const ended = { until: toUtcIso("2026-10-10T00:00:00Z") };
 
-describe("isFreeRecruitmentAvailable", () => {
-  it("needs the free recruit tag", () => {
-    expect(isFreeRecruitmentAvailable({ tags: ["recruit_free_100"], recruitments: [open], now })).toBe(true);
-    expect(isFreeRecruitmentAvailable({ tags: ["shop"], recruitments: [open], now })).toBe(false);
+describe("getAvailableFreeRecruitmentPulls", () => {
+  it("needs a free recruit tag and returns its count", () => {
+    expect(getAvailableFreeRecruitmentPulls({ tags: ["recruit_free_100"], recruitments: [open], now })).toBe(100);
+    expect(getAvailableFreeRecruitmentPulls({ tags: ["recruit_free_200"], recruitments: [open], now })).toBe(200);
+    expect(getAvailableFreeRecruitmentPulls({ tags: ["shop"], recruitments: [open], now })).toBe(0);
   });
 
   it("ends when any recruitment has ended or has no end", () => {
-    expect(isFreeRecruitmentAvailable({ tags: ["recruit_free_100"], recruitments: [open, ended], now })).toBe(false);
-    expect(isFreeRecruitmentAvailable({ tags: ["recruit_free_100"], recruitments: [{ until: null }], now })).toBe(
-      false,
+    for (const tag of ["recruit_free_100", "recruit_free_200"]) {
+      expect(getAvailableFreeRecruitmentPulls({ tags: [tag], recruitments: [open, ended], now })).toBe(0);
+      expect(getAvailableFreeRecruitmentPulls({ tags: [tag], recruitments: [{ until: null }], now })).toBe(0);
+    }
+  });
+});
+
+describe("getTaggedFreeRecruitmentPulls", () => {
+  it("applies the largest grant when several free recruit tags are set", () => {
+    expect(getTaggedFreeRecruitmentPulls(["recruit_free_100", "recruit_free_200"])).toBe(200);
+    expect(getTaggedFreeRecruitmentPulls([])).toBe(0);
+  });
+});
+
+describe("withoutFreeRecruitmentTags", () => {
+  it("removes every free recruit tag and keeps the others", () => {
+    expect(withoutFreeRecruitmentTags(["shop", "recruit_free_100", "recruit_free_200"])).toEqual(["shop"]);
+  });
+});
+
+describe("getFreeRecruitmentNotice", () => {
+  it("names the free recruit count", () => {
+    expect(getFreeRecruitmentNotice(200).description).toBe(
+      "200회 무료 모집은 픽업 기간 종료 시 소멸되며 이월되지 않아요. 기간 내 사용해주세요.",
     );
   });
 });

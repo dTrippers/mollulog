@@ -205,7 +205,7 @@ describe("PyroxeneCalculationMethodSheet", () => {
     expect(normalizedHtml).toContain(
       `누적 ${RECRUITMENT_PERK_TEN_PULL_THRESHOLDS.join(", ")}회째에 받는 10회 모집권을 바로 쓴다고 보고 계산해요.`,
     );
-    expect(html).toContain("무료 모집 100회가 있는 이벤트는 그만큼 청휘석을 덜 쓰는 것으로 계산해요.");
+    expect(html).toContain("무료 모집이 있는 이벤트는 무료 모집 횟수만큼 청휘석을 덜 쓰는 것으로 계산해요.");
     expect(html).not.toContain("차지");
   });
 

@@ -284,11 +284,11 @@ function SpecialNote({
 }) {
   const noteClassName = flexible ? "lg:min-w-0 lg:flex-1" : constrained ? "lg:shrink-0" : undefined;
   const textClassName = flexible ? "lg:min-w-0 lg:truncate" : undefined;
-  if (specialCase.kind === "perk-free-100") {
+  if (specialCase.kind === "perk-free") {
     return (
       <span className={cn("inline-flex items-center gap-1 font-semibold text-v2-perk", noteClassName)}>
         <StarIcon className="size-3.5 lg:shrink-0" aria-hidden="true" />
-        <span className={textClassName}>100회 무료</span>
+        <span className={textClassName}>{specialCase.freePulls}회 무료</span>
       </span>
     );
   }

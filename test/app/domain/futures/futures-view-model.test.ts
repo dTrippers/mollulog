@@ -164,7 +164,7 @@ describe("links and filters", () => {
 });
 
 describe("getFutureSpecialCases", () => {
-  it("reports the free-100 benefit only while every recruitment is still open", () => {
+  it("reports the free recruit benefit only while every recruitment is still open", () => {
     const base = {
       contentType: "event" as const,
       tags: ["recruit_free_100"],
@@ -177,8 +177,15 @@ describe("getFutureSpecialCases", () => {
       timeZone,
     };
     expect(getFutureSpecialCases({ ...base, recruitments: [{ until: "2026-12-01T00:00:00.000Z" }] })).toEqual([
-      { kind: "perk-free-100" },
+      { kind: "perk-free", freePulls: 100 },
     ]);
+    expect(
+      getFutureSpecialCases({
+        ...base,
+        tags: ["recruit_free_200"],
+        recruitments: [{ until: "2026-12-01T00:00:00.000Z" }],
+      }),
+    ).toEqual([{ kind: "perk-free", freePulls: 200 }]);
     expect(getFutureSpecialCases({ ...base, recruitments: [{ until: null }] })).toEqual([]);
   });
 
@@ -233,7 +240,7 @@ describe("getFutureSpecialCases", () => {
 
   it("words the period caution with its range, and has no caution text for a perk", () => {
     expect(getCautionText({ kind: "caution-period", range: "11/17 ~ 11/24" })).toBe("모집 기간 · 11/17 ~ 11/24");
-    expect(getCautionText({ kind: "perk-free-100" })).toBeNull();
+    expect(getCautionText({ kind: "perk-free", freePulls: 100 })).toBeNull();
   });
 });
 

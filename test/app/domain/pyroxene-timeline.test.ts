@@ -547,6 +547,37 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-1_200);
   });
 
+  it("subtracts 200 free recruits before perks for manual total recruitment input", () => {
+    const timeline = buildTestTimeline({
+      eventDataMap: new Map([["event-a", { completed: false, expectedTrials: 300 }]]),
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          recruitmentRuleSet: "call_charge_v1",
+          tags: ["recruit_free_200"],
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 300 total - 200 free - 50 perk recruits (70, 130, 150, 170, 270) = 50 paid recruits.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(-6_000);
+  });
+
+  it("applies 200 free recruits to the call-charge ceiling scenario", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1", tags: ["recruit_free_200"] })],
+      options: {
+        ...defaultOptions,
+        event: { pickupChance: "ceil" },
+      },
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 200 total - 200 free leaves nothing to pay.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(0);
+  });
+
   it("applies recruitment perks to the call-charge ceiling scenario", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [eventItem({ uid: "event-a", recruitmentRuleSet: "call_charge_v1" })],
@@ -582,6 +613,30 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-24_000);
+  });
+
+  it("does not apply 200 free recruits to archive recruitment in the call-charge DP", () => {
+    const archiveRecruitment = {
+      ...pickupRecruitment(),
+      recruitmentType: RecruitmentTypeEnum.Archive,
+    };
+    const buildWithTags = (tags: string[]) =>
+      buildTestTimeline({
+        scheduleItems: [
+          eventItem({
+            uid: "event-a",
+            recruitmentRuleSet: "call_charge_v1",
+            recruitments: [archiveRecruitment],
+            tags,
+          }),
+        ],
+        options: {
+          ...defaultOptions,
+          event: { pickupChance: "average_pity" },
+        },
+      }).find((entry) => entry.source.event?.uid === "event-a")?.resourceDelta.pyroxene;
+
+    expect(buildWithTags(["recruit_free_200"])).toBe(buildWithTags([]));
   });
 
   it("uses the average-mode linear central path while keeping ticket spending order unchanged", () => {
@@ -668,6 +723,46 @@ describe("buildTimeline pyroxene balance band", () => {
 
     expect(eventEntry?.resourceDelta.pyroxene).toBe(-4_320);
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(95_680);
+  });
+
+  it("subtracts 200 free recruitment trials from the average-mode linear central path", () => {
+    const timeline = buildTestTimeline({
+      scheduleItems: [
+        eventItem({
+          uid: "event-a",
+          tags: ["recruit_free_200"],
+          until: "2026-07-05T00:00:00.000Z",
+        }),
+      ],
+    });
+    const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
+
+    // 140 average trials are fully covered by 200 free recruits.
+    expect(eventEntry?.resourceDelta.pyroxene).toBe(0);
+  });
+
+  it("keeps separate average_pity expectations for 100 and 200 free recruits of the same event", () => {
+    const buildWithTag = (tag: string) =>
+      buildTestTimeline({
+        scheduleItems: [
+          eventItem({
+            uid: "event-a",
+            tags: [tag],
+            until: "2026-07-05T00:00:00.000Z",
+            recruitments: [pickupRecruitment(), pickupRecruitment({ name: "픽업 학생 B" })],
+          }),
+        ],
+        options: {
+          ...defaultOptions,
+          event: { pickupChance: "average_pity" },
+        },
+      }).find((entry) => entry.source.event?.uid === "event-a")?.resourceDelta.pyroxene ?? 0;
+
+    const free100 = buildWithTag("recruit_free_100");
+    const free200 = buildWithTag("recruit_free_200");
+
+    expect(free200).toBeGreaterThan(free100);
+    expect(free200).toBeLessThan(0);
   });
 
   it("does not add a probability band for ceiling mode", () => {

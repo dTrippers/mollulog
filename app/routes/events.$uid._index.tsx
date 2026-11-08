@@ -21,8 +21,8 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import {
-  FREE_RECRUITMENT_NOTICE,
-  isFreeRecruitmentAvailable,
+  getAvailableFreeRecruitmentPulls,
+  getFreeRecruitmentNotice,
   isPickupUnavailableRecruitment,
   PICKUP_UNAVAILABLE_NOTICE,
 } from "~/domain/recruitment-notice";
@@ -166,7 +166,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
       recruitments: recruitmentsWithFavorites,
       videos: content.videos,
     },
-    freeRecruitmentAvailable: isFreeRecruitmentAvailable({
+    freeRecruitmentPulls: getAvailableFreeRecruitmentPulls({
       tags: content.tags,
       recruitments: recruitmentsWithFavorites,
       now: nowUtcIso(),
@@ -286,13 +286,13 @@ export default function EventIndex() {
   );
   const limitedRecruitments = eventContent.recruitments.filter(isPickupUnavailableRecruitment);
   const showRecruitmentDateLabels = recruitmentGroups.length > 1;
-  const freeRecruitmentNotice = data.freeRecruitmentAvailable ? (
+  const freeRecruitmentNotice = data.freeRecruitmentPulls > 0 ? (
     <span className="inline-flex flex-wrap items-center gap-1.5">
       <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-perk">
         <StarIcon className="size-3.5" aria-hidden="true" />
-        100회 무료
+        {data.freeRecruitmentPulls}회 무료
       </span>
-      <HintChip {...FREE_RECRUITMENT_NOTICE} />
+      <HintChip {...getFreeRecruitmentNotice(data.freeRecruitmentPulls)} />
     </span>
   ) : null;
   return (

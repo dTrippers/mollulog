@@ -25,7 +25,7 @@ import {
   selectFutureMediaSource,
 } from "~/domain/futures/futures-view-model";
 import {
-  FREE_RECRUITMENT_NOTICE,
+  getFreeRecruitmentNotice,
   isPickupUnavailableRecruitment,
   PICKUP_UNAVAILABLE_NOTICE,
 } from "~/domain/recruitment-notice";
@@ -350,14 +350,14 @@ function MinigameMark({ minigameType }: { minigameType: string }) {
 }
 
 function SpecialCaseChip({ specialCase }: { specialCase: FutureSpecialCase }) {
-  if (specialCase.kind === "perk-free-100") {
+  if (specialCase.kind === "perk-free") {
     return (
       <MetaSeparatorAnd>
         <span className="inline-flex items-center gap-1 font-semibold text-v2-perk">
           <StarIcon className="size-3.5" aria-hidden="true" />
-          100회 무료
+          {specialCase.freePulls}회 무료
         </span>
-        <HintChip {...FREE_RECRUITMENT_NOTICE} />
+        <HintChip {...getFreeRecruitmentNotice(specialCase.freePulls)} />
       </MetaSeparatorAnd>
     );
   }

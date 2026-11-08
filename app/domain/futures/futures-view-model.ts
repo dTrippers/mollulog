@@ -1,5 +1,5 @@
 import { raidTypeToParam } from "~/domain/raid";
-import { isFreeRecruitmentAvailable } from "~/domain/recruitment-notice";
+import { getAvailableFreeRecruitmentPulls } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind, type RecruitmentPeriod } from "~/domain/recruitment-period-notice";
 import {
   formatInstant,
@@ -231,7 +231,7 @@ export function isOngoingFutureContent(since: UtcIsoString, until: UtcIsoString 
 }
 
 export type FutureSpecialCase =
-  | { kind: "perk-free-100" }
+  | { kind: "perk-free"; freePulls: number }
   | { kind: "caution-ended" }
   | { kind: "caution-period"; range: string };
 
@@ -270,8 +270,9 @@ export function getFutureSpecialCases({
   timeZone: string;
 }): FutureSpecialCase[] {
   const cases: FutureSpecialCase[] = [];
-  if (isFreeRecruitmentAvailable({ tags, recruitments, now })) {
-    cases.push({ kind: "perk-free-100" });
+  const freePulls = getAvailableFreeRecruitmentPulls({ tags, recruitments, now });
+  if (freePulls > 0) {
+    cases.push({ kind: "perk-free", freePulls });
   }
 
   const noticeKind = getRecruitmentPeriodNoticeKind(

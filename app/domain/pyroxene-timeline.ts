@@ -16,6 +16,7 @@ import {
   simulateRecruitmentCost,
   splitRecruitmentCostPeriodByChargeScope,
 } from "~/domain/recruitment-cost";
+import { getTaggedFreeRecruitmentPulls, withoutFreeRecruitmentTags } from "~/domain/recruitment-notice";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
 import dayjs from "~/lib/dayjs";
 
@@ -69,7 +70,6 @@ export const PYROXENE = {
   WEEKLY_MISSION: 120,
   TACTICAL: { in10: 35, in100: 30, in200: 25, over200: 20 },
   PICKUP_TRIAL: { average: 140, ceil: 200 },
-  FREE_RECRUITMENT_TRIAL: 100,
 } as const;
 
 const PICKUP_TRIAL_BAND_QUANTILE = {
@@ -330,8 +330,8 @@ function getPickupRecruitmentRate(recruitment: NonNullable<PyroxeneScheduleItem[
     : DEFAULT_PICKUP_STUDENT_RATE_BY_TIER.tier3;
 }
 
-function subtractFreeRecruitmentTrial(pickupTrial: number): number {
-  return Math.max(0, pickupTrial - PYROXENE.FREE_RECRUITMENT_TRIAL);
+function subtractFreeRecruitmentTrial(pickupTrial: number, freePulls: number): number {
+  return Math.max(0, pickupTrial - freePulls);
 }
 
 function bitCount(value: number): number {
@@ -548,7 +548,7 @@ function getPickupTrialCostDistributionCacheKey(
     mode,
     event.uid,
     event.recruitmentRuleSet ?? "legacy_points",
-    isFreeRecruitment100Event(event) ? "free100" : "paid",
+    `free${getFreeRecruitmentPulls(event)}`,
     event.recruitmentPool?.tier2Count ?? "",
     event.recruitmentPool?.tier3Count ?? "",
     recruitmentKey,
@@ -584,7 +584,7 @@ function getPickupTrialCostDistribution(
         {
           ...event,
           recruitmentRuleSet: "legacy_points",
-          tags: event.tags.filter((tag) => tag !== "recruit_free_100"),
+          tags: withoutFreeRecruitmentTags(event.tags),
         },
         excludedRecruitments,
         mode,
@@ -598,7 +598,7 @@ function getPickupTrialCostDistribution(
         {
           ...event,
           recruitmentRuleSet: "legacy_points",
-          tags: event.tags.filter((tag) => tag !== "recruit_free_100"),
+          tags: withoutFreeRecruitmentTags(event.tags),
         },
         excludedRecruitments,
         mode,
@@ -630,7 +630,7 @@ function getPickupTrialCostDistribution(
       [1] as PullCostDistribution,
     );
     const distribution = applyRecruitmentFunding(totalPullDistribution, {
-      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+      freePulls: getFreeRecruitmentPulls(event),
       recruitmentPerks: true,
     });
     cachePickupTrialCostDistribution(cacheKey, distribution);
@@ -679,17 +679,22 @@ function getPickupTrialCostDistribution(
 
   if (event.recruitmentRuleSet === "call_charge_v1") {
     const fundedDistribution = applyRecruitmentFunding(distribution, {
-      freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+      freePulls: getFreeRecruitmentPulls(event),
       recruitmentPerks: true,
     });
     cachePickupTrialCostDistribution(cacheKey, fundedDistribution);
     return fundedDistribution;
   }
 
-  if (isFreeRecruitment100Event(event)) {
+  const freePulls = getFreeRecruitmentPulls(event);
+  if (freePulls > 0) {
     const paidDistribution: TrialDistribution = [];
     for (let trials = 0; trials < distribution.length; trials++) {
-      addTrialProbability(paidDistribution, subtractFreeRecruitmentTrial(trials), distribution[trials] ?? 0);
+      addTrialProbability(
+        paidDistribution,
+        subtractFreeRecruitmentTrial(trials, freePulls),
+        distribution[trials] ?? 0,
+      );
     }
     cachePickupTrialCostDistribution(cacheKey, paidDistribution);
     return paidDistribution;
@@ -914,11 +919,11 @@ function getResourcePyroxeneQuantiles(distribution: ResourceStateDistribution): 
   };
 }
 
-export function isFreeRecruitment100Event(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): boolean {
-  return (
-    event.tags.includes("recruit_free_100") &&
-    event.recruitments.every(({ until }) => until !== null && dayjs(until).isAfter(now))
-  );
+// The free recruit count usable for the event, or 0 when it has none or any recruitment has no future end.
+export function getFreeRecruitmentPulls(event: NonNullable<PyroxeneScheduleItem["event"]>, now = dayjs()): number {
+  const freePulls = getTaggedFreeRecruitmentPulls(event.tags);
+  const open = event.recruitments.every(({ until }) => until !== null && dayjs(until).isAfter(now));
+  return open ? freePulls : 0;
 }
 
 export function buildTimeline(
@@ -984,7 +989,7 @@ export function buildTimeline(
       const hasCallChargeRecruitments = event.recruitmentRuleSet === "call_charge_v1" && callChargePickupCount > 0;
       const allRecruitmentsUseCallCharge = hasCallChargeRecruitments && callChargePickupCount === pickupCount;
       const recruitmentFundingOptions = {
-        freePulls: isFreeRecruitment100Event(event) ? PYROXENE.FREE_RECRUITMENT_TRIAL : 0,
+        freePulls: getFreeRecruitmentPulls(event),
         recruitmentPerks: true,
       };
       let pickupTrial: number;
@@ -1019,14 +1024,15 @@ export function buildTimeline(
         }
       }
 
+      const { freePulls } = recruitmentFundingOptions;
       if (
         event.recruitmentRuleSet !== "call_charge_v1" &&
-        isFreeRecruitment100Event(event) &&
+        freePulls > 0 &&
         (manualExpectedTrials !== null ||
           options.event.pickupChance === "average" ||
           options.event.pickupChance === "ceil")
       ) {
-        pickupTrial = subtractFreeRecruitmentTrial(pickupTrial);
+        pickupTrial = subtractFreeRecruitmentTrial(pickupTrial, freePulls);
       }
 
       timelineDeltas.push({
