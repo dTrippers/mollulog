@@ -2,8 +2,8 @@ import { ArrowPathIcon, ExclamationTriangleIcon } from "@heroicons/react/16/soli
 import {
   type LoaderFunctionArgs,
   Outlet,
-  type ShouldRevalidateFunction,
   redirect,
+  type ShouldRevalidateFunction,
   useLoaderData,
   useLocation,
   useMatches,
@@ -11,21 +11,24 @@ import {
   useParams,
   useRevalidator,
 } from "react-router";
+import { ContentMedia } from "~/components/v2/features/futures/ContentMedia";
 import { PageHeader, PageNotice, PageToolbar, ScreenTabs, V2Page } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { selectFutureMediaSource } from "~/domain/futures/futures-view-model";
 import { compareInstantAsc } from "~/lib/date-time";
 import { isEventShopStateSubmission } from "~/lib/revalidation";
+import { timelineContentTypeLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
 import { CloudSlashIcon } from "./events.$uid._components/CloudSlashIcon";
-import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
 import {
   buildEventScreens,
   describeEventPeriod,
   type EventLayoutContext,
   getActiveEventDetailTab,
 } from "./events.$uid._components/event-screens";
+import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
 export { getActiveEventDetailTab } from "./events.$uid._components/event-screens";
@@ -199,6 +202,23 @@ export default function EventPage() {
         meta={headerMeta(eventMetadata, timeZone)}
         back={back}
         titleHidden={headerTitleHidden}
+        // The same event logo as the futures timeline, beside the title. The overview hides the title, and the logo
+        // with it, because its thumbnail already carries both.
+        media={
+          headerTitleHidden ? undefined : (
+            <ContentMedia
+              source={selectFutureMediaSource({
+                hidden: false,
+                isRaid: false,
+                boss: null,
+                logoContentUid: eventMetadata.contentUid,
+              })}
+              contentType={eventMetadata.contentType}
+              typeLabel={timelineContentTypeLocale[eventMetadata.contentType]}
+              size="header"
+            />
+          )
+        }
       />
       {/* The overview lists the other screens in its aside instead of the tabs. */}
       {activeTab === "overview" ? null : (

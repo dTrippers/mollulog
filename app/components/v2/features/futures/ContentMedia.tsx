@@ -14,18 +14,21 @@ import { bossImageUrl, eventIconImageUrl } from "~/models/assets";
 import type { EventType, RaidType } from "~/models/content.d";
 import { useImageFailure } from "../../primitives/use-image-failure";
 
-export type ContentMediaSize = "timeline" | "row" | "table";
+export type ContentMediaSize = "timeline" | "row" | "table" | "header";
 
 const sizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-10 md:size-11 lg:size-12",
   row: "size-8",
   table: "size-7 lg:size-9",
+  // Fills the `PageHeader` media slot beside a page title.
+  header: "size-[3.75rem]",
 };
 
 const iconSizeClassName: Record<ContentMediaSize, string> = {
   timeline: "size-5 md:size-[1.375rem]",
   row: "size-4 lg:size-3.5",
   table: "size-3.5",
+  header: "size-7",
 };
 
 const typeIcon: Record<string, typeof CalendarDaysIcon> = {
