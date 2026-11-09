@@ -17,7 +17,6 @@ import { Button, Callout, Checkbox, ResourceCard, SectionCard } from "~/componen
 import type { ApPlannerState } from "~/domain/ap-planner";
 import { apPlannerStateHasData, formatApShortDate } from "~/domain/ap-planner";
 import { type EventShopState, eventShopStatesEqual } from "~/domain/event-shop-state";
-import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { isDefaultEventShopState } from "~/domain/guest-event-shop-planner";
 import {
   clearGuestPlannerItemsIfUnchanged,
@@ -39,12 +38,17 @@ import {
   type GuestPyroxeneRecord,
   pyroxeneTimelineItemFingerprint,
 } from "~/domain/guest-pyroxene-planner";
-import type { PlannerStateDocumentV1, PlannerStateTimelineRecord } from "~/domain/planner-state";
+import {
+  isEmptyPlannerStateEventData,
+  type PlannerStateDocumentV1,
+  type PlannerStateTimelineRecord,
+} from "~/domain/planner-state";
 import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
 import { extractPyroxeneTimelineBaseUid, PYROXENE_RESOURCE_UIDS } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import dayjs from "~/lib/dayjs";
+import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import { favoriteStudent, getUserFavoritedStudents } from "~/models/favorite-students";
 import { type GuestPlannerImportPlan, importGuestPlannerState } from "~/models/guest-pyroxene-import";
@@ -600,6 +604,16 @@ function selectedImportItemsBySection(
     eventShops: selection.eventShopUids.map((key) => ({ type: "eventShop", key })),
     ap: selection.ap ? [{ type: "ap", key: "current" }] : [],
   };
+}
+
+type GuestEventPlan = GuestPlannerEnvelope["document"]["pyroxene"]["eventData"][string];
+
+// Every non-default event entry is listed (completion, expected pulls, calculation basis, or target
+// tiers): an unlisted entry cannot be chosen, and a successful import of its section clears it.
+function guestEventPlanLabel(state: GuestEventPlan): string {
+  if (state.completed) return "모집 완료";
+  if (state.expectedTrials !== null) return `${state.expectedTrials}회`;
+  return "모집 설정";
 }
 
 function getSourceCleanupItems(
@@ -1544,13 +1558,13 @@ export default function UnifiedGuestPlannerImportPage() {
                           );
                         })}
                         {Object.entries(guest.document.pyroxene.eventData)
-                          .filter(([, state]) => state.completed || state.expectedTrials !== null)
+                          .filter(([, state]) => !isEmptyPlannerStateEventData(state))
                           .map(([eventUid, state]) => (
                             <ImportCheckbox
                               key={eventUid}
                               checked={selection.eventUids.includes(eventUid)}
                               onChange={(checked) => toggleUnique(source.id, "eventUids", eventUid, checked)}
-                              title={`${accountNames.get(eventUid) ?? "모집"} · ${state.completed ? "모집 완료" : `${state.expectedTrials}회`}`}
+                              title={`${accountNames.get(eventUid) ?? "모집"} · ${guestEventPlanLabel(state)}`}
                               description={
                                 account.eventData.some((item) => item.eventUid === eventUid)
                                   ? "계정에 모집 목표가 저장되어 있어요. 선택하면 비로그인 시 등록한 값으로 바뀌어요."

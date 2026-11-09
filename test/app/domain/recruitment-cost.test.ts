@@ -81,6 +81,39 @@ describe("simulateRecruitmentCost", () => {
   });
 });
 
+describe("simulateRecruitmentCost with many target copies", () => {
+  function copiesPeriod(copiesPerStudent: number[]): RecruitmentCostPeriod {
+    return period(0, {
+      recruitmentType: RecruitmentTypeEnum.Limited,
+      tier3PoolCount: 30,
+      targets: copiesPerStudent.flatMap((copies, student) =>
+        Array.from({ length: copies }, (_, copy) => ({
+          key: `student-${student}#${copy}`,
+          studentKey: `student-${student}`,
+          initialTier: 3,
+          recruitmentType: RecruitmentTypeEnum.Limited,
+        })),
+      ),
+    });
+  }
+
+  it("handles four students aimed at exclusive weapon 4", () => {
+    const distribution = simulateRecruitmentCost(copiesPeriod([8, 8, 8, 8]), "call_charge_v1");
+    const total = distribution.reduce((sum, probability) => sum + probability, 0);
+    expect(total).toBeCloseTo(1, 10);
+    // Every copy costs at most one 200-pull cycle.
+    expect(distribution.length - 1).toBeLessThanOrEqual(32 * 200);
+    expect(expectedPulls(distribution)).toBeGreaterThan(2000);
+    expect(expectedPulls(distribution)).toBeLessThan(3200);
+  });
+
+  it("returns the same distribution for the same input", () => {
+    const first = simulateRecruitmentCost(copiesPeriod([2, 1]), "call_charge_v1", { initialCharge: 40 });
+    const second = simulateRecruitmentCost(copiesPeriod([2, 1]), "call_charge_v1", { initialCharge: 40 });
+    expect(second).toEqual(first);
+  });
+});
+
 describe("distribution helpers", () => {
   it("convolves independent recruitment periods", () => {
     expect(convolvePullCostDistributions([1], [0, 0.5, 0.5])).toEqual([0, 0.5, 0.5]);

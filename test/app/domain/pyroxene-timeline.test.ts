@@ -16,6 +16,14 @@ import {
 import type { RecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { RecruitmentTypeEnum } from "~/graphql/graphql";
 
+// Pull distributions are sampled, so quantiles may differ from the exact values by a few pulls.
+const SAMPLED_QUANTILE_TOLERANCE_PULLS = 3;
+
+function expectSampledPyroxene(actual: number | undefined, exact: number) {
+  expect(actual).toBeDefined();
+  expect(Math.abs((actual ?? 0) - exact)).toBeLessThanOrEqual(SAMPLED_QUANTILE_TOLERANCE_PULLS * 120);
+}
+
 jest.mock("~/models/recruitment", () => ({
   getRecruitmentGroupsByUids: jest.fn(),
   getRecruitmentPoolStudents: jest.fn(),
@@ -486,7 +494,7 @@ describe("buildTimeline pyroxene balance band", () => {
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(83_200);
     expect(eventEntry?.accumulatedResourcesBand?.optimistic.pyroxene).toBeGreaterThan(83_200);
     // 천장 미반영 모드는 3성 픽업의 90분위가 200회를 넘어섭니다.
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 60_640);
   });
 
   it("uses the average_pity DP central path from actual pickup probability", () => {
@@ -870,7 +878,7 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(66_400);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_000);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 34_000);
   });
 
   it("keeps uncapped average bands wide when ticket spending requires resource-state tracking", () => {
@@ -926,8 +934,8 @@ describe("buildTimeline pyroxene balance band", () => {
     const firstEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
     const secondEventEntry = timeline.find((entry) => entry.source.event?.uid === "event-b");
 
-    expect(firstEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(60_640);
-    expect(secondEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(34_800);
+    expectSampledPyroxene(firstEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 60_640);
+    expectSampledPyroxene(secondEventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 34_800);
   });
 
   it("keeps the simplified ticket band close to resource-state bands on representative fixtures", () => {
@@ -984,7 +992,7 @@ describe("buildTimeline pyroxene balance band", () => {
     }
   });
 
-  it("uses shared pickup DP for same-banner multi-pickup average_pity central path and bands", () => {
+  it("uses the shared pickup distribution for same-banner multi-pickup average_pity central path and bands", () => {
     const timeline = buildTestTimeline({
       scheduleItems: [
         eventItem({
@@ -1001,7 +1009,7 @@ describe("buildTimeline pyroxene balance band", () => {
     const eventEntry = timeline.find((entry) => entry.source.event?.uid === "event-a");
 
     expect(eventEntry?.accumulatedResources.pyroxene).toBe(77_080);
-    expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBe(61_240);
+    expectSampledPyroxene(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene, 61_240);
     expect(eventEntry?.accumulatedResourcesBand?.pessimistic.pyroxene).toBeGreaterThan(56_560);
   });
 });

@@ -1060,7 +1060,7 @@ export default function PyroxenePlanner() {
     () => ({ event: options.event, raid: options.raid, tactical: options.tactical, consumption: options.consumption }),
     [options.event, options.raid, options.tactical, options.consumption],
   );
-  const { timeline, pending: timelinePending } = usePyroxeneTimeline({
+  const { timeline, pending: timelinePending, error: timelineError } = usePyroxeneTimeline({
     initialDate,
     initialResources,
     eventDataMap,
@@ -1176,7 +1176,9 @@ export default function PyroxenePlanner() {
       ? String(fetcher.data.error)
       : null;
 
-  const notice = revisionConflictError ? (
+  const notice = timelineError ? (
+    <StatusNotice tone="danger">청휘석 계산에 실패했어요. 페이지를 새로고침해 주세요.</StatusNotice>
+  ) : revisionConflictError ? (
     <StatusNotice tone="danger">{revisionConflictError}</StatusNotice>
   ) : ownedResourceSaveError ? (
     <StatusNotice tone="danger">{ownedResourceSaveError}</StatusNotice>

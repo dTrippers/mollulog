@@ -1,3 +1,4 @@
+import { type RandomSource, sampleDistribution, sampleMissesBeforeHit } from "~/domain/recruitment-sampling";
 import type { RecruitmentTypeEnum } from "~/graphql/graphql";
 
 export type RecruitmentRuleSet = "legacy_points" | "call_charge_v1";
@@ -41,7 +42,6 @@ const LEGACY_EXCHANGE_INTERVAL = 200;
 const CALL_CHARGE_MIDPOINT = 100;
 const CALL_CHARGE_CEILING = 200;
 const MIN_PROBABILITY = 1e-14;
-const MAX_TARGETS_PER_PERIOD = 30;
 
 export function getRecruitmentChargeScope(recruitmentType: RecruitmentTypeEnum): RecruitmentChargeScope | null {
   if (recruitmentType === "usual") return "regular";
@@ -96,238 +96,25 @@ export function applyRecruitmentFunding(
   return fundedDistribution;
 }
 
-type SlotOutcome = {
-  acquiredBit: number;
-  activePickup: boolean;
-  probability: number;
-};
-
-function allTargetsMask(targetCount: number): number {
-  return targetCount === 0 ? 0 : 2 ** targetCount - 1;
-}
-
-function firstUnacquiredTargetIndex(acquiredMask: number, targetCount: number): number {
-  for (let index = 0; index < targetCount; index += 1) {
-    if ((acquiredMask & (1 << index)) === 0) return index;
-  }
-  return targetCount;
-}
-
 function targetTier(target: RecruitmentCostTarget): 2 | 3 {
   return target.initialTier === 2 ? 2 : 3;
 }
 
-function directPickupRate(target: RecruitmentCostTarget): number {
-  return targetTier(target) === 2 ? 0.03 : 0.007;
+function directPickupRate(student: SampledStudent): number {
+  return student.tier === 2 ? 0.03 : 0.007;
 }
 
-function tier3SlotRate(activeTarget: RecruitmentCostTarget): number {
-  return activeTarget.recruitmentType === "fes" ? 0.06 : 0.03;
+function tier3SlotRate(active: SampledStudent): number {
+  return active.recruitmentType === "fes" ? 0.06 : 0.03;
 }
 
-function tierSlotRate(activeTarget: RecruitmentCostTarget, tier: 2 | 3, slotIndex: number): number {
-  if (tier === 3) return tier3SlotRate(activeTarget);
-  return slotIndex === PULLS_PER_BATCH - 1 ? 1 - tier3SlotRate(activeTarget) : 0.185;
+function tierSlotRate(active: SampledStudent, tier: 2 | 3, lastSlot: boolean): number {
+  if (tier === 3) return tier3SlotRate(active);
+  return lastSlot ? 1 - tier3SlotRate(active) : 0.185;
 }
 
 function poolCount(period: RecruitmentCostPeriod, tier: 2 | 3): number {
   return tier === 2 ? period.tier2PoolCount : period.tier3PoolCount;
-}
-
-function mergeSlotOutcome(outcomes: Map<string, SlotOutcome>, outcome: SlotOutcome) {
-  if (outcome.probability <= MIN_PROBABILITY) return;
-  const key = `${outcome.acquiredBit}:${outcome.activePickup ? 1 : 0}`;
-  const existing = outcomes.get(key);
-  if (existing) existing.probability += outcome.probability;
-  else outcomes.set(key, outcome);
-}
-
-function targetStudentKey(target: RecruitmentCostTarget): string {
-  return target.studentKey ?? target.key;
-}
-
-type OtherStudentSlot = {
-  target: RecruitmentCostTarget;
-  // Bit of the student's next copy, or 0 when every copy is already acquired.
-  acquiredBit: number;
-};
-
-// Bit of the active student's next unacquired copy, so repeated hits within one ten-pull each add a copy.
-function activeStudentNextCopyBit(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-): number {
-  const studentKey = targetStudentKey(period.targets[activeTargetIndex]!);
-  for (let index = 0; index < period.targets.length; index += 1) {
-    if (targetStudentKey(period.targets[index]!) === studentKey && (acquiredMask & (1 << index)) === 0) {
-      return 1 << index;
-    }
-  }
-  return 0;
-}
-
-// One entry per other student; copies of a student are acquired in list order.
-function otherStudentSlots(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-): OtherStudentSlot[] {
-  const seen = new Set<string>([targetStudentKey(period.targets[activeTargetIndex]!)]);
-  const slots: OtherStudentSlot[] = [];
-  for (let index = 0; index < period.targets.length; index += 1) {
-    const target = period.targets[index]!;
-    const studentKey = targetStudentKey(target);
-    if (seen.has(studentKey)) continue;
-    seen.add(studentKey);
-    let acquiredBit = 0;
-    for (let copyIndex = index; copyIndex < period.targets.length; copyIndex += 1) {
-      if (targetStudentKey(period.targets[copyIndex]!) === studentKey && (acquiredMask & (1 << copyIndex)) === 0) {
-        acquiredBit = 1 << copyIndex;
-        break;
-      }
-    }
-    slots.push({ target, acquiredBit });
-  }
-  return slots;
-}
-
-function normalSlotOutcomes(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-  slotIndex: number,
-): SlotOutcome[] {
-  const activeTarget = period.targets[activeTargetIndex];
-  if (!activeTarget) return [{ acquiredBit: 0, activePickup: false, probability: 1 }];
-
-  const outcomes = new Map<string, SlotOutcome>();
-  const activeTier = targetTier(activeTarget);
-  const activeProbability = directPickupRate(activeTarget);
-  mergeSlotOutcome(outcomes, {
-    acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
-    activePickup: true,
-    probability: activeProbability,
-  });
-
-  for (const { target: otherTarget, acquiredBit } of otherStudentSlots(period, acquiredMask, activeTargetIndex)) {
-    const otherTier = targetTier(otherTarget);
-    const availablePoolCount = Math.max(1, poolCount(period, otherTier) - (otherTier === activeTier ? 1 : 0));
-    const offRate = Math.max(
-      0,
-      tierSlotRate(activeTarget, otherTier, slotIndex) - (otherTier === activeTier ? activeProbability : 0),
-    );
-    mergeSlotOutcome(outcomes, {
-      acquiredBit,
-      activePickup: false,
-      probability: offRate / availablePoolCount,
-    });
-  }
-
-  const hitProbability = [...outcomes.values()].reduce((sum, outcome) => sum + outcome.probability, 0);
-  mergeSlotOutcome(outcomes, {
-    acquiredBit: 0,
-    activePickup: false,
-    probability: Math.max(0, 1 - hitProbability),
-  });
-  return [...outcomes.values()];
-}
-
-function midpointSlotOutcomes(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-): SlotOutcome[] {
-  const activeTarget = period.targets[activeTargetIndex];
-  if (!activeTarget) return [{ acquiredBit: 0, activePickup: false, probability: 1 }];
-
-  const outcomes = new Map<string, SlotOutcome>();
-  mergeSlotOutcome(outcomes, {
-    acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
-    activePickup: true,
-    probability: 0.5,
-  });
-
-  const activeTier = targetTier(activeTarget);
-  const availableTier3Count = Math.max(1, period.tier3PoolCount - (activeTier === 3 ? 1 : 0));
-  for (const { target, acquiredBit } of otherStudentSlots(period, acquiredMask, activeTargetIndex)) {
-    if (targetTier(target) !== 3) continue;
-    mergeSlotOutcome(outcomes, {
-      acquiredBit,
-      activePickup: false,
-      probability: 0.5 / availableTier3Count,
-    });
-  }
-
-  const hitProbability = [...outcomes.values()].reduce((sum, outcome) => sum + outcome.probability, 0);
-  mergeSlotOutcome(outcomes, {
-    acquiredBit: 0,
-    activePickup: false,
-    probability: Math.max(0, 1 - hitProbability),
-  });
-  return [...outcomes.values()];
-}
-
-function ceilingSlotOutcomes(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-): SlotOutcome[] {
-  return [
-    {
-      acquiredBit: activeStudentNextCopyBit(period, acquiredMask, activeTargetIndex),
-      activePickup: true,
-      probability: 1,
-    },
-  ];
-}
-
-// Slot outcomes depend only on the acquired copies, the active target, and the slot kind, so they are
-// computed once per period; copies make the per-state recomputation otherwise dominate the DP.
-const slotOutcomeCache = new WeakMap<RecruitmentCostPeriod, Map<string, SlotOutcome[]>>();
-
-function cachedSlotOutcomes(
-  period: RecruitmentCostPeriod,
-  kind: "normal" | "normal-last" | "midpoint" | "ceiling",
-  acquiredMask: number,
-  activeTargetIndex: number,
-): SlotOutcome[] {
-  let cache = slotOutcomeCache.get(period);
-  if (!cache) {
-    cache = new Map();
-    slotOutcomeCache.set(period, cache);
-  }
-  const key = `${kind}:${acquiredMask}:${activeTargetIndex}`;
-  const cached = cache.get(key);
-  if (cached) return cached;
-  const outcomes =
-    kind === "ceiling"
-      ? ceilingSlotOutcomes(period, acquiredMask, activeTargetIndex)
-      : kind === "midpoint"
-        ? midpointSlotOutcomes(period, acquiredMask, activeTargetIndex)
-        : normalSlotOutcomes(period, acquiredMask, activeTargetIndex, kind === "normal-last" ? PULLS_PER_BATCH - 1 : 0);
-  cache.set(key, outcomes);
-  return outcomes;
-}
-
-function runLegacyBatch(
-  period: RecruitmentCostPeriod,
-  acquiredMask: number,
-  activeTargetIndex: number,
-): Map<number, number> {
-  let states = new Map<number, number>([[acquiredMask, 1]]);
-  for (let slotIndex = 0; slotIndex < PULLS_PER_BATCH; slotIndex += 1) {
-    const nextStates = new Map<number, number>();
-    for (const [mask, probability] of states) {
-      const kind = slotIndex === PULLS_PER_BATCH - 1 ? "normal-last" : "normal";
-      for (const outcome of cachedSlotOutcomes(period, kind, mask, activeTargetIndex)) {
-        const nextMask = mask | outcome.acquiredBit;
-        nextStates.set(nextMask, (nextStates.get(nextMask) ?? 0) + probability * outcome.probability);
-      }
-    }
-    states = nextStates;
-  }
-  return states;
 }
 
 function addDistributionProbability(distribution: PullCostDistribution, pulls: number, probability: number) {
@@ -336,117 +123,231 @@ function addDistributionProbability(distribution: PullCostDistribution, pulls: n
 }
 
 function validatePeriod(period: RecruitmentCostPeriod) {
-  if (period.targets.length > MAX_TARGETS_PER_PERIOD) {
-    throw new Error(`too many recruitment targets in one period: ${period.targets.length}`);
-  }
   const keys = new Set(period.targets.map((target) => target.key));
   if (keys.size !== period.targets.length) {
     throw new Error(`duplicate recruitment target in period: ${period.uid}`);
   }
 }
 
-function simulateLegacyPeriod(period: RecruitmentCostPeriod): PullCostDistribution {
-  const targetCount = period.targets.length;
-  if (targetCount === 0) return [1];
-  const finalMask = allTargetsMask(targetCount);
-  const distribution: PullCostDistribution = [];
-  let activeStates = new Map<number, number>([[0, 1]]);
+// A student's copies share a studentKey and are acquired in list order.
+type SampledStudent = {
+  tier: 2 | 3;
+  recruitmentType: RecruitmentTypeEnum;
+  // Target-list positions of this student's copies; the active pickup is the earliest unacquired copy.
+  copyIndices: number[];
+};
 
-  for (let pulls = PULLS_PER_BATCH; activeStates.size > 0; pulls += PULLS_PER_BATCH) {
-    const nextStates = new Map<number, number>();
-    for (const [acquiredMask, stateProbability] of activeStates) {
-      const activeTargetIndex = firstUnacquiredTargetIndex(acquiredMask, targetCount);
-      for (const [batchMask, batchProbability] of runLegacyBatch(period, acquiredMask, activeTargetIndex)) {
-        let nextMask = batchMask;
-        if (pulls % LEGACY_EXCHANGE_INTERVAL === 0 && nextMask !== finalMask) {
-          const exchangeTargetIndex = firstUnacquiredTargetIndex(nextMask, targetCount);
-          nextMask |= 1 << exchangeTargetIndex;
-        }
-        const probability = stateProbability * batchProbability;
-        if (nextMask === finalMask) addDistributionProbability(distribution, pulls, probability);
-        else nextStates.set(nextMask, (nextStates.get(nextMask) ?? 0) + probability);
-      }
-    }
-    activeStates = nextStates;
-  }
-
-  return distribution;
+function groupSampledStudents(period: RecruitmentCostPeriod): SampledStudent[] {
+  const students = new Map<string, SampledStudent>();
+  period.targets.forEach((target, index) => {
+    const key = target.studentKey ?? target.key;
+    const student = students.get(key);
+    if (student) student.copyIndices.push(index);
+    else
+      students.set(key, {
+        tier: targetTier(target),
+        recruitmentType: target.recruitmentType,
+        copyIndices: [index],
+      });
+  });
+  return [...students.values()];
 }
 
-// Dense DP over (acquired copies, charge). The active target is fixed for a whole ten-pull, so each
-// batch tracks states per starting active target. Charge 200 always yields the active pickup, so a
-// state never holds charge 200.
-function simulateCallChargePeriod(period: RecruitmentCostPeriod, initialCharge: number): PullCostDistribution {
+// Per-pull hit probabilities of an ordinary slot while one student is the active pickup. Other students
+// are hit off-rate from their tier's pool; a hit on a finished student changes nothing, so only
+// unfinished students are listed.
+type SlotRates = {
+  active: number;
+  otherStudents: number[];
+  otherProbabilities: number[];
+  total: number;
+};
+
+function slotRates(
+  period: RecruitmentCostPeriod,
+  students: SampledStudent[],
+  finished: (index: number) => boolean,
+  activeIndex: number,
+  lastSlot: boolean,
+): SlotRates {
+  const active = students[activeIndex]!;
+  const activeRate = directPickupRate(active);
+  const rates: SlotRates = { active: activeRate, otherStudents: [], otherProbabilities: [], total: activeRate };
+  students.forEach((student, index) => {
+    if (index === activeIndex || finished(index)) return;
+    const sameTier = student.tier === active.tier;
+    const availablePoolCount = Math.max(1, poolCount(period, student.tier) - (sameTier ? 1 : 0));
+    const offRate = Math.max(0, tierSlotRate(active, student.tier, lastSlot) - (sameTier ? activeRate : 0));
+    const probability = offRate / availablePoolCount;
+    if (probability <= 0) return;
+    rates.otherStudents.push(index);
+    rates.otherProbabilities.push(probability);
+    rates.total += probability;
+  });
+  return rates;
+}
+
+// Simulates ten-pull batches until every target copy is acquired. The active pickup is the earliest
+// unacquired copy at the start of each ten-pull and stays fixed for the rest of it, so a run only
+// finishes at a ten-pull boundary.
+//
+// call_charge_v1: the charge rises by one per pull; the 100th pull of a charge cycle is the active
+// pickup with probability 1/2 (otherwise a ★3 off-rate student), the 200th always is, and an active
+// pickup resets the charge. legacy_points: every 200 pulls exchange the earliest unacquired copy.
+//
+// Ordinary pulls between those events have fixed hit probabilities, so runs of misses are sampled
+// at once instead of pull by pull.
+function createRecruitmentPeriodRunner(
+  period: RecruitmentCostPeriod,
+  ruleSet: RecruitmentRuleSet,
+  initialCharge: number,
+): (random: RandomSource) => number {
+  const callCharge = ruleSet === "call_charge_v1";
+  const students = groupSampledStudents(period);
+  const studentCount = students.length;
   const targetCount = period.targets.length;
-  if (targetCount === 0) return [1];
-  const finalMask = allTargetsMask(targetCount);
-  const distribution: PullCostDistribution = [];
-  let activeStates = new Map<number, Float64Array>();
-  const initial = new Float64Array(CALL_CHARGE_CEILING);
-  initial[initialCharge] = 1;
-  activeStates.set(0, initial);
+  const acquired = new Int32Array(studentCount);
+  const finished = (index: number) => acquired[index]! >= students[index]!.copyIndices.length;
+  const otherTier3Probability = (active: SampledStudent) =>
+    0.5 / Math.max(1, period.tier3PoolCount - (active.tier === 3 ? 1 : 0));
 
-  for (let pulls = PULLS_PER_BATCH; activeStates.size > 0; pulls += PULLS_PER_BATCH) {
-    const batchStates = new Map<number, Map<number, Float64Array>>();
-    for (const [mask, charges] of activeStates) {
-      const activeTargetIndex = firstUnacquiredTargetIndex(mask, targetCount);
-      const group = batchStates.get(activeTargetIndex) ?? new Map<number, Float64Array>();
-      const existing = group.get(mask);
-      if (existing)
-        for (let charge = 0; charge < CALL_CHARGE_CEILING; charge += 1) existing[charge] += charges[charge]!;
-      else group.set(mask, charges);
-      batchStates.set(activeTargetIndex, group);
-    }
+  // Rates depend only on the active student and which students are finished; they are recomputed
+  // when either changes.
+  let ratesStale = true;
+  let normalRates: SlotRates | null = null;
+  let lastSlotRates: SlotRates | null = null;
+  let lastSlotMatters = false;
 
-    const nextStates = new Map<number, Float64Array>();
-    for (const [activeTargetIndex, startStates] of batchStates) {
-      let states = startStates;
-      for (let slotIndex = 0; slotIndex < PULLS_PER_BATCH; slotIndex += 1) {
-        const slotStates = new Map<number, Float64Array>();
-        const normalKind = slotIndex === PULLS_PER_BATCH - 1 ? "normal-last" : "normal";
-        for (const [mask, charges] of states) {
-          for (let charge = 0; charge < CALL_CHARGE_CEILING; charge += 1) {
-            const probability = charges[charge]!;
-            if (probability <= MIN_PROBABILITY) continue;
-            const nextCharge = charge + 1;
-            const kind =
-              nextCharge === CALL_CHARGE_CEILING
-                ? "ceiling"
-                : nextCharge === CALL_CHARGE_MIDPOINT
-                  ? "midpoint"
-                  : normalKind;
-            for (const outcome of cachedSlotOutcomes(period, kind, mask, activeTargetIndex)) {
-              const nextMask = mask | outcome.acquiredBit;
-              let target = slotStates.get(nextMask);
-              if (!target) {
-                target = new Float64Array(CALL_CHARGE_CEILING);
-                slotStates.set(nextMask, target);
-              }
-              target[outcome.activePickup ? 0 : nextCharge] += probability * outcome.probability;
-            }
-          }
+  return (random) => {
+    acquired.fill(0);
+    let remaining = targetCount;
+    let pulls = 0;
+    let charge = initialCharge;
+    let activeIndex = -1;
+    ratesStale = true;
+
+    const earliestUnfinished = () => {
+      let best = -1;
+      let bestPosition = Number.POSITIVE_INFINITY;
+      for (let index = 0; index < studentCount; index += 1) {
+        if (finished(index)) continue;
+        const position = students[index]!.copyIndices[acquired[index]!]!;
+        if (position < bestPosition) {
+          best = index;
+          bestPosition = position;
         }
-        states = slotStates;
       }
-      for (const [mask, charges] of states) {
-        if (mask === finalMask) {
-          const probability = charges.reduce((sum, value) => sum + value, 0);
-          if (probability > MIN_PROBABILITY) addDistributionProbability(distribution, pulls, probability);
+      return best;
+    };
+    const acquire = (index: number) => {
+      if (finished(index)) return;
+      acquired[index]! += 1;
+      remaining -= 1;
+      if (finished(index)) ratesStale = true;
+    };
+
+    for (;;) {
+      if (pulls % PULLS_PER_BATCH === 0) {
+        if (!callCharge && pulls > 0 && pulls % LEGACY_EXCHANGE_INTERVAL === 0 && remaining > 0) {
+          acquire(earliestUnfinished());
+        }
+        if (remaining === 0) return pulls;
+        const nextActive = earliestUnfinished();
+        if (nextActive !== activeIndex) {
+          activeIndex = nextActive;
+          ratesStale = true;
+        }
+      } else if (remaining === 0) {
+        // Every copy is in; the rest of the ten-pull is still billed.
+        return pulls + PULLS_PER_BATCH - (pulls % PULLS_PER_BATCH);
+      }
+
+      const nextCharge = charge + 1;
+      if (callCharge && nextCharge === CALL_CHARGE_CEILING) {
+        acquire(activeIndex);
+        charge = 0;
+        pulls += 1;
+        continue;
+      }
+      if (callCharge && nextCharge === CALL_CHARGE_MIDPOINT) {
+        pulls += 1;
+        const roll = random();
+        if (roll < 0.5) {
+          acquire(activeIndex);
+          charge = 0;
           continue;
         }
-        const existing = nextStates.get(mask);
-        if (existing)
-          for (let charge = 0; charge < CALL_CHARGE_CEILING; charge += 1) existing[charge] += charges[charge]!;
-        else nextStates.set(mask, charges);
+        charge = nextCharge;
+        const active = students[activeIndex]!;
+        const probability = otherTier3Probability(active);
+        let threshold = 0.5;
+        for (let index = 0; index < studentCount; index += 1) {
+          if (index === activeIndex || students[index]!.tier !== 3) continue;
+          threshold += probability;
+          if (roll < threshold) {
+            acquire(index);
+            break;
+          }
+        }
+        continue;
       }
-    }
-    for (const [mask, charges] of nextStates) {
-      if (charges.every((value) => value <= MIN_PROBABILITY)) nextStates.delete(mask);
-    }
-    activeStates = nextStates;
-  }
 
-  return distribution;
+      if (ratesStale) {
+        normalRates = slotRates(period, students, finished, activeIndex, false);
+        lastSlotMatters = students.some(
+          (student, index) => index !== activeIndex && student.tier === 2 && !finished(index),
+        );
+        lastSlotRates = lastSlotMatters ? slotRates(period, students, finished, activeIndex, true) : normalRates;
+        ratesStale = false;
+      }
+
+      // The stretch ends before the next charge midpoint or ceiling, at the next legacy exchange,
+      // before a ten-pull's last slot when that slot changes ★2 rates, and at the end of the ten-pull
+      // once the active student is finished (the next ten-pull picks a new one).
+      const slot = pulls % PULLS_PER_BATCH;
+      const lastSlot = lastSlotMatters && slot === PULLS_PER_BATCH - 1;
+      let horizon = callCharge
+        ? (nextCharge < CALL_CHARGE_MIDPOINT ? CALL_CHARGE_MIDPOINT : CALL_CHARGE_CEILING) - nextCharge
+        : LEGACY_EXCHANGE_INTERVAL - (pulls % LEGACY_EXCHANGE_INTERVAL);
+      if (lastSlot) horizon = 1;
+      else if (lastSlotMatters) horizon = Math.min(horizon, PULLS_PER_BATCH - 1 - slot);
+      if (finished(activeIndex)) horizon = Math.min(horizon, PULLS_PER_BATCH - slot);
+
+      const rates = (lastSlot ? lastSlotRates : normalRates)!;
+      const misses = sampleMissesBeforeHit(random, rates.total);
+      if (misses >= horizon) {
+        pulls += horizon;
+        if (callCharge) charge += horizon;
+        continue;
+      }
+      pulls += misses + 1;
+      if (callCharge) charge += misses + 1;
+      let roll = random() * rates.total - rates.active;
+      if (roll < 0) {
+        acquire(activeIndex);
+        if (callCharge) charge = 0;
+        continue;
+      }
+      let hit = rates.otherStudents.length - 1;
+      for (let other = 0; other < rates.otherStudents.length; other += 1) {
+        roll -= rates.otherProbabilities[other]!;
+        if (roll < 0) {
+          hit = other;
+          break;
+        }
+      }
+      acquire(rates.otherStudents[hit]!);
+    }
+  };
+}
+
+function simulateRecruitmentPeriod(
+  period: RecruitmentCostPeriod,
+  ruleSet: RecruitmentRuleSet,
+  initialCharge: number,
+): PullCostDistribution {
+  if (period.targets.length === 0) return [1];
+  return sampleDistribution(createRecruitmentPeriodRunner(period, ruleSet, initialCharge));
 }
 
 export function normalizeRecruitmentCharge(value: number): number {
@@ -459,9 +360,11 @@ export function simulateRecruitmentCost(
   { initialCharge = 0 }: RecruitmentCostSimulationOptions = {},
 ): PullCostDistribution {
   validatePeriod(period);
-  return ruleSet === "call_charge_v1"
-    ? simulateCallChargePeriod(period, normalizeRecruitmentCharge(initialCharge))
-    : simulateLegacyPeriod(period);
+  return simulateRecruitmentPeriod(
+    period,
+    ruleSet,
+    ruleSet === "call_charge_v1" ? normalizeRecruitmentCharge(initialCharge) : 0,
+  );
 }
 
 export function convolvePullCostDistributions(

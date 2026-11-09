@@ -439,6 +439,38 @@ describe("PostgreSQL unified guest planner import", () => {
     expect(sameAmounts.storedDocument.pyroxene.resources).toEqual(accountResource);
   });
 
+  it("imports guest recruitment stacks even when the amounts match the account", async () => {
+    const accountResource = {
+      inputAt: "2026-09-28T00:00:00.000Z",
+      pyroxene: 100,
+      oneTimeTicket: 0,
+      tenTimeTicket: 0,
+      recruitmentStacks: { regular: 0, limited: 0 },
+    };
+    const accountDocument = emptyDocument();
+    accountDocument.pyroxene.resources = accountResource;
+    const document = emptyDocument();
+    document.pyroxene.resources = {
+      ...accountResource,
+      inputAt: "2026-09-29T00:00:00.000Z",
+      recruitmentStacks: { regular: 150, limited: 90 },
+    };
+    const plan = makePlan(document);
+    plan.sources[0].selection = {
+      resources: true,
+      options: false,
+      recordUids: [],
+      sourceKeys: [],
+      eventUids: [],
+      eventShopUids: [],
+      ap: false,
+    };
+    const client = fakeClient(tables(accountDocument));
+    await runPostgresGuestPlannerImport(env, 7, plan, { createClient: () => client as unknown as Client });
+
+    expect(storedDocument(client).pyroxene.resources?.recruitmentStacks).toEqual({ regular: 150, limited: 90 });
+  });
+
   it("rolls back all selected planner sections when the conditional document write conflicts", async () => {
     const source = makePlan();
     source.sources[0].selection = {

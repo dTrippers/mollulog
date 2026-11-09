@@ -26,6 +26,7 @@ import {
   simulateRecruitmentCost,
 } from "~/domain/recruitment-cost";
 import { getTaggedFreeRecruitmentPulls, withoutFreeRecruitmentTags } from "~/domain/recruitment-notice";
+import { sampleDistribution, sampleMissesBeforeHit } from "~/domain/recruitment-sampling";
 import { DEFAULT_PICKUP_STUDENT_RATE_BY_TIER } from "~/domain/recruitment-simulator";
 import dayjs from "~/lib/dayjs";
 
@@ -141,17 +142,6 @@ const TIMELINE_DELTA_PRIORITY = {
 
 type PickupEvent = NonNullable<PyroxeneScheduleItem["event"]>;
 type PickupRecruitment = PickupEvent["recruitments"][number];
-
-type PickupTargetDistributionEntry = {
-  acquiredMask: number;
-  probability: number;
-};
-
-type PickupDpState = {
-  targetIndex: number;
-  acquiredMask: number;
-  sparkPoints: number;
-};
 
 type PickupTrialCostDistributionMode = "with_pity" | "without_pity";
 
@@ -353,16 +343,6 @@ function subtractFreeRecruitmentTrial(pickupTrial: number, freePulls: number): n
   return Math.max(0, pickupTrial - freePulls);
 }
 
-function bitCount(value: number): number {
-  let count = 0;
-  let remaining = value;
-  while (remaining > 0) {
-    count += remaining & 1;
-    remaining >>>= 1;
-  }
-  return count;
-}
-
 function getRecruitmentStudentTier(recruitment: PickupRecruitment): number {
   return recruitment.student?.initialTier ?? 3;
 }
@@ -456,105 +436,6 @@ function getTicketPyroxeneDiscount(resourceDelta: PickupResources | undefined): 
   return Math.max(0, -resourceDelta.oneTimeTicket) * 120 + Math.max(0, -resourceDelta.tenTimeTicket) * 10 * 120;
 }
 
-function getPickupDpStateKey(state: PickupDpState): string {
-  return `${state.targetIndex}:${state.acquiredMask}:${state.sparkPoints}`;
-}
-
-function getNextTargetIndex(
-  targetRecruitments: PickupRecruitment[],
-  targetIndex: number,
-  acquiredMask: number,
-): number {
-  let nextTargetIndex = targetIndex;
-  while (nextTargetIndex < targetRecruitments.length && (acquiredMask & (1 << nextTargetIndex)) !== 0) {
-    nextTargetIndex++;
-  }
-  return nextTargetIndex;
-}
-
-function shouldStopTarget(
-  targetRecruitments: PickupRecruitment[],
-  targetIndex: number,
-  acquiredMask: number,
-  sparkPoints: number,
-  mode: PickupTrialCostDistributionMode,
-) {
-  const targetCount = targetRecruitments.length;
-  if (targetIndex >= targetCount) {
-    return true;
-  }
-
-  const missingTargetCount = targetCount - bitCount(acquiredMask);
-  if (missingTargetCount <= 0) {
-    return true;
-  }
-
-  if (mode === "without_pity") {
-    return false;
-  }
-
-  return Math.floor(sparkPoints / PYROXENE.PICKUP_TRIAL.ceil) >= missingTargetCount;
-}
-
-function applySparkExchange(acquiredMask: number, targetCount: number, sparkPoints: number): number {
-  let result = acquiredMask;
-  let exchangeableCount = Math.floor(sparkPoints / PYROXENE.PICKUP_TRIAL.ceil);
-  for (let targetIndex = 0; targetIndex < targetCount && exchangeableCount > 0; targetIndex++) {
-    const targetMask = 1 << targetIndex;
-    if ((result & targetMask) !== 0) {
-      continue;
-    }
-    result |= targetMask;
-    exchangeableCount--;
-  }
-  return result;
-}
-
-// Copies of one student are the same recruitment object repeated in the target list and are acquired in order.
-function getTargetSlotDistribution(
-  targetRecruitments: PickupRecruitment[],
-  currentTargetIndex: number,
-  acquiredMask: number,
-  event: PickupEvent,
-): PickupTargetDistributionEntry[] {
-  const currentTarget = targetRecruitments[currentTargetIndex];
-  if (!currentTarget) {
-    return [{ acquiredMask: 0, probability: 1 }];
-  }
-
-  const entries: PickupTargetDistributionEntry[] = [];
-  const currentTier = getRecruitmentStudentTier(currentTarget);
-  const directProbability = getPickupRecruitmentRate(currentTarget);
-  entries.push({ acquiredMask: 1 << currentTargetIndex, probability: directProbability });
-
-  if (currentTier === 2 || currentTier === 3) {
-    const poolCount = Math.max(1, getRecruitmentPoolCountByTier(event, currentTier) - 1);
-    const offRateProbability = Math.max(0, getRecruitmentTierSlotRate(currentTarget) - directProbability);
-    const spookProbability = offRateProbability / poolCount;
-
-    const seen = new Set<PickupRecruitment>([currentTarget]);
-    for (let targetIndex = 0; targetIndex < targetRecruitments.length; targetIndex++) {
-      const target = targetRecruitments[targetIndex];
-      if (seen.has(target)) {
-        continue;
-      }
-      seen.add(target);
-      if (getRecruitmentStudentTier(target) !== currentTier) {
-        continue;
-      }
-      const nextCopyIndex = targetRecruitments.findIndex(
-        (candidate, index) => index >= targetIndex && candidate === target && (acquiredMask & (1 << index)) === 0,
-      );
-      entries.push({ acquiredMask: nextCopyIndex === -1 ? 0 : 1 << nextCopyIndex, probability: spookProbability });
-    }
-  }
-
-  const hitProbability = entries.reduce((sum, entry) => sum + entry.probability, 0);
-  return [...entries, { acquiredMask: 0, probability: Math.max(0, 1 - hitProbability) }].filter(
-    (entry) => entry.probability > MIN_PROBABILITY,
-  );
-}
-
 function getPickupTrialCostDistributionCacheKey(
   event: PickupEvent,
   pickupRecruitments: PickupRecruitment[],
@@ -637,59 +518,108 @@ function simulateCallChargeScope(
 }
 
 // Pull count distribution until every target copy is acquired, before free pulls and mileage tickets.
+// Pull by pull, the active pickup is the earliest unacquired copy; other targets of the active
+// student's tier are hit off-rate from the pool. With pity, every 200 pulls exchange one missing copy,
+// so a run ends once the exchanges cover every copy still missing.
+//
+// Ordinary pulls between hits have fixed probabilities, so runs of misses are sampled at once.
 function simulatePickupTrialDistribution(
   event: PickupEvent,
   pickupRecruitments: PickupRecruitment[],
   mode: PickupTrialCostDistributionMode,
 ): TrialDistribution {
+  // Copies of one student are the same recruitment object repeated in the target list.
+  const students: { recruitment: PickupRecruitment; firstIndex: number; copies: number }[] = [];
+  const studentIndexByRecruitment = new Map<PickupRecruitment, number>();
+  pickupRecruitments.forEach((recruitment, index) => {
+    const existing = studentIndexByRecruitment.get(recruitment);
+    if (existing === undefined) {
+      studentIndexByRecruitment.set(recruitment, students.length);
+      students.push({ recruitment, firstIndex: index, copies: 1 });
+    } else {
+      students[existing]!.copies += 1;
+    }
+  });
+  const studentCount = students.length;
   const targetCount = pickupRecruitments.length;
-  const distribution: TrialDistribution = [];
-  const slotDistributionCache = new Map<string, PickupTargetDistributionEntry[]>();
-  let activeStates = new Map<string, { state: PickupDpState; probability: number }>();
-  const initialState = { targetIndex: 0, acquiredMask: 0, sparkPoints: 0 };
-  activeStates.set(getPickupDpStateKey(initialState), { state: initialState, probability: 1 });
+  const acquired = new Int32Array(studentCount);
+  const finished = (index: number) => acquired[index]! >= students[index]?.copies;
+  const ceil = PYROXENE.PICKUP_TRIAL.ceil;
 
-  while (activeStates.size > 0) {
-    const nextStates = new Map<string, { state: PickupDpState; probability: number }>();
+  // Hit probabilities per pull while a student is active; they change only when the active student
+  // changes or another student finishes.
+  const rates = { active: 0, otherStudents: [] as number[], otherProbabilities: [] as number[], total: 0 };
+  const updateRates = (activeIndex: number) => {
+    const active = students[activeIndex]?.recruitment;
+    const activeTier = getRecruitmentStudentTier(active);
+    rates.active = getPickupRecruitmentRate(active);
+    rates.otherStudents.length = 0;
+    rates.otherProbabilities.length = 0;
+    rates.total = rates.active;
+    if (activeTier !== 2 && activeTier !== 3) return;
+    const poolCount = Math.max(1, getRecruitmentPoolCountByTier(event, activeTier) - 1);
+    const spookProbability = Math.max(0, getRecruitmentTierSlotRate(active) - rates.active) / poolCount;
+    if (spookProbability <= 0) return;
+    for (let index = 0; index < studentCount; index += 1) {
+      if (index === activeIndex || finished(index)) continue;
+      if (getRecruitmentStudentTier(students[index]?.recruitment) !== activeTier) continue;
+      rates.otherStudents.push(index);
+      rates.otherProbabilities.push(spookProbability);
+      rates.total += spookProbability;
+    }
+  };
 
-    for (const { state, probability } of activeStates.values()) {
-      const targetIndex = getNextTargetIndex(pickupRecruitments, state.targetIndex, state.acquiredMask);
-      if (shouldStopTarget(pickupRecruitments, targetIndex, state.acquiredMask, state.sparkPoints, mode)) {
-        const acquiredMask =
-          mode === "with_pity"
-            ? applySparkExchange(state.acquiredMask, targetCount, state.sparkPoints)
-            : state.acquiredMask;
-        if (bitCount(acquiredMask) >= targetCount) {
-          addTrialProbability(distribution, state.sparkPoints, probability);
+  return sampleDistribution((random) => {
+    acquired.fill(0);
+    let remaining = targetCount;
+    let pulls = 0;
+    let activeIndex = -1;
+    let ratesStale = true;
+
+    for (;;) {
+      if (remaining === 0) return pulls;
+      if (mode === "with_pity" && Math.floor(pulls / ceil) >= remaining) return pulls;
+
+      // Students are acquired in list order, so the earliest unfinished student holds the earliest copy.
+      if (activeIndex === -1 || finished(activeIndex)) {
+        activeIndex = -1;
+        for (let index = 0; index < studentCount; index += 1) {
+          if (finished(index)) continue;
+          if (activeIndex === -1 || students[index]?.firstIndex < students[activeIndex]?.firstIndex) {
+            activeIndex = index;
+          }
         }
+        ratesStale = true;
+      }
+      if (ratesStale) {
+        updateRates(activeIndex);
+        ratesStale = false;
+      }
+
+      const horizon = mode === "with_pity" ? ceil - (pulls % ceil) : Number.POSITIVE_INFINITY;
+      const misses = sampleMissesBeforeHit(random, rates.total);
+      if (misses >= horizon) {
+        pulls += horizon;
         continue;
       }
-
-      const slotKey = `${targetIndex}:${state.acquiredMask}`;
-      let slotDistribution = slotDistributionCache.get(slotKey);
-      if (!slotDistribution) {
-        slotDistribution = getTargetSlotDistribution(pickupRecruitments, targetIndex, state.acquiredMask, event);
-        slotDistributionCache.set(slotKey, slotDistribution);
-      }
-      for (const result of slotDistribution) {
-        const sparkPoints = state.sparkPoints + 1;
-        const acquiredMask = state.acquiredMask | result.acquiredMask;
-        const nextTargetIndex = getNextTargetIndex(pickupRecruitments, targetIndex, acquiredMask);
-        const nextState = { targetIndex: nextTargetIndex, acquiredMask, sparkPoints };
-        const nextProbability = probability * result.probability;
-        const key = getPickupDpStateKey(nextState);
-        const existing = nextStates.get(key);
-        if (existing) {
-          existing.probability += nextProbability;
-        } else if (nextProbability > MIN_PROBABILITY) {
-          nextStates.set(key, { state: nextState, probability: nextProbability });
+      pulls += misses + 1;
+      let roll = random() * rates.total - rates.active;
+      let hitIndex = activeIndex;
+      if (roll >= 0) {
+        hitIndex = rates.otherStudents[rates.otherStudents.length - 1]!;
+        for (let other = 0; other < rates.otherStudents.length; other += 1) {
+          roll -= rates.otherProbabilities[other]!;
+          if (roll < 0) {
+            hitIndex = rates.otherStudents[other]!;
+            break;
+          }
         }
       }
+      acquired[hitIndex]! += 1;
+      remaining -= 1;
+      if (finished(hitIndex)) ratesStale = true;
     }
-
-    activeStates = nextStates;
-  }
-  return distribution;
+  });
 }
 
 type PickupTrialDistributions = {
