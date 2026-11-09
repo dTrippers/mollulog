@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
 import { deriveJankenPlan } from "~/domain/event-shop/janken";
 import type { MinigameConfig } from "~/domain/event-shop";
@@ -19,40 +19,17 @@ jest.mock("react-router", () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => createElement("a", { href: to }, children),
   useOutletContext: () => mockPlan,
 }));
-jest.mock("~/components/v2/features/events/ShopSection", () => ({
-  ShopSection: ({ children, title, action }: { children: ReactNode; title: string; action?: ReactNode }) =>
-    createElement("section", null, createElement("h2", null, title), action, children),
-}));
 jest.mock("~/components/v2/features/resources/ResourceThumb", () => ({
   ResourceThumb: ({ name }: { name: string }) => createElement("span", { "aria-label": name }),
+  resourceThumbImageSrc: () => "/thumb.png",
 }));
 jest.mock("~/components/v2/layout", () => ({
-  AsideLinks: () => null,
-  PageActionBar: ({ children, summary, className }: { children: ReactNode; summary?: ReactNode; className?: string }) =>
-    createElement("div", { className }, summary, children),
+  MobileActionBar: ({ leading }: { leading?: ReactNode }) =>
+    createElement("div", { "data-testid": "mobile-action-bar" }, leading),
   PageAside: ({ children }: { children: ReactNode }) => createElement("aside", null, children),
   PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children),
   PanelSheet: ({ children }: { children: ReactNode }) => createElement("section", null, children),
-  useV2Page: () => ({ stacked: mockStacked, openSheet: jest.fn() }),
-}));
-jest.mock("~/components/v2/primitives/Button", () => ({
-  Button: ({ children, onClick, disabled }: { children: ReactNode; onClick?: () => void; disabled?: boolean }) =>
-    createElement("button", { type: "button", onClick, disabled }, children),
-  v2ButtonClassName: () => "button",
-}));
-jest.mock("~/components/v2/primitives/NumberInput", () => ({
-  NumberInput: ({ id, "aria-label": ariaLabel, value, onValueChange }: {
-    id?: string;
-    "aria-label"?: string;
-    value: number | string;
-    onValueChange: (value: number) => void;
-  }) => createElement("input", {
-    id,
-    "aria-label": ariaLabel,
-    type: "number",
-    value,
-    onChange: (event: { currentTarget: { value: string } }) => onValueChange(Number(event.currentTarget.value)),
-  }),
+  useV2Page: () => ({ stacked: mockStacked, openSheet: jest.fn(), sheetPanelId: null }),
 }));
 jest.mock("~/components/v2/primitives/SectionTabs", () => ({
   SectionTabs: ({ items, selectedId, onChange }: {
@@ -72,19 +49,6 @@ jest.mock("~/components/v2/primitives/SectionTabs", () => ({
 jest.mock("~/components/v2/primitives/StatusNotice", () => ({
   StatusNotice: ({ children, action }: { children: ReactNode; action?: ReactNode }) =>
     createElement("div", { role: "alert" }, children, action),
-}));
-jest.mock("~/components/v2/primitives/ToggleChip", () => ({
-  ToggleChip: ({ children, pressed, ariaLabel, disabled, onPressedChange }: {
-    children: ReactNode;
-    pressed: boolean;
-    ariaLabel: string;
-    disabled?: boolean;
-    onPressedChange: () => void;
-  }) => createElement(
-    "button",
-    { type: "button", "aria-label": ariaLabel, "aria-pressed": pressed, disabled, onClick: onPressedChange },
-    children,
-  ),
 }));
 jest.mock("~/contexts/SignInProvider", () => ({ useSignIn: () => ({ showSignIn: jest.fn() }) }));
 
@@ -164,18 +128,24 @@ beforeEach(() => {
 });
 
 describe("janken planner screen", () => {
-  it("distinguishes current and goal tier chip accessible names", () => {
+  it("distinguishes current and goal tier pickers", () => {
     renderScreen();
 
-    expect(screen.getByRole("button", { name: "현재 등급 1성" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "목표 등급 3성" })).toBeTruthy();
+    const current = screen.getByRole("group", { name: "현재 성급" });
+    const goal = screen.getByRole("group", { name: "목표 성급" });
+    expect(within(current).getByRole("button", { name: "1성" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(goal).getByRole("button", { name: "없음" }).getAttribute("aria-pressed")).toBe("true");
+    expect(within(goal).getByRole("button", { name: "3성" }).getAttribute("aria-pressed")).toBe("false");
+    expect(within(goal).getByRole("button", { name: "고유무기 1" })).toBeTruthy();
   });
 
   it("edits the shared planner entry, including cleared stages", () => {
     renderScreen();
 
     fireEvent.click(screen.getByRole("button", { name: "스토리 1 클리어" }));
-    fireEvent.change(screen.getByRole("spinbutton", { name: "현재 챌린지 누적 스코어" }), { target: { value: "500000" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "현재 챌린지 누적 스코어" }), {
+      target: { value: "500,000" },
+    });
 
     expect(mockPlan.jankenEntry.progress.clearedStageUids).toEqual(["100860101"]);
     expect(mockPlan.jankenEntry.progress.cumulativeScore).toBe(500_000);
@@ -188,38 +158,36 @@ describe("janken planner screen", () => {
     renderScreen();
 
     expect(screen.getByRole("alert").textContent).toContain("1회 평균 스코어를 입력해 주세요.");
-    expect(screen.getByText("1회 평균 스코어 필요")).toBeTruthy();
-    expect(screen.getByRole("spinbutton", { name: "1회 평균 스코어" })).toBeTruthy();
+    expect(screen.getByText("1회 평균 필요")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "1회 평균 스코어" }).getAttribute("aria-invalid")).toBe("true");
   });
 
-  it("hides the challenge target input until a score goal is selected", () => {
+  it("hides the average score input until a score goal is selected", () => {
     const view = renderScreen();
 
-    expect(screen.queryByRole("spinbutton", { name: "목표 스코어" })).toBeNull();
-    expect(screen.getByText("챌린지 스코어가 쌓이면 단계별 보상을 받아요")).toBeTruthy();
+    expect(screen.queryByRole("textbox", { name: "1회 평균 스코어" })).toBeNull();
 
-    const preset = screen.getAllByRole("button", { name: /만 · .*단계/ }).at(0);
+    const select = screen.getByRole("combobox", { name: "목표 스코어" });
+    const preset = [...select.querySelectorAll("option")].find((option) => /만 · .*단계/.test(option.textContent ?? ""));
     if (!preset) throw new Error("Expected a challenge score preset.");
-    fireEvent.click(preset);
+    fireEvent.change(select, { target: { value: preset.value } });
     view.rerender(createElement(JankenScreen, { loaderData: loaderData as never }));
 
-    expect(screen.getByRole("spinbutton", { name: "목표 스코어" })).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "1회 평균 스코어" })).toBeTruthy();
   });
 
-  it("keeps the score need unit attached to its number", () => {
+  it("shows the remaining score in 만 units on the score goal", () => {
     const entry = {
       ...entryWithScoreTarget(100_000),
       goals: { ...entryWithScoreTarget(100_000).goals, targetScore: 2_250_000 },
     };
     setSharedEntry(entry);
-    const { container } = renderScreen();
-    const scoreHeader = [...container.querySelectorAll("strong")].find((node) => node.textContent === "225");
+    renderScreen();
 
-    expect(scoreHeader?.parentElement?.textContent).toBe("225만 점 더 필요");
-    expect(scoreHeader?.nextElementSibling?.className).not.toContain("ml-1");
+    expect(screen.getByText("225만 점 부족")).toBeTruthy();
   });
 
-  it("keeps goal headers without the extra progress summary lines", () => {
+  it("keeps goal cards without the extra progress summary lines", () => {
     const entry = {
       ...makeEntry(),
       progress: {
@@ -242,7 +210,7 @@ describe("janken planner screen", () => {
     mockPlan = { ...mockPlan, jankenShopCurrency: { uid: "80863", required: 560, total: 600, owned: 40 } };
     const { container } = renderScreen();
 
-    expect(screen.getByText("무술대회 장비")).toBeTruthy();
+    expect(container.querySelector('[data-region="goal-equip"]')).not.toBeNull();
     expect(container.textContent).not.toContain("현재 3성에서 220개 · 보유 45개");
     expect(container.textContent).not.toContain("상점 계산기에서 고른 아이템 기준");
     expect(container.textContent).not.toContain("현재 175만 점");
@@ -260,18 +228,21 @@ describe("janken planner screen", () => {
     };
     const view = renderScreen();
 
-    expect(screen.getAllByText("계산 중…").length).toBeGreaterThan(0);
-    expect(screen.queryByText("약 0 AP")).toBeNull();
+    expect(view.container.textContent?.match(/계산 중…/g)).toHaveLength(1);
+    expect(view.container.textContent).not.toContain("약 0");
+    expect(screen.queryByTestId("mobile-action-bar")).toBeNull();
 
     mockStacked = true;
     view.rerender(createElement(JankenScreen, { loaderData: loaderData as never }));
-    expect(view.container.querySelector(".janken-mobile-action-bar")).not.toBeNull();
+    expect(screen.getByTestId("mobile-action-bar").textContent).toContain("AP 계산 중…");
     expect(view.container.textContent?.match(/계산 중…/g)).toHaveLength(2);
-    expect(screen.queryByText("약 0 AP")).toBeNull();
+    expect(view.container.textContent).not.toContain("약 0");
   });
 
-  it("follows desktop and mobile tab defaults until the user selects a tab", () => {
+  it("follows desktop and mobile reference tab defaults until the user selects a tab", () => {
     const view = renderScreen();
+    expect(screen.queryByRole("button", { name: "효율 비교" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "펼치기" }));
     expect(screen.getByRole("button", { name: "효율 비교" }).getAttribute("aria-pressed")).toBe("true");
 
     mockStacked = true;
