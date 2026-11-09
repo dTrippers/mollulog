@@ -18,6 +18,7 @@ import {
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { TimelineEntry, TimelinePickupStack } from "~/domain/pyroxene-timeline";
+import { getTaggedFreeRecruitmentPulls } from "~/domain/recruitment-notice";
 import { STUDENT_ACQUISITION_LABELS } from "~/domain/student-directory";
 import dayjs from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
@@ -256,7 +257,9 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
   const status = plan ? getPyroxeneEventStatus(entry) : null;
   const since = dayjs(event.since);
   const canComplete = canRecordCompletion && !completed && since.isBefore(dayjs());
-  const freeLabel = plan && plan.freePulls > 0 ? plan.freePulls : null;
+  // Event metadata: the tagged free count, independent of how many pulls the plan uses.
+  const taggedFreePulls = getTaggedFreeRecruitmentPulls(event.tags);
+  const freeLabel = taggedFreePulls > 0 ? taggedFreePulls : null;
   const ruleIsLegacy = event.recruitmentRuleSet !== "call_charge_v1";
 
   const completionValues: OwnedResourceValues = {
