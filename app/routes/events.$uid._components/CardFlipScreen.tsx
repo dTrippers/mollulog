@@ -35,6 +35,8 @@ export default function CardFlipScreen() {
           overriddenRequiredQuantities: plan.state.overriddenRequiredQuantities,
         })
       : null;
+  // The table reads the stage calculation's breakdown, which is empty until the first calculation lands.
+  const breakdownKnown = plan.hasCalculationResult && !plan.calculationFailed;
   const rewards = useMemo(() => uniqueRewards(comparison.flatMap(({ rewards }) => rewards)), [comparison]);
   const costs = useMemo(() => uniqueRewards(comparison.flatMap(({ costs }) => costs)), [comparison]);
 
@@ -146,17 +148,21 @@ export default function CardFlipScreen() {
                               </span>
                             </th>
                             <td className="p-2 text-right tabular-nums text-v2-fg-secondary">
-                              {breakdown.actualRequired.toLocaleString()}
+                              {breakdownKnown ? breakdown.actualRequired.toLocaleString() : "—"}
                             </td>
                             <td className="p-2 text-right tabular-nums text-v2-fg-secondary">
-                              {Math.round(breakdown.acquiredSubtotal).toLocaleString()}
+                              {breakdownKnown ? Math.round(breakdown.acquiredSubtotal).toLocaleString() : "—"}
                             </td>
-                            <td
-                              className={`p-2 text-right font-semibold tabular-nums ${breakdown.remaining >= 0 ? "text-v2-success" : "text-v2-danger"}`}
-                            >
-                              {breakdown.remaining >= 0 ? "+" : "−"}
-                              {Math.abs(Math.round(breakdown.remaining)).toLocaleString()}
-                            </td>
+                            {breakdownKnown ? (
+                              <td
+                                className={`p-2 text-right font-semibold tabular-nums ${breakdown.remaining >= 0 ? "text-v2-success" : "text-v2-danger"}`}
+                              >
+                                {breakdown.remaining >= 0 ? "+" : "−"}
+                                {Math.abs(Math.round(breakdown.remaining)).toLocaleString()}
+                              </td>
+                            ) : (
+                              <td className="p-2 text-right font-semibold text-v2-fg-tertiary">—</td>
+                            )}
                           </tr>
                         ))}
                       </tbody>

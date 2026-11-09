@@ -7,6 +7,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { useOutletContext } from "react-router";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import CardFlipScreen from "~/routes/events.$uid._components/CardFlipScreen";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { createCardFlipPlan } from "./event-shop-fixtures";
 
 let mockPlan: EventShopPlanContext;
@@ -74,6 +75,22 @@ describe("card flip v2 screen", () => {
 
     expect(region.getAttribute("tabindex")).toBe("0");
     expect(region.className).toContain("focus-visible:outline-v2-focus");
+  });
+
+  it("waits for the first calculation instead of reading the empty breakdown as a surplus", () => {
+    mockPlan = createCardFlipPlan({
+      isCalculating: true,
+      hasCalculationResult: false,
+      collectableResources: [{ type: ResourceTypeEnum.Item, uid: "photo-card", name: "포토 카드", forPayment: true }],
+    });
+    renderScreen();
+
+    const region = screen.getByRole("region", { name: "현재 계획 재화 표" });
+    const cells = [...region.querySelectorAll("tbody td")];
+
+    expect(cells.length).toBeGreaterThan(0);
+    expect(cells.every((cell) => cell.textContent === "—")).toBe(true);
+    expect(region.querySelector(".text-v2-success")).toBeNull();
   });
 
   it("selects a strategy from its table header radio without a separate button group", () => {

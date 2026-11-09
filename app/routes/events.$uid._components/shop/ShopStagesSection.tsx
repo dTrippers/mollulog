@@ -25,7 +25,12 @@ export function ShopStagesSection({ plan }: { plan: EventShopPlanContext }) {
   const totalRuns = enabled.reduce((sum, stage) => sum + runsOf(stage), 0);
   const totalExtra = enabled.reduce((sum, stage) => sum + extraOf(stage), 0);
   const totalAp = plan.stageCalculations.questSweepAp + plan.stageCalculations.extraSweepAp;
-  const runsKnown = !plan.holdTreasureHuntCalculations && !plan.roadPuzzlePlannerStatus && !plan.calculationFailed;
+  // Before the first calculation lands, the stage runs are the empty result's zeros, not a plan.
+  const runsKnown =
+    plan.hasCalculationResult &&
+    !plan.holdTreasureHuntCalculations &&
+    !plan.roadPuzzlePlannerStatus &&
+    !plan.calculationFailed;
 
   return (
     <ShopSection id="stage-plan-title" region="stage-plan">
