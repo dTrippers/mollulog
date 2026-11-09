@@ -1,4 +1,4 @@
-import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { ExclamationTriangleIcon, InformationCircleIcon } from "@heroicons/react/16/solid";
 import { type MouseEvent, type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { v2FocusRing } from "../layout/styles";
 import { cn } from "~/lib/utils";
@@ -7,6 +7,9 @@ import { Popover } from "./Popover";
 export type HintChipProps = {
   label: string;
   description: string;
+  // `warning` shows the label with a warning icon. `info` shows only an ⓘ icon; the label is read by screen readers and
+  // heads the popover.
+  variant?: "warning" | "info";
   className?: string;
 };
 
@@ -19,7 +22,7 @@ function isHoverPointer(pointerType: string): boolean {
 
 // A warning label whose detail opens in a popover. A mouse opens it on hover and can move onto the panel, a touch toggles
 // it on tap, and the keyboard opens it on focus and toggles it with Enter. A screen reader gets the detail from the button.
-export function HintChip({ label, description, className }: HintChipProps) {
+export function HintChip({ label, description, variant = "warning", className }: HintChipProps) {
   const [open, setOpen] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const timerRef = useRef<number | null>(null);
@@ -68,7 +71,9 @@ export function HintChip({ label, description, className }: HintChipProps) {
         aria-haspopup="dialog"
         aria-expanded={open}
         className={cn(
-          "inline-flex cursor-help items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-v2-warning",
+          variant === "warning"
+            ? "inline-flex cursor-help items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-v2-warning"
+            : "inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full text-v2-fg-tertiary hover:text-v2-fg-secondary",
           v2FocusRing,
           className,
         )}
@@ -89,9 +94,20 @@ export function HintChip({ label, description, className }: HintChipProps) {
           setOpen(false);
         }}
       >
-        <ExclamationTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
-        {label}
-        <span className="sr-only">: {description}</span>
+        {variant === "warning" ? (
+          <>
+            <ExclamationTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            {label}
+            <span className="sr-only">: {description}</span>
+          </>
+        ) : (
+          <>
+            <InformationCircleIcon className="size-3.5" aria-hidden="true" />
+            <span className="sr-only">
+              {label}: {description}
+            </span>
+          </>
+        )}
       </button>
       <Popover
         open={open}

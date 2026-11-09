@@ -29,6 +29,8 @@ export type StudentThumbProps = {
   selectedIndicatorPosition?: "top-left" | "mobile-bottom-left";
   // Off when another badge (such as the favorite heart) already shows the selection.
   showSelectedIndicator?: boolean;
+  // "small" is a 14px check for dense pickers, such as the shop calculator's bonus students.
+  selectedIndicatorSize?: "default" | "small";
   mutedWhenUnselected?: boolean;
   grayscaleWhenUnselected?: boolean;
   // Shows the quick panel as the popover anchor.
@@ -77,6 +79,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     selectionActionLabel,
     selectedIndicatorPosition = "top-left",
     showSelectedIndicator = true,
+    selectedIndicatorSize = "default",
     mutedWhenUnselected = false,
     grayscaleWhenUnselected = false,
     expanded = false,
@@ -153,38 +156,56 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
       {onSelect && selected && showSelectedIndicator ? (
         <span
           className={cn(
-            "absolute left-1 flex size-5 items-center justify-center rounded-full bg-v2-fg text-v2-canvas",
-            selectedIndicatorPosition === "mobile-bottom-left" ? "bottom-1 md:top-1 md:bottom-auto" : "top-1",
+            "absolute flex items-center justify-center rounded-full bg-v2-fg text-v2-canvas",
+            selectedIndicatorSize === "small" ? "left-0.5 size-3.5" : "left-1 size-5",
+            selectedIndicatorPosition === "mobile-bottom-left"
+              ? "bottom-1 md:top-1 md:bottom-auto"
+              : selectedIndicatorSize === "small"
+                ? "top-0.5"
+                : "top-1",
           )}
         >
-          <CheckIcon className="size-3.5" aria-hidden="true" />
+          <CheckIcon className={selectedIndicatorSize === "small" ? "size-2.5" : "size-3.5"} aria-hidden="true" />
         </span>
       ) : null}
     </>
   );
-  const caption = showCaption && !overlayCaption ? (
-    <>
-      <span
-        className={cn(
-          "block w-full truncate text-center text-xs leading-4 text-v2-fg",
-          large ? "mt-0.5 md:mt-1" : "mt-1",
-        )}
-      >
-        {name}
-      </span>
-      {variant ? (
-        <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
-          {variant}
+  const caption =
+    showCaption && !overlayCaption ? (
+      <>
+        <span
+          className={cn(
+            "block w-full truncate text-center text-xs leading-4 text-v2-fg",
+            large ? "mt-0.5 md:mt-1" : "mt-1",
+          )}
+        >
+          {name}
         </span>
-      ) : null}
-    </>
-  ) : null;
+        {variant ? (
+          <span className="block w-full truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary">
+            {variant}
+          </span>
+        ) : null}
+      </>
+    ) : null;
 
   return (
     <div
       className={cn(
         "flex min-w-0 flex-col items-center",
-        fluid ? "w-full" : large ? "w-[4.375rem] md:w-[5.5rem]" : relaxed ? "w-14 sm:w-20" : small ? "w-6" : compact ? "w-9" : headerPortrait ? "w-[3.75rem]" : "w-14 sm:w-16",
+        fluid
+          ? "w-full"
+          : large
+            ? "w-[4.375rem] md:w-[5.5rem]"
+            : relaxed
+              ? "w-14 sm:w-20"
+              : small
+                ? "w-6"
+                : compact
+                  ? "w-9"
+                  : headerPortrait
+                    ? "w-[3.75rem]"
+                    : "w-14 sm:w-16",
       )}
     >
       {linkTo ? (
@@ -193,7 +214,10 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           prefetch="intent"
           aria-label={accessibleName}
           {...getV2LinkTransitionProps("forward")}
-          className={cn("block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus", hoverScale && hoverScaleClassName)}
+          className={cn(
+            "block w-full rounded-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus",
+            hoverScale && hoverScaleClassName,
+          )}
         >
           <span className={frameClassName}>{frame}</span>
           {caption}

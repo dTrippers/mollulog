@@ -81,9 +81,11 @@ describe("responsive ScreenNavigation", () => {
     fireEvent.click(docs);
     expect(screen.getByTestId("location").textContent).toBe('/developers/docs|{"source":"screen-navigation"}');
 
-    const disabled = within(navigation).getByRole("button", { name: /준비 중/ });
-    expect(disabled.hasAttribute("disabled")).toBe(true);
-    expect(disabled.getAttribute("title")).toBe("아직 제공하지 않습니다.");
+    const disabled = within(navigation).getByText("준비 중").closest("[aria-disabled='true']");
+    expect(disabled).not.toBeNull();
+    expect(
+      within(disabled as HTMLElement).getByRole("button", { name: "준비 중을 쓸 수 없어요: 아직 제공하지 않습니다." }),
+    ).toBeTruthy();
 
     const local = within(navigation).getByRole("button", { name: "로컬 상태" });
     expect(local.getAttribute("aria-pressed")).toBe("false");

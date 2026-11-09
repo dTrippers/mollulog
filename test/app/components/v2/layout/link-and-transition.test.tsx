@@ -161,7 +161,7 @@ describe("AsideLinks", () => {
     expect(badge.compareDocumentPosition(arrow!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("renders disabled items without interaction or an arrow", () => {
+  it("renders disabled items dimmed, without a link or arrow, and explains them behind an info button", () => {
     const { container } = render(
       <MemoryRouter>
         <AsideLinks
@@ -172,10 +172,15 @@ describe("AsideLinks", () => {
 
     const row = container.querySelector('[aria-disabled="true"]');
     expect(row).not.toBeNull();
-    expect(row?.querySelector("a, button, svg")).toBeNull();
+    expect(row?.querySelector("a")).toBeNull();
     expect(row?.className).not.toContain("hover:bg-v2-hover");
-    expect(row?.querySelector(".text-v2-fg-secondary")?.textContent).toBe("상점 계산기");
-    expect(row?.querySelector(".text-xs")?.textContent).toBe("상점이 없거나 정보를 준비 중이에요");
+    expect(row?.querySelector(".text-v2-fg-disabled")?.textContent).toBe("상점 계산기");
+    // The reason moves behind the info button instead of a description line, and there is no trailing arrow.
+    expect(row?.querySelector(".text-xs")).toBeNull();
+    const buttons = row?.querySelectorAll("button") ?? [];
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]?.textContent).toBe("상점 계산기를 쓸 수 없어요: 상점이 없거나 정보를 준비 중이에요");
+    expect(buttons[0]?.getAttribute("aria-haspopup")).toBe("dialog");
   });
 
   it("navigates an internal link without a transition when the API is missing", () => {

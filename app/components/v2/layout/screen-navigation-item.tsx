@@ -1,6 +1,8 @@
 import type { ElementType } from "react";
 import { Link } from "react-router";
+import { withObjectParticle } from "~/lib/korean";
 import { cn } from "~/lib/utils";
+import { HintChip } from "../primitives/HintChip";
 import { getV2LinkTransitionProps, runV2StateTransition } from "./screen-transition";
 import { v2FocusRing } from "./styles";
 
@@ -56,9 +58,26 @@ export function ScreenNavigationItemRenderer({
       <Icon className={cn("size-4 shrink-0", item.active ? "text-v2-fg" : "text-v2-fg-tertiary")} aria-hidden="true" />
       <span className={orientation === "vertical" ? "min-w-0 flex-1 truncate" : undefined}>{item.text}</span>
       {item.label ? <span className="text-xs tabular-nums text-v2-fg-tertiary">{item.label}</span> : null}
-      {item.disabled && item.disabledReason ? <span className="sr-only">{item.disabledReason}</span> : null}
     </>
   );
+
+  // A disabled tab with a reason keeps the tab dimmed and puts the reason behind an ⓘ button, so the row stays short.
+  if (item.disabled && item.disabledReason) {
+    return (
+      <span
+        aria-disabled="true"
+        className={cn(className, "cursor-default")}
+        data-v2-screen-navigation-item={responsiveNavigation ? item.key : undefined}
+      >
+        {content}
+        <HintChip
+          variant="info"
+          label={`${withObjectParticle(item.text)} 쓸 수 없어요`}
+          description={item.disabledReason}
+        />
+      </span>
+    );
+  }
 
   if (item.disabled) {
     return (

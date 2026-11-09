@@ -1055,6 +1055,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 
 @container page-available (width >= 48rem) {
   .v2-stacked-summary,
+  /* Content that stands in for the aside while the aside is hidden. */
+  .v2-stacked-only,
   /* The header action also renders in Sheet's portal, outside this container. */
   .v2-chat-new-conversation-stacked {
     display: none;
