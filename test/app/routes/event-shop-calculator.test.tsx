@@ -145,11 +145,16 @@ describe("event shop v2 calculator", () => {
     };
 
     const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    // The result leads and the student picker stays folded until asked for.
+    expect(screen.queryByRole("button", { name: "재화별" })).toBeNull();
+    const pickerToggle = screen.getByRole("button", { name: /학생 선택 · 1 \/ 1/ });
+    expect(pickerToggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(pickerToggle);
     expect(screen.getByText("재화마다 서로 다른 보너스 학생을 선택했어요. 재화별 탭에서 확인해주세요.")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "재화별" }));
 
     expect(screen.getByRole("button", { name: /키사키 상세, 선택됨/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 10% / 최대 10%");
+    expect(screen.getByRole("heading", { name: "보너스 아이템" }).parentElement?.textContent).toContain("적용 10% / 최대 10%");
 
     fireEvent.click(screen.getByRole("button", { name: "모든 재화 동일" }));
     expect(setMode).toHaveBeenCalledWith("shared", ["bonus-item"]);
@@ -158,7 +163,7 @@ describe("event shop v2 calculator", () => {
     view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
     expect(screen.getByRole("button", { name: /키사키 상세, 선택 안 됨/ }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 0% / 최대 10%");
+    expect(screen.getByRole("heading", { name: "보너스 아이템" }).parentElement?.textContent).toContain("적용 0% / 최대 10%");
   });
 
   it("edits the completed round of a treasure hunt as the round before the start round", () => {

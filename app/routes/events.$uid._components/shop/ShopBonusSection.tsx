@@ -1,5 +1,6 @@
+import { ChevronDownIcon, ChevronUpIcon } from "@heroicons/react/16/solid";
 import Decimal from "decimal.js";
-import { useState } from "react";
+import { useId, useState } from "react";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
 import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
@@ -9,7 +10,7 @@ import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import { cn } from "~/lib/utils";
-import { ShopSection, ShopSectionHeader } from "./shop-ui";
+import { formatCount, ShopSection, ShopSectionHeader } from "./shop-ui";
 
 type BonusItem = EventShopPlanContext["eventRewardBonus"][number];
 type BonusStudent = BonusItem["rewardBonuses"][number]["student"];
@@ -21,16 +22,23 @@ function percent(value: Decimal) {
   return value.mul(100).toFixed(0);
 }
 
-// The student bonus, read two ways like the earlier calculator: by student, one pick for every currency with the
-// applied bonus summed up below, or by currency, where each currency lists its strikers and specials with their bonus
-// and can keep its own picks.
+// The student bonus leads with its result, the applied bonus of each currency, and keeps the student picker folded
+// until asked for. The picker reads two ways like the earlier calculator: by student, one pick for every currency, or
+// by currency, where each currency lists its strikers and specials with their bonus and can keep its own picks.
 export function ShopBonusSection({ plan }: { plan: EventShopPlanContext }) {
   const [view, setView] = useState<"student" | "item">("student");
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerId = useId();
   const bonusItems = plan.eventRewardBonus.filter(({ rewardBonuses }) => rewardBonuses.length > 0);
   if (bonusItems.length === 0) return null;
   const students = bonusStudents(bonusItems);
   const mode = plan.state.bonusStudentSelectionMode;
   const itemUids = bonusItems.map(({ uid }) => uid);
+  const selectedCount = students.filter(({ uid }) =>
+    mode === "shared"
+      ? plan.state.selectedBonusStudentUids.includes(uid)
+      : bonusItems.some((item) => selectedUidsForItem(plan, item.uid).includes(uid)),
+  ).length;
   const hasSelection =
     plan.state.selectedBonusStudentUids.length > 0 ||
     Object.values(plan.state.selectedBonusStudentUidsByItem).some((uids) => uids.length > 0);
@@ -59,85 +67,121 @@ export function ShopBonusSection({ plan }: { plan: EventShopPlanContext }) {
         title="학생 보너스"
         description="재화마다 보너스가 높은 학생부터 스트라이커 4명, 스페셜 2명까지 적용돼요."
       />
-      <div>
-        <SectionTabs
-          label="학생 보너스 보기"
-          selectedId={view}
-          onChange={(id) => setView(id as "student" | "item")}
-          items={[
-            { id: "student", label: "학생별" },
-            { id: "item", label: "재화별" },
-          ]}
-        />
-        {view === "student" ? (
-          <>
-            {mode === "perItem" ? (
-              <p className="my-3 rounded-md bg-v2-surface p-v2-tile-p text-sm text-v2-fg-secondary">
-                재화마다 서로 다른 보너스 학생을 선택했어요. 재화별 탭에서 확인해주세요.
-              </p>
-            ) : null}
-            <div className={cn(STUDENT_PICK_GRID, mode === "perItem" ? null : "mt-4")}>
-              {students.map((student) => {
-                const selected =
-                  mode === "shared"
-                    ? plan.state.selectedBonusStudentUids.includes(student.uid)
-                    : bonusItems.every(({ uid }) => selectedUidsForItem(plan, uid).includes(student.uid));
-                return (
-                  <BonusStudentThumb
-                    key={student.uid}
-                    student={student}
-                    plan={plan}
-                    selected={selected}
-                    onSelect={() => {
-                      if (mode === "shared") plan.actions.toggleBonusStudent(student.uid);
-                      else plan.actions.setBonusStudentForItems(itemUids, student.uid, !selected);
-                    }}
-                  />
-                );
-              })}
-            </div>
+      <BonusSummary plan={plan} bonusItems={bonusItems} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Button
+          size="sm"
+          aria-expanded={pickerOpen}
+          aria-controls={pickerOpen ? pickerId : undefined}
+          onClick={() => setPickerOpen(!pickerOpen)}
+        >
+          학생 선택 · {formatCount(selectedCount)} / {formatCount(students.length)}
+          {pickerOpen ? (
+            <ChevronUpIcon className="size-4" aria-hidden="true" />
+          ) : (
+            <ChevronDownIcon className="size-4" aria-hidden="true" />
+          )}
+        </Button>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Button
+            size="sm"
+            disabled={!plan.signedIn || plan.recruitedStudentUids.length === 0}
+            onClick={applyRecruited}
+          >
+            보유 학생 반영
+          </Button>
+          <Button size="sm" onClick={chooseAll}>
+            모두 선택
+          </Button>
+          <Button size="sm" variant="danger-subtle" disabled={!hasSelection} onClick={clear}>
+            초기화
+          </Button>
+        </div>
+      </div>
+      {pickerOpen ? (
+        <div id={pickerId}>
+          <SectionTabs
+            label="학생 보너스 보기"
+            selectedId={view}
+            onChange={(id) => setView(id as "student" | "item")}
+            items={[
+              { id: "student", label: "학생별" },
+              { id: "item", label: "재화별" },
+            ]}
+          />
+          {view === "student" ? (
+            <>
+              {mode === "perItem" ? (
+                <p className="my-3 rounded-md bg-v2-surface p-v2-tile-p text-sm text-v2-fg-secondary">
+                  재화마다 서로 다른 보너스 학생을 선택했어요. 재화별 탭에서 확인해주세요.
+                </p>
+              ) : null}
+              <div className={cn(STUDENT_PICK_GRID, mode === "perItem" ? null : "mt-4")}>
+                {students.map((student) => {
+                  const selected =
+                    mode === "shared"
+                      ? plan.state.selectedBonusStudentUids.includes(student.uid)
+                      : bonusItems.every(({ uid }) => selectedUidsForItem(plan, uid).includes(student.uid));
+                  return (
+                    <BonusStudentThumb
+                      key={student.uid}
+                      student={student}
+                      plan={plan}
+                      selected={selected}
+                      onSelect={() => {
+                        if (mode === "shared") plan.actions.toggleBonusStudent(student.uid);
+                        else plan.actions.setBonusStudentForItems(itemUids, student.uid, !selected);
+                      }}
+                    />
+                  );
+                })}
+              </div>
+            </>
+          ) : (
             <div className="mt-4">
-              <BonusSummary plan={plan} bonusItems={bonusItems} />
+              <ItemBonusView plan={plan} bonusItems={bonusItems} />
             </div>
-          </>
-        ) : (
-          <div className="mt-4">
-            <ItemBonusView plan={plan} bonusItems={bonusItems} />
-          </div>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center justify-end gap-1.5">
-        <Button size="sm" disabled={!plan.signedIn || plan.recruitedStudentUids.length === 0} onClick={applyRecruited}>
-          보유 학생 반영
-        </Button>
-        <Button size="sm" onClick={chooseAll}>
-          모두 선택
-        </Button>
-        <Button size="sm" variant="danger-subtle" disabled={!hasSelection} onClick={clear}>
-          초기화
-        </Button>
-      </div>
+          )}
+        </div>
+      ) : null}
     </ShopSection>
   );
 }
 
 function BonusSummary({ plan, bonusItems }: { plan: EventShopPlanContext; bonusItems: BonusItem[] }) {
   return (
-    <div className="grid grid-cols-2 gap-v2-block-gap rounded-md bg-v2-surface p-v2-tile-p md:grid-cols-3">
+    // Three currencies side by side even on a phone: each card stacks its parts there so the result stays one row.
+    <div className="grid grid-cols-3 gap-2">
       {bonusItems.map((item) => {
         const ratios = bonusRatios(plan, item.uid);
         return (
-          <div key={item.uid} className="flex min-w-0 items-center gap-2 text-sm tabular-nums">
+          <div
+            key={item.uid}
+            className="flex min-w-0 flex-col items-center gap-1.5 rounded-lg bg-v2-surface p-2.5 text-center md:flex-row md:gap-2.5 md:p-3 md:text-left"
+          >
             <ResourceThumb
               itemUid={item.uid}
               resourceType={ResourceTypeEnum.Item}
               name={item.name}
               rarity={1}
+              size="drop"
               tooltip
             />
-            <div className="min-w-0">
-              <p>적용 {ratios ? `${ratios.applied}%` : "—"}</p>
-              <p className="text-v2-fg-tertiary">최대 {ratios ? `${ratios.maximum}%` : "—"}</p>
+            <div className="w-full min-w-0 md:w-auto md:grow">
+              <p className="truncate text-xs font-semibold text-v2-fg md:text-sm">{item.name}</p>
+              <p className="flex flex-col items-center tabular-nums md:flex-row md:items-baseline md:gap-1.5">
+                <span
+                  className={cn(
+                    "text-lg font-bold",
+                    ratios && ratios.applied === ratios.maximum && ratios.maximum !== "0"
+                      ? "text-v2-success"
+                      : "text-v2-fg",
+                  )}
+                >
+                  {ratios ? `${ratios.applied}%` : "—"}
+                </span>
+                <span className="text-xs text-v2-fg-tertiary">최대 {ratios ? `${ratios.maximum}%` : "—"}</span>
+              </p>
             </div>
           </div>
         );
