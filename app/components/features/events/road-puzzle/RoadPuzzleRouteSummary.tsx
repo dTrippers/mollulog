@@ -79,24 +79,28 @@ export function RoadPuzzleRouteSummary({
   const completable = analysis?.status === "completable";
   const required = analysis ? analysis.requiredVector : solution?.minimumVector;
   const drawn = analysis?.drawnVector;
-  const minimum = analysis ? analysis.minimumStickers : solution?.minimumStickers;
-  const expected = analysis
-    ? analysis.expectedStickers === null
-      ? undefined
-      : Math.round(analysis.expectedStickers)
-    : solution
-      ? Math.round(solution.expectedStickers)
-      : undefined;
-  const maximum = analysis ? analysis.maximumStickers : solution?.maximumStickers;
-  const delta = analysis?.delta;
+  // The solver counts tiles; each placed tile costs the event's payment quantity.
+  const perTile = payment.quantity;
+  const minimumTiles = analysis ? analysis.minimumTiles : solution?.minimumTiles;
+  const expectedTiles = analysis ? analysis.expectedTiles : solution?.expectedTiles;
+  const maximumTiles = analysis ? analysis.maximumTiles : solution?.maximumTiles;
+  const minimum = minimumTiles == null ? undefined : minimumTiles * perTile;
+  const expected = expectedTiles == null ? undefined : Math.round(expectedTiles * perTile);
+  const maximum = maximumTiles == null ? undefined : maximumTiles * perTile;
+  const delta = analysis?.delta
+    ? {
+        minimum: analysis.delta.minimumTiles * perTile,
+        expected: Math.round(analysis.delta.expectedTiles * perTile),
+      }
+    : null;
   const stickerValues = [
-    { label: roadPuzzleLocale.minimum, value: noRoute ? undefined : (minimum ?? undefined) },
+    { label: roadPuzzleLocale.minimum, value: noRoute ? undefined : minimum },
     {
       label: roadPuzzleLocale.expected,
       value: noRoute ? undefined : expected,
       expected: true,
     },
-    { label: roadPuzzleLocale.maximum, value: noRoute ? undefined : (maximum ?? undefined) },
+    { label: roadPuzzleLocale.maximum, value: noRoute ? undefined : maximum },
   ];
   const resetButton = hasState ? (
     <Button size="sm" onClick={onReset} className="ml-auto">
@@ -214,8 +218,7 @@ export function RoadPuzzleRouteSummary({
           </div>
           <dl className={`mt-2 grid grid-cols-3 gap-2 text-center text-xs ${isStale ? "opacity-50" : ""}`}>
             {stickerValues.map(({ label, value, expected }, index) => {
-              const deltaValue =
-                index === 0 ? delta?.minimumStickers : index === 1 ? delta?.expectedStickers : undefined;
+              const deltaValue = index === 0 ? delta?.minimum : index === 1 ? delta?.expected : undefined;
               return (
                 <div key={label}>
                   <dt className="text-v2-fg-secondary">{label}</dt>

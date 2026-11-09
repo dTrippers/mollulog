@@ -98,7 +98,8 @@ const payment: MinigamePayment = {
   resourceType: ResourceTypeEnum.Item,
   resourceUid: "viewer-sticker",
   resourceName: "하이랜더 기념 스티커",
-  quantity: 150,
+  // Deliberately not 150: the viewer must use the event's payment quantity.
+  quantity: 200,
 };
 
 const solution: RoadPuzzleSolution = {
@@ -112,9 +113,6 @@ const solution: RoadPuzzleSolution = {
   minimumTiles: 1,
   maximumTiles: 6,
   expectedTiles: 2.5,
-  minimumStickers: 150,
-  maximumStickers: 900,
-  expectedStickers: 375,
 };
 
 function mockCalculation(status: RoadPuzzleStatsCalculation["status"]): RoadPuzzleStatsCalculation {
@@ -162,9 +160,9 @@ beforeEach(() => {
             witness: null,
             requiredVector: null,
             drawnVector: null,
-            minimumStickers: null,
-            expectedStickers: null,
-            maximumStickers: null,
+            minimumTiles: null,
+            expectedTiles: null,
+            maximumTiles: null,
             delta: null,
           }
         : {
@@ -182,10 +180,10 @@ beforeEach(() => {
                   shortCurve: map.deck.shortCurve - remaining.shortCurve,
                 }
               : null,
-            minimumStickers: remaining ? 150 : solution.minimumStickers,
-            expectedStickers: remaining ? 300 : solution.expectedStickers,
-            maximumStickers: remaining ? 450 : solution.maximumStickers,
-            delta: marks.length > 0 ? { minimumStickers: 0, expectedStickers: 0 } : null,
+            minimumTiles: remaining ? 1 : solution.minimumTiles,
+            expectedTiles: remaining ? 2 : solution.expectedTiles,
+            maximumTiles: remaining ? 3 : solution.maximumTiles,
+            delta: marks.length > 0 ? { minimumTiles: 0, expectedTiles: 0 } : null,
           };
       return { status: "ready", analysis, analysisMapUid: map.uid, retry: jest.fn() };
     },
@@ -348,9 +346,9 @@ describe("RoadPuzzleViewerPage", () => {
       "배치한 레일은 빼고 계산해요. 기대값은 남은 레일이 무작위 순서로 등장하고, 경로가 완성되면 멈출 때 평균적으로 필요한 재화예요.",
     );
     expect(within(summary).getByText(roadPuzzleLocale.viewerCostHelp).classList.contains("text-xs")).toBe(true);
-    expect(within(summary).getByText("150")).toBeTruthy();
-    expect(within(summary).getByText("≈375")).toBeTruthy();
-    expect(within(summary).getByText("900")).toBeTruthy();
+    expect(within(summary).getByText("200")).toBeTruthy();
+    expect(within(summary).getByText("≈500")).toBeTruthy();
+    expect(within(summary).getByText("1,200")).toBeTruthy();
     expect(summary.querySelector("svg.size-4.text-v2-fg-tertiary")).toBeNull();
 
     fireEvent.change(input, { target: { value: "0" } });
@@ -370,10 +368,10 @@ describe("RoadPuzzleViewerPage", () => {
         ?.classList.contains("top-0.5"),
     ).toBe(true);
     expect(screen.getByText("필요 1개, 1개 배치")).toBeTruthy();
-    expect(screen.getByText(roadPuzzleLocale.progressExpectationLive(300))).toBeTruthy();
-    expect(within(summary).getByText("150")).toBeTruthy();
-    expect(within(summary).getByText("≈300")).toBeTruthy();
-    expect(within(summary).getByText("450")).toBeTruthy();
+    expect(screen.getByText(roadPuzzleLocale.progressExpectationLive(400))).toBeTruthy();
+    expect(within(summary).getByText("200")).toBeTruthy();
+    expect(within(summary).getByText("≈400")).toBeTruthy();
+    expect(within(summary).getByText("600")).toBeTruthy();
     expect(summary.querySelector("svg.size-4.text-v2-fg-tertiary")).toBeNull();
     expect(screen.getByRole("button", { name: "초기화" })).toBeTruthy();
     const row = screen.getByRole("button", { name: "직선 레일 강조" }).closest("tr")!;

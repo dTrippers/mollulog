@@ -454,7 +454,7 @@ export function RoadPuzzleViewerPage({ config, payment }: RoadPuzzleViewerPagePr
                           ? roadPuzzleLocale.canCompleteNow
                           : displayedAnalysis?.status === "incomplete"
                             ? roadPuzzleLocale.progressExpectationLive(
-                                Math.round(displayedAnalysis.expectedStickers ?? 0),
+                                Math.round((displayedAnalysis.expectedTiles ?? 0) * payment.quantity),
                               )
                             : roadPuzzleLocale.calculationComplete}
               </p>

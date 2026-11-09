@@ -16,9 +16,9 @@ const analysis: RoadPuzzleInteractiveAnalysis = {
   witness: null,
   requiredVector: null,
   drawnVector: null,
-  minimumStickers: null,
-  expectedStickers: null,
-  maximumStickers: null,
+  minimumTiles: null,
+  expectedTiles: null,
+  maximumTiles: null,
   delta: null,
 };
 

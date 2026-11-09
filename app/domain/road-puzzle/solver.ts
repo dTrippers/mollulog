@@ -1,7 +1,5 @@
 import type { RoadPuzzleDeck, RoadPuzzleMap, RoadPuzzleCoordinate } from "~/domain/event-shop";
 
-export const ROAD_PUZZLE_STICKERS_PER_TILE = 150;
-
 const EDGE_OFFSETS: readonly RoadPuzzleCoordinate[] = [
   { x: 1, y: -1, z: 0 },
   { x: 1, y: 0, z: -1 },
@@ -30,9 +28,6 @@ export type RoadPuzzleSolution = {
   minimumTiles: number;
   maximumTiles: number;
   expectedTiles: number;
-  minimumStickers: number;
-  maximumStickers: number;
-  expectedStickers: number;
 };
 
 export type RoadPuzzleInteractiveAnalysis = {
@@ -40,10 +35,11 @@ export type RoadPuzzleInteractiveAnalysis = {
   witness: RoadPuzzlePathStep[] | null;
   requiredVector: RailCounts | null;
   drawnVector: RailCounts | null;
-  minimumStickers: number | null;
-  expectedStickers: number | null;
-  maximumStickers: number | null;
-  delta: { minimumStickers: number; expectedStickers: number } | null;
+  // Tile counts. Each placed tile costs the minigame payment quantity, which callers apply.
+  minimumTiles: number | null;
+  expectedTiles: number | null;
+  maximumTiles: number | null;
+  delta: { minimumTiles: number; expectedTiles: number } | null;
 };
 
 type RouteCandidate = { counts: RailCounts; witness: RoadPuzzlePathStep[] };
@@ -147,11 +143,7 @@ export function calculateExpectedDraws(deck: RoadPuzzleDeck, paretoVectors: read
     const totalCombinations = countCombinations(totalTiles, draws);
     let impossibleCombinations = 0;
     for (let straightDrawn = 0; straightDrawn <= Math.min(straight, draws); straightDrawn += 1) {
-      for (
-        let longDrawn = 0;
-        longDrawn <= Math.min(longCurve, draws - straightDrawn);
-        longDrawn += 1
-      ) {
+      for (let longDrawn = 0; longDrawn <= Math.min(longCurve, draws - straightDrawn); longDrawn += 1) {
         const shortDrawn = draws - straightDrawn - longDrawn;
         if (shortDrawn > shortCurve) continue;
         const drawn = { straight: straightDrawn, longCurve: longDrawn, shortCurve: shortDrawn };
@@ -178,8 +170,10 @@ function findRoadPuzzleRoutes(
   const tiles = [...tileByCoordinate.values()];
   const indexByCoordinate = new Map(tiles.map((tile, index) => [coordinateKey(tile), index]));
   const neighbors = tiles.map((tile) =>
-    EDGE_OFFSETS.map((offset) =>
-      indexByCoordinate.get(coordinateKey({ x: tile.x + offset.x, y: tile.y + offset.y, z: tile.z + offset.z })) ?? -1,
+    EDGE_OFFSETS.map(
+      (offset) =>
+        indexByCoordinate.get(coordinateKey({ x: tile.x + offset.x, y: tile.y + offset.y, z: tile.z + offset.z })) ??
+        -1,
     ),
   );
   const startIndex = indexByCoordinate.get(coordinateKey(start))!;
@@ -308,7 +302,10 @@ function findRoadPuzzleRoutes(
   });
 }
 
-function solutionFromRoutes(map: RoadPuzzleMap, orderedCandidates: readonly RouteCandidate[]): RoadPuzzleSolution | null {
+function solutionFromRoutes(
+  map: RoadPuzzleMap,
+  orderedCandidates: readonly RouteCandidate[],
+): RoadPuzzleSolution | null {
   if (orderedCandidates.length === 0) return null;
   const minimum = orderedCandidates[0]!;
   const paretoVectors = orderedCandidates.map(({ counts }) => counts);
@@ -323,9 +320,6 @@ function solutionFromRoutes(map: RoadPuzzleMap, orderedCandidates: readonly Rout
     minimumTiles,
     maximumTiles,
     expectedTiles,
-    minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
-    maximumStickers: maximumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
-    expectedStickers: expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
   };
 }
 
@@ -339,9 +333,11 @@ export function createRoadPuzzleRouteBaseline(map: RoadPuzzleMap): RoadPuzzleRou
 }
 
 function missingRailCount(required: RailCounts, drawn: RailCounts): number {
-  return Math.max(0, required.straight - drawn.straight) +
+  return (
+    Math.max(0, required.straight - drawn.straight) +
     Math.max(0, required.longCurve - drawn.longCurve) +
-    Math.max(0, required.shortCurve - drawn.shortCurve);
+    Math.max(0, required.shortCurve - drawn.shortCurve)
+  );
 }
 
 function residualVector(required: RailCounts, drawn: RailCounts): RailCounts {
@@ -382,9 +378,9 @@ function emptyInteractiveAnalysis(): RoadPuzzleInteractiveAnalysis {
     witness: null,
     requiredVector: null,
     drawnVector: null,
-    minimumStickers: null,
-    expectedStickers: null,
-    maximumStickers: null,
+    minimumTiles: null,
+    expectedTiles: null,
+    maximumTiles: null,
     delta: null,
   };
 }
@@ -401,21 +397,22 @@ export function analyzeRoadPuzzleMap(
 
   if (remaining === null) {
     const solution = solutionFromRoutes(map, routes)!;
-    const noMarkBaseline = requiredCells.length > 0 ? (baseline ?? createRoadPuzzleRouteBaseline(map)).solution : solution;
+    const noMarkBaseline =
+      requiredCells.length > 0 ? (baseline ?? createRoadPuzzleRouteBaseline(map)).solution : solution;
     if (!noMarkBaseline) throw new Error("Road puzzle constrained route has no baseline route.");
     return {
       status: "planned",
       witness: solution.witness,
       requiredVector: solution.minimumVector,
       drawnVector: null,
-      minimumStickers: solution.minimumStickers,
-      expectedStickers: solution.expectedStickers,
-      maximumStickers: solution.maximumStickers,
+      minimumTiles: solution.minimumTiles,
+      expectedTiles: solution.expectedTiles,
+      maximumTiles: solution.maximumTiles,
       delta:
         requiredCells.length > 0
           ? {
-              minimumStickers: solution.minimumStickers - noMarkBaseline.minimumStickers,
-              expectedStickers: Math.round(solution.expectedStickers) - Math.round(noMarkBaseline.expectedStickers),
+              minimumTiles: solution.minimumTiles - noMarkBaseline.minimumTiles,
+              expectedTiles: solution.expectedTiles - noMarkBaseline.expectedTiles,
             }
           : null,
     };
@@ -453,11 +450,11 @@ export function analyzeRoadPuzzleMap(
   if (requiredCells.length > 0) {
     const noMarkBaseline = baseline ?? createRoadPuzzleRouteBaseline(map);
     const baselineAnalysis = analyzeRoadPuzzleMap(map, [], remaining, noMarkBaseline);
-    const baselineMinimum = baselineAnalysis.status === "incomplete" ? baselineAnalysis.minimumStickers! : 0;
-    const baselineExpected = baselineAnalysis.status === "incomplete" ? Math.round(baselineAnalysis.expectedStickers!) : 0;
+    const baselineMinimum = baselineAnalysis.status === "incomplete" ? baselineAnalysis.minimumTiles! : 0;
+    const baselineExpected = baselineAnalysis.status === "incomplete" ? baselineAnalysis.expectedTiles! : 0;
     delta = {
-      minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE - baselineMinimum,
-      expectedStickers: Math.round(expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE) - baselineExpected,
+      minimumTiles: minimumTiles - baselineMinimum,
+      expectedTiles: expectedTiles - baselineExpected,
     };
   }
 
@@ -466,9 +463,9 @@ export function analyzeRoadPuzzleMap(
     witness: recommended.witness,
     requiredVector: recommended.counts,
     drawnVector,
-    minimumStickers: minimumTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
-    expectedStickers: expectedTiles * ROAD_PUZZLE_STICKERS_PER_TILE,
-    maximumStickers: remainingTotal * ROAD_PUZZLE_STICKERS_PER_TILE,
+    minimumTiles,
+    expectedTiles,
+    maximumTiles: remainingTotal,
     delta,
   };
 }

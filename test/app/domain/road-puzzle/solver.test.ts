@@ -80,15 +80,19 @@ function hasRouteCounts(required: { straight: number; longCurve: number; shortCu
   );
 }
 
+// The reference values below were measured in an event that charges 150 stickers per placed tile.
+const STICKERS_PER_TILE = 150;
+const stickers = (tiles: number | null | undefined) => (tiles ?? Number.NaN) * STICKERS_PER_TILE;
+
 describe("road puzzle solver", () => {
   it.each(expectedByMap)("matches the expected sticker draws for %s", (name, minimum, expected, maximum) => {
     const map = maps.find((item) => item.name === name);
     expect(map).toBeDefined();
     const solution = solveRoadPuzzleMap(map!);
     expect(solution).not.toBeNull();
-    expect(solution!.minimumStickers).toBe(minimum);
-    expect(Math.abs(Math.round(solution!.expectedStickers) - expected)).toBeLessThanOrEqual(1);
-    expect(solution!.maximumStickers).toBe(maximum);
+    expect(stickers(solution!.minimumTiles)).toBe(minimum);
+    expect(Math.abs(Math.round(stickers(solution!.expectedTiles)) - expected)).toBeLessThanOrEqual(1);
+    expect(stickers(solution!.maximumTiles)).toBe(maximum);
   });
 
   it.each(expectedByMap.map(([name]) => [name]))("returns a valid minimum witness for %s", (name) => {
@@ -128,7 +132,7 @@ describe("road puzzle solver", () => {
     expect(counts.straight).toBeLessThanOrEqual(map.deck.straight);
     expect(counts.longCurve).toBeLessThanOrEqual(map.deck.longCurve);
     expect(counts.shortCurve).toBeLessThanOrEqual(map.deck.shortCurve);
-    expect(placed.length * 150).toBe(solution.minimumStickers);
+    expect(placed.length).toBe(solution.minimumTiles);
   });
 
   it("matches exhaustive drawing probabilities for a small deck", () => {
@@ -168,8 +172,8 @@ describe("road puzzle solver", () => {
     expect(shortest.paretoVectors).toEqual([{ straight: 2, longCurve: 0, shortCurve: 0 }]);
     expect(marked.status).toBe("planned");
     expect(marked.witness?.some((step) => step.x === 1 && step.y === -1 && step.z === 0)).toBe(true);
-    expect(marked.minimumStickers).toBe(shortest.minimumStickers);
-    expect(marked.delta).toEqual({ minimumStickers: 0, expectedStickers: 0 });
+    expect(marked.minimumTiles).toBe(shortest.minimumTiles);
+    expect(marked.delta).toEqual({ minimumTiles: 0, expectedTiles: 0 });
   });
 
   it("returns an explicit no-route result when a valid empty tile is disconnected", () => {
@@ -180,9 +184,9 @@ describe("road puzzle solver", () => {
       witness: null,
       requiredVector: null,
       drawnVector: null,
-      minimumStickers: null,
-      expectedStickers: null,
-      maximumStickers: null,
+      minimumTiles: null,
+      expectedTiles: null,
+      maximumTiles: null,
       delta: null,
     });
   });
@@ -193,10 +197,11 @@ describe("road puzzle solver", () => {
 
     expect(analysis.status).toBe("planned");
     expect(analysis.requiredVector).toEqual({ straight: 4, longCurve: 10, shortCurve: 3 });
-    expect(analysis.minimumStickers).toBe(2_550);
-    expect(Math.round(analysis.expectedStickers!)).toBe(2_899);
-    expect(analysis.maximumStickers).toBe(4_500);
-    expect(analysis.delta).toEqual({ minimumStickers: 300, expectedStickers: 217 });
+    expect(stickers(analysis.minimumTiles)).toBe(2_550);
+    expect(Math.round(stickers(analysis.expectedTiles))).toBe(2_899);
+    expect(stickers(analysis.maximumTiles)).toBe(4_500);
+    expect(stickers(analysis.delta?.minimumTiles)).toBe(300);
+    expect(Math.round(stickers(analysis.delta?.expectedTiles))).toBe(217);
   });
 
   it("uses the drawn and remaining counts for incomplete and completable routes", () => {
@@ -215,10 +220,11 @@ describe("road puzzle solver", () => {
     expect(incomplete.status).toBe("incomplete");
     expect(incomplete.requiredVector).toEqual({ straight: 4, longCurve: 10, shortCurve: 3 });
     expect(incomplete.drawnVector).toEqual({ straight: 4, longCurve: 5, shortCurve: 3 });
-    expect(incomplete.minimumStickers).toBe(750);
-    expect(Math.round(incomplete.expectedStickers!)).toBe(995);
-    expect(incomplete.maximumStickers).toBe(2_700);
-    expect(incomplete.delta).toEqual({ minimumStickers: 300, expectedStickers: 258 });
+    expect(stickers(incomplete.minimumTiles)).toBe(750);
+    expect(Math.round(stickers(incomplete.expectedTiles))).toBe(995);
+    expect(stickers(incomplete.maximumTiles)).toBe(2_700);
+    expect(stickers(incomplete.delta?.minimumTiles)).toBe(300);
+    expect(Math.round(stickers(incomplete.delta?.expectedTiles))).toBe(258);
 
     expect(complete.status).toBe("completable");
     expect(complete.drawnVector).toEqual({ straight: 7, longCurve: 7, shortCurve: 5 });
@@ -247,8 +253,8 @@ describe("road puzzle solver", () => {
       orders.reduce((total, order) => total + order.findIndex((kind) => kind === "straight") + 1, 0) / orders.length;
 
     expect(analysis.status).toBe("incomplete");
-    expect(analysis.minimumStickers).toBe(150);
-    expect(analysis.expectedStickers).toBeCloseTo(expectedDraws * 150, 10);
-    expect(analysis.maximumStickers).toBe(450);
+    expect(analysis.minimumTiles).toBe(1);
+    expect(analysis.expectedTiles).toBeCloseTo(expectedDraws, 10);
+    expect(analysis.maximumTiles).toBe(3);
   });
 });

@@ -55,9 +55,6 @@ const solutionsByUid = Object.fromEntries(
       minimumTiles,
       maximumTiles: 30,
       expectedTiles,
-      minimumStickers: minimumMapCosts[index]!,
-      maximumStickers: 4_500,
-      expectedStickers: expectedMapCosts[index]!,
     };
     return [uid, solution];
   }),

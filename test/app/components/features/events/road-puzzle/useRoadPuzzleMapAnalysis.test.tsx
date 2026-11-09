@@ -23,9 +23,9 @@ const planned: RoadPuzzleInteractiveAnalysis = {
   witness: [],
   requiredVector: { straight: 1, longCurve: 0, shortCurve: 0 },
   drawnVector: null,
-  minimumStickers: 150,
-  expectedStickers: 300,
-  maximumStickers: 450,
+  minimumTiles: 1,
+  expectedTiles: 2,
+  maximumTiles: 3,
   delta: null,
 };
 
@@ -33,9 +33,9 @@ const incomplete: RoadPuzzleInteractiveAnalysis = {
   ...planned,
   status: "incomplete",
   drawnVector: { straight: 0, longCurve: 0, shortCurve: 0 },
-  minimumStickers: 150,
-  expectedStickers: 300,
-  maximumStickers: 300,
+  minimumTiles: 1,
+  expectedTiles: 2,
+  maximumTiles: 2,
 };
 
 class FakeWorker {

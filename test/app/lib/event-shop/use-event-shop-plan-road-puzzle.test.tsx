@@ -63,9 +63,6 @@ const roadPuzzleSolution: RoadPuzzleSolution = {
   minimumTiles: 1,
   maximumTiles: 6,
   expectedTiles: 2,
-  minimumStickers: 150,
-  maximumStickers: 900,
-  expectedStickers: 300,
 };
 
 jest.mock("~/lib/event-shop/hooks", () => ({

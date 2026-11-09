@@ -42,9 +42,6 @@ const solution = {
   minimumTiles: 1,
   maximumTiles: 1,
   expectedTiles: 1,
-  minimumStickers: 150,
-  maximumStickers: 150,
-  expectedStickers: 150,
 };
 
 beforeEach(() => {
