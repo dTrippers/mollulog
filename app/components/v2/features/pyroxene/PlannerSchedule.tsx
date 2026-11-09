@@ -1,78 +1,16 @@
-import { ChevronDownIcon, ChevronUpIcon, FunnelIcon, TrashIcon } from "@heroicons/react/16/solid";
+import { ChevronDownIcon, ChevronUpIcon, TrashIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
 import { CheckCircleIcon as SolidCheckCircleIcon } from "@heroicons/react/24/solid";
-import { type Ref, useId, useRef, useState } from "react";
-import type { PyroxenePickupChance, TimelineSourceType } from "~/domain/pyroxene-planner";
+import { type Ref, useId, useState } from "react";
+import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import type { PlannerIncomeRow, PlannerTimelineRow } from "~/domain/pyroxene-planner-view";
 import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
-import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
-import { Checkbox } from "../../primitives/Checkbox";
 import { IconButton } from "../../primitives/IconButton";
-import { Popover } from "../../primitives/Popover";
 import { Switch } from "../../primitives/Switch";
 import { EventCard, type EventCardHandlers, type PlannerEventData } from "./EventCard";
 import { formatAmount, formatSigned, KST, ResourceIcon, SCHEDULE_GRID_CLASS_NAME } from "./pyroxene-ui";
-
-const FILTERABLE_SOURCES = PYROXENE_SOURCE_DEFINITIONS.filter((source) => source.type !== "event");
-
-function DisplayFilter({
-  display,
-  onChange,
-}: {
-  display: readonly TimelineSourceType[];
-  onChange: (display: TimelineSourceType[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const idPrefix = useId();
-  const visibleCount = FILTERABLE_SOURCES.filter((source) => display.includes(source.type)).length;
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label={`표시할 수급 종류, ${FILTERABLE_SOURCES.length}개 중 ${visibleCount}개 표시`}
-        onClick={() => setOpen((current) => !current)}
-        className={cn(
-          "inline-flex min-h-7 cursor-pointer items-center gap-1 rounded-md bg-v2-inset px-2 text-xs text-v2-fg tabular-nums hover:bg-v2-filled-hover",
-          v2FocusRing,
-        )}
-      >
-        <FunnelIcon className="size-3.5 text-v2-fg-secondary" aria-hidden="true" />
-        {visibleCount}/{FILTERABLE_SOURCES.length}
-        <ChevronDownIcon className="size-3.5 text-v2-fg-tertiary" aria-hidden="true" />
-      </button>
-      <Popover
-        open={open}
-        label="표시할 수급 종류"
-        onClose={() => setOpen(false)}
-        returnFocusRef={buttonRef}
-        anchorRef={buttonRef}
-        className="w-60"
-      >
-        <div className="flex flex-col gap-1.5 p-3">
-          <p className="text-xs text-v2-fg-tertiary">숨긴 수급도 계산에는 들어가요. 모집 소비는 항상 표시해요.</p>
-          {FILTERABLE_SOURCES.map((source) => (
-            <Checkbox
-              key={source.type}
-              id={`${idPrefix}-${source.type}`}
-              checked={display.includes(source.type)}
-              onCheckedChange={(checked) =>
-                onChange(checked ? [...display, source.type] : display.filter((type) => type !== source.type))
-              }
-            >
-              {source.label}
-            </Checkbox>
-          ))}
-        </div>
-      </Popover>
-    </>
-  );
-}
 
 export type ScheduleIncomeHandlers = {
   onDeleteItem: (itemUid: string) => void;
@@ -83,14 +21,25 @@ function deltaClassName(value: number): string {
   return value > 0 ? "text-v2-success" : value < 0 ? "text-v2-danger" : "text-v2-fg-tertiary";
 }
 
-function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: ScheduleIncomeHandlers }) {
-  const tickets = (["tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => row.delta[resource] !== 0);
-  const ticketDeltas = tickets.map((resource) => (
-    <span key={resource} className="inline-flex items-center gap-0.5 text-xs text-v2-fg-secondary tabular-nums">
-      <ResourceIcon resource={resource} className="size-5.5" />
-      {formatSigned(row.delta[resource])}
+const RESOURCE_ORDER = ["pyroxene", "tenTimeTicket", "oneTimeTicket"] as const;
+
+/** Every resource a row changes, one per line with its icon, for the change column. */
+function ResourceDeltas({ delta, className }: { delta: PlannerIncomeRow["delta"]; className?: string }) {
+  const changed = RESOURCE_ORDER.filter((resource) => delta[resource] !== 0);
+  return (
+    <span className={cn("flex flex-col items-end gap-0.5 font-semibold tabular-nums", className)}>
+      {changed.length === 0 ? <span className="text-v2-fg-tertiary">—</span> : null}
+      {changed.map((resource) => (
+        <span key={resource} className={cn("inline-flex items-center gap-0.5", deltaClassName(delta[resource]))}>
+          <ResourceIcon resource={resource} className="my-0 size-5" />
+          {formatSigned(delta[resource])}
+        </span>
+      ))}
     </span>
-  ));
+  );
+}
+
+function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: ScheduleIncomeHandlers }) {
   return (
     // Stacked layouts keep a short title on one line with the amounts and wrap the amounts below only when the title
     // needs the room. The wrappers dissolve into the shared grid on wide containers.
@@ -105,17 +54,10 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
         {row.date.tz(KST).format("MM/DD")}
       </span>
       <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1.5 gap-y-0.5 @2xl:contents">
-        <span className="flex min-w-0 grow flex-wrap items-center gap-x-2 py-0.5 @2xl:py-0">
-          <span className="min-w-0 break-keep whitespace-pre-line text-v2-fg">{row.label}</span>
-          {ticketDeltas.length > 0 ? <span className="inline-flex items-center gap-x-2">{ticketDeltas}</span> : null}
-        </span>
+        <span className="min-w-0 grow py-0.5 break-keep whitespace-pre-line text-v2-fg @2xl:py-0">{row.label}</span>
         <span className="ml-auto flex shrink-0 items-center gap-x-1.5 @2xl:contents">
-          <span
-            className={cn("w-14 text-right font-semibold tabular-nums @2xl:w-auto", deltaClassName(row.delta.pyroxene))}
-          >
-            {row.delta.pyroxene === 0 ? "—" : formatSigned(row.delta.pyroxene)}
-          </span>
-          <span className="w-14 text-right text-v2-fg-secondary tabular-nums @2xl:w-auto">
+          <ResourceDeltas delta={row.delta} className="w-16 py-0.5 @2xl:w-auto @2xl:py-0" />
+          <span className="w-14 py-0.5 text-right @2xl:py-0 text-v2-fg-secondary tabular-nums @2xl:w-auto">
             {formatAmount(row.balance)}
           </span>
           <span className="-my-1.5 flex w-7 flex-col items-end justify-center gap-0.5 @2xl:my-0 @2xl:w-auto @2xl:flex-row @2xl:justify-end">
@@ -144,8 +86,6 @@ function IncomeRowView({ row, handlers }: { row: PlannerIncomeRow; handlers: Sch
 export type PlannerScheduleProps = {
   rows: PlannerTimelineRow[];
   pending: boolean;
-  display: readonly TimelineSourceType[];
-  onDisplayChange: (display: TimelineSourceType[]) => void;
   hideUntargeted: boolean;
   onHideUntargetedChange: (value: boolean) => void;
   selectedEventUid: string | null;
@@ -163,8 +103,6 @@ export type PlannerScheduleProps = {
 export function PlannerSchedule({
   rows,
   pending,
-  display,
-  onDisplayChange,
   hideUntargeted,
   onHideUntargetedChange,
   selectedEventUid,
@@ -203,7 +141,6 @@ export function PlannerSchedule({
           onCheckedChange={onHideUntargetedChange}
           label="목표 없는 이벤트 숨기기"
         />
-        <DisplayFilter display={display} onChange={onDisplayChange} />
       </div>
       {selectedEventMissing ? (
         <p role="status" className="rounded-md bg-v2-inset px-3 py-2 text-sm text-v2-fg-secondary">
@@ -218,7 +155,7 @@ export function PlannerSchedule({
       <div className={cn(SCHEDULE_GRID_CLASS_NAME, "hidden px-4 text-xs font-medium text-v2-fg-tertiary @2xl:grid")}>
         <span>날짜</span>
         <span>내용</span>
-        <span className="text-right">변화</span>
+        <span className="text-right">재화 증감</span>
         <span className="text-right">남은 재화</span>
         <span />
       </div>
@@ -266,7 +203,7 @@ export function PlannerSchedule({
               ))}
               <li className={cn(SCHEDULE_GRID_CLASS_NAME, "min-h-7 items-center pr-3 pl-4 text-xs @2xl:px-4")}>
                 <span />
-                <span className="col-span-4 flex min-w-0 items-center gap-1.5 whitespace-nowrap @2xl:col-span-1">
+                <span className="flex min-w-0 items-center whitespace-nowrap">
                   <button
                     type="button"
                     aria-expanded={open}
@@ -283,8 +220,15 @@ export function PlannerSchedule({
                       <ChevronDownIcon className="size-3.5" aria-hidden="true" />
                     )}
                   </button>
-                  <span className="truncate text-v2-fg-tertiary tabular-nums">· 합계 {formatSigned(row.delta)}</span>
                 </span>
+                {/* The group's pyroxene total sits in the change column, under the rows it adds up. */}
+                <span className="inline-flex items-center justify-end gap-0.5 font-medium text-v2-fg-tertiary tabular-nums">
+                  <ResourceIcon resource="pyroxene" className="my-0 size-5" />
+                  <span className="sr-only">합계 </span>
+                  {formatSigned(row.delta)}
+                </span>
+                <span />
+                <span />
               </li>
             </ul>
           );

@@ -1,7 +1,7 @@
-import { ChevronRightIcon, PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
-import { useEffect, useId, useMemo, useState } from "react";
+import { Cog6ToothIcon, EyeIcon, EyeSlashIcon, PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
+import { type ElementType, useEffect, useId, useMemo, useState } from "react";
 import { formatPlannerPeriodRangeParts, plannerPeriodRangeLabel } from "~/domain/integrated-planner";
-import type { PyroxenePlannerOptions } from "~/domain/pyroxene-planner";
+import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { ActivePyroxenePackage } from "~/domain/pyroxene-planner-view";
 import {
   calculateDailyApChargePyroxene,
@@ -22,13 +22,10 @@ import { Button } from "../../primitives/Button";
 import { Checkbox } from "../../primitives/Checkbox";
 import { IconButton } from "../../primitives/IconButton";
 import { NumberInput } from "../../primitives/NumberInput";
-import { SectionTabs } from "../../primitives/SectionTabs";
-import { Select } from "../../primitives/Select";
 import { Switch } from "../../primitives/Switch";
 import { SegmentedChoice } from "./PickupBasis";
 import {
   FieldLabel,
-  formatSigned,
   PlannerDialog,
   PYROXENE_RESOURCE_LABELS,
   type PyroxeneResourceKey,
@@ -75,44 +72,122 @@ export type IncomePlanHandlers = {
   onSaveOther: (resources: PickupResources, description: string, date: Date) => void;
 };
 
-type IncomeDialog = "ap" | "attendance" | null;
+type IncomeDialog = "ap" | "attendance" | "raid" | "tactical" | null;
 
-// Plan rows read as text with a chevron; the fill appears only on hover, so the panel is not a stack of boxes.
-const QUIET_SELECT_CLASS_NAME =
-  "-mr-1.5 [&>select]:min-h-8 [&>select]:min-w-0 [&>select]:bg-transparent [&>select]:py-1 [&>select]:pr-7 [&>select]:pl-2 [&>select]:text-right [&>select]:font-medium [&>select]:hover:bg-v2-hover";
+const ROW_ACTION_CLASS_NAME =
+  "inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md text-xs font-semibold";
 
-function PlanRow({ label, children }: { label: string; children: React.ReactNode }) {
+/** A filled square that opens a row's settings (gear) or adds an entry (plus). */
+function RowAction({ icon: Icon, label, onClick }: { icon: ElementType; label: string; onClick: () => void }) {
   return (
-    <div className="flex min-h-10 items-center justify-between gap-3 text-sm">
-      <span className="shrink-0 text-v2-fg-secondary">{label}</span>
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className={cn(
+        ROW_ACTION_CLASS_NAME,
+        "w-8 bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg",
+        v2FocusRing,
+      )}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+    </button>
+  );
+}
+
+/** Shows or hides a source in the schedule. Hidden sources still count in the calculation. */
+function VisibilityToggle({
+  label,
+  text,
+  visible,
+  onToggle,
+}: {
+  label: string;
+  text?: string;
+  visible: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = visible ? EyeIcon : EyeSlashIcon;
+  return (
+    <button
+      type="button"
+      aria-label={`${label} 일정에 표시`}
+      title={`${label} 일정에 표시`}
+      aria-pressed={visible}
+      onClick={onToggle}
+      className={cn(
+        ROW_ACTION_CLASS_NAME,
+        text ? "px-2" : "w-8",
+        visible
+          ? "bg-v2-accent-subtle text-v2-accent hover:bg-v2-accent-subtle/80"
+          : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg",
+        v2FocusRing,
+      )}
+    >
+      <Icon className="size-4" aria-hidden="true" />
+      {text}
+    </button>
+  );
+}
+
+function SourceRow({
+  label,
+  detail,
+  actions,
+  children,
+}: {
+  label: string;
+  detail?: React.ReactNode;
+  actions: React.ReactNode;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col py-1.5">
+      <div className="flex min-h-8 items-center gap-2">
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm text-v2-fg">{label}</span>
+          {detail ? <span className="block text-xs text-v2-fg-tertiary tabular-nums">{detail}</span> : null}
+        </span>
+        <span className="flex shrink-0 items-center gap-1">{actions}</span>
+      </div>
       {children}
     </div>
   );
 }
 
-function RowButton({ children, onClick, label }: { children: React.ReactNode; onClick: () => void; label: string }) {
+function PlanGroup({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        "-mr-1.5 inline-flex min-h-8 min-w-0 cursor-pointer items-center gap-1 rounded-md pr-1.5 pl-2 text-sm font-medium text-v2-fg tabular-nums hover:bg-v2-hover",
-        v2FocusRing,
-      )}
-    >
-      <span className="truncate">{children}</span>
-      <ChevronRightIcon className="size-3.5 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-    </button>
+    <section aria-label={label} className="flex flex-col">
+      <h3 className="pb-0.5 text-xs font-medium text-v2-fg-tertiary">{label}</h3>
+      {children}
+    </section>
   );
 }
 
-export function IncomePlanAddButton({ onClick }: { onClick: () => void }) {
+/** Packages bought within their active window, under the row that adds them. */
+function ActivePackageList({
+  packages,
+  onDelete,
+}: {
+  packages: ActivePyroxenePackage[];
+  onDelete: (uid: string) => void;
+}) {
+  if (packages.length === 0) return null;
   return (
-    <Button size="sm" onClick={onClick}>
-      <PlusIcon className="size-3.5" aria-hidden="true" />
-      추가
-    </Button>
+    <ul className="mt-1 flex flex-col gap-1 border-l-2 border-v2-divider pl-3" aria-label="적용 중인 패키지">
+      {packages.map((item) => (
+        <li key={item.uid} className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 text-xs">
+            <span className="text-v2-fg-secondary">{item.name}</span>
+            <span className="ml-1.5 text-v2-fg-tertiary tabular-nums">
+              {dayjs(item.date).tz(KST).format("MM/DD")}~ · {item.activeDays}일
+            </span>
+          </span>
+          <IconButton icon={TrashIcon} label={`${item.name} 삭제`} onClick={() => onDelete(item.uid)} />
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -122,70 +197,168 @@ export function IncomePlanPanel({
   attendanceStart,
   saving,
   handlers,
+  onAdd,
 }: {
   options: PyroxenePlannerOptions;
   activePackages: ActivePyroxenePackage[];
   attendanceStart: Date | null;
   saving: boolean;
   handlers: IncomePlanHandlers;
+  onAdd: (tab: AddTab) => void;
 }) {
   const [dialog, setDialog] = useState<IncomeDialog>(null);
   const exceptionCount = options.consumption.apChargeExceptions.length;
+  const display = options.timeline.display;
+  const visibility = (type: TimelineSourceType, label: string, text?: string) => (
+    <VisibilityToggle
+      label={label}
+      text={text}
+      visible={display.includes(type)}
+      onToggle={() =>
+        handlers.onOptionsChange({
+          ...options,
+          timeline: {
+            ...options.timeline,
+            display: display.includes(type) ? display.filter((item) => item !== type) : [...display, type],
+          },
+        })
+      }
+    />
+  );
+  const raidLabel = raidTierOptions.find((option) => option.value === options.raid.tier)?.label;
+  const tacticalLabel = tacticalLevelOptions.find((option) => option.value === options.tactical.level)?.label;
+  const monthlyPackages = activePackages.filter((item) => item.source === "package_onetime");
+  const apPackages = activePackages.filter((item) => item.source === "package_ap");
 
   return (
-    <div className="flex flex-col">
-      <PlanRow label="임무">
-        <span className="text-sm font-medium text-v2-fg tabular-nums">매일 +20 · 매주 +120</span>
-      </PlanRow>
-      <PlanRow label="총력전·대결전">
-        <Select
-          className={QUIET_SELECT_CLASS_NAME}
-          label="총력전·대결전 등급"
-          value={options.raid.tier}
-          options={raidTierOptions}
-          onChange={(tier) => handlers.onOptionsChange({ ...options, raid: { tier } })}
+    <div className="flex flex-col gap-3">
+      <PlanGroup label="수급">
+        <SourceRow label="이벤트/스토리 보상" actions={visibility("event_reward", "이벤트/스토리 보상")} />
+        <SourceRow
+          label="총력전·대결전"
+          detail={raidLabel}
+          actions={
+            <>
+              <RowAction icon={Cog6ToothIcon} label="총력전·대결전 설정" onClick={() => setDialog("raid")} />
+              {visibility("raid", "총력전·대결전 보상")}
+            </>
+          }
         />
-      </PlanRow>
-      <PlanRow label="전술대회">
-        <Select
-          className={QUIET_SELECT_CLASS_NAME}
-          label="전술대회 순위"
-          value={options.tactical.level}
-          options={tacticalLevelOptions}
-          onChange={(level) => handlers.onOptionsChange({ ...options, tactical: { level } })}
+        <SourceRow
+          label="임무"
+          detail="매일 +20 · 매주 +120"
+          actions={
+            <>
+              {visibility("daily_mission", "일일 임무", "일일")}
+              {visibility("weekly_mission", "주간 임무", "주간")}
+            </>
+          }
         />
-      </PlanRow>
-      <PlanRow label="AP 충전">
-        <RowButton label="AP 충전 설정" onClick={() => setDialog("ap")}>
-          {options.consumption.apChargeCount > 0 ? `하루 ${options.consumption.apChargeCount}회` : "안 함"}
-          {exceptionCount > 0 ? ` · 예외 ${exceptionCount}` : ""}
-        </RowButton>
-      </PlanRow>
-      <PlanRow label="출석">
-        <RowButton label="출석 설정" onClick={() => setDialog("attendance")}>
-          {attendanceStart ? `${dayjs(attendanceStart).tz(KST).format("MM/DD")}~` : "설정 안 함"}
-        </RowButton>
-      </PlanRow>
-      {activePackages.length > 0 ? (
-        <ul className="mt-2 flex flex-col gap-2.5 border-t border-v2-divider pt-3" aria-label="적용 중인 패키지">
-          {activePackages.map((item) => (
-            <li key={item.uid} className="flex items-center gap-2 text-sm">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-v2-fg">{item.description}</span>
-                <span className="block text-xs text-v2-fg-tertiary tabular-nums">
-                  {dayjs(item.date).tz(KST).format("MM/DD")}~ · {item.activeDays}일
-                </span>
-              </span>
-              <span className="text-sm font-medium text-v2-fg tabular-nums">{formatSigned(item.pyroxeneDelta)}</span>
-              <IconButton
-                icon={TrashIcon}
-                label={`${item.description} 삭제`}
-                onClick={() => handlers.onDeleteItem(item.uid)}
-              />
-            </li>
-          ))}
-        </ul>
-      ) : null}
+        <SourceRow
+          label="전술대회"
+          detail={tacticalLabel}
+          actions={
+            <>
+              <RowAction icon={Cog6ToothIcon} label="전술대회 설정" onClick={() => setDialog("tactical")} />
+              {visibility("tactical", "전술대회 보상")}
+            </>
+          }
+        />
+        <SourceRow
+          label="출석"
+          detail={attendanceStart ? `${dayjs(attendanceStart).tz(KST).format("MM/DD")}~` : "설정 안 함"}
+          actions={
+            <>
+              <RowAction icon={Cog6ToothIcon} label="출석 설정" onClick={() => setDialog("attendance")} />
+              {visibility("attendance", "출석")}
+            </>
+          }
+        />
+        <SourceRow
+          label="청휘석 구매"
+          actions={
+            <>
+              <RowAction icon={PlusIcon} label="청휘석 구매 추가" onClick={() => onAdd("buy")} />
+              {visibility("buy", "청휘석 구매")}
+            </>
+          }
+        />
+        <SourceRow
+          label="직접 등록"
+          actions={
+            <>
+              <RowAction icon={PlusIcon} label="직접 등록 추가" onClick={() => onAdd("other")} />
+              {visibility("other", "직접 등록")}
+            </>
+          }
+        />
+      </PlanGroup>
+      <PlanGroup label="소비">
+        <SourceRow
+          label="AP 충전"
+          detail={
+            options.consumption.apChargeCount > 0
+              ? `하루 ${options.consumption.apChargeCount}회${exceptionCount > 0 ? ` · 예외 ${exceptionCount}` : ""}`
+              : "안 함"
+          }
+          actions={
+            <>
+              <RowAction icon={Cog6ToothIcon} label="AP 충전 설정" onClick={() => setDialog("ap")} />
+              {visibility("ap_charge", "AP 충전")}
+            </>
+          }
+        />
+      </PlanGroup>
+      <PlanGroup label="반복 구매">
+        <SourceRow
+          label="청휘석 패키지"
+          actions={
+            <>
+              <RowAction icon={PlusIcon} label="청휘석 패키지 추가" onClick={() => onAdd("monthly")} />
+              {visibility("package_onetime", "청휘석 패키지 초회", "초회")}
+              {visibility("package_daily", "청휘석 패키지 일간", "일간")}
+            </>
+          }
+        >
+          <ActivePackageList packages={monthlyPackages} onDelete={handlers.onDeleteItem} />
+        </SourceRow>
+        <SourceRow
+          label="AP 패키지"
+          actions={
+            <>
+              <RowAction icon={PlusIcon} label="AP 패키지 추가" onClick={() => onAdd("ap")} />
+              {visibility("package_ap", "AP 패키지")}
+            </>
+          }
+        >
+          <ActivePackageList packages={apPackages} onDelete={handlers.onDeleteItem} />
+        </SourceRow>
+      </PlanGroup>
+      <p className="text-xs text-v2-fg-tertiary">일정에서 숨긴 항목도 계산에는 들어가요.</p>
+      <ChoiceDialog
+        open={dialog === "raid"}
+        title="총력전·대결전"
+        label="총력전·대결전 등급"
+        options={raidTierOptions}
+        value={options.raid.tier}
+        onClose={() => setDialog(null)}
+        onChange={(tier) => {
+          handlers.onOptionsChange({ ...options, raid: { tier } });
+          setDialog(null);
+        }}
+      />
+      <ChoiceDialog
+        open={dialog === "tactical"}
+        title="전술대회"
+        label="전술대회 순위"
+        options={tacticalLevelOptions}
+        value={options.tactical.level}
+        onClose={() => setDialog(null)}
+        onChange={(level) => {
+          handlers.onOptionsChange({ ...options, tactical: { level } });
+          setDialog(null);
+        }}
+      />
       <ApChargeDialog
         open={dialog === "ap"}
         options={options}
@@ -214,6 +387,31 @@ export function IncomePlanPanel({
         saving={saving}
       />
     </div>
+  );
+}
+
+/** One choice that applies as soon as it is picked. */
+function ChoiceDialog<T extends string>({
+  open,
+  title,
+  label,
+  options,
+  value,
+  onClose,
+  onChange,
+}: {
+  open: boolean;
+  title: string;
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onClose: () => void;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <PlannerDialog open={open} title={title} onClose={onClose}>
+      <SegmentedChoice label={label} variant="tiles" options={[...options]} value={value} onChange={onChange} />
+    </PlannerDialog>
   );
 }
 
@@ -351,28 +549,29 @@ function AttendanceDialog({
   );
 }
 
-type AddTab = "buy" | "monthly" | "ap" | "other";
+export type AddTab = "buy" | "monthly" | "ap" | "other";
 
 const addTabs: { id: AddTab; label: string }[] = [
   { id: "buy", label: "청휘석 구매" },
-  { id: "monthly", label: "월정액" },
+  { id: "monthly", label: "청휘석 패키지" },
   { id: "ap", label: "AP 패키지" },
-  { id: "other", label: "기타" },
+  { id: "other", label: "직접 등록" },
 ];
 
 /** Rendered by the route so a closing panel sheet cannot remount and reopen it. */
 export function AddIncomeDialog({
-  open,
+  tab,
   onClose,
   saving,
   handlers,
 }: {
-  open: boolean;
+  // The kind to add, chosen by the panel row that opened the dialog; null while closed.
+  tab: AddTab | null;
   onClose: () => void;
   saving: boolean;
   handlers: IncomePlanHandlers;
 }) {
-  const [tab, setTab] = useState<AddTab>("buy");
+  const open = tab !== null;
   const [buy, setBuy] = useState({
     quantity: DEFAULT_BUY_PYROXENE_QUANTITY,
     date: new Date(),
@@ -415,7 +614,7 @@ export function AddIncomeDialog({
   return (
     <PlannerDialog
       open={open}
-      title="수급 추가"
+      title={`${addTabs.find((item) => item.id === tab)?.label ?? ""} 추가`}
       onClose={onClose}
       footer={
         <>
@@ -430,7 +629,6 @@ export function AddIncomeDialog({
         </>
       }
     >
-      <SectionTabs label="수급 종류" items={addTabs} selectedId={tab} onChange={(id) => setTab(id as AddTab)} />
       {tab === "buy" ? (
         <>
           <DateField label="구매 날짜" value={buy.date} onChange={(date) => setBuy((v) => ({ ...v, date }))} />

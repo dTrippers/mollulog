@@ -20,7 +20,7 @@ import { useGuestPlanner } from "~/components/features/futures/useGuestPlanner";
 import { usePyroxeneScheduleItems } from "~/components/features/futures/usePyroxeneScheduleItems";
 import { usePyroxeneTimeline } from "~/components/features/futures/usePyroxeneTimeline";
 import type { PlannerEventData, PlannerEventDataPatch } from "~/components/v2/features/pyroxene/EventCard";
-import { AddIncomeDialog, IncomePlanAddButton, IncomePlanPanel } from "~/components/v2/features/pyroxene/IncomePlan";
+import { AddIncomeDialog, type AddTab, IncomePlanPanel } from "~/components/v2/features/pyroxene/IncomePlan";
 import {
   formatInputAt,
   OwnedResourceList,
@@ -535,7 +535,7 @@ export default function PyroxenePlanner() {
   const [hideUntargeted, setHideUntargeted] = useState(false);
   const [resourcesDialogOpen, setResourcesDialogOpen] = useState(false);
   const [methodDialogOpen, setMethodDialogOpen] = useState(false);
-  const [incomeAddOpen, setIncomeAddOpen] = useState(false);
+  const [incomeAddTab, setIncomeAddTab] = useState<AddTab | null>(null);
   const [selectedEventMissing, setSelectedEventMissing] = useState(false);
   const selectedEventRef = useRef<HTMLDivElement>(null);
   const fetcher = useFetcher<Awaited<ReturnType<typeof action>>>();
@@ -1237,7 +1237,6 @@ export default function PyroxenePlanner() {
       onShowMethod={() => setMethodDialogOpen(true)}
     />
   );
-  const incomeAddButton = <IncomePlanAddButton onClick={() => setIncomeAddOpen(true)} />;
   const incomePanel = (
     <IncomePlanPanel
       options={options}
@@ -1245,6 +1244,7 @@ export default function PyroxenePlanner() {
       attendanceStart={attendanceStart}
       saving={saving}
       handlers={incomeHandlers}
+      onAdd={setIncomeAddTab}
     />
   );
 
@@ -1285,10 +1285,6 @@ export default function PyroxenePlanner() {
           <PlannerSchedule
             rows={rows}
             pending={timelinePending}
-            display={options.timeline.display}
-            onDisplayChange={(display) =>
-              handleOptionsChange({ ...options, timeline: { ...options.timeline, display } })
-            }
             hideUntargeted={hideUntargeted}
             onHideUntargetedChange={handleHideUntargetedChange}
             selectedEventUid={selectedEventUid}
@@ -1322,7 +1318,7 @@ export default function PyroxenePlanner() {
         <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon}>
           {basisPanel}
         </PanelSheet>
-        <PanelSheet panelId="income" title="수급 계획" Icon={ArrowTrendingUpIcon} headerAction={incomeAddButton}>
+        <PanelSheet panelId="income" title="수급/소비 계획" Icon={ArrowTrendingUpIcon}>
           {incomePanel}
         </PanelSheet>
         <AsideLinks
@@ -1345,9 +1341,8 @@ export default function PyroxenePlanner() {
           { key: "basis", title: "계산 기준", Icon: ChartBarIcon, content: basisPanel },
           {
             key: "income",
-            title: "수급 계획",
+            title: "수급/소비 계획",
             Icon: ArrowTrendingUpIcon,
-            headerAction: incomeAddButton,
             content: incomePanel,
           },
         ]}
@@ -1364,8 +1359,9 @@ export default function PyroxenePlanner() {
         }}
       />
       <AddIncomeDialog
-        open={incomeAddOpen}
-        onClose={() => setIncomeAddOpen(false)}
+        key={incomeAddTab ?? "closed"}
+        tab={incomeAddTab}
+        onClose={() => setIncomeAddTab(null)}
         saving={saving}
         handlers={incomeHandlers}
       />

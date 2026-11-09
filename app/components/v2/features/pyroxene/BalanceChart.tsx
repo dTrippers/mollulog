@@ -146,6 +146,18 @@ function EventMarkerLabel({
   );
 }
 
+/** Every Tuesday (KST) within the chart's time span, as tick timestamps. */
+function getTuesdayTicks(startTs: number, endTs: number): number[] {
+  const TUESDAY = 2;
+  let day = dayjs(startTs).tz("Asia/Seoul").startOf("day");
+  day = day.add((TUESDAY - day.day() + 7) % 7, "day");
+  const ticks: number[] = [];
+  for (; day.valueOf() <= endTs; day = day.add(7, "day")) {
+    if (day.valueOf() >= startTs) ticks.push(day.valueOf());
+  }
+  return ticks;
+}
+
 export default function BalanceChart({
   timeline,
   markers,
@@ -159,6 +171,7 @@ export default function BalanceChart({
     return <p className="py-8 text-center text-sm text-v2-fg-tertiary">그래프로 볼 일정이 아직 없어요</p>;
   }
   const eventPoints = points.filter((point) => point.events.length > 0);
+  const tuesdayTicks = getTuesdayTicks(points[0].ts, points[points.length - 1].ts);
   return (
     <div className="h-56" role="img" aria-label="날짜별 예상 청휘석 그래프. 자세한 값은 아래 일정에 있어요.">
       <ResponsiveContainer width="100%" height="100%">
@@ -169,6 +182,8 @@ export default function BalanceChart({
             type="number"
             scale="time"
             domain={["dataMin", "dataMax"]}
+            // Label only Tuesdays; the axis drops some of them when they would overlap.
+            ticks={tuesdayTicks}
             tickFormatter={(ts: number) => dayjs(ts).tz("Asia/Seoul").format("MM/DD")}
             tick={{ fontSize: 11, fill: "var(--v2-fg-tertiary)" }}
             stroke="var(--v2-divider)"

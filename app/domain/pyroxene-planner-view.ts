@@ -5,11 +5,16 @@ import { PYROXENE_SOURCE_DEFINITIONS } from "~/domain/pyroxene-sources";
 import type { PickupResources, Timeline, TimelineEntry } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 
-export type PyroxeneEventStatus = "enough" | "short";
+export type PyroxeneEventStatus = "enough" | "caution" | "short";
 
-/** Short when the expected balance is negative. A negative low end of the range shows on the range itself. */
+/**
+ * Short when the expected balance is negative; caution when it is not but the low end of the range is,
+ * so bad luck can run the balance short.
+ */
 export function getPyroxeneEventStatus(entry: TimelineEntry): PyroxeneEventStatus {
-  return entry.accumulatedResources.pyroxene < 0 ? "short" : "enough";
+  if (entry.accumulatedResources.pyroxene < 0) return "short";
+  const range = getBalanceRange(entry);
+  return range && range.low < 0 ? "caution" : "enough";
 }
 
 /** The balance range shown next to a balance: the 10th and 90th percentile, low first. */
@@ -231,11 +236,14 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
 
 export type ActivePyroxenePackage = {
   uid: string;
+  source: "package_onetime" | "package_ap";
   date: Date;
-  description: string;
-  pyroxeneDelta: number;
+  // The package name without the first-purchase suffix the stored description carries.
+  name: string;
   activeDays: number;
 };
+
+const FIRST_PURCHASE_SUFFIX = " (초회)";
 
 const ACTIVE_PACKAGE_SOURCE_TYPES = new Set<TimelineSourceType>(["package_onetime", "package_ap"]);
 
@@ -261,11 +269,13 @@ export function getActivePyroxenePackages(scheduleItems: PyroxeneScheduleItem[],
         {
           uid: gain.uid,
           date: start.toDate(),
-          description: gain.description,
-          pyroxeneDelta: gain.pyroxeneDelta ?? 0,
+          source: gain.source as ActivePyroxenePackage["source"],
+          name: gain.description.endsWith(FIRST_PURCHASE_SUFFIX)
+            ? gain.description.slice(0, -FIRST_PURCHASE_SUFFIX.length)
+            : gain.description,
           activeDays,
         },
       ];
     })
-    .sort((a, b) => a.date.getTime() - b.date.getTime() || a.description.localeCompare(b.description, "ko"));
+    .sort((a, b) => a.date.getTime() - b.date.getTime() || a.name.localeCompare(b.name, "ko"));
 }

@@ -91,9 +91,9 @@ function rowOptions(overrides: Partial<PlannerTimelineRowOptions> = {}): Planner
 }
 
 describe("pyroxene planner view", () => {
-  it("rates a balance short only when the expected balance is negative", () => {
+  it("rates a negative balance short and a negative low end of the range as caution", () => {
     expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", -1))).toBe("short");
-    expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: -1 }))).toBe("enough");
+    expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: -1 }))).toBe("caution");
     expect(getPyroxeneEventStatus(eventEntry("a", "2026-12-01", 100, { low: 0 }))).toBe("enough");
   });
 

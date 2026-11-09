@@ -187,8 +187,8 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
       <div className="flex flex-col items-end gap-2.5">
         <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} large>
           {range ? (
-            <span className="mt-0.5 flex flex-col items-end text-xs text-v2-fg-tertiary">
-              <span className="text-[0.625rem] leading-3">예상 범위</span>
+            <span className="mt-1.5 flex flex-col items-end text-xs text-v2-fg-tertiary">
+              <span className="text-[0.625rem] leading-3">상하위 10% 범위</span>
               <span>
                 {/* A low end below zero means bad luck can run the balance short. */}
                 <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
