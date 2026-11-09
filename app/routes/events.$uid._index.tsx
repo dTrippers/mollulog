@@ -1,6 +1,5 @@
-import { ArrowPathIcon, ClockIcon } from "@heroicons/react/24/outline";
 import { ListBulletIcon } from "@heroicons/react/16/solid";
-import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { ArrowPathIcon } from "@heroicons/react/24/outline";
 import { Fragment, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useFetcher, useLoaderData, useOutletContext, useRevalidator } from "react-router";
@@ -14,11 +13,7 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { calendarDayDifference } from "~/domain/home-portal";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import {
-  getAvailableFreeRecruitmentPulls,
-  isPickupUnavailableRecruitment,
-  PICKUP_UNAVAILABLE_NOTICE,
-} from "~/domain/recruitment-notice";
+import { getAvailableFreeRecruitmentPulls, isPickupUnavailableRecruitment } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-notice";
 import {
   formatInstant,
@@ -29,9 +24,9 @@ import {
   type UtcIsoString,
 } from "~/lib/date-time";
 import { conjunctionParticle } from "~/lib/korean";
-import { cn } from "~/lib/utils";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
+import { cn } from "~/lib/utils";
 import { recruitmentLabelLocale, timelineContentTypeLocale } from "~/locales/ko";
 import { getNestedContentComments } from "~/models/content.server";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
@@ -46,8 +41,8 @@ import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { EventOpinions } from "./events.$uid._components/EventOpinions";
 import type { EventLayoutContext } from "./events.$uid._components/event-screens";
-import { EventShopPicker } from "./events.$uid._components/shop/EventShopPicker";
 import { type EventShopPortalData, getEventShopPortalData } from "./events.$uid._components/event-shop-availability";
+import { EventShopPicker } from "./events.$uid._components/shop/EventShopPicker";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const timelineUid = params.uid;
@@ -282,7 +277,8 @@ export default function EventIndex() {
   return (
     <>
       <PageMain>
-        <div className="flex flex-col gap-10">
+        {/* The overview reads as one column, as wide as the event thumbnail. */}
+        <div className="flex w-full max-w-3xl flex-col gap-10">
           <EventOverviewHero
             imageUrl={eventContent.imageUrl}
             imageBlurhash={eventContent.imageBlurhash}
@@ -355,15 +351,11 @@ export default function EventIndex() {
 
           {limitedRecruitments.length > 0 ? (
             <section data-region="nonpickup-students" aria-labelledby="nonpickup-title" className="flex flex-col gap-3">
-              <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
-                <SectionTitle id="nonpickup-title">픽업 외 모집 가능</SectionTitle>
-                <HintChip {...PICKUP_UNAVAILABLE_NOTICE} />
-              </div>
+              <SectionTitle id="nonpickup-title">픽업 외 모집 가능</SectionTitle>
               {recruitmentGroups.length === 0 ? facts : null}
-              <StatusNotice tone="neutral" boxed Icon={ClockIcon}>
-                <span className="font-semibold text-v2-fg">모집 포인트(천장) 교환 불가</span> · 아래 학생들은 모집
-                포인트(천장)로는 교환할 수 없어요
-              </StatusNotice>
+              <WarningNotice label="픽업 불가">
+                아래 학생은 ‘픽뚫’로만 모집할 수 있고, 모집 포인트(천장)로는 교환할 수 없어요
+              </WarningNotice>
               <RecruitmentCardList
                 recruitments={limitedRecruitments}
                 signedIn={data.signedIn}
@@ -387,12 +379,12 @@ export default function EventIndex() {
         </div>
       </PageMain>
       <PageAside>
+        <OverviewMenu layout={layout} />
         {layout.events.length > 1 ? (
           <PanelSheet panelId="events" title="이벤트 선택" Icon={ListBulletIcon}>
             <EventShopPicker events={layout.events} currentEventUid={data.eventUid} destination="overview" />
           </PanelSheet>
         ) : null}
-        <OverviewMenu layout={layout} />
       </PageAside>
     </>
   );
@@ -532,15 +524,7 @@ function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now:
     rows.push({
       key: "free",
       term: "무료 모집",
-      detail: (
-        <>
-          <FactPill tone="perk">{data.freeRecruitmentPulls}회 무료</FactPill>
-          <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-warning">
-            <ExclamationTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
-            남은 횟수는 다음 모집으로 넘어가지 않아요
-          </span>
-        </>
-      ),
+      detail: <FactPill tone="perk">{data.freeRecruitmentPulls}회 무료</FactPill>,
     });
   }
   if (data.siblingEvents.length > 0) {
@@ -583,17 +567,31 @@ function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now:
   if (rows.length === 0) return null;
 
   return (
-    <dl
-      data-region="recruit-facts"
-      className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 text-sm"
-    >
-      {rows.map((row) => (
-        <Fragment key={row.key}>
-          <dt className="text-v2-fg-tertiary">{row.term}</dt>
-          <dd className="flex flex-wrap items-center gap-x-2 gap-y-0.5">{row.detail}</dd>
-        </Fragment>
-      ))}
-    </dl>
+    <div className="flex flex-col gap-3">
+      <dl
+        data-region="recruit-facts"
+        className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 text-sm"
+      >
+        {rows.map((row) => (
+          <Fragment key={row.key}>
+            <dt className="text-v2-fg-tertiary">{row.term}</dt>
+            <dd className="flex flex-wrap items-center gap-x-2 gap-y-0.5">{row.detail}</dd>
+          </Fragment>
+        ))}
+      </dl>
+      {data.freeRecruitmentPulls > 0 ? (
+        <WarningNotice label="이월 불가">남은 무료 모집 횟수는 다음 모집으로 넘어가지 않아요</WarningNotice>
+      ) : null}
+    </div>
+  );
+}
+
+// A recruitment rule the player can lose out on, kept in view instead of behind a hint.
+function WarningNotice({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <StatusNotice tone="warning" boxed>
+      <span className="font-semibold">{label}</span> · {children}
+    </StatusNotice>
   );
 }
 

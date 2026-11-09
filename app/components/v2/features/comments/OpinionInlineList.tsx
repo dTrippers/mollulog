@@ -1,4 +1,4 @@
-import { BookmarkIcon, ChevronDownIcon, LockClosedIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/16/solid";
+import { BookmarkIcon, ChevronUpIcon, LockClosedIcon, PencilSquareIcon, TrashIcon } from "@heroicons/react/16/solid";
 import {
   ArrowPathIcon,
   BookmarkIcon as BookmarkOutlineIcon,
@@ -42,8 +42,9 @@ export type OpinionInlineListProps = {
   onRequestSignIn: () => void;
 };
 
-// Opinions read inline on the page: the pinned opinion first, then the newest. Each opinion shows its first reply, and
-// the rest of the conversation opens in the full thread. The composer sits below the list, where reading ends.
+// Opinions read inline on the page, oldest first like the full thread, so the newest sit right above the composer. Only
+// the newest few show at first, and older ones load above them. Each opinion shows its first reply, and the rest of the
+// conversation opens in the full thread.
 export function OpinionInlineList({
   title,
   comments,
@@ -64,11 +65,8 @@ export function OpinionInlineList({
   onRequestSignIn,
 }: OpinionInlineListProps) {
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE);
-  const ordered = [...comments].sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-    return b.createdAt.localeCompare(a.createdAt);
-  });
-  const visible = ordered.slice(0, visibleCount);
+  const ordered = sortByCreatedAt(comments);
+  const visible = ordered.slice(Math.max(0, ordered.length - visibleCount));
   const remaining = ordered.length - visible.length;
 
   return (
@@ -116,6 +114,17 @@ export function OpinionInlineList({
         </p>
       ) : (
         <>
+          {remaining > 0 ? (
+            <Button
+              variant="text"
+              size="sm"
+              className="self-start px-0"
+              onClick={() => setVisibleCount((value) => value + VISIBLE_STEP)}
+            >
+              이전 의견 {formatThousands(remaining)}개 더 보기
+              <ChevronUpIcon className="size-4" aria-hidden="true" />
+            </Button>
+          ) : null}
           <ol className="flex flex-col gap-5">
             {visible.map((comment) => (
               <InlineOpinion
@@ -131,17 +140,6 @@ export function OpinionInlineList({
               />
             ))}
           </ol>
-          {remaining > 0 ? (
-            <Button
-              variant="text"
-              size="sm"
-              className="self-start px-0"
-              onClick={() => setVisibleCount((value) => value + VISIBLE_STEP)}
-            >
-              의견 {formatThousands(remaining)}개 더 보기
-              <ChevronDownIcon className="size-4" aria-hidden="true" />
-            </Button>
-          ) : null}
         </>
       )}
 
