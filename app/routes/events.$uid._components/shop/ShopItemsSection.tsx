@@ -3,6 +3,7 @@ import { UserIcon as UserOutlineIcon } from "@heroicons/react/24/outline";
 import { type ReactNode, useRef, useState } from "react";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button } from "~/components/v2/primitives/Button";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
@@ -39,7 +40,6 @@ export function ShopItemsSection({ plan }: { plan: EventShopPlanContext }) {
   const hasSelection = visibleItems.some(
     ({ uid }) => (plan.state.itemQuantities[uid] ?? 0) > 0 || (plan.state.itemPurchaseDays[uid] ?? 0) > 0,
   );
-  const required = plan.stageCalculations.itemBreakdown.toBuyShopItems;
 
   return (
     <ShopSection id="shop-items-title" region="shop-items">
@@ -71,7 +71,6 @@ export function ShopItemsSection({ plan }: { plan: EventShopPlanContext }) {
           >
             {paymentResources.map((resource) => {
               const selected = resource.uid === activeCurrencyUid;
-              const amount = Math.ceil(required[resource.uid] ?? 0);
               return (
                 <button
                   key={resource.uid}
@@ -89,13 +88,6 @@ export function ShopItemsSection({ plan }: { plan: EventShopPlanContext }) {
                 >
                   <CurrencyIcon uid={resource.uid} type={resource.type} imageUrl={resource.imageUrl} />
                   <span className={cn("text-sm", selected ? "font-semibold" : "font-medium")}>{resource.name}</span>
-                  {amount > 0 ? (
-                    <span
-                      className={cn("hidden text-xs text-v2-fg-tertiary tabular-nums", `@min-[40rem]/items:inline`)}
-                    >
-                      {formatCount(amount)} 필요
-                    </span>
-                  ) : null}
                 </button>
               );
             })}
@@ -159,14 +151,14 @@ function ShopItemTile({ item, plan }: { item: ShopItem; plan: EventShopPlanConte
       <div
         className={cn(
           "flex flex-col items-center gap-1.5",
-          `@min-[40rem]/items:flex-row @min-[40rem]/items:items-start @min-[40rem]/items:gap-2.5`,
+          `@min-[40rem]/items:flex-row @min-[40rem]/items:items-center @min-[40rem]/items:gap-2.5`,
         )}
       >
         {thumb}
         <div
           className={cn(
             "flex min-w-0 grow flex-col items-center text-center text-[0.625rem] leading-4 text-v2-fg-tertiary",
-            `@min-[40rem]/items:items-end @min-[40rem]/items:text-right @min-[40rem]/items:text-xs @min-[40rem]/items:leading-[1.15rem]`,
+            `@min-[40rem]/items:text-xs @min-[40rem]/items:leading-[1.15rem]`,
           )}
         >
           <ItemPrice item={item} />
@@ -310,7 +302,7 @@ function ItemPrice({ item }: { item: ShopItem }) {
     );
   }
   return (
-    <span className={cn(priceClassName, "flex-wrap justify-center", `@min-[40rem]/items:justify-end`)}>
+    <span className={cn(priceClassName, "flex-wrap justify-center")}>
       {tiers.map((tier, index) => (
         <span key={tier.tierIndex} className="inline-flex items-center gap-0.5">
           {index > 0 ? <ArrowRightIcon className="size-3.5 text-v2-fg-secondary" aria-label="다음 단계" /> : null}
@@ -410,8 +402,7 @@ function FurnitureThumb({
             <StudentThumb
               key={student.uid}
               studentUid={student.uid}
-              name={student.name}
-              variant={null}
+              {...splitVisibleStudentName(student.name)}
               recruitmentLabel=""
               isNew={false}
               favorite={noFavorite}

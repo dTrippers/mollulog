@@ -8,10 +8,11 @@ import { nowUtcIso } from "~/lib/date-time";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import { cn } from "~/lib/utils";
 import { treasureHuntLocale } from "~/locales/ko";
-import { CurrencyIcon, formatCount } from "./shop-ui";
 import { resourceShortfalls, resultSlotState, stageRunRows } from "./shop-model";
+import { CurrencyIcon, formatCount } from "./shop-ui";
 
-// The calculation result: required AP, how it splits, the stages to sweep, and whether each currency is enough.
+// The calculation result: required AP and how it splits, then whether each currency is enough. The stages to sweep
+// are listed in the stage section, not here.
 export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
   const calculation = plan.stageCalculations;
   const slot = resultSlotState(plan);
@@ -85,22 +86,6 @@ export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
               value={plan.state.includeFirstClear ? formatCount(calculation.firstClearAp) : "포함 안 함"}
             />
           </div>
-          {rows.length > 0 ? (
-            <div className="mt-3">
-              <p className="mb-1.5 text-xs text-v2-fg-tertiary">소탕할 스테이지</p>
-              <ul className="grid grid-cols-2 gap-1.5">
-                {rows.map(({ stage, runs, extraRuns: extra }) => (
-                  <li
-                    key={stage.uid}
-                    className="flex items-center justify-between gap-2 rounded-md bg-v2-inset px-2 py-1.5 text-xs"
-                  >
-                    <span className="text-v2-fg-tertiary">스테이지 {stage.index}</span>
-                    <b className="font-bold tabular-nums text-v2-fg">{formatCount(runs + extra)}회</b>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
           {treasureNote ? <p className="mt-3 text-xs text-v2-fg-secondary">{treasureNote}</p> : null}
           {plan.collectableResources.length > 0 ? (
             <>

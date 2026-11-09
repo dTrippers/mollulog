@@ -145,21 +145,20 @@ describe("event shop v2 calculator", () => {
     };
 
     const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    const bonusCard = () => screen.getByText("보너스 아이템").closest("div.rounded-lg") as HTMLElement;
-    expect(screen.getByRole("radio", { name: "재화마다 따로" }).getAttribute("aria-checked")).toBe("true");
-    expect(bonusCard().textContent).toContain("10%최대 10%");
-    fireEvent.click(within(bonusCard()).getByRole("button", { name: /학생 선택 · 1 \/ 1/ }));
-    expect(screen.getByRole("button", { name: /키사키 상세, 선택됨/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("재화마다 서로 다른 보너스 학생을 선택했어요. 재화별 탭에서 확인해주세요.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "재화별" }));
 
-    fireEvent.click(screen.getByRole("radio", { name: "모든 재화 같은 학생" }));
+    expect(screen.getByRole("button", { name: /키사키 상세, 선택됨/ }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 10% / 최대 10%");
+
+    fireEvent.click(screen.getByRole("button", { name: "모든 재화 동일" }));
     expect(setMode).toHaveBeenCalledWith("shared", ["bonus-item"]);
     const sharedPlan = makePlan("shared");
     mockPlan = { ...sharedPlan, actions: { ...sharedPlan.actions, setBonusStudentSelectionMode: setMode } };
     view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(bonusCard().textContent).toContain("0%최대 10%");
-    fireEvent.click(screen.getByRole("button", { name: /학생 선택 · 0 \/ 1/ }));
     expect(screen.getByRole("button", { name: /키사키 상세, 선택 안 됨/ }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 0% / 최대 10%");
   });
 
   it("edits the completed round of a treasure hunt as the round before the start round", () => {

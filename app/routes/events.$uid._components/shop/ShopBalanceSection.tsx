@@ -1,8 +1,8 @@
 import { CheckIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
 import { type ReactNode, useState } from "react";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
-import { Button } from "~/components/v2/primitives/Button";
 import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Button } from "~/components/v2/primitives/Button";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
 import { calculateBoughtResourceQuantities } from "~/domain/event-shop/calculations/shop-rewards";
 import { calculateMinigameRewards } from "~/domain/event-shop/utils";
@@ -20,8 +20,8 @@ export function ShopBalanceSection({ plan }: { plan: EventShopPlanContext }) {
     <ShopSection id="currency-balance-title" region="currency-balance">
       <ShopSectionHeader
         id="currency-balance-title"
-        title="재화 정산"
-        description="재화마다 획득 개수에서 필요 개수를 빼요. 보유 개수에는 게임에서 지금 가진 개수를 적어요."
+        title="재화 계산 결과"
+        description="선택한 아이템을 모두 얻기 위해 필요한 재화 계산 결과에요. 필요 개수를 직접 입력해 추가 소탕 필요량을 계산할 수 있어요."
       />
       <div className="@container flex flex-col gap-2">
         {plan.collectableResources.map((resource) => (
