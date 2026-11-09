@@ -3,7 +3,6 @@ import { type ReactNode, useId } from "react";
 import {
   getOfferedPickupChanceOptions,
   getPyroxeneRuleLabel,
-  PYROXENE_PICKUP_CHANCE_OPTIONS,
   type PyroxeneCalculationAssumptions,
   RECRUITMENT_PERK_TEN_PULL_THRESHOLDS,
 } from "~/domain/pyroxene-assumptions";
@@ -76,29 +75,28 @@ export function PickupBasisPanel({
   value,
   initialValue,
   onChange,
-  onShowMethod,
 }: {
   value: PyroxenePickupChance;
   // The basis the page loaded with. A deprecated basis in use then stays offered for the visit,
   // so switching away by mistake can be undone.
   initialValue: PyroxenePickupChance;
   onChange: (value: PyroxenePickupChance) => void;
-  onShowMethod: () => void;
 }) {
   const basisOptions = getOfferedPickupChanceOptions([value, initialValue]).map((option) => ({
     value: option.value,
     label: PICKUP_BASIS_SHORT_LABELS[option.value],
   }));
-  const description = PYROXENE_PICKUP_CHANCE_OPTIONS.find((option) => option.value === value)?.description;
+  // Each basis is explained in the calculation method dialog, opened from the panel header.
+  return <SegmentedChoice label="계산 기준" options={basisOptions} value={value} onChange={onChange} />;
+}
+
+/** Opens the calculation method dialog from the basis panel header. */
+export function CalculationMethodButton({ onClick }: { onClick: () => void }) {
   return (
-    <div className="flex flex-col gap-3">
-      <SegmentedChoice label="계산 기준" options={basisOptions} value={value} onChange={onChange} />
-      <p className="text-xs leading-relaxed text-v2-fg-tertiary">{description} 이벤트별로 따로 정할 수도 있어요.</p>
-      <Button variant="link" size="sm" className="self-start" onClick={onShowMethod}>
-        <InformationCircleIcon className="size-3.5" aria-hidden="true" />
-        계산 방식 보기
-      </Button>
-    </div>
+    <Button size="sm" onClick={onClick}>
+      <InformationCircleIcon className="size-3.5" aria-hidden="true" />
+      계산 방식
+    </Button>
   );
 }
 

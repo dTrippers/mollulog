@@ -28,7 +28,11 @@ import {
   OwnedResourcesHeaderAction,
   type OwnedResourceValues,
 } from "~/components/v2/features/pyroxene/OwnedResources";
-import { CalculationMethodDialog, PickupBasisPanel } from "~/components/v2/features/pyroxene/PickupBasis";
+import {
+  CalculationMethodButton,
+  CalculationMethodDialog,
+  PickupBasisPanel,
+} from "~/components/v2/features/pyroxene/PickupBasis";
 import { PlannerSchedule } from "~/components/v2/features/pyroxene/PlannerSchedule";
 import { PLAN_SHEET_PANEL_ID, PlanSheet } from "~/components/v2/features/pyroxene/PlanSheet";
 import { AsideLinks } from "~/components/v2/layout/AsideLinks";
@@ -1234,9 +1238,9 @@ export default function PyroxenePlanner() {
       value={options.event.pickupChance}
       initialValue={loaderData.calcOptions.event.pickupChance}
       onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
-      onShowMethod={() => setMethodDialogOpen(true)}
     />
   );
+  const methodButton = <CalculationMethodButton onClick={() => setMethodDialogOpen(true)} />;
   const incomePanel = (
     <IncomePlanPanel
       options={options}
@@ -1315,7 +1319,7 @@ export default function PyroxenePlanner() {
         >
           <OwnedResourceList values={ownedValues} />
         </PanelSheet>
-        <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon}>
+        <PanelSheet panelId="basis" title="계산 기준" Icon={ChartBarIcon} headerAction={methodButton}>
           {basisPanel}
         </PanelSheet>
         <PanelSheet panelId="income" title="수급/소비 계획" Icon={ArrowTrendingUpIcon}>
@@ -1338,7 +1342,7 @@ export default function PyroxenePlanner() {
         title="계획"
         Icon={AdjustmentsHorizontalIcon}
         sections={[
-          { key: "basis", title: "계산 기준", Icon: ChartBarIcon, content: basisPanel },
+          { key: "basis", title: "계산 기준", Icon: ChartBarIcon, headerAction: methodButton, content: basisPanel },
           {
             key: "income",
             title: "수급/소비 계획",

@@ -246,7 +246,6 @@ export function IncomePlanPanel({
         />
         <SourceRow
           label="임무"
-          detail="매일 +20 · 매주 +120"
           actions={
             <>
               {visibility("daily_mission", "일일 임무", "일일")}
