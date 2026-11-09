@@ -1,8 +1,8 @@
 import { CheckIcon } from "@heroicons/react/24/solid";
 import { BottomSheet, Button } from "~/components/primitives";
 import {
+  getOfferedPickupChanceOptions,
   getPyroxeneRuleLabel,
-  PYROXENE_PICKUP_CHANCE_OPTIONS,
   type PyroxeneCalculationAssumptions,
   RECRUITMENT_PERK_TEN_PULL_THRESHOLDS,
 } from "~/domain/pyroxene-assumptions";
@@ -74,23 +74,25 @@ export function PyroxeneCalculationMethodContent({
           )}
         </div>
         <ul className="space-y-2 text-muted-foreground">
-          {PYROXENE_PICKUP_CHANCE_OPTIONS.map(({ label, value, description: optionDescription }) => {
-            const selected = value === assumptions.pickupChance;
-            return (
-              <li key={value} aria-current={selected ? "true" : undefined} className="flex items-start gap-2">
-                <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
-                  {selected ? <CheckIcon className="size-4 text-primary" aria-hidden="true" /> : null}
-                </span>
-                <span className="min-w-0 space-y-0.5">
-                  <span className="flex flex-wrap items-baseline gap-x-2">
-                    <span className="font-medium text-foreground">{label}</span>
-                    {selected ? <span className="text-xs text-primary">사용 중</span> : null}
+          {getOfferedPickupChanceOptions([assumptions.pickupChance]).map(
+            ({ label, value, description: optionDescription }) => {
+              const selected = value === assumptions.pickupChance;
+              return (
+                <li key={value} aria-current={selected ? "true" : undefined} className="flex items-start gap-2">
+                  <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center">
+                    {selected ? <CheckIcon className="size-4 text-primary" aria-hidden="true" /> : null}
                   </span>
-                  <span className="block text-xs text-muted-foreground">{optionDescription}</span>
-                </span>
-              </li>
-            );
-          })}
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-medium text-foreground">{label}</span>
+                      {selected ? <span className="text-xs text-primary">사용 중</span> : null}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">{optionDescription}</span>
+                  </span>
+                </li>
+              );
+            },
+          )}
         </ul>
         <p className="text-muted-foreground">이벤트에 예상 모집 횟수를 직접 입력했다면 그 횟수로 계산해요.</p>
       </section>

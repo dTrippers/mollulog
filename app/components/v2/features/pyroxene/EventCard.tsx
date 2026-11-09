@@ -7,6 +7,7 @@ import {
   StarIcon,
 } from "@heroicons/react/16/solid";
 import { forwardRef, type ReactNode, useId, useMemo, useState } from "react";
+import { getOfferedPickupChanceOptions } from "~/domain/pyroxene-assumptions";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
 import {
@@ -618,15 +619,18 @@ function TargetDialog({
   const [basis, setBasis] = useState<TargetBasis>(initialBasis);
   const [trials, setTrials] = useState(eventData?.expectedTrials ?? defaultPulls ?? 200);
   const inputId = useId();
+  // A deprecated basis is offered only while the global basis or this event's own basis uses it.
+  const savedBasis = eventData?.pickupChance;
   const options = useMemo(
     () => [
       { value: "default" as const, label: `기본(${PICKUP_BASIS_SHORT_LABELS[defaultBasis]})` },
-      { value: "average" as const, label: "평균" },
-      { value: "average_pity" as const, label: "평균+천장" },
-      { value: "ceil" as const, label: "천장" },
+      ...getOfferedPickupChanceOptions([defaultBasis, savedBasis]).map(({ value }) => ({
+        value,
+        label: PICKUP_BASIS_SHORT_LABELS[value],
+      })),
       { value: "manual" as const, label: "직접" },
     ],
-    [defaultBasis],
+    [defaultBasis, savedBasis],
   );
 
   return (

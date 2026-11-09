@@ -1,6 +1,7 @@
 import { InformationCircleIcon } from "@heroicons/react/16/solid";
 import { type ReactNode, useId } from "react";
 import {
+  getOfferedPickupChanceOptions,
   getPyroxeneRuleLabel,
   PYROXENE_PICKUP_CHANCE_OPTIONS,
   type PyroxeneCalculationAssumptions,
@@ -71,25 +72,28 @@ export function SegmentedChoice<T extends string>({
   );
 }
 
-const basisOptions = PYROXENE_PICKUP_CHANCE_OPTIONS.map(({ value }) => ({
-  value,
-  label: PICKUP_BASIS_SHORT_LABELS[value],
-}));
-
 export function PickupBasisPanel({
   value,
+  initialValue,
   onChange,
   onShowMethod,
 }: {
   value: PyroxenePickupChance;
+  // The basis the page loaded with. A deprecated basis in use then stays offered for the visit,
+  // so switching away by mistake can be undone.
+  initialValue: PyroxenePickupChance;
   onChange: (value: PyroxenePickupChance) => void;
   onShowMethod: () => void;
 }) {
+  const basisOptions = getOfferedPickupChanceOptions([value, initialValue]).map((option) => ({
+    value: option.value,
+    label: PICKUP_BASIS_SHORT_LABELS[option.value],
+  }));
   const description = PYROXENE_PICKUP_CHANCE_OPTIONS.find((option) => option.value === value)?.description;
   return (
     <div className="flex flex-col gap-3">
       <SegmentedChoice label="계산 기준" options={basisOptions} value={value} onChange={onChange} />
-      <p className="text-xs leading-relaxed text-v2-fg-tertiary">{description} 이벤트마다 기준을 바꿀 수 있어요.</p>
+      <p className="text-xs leading-relaxed text-v2-fg-tertiary">{description} 이벤트별로 따로 정할 수도 있어요.</p>
       <Button variant="link" size="sm" className="self-start" onClick={onShowMethod}>
         <InformationCircleIcon className="size-3.5" aria-hidden="true" />
         계산 방식 보기
@@ -130,7 +134,7 @@ export function CalculationMethodDialog({
         <section className="flex flex-col gap-1">
           <h3 className="font-semibold text-v2-fg">계산 기준</h3>
           <ul className="flex flex-col gap-1.5 text-v2-fg-secondary">
-            {PYROXENE_PICKUP_CHANCE_OPTIONS.map(({ value, label, description }) => (
+            {getOfferedPickupChanceOptions([assumptions.pickupChance]).map(({ value, label, description }) => (
               <li key={value}>
                 <span className="font-medium text-v2-fg">{label}</span>
                 {value === assumptions.pickupChance ? (

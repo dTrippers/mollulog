@@ -8,19 +8,32 @@ export const PYROXENE_PICKUP_CHANCE_OPTIONS = [
   {
     label: "평균 (천장 미반영)",
     value: "average",
-    description: "픽업 확률만으로 계산한 평균 모집 횟수를 써요.",
+    description: "픽업 확률대로 뽑았을 때의 평균 횟수로 계산해요.",
   },
   {
     label: "평균 (천장 반영)",
     value: "average_pity",
-    description: "천장까지 고려한 평균 모집 횟수를 써요.",
+    description: "천장에서 픽업을 확정한다고 보고 평균 횟수를 계산해요.",
   },
   {
     label: "천장",
     value: "ceil",
-    description: "모든 픽업 학생을 천장까지 모집하는 경우를 기준으로 계산해요.",
+    description: "모든 픽업 학생을 천장에서 얻는다고 보고 계산해요.",
   },
 ] satisfies { label: string; value: PyroxenePickupChance; description: string }[];
+
+/**
+ * "average" ignores the pity and gives an unrealistically low pull count, so it is deprecated: it stays
+ * selectable only for someone already using it, and is not offered to anyone else, new users included.
+ */
+const DEPRECATED_PYROXENE_PICKUP_CHANCES: readonly PyroxenePickupChance[] = ["average"];
+
+/** The basis options to offer, given the bases currently in use (a deprecated one stays only while in use). */
+export function getOfferedPickupChanceOptions(inUse: readonly (PyroxenePickupChance | null | undefined)[]) {
+  return PYROXENE_PICKUP_CHANCE_OPTIONS.filter(
+    ({ value }) => !DEPRECATED_PYROXENE_PICKUP_CHANCES.includes(value) || inUse.includes(value),
+  );
+}
 
 export type PyroxeneRecruitmentRule =
   | { kind: "none" }

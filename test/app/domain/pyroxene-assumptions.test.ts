@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   buildPyroxeneAssumptionItems,
   buildPyroxeneCalculationAssumptions,
+  getOfferedPickupChanceOptions,
   getPyroxeneRuleLabel,
   PYROXENE_PICKUP_CHANCE_OPTIONS,
 } from "~/domain/pyroxene-assumptions";
@@ -216,9 +217,26 @@ describe("buildPyroxeneAssumptionItems", () => {
 
   it("shares concise mode descriptions between the settings panel and the method sheet", () => {
     expect(PYROXENE_PICKUP_CHANCE_OPTIONS.map(({ description }) => description)).toEqual([
-      "픽업 확률만으로 계산한 평균 모집 횟수를 써요.",
-      "천장까지 고려한 평균 모집 횟수를 써요.",
-      "모든 픽업 학생을 천장까지 모집하는 경우를 기준으로 계산해요.",
+      "픽업 확률대로 뽑았을 때의 평균 횟수로 계산해요.",
+      "천장에서 픽업을 확정한다고 보고 평균 횟수를 계산해요.",
+      "모든 픽업 학생을 천장에서 얻는다고 보고 계산해요.",
+    ]);
+  });
+});
+
+describe("getOfferedPickupChanceOptions", () => {
+  it("does not offer the deprecated average basis to someone not using it", () => {
+    expect(getOfferedPickupChanceOptions(["average_pity", null]).map(({ value }) => value)).toEqual([
+      "average_pity",
+      "ceil",
+    ]);
+  });
+
+  it("keeps the average basis while it is in use", () => {
+    expect(getOfferedPickupChanceOptions(["ceil", "average"]).map(({ value }) => value)).toEqual([
+      "average",
+      "average_pity",
+      "ceil",
     ]);
   });
 });

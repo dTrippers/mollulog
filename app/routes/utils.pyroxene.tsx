@@ -1232,6 +1232,7 @@ export default function PyroxenePlanner() {
   const basisPanel = (
     <PickupBasisPanel
       value={options.event.pickupChance}
+      initialValue={loaderData.calcOptions.event.pickupChance}
       onChange={(pickupChance) => handleOptionsChange({ ...options, event: { pickupChance } })}
       onShowMethod={() => setMethodDialogOpen(true)}
     />
@@ -1273,7 +1274,7 @@ export default function PyroxenePlanner() {
                 </span>
                 <span className="inline-flex items-center gap-1.5">
                   <span aria-hidden="true" className="h-2.5 w-3 rounded-sm bg-v2-accent/15" />
-                  상하위 10% 이내 (10번 중 8번은 이 안)
+                  상하위 10% 이내
                 </span>
               </p>
             </div>

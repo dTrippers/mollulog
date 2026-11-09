@@ -194,8 +194,9 @@ describe("PyroxeneCalculationMethodSheet", () => {
     expect(html).toContain("개편 전 규칙에서는 200회마다 픽업 학생과 교환할 수 있다고 보고 계산해요.");
     expect(html).toContain("개편 후 규칙에서는 픽업 학생이 나오기 전까지 100회째 모집에서 50% 확률로, 200회째 모집에서 반드시 픽업 학생을 얻어요.");
     expect(html).toContain("★3 학생 모집 목표");
-    expect(html).toContain("평균 (천장 미반영)");
-    expect(html).toContain("픽업 확률만으로 계산한 평균 모집 횟수를 써요.");
+    // The deprecated average basis is not offered to someone not using it.
+    expect(html).not.toContain("평균 (천장 미반영)");
+    expect(html).toContain("천장에서 픽업을 확정한다고 보고 평균 횟수를 계산해요.");
     expect(html).toContain('aria-current="true"');
     expect(html).toContain("사용 중");
     expect(html).toContain("이벤트에 예상 모집 횟수를 직접 입력했다면 그 횟수로 계산해요.");
@@ -235,9 +236,16 @@ describe("PyroxeneCalculationMethodSheet", () => {
     });
 
     expect(html).toContain('href="/utils/pyroxene"');
-    for (const { label, description } of PYROXENE_PICKUP_CHANCE_OPTIONS) {
+    for (const { label, description } of PYROXENE_PICKUP_CHANCE_OPTIONS.filter(({ value }) => value !== "average")) {
       expect(html).toContain(label);
       expect(html).toContain(description);
     }
+  });
+
+  it("keeps listing the deprecated average basis for someone using it", () => {
+    const html = renderMethodSheet({ assumptions: sampleAssumptions({ pickupChance: "average" }) });
+
+    expect(html).toContain("평균 (천장 미반영)");
+    expect(html).toContain("픽업 확률대로 뽑았을 때의 평균 횟수로 계산해요.");
   });
 });
