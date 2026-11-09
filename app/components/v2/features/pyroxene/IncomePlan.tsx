@@ -718,7 +718,11 @@ export function AddIncomeDialog({
               value={other.description}
               aria-invalid={otherDescriptionError ? true : undefined}
               aria-describedby={otherDescriptionError ? `${idPrefix}-description-error` : undefined}
-              onChange={(event) => setOther((v) => ({ ...v, description: event.currentTarget.value }))}
+              onChange={(event) => {
+                // Read the value now: the updater runs after the event, when currentTarget is already null.
+                const description = event.currentTarget.value;
+                setOther((v) => ({ ...v, description }));
+              }}
               className={cn(v2TextInputClassName, v2FocusRing, "aria-invalid:border-v2-danger")}
             />
             {otherDescriptionError ? (
