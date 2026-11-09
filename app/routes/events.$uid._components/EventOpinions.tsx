@@ -5,11 +5,13 @@ import { useSignIn } from "~/contexts/SignInProvider";
 import type { NestedComment } from "~/models/content";
 import type { ActionData as CommentActionData, CommentResponse } from "~/routes/api.contents.$uid.comments";
 import { useRecruitmentOpinionSetting } from "../futures._components/recruitment-opinion-setting";
+import { OpinionInlineList } from "~/components/v2/features/comments/OpinionInlineList";
 import { OpinionPreview } from "~/components/v2/features/comments/OpinionPreview";
 import { OpinionSheet } from "~/components/v2/features/comments/OpinionSheet";
 import { RecruitmentOpinionToggle } from "~/components/v2/features/comments/RecruitmentOpinionToggle";
 import { IconButton } from "~/components/v2/primitives/IconButton";
 import { Popover } from "~/components/v2/primitives/Popover";
+import { Switch } from "~/components/v2/primitives/Switch";
 import type { UtcIsoString } from "~/lib/date-time";
 import type { CommentVisibility } from "~/components/v2/features/comments/CommentComposer";
 
@@ -23,6 +25,7 @@ export function EventOpinions({
   initialHideRecruitmentOpinions,
   canFilterRecruitmentOpinions,
   now,
+  layout = "preview",
 }: {
   eventUid: string;
   eventName: string;
@@ -33,6 +36,8 @@ export function EventOpinions({
   initialHideRecruitmentOpinions: boolean;
   canFilterRecruitmentOpinions: boolean;
   now: UtcIsoString;
+  // "inline" lists opinions on the page with the composer below them. "preview" shows a summary that opens the sheet.
+  layout?: "preview" | "inline";
 }) {
   const { showSignIn } = useSignIn();
   const [comments, setComments] = useState(initialComments);
@@ -45,9 +50,12 @@ export function EventOpinions({
   const commentsFetcher = useFetcher<CommentResponse>();
   const refreshFetcher = useFetcher<CommentResponse>();
 
-  const refreshComments = useCallback((_value?: boolean) => {
-    refreshFetcher.load(`/api/contents/${eventUid}/comments`);
-  }, [eventUid, refreshFetcher]);
+  const refreshComments = useCallback(
+    (_value?: boolean) => {
+      refreshFetcher.load(`/api/contents/${eventUid}/comments`);
+    },
+    [eventUid, refreshFetcher],
+  );
   const setting = useRecruitmentOpinionSetting({
     initialValue: initialHideRecruitmentOpinions,
     signedIn,
@@ -127,6 +135,74 @@ export function EventOpinions({
   const title = isLive ? "공식 방송 의견" : "이벤트 의견";
   const loading = refreshFetcher.state === "loading";
 
+  const sheet = (
+    <OpinionSheet
+      open={open}
+      contentUid={eventUid}
+      isLive={isLive}
+      contentName={eventName.replaceAll("\n", " ")}
+      commentCount={unavailable ? null : comments.length}
+      comments={comments}
+      loading={loading}
+      unavailable={unavailable}
+      now={now}
+      signedIn={signedIn}
+      hideRecruitmentOpinions={setting.value}
+      submitting={commentsFetcher.state === "submitting"}
+      tutorial={null}
+      actions={actions}
+      onRetry={() => refreshComments()}
+      onRequestSignIn={showSignIn}
+      onClose={() => setOpen(false)}
+      headerAction={headerAction}
+    />
+  );
+
+  if (layout === "inline") {
+    return (
+      <>
+        <OpinionInlineList
+          title="의견"
+          comments={comments}
+          count={unavailable ? null : comments.length}
+          now={now}
+          loading={loading}
+          unavailable={unavailable}
+          hidden={setting.value}
+          signedIn={signedIn}
+          submitting={commentsFetcher.state === "submitting"}
+          headerControl={
+            canFilterRecruitmentOpinions ? (
+              <div className="flex flex-col items-start gap-0.5 md:items-end">
+                <Switch
+                  id="event-opinion-hide-recruitment-inline"
+                  layout="inline"
+                  label="모집 결과 숨기기"
+                  checked={setting.value}
+                  disabled={setting.saving}
+                  onCheckedChange={setting.toggle}
+                />
+                {setting.error ? (
+                  <p role="alert" className="text-xs text-v2-danger">
+                    {setting.error}
+                  </p>
+                ) : null}
+              </div>
+            ) : undefined
+          }
+          onCreate={actions.onCreate}
+          onDelete={actions.onDelete}
+          onPin={actions.onPin}
+          onUnpin={actions.onUnpin}
+          onOpenThread={() => setOpen(true)}
+          onRetry={() => refreshComments()}
+          onRequestSignIn={showSignIn}
+        />
+        {sheet}
+      </>
+    );
+  }
+
   return (
     <>
       <OpinionPreview
@@ -140,26 +216,7 @@ export function EventOpinions({
         onOpen={() => setOpen(true)}
         onRetry={() => refreshComments()}
       />
-      <OpinionSheet
-        open={open}
-        contentUid={eventUid}
-        isLive={isLive}
-        contentName={eventName.replaceAll("\n", " ")}
-        commentCount={unavailable ? null : comments.length}
-        comments={comments}
-        loading={loading}
-        unavailable={unavailable}
-        now={now}
-        signedIn={signedIn}
-        hideRecruitmentOpinions={setting.value}
-        submitting={commentsFetcher.state === "submitting"}
-        tutorial={null}
-        actions={actions}
-        onRetry={() => refreshComments()}
-        onRequestSignIn={showSignIn}
-        onClose={() => setOpen(false)}
-        headerAction={headerAction}
-      />
+      {sheet}
     </>
   );
 }

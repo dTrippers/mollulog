@@ -94,8 +94,8 @@ function openGraphImageTags(head: string) {
 }
 
 describe("event detail Open Graph image metadata", () => {
-  it("marks only the event overview to hide its duplicate page header title", () => {
-    expect(eventRouteHandle).toMatchObject({ v2HeaderTitleHidden: true });
+  it("hides the page header title on the event overview, whose artwork carries the title", () => {
+    expect(eventRouteHandle).toHaveProperty("v2HeaderTitleHidden", true);
     expect(eventRouteHandle).not.toHaveProperty("v2Width");
   });
 

@@ -1,11 +1,4 @@
-import {
-  InformationCircleIcon,
-  MapIcon,
-  RectangleStackIcon,
-  ShoppingCartIcon,
-  SparklesIcon,
-  Squares2X2Icon,
-} from "@heroicons/react/24/outline";
+import { ArrowPathIcon, ExclamationTriangleIcon } from "@heroicons/react/16/solid";
 import {
   type LoaderFunctionArgs,
   Outlet,
@@ -22,17 +15,24 @@ import { PageHeader, PageNotice, PageToolbar, ScreenTabs, V2Page } from "~/compo
 import { Button } from "~/components/v2/primitives/Button";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
-import { calendarDayDifference } from "~/domain/home-portal";
-import { compareInstantAsc, formatInstant, isInstantAfter, nowUtcIso } from "~/lib/date-time";
+import { compareInstantAsc } from "~/lib/date-time";
 import { isEventShopStateSubmission } from "~/lib/revalidation";
-import { cardFlipLocale, jankenLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType, getShopAvailableEvents } from "~/models/event-content";
+import { CloudSlashIcon } from "./events.$uid._components/CloudSlashIcon";
 import { getEventShopAvailability } from "./events.$uid._components/event-shop-availability";
+import {
+  buildEventScreens,
+  describeEventPeriod,
+  type EventLayoutContext,
+  getActiveEventDetailTab,
+} from "./events.$uid._components/event-screens";
 import { useFutureDetailReturn } from "./futures._components/use-futures-navigation";
 
-// Only the shop page shows the event selector, so the loader reads the shop events for that page alone.
-function isShopPath(pathname: string) {
-  return pathname.endsWith("/shop");
+export { getActiveEventDetailTab } from "./events.$uid._components/event-screens";
+
+// The shop and the overview show the event selector, so the loader reads the shop events for those pages alone.
+function hasEventSelector(pathname: string, uid: string) {
+  return pathname === `/events/${uid}/shop` || pathname === `/events/${uid}`;
 }
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
@@ -62,13 +62,18 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   }
 
   const shopAvailability = await getEventShopAvailability(env, eventMetadata);
-  const shopEventsRequested = isShopPath(url.pathname);
+  const shopEventsRequested = hasEventSelector(url.pathname, uid);
+  const overviewRequested = url.pathname === `/events/${uid}`;
   let shopAvailableEvents: Awaited<ReturnType<typeof getShopAvailableEvents>> = [];
   let shopEventsUnavailable = false;
   if (shopEventsRequested) {
     try {
       shopAvailableEvents = await getShopAvailableEvents(env, ctx);
-      if (eventMetadata.shopAvailable && !shopAvailableEvents.some((event) => event.uid === uid)) {
+      // The overview selector always lists the current event, with or without a shop.
+      if (
+        (eventMetadata.shopAvailable || overviewRequested) &&
+        !shopAvailableEvents.some((event) => event.uid === uid)
+      ) {
         shopAvailableEvents.push({
           uid,
           name: eventMetadata.name,
@@ -94,45 +99,42 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   };
 };
 
-// Moving to or from the shop tab keeps this layout mounted, so the loader must run again to load or drop the selector's
-// events. Shop state submissions never change the event metadata this loader reads.
+// Moving between a page with the selector and one without keeps this layout mounted, so the loader must run again to
+// load or drop the selector's events. Shop state submissions never change the event metadata this loader reads.
 export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopStateSubmission(args) &&
-  (isShopPath(args.currentUrl.pathname) !== isShopPath(args.nextUrl.pathname) || args.defaultShouldRevalidate);
+  (hasEventSelector(args.currentUrl.pathname, args.currentParams.uid ?? "") !==
+    hasEventSelector(args.nextUrl.pathname, args.nextParams.uid ?? "") ||
+    args.defaultShouldRevalidate);
 
 type DetailHandle = { v2HeaderTitleHidden?: boolean };
 
-type EventDetailTabKey = "overview" | "shop" | "simulator" | "card-flip" | "treasure-hunt" | "road-puzzle" | "janken";
-
-export function getActiveEventDetailTab(pathname: string, uid: string): EventDetailTabKey | null {
-  if (pathname === `/events/${uid}`) return "overview";
-  if (pathname === `/events/${uid}/shop`) return "shop";
-  if (pathname === `/events/${uid}/recruitment-simulator`) return "simulator";
-  if (pathname === `/events/${uid}/shop/card-flip`) return "card-flip";
-  if (pathname === `/events/${uid}/treasure-hunt`) return "treasure-hunt";
-  if (pathname === `/events/${uid}/road-puzzle`) return "road-puzzle";
-  if (pathname === `/events/${uid}/shop/janken`) return "janken";
-  return null;
-}
-
+// Run type as a pill, the period, then the status. A running event gets a live dot.
 function headerMeta(metadata: NonNullable<Awaited<ReturnType<typeof getEventMetadata>>>, timeZone: string) {
-  const now = nowUtcIso();
-  const parts = ["이벤트"];
-  if (metadata.runType === "rerun") parts.push("복각");
-  if (metadata.runType === "permanent") parts.push("상설");
-  const period = `${formatInstant(metadata.since, { timeZone, format: "MM/DD" })} ~ ${metadata.until ? formatInstant(metadata.until, { timeZone, format: "MM/DD" }) : "—"}`;
-  if (metadata.until && !isInstantAfter(metadata.until, now)) {
-    parts.push(period, "종료");
-  } else if (isInstantAfter(metadata.since, now)) {
-    const days = Math.max(1, calendarDayDifference(now, metadata.since, timeZone));
-    parts.push(period, `${days}일 후 시작`);
-  } else if (metadata.until) {
-    const days = Math.max(1, calendarDayDifference(now, metadata.until, timeZone));
-    parts.push(period, `${days}일 남음`);
-  } else {
-    parts.push(period);
-  }
-  return parts.join(" · ");
+  const { runType, period, status } = describeEventPeriod(metadata, timeZone);
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 gap-y-1 tabular-nums">
+      {runType ? (
+        <span className="inline-flex h-5 shrink-0 items-center rounded-full bg-v2-inset px-2 text-xs font-semibold text-v2-fg-secondary">
+          {runType}
+        </span>
+      ) : null}
+      <span>{period}</span>
+      <span className="text-v2-fg-disabled" aria-hidden="true">
+        ·
+      </span>
+      {status.kind === "ended" ? (
+        <span className="text-v2-fg-disabled">{status.text}</span>
+      ) : status.kind === "ongoing" ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className="size-[7px] shrink-0 rounded-full bg-v2-success" aria-hidden="true" />
+          {status.text}
+        </span>
+      ) : (
+        status.text
+      )}
+    </span>
+  );
 }
 
 export default function EventPage() {
@@ -151,18 +153,17 @@ export default function EventPage() {
 
   if (loaderData.status === "unavailable") {
     return (
-      <V2Page width="reading">
-        <PageHeader title="이벤트 정보" />
-        <StatusNotice
-          tone="danger"
-          action={
-            <Button size="sm" onClick={() => revalidator.revalidate()}>
-              다시 시도
-            </Button>
-          }
-        >
-          정보를 불러오지 못했어요.
-        </StatusNotice>
+      <V2Page width="wide">
+        <PageHeader title="이벤트 정보" titleHidden back={{ title: "이벤트", to: "/events" }} />
+        <div role="alert" className="flex flex-col items-center gap-2.5 px-6 py-16 text-center">
+          <CloudSlashIcon className="size-7 text-v2-fg-tertiary" />
+          <p className="text-base font-semibold text-v2-fg">이벤트 정보를 불러오지 못했어요</p>
+          <p className="text-sm text-v2-fg-tertiary">잠시 뒤 다시 시도해 주세요</p>
+          <Button className="mt-1" onClick={() => revalidator.revalidate()}>
+            <ArrowPathIcon className="size-4" aria-hidden="true" />
+            다시 시도
+          </Button>
+        </div>
       </V2Page>
     );
   }
@@ -175,92 +176,20 @@ export default function EventPage() {
   const back = verifiedFutureReturn
     ? { title: "미래시", onClick: returnToFutures }
     : { title: "이벤트", to: "/events" };
-  const tabs = [
-    {
-      key: "overview",
-      text: "개요",
-      Icon: InformationCircleIcon,
-      link: `/events/${uid}`,
-      active: activeTab === "overview",
-      linkState: futureLinkState,
-    },
-    {
-      key: "shop",
-      text: "상점 계산기",
-      Icon: ShoppingCartIcon,
-      link: `/events/${uid}/shop`,
-      active: activeTab === "shop",
-      disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
-      disabledReason:
-        shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
-      linkState: futureLinkState,
-    },
-    {
-      key: "simulator",
-      text: "모집 시뮬레이션",
-      Icon: SparklesIcon,
-      link: `/events/${uid}/recruitment-simulator`,
-      active: activeTab === "simulator",
-      disabled: !eventMetadata.recruitmentGroupUid,
-      disabledReason: "모집 정보가 없어요",
-      linkState: futureLinkState,
-    },
-    ...(minigameType === "card_flip"
-      ? [
-          {
-            key: "card-flip",
-            text: cardFlipLocale.menuTitle,
-            Icon: RectangleStackIcon,
-            link: `/events/${uid}/shop/card-flip`,
-            active: activeTab === "card-flip",
-            disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
-            disabledReason:
-              shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
-            linkState: futureLinkState,
-          },
-        ]
-      : []),
-    ...(minigameType === "janken"
-      ? [
-          {
-            key: "janken",
-            text: jankenLocale.menuTitle,
-            Icon: RectangleStackIcon,
-            link: `/events/${uid}/shop/janken`,
-            active: activeTab === "janken",
-            disabled: shopAvailability === "no-data" || shopAvailability === "unavailable",
-            disabledReason:
-              shopAvailability === "unavailable" ? "정보를 불러오지 못했어요" : "상점이 없거나 정보를 준비 중이에요",
-            linkState: futureLinkState,
-          },
-        ]
-      : []),
-    ...(minigameType === "treasure_hunt"
-      ? [
-          {
-            key: "treasure-hunt",
-            text: treasureHuntLocale.simulatorTitle,
-            Icon: Squares2X2Icon,
-            link: `/events/${uid}/treasure-hunt`,
-            active: activeTab === "treasure-hunt",
-            linkState: futureLinkState,
-          },
-        ]
-      : []),
-    ...(minigameType === "road_puzzle"
-      ? [
-          {
-            key: "road-puzzle",
-            text: roadPuzzleLocale.menuTitle,
-            Icon: MapIcon,
-            link: `/events/${uid}/road-puzzle`,
-            active: activeTab === "road-puzzle",
-            linkState: futureLinkState,
-          },
-        ]
-      : []),
-  ];
-  const statusMessage = shopAvailability === "unavailable" || loaderData.shopEventsUnavailable || minigameUnavailable;
+  const tabs = buildEventScreens({
+    uid: uid ?? "",
+    recruitmentGroupUid: eventMetadata.recruitmentGroupUid,
+    minigameType,
+    shopAvailability,
+    activeTab,
+    linkState: futureLinkState,
+  });
+  // A failed minigame lookup hides that tab, so the notice names it; other partial failures keep the generic notice.
+  const statusMessage = minigameUnavailable
+    ? "미니게임 정보를 불러오지 못해서 미니게임 탭을 보여주지 못했어요"
+    : shopAvailability === "unavailable" || loaderData.shopEventsUnavailable
+      ? "정보를 불러오지 못했어요."
+      : null;
 
   return (
     // Every tab uses the same width and a full-width toolbar row, so switching tabs never moves the tabs or the content.
@@ -271,24 +200,39 @@ export default function EventPage() {
         back={back}
         titleHidden={headerTitleHidden}
       />
-      <PageToolbar>
-        <ScreenTabs items={tabs} />
-      </PageToolbar>
+      {/* The overview lists the other screens in its aside instead of the tabs. */}
+      {activeTab === "overview" ? null : (
+        <PageToolbar>
+          <ScreenTabs items={tabs} />
+        </PageToolbar>
+      )}
       {statusMessage ? (
         <PageNotice>
           <StatusNotice
             tone="danger"
+            boxed
+            Icon={ExclamationTriangleIcon}
+            className="items-center"
             action={
               <Button size="sm" onClick={() => revalidator.revalidate()}>
+                <ArrowPathIcon className="size-4" aria-hidden="true" />
                 다시 시도
               </Button>
             }
           >
-            정보를 불러오지 못했어요.
+            {statusMessage}
           </StatusNotice>
         </PageNotice>
       ) : null}
-      <Outlet />
+      <Outlet
+        context={
+          {
+            screens: tabs,
+            events: loaderData.shopAvailableEvents,
+            period: describeEventPeriod(eventMetadata, timeZone),
+          } satisfies EventLayoutContext
+        }
+      />
     </V2Page>
   );
 }

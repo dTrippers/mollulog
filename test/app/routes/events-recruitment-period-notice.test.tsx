@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { MemoryRouter, useLoaderData, useNavigate } from "react-router";
+import { MemoryRouter, useLoaderData, useNavigate, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getNestedContentComments } from "~/models/content.server";
 import { getFavoritedCounts, getUserFavoritedStudents } from "~/models/favorite-students";
@@ -15,8 +15,7 @@ import {
 import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { getEventShopPortalData } from "~/routes/events.$uid._components/event-shop-availability";
-import { createFutureDetailNavigationState } from "~/routes/futures._components/futures-navigation";
-import { useVerifiedFutureDetailReturn } from "~/routes/futures._components/use-futures-navigation";
+import { buildEventScreens, type EventLayoutContext } from "~/routes/events.$uid._components/event-screens";
 import EventIndex, { loader } from "~/routes/events.$uid._index";
 
 jest.mock("react-router", () => {
@@ -31,14 +30,11 @@ jest.mock("react-router", () => {
       ),
     useLoaderData: jest.fn(),
     useNavigate: jest.fn(),
+    useOutletContext: jest.fn(),
     useFetcher: jest.fn(() => ({ submit: jest.fn() })),
     useRevalidator: jest.fn(() => ({ revalidate: jest.fn() })),
   };
 });
-
-jest.mock("~/routes/futures._components/use-futures-navigation", () => ({
-  useVerifiedFutureDetailReturn: jest.fn(),
-}));
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -47,7 +43,12 @@ jest.mock("~/auth/authenticator.server", () => ({
 jest.mock("~/components/v2/layout", () => {
   const { createElement } = jest.requireActual<typeof import("react")>("react");
   const actual = jest.requireActual<typeof import("~/components/v2/layout")>("~/components/v2/layout");
-  return { ...actual, PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children) };
+  return {
+    ...actual,
+    PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children),
+    PageAside: ({ children }: { children: ReactNode }) => createElement("aside", null, children),
+    PanelSheet: ({ children }: { children: ReactNode }) => createElement("section", null, children),
+  };
 });
 jest.mock("~/components/v2/features/events/EventHero", () => ({ EventHero: () => null }));
 jest.mock("~/components/v2/features/students/RecruitmentStudentCard", () => ({ RecruitmentStudentCard: () => null }));
@@ -104,7 +105,6 @@ const env = {} as Env;
 const ctx = {} as ExecutionContext;
 const mockedUseLoaderData = useLoaderData as jest.MockedFunction<typeof useLoaderData>;
 const mockedUseNavigate = useNavigate as jest.MockedFunction<typeof useNavigate>;
-const mockedUseVerifiedFutureDetailReturn = jest.mocked(useVerifiedFutureDetailReturn);
 const mockedGetActiveSensei = getActiveSensei as jest.MockedFunction<typeof getActiveSensei>;
 const mockedGetNestedContentComments = getNestedContentComments as jest.MockedFunction<typeof getNestedContentComments>;
 const mockedGetFavoritedCounts = getFavoritedCounts as jest.MockedFunction<typeof getFavoritedCounts>;
@@ -129,6 +129,19 @@ const mockedGetTimelineContentsByRecruitmentGroupUids =
 const recruitmentPeriod = {
   startAt: "2030-01-11T00:00:00.000Z",
   endAt: "2030-01-21T00:00:00.000Z",
+};
+
+const pickupRecruitment = {
+  favoriteKey: "pickup-student",
+  studentUid: "pickup-student",
+  studentName: "픽업 학생",
+  pickup: true,
+  recruitmentType: "limited",
+  since: "2030-01-10T00:00:00.000Z",
+  until: "2030-01-20T00:00:00.000Z",
+  favorited: false,
+  favoritedCount: 0,
+  student: null,
 };
 
 const timelineContent = {
@@ -183,6 +196,16 @@ async function loadEventData(): Promise<EventIndexLoaderData> {
   return result;
 }
 
+// The event layout hands the overview its screens, the events for the selector, and the period for the artwork.
+function mockLayout(screens: Parameters<typeof buildEventScreens>[0]) {
+  const layout: EventLayoutContext = {
+    screens: buildEventScreens(screens),
+    events: [],
+    period: { runType: null, period: "01/10 ~ 01/20", status: { kind: "upcoming", text: "1일 후 시작" } },
+  };
+  jest.mocked(useOutletContext).mockReturnValue(layout);
+}
+
 beforeEach(() => {
   jest.clearAllMocks();
   mockedGetActiveSensei.mockResolvedValue(null);
@@ -197,7 +220,6 @@ beforeEach(() => {
   mockedNormalizeRecruitmentGroupPeriod.mockReturnValue(recruitmentPeriod);
   mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([] as never);
   mockedUseNavigate.mockReturnValue((() => undefined) as ReturnType<typeof useNavigate>);
-  mockedUseVerifiedFutureDetailReturn.mockReturnValue({ navigationState: null, verifiedFutureReturn: false });
 });
 
 describe("event recruitment period notice loader", () => {
@@ -294,7 +316,7 @@ describe("event recruitment period notice loader", () => {
 });
 
 describe("event recruitment period notice presentation", () => {
-  it("renders the recruitment-period warning and sibling guidance", () => {
+  it("renders the recruitment period with its difference and the shared-point siblings in the recruitment facts", () => {
     mockedUseLoaderData.mockReturnValue({
       eventContent: {
         name: "미래 이벤트",
@@ -307,7 +329,7 @@ describe("event recruitment period notice presentation", () => {
         videos: [],
         recruitmentGroupUid: "group-a",
         recruitmentPeriod,
-        recruitments: [],
+        recruitments: [pickupRecruitment],
       },
       signedIn: false,
       hideRecruitmentOpinions: false,
@@ -322,17 +344,28 @@ describe("event recruitment period notice presentation", () => {
       minigameUnavailable: false,
     } as never);
 
-    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
-    const noticeIndex = markup.indexOf("모집 기간이 달라요 · 01/11 ~ 01/21");
-    const siblingIndex = markup.indexOf("모집 동시 개최");
+    mockLayout({
+      uid: "future-event",
+      recruitmentGroupUid: "group-a",
+      minigameType: null,
+      shopAvailability: "ready",
+      activeTab: "overview",
+      linkState: undefined,
+    });
 
-    expect(noticeIndex).toBeGreaterThanOrEqual(0);
-    expect(siblingIndex).toBeGreaterThan(noticeIndex);
-    expect(markup).toContain("role=\"status\"");
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
+    const periodIndex = markup.indexOf("01/11 ~ 01/21");
+    const siblingIndex = markup.indexOf("천장 공유");
+
+    expect(markup).toContain("모집 기간");
+    expect(periodIndex).toBeGreaterThanOrEqual(0);
+    expect(markup).toContain("이벤트보다 1일 늦게 끝나요");
+    expect(siblingIndex).toBeGreaterThan(periodIndex);
+    expect(markup).toContain('href="/events/sibling-event"');
     expect(markup).not.toContain('role="alert"');
   });
 
-  it("shows a disabled shop reason only once", () => {
+  it("lists the other screens in the event menu and dims the ones the event cannot use", () => {
     mockedUseLoaderData.mockReturnValue({
       eventContent: {
         name: "미래 이벤트",
@@ -345,7 +378,7 @@ describe("event recruitment period notice presentation", () => {
         videos: [],
         recruitmentGroupUid: null,
         recruitmentPeriod: null,
-        recruitments: [],
+        recruitments: [pickupRecruitment],
       },
       signedIn: false,
       hideRecruitmentOpinions: false,
@@ -356,106 +389,26 @@ describe("event recruitment period notice presentation", () => {
       siblingEvents: [],
       shopPortal: { status: "no-data", since: "2030-01-10T00:00:00.000Z", until: "2030-01-20T00:00:00.000Z", currencies: [] },
       recruitmentUnavailable: false,
-      minigameType: null,
-      minigameUnavailable: false,
-    } as never);
-
-    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
-
-    expect(markup.match(/상점이 없거나 정보를 준비 중이에요/g)).toHaveLength(1);
-  });
-
-  it("renders overview tool links with AsideLinks and no description lines", () => {
-    mockedUseLoaderData.mockReturnValue({
-      eventContent: {
-        name: "미래 이벤트",
-        since: "2030-01-10T00:00:00.000Z",
-        until: "2030-01-20T00:00:00.000Z",
-        imageUrl: null,
-        type: "event",
-        runType: "first",
-        endless: false,
-        videos: [],
-        recruitmentGroupUid: "group-a",
-        recruitmentPeriod: null,
-        recruitments: [],
-      },
-      signedIn: false,
-      hideRecruitmentOpinions: false,
-      canFilterRecruitmentOpinions: true,
-      allComments: [],
-      commentsUnavailable: false,
-      eventUid: "future-event",
-      siblingEvents: [],
-      shopPortal: { status: "ready", since: "2030-01-10T00:00:00.000Z", until: "2030-01-20T00:00:00.000Z", currencies: [] },
-      recruitmentUnavailable: false,
       minigameType: "card_flip",
       minigameUnavailable: false,
     } as never);
 
-    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
-    const toolLinks = [...markup.matchAll(/<a\b[^>]*href="\/events\/future-event\/(?:shop|recruitment-simulator|shop\/card-flip)"[^>]*>[\s\S]*?<\/a>/g)].map(
-      ([link]) => link,
-    );
-
-    expect(markup).toContain('aria-label="이벤트 도구"');
-    expect(markup).toContain("rounded-lg bg-v2-surface p-2");
-    expect(toolLinks).toHaveLength(3);
-    expect(toolLinks.every((link) => link.includes("min-h-v2-row-min"))).toBe(true);
-    expect(toolLinks.every((link) => !link.includes("text-xs"))).toBe(true);
-    expect(markup).not.toContain("★3 학생 3명");
-    expect(markup).not.toContain("01/10 ~ 01/20");
-  });
-
-  it("passes a verified future return state through overview tool links", () => {
-    const entryKey = "future-overview-entry";
-    const navigationState = createFutureDetailNavigationState(entryKey, "future-event");
-    mockedUseVerifiedFutureDetailReturn.mockReturnValue({
-      navigationState: navigationState.__mllg,
-      verifiedFutureReturn: true,
+    mockLayout({
+      uid: "future-event",
+      recruitmentGroupUid: null,
+      minigameType: "card_flip",
+      shopAvailability: "no-data",
+      activeTab: "overview",
+      linkState: undefined,
     });
-    mockedUseLoaderData.mockReturnValue({
-      eventContent: {
-        name: "미래 이벤트",
-        since: "2030-01-10T00:00:00.000Z",
-        until: "2030-01-20T00:00:00.000Z",
-        imageUrl: null,
-        type: "event",
-        runType: "first",
-        endless: false,
-        videos: [],
-        recruitmentGroupUid: "group-a",
-        recruitmentPeriod: null,
-        recruitments: [],
-      },
-      signedIn: false,
-      hideRecruitmentOpinions: false,
-      canFilterRecruitmentOpinions: true,
-      allComments: [],
-      commentsUnavailable: false,
-      eventUid: "future-event",
-      siblingEvents: [],
-      shopPortal: { status: "ready", since: "2030-01-10T00:00:00.000Z", until: "2030-01-20T00:00:00.000Z", currencies: [] },
-      recruitmentUnavailable: false,
-      minigameType: "card_flip",
-      minigameUnavailable: false,
-    } as never);
 
-    const markup = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        { initialEntries: [{ pathname: "/events/future-event", state: navigationState }] },
-        createElement(EventIndex),
-      ),
-    );
-    const toolLinks = [
-      ...markup.matchAll(
-        /<a\b[^>]*href="\/events\/future-event\/(?:shop|recruitment-simulator|shop\/card-flip)"[^>]*>[\s\S]*?<\/a>/g,
-      ),
-    ].map(([link]) => link);
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
 
-    expect(toolLinks).toHaveLength(3);
-    expect(toolLinks.every((link) => link.includes('data-link-state="'))).toBe(true);
-    expect(toolLinks.every((link) => link.includes("future-event") && link.includes(entryKey))).toBe(true);
+    expect(markup).toContain('aria-label="이벤트 메뉴"');
+    for (const title of ["상점 계산기", "모집 시뮬레이션"]) {
+      expect(markup).toContain(title);
+    }
+    expect(markup.match(/aria-disabled="true"/g)?.length).toBeGreaterThanOrEqual(3);
+    expect(markup).not.toMatch(/href="\/events\/future-event\/(?:shop|recruitment-simulator|shop\/card-flip)"/);
   });
 });

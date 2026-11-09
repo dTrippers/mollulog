@@ -55,7 +55,7 @@ describe("event detail route loader minigame type", () => {
     const metadata = createMetadata();
     mockGetEventMetadata.mockResolvedValue(metadata);
 
-    await expect(loader(loaderArgs())).resolves.toMatchObject({
+    await expect(loader(loaderArgs("/events/event-1/treasure-hunt"))).resolves.toMatchObject({
       eventMetadata: metadata,
       minigameType: "treasure_hunt",
       shopAvailableEvents: [],
@@ -63,6 +63,18 @@ describe("event detail route loader minigame type", () => {
 
     expect(mockGetEventMinigameType).toHaveBeenCalledWith(env, metadata);
     expect(mockGetShopAvailableEvents).not.toHaveBeenCalled();
+  });
+
+  it("loads the event selector on the overview, keeping the event even without a shop", async () => {
+    const metadata = createMetadata({ shopAvailable: false });
+    mockGetEventMetadata.mockResolvedValue(metadata);
+
+    await expect(loader(loaderArgs())).resolves.toMatchObject({
+      shopAvailableEvents: [
+        { uid: "event-1", name: "이벤트", since: "2026-01-01T00:00:00.000Z", until: null, isSpoiler: false },
+      ],
+    });
+    expect(mockGetShopAvailableEvents).toHaveBeenCalledTimes(1);
   });
 
   it("permanently redirects live content and keeps the query string", async () => {

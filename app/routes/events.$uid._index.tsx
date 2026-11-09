@@ -1,39 +1,40 @@
-import {
-  ChevronRightIcon,
-  ClockIcon,
-  MapIcon,
-  RectangleStackIcon,
-  ShoppingCartIcon,
-  SparklesIcon,
-  Squares2X2Icon,
-} from "@heroicons/react/24/outline";
-import { StarIcon } from "@heroicons/react/16/solid";
+import { ArrowPathIcon, ClockIcon } from "@heroicons/react/24/outline";
+import { ListBulletIcon } from "@heroicons/react/16/solid";
+import { ExclamationTriangleIcon } from "@heroicons/react/16/solid";
+import { Fragment, type ReactNode } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useFetcher, useLoaderData, useLocation, useRevalidator } from "react-router";
+import { Link, redirect, useFetcher, useLoaderData, useOutletContext, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { EventHero } from "~/components/v2/features/events/EventHero";
+import { EventOverviewHero } from "~/components/v2/features/events/EventOverviewHero";
 import { RecruitmentStudentCard } from "~/components/v2/features/students/RecruitmentStudentCard";
-import { RecruitmentStudentCardRail } from "~/components/v2/features/students/RecruitmentStudentCardRail";
-import { AsideLinks, PageMain } from "~/components/v2/layout";
+import { AsideLinks, PageAside, PageMain, PanelSheet } from "~/components/v2/layout";
 import { Button } from "~/components/v2/primitives/Button";
 import { HintChip } from "~/components/v2/primitives/HintChip";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
+import { calendarDayDifference } from "~/domain/home-portal";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import {
   getAvailableFreeRecruitmentPulls,
-  getFreeRecruitmentNotice,
   isPickupUnavailableRecruitment,
   PICKUP_UNAVAILABLE_NOTICE,
 } from "~/domain/recruitment-notice";
-import { getRecruitmentPeriodNotice, getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-notice";
-import { formatInstant, formatInstantDateKey, nowUtcIso, toUtcIso } from "~/lib/date-time";
+import { getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-notice";
+import {
+  formatInstant,
+  formatInstantDateKey,
+  nowUtcIso,
+  parseUtcTimestamp,
+  toUtcIso,
+  type UtcIsoString,
+} from "~/lib/date-time";
+import { conjunctionParticle } from "~/lib/korean";
+import { cn } from "~/lib/utils";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
-import { cardFlipLocale, recruitmentLabelLocale, roadPuzzleLocale, treasureHuntLocale } from "~/locales/ko";
+import { recruitmentLabelLocale, timelineContentTypeLocale } from "~/locales/ko";
 import { getNestedContentComments } from "~/models/content.server";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
-import { useVerifiedFutureDetailReturn } from "./futures._components/use-futures-navigation";
 import {
   favoriteStudent,
   getFavoritedCounts,
@@ -44,6 +45,8 @@ import { getRecruitmentGroupByUidStrict, normalizeRecruitmentGroupPeriod } from 
 import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import { EventOpinions } from "./events.$uid._components/EventOpinions";
+import type { EventLayoutContext } from "./events.$uid._components/event-screens";
+import { EventShopPicker } from "./events.$uid._components/shop/EventShopPicker";
 import { type EventShopPortalData, getEventShopPortalData } from "./events.$uid._components/event-shop-availability";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -223,49 +226,32 @@ export const meta: MetaFunction<typeof loader> = ({ data, params, location }) =>
   ];
 };
 
+// The artwork carries the name and period, so the page header keeps only its back link.
 export const handle = { ownsOpenGraphImage: true, v2HeaderTitleHidden: true } as const;
+
+function addDays(instant: UtcIsoString, days: number): UtcIsoString {
+  return toUtcIso(parseUtcTimestamp(instant).add(days, "day").toDate());
+}
 
 export default function EventIndex() {
   const data = useLoaderData<typeof loader>();
-  const location = useLocation();
-  const { navigationState, verifiedFutureReturn } = useVerifiedFutureDetailReturn(data.eventUid, location.state);
-  const futureLinkState = navigationState && verifiedFutureReturn ? location.state : undefined;
   const favoriteFetcher = useFetcher();
   const revalidator = useRevalidator();
   const timeZone = useDisplayTimeZone();
   const now = nowUtcIso();
   const { eventContent } = data;
-  const premiumDash = eventContent.recruitmentPeriod?.recruitmentType === "premium_dash";
-  const recruitmentNoticeKind = getRecruitmentPeriodNoticeKind(
-    {
-      recruitmentGroupUid: eventContent.recruitmentGroupUid,
-      contentType: eventContent.type,
-      startAt: eventContent.since,
-      endAt: eventContent.until,
-      endless: eventContent.endless,
-    },
-    eventContent.recruitmentPeriod,
-    now,
-  );
-  const premiumNotice = premiumDash
-    ? getRecruitmentPeriodNotice(
-        {
-          recruitmentGroupUid: eventContent.recruitmentGroupUid,
-          contentType: eventContent.type,
-          startAt: eventContent.since,
-          endAt: eventContent.until,
-          endless: eventContent.endless,
-        },
-        eventContent.recruitmentPeriod,
-        now,
-      )
-    : null;
+  const layout = useOutletContext<EventLayoutContext>();
 
   const pickupRecruitments = eventContent.recruitments.filter(
     (recruitment) => recruitment.pickup || recruitment.recruitmentType === "given",
   );
+  // Pickup students first, then the students handed out by the event.
+  const orderedPickupRecruitments = [
+    ...pickupRecruitments.filter((recruitment) => recruitment.recruitmentType !== "given"),
+    ...pickupRecruitments.filter((recruitment) => recruitment.recruitmentType === "given"),
+  ];
   const recruitmentGroups = Object.values(
-    pickupRecruitments.reduce(
+    orderedPickupRecruitments.reduce(
       (groups, recruitment) => {
         const key = `${formatInstantDateKey(recruitment.since, timeZone)}-${
           recruitment.until ? formatInstantDateKey(recruitment.until, timeZone) : "null"
@@ -283,260 +269,346 @@ export default function EventIndex() {
         }
       >,
     ),
-  );
+  ).sort((a, b) => a.since.localeCompare(b.since));
   const limitedRecruitments = eventContent.recruitments.filter(isPickupUnavailableRecruitment);
   const showRecruitmentDateLabels = recruitmentGroups.length > 1;
-  const freeRecruitmentNotice = data.freeRecruitmentPulls > 0 ? (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-perk">
-        <StarIcon className="size-3.5" aria-hidden="true" />
-        {data.freeRecruitmentPulls}회 무료
-      </span>
-      <HintChip {...getFreeRecruitmentNotice(data.freeRecruitmentPulls)} />
-    </span>
-  ) : null;
+  const toggleFavorite = (favoriteKey: string, favorited: boolean) => {
+    if (!data.signedIn) return;
+    favoriteFetcher.submit({ favorite: { favoriteKey, favorited } }, { method: "post", encType: "application/json" });
+  };
+  const facts = <RecruitmentFacts data={data} now={now} timeZone={timeZone} />;
+  const hasRecruitments = recruitmentGroups.length > 0 || limitedRecruitments.length > 0;
+
   return (
-    <PageMain>
-      <div className="space-y-v2-section-gap">
-        <div className="space-y-v2-group-gap">
-          <EventHero
+    <>
+      <PageMain>
+        <div className="flex flex-col gap-10">
+          <EventOverviewHero
             imageUrl={eventContent.imageUrl}
             imageBlurhash={eventContent.imageBlurhash}
             name={eventContent.name}
-            type={eventContent.type}
-            runType={eventContent.runType}
-            since={eventContent.since}
-            until={eventContent.until}
-            endless={eventContent.endless}
+            typeLabel={timelineContentTypeLocale[eventContent.type]}
+            period={layout.period}
             videos={eventContent.videos}
           />
 
-          {premiumNotice ? (
-            <StatusNotice tone="warning" Icon={ClockIcon}>
-              {premiumNotice}
-            </StatusNotice>
-          ) : recruitmentNoticeKind === "differs" && eventContent.recruitmentPeriod ? (
-            <StatusNotice tone="warning" Icon={ClockIcon}>
-              모집 기간이 달라요 ·{" "}
-              {formatInstant(eventContent.recruitmentPeriod.startAt, { timeZone, format: "MM/DD" })} ~{" "}
-              {eventContent.recruitmentPeriod.endAt
-                ? formatInstant(eventContent.recruitmentPeriod.endAt, { timeZone, format: "MM/DD" })
-                : "—"}
-            </StatusNotice>
-          ) : recruitmentNoticeKind === "ended" ? (
-            <StatusNotice tone="neutral" Icon={ClockIcon}>
-              모집 종료
-            </StatusNotice>
+          {/* The aside is hidden on stacked layouts, so its selector and menu follow the artwork instead. CSS decides, as it
+            does for the aside, so the server render and the first frame put them in the same place. */}
+          <div className="v2-stacked-only flex flex-col gap-v2-list-gap">
+            {layout.events.length > 1 ? (
+              <EventShopPicker
+                events={layout.events}
+                currentEventUid={data.eventUid}
+                variant="row"
+                destination="overview"
+              />
+            ) : null}
+            <OverviewMenu layout={layout} />
+          </div>
+
+          {data.recruitmentUnavailable ? (
+            <section data-region="recruit-students" aria-labelledby="recruit-title" className="flex flex-col gap-3">
+              <SectionTitle id="recruit-title">모집 학생</SectionTitle>
+              <StatusNotice
+                tone="danger"
+                boxed
+                action={
+                  <Button size="sm" onClick={() => revalidator.revalidate()}>
+                    <ArrowPathIcon className="size-4" aria-hidden="true" />
+                    다시 시도
+                  </Button>
+                }
+              >
+                모집 정보를 불러오지 못했어요
+              </StatusNotice>
+            </section>
+          ) : !hasRecruitments ? (
+            <section data-region="recruit-empty" aria-labelledby="recruit-title" className="flex flex-col gap-3">
+              <SectionTitle id="recruit-title">모집 학생</SectionTitle>
+              <p className="text-sm text-v2-fg-tertiary">이 이벤트에는 모집 학생이 없어요</p>
+            </section>
           ) : null}
 
-          {data.siblingEvents.map((sibling) => (
-            <Link
-              key={sibling.uid}
-              to={`/events/${sibling.uid}`}
-              title="모집 포인트(천장)를 공유해요"
-              className="flex min-h-v2-row-min items-center gap-2 rounded-lg bg-v2-surface px-v2-row-x py-v2-row-y text-sm text-v2-fg hover:bg-v2-hover"
-            >
-              <SparklesIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-              <span className="min-w-0 flex-1 truncate">모집 동시 개최 · {sibling.name}</span>
-              <ChevronRightIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-            </Link>
-          ))}
-        </div>
-
-        {recruitmentGroups.length > 0 ? (
-          <section className="space-y-v2-group-gap">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-v2-fg">모집 학생</h2>
-              {freeRecruitmentNotice}
-            </div>
-            {eventContent.recruitments.some(({ recruitmentType }) => recruitmentType === "fes") ? (
-              <StatusNotice tone="neutral" Icon={SparklesIcon}>
-                모집 확률 상승 · ★3 학생 모집 확률이 6%로 상승해요. 단, 픽업 확률은 유지돼요.
-              </StatusNotice>
-            ) : null}
-            {eventContent.recruitments.some(({ recruitmentType }) => recruitmentType === "archive") ? (
-              <>
-                <StatusNotice tone="neutral" Icon={SparklesIcon}>
-                  아카이브 모집 · 아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 모집에서
-                  등장하지 않아요.
-                </StatusNotice>
-                <StatusNotice tone="neutral" Icon={ClockIcon}>
-                  모집 포인트 유지 · 모집 포인트(천장)은 만료되지 않고 무기한 유지돼요.
-                </StatusNotice>
-              </>
-            ) : null}
-            {eventContent.recruitments.some(({ recruitmentType }) => recruitmentType === "recollect") ? (
-              <StatusNotice tone="neutral" Icon={SparklesIcon}>
-                리콜렉트 모집 · 아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 페스 모집에서
-                등장하지 않아요.
-              </StatusNotice>
-            ) : null}
-            {eventContent.recruitments.some(({ recruitmentType }) => recruitmentType === "encore") ? (
-              <StatusNotice tone="neutral" Icon={SparklesIcon}>
-                앙코르 모집 · 아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 한정 픽업을
-                진행하지 않아요.
-              </StatusNotice>
-            ) : null}
-            {recruitmentGroups.map((group) => (
-              <div key={`${group.since}-${group.until}`} className="space-y-v2-block-gap">
-                {showRecruitmentDateLabels ? (
-                  <h3 className="text-sm font-semibold text-v2-fg-secondary">
-                    {formatInstant(group.since, { timeZone, format: "M월 D일" })}
-                    {group.until ? ` ~ ${formatInstant(group.until, { timeZone, format: "M월 D일" })}` : ""}
-                  </h3>
-                ) : null}
-                <RecruitmentCardList
-                  recruitments={group.recruitments}
-                  signedIn={data.signedIn}
-                  onToggleFavorite={(favoriteKey, favorited) => {
-                    if (!data.signedIn) return;
-                    favoriteFetcher.submit(
-                      { favorite: { favoriteKey, favorited } },
-                      { method: "post", encType: "application/json" },
-                    );
-                  }}
-                />
+          {recruitmentGroups.length > 0 ? (
+            <section data-region="recruit-students" aria-labelledby="pickup-title" className="flex flex-col gap-3">
+              <SectionTitle id="pickup-title">픽업 학생</SectionTitle>
+              {facts}
+              <div className="flex flex-col gap-3">
+                {recruitmentGroups.map((group, index) => (
+                  <div key={`${group.since}-${group.until}`} className="flex flex-col gap-2">
+                    {showRecruitmentDateLabels ? (
+                      <h3 className="text-sm font-normal text-v2-fg-tertiary tabular-nums">
+                        {index + 1}차 픽업 · {formatInstant(group.since, { timeZone, format: "MM/DD" })}
+                        {group.until ? ` ~ ${formatInstant(group.until, { timeZone, format: "MM/DD" })}` : ""}
+                      </h3>
+                    ) : null}
+                    <RecruitmentCardList
+                      recruitments={group.recruitments}
+                      signedIn={data.signedIn}
+                      onToggleFavorite={toggleFavorite}
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </section>
-        ) : null}
-
-        {limitedRecruitments.length > 0 ? (
-          <section className="space-y-v2-group-gap">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-lg font-semibold text-v2-fg">픽업 외 모집 가능</h2>
-              <span className="inline-flex flex-wrap items-center gap-1.5">
-                {recruitmentGroups.length === 0 ? freeRecruitmentNotice : null}
-                <HintChip {...PICKUP_UNAVAILABLE_NOTICE} />
-              </span>
-            </div>
-            <StatusNotice tone="neutral" Icon={ClockIcon}>
-              모집 포인트(천장) 교환 불가 · 아래 학생들은 모집 포인트(천장)로는 교환할 수 없어요
-            </StatusNotice>
-            <RecruitmentCardList
-              recruitments={limitedRecruitments}
-              signedIn={data.signedIn}
-              onToggleFavorite={(favoriteKey, favorited) => {
-                if (!data.signedIn) return;
-                favoriteFetcher.submit(
-                  { favorite: { favoriteKey, favorited } },
-                  { method: "post", encType: "application/json" },
-                );
-              }}
-            />
-          </section>
-        ) : null}
-
-        <div className="space-y-v2-group-gap">
-          <section aria-label="이벤트 도구">
-            <AsideLinks
-              items={[
-                {
-                  key: "shop",
-                  title: "상점 계산기",
-                  Icon: ShoppingCartIcon,
-                  linkState: futureLinkState,
-                  to:
-                    data.shopPortal.status === "ready" || data.shopPortal.status === "ended"
-                      ? `/events/${data.eventUid}/shop`
-                      : undefined,
-                  disabledReason:
-                    data.shopPortal.status === "unavailable"
-                      ? "정보를 불러오지 못했어요"
-                      : data.shopPortal.status === "no-data"
-                        ? "상점이 없거나 정보를 준비 중이에요"
-                        : undefined,
-                  badge: data.shopPortal.status === "ended" ? "종료" : undefined,
-                },
-                {
-                  key: "recruitment-simulator",
-                  title: "모집 시뮬레이션",
-                  Icon: SparklesIcon,
-                  linkState: futureLinkState,
-                  to:
-                    data.eventContent.recruitmentGroupUid && !data.recruitmentUnavailable
-                      ? `/events/${data.eventUid}/recruitment-simulator`
-                      : undefined,
-                  disabledReason: data.recruitmentUnavailable
-                    ? "정보를 불러오지 못했어요"
-                    : data.eventContent.recruitmentGroupUid
-                      ? undefined
-                      : "모집 정보가 없어요",
-                },
-                ...(data.minigameType === "card_flip"
-                  ? [
-                      {
-                        key: "card-flip",
-                        title: cardFlipLocale.menuTitle,
-                        Icon: RectangleStackIcon,
-                        linkState: futureLinkState,
-                        to:
-                          data.shopPortal.status === "ready" || data.shopPortal.status === "ended"
-                            ? `/events/${data.eventUid}/shop/card-flip`
-                            : undefined,
-                        disabledReason:
-                          data.shopPortal.status === "unavailable"
-                            ? "정보를 불러오지 못했어요"
-                            : data.shopPortal.status === "no-data"
-                              ? "상점이 없거나 정보를 준비 중이에요"
-                              : undefined,
-                        badge: data.shopPortal.status === "ended" ? "종료" : undefined,
-                      },
-                    ]
-                  : []),
-                ...(data.minigameType === "treasure_hunt"
-                  ? [
-                      {
-                        key: "treasure-hunt",
-                        title: treasureHuntLocale.simulatorTitle,
-                        Icon: Squares2X2Icon,
-                        linkState: futureLinkState,
-                        to: `/events/${data.eventUid}/treasure-hunt`,
-                      },
-                    ]
-                  : []),
-                ...(data.minigameType === "road_puzzle"
-                  ? [
-                      {
-                        key: "road-puzzle",
-                        title: roadPuzzleLocale.menuTitle,
-                        Icon: MapIcon,
-                        linkState: futureLinkState,
-                        to: `/events/${data.eventUid}/road-puzzle`,
-                      },
-                    ]
-                  : []),
-              ]}
-            />
-          </section>
-
-          {data.shopPortal.status === "unavailable" || data.recruitmentUnavailable || data.minigameUnavailable ? (
-            <StatusNotice
-              tone="danger"
-              action={
-                <Button size="sm" onClick={() => revalidator.revalidate()}>
-                  다시 시도
-                </Button>
-              }
-            >
-              정보를 불러오지 못했어요.
-            </StatusNotice>
+            </section>
           ) : null}
-        </div>
 
-        <EventOpinions
-          eventUid={data.eventUid}
-          eventName={eventContent.name}
-          isLive={false}
-          initialComments={data.allComments}
-          initialUnavailable={data.commentsUnavailable}
-          signedIn={data.signedIn}
-          initialHideRecruitmentOpinions={data.hideRecruitmentOpinions}
-          canFilterRecruitmentOpinions={data.canFilterRecruitmentOpinions}
-          now={now}
-        />
-      </div>
-    </PageMain>
+          {limitedRecruitments.length > 0 ? (
+            <section data-region="nonpickup-students" aria-labelledby="nonpickup-title" className="flex flex-col gap-3">
+              <div className="flex min-h-8 flex-wrap items-center justify-between gap-3">
+                <SectionTitle id="nonpickup-title">픽업 외 모집 가능</SectionTitle>
+                <HintChip {...PICKUP_UNAVAILABLE_NOTICE} />
+              </div>
+              {recruitmentGroups.length === 0 ? facts : null}
+              <StatusNotice tone="neutral" boxed Icon={ClockIcon}>
+                <span className="font-semibold text-v2-fg">모집 포인트(천장) 교환 불가</span> · 아래 학생들은 모집
+                포인트(천장)로는 교환할 수 없어요
+              </StatusNotice>
+              <RecruitmentCardList
+                recruitments={limitedRecruitments}
+                signedIn={data.signedIn}
+                onToggleFavorite={toggleFavorite}
+              />
+            </section>
+          ) : null}
+
+          <EventOpinions
+            eventUid={data.eventUid}
+            eventName={eventContent.name}
+            isLive={false}
+            initialComments={data.allComments}
+            initialUnavailable={data.commentsUnavailable}
+            signedIn={data.signedIn}
+            initialHideRecruitmentOpinions={data.hideRecruitmentOpinions}
+            canFilterRecruitmentOpinions={data.canFilterRecruitmentOpinions}
+            now={now}
+            layout="inline"
+          />
+        </div>
+      </PageMain>
+      <PageAside>
+        {layout.events.length > 1 ? (
+          <PanelSheet panelId="events" title="이벤트 선택" Icon={ListBulletIcon}>
+            <EventShopPicker events={layout.events} currentEventUid={data.eventUid} destination="overview" />
+          </PanelSheet>
+        ) : null}
+        <OverviewMenu layout={layout} />
+      </PageAside>
+    </>
+  );
+}
+
+// The other screens of the event, in place of the tabs the overview leaves out.
+function OverviewMenu({ layout }: { layout: EventLayoutContext }) {
+  return (
+    <nav aria-label="이벤트 메뉴">
+      <AsideLinks
+        items={layout.screens
+          .filter(({ key }) => key !== "overview")
+          .map((screen) => ({
+            key: screen.key,
+            title: screen.text,
+            description: screen.description,
+            Icon: screen.Icon,
+            to: screen.disabled ? undefined : screen.link,
+            linkState: screen.linkState,
+            disabledReason: screen.disabled ? screen.disabledReason : undefined,
+          }))}
+      />
+    </nav>
+  );
+}
+
+function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
+  return (
+    <h2 id={id} className="flex min-h-8 items-center text-lg font-semibold tracking-[-0.2px] text-v2-fg">
+      {children}
+    </h2>
+  );
+}
+
+const RECRUITMENT_METHODS = [
+  {
+    type: "archive",
+    label: "아카이브",
+    description:
+      "아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 모집에서 등장하지 않아요. 모집 포인트(천장)는 만료되지 않고 무기한 유지돼요.",
+  },
+  {
+    type: "recollect",
+    label: "리콜렉트",
+    description:
+      "아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 페스 모집에서 등장하지 않아요.",
+  },
+  {
+    type: "encore",
+    label: "앙코르",
+    description: "아래 학생 중 한 명을 지정하여 픽업 모집할 수 있어요. 대상 학생들은 이후 한정 픽업을 진행하지 않아요.",
+  },
+] as const;
+
+const PREMIUM_DASH_DAYS = 28;
+
+// The recruitment conditions of the event. Each row shows only when it applies to the event.
+function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now: UtcIsoString; timeZone: string }) {
+  const { eventContent } = data;
+  const period = eventContent.recruitmentPeriod;
+  const premiumDash = period?.recruitmentType === "premium_dash";
+  const noticeContent = {
+    recruitmentGroupUid: eventContent.recruitmentGroupUid,
+    contentType: eventContent.type,
+    startAt: eventContent.since,
+    endAt: eventContent.until,
+    endless: eventContent.endless,
+  };
+  const periodKind = getRecruitmentPeriodNoticeKind(noticeContent, period, now);
+  const recruitmentTypes = new Set<string>(eventContent.recruitments.map(({ recruitmentType }) => recruitmentType));
+  const methods = RECRUITMENT_METHODS.filter(({ type }) => recruitmentTypes.has(type));
+  const fes = recruitmentTypes.has("fes");
+  const formatDate = (instant: string) => formatInstant(instant, { timeZone, format: "MM/DD" });
+
+  // "Ended" reads as part of the date ("10/27 ~ 11/03 · 끝났어요"); other notes sit beside it.
+  const periodEnded = !!period && periodKind === "ended";
+  let periodNote: ReactNode = null;
+  if (period && periodKind === "differs" && period.endAt && eventContent.until) {
+    const days = calendarDayDifference(period.endAt, eventContent.until, timeZone);
+    periodNote = (
+      <span className="text-xs text-v2-warning">
+        {days > 0
+          ? `이벤트보다 ${days}일 먼저 끝나요`
+          : days < 0
+            ? `이벤트보다 ${-days}일 늦게 끝나요`
+            : `이벤트와 시작일이 달라요`}
+      </span>
+    );
+  }
+
+  const rows: { key: string; term: string; detail: ReactNode }[] = [];
+  if (period && !premiumDash) {
+    rows.push({
+      key: "period",
+      term: "모집 기간",
+      detail: (
+        <>
+          <span>
+            <span className="tabular-nums">
+              {formatDate(period.startAt)} ~ {period.endAt ? formatDate(period.endAt) : "—"}
+            </span>
+            {periodEnded ? <span className="text-v2-fg-tertiary"> · 끝났어요</span> : null}
+          </span>
+          {periodNote}
+        </>
+      ),
+    });
+  }
+  if (fes || methods.length > 0) {
+    rows.push({
+      key: "method",
+      term: "모집 방식",
+      detail: (
+        <>
+          {fes ? (
+            <span className="inline-flex items-center gap-1.5">
+              <FactPill tone="accent">페스</FactPill>
+              <span className="text-[0.8125rem]">★3 확률 6%</span>
+              <HintChip
+                variant="info"
+                label="페스 모집"
+                description="★3 학생 모집 확률이 6%로 상승해요. 단, 픽업 확률은 유지돼요."
+              />
+            </span>
+          ) : null}
+          {methods.map((method) => (
+            <span key={method.type} className="inline-flex items-center gap-0.5">
+              <FactPill tone="neutral">{method.label}</FactPill>
+              <HintChip variant="info" label={`${method.label} 모집`} description={method.description} />
+            </span>
+          ))}
+        </>
+      ),
+    });
+  }
+  if (data.freeRecruitmentPulls > 0) {
+    rows.push({
+      key: "free",
+      term: "무료 모집",
+      detail: (
+        <>
+          <FactPill tone="perk">{data.freeRecruitmentPulls}회 무료</FactPill>
+          <span className="inline-flex items-center gap-1 text-xs font-semibold text-v2-warning">
+            <ExclamationTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
+            남은 횟수는 다음 모집으로 넘어가지 않아요
+          </span>
+        </>
+      ),
+    });
+  }
+  if (data.siblingEvents.length > 0) {
+    const lastSibling = data.siblingEvents[data.siblingEvents.length - 1];
+    rows.push({
+      key: "shared-points",
+      term: "천장 공유",
+      detail: (
+        <span className="text-[0.8125rem]">
+          모집 포인트를{" "}
+          {data.siblingEvents.map((sibling, index) => (
+            <span key={sibling.uid}>
+              {index > 0 ? ", " : null}
+              <Link to={`/events/${sibling.uid}`} className="text-v2-accent hover:underline">
+                {sibling.name.replaceAll("\n", " ")}
+              </Link>
+            </span>
+          ))}
+          {conjunctionParticle(lastSibling.name)} 같이 써요
+        </span>
+      ),
+    });
+  }
+  if (period && premiumDash) {
+    rows.push({
+      key: "premium-dash",
+      term: "프리미엄 대시",
+      detail: (
+        <span className="flex flex-col">
+          <span className="tabular-nums">
+            ~ {formatInstant(addDays(eventContent.since, PREMIUM_DASH_DAYS), { timeZone, format: "MM/DD" })}
+          </span>
+          <span className="mt-1 text-xs text-v2-fg-tertiary">
+            이벤트 시작일과 블루 아카이브 최초 가입일 중 늦은 날부터 {PREMIUM_DASH_DAYS}일
+          </span>
+        </span>
+      ),
+    });
+  }
+  if (rows.length === 0) return null;
+
+  return (
+    <dl
+      data-region="recruit-facts"
+      className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 text-sm"
+    >
+      {rows.map((row) => (
+        <Fragment key={row.key}>
+          <dt className="text-v2-fg-tertiary">{row.term}</dt>
+          <dd className="flex flex-wrap items-center gap-x-2 gap-y-0.5">{row.detail}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+function FactPill({ tone, children }: { tone: "accent" | "neutral" | "perk"; children: ReactNode }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex h-5.5 shrink-0 items-center rounded-full px-2 text-xs font-semibold whitespace-nowrap",
+        tone === "accent" && "bg-v2-accent-subtle text-v2-accent",
+        tone === "neutral" && "bg-v2-inset text-v2-fg-secondary",
+        tone === "perk" && "bg-v2-perk/15 text-v2-perk",
+      )}
+    >
+      {children}
+    </span>
   );
 }
 
@@ -550,7 +622,7 @@ function RecruitmentCardList({
   onToggleFavorite: (favoriteKey: string, favorited: boolean) => void;
 }) {
   return (
-    <RecruitmentStudentCardRail className="-mx-4 md:mx-0" listClassName="px-4 md:px-0">
+    <ul className="flex flex-wrap gap-2">
       {recruitments.map((recruitment) => (
         <li key={recruitment.favoriteKey} className="list-none">
           <RecruitmentStudentCard
@@ -568,6 +640,6 @@ function RecruitmentCardList({
           />
         </li>
       ))}
-    </RecruitmentStudentCardRail>
+    </ul>
   );
 }
