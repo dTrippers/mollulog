@@ -9,7 +9,7 @@ function createStage(overrides: Partial<Stage>): Stage {
     uid: "stage",
     entryAp: 10,
     index: "1-1",
-    difficulty: 0,
+    difficulty: 1,
     rewards: [],
     ...overrides,
   };

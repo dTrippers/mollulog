@@ -7,11 +7,13 @@ import { janken860Fixture } from "../../../../../domain/fixtures/janken-860";
 
 describe("calculateShopApRequirement", () => {
   it("shares the same totalApWithExtras calculation used by the shop screen", () => {
-    const stages: Stage[] = [{ uid: "story", index: "1", entryAp: 12, difficulty: 0, rewards: [] }];
+    const stages: Stage[] = [
+      { uid: "story", index: "1", entryAp: 12, difficulty: 0, rewards: [] },
+      { uid: "quest", index: "9", entryAp: 12, difficulty: 1, rewards: [] },
+    ];
     const state = createDefaultEventShopState(stages, []);
-    state.enabledStages.story = true;
     state.includeFirstClear = true;
-    state.extraStageRuns.story = 3;
+    state.extraStageRuns.quest = 3;
 
     const result = calculateShopApRequirement({
       state,
@@ -101,5 +103,34 @@ describe("calculateShopApRequirement", () => {
 
     expect(result.totalApWithExtras).toBe(12);
     expect(result.stageRuns).toEqual({ "entry-farm": 2 });
+  });
+
+  it("sweeps only normal stages, even when a saved plan enables story or challenge stages", () => {
+    const sand = { uid: "sand", name: "Sand", category: "coin", rarity: 1 };
+    const story: Stage = {
+      uid: "story-9",
+      index: "9",
+      entryAp: 10,
+      difficulty: 0,
+      rewards: [{ amount: 5, rewardRequirement: null, chance: null, item: sand }],
+    };
+    const challenge: Stage = { uid: "challenge-ex", index: "Ex", entryAp: 5, difficulty: 2, rewards: [] };
+    const state = createDefaultEventShopState([story, challenge], []);
+    state.enabledStages = { "story-9": true, "challenge-ex": true };
+    state.extraStageRuns = { "story-9": 4 };
+    state.overriddenRequiredQuantities = { sand: 100 };
+
+    const result = calculateShopApRequirement({
+      state,
+      stages: [story, challenge],
+      shopResources: [],
+      minigameConfig: null,
+      appliedBonusRatio: {},
+    });
+
+    expect(result.stageRuns).toEqual({});
+    expect(result.questSweepAp).toBe(0);
+    expect(result.extraSweepAp).toBe(0);
+    expect(result.unobtainableTargets).toEqual({ sand: 100 });
   });
 });

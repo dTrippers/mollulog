@@ -11,8 +11,8 @@ describe("event shop state", () => {
   it("creates the detailed planner defaults and patches only current owned quantities", () => {
     const defaults = createDefaultEventShopState(
       [
-        { uid: "stage-8", entryAp: 10, index: "8", difficulty: 0, rewards: [] },
-        { uid: "stage-9", entryAp: 10, index: "9", difficulty: 0, rewards: [] },
+        { uid: "stage-8", entryAp: 10, index: "8", difficulty: 1, rewards: [] },
+        { uid: "stage-9", entryAp: 10, index: "9", difficulty: 1, rewards: [] },
       ],
       ["student-1"],
     );
@@ -26,6 +26,27 @@ describe("event shop state", () => {
     expect(patched.itemQuantities).toEqual(defaults.itemQuantities);
     expect(patched.enabledStages).toEqual(defaults.enabledStages);
     expect(patched.selectedBonusStudentUids).toEqual(defaults.selectedBonusStudentUids);
+  });
+
+  it("enables only the later normal stages by default, leaving story and challenge stages off", () => {
+    const defaults = createDefaultEventShopState(
+      [
+        { uid: "normal-8", entryAp: 15, index: "8", difficulty: 1, rewards: [] },
+        { uid: "normal-9", entryAp: 20, index: "9", difficulty: 1, rewards: [] },
+        { uid: "story-9", entryAp: 10, index: "9", difficulty: 0, rewards: [] },
+        { uid: "story-10", entryAp: 10, index: "10", difficulty: 0, rewards: [] },
+        { uid: "challenge-ex", entryAp: 5, index: "Ex", difficulty: 2, rewards: [] },
+      ],
+      [],
+    );
+
+    expect(defaults.enabledStages).toEqual({
+      "normal-8": false,
+      "normal-9": true,
+      "story-9": false,
+      "story-10": false,
+      "challenge-ex": false,
+    });
   });
 
   it("treats omitted and zero quantities as equivalent only where calculations do", () => {

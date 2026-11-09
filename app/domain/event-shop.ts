@@ -3,6 +3,12 @@ import type { FurnitureInteractionStudent } from "./furniture-catalog";
 
 export const FIRST_CLEAR_REWARD_REQUIREMENT = "FirstClear";
 
+// Event stage difficulties: 0 is a story stage that pays once, 1 a normal quest, 2 a challenge that pays no currency.
+// Only normal quests can be swept, so the shop plans its repeated runs on them alone.
+export function isSweepableStage(stage: Pick<Stage, "difficulty">): boolean {
+  return stage.difficulty === 1;
+}
+
 export const MINIGAME_PAYMENT_QUANTITY_MODES = ["expected", "min", "max"] as const;
 
 export type MinigamePaymentQuantityMode = (typeof MINIGAME_PAYMENT_QUANTITY_MODES)[number];

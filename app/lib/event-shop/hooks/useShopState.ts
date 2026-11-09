@@ -8,6 +8,7 @@ import {
   type Stage,
 } from "~/domain/event-shop";
 import type { EventShopState } from "~/models/event-shop-state";
+import { createDefaultEnabledStages } from "~/domain/event-shop-state";
 import { isDailyResetShopResource } from "~/domain/event-shop/calculations/shop-costs";
 
 export type ShopState = {
@@ -59,14 +60,6 @@ type UseShopStateParams = {
   stages: Stage[];
   signedIn: boolean;
 };
-
-function getDefaultEnabledStages(stages: Stage[]) {
-  const initialEnabledStages: Record<string, boolean> = {};
-  for (const stage of stages) {
-    initialEnabledStages[stage.uid] = Number.parseInt(stage.index, 10) >= 9;
-  }
-  return initialEnabledStages;
-}
 
 export function getInitialItemPurchaseDays(
   savedShopState: EventShopState | null,
@@ -158,7 +151,7 @@ export function getPostSignInState({
     bonusStudentSelectionMode: savedShopState?.bonusStudentSelectionMode ?? "shared",
     selectedBonusStudentUidsByItem: savedShopState?.selectedBonusStudentUidsByItem ?? {},
     includeRecruitedStudents: savedShopState?.includeRecruitedStudents ?? true,
-    enabledStages: savedShopState?.enabledStages ?? getDefaultEnabledStages(stages),
+    enabledStages: savedShopState?.enabledStages ?? createDefaultEnabledStages(stages),
     existingPaymentItemQuantities: savedShopState?.existingPaymentItemQuantities ?? {},
     includeFirstClear: savedShopState?.includeFirstClear ?? false,
     extraStageRuns: savedShopState?.extraStageRuns ?? {},
@@ -198,7 +191,7 @@ export function useShopState({
   );
 
   const [enabledStages, setEnabledStages] = useState<Record<string, boolean>>(
-    savedShopState?.enabledStages ?? getDefaultEnabledStages(stages),
+    savedShopState?.enabledStages ?? createDefaultEnabledStages(stages),
   );
 
   const [existingPaymentItemQuantities, setExistingPaymentItemQuantities] = useState<Record<string, number>>(

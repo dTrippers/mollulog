@@ -1,5 +1,5 @@
 import Decimal from "decimal.js";
-import { FIRST_CLEAR_REWARD_REQUIREMENT } from "~/domain/event-shop";
+import { FIRST_CLEAR_REWARD_REQUIREMENT, isSweepableStage } from "~/domain/event-shop";
 import type { ItemBreakdownInput, ItemBreakdownResult } from "./types";
 
 /**
@@ -36,7 +36,8 @@ export function calculateItemBreakdowns({
   // Calculate items from repeated stage runs (calculated + extra runs)
   let calculatedTotalAp = 0;
   for (const stage of stages) {
-    if (!enabledStages[stage.uid]) {
+    // A saved plan can still enable a story or challenge stage from older defaults; neither is swept.
+    if (!enabledStages[stage.uid] || !isSweepableStage(stage)) {
       continue;
     }
 

@@ -1,6 +1,6 @@
 import Decimal from "decimal.js";
 import solver from "javascript-lp-solver";
-import type { Stage } from "~/domain/event-shop";
+import { isSweepableStage, type Stage } from "~/domain/event-shop";
 import type { OptimizationResult, StageInfo } from "./types";
 
 export const OPTIMIZATION_TOLERANCE = 0.001;
@@ -19,7 +19,7 @@ export function calculateStageInfos(
   appliedBonusRatio: Record<string, Decimal>,
 ): StageInfo[] {
   return stages
-    .filter((stage) => enabledStages[stage.uid])
+    .filter((stage) => enabledStages[stage.uid] && isSweepableStage(stage))
     .map((stage) => {
       const rewardPerItem: Record<string, Decimal> = {};
       for (const { item, rewardRequirement, amount } of stage.rewards) {
