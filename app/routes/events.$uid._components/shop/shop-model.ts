@@ -89,6 +89,8 @@ export function resultSlotState(plan: EventShopPlanContext): ResultSlotState {
   if (!hasShopSelection(plan) && plan.stageCalculations.totalApWithExtras <= 0 && !plan.isCalculating) {
     return { kind: "empty" };
   }
+  // Before the first calculation lands, the empty result would read as 0 AP and every currency as enough.
+  if (!plan.hasCalculationResult) return { kind: "waiting", text: "계산 중" };
   return { kind: "ready" };
 }
 

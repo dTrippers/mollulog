@@ -130,6 +130,8 @@ describe("useShopCalculations input tracking", () => {
 
     expect(result.current.isCalculating).toBe(true);
     expect(result.current.isReady).toBe(false);
+    // The empty result before the first calculation is not a result.
+    expect(result.current.hasResult).toBe(false);
 
     await act(async () => {
       await jest.advanceTimersByTimeAsync(300);
@@ -137,6 +139,7 @@ describe("useShopCalculations input tracking", () => {
 
     expect(result.current.isCalculating).toBe(false);
     expect(result.current.isReady).toBe(true);
+    expect(result.current.hasResult).toBe(true);
     expect(calculateShopApRequirement).toHaveBeenCalledTimes(1);
   });
 

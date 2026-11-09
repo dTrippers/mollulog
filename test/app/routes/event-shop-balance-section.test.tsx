@@ -72,6 +72,36 @@ describe("shop v2 currency balance", () => {
     expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수").value).toBe("500");
   });
 
+  it("waits for the first calculation instead of reading its empty result as enough", () => {
+    render(
+      createElement(ShopBalanceSection, { plan: planWith({ isCalculating: true, hasCalculationResult: false }) }),
+    );
+
+    expect(screen.getByText("계산 중")).toBeTruthy();
+    expect(screen.queryByText("충분")).toBeNull();
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
+
+  it("keeps the previous result, dimmed, while a later calculation runs", () => {
+    const base = planWith();
+    const { container } = render(
+      createElement(ShopBalanceSection, {
+        plan: {
+          ...base,
+          isCalculating: true,
+          stageCalculations: {
+            ...base.stageCalculations,
+            itemBreakdown: { ...base.stageCalculations.itemBreakdown, remaining: { "event-currency": -300 } },
+          },
+        },
+      }),
+    );
+
+    expect(screen.getByText(/300 부족/)).toBeTruthy();
+    expect(screen.queryByText("계산 중")).toBeNull();
+    expect(container.querySelectorAll(".opacity-50")).toHaveLength(2);
+  });
+
   it("marks a pending treasure hunt calculation as calculating, not as zero", () => {
     render(createElement(ShopBalanceSection, { plan: planWith({ resultTreasureHuntStatus: "pending" }) }));
 

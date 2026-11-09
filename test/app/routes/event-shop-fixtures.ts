@@ -156,6 +156,7 @@ export function createEventShopPlan(overrides: Partial<EventShopPlanContext> = {
     stageCalculations: emptyCalculation,
     isCalculating: false,
     calculationFailed: false,
+    hasCalculationResult: true,
     retryCalculation: () => {},
     ...overrides,
   };

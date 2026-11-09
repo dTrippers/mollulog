@@ -404,6 +404,7 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     stageCalculations,
     isCalculating: stageCalculations.isCalculating,
     calculationFailed: stageCalculations.calculationFailed,
+    hasCalculationResult: stageCalculations.hasResult,
     retryCalculation: stageCalculations.retryCalculation,
     isSaving,
     saveError,

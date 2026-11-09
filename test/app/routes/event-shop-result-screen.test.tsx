@@ -64,6 +64,21 @@ describe("shop v2 result area", () => {
     expect(markup).not.toContain("살 아이템을 고르면 계산해요");
   });
 
+  it("waits for the first calculation instead of showing 0 AP", () => {
+    const emptyPlan = createEventShopPlan();
+    const markup = render(
+      createEventShopPlan({
+        isCalculating: true,
+        hasCalculationResult: false,
+        state: { ...emptyPlan.state, itemQuantities: { "shop-item": 1 } },
+      }),
+    );
+
+    expect(markup).toContain('aria-busy="true"');
+    expect(markup).toContain("계산 중");
+    expect(markup).not.toMatch(/>0<\/p>/);
+  });
+
   it("tells the player to lower a treasure hunt round over the limit instead of waiting forever", () => {
     const emptyPlan = createEventShopPlan();
     const markup = render(

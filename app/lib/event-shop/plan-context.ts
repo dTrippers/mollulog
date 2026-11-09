@@ -87,6 +87,9 @@ export type EventShopPlanContext = {
   isCalculating: boolean;
   // The AP calculation threw. The result panel shows the failure with a retry instead of waiting forever.
   calculationFailed: boolean;
+  // False before the first calculation lands, when the stage calculation still holds its empty result. A later
+  // recalculation keeps the previous result, which stays readable (dimmed) while it runs.
+  hasCalculationResult: boolean;
   retryCalculation: () => void;
   isSaving?: boolean;
   saveError?: string | null;

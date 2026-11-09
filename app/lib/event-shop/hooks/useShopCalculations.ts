@@ -318,6 +318,8 @@ export function useShopCalculations({
       isReady,
       isUserCalculating: calculationFailed ? false : isUserCalculating,
       calculationFailed: !holdCalculations && calculationFailed,
+      // False until the first calculation for these inputs lands. The empty result before it is not a result.
+      hasResult: !holdCalculations && result !== EMPTY_RESULT,
       retryCalculation: () => setRetryCount((count) => count + 1),
     }),
     [holdCalculations, result, isCalculating, isReady, isUserCalculating, calculationFailed],
