@@ -1,66 +1,94 @@
-import { ArrowPathIcon, ExclamationCircleIcon, ListBulletIcon } from "@heroicons/react/16/solid";
-import { PageActionBar, useV2Page } from "~/components/v2/layout";
-import { Button } from "~/components/v2/primitives/Button";
-import { IconButton } from "~/components/v2/primitives/IconButton";
+import { ChevronUpIcon, ClockIcon, ExclamationCircleIcon, ListBulletIcon } from "@heroicons/react/16/solid";
+import { MobileActionBar, useV2Page } from "~/components/v2/layout";
+import { v2FocusRing } from "~/components/v2/layout/styles";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
+import { cn } from "~/lib/utils";
+import { resourceShortfalls, resultSlotState, stageRunRows } from "./shop/shop-model";
+import { formatCount, Pill } from "./shop/shop-ui";
 
+// Stacked layouts float the result summary above the bottom navigation. Tapping it opens the result sheet; the event
+// selector beside it opens the "events" sheet when another event's shop is available.
 export function ShopMobileResultBar({
   plan,
-  ap,
-  onEventPicker,
+  eventPicker = false,
 }: {
   plan: EventShopPlanContext;
-  ap: number;
-  onEventPicker?: () => void;
+  eventPicker?: boolean;
 }) {
-  const { stacked, openSheet } = useV2Page();
+  const { stacked, openSheet, sheetPanelId } = useV2Page();
   if (!stacked) return null;
+  const slot = resultSlotState(plan);
+  const recalculating = slot.kind === "ready" && plan.isCalculating;
+  const ap = plan.stageCalculations.totalApWithExtras;
+  const shortfalls = resourceShortfalls(plan);
+  const short = plan.collectableResources.filter(({ uid }) => shortfalls[uid]);
+  const stageCount = stageRunRows(plan).length;
 
   return (
-    <PageActionBar
-      placement="fixed"
-      summary={<MobileApSummary plan={plan} ap={ap} />}
-      className="v2-action-bar flex-nowrap gap-2 px-4 py-2 [&>div:first-child]:shrink-0"
-    >
-      {onEventPicker ? <IconButton icon={ListBulletIcon} label="이벤트 선택" onClick={onEventPicker} /> : null}
-      <Button variant="primary" onClick={() => openSheet("result")}>
-        결과
-      </Button>
-    </PageActionBar>
-  );
-}
-
-function MobileApSummary({ plan, ap }: { plan: EventShopPlanContext; ap: number }) {
-  const danger =
-    !!plan.saveError ||
-    plan.resultTreasureHuntStatus === "failed" ||
-    plan.roadPuzzlePlannerStatus === "failed" ||
-    plan.roadPuzzlePlannerStatus === "missing";
-  const busy =
-    plan.isSaving ||
-    plan.isCalculating ||
-    plan.roadPuzzlePlannerStatus === "pending" ||
-    plan.resultTreasureHuntStatus === "pending" ||
-    plan.resultTreasureHuntStatus === "provisional";
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <span className="min-w-0">
-        <span className="block text-xs leading-tight font-normal text-v2-fg-tertiary">필요 AP</span>
-        <span
-          className={`block text-base font-semibold leading-tight tabular-nums ${ap > 0 ? "text-v2-ap" : "text-v2-fg-tertiary"}`}
+    <MobileActionBar
+      panels={
+        eventPicker ? [{ panelId: "events", title: "이벤트 선택", shortTitle: "이벤트", Icon: ListBulletIcon }] : []
+      }
+      leading={
+        <button
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={sheetPanelId === "result"}
+          aria-label="계산 결과 열기"
+          onClick={() => openSheet("result")}
+          className={cn(
+            "flex w-full items-center gap-3 rounded-[14px] bg-v2-elevated px-3.5 py-3 text-left shadow-lg",
+            v2FocusRing,
+          )}
         >
-          {busy ? <span aria-hidden="true">{"\u00a0"}</span> : ap > 0 ? ap.toLocaleString() : "—"}
-        </span>
-      </span>
-      {danger ? (
-        <ExclamationCircleIcon className="size-4 shrink-0 text-v2-danger" role="img" aria-label="계산 오류" />
-      ) : busy ? (
-        <ArrowPathIcon
-          className="size-4 shrink-0 animate-spin text-v2-fg-tertiary motion-reduce:animate-none"
-          role="img"
-          aria-label="계산 중"
-        />
-      ) : null}
-    </div>
+          <span className="min-w-0 grow">
+            {slot.kind === "ready" ? (
+              <>
+                <span className={cn("flex min-w-0 items-center gap-2", recalculating && "opacity-50")}>
+                  <span
+                    className={cn(
+                      "text-lg leading-[1.2] font-bold tabular-nums",
+                      ap > 0 ? "text-v2-ap" : "text-v2-fg-tertiary",
+                    )}
+                  >
+                    {formatCount(ap)}
+                  </span>
+                  {short.length === 1 ? (
+                    <Pill tone="danger" className="min-w-0">
+                      <span className="truncate">
+                        {short[0]?.name} {formatCount(shortfalls[short[0]?.uid ?? ""] ?? 0)} 부족
+                      </span>
+                    </Pill>
+                  ) : short.length > 1 ? (
+                    <Pill tone="danger">재화 {formatCount(short.length)}종 부족</Pill>
+                  ) : plan.collectableResources.length > 0 ? (
+                    <Pill tone="success">재화 모두 충분</Pill>
+                  ) : null}
+                </span>
+                <span className="mt-0.5 block text-xs text-v2-fg-tertiary">
+                  {recalculating ? "계산 중..." : `필요 AP · 스테이지 ${formatCount(stageCount)}곳`}
+                </span>
+              </>
+            ) : slot.kind === "empty" ? (
+              <>
+                <span className="block text-lg leading-[1.2] font-bold text-v2-fg-tertiary">—</span>
+                <span className="mt-0.5 block text-xs text-v2-fg-tertiary">살 아이템을 고르면 계산해요</span>
+              </>
+            ) : slot.kind === "waiting" ? (
+              <span className="flex items-center gap-1.5 text-sm text-v2-fg-secondary">
+                <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{slot.text}</span>
+              </span>
+            ) : (
+              <span className="flex items-center gap-1.5 text-sm font-medium text-v2-danger">
+                <ExclamationCircleIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{slot.text}</span>
+              </span>
+            )}
+          </span>
+          <ChevronUpIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+        </button>
+      }
+    />
   );
 }

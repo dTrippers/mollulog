@@ -66,8 +66,7 @@ function containsBigInt(value: unknown, seen = new WeakSet<object>()): boolean {
 }
 
 describe("treasure hunt round range and estimates", () => {
-  it("uses the approved basis and open-reward captions", () => {
-    expect(treasureHuntLocale.costMode).toBe("보상 획득 기준");
+  it("uses the approved open-reward caption", () => {
     expect(treasureHuntLocale.openRewards).toBe("오픈 보상");
   });
 

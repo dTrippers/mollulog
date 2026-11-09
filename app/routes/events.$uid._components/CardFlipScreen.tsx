@@ -209,13 +209,13 @@ export default function CardFlipScreen() {
             </>
           )}
         </div>
-        <ShopMobileResultBar plan={plan} ap={plan.stageCalculations.totalApWithExtras} />
       </PageMain>
       <PageAside>
         <PanelSheet panelId="result" title="계산 결과" Icon={CalculatorIcon}>
           <ShopResultContents plan={plan} />
         </PanelSheet>
       </PageAside>
+      <ShopMobileResultBar plan={plan} />
     </>
   );
 }

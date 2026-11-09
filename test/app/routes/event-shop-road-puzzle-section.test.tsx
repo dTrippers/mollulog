@@ -1,30 +1,19 @@
 /**
  * @jest-environment jsdom
- * @jest-environment-options {"customExportConditions":["node","node-addons"]}
  */
 import { describe, expect, it, jest } from "@jest/globals";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
 import type { MinigameConfig } from "~/domain/event-shop";
-import { getRoadPuzzleTotalRewards } from "~/domain/road-puzzle/calculator";
 import { ResourceTypeEnum } from "~/graphql/graphql";
 import type { RoadPuzzleStatsCalculation } from "~/lib/event-shop/hooks/useRoadPuzzleStats";
 import { roadPuzzleLocale } from "~/locales/ko";
-import { RoadPuzzleShopSection } from "~/routes/events.$uid._components/RoadPuzzleShopSection";
+import { ShopMinigameSection } from "~/routes/events.$uid._components/shop/ShopMinigameSection";
 import { createEventShopPlan } from "./event-shop-fixtures";
 
 jest.mock("react-router", () => ({
   Link: ({ children, to, className }: { children: ReactNode; to: string; className?: string }) =>
     createElement("a", { href: to, className }, children),
-}));
-jest.mock("~/components/v2/layout", () => ({
-  AsideLinks: ({ items }: { items: { key: string; title: string; description?: string; to: string }[] }) =>
-    createElement(
-      "nav",
-      null,
-      items.map((item) => createElement("a", { key: item.key, href: item.to }, item.title, " ", item.description)),
-    ),
 }));
 
 const maps = [
@@ -59,10 +48,6 @@ const config: MinigameConfig = {
       mapUids: [maps[0]!.uid],
       rewards: [
         { resourceType: ResourceTypeEnum.Item, resourceUid: "wrench", resourceName: "파이프 렌치", quantity: 10 },
-        { resourceType: ResourceTypeEnum.Item, resourceUid: "eleph", resourceName: "아오바의 엘레프", quantity: 2 },
-        { resourceType: ResourceTypeEnum.Currency, resourceUid: "pyroxene", resourceName: "청휘석", quantity: 200 },
-        { resourceType: ResourceTypeEnum.Currency, resourceUid: "credits", resourceName: "크레딧", quantity: 1_000 },
-        { resourceType: ResourceTypeEnum.Item, resourceUid: "note", resourceName: "노트", quantity: 3 },
       ],
       additionalRewards: [
         { resourceType: ResourceTypeEnum.Currency, resourceUid: "path-reward", resourceName: "경로 보상", quantity: 100 },
@@ -71,6 +56,7 @@ const config: MinigameConfig = {
   },
 };
 
+// Tile counts; the card prices them with the payment quantity (150 per tile here).
 const calculation: RoadPuzzleStatsCalculation = {
   status: "ready",
   resultsByUid: {
@@ -89,107 +75,76 @@ const calculation: RoadPuzzleStatsCalculation = {
   retry: jest.fn(),
 };
 
-function sectionElement(
-  targetRound: number,
-  startRound: number,
-  currentCalculation: RoadPuzzleStatsCalculation = calculation,
-) {
-  const base = createEventShopPlan();
-  const plan = createEventShopPlan({
-    eventUid: "10846",
-    minigameConfig: config,
-    state: { ...base.state, minigamePlayCount: targetRound, minigameStartRound: startRound },
-    roadPuzzleCalculation: currentCalculation,
-    minigameRewards: getRoadPuzzleTotalRewards(config.roadPuzzle!, startRound, targetRound),
-  });
-  return createElement(RoadPuzzleShopSection, { plan, config });
-}
-
 function renderSection(
   targetRound: number,
   startRound: number,
   currentCalculation: RoadPuzzleStatsCalculation = calculation,
+  currentConfig: MinigameConfig = config,
 ) {
-  return renderToStaticMarkup(sectionElement(targetRound, startRound, currentCalculation));
+  const base = createEventShopPlan();
+  const plan = createEventShopPlan({
+    eventUid: "10846",
+    minigameConfig: currentConfig,
+    state: {
+      ...base.state,
+      minigamePlayCount: targetRound,
+      minigameStartRound: startRound,
+      minigamePaymentQuantityMode: "expected",
+    },
+    roadPuzzleCalculation: currentCalculation,
+  });
+  return render(createElement(ShopMinigameSection, { plan }));
 }
 
-describe("RoadPuzzleShopSection", () => {
-  it("uses resource wording in the help, caption, and calculation statuses", () => {
-    const readyMarkup = renderSection(9, 3);
-    const pendingMarkup = renderSection(9, 3, { ...calculation, status: "pending" });
-    const failedMarkup = renderSection(9, 3, { ...calculation, status: "failed" });
+describe("road puzzle shop card", () => {
+  it("prices the remaining rounds with the payment quantity and counts loop runs", () => {
+    const { container } = renderSection(9, 3);
+    const text = container.textContent ?? "";
 
-    expect(readyMarkup).toContain(roadPuzzleLocale.costModeHelp);
-    expect(readyMarkup).toContain("회차별 필요 재화와 보상");
-    expect(readyMarkup).toContain(roadPuzzleLocale.calculationComplete);
-    expect(pendingMarkup).toContain(roadPuzzleLocale.calculatingCost);
-    expect(failedMarkup).toContain(roadPuzzleLocale.calculationFailed);
-    expect(failedMarkup).toContain(roadPuzzleLocale.retry);
+    expect(text).not.toContain("1회차");
+    expect(text).not.toContain("2회차");
+    expect(text).toContain("3회차");
+    expect(text).toContain("7회차 이후");
+    // Rounds 3–6 once each and the loop round three times, at about 2,651 stickers per run.
+    expect(text).toContain("2,651");
+    expect(text).toContain("7,953");
+    expect(text).toContain("18,557");
+    expect(text).not.toContain("7,500");
+    expect(screen.getByRole("link", { name: /철도 연결 탭/ }).getAttribute("href")).toBe(
+      "/events/10846/road-puzzle?round=7&map=1",
+    );
   });
 
-  it("shows a 7-row expected-cost table, per-run loop rewards, and the map viewer link", () => {
-    const markup = renderSection(9, 3);
-    expect(markup).toContain("최소값");
-    expect(markup).toContain("기대값");
-    expect(markup).toContain("최대값");
-    expect(markup).toContain("7회차~ ×3");
-    expect(markup).toContain("≈2,651");
-    expect(markup).toContain("회차별 맵");
-    expect(markup).toContain("최단 경로와 필요한 레일");
-    expect(markup).toContain('href="/events/10846/road-puzzle?round=7&amp;map=1"');
-    expect(markup).not.toContain("경로 보상");
-    expect(markup).not.toContain("7,500");
+  it("shows no round costs at target zero", () => {
+    const { container } = renderSection(0, 1);
+
+    expect(container.textContent).not.toContain("회차 이후");
+    expect(container.textContent).not.toContain("하이랜더 기념 스티커");
   });
 
-  it("hides totals at target zero and excludes completed rounds from row highlighting", () => {
-    const zeroMarkup = renderSection(0, 1);
-    expect(zeroMarkup).not.toContain(`>${roadPuzzleLocale.requiredResources}</h3>`);
-    expect(zeroMarkup).not.toContain(`>${roadPuzzleLocale.totalRewards}</h3>`);
+  it("shows pending and failed calculation states", () => {
+    const pending = renderSection(9, 3, { ...calculation, status: "pending" });
+    expect(pending.container.textContent).toContain(roadPuzzleLocale.calculating);
+    expect(pending.container.textContent).not.toContain("18,557");
+    pending.unmount();
 
-    const completedMarkup = renderSection(9, 3);
-    expect(completedMarkup).toContain("(포함)");
-    const firstRound = completedMarkup.match(/<tr[^>]*>[\s\S]*?1회차[\s\S]*?<\/tr>/)?.[0] ?? "";
-    expect(firstRound).not.toContain("(포함)");
-  });
-
-  it("places the round disclosure at the row end and lists completion and path rewards", () => {
-    const { container } = render(sectionElement(9, 3));
-    const firstRow = Array.from(container.querySelectorAll<HTMLTableRowElement>("tbody tr")).find((row) =>
-      row.querySelector("th")?.textContent?.includes("1회차"),
-    );
-    expect(firstRow?.querySelector("th button")).toBeNull();
-    expect(
-      firstRow?.lastElementChild?.querySelector(
-        'button[aria-expanded="false"][aria-controls="road-puzzle-round-1-details"]',
-      ),
-    ).not.toBeNull();
-
-    fireEvent.click(within(firstRow!).getByRole("button", { name: "1회차 보상 펼치기" }));
-    expect(within(firstRow!).getByRole("button", { name: "1회차 보상 접기" }).getAttribute("aria-expanded")).toBe(
-      "true",
-    );
-    const details = container.querySelector("#road-puzzle-round-1-details");
-    expect(details?.textContent).toContain(roadPuzzleLocale.pathRewards);
-    expect(screen.getByRole("link", { name: roadPuzzleLocale.mapLink }).getAttribute("href")).toBe(
-      "/events/10846/road-puzzle?round=1&map=1",
-    );
+    const retry = jest.fn();
+    renderSection(9, 3, { ...calculation, status: "failed", retry });
+    expect(screen.getByText(roadPuzzleLocale.calculationFailed)).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: roadPuzzleLocale.retry }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 
   it("shows explicit states when road puzzle or reward data is missing", () => {
-    expect(
-      renderToStaticMarkup(
-        createElement(RoadPuzzleShopSection, {
-          plan: createEventShopPlan(),
-          config: { ...config, roadPuzzle: undefined },
-        }),
-      ),
-    ).toContain(roadPuzzleLocale.noData);
+    const missing = renderSection(9, 3, calculation, { ...config, roadPuzzle: undefined });
+    expect(missing.container.textContent).toContain(roadPuzzleLocale.noData);
+    missing.unmount();
+
     const withoutRewards: MinigameConfig = {
       ...config,
       roadPuzzle: { ...config.roadPuzzle!, rounds: config.roadPuzzle!.rounds.map((round) => ({ ...round, rewards: [] })) },
     };
-    expect(
-      renderToStaticMarkup(createElement(RoadPuzzleShopSection, { plan: createEventShopPlan(), config: withoutRewards })),
-    ).toContain(roadPuzzleLocale.rewardDataMissing);
+    const { container } = renderSection(9, 3, calculation, withoutRewards);
+    expect(container.textContent).toContain(roadPuzzleLocale.rewardDataMissing);
   });
 });

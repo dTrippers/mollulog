@@ -2,11 +2,11 @@
  * @jest-environment jsdom
  * @jest-environment-options {"customExportConditions":["node","node-addons"]}
  */
-import { describe, expect, it, jest } from "@jest/globals";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, useMatches, useOutletContext } from "react-router";
-import { fireEvent, render as renderDom, screen } from "@testing-library/react";
+import { fireEvent, render as renderDom, screen, within } from "@testing-library/react";
 import type { EventRewardBonus, MinigameConfig, ShopResource, Stage } from "~/domain/event-shop";
 import { deriveJankenPlan } from "~/domain/event-shop/janken";
 import { ResourceTypeEnum } from "~/graphql/graphql";
@@ -49,12 +49,12 @@ jest.mock("react-router", () => {
 });
 jest.mock("~/components/v2/layout", () => ({
   AsideLinks: () => null,
-  PageActionBar: ({ children, className, summary }: { children: ReactNode; className?: string; summary?: ReactNode }) =>
-    createElement("div", { className }, createElement("div", { "data-testid": "page-action-bar-summary" }, summary), children),
+  MobileActionBar: ({ leading }: { leading?: ReactNode }) =>
+    createElement("div", { "data-testid": "mobile-action-bar" }, leading),
   PageAside: ({ children }: { children: ReactNode }) => createElement("aside", null, children),
   PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children),
   PanelSheet: ({ children }: { children: ReactNode }) => createElement("section", null, children),
-  useV2Page: () => ({ stacked: mockStacked, openSheet: jest.fn() }),
+  useV2Page: () => ({ stacked: mockStacked, openSheet: jest.fn(), sheetPanelId: null }),
 }));
 jest.mock("~/contexts/SignInProvider", () => ({ useSignIn: () => ({ showSignIn: jest.fn() }) }));
 
@@ -104,6 +104,11 @@ function createRoundMinigamePlan(
 }
 
 describe("event shop v2 calculator", () => {
+  beforeEach(() => {
+    mockStacked = false;
+    mockedUseMatches.mockReturnValue([]);
+  });
+
   it("shows shared bonus selections after switching from per-item mode, matching the applied bonus", () => {
     const eventRewardBonus: EventRewardBonus[] = [
       {
@@ -140,57 +145,49 @@ describe("event shop v2 calculator", () => {
     };
 
     const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    fireEvent.click(screen.getByRole("button", { name: "아이템별" }));
-
+    const bonusCard = () => screen.getByText("보너스 아이템").closest("div.rounded-lg") as HTMLElement;
+    expect(screen.getByRole("radio", { name: "재화마다 따로" }).getAttribute("aria-checked")).toBe("true");
+    expect(bonusCard().textContent).toContain("10%최대 10%");
+    fireEvent.click(within(bonusCard()).getByRole("button", { name: /학생 선택 · 1 \/ 1/ }));
     expect(screen.getByRole("button", { name: /키사키 상세, 선택됨/ }).getAttribute("aria-pressed")).toBe("true");
-    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 10% / 최대 10%");
 
-    fireEvent.click(screen.getByRole("button", { name: "모든 아이템 동일" }));
+    fireEvent.click(screen.getByRole("radio", { name: "모든 재화 같은 학생" }));
     expect(setMode).toHaveBeenCalledWith("shared", ["bonus-item"]);
     const sharedPlan = makePlan("shared");
     mockPlan = { ...sharedPlan, actions: { ...sharedPlan.actions, setBonusStudentSelectionMode: setMode } };
     view.rerender(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
+    expect(bonusCard().textContent).toContain("0%최대 10%");
+    fireEvent.click(screen.getByRole("button", { name: /학생 선택 · 0 \/ 1/ }));
     expect(screen.getByRole("button", { name: /키사키 상세, 선택 안 됨/ }).getAttribute("aria-pressed")).toBe("false");
-    expect(screen.getByText("보너스 아이템").parentElement?.textContent).toContain("적용 0% / 최대 10%");
   });
 
-  it("restores the completed-round control for treasure hunt and resets its start round when disabled", () => {
+  it("edits the completed round of a treasure hunt as the round before the start round", () => {
     const setMinigameStartRound = jest.fn<(round: number) => void>();
     mockPlan = createRoundMinigamePlan("treasure_hunt", 4, 3, { setMinigameStartRound });
 
-    const { container } = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    const completedRound = container.querySelector<HTMLInputElement>("#event-minigame-completed-round");
-    const toggle = screen.getByRole("switch", { name: "완료한 회차 제외" });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    const completedRound = screen.getByLabelText<HTMLInputElement>("완료한 회차");
 
-    expect(toggle.getAttribute("aria-checked")).toBe("true");
-    expect(completedRound?.value).toBe("2");
-    expect(screen.getByText("완료한 다음 회차부터 계산해요")).toBeTruthy();
+    expect(completedRound.value).toBe("2");
+    expect(screen.getByLabelText<HTMLInputElement>("목표 회차").value).toBe("4");
 
-    fireEvent.change(completedRound!, { target: { value: "1" } });
+    fireEvent.change(completedRound, { target: { value: "1" } });
     expect(setMinigameStartRound).toHaveBeenCalledWith(2);
-    setMinigameStartRound.mockClear();
-    fireEvent.click(toggle);
-
-    expect(setMinigameStartRound).toHaveBeenCalledWith(1);
-    expect(screen.queryByRole("spinbutton", { name: "완료 회차" })).toBeNull();
   });
 
   it.each([
-    ["clue_search", 2],
-    ["clue_search", 0],
-    ["treasure_hunt", 2],
-    ["treasure_hunt", 0],
-  ] as const)("normalizes the start round when %s play count shrinks to %i", (minigameType, count) => {
+    ["clue_search", "플레이 횟수", 2],
+    ["clue_search", "플레이 횟수", 0],
+    ["treasure_hunt", "목표 회차", 2],
+    ["treasure_hunt", "목표 회차", 0],
+  ] as const)("normalizes the start round when %s play count shrinks to %i", (minigameType, label, count) => {
     const setMinigamePlayCount = jest.fn<(playCount: number) => void>();
     const setMinigameStartRound = jest.fn<(round: number) => void>();
     mockPlan = createRoundMinigamePlan(minigameType, 4, 3, { setMinigamePlayCount, setMinigameStartRound });
-    const { container } = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    expect(screen.getByText("목표 회차")).toBeTruthy();
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    fireEvent.change(container.querySelector<HTMLInputElement>("#event-minigame-count")!, {
-      target: { value: String(count) },
-    });
+    fireEvent.change(screen.getByLabelText(label), { target: { value: String(count) } });
 
     expect(setMinigamePlayCount).toHaveBeenCalledWith(count);
     expect(setMinigameStartRound).toHaveBeenCalledWith(Math.max(1, count));
@@ -243,11 +240,11 @@ describe("event shop v2 calculator", () => {
     expect(mockedUseOutletContext).toHaveBeenCalled();
     expect(mockedUseMatches).toHaveBeenCalled();
     expect(markup).toContain("상점 아이템");
-    expect(markup).toContain("1,200~");
-    expect(markup).toContain("1,500");
-    expect(markup).toMatch(/보유 <span class="whitespace-nowrap font-semibold tabular-nums text-v2-fg">1,234<\/span>/);
+    // The price steps up, so each tier shows with an arrow between them.
+    expect(markup).toMatch(/1,200<\/span>[\s\S]*aria-label="다음 단계"[\s\S]*1,500/);
+    expect(markup).toContain('<span class="tabular-nums">보유 1,234</span>');
     expect(markup).toContain("text-v2-ap");
-    expect(markup).toContain(">20</span>");
+    expect(markup).toMatch(/aria-label="AP"[^>]*>[\s\S]*?<\/svg>20<\/span>/);
     expect(markup).toContain("스테이지 코인");
   });
 
@@ -262,12 +259,13 @@ describe("event shop v2 calculator", () => {
         collectableResources: [{ ...currency, forPayment: true }],
       });
 
-      expect(render()).not.toMatch(/보유 <span/);
+      expect(render()).not.toContain('<span class="tabular-nums">보유 ');
     }
   });
 
-  it("keeps result edit buttons at the bottom and marks an overridden target line", () => {
-    const plan = createEventShopPlan({
+  it("edits owned and required currency inline and offers a reset for an overridden requirement", () => {
+    const resetOverriddenRequired = jest.fn<(uid: string) => void>();
+    const base = createEventShopPlan({
       collectableResources: [
         { type: ResourceTypeEnum.Currency, uid: "event-currency", name: "이벤트 재화", forPayment: true },
       ],
@@ -276,37 +274,27 @@ describe("event shop v2 calculator", () => {
         overriddenRequiredQuantities: { "event-currency": 1000 },
       },
     });
-    mockPlan = plan;
-
-    const markup = render();
-
-    expect(markup).toContain("flex h-full min-w-0 flex-col rounded-md bg-v2-surface p-v2-tile-p");
-    expect(markup).toContain("mt-auto flex flex-wrap justify-end gap-2 pt-v2-group-gap");
-    expect(markup).toContain('<p><span class="mr-1.5">·</span>입력한 목표 수량</p>');
+    mockPlan = { ...base, actions: { ...base.actions, resetOverriddenRequired } };
 
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(screen.getByRole("button", { name: "이벤트 재화 보유 수량 입력" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "이벤트 재화 목표 수량 입력" })).toBeTruthy();
+    expect(screen.getByLabelText("이벤트 재화 보유 개수")).toBeTruthy();
+    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 필요 개수").value).toBe("1000");
+    fireEvent.click(screen.getByRole("button", { name: "계산값으로 되돌리기" }));
+    expect(resetOverriddenRequired).toHaveBeenCalledWith("event-currency");
   });
 
-  it("uses the configured draw count in the all-open helper when no plays are selected", () => {
+  it("shows the card count, the strategy, and a link to the strategy comparison for card flip", () => {
     const plan = createCardFlipPlan();
-    const config = plan.minigameConfig;
-    if (config?.cardFlip?.status !== "available") throw new Error("card-flip fixture must be available");
+    mockPlan = createCardFlipPlan({ state: { ...plan.state, minigamePlayCount: 0 } });
 
-    mockPlan = createCardFlipPlan({
-      minigameConfig: {
-        ...config,
-        cardFlip: {
-          ...config.cardFlip,
-          drawRules: { ...config.cardFlip.drawRules, maxDrawCount: 4 },
-        },
-      },
-      state: { ...plan.state, minigamePlayCount: 0 },
-    });
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(render()).toContain("항상 4장을 모두 열어요");
+    expect(screen.getByLabelText<HTMLInputElement>("카드 수").value).toBe("0");
+    expect(screen.getByRole("link", { name: /전략 비교/ }).getAttribute("href")).toBe(
+      `/events/${mockPlan.eventUid}/shop/card-flip`,
+    );
+    expect(screen.queryByText(/기대 획득 개수/)).toBeNull();
   });
 
   it("shows the planner-derived janken stage counts as a read-only summary", () => {
@@ -335,10 +323,12 @@ describe("event shop v2 calculator", () => {
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(screen.getByText("플레이 횟수")).toBeTruthy();
     expect(screen.getByText("노말 4")).toBeTruthy();
     expect(screen.getByText("챌린지")).toBeTruthy();
-    expect(screen.queryByRole("spinbutton", { name: /플레이 횟수/ })).toBeNull();
+    expect(screen.queryByRole("spinbutton")).toBeNull();
+    expect(screen.getByRole("link", { name: /세부 설정/ }).getAttribute("href")).toBe(
+      `/events/${mockPlan.eventUid}/shop/janken`,
+    );
   });
 
   it("shows the total entry currency for each planned stage row", () => {
@@ -370,12 +360,13 @@ describe("event shop v2 calculator", () => {
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    const row = screen.getByText("노말 4").closest("li");
+    const row = screen.getByText("노말 4").closest("div");
     expect(row?.textContent).toContain("×98");
     expect(row?.textContent).toContain("39,200");
+    expect(screen.getByText("필요 입장 재화").closest("div")?.textContent).toContain("39,200");
   });
 
-  it("formats score and equipment goals in the shop goal line", () => {
+  it("formats score and equipment goals as goal pills", () => {
     const config: MinigameConfig = {
       minigameType: "janken",
       payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
@@ -406,10 +397,16 @@ describe("event shop v2 calculator", () => {
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(screen.getByText("목표 · 상점 재화 부족분 · 학생 성장 고유무기 1 · 누적 스코어 400만 점 · 무술대회 장비 T5")).toBeTruthy();
+    const goals = screen.getByText("목표").parentElement;
+    expect([...(goals?.querySelectorAll(":scope > span[title]") ?? [])].map((pill) => pill.textContent)).toEqual([
+      "부족분",
+      "고유무기 1",
+      "누적 스코어 400만 점",
+      "T5",
+    ]);
   });
 
-  it("uses the live plain-star student goal in the shop goal line", () => {
+  it("uses the live plain-star student goal in the goal pills", () => {
     const config: MinigameConfig = {
       minigameType: "janken",
       payment: { resourceType: ResourceTypeEnum.Item, resourceUid: "80860", quantity: 400 },
@@ -439,10 +436,14 @@ describe("event shop v2 calculator", () => {
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(screen.getByText("목표 · 상점 재화 부족분 · 학생 성장 4성")).toBeTruthy();
+    const goals = screen.getByText("목표").parentElement;
+    expect([...(goals?.querySelectorAll(":scope > span[title]") ?? [])].map((pill) => pill.textContent)).toEqual([
+      "부족분",
+      "4성",
+    ]);
   });
 
-  it("shows the planner score basis or missing-average notice for challenge plays", () => {
+  it("shows the challenge plays from the planner score, or the missing-average notice", () => {
     const empty = createEventShopPlan();
     const config: MinigameConfig = {
       minigameType: "janken",
@@ -460,15 +461,15 @@ describe("event shop v2 calculator", () => {
           ...empty.jankenEntry.progress,
           cumulativeScore: 1_200_000,
           clearedStageUids: [
-        "100860101",
-        "100860102",
-        "100860103",
-        "100860104",
-        "100860105",
-        "100860201",
-        "100860202",
-        "100860203",
-        "100860204",
+            "100860101",
+            "100860102",
+            "100860103",
+            "100860104",
+            "100860105",
+            "100860201",
+            "100860202",
+            "100860203",
+            "100860204",
           ],
         },
         goals: { ...empty.jankenEntry.goals, targetScore: 1_700_000, averageScore: 250_000 },
@@ -485,7 +486,8 @@ describe("event shop v2 calculator", () => {
       }),
     });
     const view = renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
-    expect(document.body.textContent).toContain("누적 스코어 보상 포함 · 현재 120만 점 → 예상 170만 점");
+    // (1,700,000 - 1,200,000) / 250,000 = 2 challenge plays.
+    expect(screen.getByText("챌린지").closest("div")?.textContent).toContain("×2");
 
     const missingAverageEntry = {
       ...base.jankenEntry,
@@ -557,56 +559,23 @@ describe("event shop v2 calculator", () => {
     });
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    const rewardsTitle = screen.getByText("기대 획득량");
-    const rewardsList = rewardsTitle.closest("section")?.querySelector(":scope > div");
+    const rewardsList = screen.getByText("기대 획득 개수 · 누적 스코어 보상 포함").nextElementSibling;
     expect(rewardsList?.querySelector('[aria-label="zero reward 이름 표시"], img[alt="zero reward"]')).toBeNull();
     expect(rewardsList?.textContent).toContain("5");
   });
 
-  it("renders event search and results directly in the mobile sheet", () => {
+  it("floats the result bar with the empty-selection state on stacked layouts", () => {
     mockStacked = true;
-    mockedUseMatches.mockReturnValue([
-      {
-        id: "routes/events.$uid",
-        pathname: "/events/event-1",
-        params: { uid: "event-1" },
-        data: {
-          status: "ready",
-          shopAvailableEvents: [
-            {
-              uid: "event-1",
-              name: "현재 이벤트",
-              since: "2026-01-01T00:00:00.000Z",
-              until: null,
-              isSpoiler: false,
-              recruitments: [],
-            },
-            {
-              uid: "event-2",
-              name: "다른 이벤트",
-              since: "2026-02-01T00:00:00.000Z",
-              until: null,
-              isSpoiler: false,
-              recruitments: [],
-            },
-          ],
-        },
-        handle: undefined,
-      },
-    ] as unknown as ReturnType<typeof useMatches>);
     mockPlan = createEventShopPlan();
 
     const markup = render();
 
-    expect(markup).toContain('aria-label="이벤트 검색"');
-    expect(markup).toContain("다른 이벤트");
-    expect(markup).toContain("v2-action-bar");
-    expect(markup).not.toContain('aria-haspopup="dialog"');
-    mockStacked = false;
-    mockedUseMatches.mockReturnValue([]);
+    expect(markup).toContain('data-testid="mobile-action-bar"');
+    expect(markup).toContain('aria-label="계산 결과 열기"');
+    expect(markup).toContain("살 아이템을 고르면 계산해요");
   });
 
-  it("hides stale AP values from the mobile action bar while calculating", () => {
+  it("dims the previous AP in the mobile action bar while recalculating", () => {
     mockStacked = true;
     const emptyPlan = createEventShopPlan();
     mockPlan = createEventShopPlan({
@@ -618,18 +587,15 @@ describe("event shop v2 calculator", () => {
       stageCalculations: { ...emptyPlan.stageCalculations, totalApWithExtras: 9620 },
     });
 
-    const markup = render();
-    const summary = markup.match(/<div data-testid="page-action-bar-summary">([\s\S]*?)<\/div>/)?.[1];
+    renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
+    const bar = screen.getByRole("button", { name: "계산 결과 열기" });
 
-    expect(summary).toBeDefined();
-    expect(summary).toContain("필요 AP");
-    expect(summary).not.toContain("—");
-    expect(summary).not.toContain("9,620");
-    mockStacked = false;
+    expect(bar.textContent).toContain("계산 중...");
+    expect(within(bar).getByText("9,620").closest(".opacity-50")).not.toBeNull();
   });
 
   it.each([
-    ["pending", "철도 연결 비용을 계산하고 있어요"],
+    ["pending", "철도 연결 계산을 기다리는 중"],
     ["failed", "철도 연결 비용을 계산하지 못해 소탕 횟수와 필요한 AP를 보여드릴 수 없어요"],
     ["missing", "철도 연결 데이터를 찾지 못했어요"],
   ] as const)("holds stage runs and AP while the road puzzle planner is %s", (status, message) => {
@@ -645,8 +611,8 @@ describe("event shop v2 calculator", () => {
     const markup = render();
 
     expect(markup).toContain(message);
-    expect(markup).not.toContain("77회 소탕");
+    expect(markup).not.toContain("77회");
     expect(markup).not.toContain("1,540");
-    if (status === "failed") expect(markup).toContain("다시 시도");
+    if (status !== "pending") expect(markup).toContain("다시 시도");
   });
 });

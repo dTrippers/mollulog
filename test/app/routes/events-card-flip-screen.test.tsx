@@ -16,13 +16,12 @@ jest.mock("react-router", () => {
   return { useOutletContext: jest.fn(() => mockPlan) };
 });
 jest.mock("~/components/v2/layout", () => ({
-  PageActionBar: ({ children, className, summary }: { children: ReactNode; className?: string; summary?: ReactNode }) =>
-    createElement("div", { className }, summary, children),
+  MobileActionBar: ({ leading }: { leading?: ReactNode }) => createElement("div", { className: "v2-action-bar" }, leading),
   PageMain: ({ children }: { children: ReactNode }) => createElement("main", null, children),
   PageAside: ({ children }: { children: ReactNode }) => createElement("aside", null, children),
   PanelSheet: ({ children, panelId }: { children: ReactNode; panelId: string }) =>
     createElement("section", { "data-panel-id": panelId }, children),
-  useV2Page: () => ({ stacked: true, openSheet: mockOpenSheet }),
+  useV2Page: () => ({ stacked: true, openSheet: mockOpenSheet, sheetPanelId: null }),
 }));
 jest.mock("~/routes/events.$uid._components/EventShopCalculator", () => ({ ShopResultContents: () => null }));
 
@@ -41,9 +40,8 @@ describe("card flip v2 screen", () => {
     const actionBar = container.querySelector(".v2-action-bar");
 
     expect(actionBar).toBeTruthy();
-    expect(screen.getByText("필요 AP")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "이벤트 선택" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "결과" }));
+    fireEvent.click(screen.getByRole("button", { name: "계산 결과 열기" }));
 
     expect(mockOpenSheet).toHaveBeenCalledWith("result");
     expect(container.querySelector('[data-panel-id="result"]')).toBeTruthy();

@@ -16,7 +16,10 @@ jest.mock("react-router", () => ({
   useRevalidator: () => ({ revalidate: jest.fn() }),
   useFetcher: () => ({ state: "idle", data: undefined, submit: mockFetcherSubmit }),
 }));
-jest.mock("~/components/v2/layout", () => ({ PageMain: ({ children }: { children: unknown }) => children }));
+jest.mock("~/components/v2/layout", () => ({
+  PageMain: ({ children }: { children: unknown }) => children,
+  useV2Page: () => ({ stacked: false }),
+}));
 jest.mock("~/components/v2/primitives/Button", () => ({ Button: () => null }));
 jest.mock("~/components/v2/primitives/Skeleton", () => ({ Skeleton: () => null }));
 jest.mock("~/components/v2/primitives/StatusNotice", () => ({ StatusNotice: () => null }));
