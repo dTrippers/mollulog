@@ -60,8 +60,8 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `ring-v2-focus`, `outline-v2-focus` | `var(--v2-accent)` | `var(--v2-accent)` | Focus ring, 2px with 2px offset (3:1 or higher) |
 | `text-v2-success` | `oklch(0.527 0.154 150.069)` | `oklch(0.792 0.209 151.711)` | Confirmed pill text and completed icons |
 | `bg-v2-success-subtle` | `oklch(0.982 0.018 155.826)` | `oklch(0.31 0.065 152.934)` | Success pill background |
-| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5). 4.5:1 or higher on subtle, surface, and canvas |
-| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction`, and of a failed value in a review table. Text on it: 8.4:1 light, 5.2:1 dark (measured) |
+| `text-v2-danger` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | Status: label of a danger `PanelAction` on `bg-v2-danger-subtle`. Failure states (upload expired, recognition failed, failed file) also use it (D5), and so does a calculated shortfall (`N 부족`). 4.5:1 or higher on subtle, surface, and canvas |
+| `bg-v2-danger-subtle` | `oklch(0.971 0.013 17.38)` | `oklch(0.31 0.092 26.042)` | Status: background of a danger `PanelAction`, of a failed value in a review table, and of a 부족 status pill. Text on it: 8.4:1 light, 5.2:1 dark (measured) |
 | `bg-v2-danger-solid`, `text-v2-on-danger` | `oklch(0.552 0.205 24.53)` / `oklch(1 0 0)` | `oklch(0.586 0.201 26.79)` / `oklch(1 0 0)` | Filled destructive `Button` (`danger`): GitHub Primer `bgColor-danger-emphasis` (#cf222e light / #da3633 dark) with white text. Measured contrast: rest 5.36:1 light and 4.61:1 dark; hover at 90% opacity 4.73:1 on the light surface (#fff) and 5.25:1 on the dark surface (`oklch(0.27 0 0)`), blended in sRGB gamma space |
 | `bg-v2-warning-subtle` | `oklch(0.965 0.05 95)` | `oklch(0.33 0.07 75)` | Status: background of a value that needs confirmation (D6). The text on it keeps `text-v2-fg` (16.8:1 light, 18.0:1 dark, measured). The tone is the background only; the label carries the meaning |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
@@ -131,8 +131,9 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 ## Status and domain
 
 - `success` is status. It means confirmed or completed.
-- `danger` is status. Use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
+- `danger` is status. As an action, use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. As a state, it marks a failure and a calculated shortfall. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
 - The v2 `Button` `danger` variant is for destructive actions that need a strong red fill, such as deleting a key, application, or connection. The `danger-subtle` variant is for reversible reset, cancel, or exclusion actions. Keep `PanelAction` and status notices on `text-v2-danger` and `bg-v2-danger-subtle`.
+- In a resource calculation, a calculated shortfall uses `danger` (`N 부족`) and an exact or certain surplus uses `success` (`충분`). Where the calculation gives an estimated range (for example the 상하위 10% range of a recruitment plan) and the range includes a shortfall while the central estimate does not, show the `warning` state `주의`, never `충분`.
 - `neutral` `PanelAction` is for helper actions that do not clear state, such as "모두 보기". Do not use `danger` for them.
 - `live`, `favorite`, `new`, and `attr-*` are domain colors. They describe content, not state.
 - Do not use color alone to convey meaning. Pair color with a text label or a distinct icon shape; an icon-only element (for example the favorite heart or the completed check) needs an accessible name.
@@ -166,9 +167,35 @@ These rules come from the product owner's reviews of design proposals and implem
 - Secondary content, such as a video list, does not take a large share of the screen.
 - A step in the user's plan belongs in Main, not in an Aside.
 - A notice about something the user will lose or cannot do (unspent currency, a pickup that cannot be recruited) uses the warning style, not a neutral information line.
+- A calculated value or range carries a short label that says what it measures (필요 소탕, 상하위 10% 범위); a number with only its unit ("n회 (x~y)") is not enough. A status such as 충분 or 부족 sits beside the value it qualifies, on mobile as well.
+- On a calculator with many optional inputs, the result can come first and the detailed inputs open on demand (for example a student list that expands for entry). Keep fixed or always-visible space for what the primary task needs; secondary details open from a compact action such as a bottom sheet. This is a choice by importance, not a rule to fold every input.
 - A calculated result that is not ready or failed shows that state. Never show it as 0, 충분, or any other value it does not have.
 - A result for a currency allows several acquisition and consumption sources. A display with one slot per currency is a defect.
-- UI copy uses polite, neutral wording. Avoid casual or condescending words (갖고 있는, 키운다) and labels that read as a judgment of the user (운).
+- UI copy uses the domain terms below and polite, neutral wording. Avoid casual or condescending words (갖고 있는, 키운다) and labels that read as a judgment of the user (운).
+
+### Domain terms
+
+UI copy uses these terms for these concepts. Add a term here only when its meaning is settled and it applies beyond one screen; a label for one screen's own concept stays with that screen. Keep in-game official names (items, currencies, content) as the game writes them.
+
+| Term | Meaning | Do not use |
+| --- | --- | --- |
+| 획득 개수 | How many of a currency or item the plan obtains | 얻는 양 |
+| 필요 개수 | How many the selected goals require | 사용, 필요한 양 |
+| 부족 / `N 부족` | The plan obtains fewer than it needs; add the missing count (`450 부족`) where the screen calls for it | 더 필요 |
+| 충분 | The plan obtains at least what it needs; do not show the surplus unless the screen is about it | `N 남음` |
+| 주의 | An estimated range includes a shortfall although the central estimate does not | 불확실, 운에 따라, 빠듯 |
+| 상하위 10% 범위 | The range between the top 10% and bottom 10% of simulated outcomes | 80% 범위, 예상 범위 |
+| 초회 클리어 | A stage's first-clear reward | 처음 클리어 |
+| 대상 스테이지 | The stages the calculation may use | 켜 둔 스테이지 |
+| 필요 소탕 | The sweeps the calculation requires; extra sweeps the user enters are 추가 소탕 | 자동 소탕 |
+| 최종 획득 재화 | What the user ends up with after the plan | 얻게 될 보상 |
+| 재화 증감 | The change in a currency or ticket on a date, positive or negative | 변화 |
+| 모집 기간 | The period a recruitment banner runs | 모집 |
+| 모집 횟수 | A count of recruits (pulls), in 회 | 필요 인원, n명 |
+| 10회 모집 티켓 | The in-game 10-pull ticket, including the one bought with mileage | 마일리지 티켓 |
+| 픽업 외 모집 가능 | A student also obtainable outside its pickup | 픽업 아님 |
+| 관심 학생 | A student the user marked; removing it is 관심 학생에서 제외 | 목표 해제 |
+| 보유 수량, 현재 성급, 목표 성급 | What the user owns now, and the tier they have and want | 현재, 목표 (alone) |
 
 ### Icons and images
 
@@ -176,6 +203,7 @@ These rules come from the product owner's reviews of design proposals and implem
 - Keep status, category, and count labels as text. Do not replace them with icons.
 - Game icon images carry transparent padding, so they look smaller than their box. Size them by the visible object, next to the text they go with.
 - Growth-tier stars use `text-v2-star`, and the exclusive weapon uses its game icon (`TierInput`, `GrowthTier`).
+- Show a student with `StudentThumb`'s name and variant (이격명) presentation rather than a new one: the caption under a thumbnail is two lines, the name and then the variant. Wherever a student is identified, including dialogs and lists, keep the variant; a name without it can mean a different student.
 - Never crop a student image arbitrarily. A name overlay sits in the bottom-left corner and does not cover the face or outfit.
 - The selected mark on a portrait is small: `bg-v2-selected-on-media` with a white check and no border.
 - Do not show event progress as a progress bar.
