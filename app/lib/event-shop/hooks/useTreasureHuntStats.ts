@@ -274,5 +274,7 @@ export function useTreasureHuntStats(items: ScheduleItem[], enabled = true) {
     return targetGames > 0 ? Math.floor((completedGames / targetGames) * 100) : 0;
   }, [enabled, items, statsBySignature]);
 
-  return { statsBySignature, progress, retry };
+  // Keep the value stable between renders. The shop plan derives its calculation inputs from it, and a new object on
+  // every render restarts the debounced shop calculation forever.
+  return useMemo(() => ({ statsBySignature, progress, retry }), [statsBySignature, progress, retry]);
 }

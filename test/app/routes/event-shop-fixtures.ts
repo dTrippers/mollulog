@@ -155,6 +155,8 @@ export function createEventShopPlan(overrides: Partial<EventShopPlanContext> = {
     cardFlipComparison: null,
     stageCalculations: emptyCalculation,
     isCalculating: false,
+    calculationFailed: false,
+    retryCalculation: () => {},
     ...overrides,
   };
 }

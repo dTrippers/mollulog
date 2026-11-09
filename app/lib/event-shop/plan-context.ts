@@ -85,6 +85,9 @@ export type EventShopPlanContext = {
   cardFlipComparison: CardFlipStrategyResult[] | null;
   stageCalculations: CalculationResult;
   isCalculating: boolean;
+  // The AP calculation threw. The result panel shows the failure with a retry instead of waiting forever.
+  calculationFailed: boolean;
+  retryCalculation: () => void;
   isSaving?: boolean;
   saveError?: string | null;
   retrySave?: () => void;

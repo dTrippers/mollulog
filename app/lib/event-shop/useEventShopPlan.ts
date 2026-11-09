@@ -173,9 +173,7 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     required: jankenResourceRoles.shopUid
       ? (linkedJankenShopLedger?.remainingToFarm[jankenResourceRoles.shopUid] ?? 0)
       : 0,
-    total: jankenResourceRoles.shopUid
-      ? (linkedJankenShopLedger?.requiredTotals[jankenResourceRoles.shopUid] ?? 0)
-      : 0,
+    total: jankenResourceRoles.shopUid ? (linkedJankenShopLedger?.requiredTotals[jankenResourceRoles.shopUid] ?? 0) : 0,
     owned: jankenResourceRoles.shopUid ? (linkedJankenShopLedger?.existing[jankenResourceRoles.shopUid] ?? 0) : 0,
   };
   const jankenStagePlays = jankenPlan.status === "available" ? jankenPlan.stagePlays : EMPTY_JANKEN_STAGE_PLAYS;
@@ -352,7 +350,9 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     holdCalculations: holdTreasureHuntCalculations || holdRoadPuzzleCalculationInput,
   });
   const holdRoadPuzzleCalculations =
-    isRoadPuzzle && state.minigamePlayCount > 0 && (holdRoadPuzzleCalculationInput || !stageCalculations.isReady);
+    isRoadPuzzle &&
+    state.minigamePlayCount > 0 &&
+    (holdRoadPuzzleCalculationInput || (!stageCalculations.isReady && !stageCalculations.calculationFailed));
   const roadPuzzlePlannerStatus: EventShopPlanContext["roadPuzzlePlannerStatus"] = holdRoadPuzzleCalculations
     ? !roadPuzzle
       ? "missing"
@@ -403,6 +403,8 @@ export function useEventShopPlan(input: EventShopControllerInput) {
     cardFlipComparison,
     stageCalculations,
     isCalculating: stageCalculations.isCalculating,
+    calculationFailed: stageCalculations.calculationFailed,
+    retryCalculation: stageCalculations.retryCalculation,
     isSaving,
     saveError,
     retrySave,

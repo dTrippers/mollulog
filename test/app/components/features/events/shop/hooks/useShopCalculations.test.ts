@@ -139,4 +139,48 @@ describe("useShopCalculations input tracking", () => {
     expect(result.current.isReady).toBe(true);
     expect(calculateShopApRequirement).toHaveBeenCalledTimes(1);
   });
+
+  it("stops calculating and reports a failure when the calculation throws", async () => {
+    jest.useFakeTimers();
+    const calculate = jest.mocked(calculateShopApRequirement);
+    const succeed = calculate.getMockImplementation();
+    if (!succeed) throw new Error("calculate mock has no implementation");
+    calculate.mockClear();
+    calculate.mockImplementation(() => {
+      throw new Error("solver failed");
+    });
+    const appliedBonusRatio = {};
+    const { result } = renderHook(() =>
+      useShopCalculations({
+        state,
+        stages,
+        shopResources,
+        appliedBonusRatio,
+        jankenClearedStageUids: noClearedJankenStages,
+        jankenStagePlays: noJankenStagePlays,
+        jankenScore: { currentScore: 0, averageScore: null },
+      }),
+    );
+
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+
+    expect(result.current.isCalculating).toBe(false);
+    expect(result.current.calculationFailed).toBe(true);
+
+    calculate.mockImplementation(succeed);
+    act(() => {
+      result.current.retryCalculation();
+    });
+    expect(result.current.calculationFailed).toBe(false);
+    expect(result.current.isCalculating).toBe(true);
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(300);
+    });
+
+    expect(result.current.calculationFailed).toBe(false);
+    expect(result.current.isReady).toBe(true);
+    expect(calculate).toHaveBeenCalledTimes(2);
+  });
 });

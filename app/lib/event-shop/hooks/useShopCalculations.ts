@@ -162,6 +162,10 @@ export function useShopCalculations({
   const jankenAverageScore = jankenScore.averageScore;
   const [result, setResult] = useState<CalculationResult>(EMPTY_RESULT);
   const [isCalculating, setIsCalculating] = useState(false);
+  // A thrown calculation must not leave the result waiting forever. The failure shows until the inputs change or
+  // the viewer retries.
+  const [calculationFailed, setCalculationFailed] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCompletedInputsRef = useRef<readonly unknown[] | null>(null);
   const inputSets = useMemo(
@@ -240,6 +244,7 @@ export function useShopCalculations({
     inputSets.user,
   );
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: retryCount reruns the same inputs after a failed calculation.
   useEffect(() => {
     const currentInputSets = inputSetsRef.current;
     const {
@@ -261,6 +266,7 @@ export function useShopCalculations({
       clearTimeout(debounceTimerRef.current);
     }
 
+    setCalculationFailed(false);
     if (holdCalculations) {
       setIsCalculating(false);
       setResult(EMPTY_RESULT);
@@ -271,8 +277,9 @@ export function useShopCalculations({
 
     // Debounce calculation by 300ms to prevent excessive recalculations
     debounceTimerRef.current = setTimeout(() => {
-      setResult(
-        calculateShopApRequirement({
+      let nextResult: CalculationResult;
+      try {
+        nextResult = calculateShopApRequirement({
           state: calculationState,
           stages: calculationStages,
           shopResources: calculationShopResources,
@@ -284,8 +291,14 @@ export function useShopCalculations({
           jankenClearedStageUids: calculationJankenClearedStageUids,
           jankenStagePlays: calculationJankenStagePlays,
           jankenScore: calculationJankenScore,
-        }),
-      );
+        });
+      } catch (error) {
+        console.error("Event shop calculation failed", error);
+        setCalculationFailed(true);
+        setIsCalculating(false);
+        return;
+      }
+      setResult(nextResult);
       lastCompletedInputsRef.current = calculationInputs;
       lastCompletedUserInputsRef.current = inputSetsRef.current.user;
       setIsCalculating(false);
@@ -296,15 +309,17 @@ export function useShopCalculations({
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [calculationInputs, holdCalculations]);
+  }, [calculationInputs, holdCalculations, retryCount]);
 
   return useMemo(
     () => ({
       ...(holdCalculations ? EMPTY_RESULT : result),
-      isCalculating: holdCalculations ? false : !isReady || isCalculating,
+      isCalculating: holdCalculations || calculationFailed ? false : !isReady || isCalculating,
       isReady,
-      isUserCalculating,
+      isUserCalculating: calculationFailed ? false : isUserCalculating,
+      calculationFailed: !holdCalculations && calculationFailed,
+      retryCalculation: () => setRetryCount((count) => count + 1),
     }),
-    [holdCalculations, result, isCalculating, isReady, isUserCalculating],
+    [holdCalculations, result, isCalculating, isReady, isUserCalculating, calculationFailed],
   );
 }
