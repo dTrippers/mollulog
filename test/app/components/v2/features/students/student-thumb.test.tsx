@@ -136,7 +136,7 @@ describe("StudentThumb shop grid options", () => {
 
     expect(container.firstElementChild?.className).toContain("w-full");
     expect(container.querySelector("img")?.className).toContain("grayscale");
-    expect(container.querySelector(".bg-v2-scrim")?.textContent).toContain("키사키");
+    expect(container.querySelector(".bg-linear-15")?.textContent).toContain("키사키");
     expect(screen.getByText("모집")).toBeTruthy();
   });
 
@@ -147,11 +147,11 @@ describe("StudentThumb shop grid options", () => {
       overlayOnMobile: true,
     });
 
-    const caption = container.querySelector(".absolute.inset-x-0");
-    expect(caption?.className).toContain("block");
+    const caption = container.querySelector(".bg-linear-15");
+    expect(caption?.className).toContain("flex");
     expect(caption?.className).not.toContain("hidden");
-    expect(screen.getByText("수영복")).toBeTruthy();
-    expect(screen.getByText("키사키")).toBeTruthy();
+    // The variant sits small above the name, as the 1.x cards did.
+    expect(caption?.textContent).toBe("수영복키사키");
   });
 
   it("moves the selected check below the recruitment badge when opted in", () => {

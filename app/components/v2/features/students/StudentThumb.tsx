@@ -126,14 +126,18 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         haloScale="72%"
       />
       {overlayCaption ? (
+        // As the 1.x student cards did: a gradient rising from the bottom-left corner keeps the name readable while
+        // leaving the face uncovered, with the variant set small above the name.
         <span
           className={cn(
-            "absolute inset-x-0 bottom-0 bg-v2-scrim px-1 py-0.5 text-center text-[0.625rem] leading-tight text-v2-on-media",
-            overlayOnMobile ? "block" : "hidden md:block",
+            "absolute inset-0 flex-col justify-end bg-linear-15 from-v2-scrim from-10% via-transparent via-50% to-transparent px-0.5 pb-px text-left text-v2-on-media text-shadow-sm text-shadow-v2-scrim md:px-1 md:pb-0.5",
+            overlayOnMobile ? "flex" : "hidden md:flex",
           )}
         >
-          <span className="block truncate font-medium">{name}</span>
-          {variant ? <span className="block truncate text-[0.5625rem] text-v2-on-media/80">{variant}</span> : null}
+          {variant ? (
+            <span className="block truncate text-[0.5625rem] leading-none font-bold tracking-tighter">{variant}</span>
+          ) : null}
+          <span className="block truncate text-[0.6875rem] leading-tight font-bold tracking-tighter">{name}</span>
         </span>
       ) : null}
       {overlayCaption && showRecruitmentLabel && recruitmentLabel ? (
