@@ -66,11 +66,12 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `bg-v2-warning-subtle` | `oklch(0.965 0.05 95)` | `oklch(0.33 0.07 75)` | Status: background of a value that needs confirmation (D6). The text on it keeps `text-v2-fg` (16.8:1 light, 18.0:1 dark, measured). The tone is the background only; the label carries the meaning |
 | `text-v2-live`, `bg-v2-live` | `oklch(0.505 0.213 27.518)` | `oklch(0.704 0.191 22.216)` | In-progress dot and label (domain) |
 | `text-v2-favorite` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Favorite heart (domain). Red, the same hue family as live; the heart shape carries the meaning |
-| `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, and a restriction notice. Pair with a clock icon and text, semibold |
+| `text-v2-warning` | `oklch(0.55 0.163 48.998)` | `oklch(0.828 0.189 84.429)` | Ending soon, recruitment-period caution, a restriction notice, and a loss notice (something the user will lose, such as currency left unspent). Pair with an icon and text, semibold |
 | `text-v2-perk` | `oklch(0.52 0.105 223.128)` | `oklch(0.865 0.127 207.078)` | Benefit, such as a free-recruit special case. Pair with a star icon and text, semibold |
 | `text-v2-star` | `oklch(0.795 0.184 86.047)` | `oklch(0.852 0.199 91.936)` | Star-tier icons (★ marks in tier pickers and target tier faces). A non-text marker like `attr-yellow`; always paired with the tier number or an accessible tier name |
 | `text-v2-ap` | `oklch(0.448 0.119 151.328)` | `oklch(0.871 0.15 154.449)` | AP totals and stage costs; measured contrast is 17.0:1 light and 11.7:1 dark on surface |
 | `text-v2-perk-on-media` | `#fdba74` | same | Bonus label on a `bg-v2-scrim`; fixed orange-300 in both themes so it stays legible over the dark image scrim |
+| `bg-v2-selected-on-media` | `oklch(0.6 0.15 252)` | same | Selected mark on a student portrait: a small circle with a white check (`text-v2-on-media`) and no border. One deep blue in both themes so the mark stays visible on bright and dark portraits |
 | `bg-v2-item-rarity-1…4` | `#f5f5f5` / `#bfdbfe` / `#fed7aa` / `#e9d5ff` | `#737373` / `#93c5fd` / `#fdba74` / `#d8b4fe` | Resource thumbnail backgrounds, copied from the 1.x neutral-100/neutral-500, blue-200/blue-300, orange-200/orange-300, and purple-200/purple-300 values |
 | `bg-v2-recruitment-tier-1/2/3` | `oklch(0.488 0.243 264.376)` / `oklch(0.555 0.163 48.998)` / `oklch(0.496 0.265 301.924)` | `oklch(0.707 0.165 254.624)` / `oklch(0.828 0.189 84.429)` / `oklch(0.714 0.203 305.504)` | Recruitment rarity markers. The visual marker is paired with a star-rarity accessible label |
 | `bg-v2-treasure-heat-0…5` | `oklch(0.96 0.02 255)` / `oklch(0.91 0.04 255)` / `oklch(0.86 0.07 255)` / `oklch(0.80 0.10 255)` / `oklch(0.74 0.13 255)` / `oklch(0.68 0.16 255)` | `oklch(0.30 0.055 255)` / `oklch(0.35 0.075 255)` / `oklch(0.40 0.095 255)` / `oklch(0.45 0.115 255)` / `oklch(0.50 0.135 255)` / `oklch(0.55 0.155 255)` | Blue treasure probability heatmap: 0, ≤20%, ≤40%, ≤60%, ≤80%, and >80%. Percent text contrast is at least 6.19:1 light and 4.90:1 dark |
@@ -125,6 +126,7 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - Remaining time: `N일 남음` for a running period, `N일 후 시작` for a future one.
 - Counts: thousands separator, for example `1,234`.
 - Comparison tables: right-align the date and figure columns so rows compare by digit position.
+- Show each value in its own unit, and compare or subtract only values of the same unit. A difference between 청휘석 and a recruit count (for example "차이 30회") is meaningless.
 
 ## Status and domain
 
@@ -140,6 +142,52 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - In dark mode, `live` and `attr-red` share the same value. Always show them with their labels.
 - The light `attr-yellow` stripe has low contrast (about 1.68:1). The text label carries the meaning, so the stripe stays.
 - Show terrain adaptation ranks with the rank icons (`TerrainRanks`, `terrainAdaptationIconUrl`), not `SS` / `S` / `A` text. The icon carries `적성 <rank>` as its accessible name.
+
+## Screen design rules
+
+These rules come from the product owner's reviews of design proposals and implemented screens. They apply to every v2 screen and to every design proposal for one.
+
+- A designer who wants to depart from a rule marks the departure on the proposal with the reason, so the owner can approve or reject it. An implementation does not depart from a rule without that approval.
+- Each rule states its scope. Do not stretch a rule past it: the tier star color is for growth tiers, not for the free-recruit perk star.
+- When the owner states a preference in a review that applies beyond the screen under review, add it here once the owner approves the wording.
+
+### Keep what the current screen offers
+
+- A redesign keeps every capability, label, and link the current production screen offers. Removing, renaming, or moving one is a proposal for the owner, never a silent change. Lack of space is not a reason to drop a capability; rearrange instead.
+- Keep the existing label names (for example 픽업 외 모집 가능). Do not invent a new label for an existing concept.
+- Where MolluLog mirrors the game, follow the in-game layout and notation: the shop grid's columns, base and bonus drops as the same icon in different colors, tier stars, and the exclusive weapon icon.
+- Compare a redesign with the current screen. A new structure that reads worse than the current one is a regression, not a trade-off; keep the current structure for that part.
+
+### Information
+
+- Show a fact, notice, or label in one place. Do not repeat it inside and outside a card, in a tab and in the Aside beside it, or in a badge and the banner below it.
+- Information that stays on screen must help a decision. Remove constants, values that are always zero, and rules that apply to every user, or move them behind an action (a tooltip, popover, or bottom sheet).
+- Add a description under a title, section, or link only when it carries something the user cannot otherwise tell. Keep text short; a concise screen beats an explanatory one.
+- Secondary content, such as a video list, does not take a large share of the screen.
+- A step in the user's plan belongs in Main, not in an Aside.
+- A notice about something the user will lose or cannot do (unspent currency, a pickup that cannot be recruited) uses the warning style, not a neutral information line.
+- A calculated result that is not ready or failed shows that state. Never show it as 0, 충분, or any other value it does not have.
+- A result for a currency allows several acquisition and consumption sources. A display with one slot per currency is a defect.
+- UI copy uses polite, neutral wording. Avoid casual or condescending words (갖고 있는, 키운다) and labels that read as a judgment of the user (운).
+
+### Icons and images
+
+- Show game objects (currencies, items, students, the exclusive weapon) with their game images, not their names or a generic icon.
+- Keep status, category, and count labels as text. Do not replace them with icons.
+- Game icon images carry transparent padding, so they look smaller than their box. Size them by the visible object, next to the text they go with.
+- Growth-tier stars use `text-v2-star`, and the exclusive weapon uses its game icon (`TierInput`, `GrowthTier`).
+- Never crop a student image arbitrarily. A name overlay sits in the bottom-left corner and does not cover the face or outfit.
+- The selected mark on a portrait is small: `bg-v2-selected-on-media` with a white check and no border.
+- Do not show event progress as a progress bar.
+
+### Layout and spacing
+
+- Density is two separate judgments. Controls stay compact (see `min-h-v2-control-min` and `min-h-v2-input-min`); do not enlarge them. Space between elements is generous enough that a block with many elements does not look cramped; when it does, add space between elements or quiet secondary ones, not larger controls.
+- UI that appears and disappears, such as a save status, never sits in the layout flow, where it pushes the content below it. Use an overlay: autosave status uses `primitives/SaveToast`.
+- Group with spacing and surfaces, not borders. Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal.
+- One page uses one content width. Sections, banners, and notices in Main share the same maximum width, so their edges line up.
+- Elements of the same kind keep one width and even spacing whatever their number: three tier targets do not stretch to fill a row, and a column of owned currencies is evenly spaced.
+- Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
 
 ## Motion
 
@@ -358,7 +406,9 @@ Every event detail tab uses `width="wide"` with `toolbarSpan="full"`, so the tab
 - Listed resources use `ResourceThumb` with `quantity` in a `gap-1` row. A resource that is the subject of its own design may keep that design.
 - The shop grid keeps its tile, which mirrors the in-game shop: 2 columns on mobile and 4 from a 40rem container. From a 48rem container the currency tabs (`SectionTabs verticalWhenWide`) become a left column, as in the game.
 - Student bonus pickers keep one card size in every view: 7 portrait-only columns on mobile, and more named columns as the page widens.
-- Buttons have four roles: `primary` for the one main action on a screen, `secondary`, `danger`, and `link` for navigation. A report action under a notice is a full-width `secondary` button on its own row.
+- Buttons have four roles: `primary` for the one main action on a screen, `secondary`, `danger`, and `link` for navigation.
+- A data-error notice and its report action share one line: small tertiary text with an icon, and a `size="sm"` `Button` at the end of the line. Do not make the report action a full-width button, a card, or a row of its own.
+- Cleared stages are grouped by type (스토리, 노말, 챌린지).
 - Chips and number inputs are 28px.
 
 ### Form (reading, no Aside)
