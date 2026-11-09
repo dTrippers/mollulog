@@ -164,6 +164,8 @@ These rules come from the product owner's reviews of design proposals and implem
 - Show a fact, notice, or label in one place. Do not repeat it inside and outside a card, in a tab and in the Aside beside it, or in a badge and the banner below it.
 - Information that stays on screen must help a decision. Remove constants, values that are always zero, and rules that apply to every user, or move them behind an action (a tooltip, popover, or bottom sheet).
 - Add a description under a title, section, or link only when it carries something the user cannot otherwise tell. Keep text short; a concise screen beats an explanatory one.
+- Do explain what the user cannot infer: a control or value that is not intuitive, a new feature, or an interaction that exists only on this screen. Say briefly what it is, where it is needed; put a long or rarely needed explanation behind a tooltip or help action.
+- Do not show internal or system labels the user cannot interpret, such as IDs, code names, or internal cost terms.
 - Secondary content, such as a video list, does not take a large share of the screen.
 - A step in the user's plan belongs in Main, not in an Aside.
 - A notice about something the user will lose or cannot do (unspent currency, a pickup that cannot be recruited) uses the warning style, not a neutral information line.
