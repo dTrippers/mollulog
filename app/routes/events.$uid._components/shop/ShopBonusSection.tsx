@@ -258,6 +258,7 @@ function BonusStudentThumb({
       onSelect={onSelect}
       selected={selected}
       selectedIndicatorPosition="mobile-bottom-left"
+      selectedIndicatorSize="small"
       fluid
       captionPlacement="overlay"
       grayscaleWhenUnselected

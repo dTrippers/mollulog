@@ -164,7 +164,7 @@ describe("StudentThumb shop grid options", () => {
       captionPlacement: "overlay",
     });
 
-    const selectedIndicator = container.querySelector(".bg-v2-fg");
+    const selectedIndicator = container.querySelector(".bg-v2-selected-on-media");
     expect(selectedIndicator?.className).toContain("bottom-1");
     expect(selectedIndicator?.className).toContain("md:top-1");
     expect(selectedIndicator?.className).toContain("md:bottom-auto");
@@ -174,7 +174,7 @@ describe("StudentThumb shop grid options", () => {
   it("keeps the selected check at the top for callers that do not opt in", () => {
     const { container } = renderThumb({ onOpen: undefined, onSelect: jest.fn<() => void>(), selected: true });
 
-    const selectedIndicator = container.querySelector(".bg-v2-fg");
+    const selectedIndicator = container.querySelector(".bg-v2-selected-on-media");
     expect(selectedIndicator?.className).toContain("top-1");
     expect(selectedIndicator?.className).not.toContain("bottom-1");
   });

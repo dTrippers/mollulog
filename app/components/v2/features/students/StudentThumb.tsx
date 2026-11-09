@@ -160,7 +160,8 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
       {onSelect && selected && showSelectedIndicator ? (
         <span
           className={cn(
-            "absolute flex items-center justify-center rounded-full bg-v2-fg text-v2-canvas",
+            // A deep blue with a white check and a soft shadow stays visible on both bright and dark portraits.
+            "absolute flex items-center justify-center rounded-full bg-v2-selected-on-media text-v2-on-media shadow-sm shadow-v2-scrim",
             selectedIndicatorSize === "small" ? "left-0.5 size-3.5" : "left-1 size-5",
             selectedIndicatorPosition === "mobile-bottom-left"
               ? "bottom-1 md:top-1 md:bottom-auto"

@@ -512,6 +512,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-star: var(--v2-star);
   --color-v2-ap: var(--v2-ap);
   --color-v2-perk-on-media: var(--v2-perk-on-media);
+  --color-v2-selected-on-media: var(--v2-selected-on-media);
   --color-v2-item-rarity-1: var(--v2-item-rarity-1);
   --color-v2-item-rarity-2: var(--v2-item-rarity-2);
   --color-v2-item-rarity-3: var(--v2-item-rarity-3);
@@ -616,6 +617,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-star: oklch(0.795 0.184 86.047);
   --v2-ap: oklch(0.448 0.119 151.328);
   --v2-perk-on-media: #fdba74;
+  /* The selected check on a portrait: one blue in both themes, deep enough for a white check on any image. */
+  --v2-selected-on-media: oklch(0.6 0.15 252);
   --v2-item-rarity-1: #f5f5f5;
   --v2-item-rarity-2: #bfdbfe;
   --v2-item-rarity-3: #fed7aa;
