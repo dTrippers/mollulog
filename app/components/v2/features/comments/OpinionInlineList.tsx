@@ -4,10 +4,11 @@ import {
   BookmarkIcon as BookmarkOutlineIcon,
   EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { formatThousands } from "~/domain/futures/futures-view-model";
 import type { UtcIsoString } from "~/lib/date-time";
+import { cn } from "~/lib/utils";
 import type { NestedComment } from "~/models/content";
 import { ActionMenu, type ActionMenuItem } from "../../primitives/ActionMenu";
 import { Button } from "../../primitives/Button";
@@ -247,9 +248,7 @@ function InlineOpinion({
             </Link>
             <div className="min-w-0">
               <OpinionMeta comment={firstReply} now={now} size="reply" />
-              <p className="mt-0.5 line-clamp-3 text-sm leading-normal wrap-break-word whitespace-pre-line text-v2-fg">
-                {firstReply.body}
-              </p>
+              <ClampedReply key={`${firstReply.uid}:${firstReply.body}`} body={firstReply.body} />
               {moreReplies.length > 0 ? (
                 <button
                   type="button"
@@ -273,6 +272,46 @@ function InlineOpinion({
         ) : null}
       </div>
     </li>
+  );
+}
+
+// The first reply is cut at three lines. A reader can always unfold it here, since the full thread may offer nothing
+// else to a signed-out reader of a single reply.
+function ClampedReply({ body }: { body: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [clamped, setClamped] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node || expanded) return;
+    const measure = () => setClamped(node.scrollHeight > node.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [expanded]);
+  return (
+    <>
+      <p
+        ref={ref}
+        className={cn(
+          "mt-0.5 text-sm leading-normal wrap-break-word whitespace-pre-line text-v2-fg",
+          !expanded && "line-clamp-3",
+        )}
+      >
+        {body}
+      </p>
+      {clamped && !expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-0.5 rounded-sm text-xs font-semibold text-v2-fg-tertiary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+        >
+          더 보기
+        </button>
+      ) : null}
+    </>
   );
 }
 

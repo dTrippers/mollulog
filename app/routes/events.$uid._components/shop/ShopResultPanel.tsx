@@ -1,4 +1,10 @@
-import { ArrowPathIcon, ClockIcon, InformationCircleIcon, UserIcon } from "@heroicons/react/16/solid";
+import {
+  ArrowPathIcon,
+  ClockIcon,
+  ExclamationTriangleIcon,
+  InformationCircleIcon,
+  UserIcon,
+} from "@heroicons/react/16/solid";
 import { type FormEvent, useState } from "react";
 import { useFetcher } from "react-router";
 import { Button } from "~/components/v2/primitives/Button";
@@ -22,12 +28,7 @@ export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
   const questRuns = rows.reduce((sum, row) => sum + row.runs, 0);
   const extraRuns = rows.reduce((sum, row) => sum + row.extraRuns, 0);
   const showDetails = slot.kind === "ready";
-  const treasureNote =
-    plan.resultTreasureHuntStatus === "provisional"
-      ? treasureHuntLocale.provisionalResult
-      : plan.resultTreasureHuntStatus === "round-limit"
-        ? treasureHuntLocale.roundLimitResult
-        : null;
+  const treasureNote = plan.resultTreasureHuntStatus === "provisional" ? treasureHuntLocale.provisionalResult : null;
 
   return (
     <div data-region="result-summary" aria-busy={recalculating || slot.kind === "waiting"}>
@@ -40,6 +41,11 @@ export function ShopResultContents({ plan }: { plan: EventShopPlanContext }) {
       ) : slot.kind === "waiting" ? (
         <p role="status" className="mt-2 flex items-center gap-1.5 text-sm text-v2-fg-secondary">
           <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
+          {slot.text}
+        </p>
+      ) : slot.kind === "blocked" ? (
+        <p role="status" className="mt-2 flex items-start gap-1.5 text-sm text-v2-warning">
+          <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
           {slot.text}
         </p>
       ) : slot.kind === "failed" ? (

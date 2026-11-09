@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import "../../layout/layout-test-polyfills";
-import { describe, expect, it } from "@jest/globals";
+import { afterEach, describe, expect, it } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import {
@@ -89,5 +89,34 @@ describe("OpinionInlineList", () => {
     ]);
 
     expect(shownBodies()).toEqual(["의견 a", "의견 b", "의견 c"]);
+  });
+
+  describe("a long first reply", () => {
+    const original = {
+      scrollHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollHeight"),
+      clientHeight: Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight"),
+    };
+    afterEach(() => {
+      for (const [key, descriptor] of Object.entries(original)) {
+        if (descriptor) Object.defineProperty(HTMLElement.prototype, key, descriptor);
+      }
+    });
+
+    it("unfolds in place for a signed-out reader with no other way into the thread", () => {
+      // jsdom has no layout: report the clamped paragraph as taller than its three visible lines.
+      Object.defineProperty(HTMLElement.prototype, "scrollHeight", { configurable: true, get: () => 120 });
+      Object.defineProperty(HTMLElement.prototype, "clientHeight", { configurable: true, get: () => 60 });
+      const parent = comment("a", "2026-11-01T00:00:00.000Z");
+      const reply = { ...comment("r", "2026-11-02T00:00:00.000Z"), body: "첫 줄\n둘째 줄\n셋째 줄\n넷째 줄" };
+      renderList([{ ...parent, subcomments: [reply] } as NestedComment]);
+
+      const replyBody = screen.getByText(/첫 줄/);
+      expect(replyBody.className).toContain("line-clamp-3");
+      expect(screen.queryByRole("button", { name: "답글 달기" })).toBeNull();
+
+      fireEvent.click(screen.getByRole("button", { name: "더 보기" }));
+      expect(screen.getByText(/첫 줄/).className).not.toContain("line-clamp-3");
+      expect(screen.queryByRole("button", { name: "더 보기" })).toBeNull();
+    });
   });
 });

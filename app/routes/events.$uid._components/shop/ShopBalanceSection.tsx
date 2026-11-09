@@ -10,7 +10,7 @@ import type { ResourceTypeEnum } from "~/graphql/graphql";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
 import { cn } from "~/lib/utils";
 import { cardFlipLocale } from "~/locales/ko";
-import { minigameTitle, normalStages } from "./shop-model";
+import { minigameTitle, normalStages, resultSlotState } from "./shop-model";
 import { formatCount, Pill, ShopSection, ShopSectionHeader } from "./shop-ui";
 
 // Per currency: what the plan gets, what it needs, and whether that is enough.
@@ -43,7 +43,15 @@ function BalanceCard({
   const breakdown = plan.stageCalculations.itemBreakdown;
   const uid = resource.uid;
   const minigame = plan.minigameConfig ? minigameTitle(plan.minigameConfig.minigameType) : "미니게임";
+  // The owned count is the player's input, so the field reads the state right away. The breakdown echoes it only after
+  // the debounced calculation, and reading it back would drop digits typed in between.
+  const owned = plan.state.existingPaymentItemQuantities[uid] ?? 0;
   const existing = breakdown.existing[uid] ?? 0;
+  // While the calculation waits, fails, or cannot run, the breakdown holds no result for this plan. Its zeros must not
+  // read as "enough".
+  const slot = resultSlotState(plan);
+  const settled = slot.kind === "ready" || slot.kind === "empty";
+  const recalculating = settled && plan.isCalculating;
   const acquiredSources = [
     { label: "스테이지 소탕", value: breakdown.fromRepeatedRuns[uid] ?? 0 },
     { label: `${minigame} 기대 보상`, value: breakdown.fromMinigame[uid] ?? 0 },
@@ -63,6 +71,7 @@ function BalanceCard({
   const unobtainable = (plan.stageCalculations.unobtainableTargets[uid] ?? 0) > 0;
   const fixStage = unobtainable ? bestDisabledStageFor(plan, uid) : null;
   const showOverrideInput = override !== undefined || editingRequired;
+  const unsettledLabel = slot.kind === "failed" ? "계산 실패" : slot.kind === "blocked" ? "계산 불가" : "계산 중";
 
   return (
     <div className="rounded-lg bg-v2-surface p-3">
@@ -81,7 +90,9 @@ function BalanceCard({
             <span className="min-w-0 truncate text-sm font-semibold text-v2-fg">{resource.name}</span>
           </div>
           <div className="mt-2 flex">
-            {shortfall > 0 ? (
+            {!settled ? (
+              <Pill tone="neutral">{unsettledLabel}</Pill>
+            ) : shortfall > 0 ? (
               <Pill tone="danger">
                 <ExclamationTriangleIcon className="size-3.5" aria-hidden="true" />
                 {formatCount(shortfall)} 부족
@@ -94,27 +105,27 @@ function BalanceCard({
             )}
           </div>
         </div>
-        <div>
-          <BalanceHead label="획득 개수" value={formatCount(acquired)} />
+        <div className={cn(recalculating && "opacity-50")}>
+          <BalanceHead label="획득 개수" value={settled ? formatCount(acquired) : "—"} />
           <BalanceLine label={<label htmlFor={`balance-owned-${uid}`}>보유 개수</label>}>
             <NumberInput
               id={`balance-owned-${uid}`}
               aria-label={`${resource.name} 보유 개수`}
               compact
               min={0}
-              value={existing}
+              value={owned}
               className="w-24 text-right font-semibold"
               onChange={(event) =>
                 plan.actions.updateExistingQuantity(uid, wholeCount(event.currentTarget.valueAsNumber))
               }
             />
           </BalanceLine>
-          {acquiredSources.map(({ label, value }) => (
+          {(settled ? acquiredSources : []).map(({ label, value }) => (
             <BalanceLine key={label} label={label}>
               <b className="font-semibold tabular-nums text-v2-fg-secondary">{formatCount(Math.floor(value))}</b>
             </BalanceLine>
           ))}
-          {unobtainable ? (
+          {settled && unobtainable ? (
             <BalanceLine
               danger
               label={
@@ -132,8 +143,8 @@ function BalanceCard({
             </BalanceLine>
           ) : null}
         </div>
-        <div>
-          <BalanceHead label="필요 개수" value={formatCount(required)} />
+        <div className={cn(recalculating && "opacity-50")}>
+          <BalanceHead label="필요 개수" value={override !== undefined || settled ? formatCount(required) : "—"} />
           {showOverrideInput ? (
             <BalanceLine label={<label htmlFor={`balance-required-${uid}`}>직접 입력</label>}>
               <NumberInput
@@ -149,7 +160,7 @@ function BalanceCard({
               />
             </BalanceLine>
           ) : (
-            requiredSources.map(({ label, value }) => (
+            (settled ? requiredSources : []).map(({ label, value }) => (
               <BalanceLine key={label} label={label}>
                 <b className="font-semibold tabular-nums text-v2-fg-secondary">{formatCount(Math.ceil(value))}</b>
               </BalanceLine>

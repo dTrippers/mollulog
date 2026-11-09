@@ -239,6 +239,26 @@ describe("janken planner screen", () => {
     expect(view.container.textContent).not.toContain("약 0");
   });
 
+  it("shows a failed AP calculation with a retry instead of a zero or stale AP", () => {
+    const entry = entryWithScoreTarget(100_000);
+    setSharedEntry(entry);
+    const retryCalculation = jest.fn();
+    mockPlan = {
+      ...mockPlan,
+      isCalculating: false,
+      calculationFailed: true,
+      retryCalculation,
+      stageCalculations: { ...mockPlan.stageCalculations, totalApWithExtras: 1234 },
+    };
+    renderScreen();
+
+    expect(screen.getByRole("alert").textContent).toContain("계산하지 못했어요");
+    expect(document.body.textContent).not.toContain("약 1,234");
+    expect(document.body.textContent).not.toContain("약 0");
+    fireEvent.click(screen.getByRole("button", { name: "다시 계산" }));
+    expect(retryCalculation).toHaveBeenCalledTimes(1);
+  });
+
   it("follows desktop and mobile reference tab defaults until the user selects a tab", () => {
     const view = renderScreen();
     expect(screen.queryByRole("button", { name: "효율 비교" })).toBeNull();

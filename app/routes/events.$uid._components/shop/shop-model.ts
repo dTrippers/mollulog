@@ -47,6 +47,8 @@ export type ResultSlotState =
   | { kind: "ready" }
   | { kind: "empty" }
   | { kind: "waiting"; text: string }
+  // The input itself rules the calculation out, so nothing will arrive until the player changes it.
+  | { kind: "blocked"; text: string }
   | { kind: "failed"; text: string; retryLabel: string; retry: () => void };
 
 // What the AP slot shows. Waiting and failure replace the AP number; recalculation keeps the previous values dimmed.
@@ -78,6 +80,8 @@ export function resultSlotState(plan: EventShopPlanContext): ResultSlotState {
       retry: plan.treasureHuntCalculation.retry,
     };
   }
+  if (plan.resultTreasureHuntStatus === "round-limit")
+    return { kind: "blocked", text: treasureHuntLocale.roundLimitResult };
   if (plan.roadPuzzlePlannerStatus === "pending") return { kind: "waiting", text: "철도 연결 계산을 기다리는 중" };
   if (plan.holdTreasureHuntCalculations || plan.resultTreasureHuntStatus === "pending") {
     return { kind: "waiting", text: "보물찾기 계산을 기다리는 중" };

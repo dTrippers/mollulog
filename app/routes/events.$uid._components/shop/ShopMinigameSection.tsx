@@ -536,7 +536,7 @@ function TreasureHuntCard({ plan, config }: { plan: EventShopPlanContext; config
                     <span className="text-xs text-v2-fg-tertiary">
                       {calculation.progress === null
                         ? treasureHuntLocale.calculatingShort
-                        : treasureHuntLocale.progress(Math.round(calculation.progress * 100))}
+                        : treasureHuntLocale.progress(calculation.progress)}
                     </span>
                   )
                 }

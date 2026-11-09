@@ -399,6 +399,8 @@ export const jankenLocale = {
   entryCurrencyRequired: "필요 입장 재화",
   requiredApTitle: "필요 AP",
   calculationPending: "계산 중…",
+  calculationFailed: "계산하지 못했어요",
+  retryCalculation: "다시 계산",
   invalidSaveInput: "계획 내용을 확인해 주세요.",
   loginRequired: "로그인이 필요해요.",
   unreadableSaveInput: "요청 내용을 읽지 못했어요.",

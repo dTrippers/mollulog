@@ -64,6 +64,21 @@ describe("shop v2 result area", () => {
     expect(markup).not.toContain("살 아이템을 고르면 계산해요");
   });
 
+  it("tells the player to lower a treasure hunt round over the limit instead of waiting forever", () => {
+    const emptyPlan = createEventShopPlan();
+    const markup = render(
+      createEventShopPlan({
+        holdTreasureHuntCalculations: true,
+        resultTreasureHuntStatus: "round-limit",
+        state: { ...emptyPlan.state, itemQuantities: { "shop-item": 1 } },
+      }),
+    );
+
+    expect(markup).toContain("목표 회차가 100회를 넘어 소탕 횟수와 필요 AP를 계산할 수 없어요.");
+    expect(markup).not.toContain("보물찾기 계산을 기다리는 중");
+    expect(markup).not.toContain('aria-busy="true"');
+  });
+
   it("shows a save failure as an alert toast with a retry action", () => {
     const retry = jest.fn();
     const markup = renderToStaticMarkup(createElement(SaveToast, { saving: false, failed: true, onRetry: retry }));

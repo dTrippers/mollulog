@@ -1,4 +1,5 @@
 import {
+  ArrowPathIcon,
   ArrowRightIcon,
   CheckIcon,
   ChevronDownIcon,
@@ -267,9 +268,13 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
     goals.targetScore == null &&
     goals.targetEquipmentTier == null &&
     goals.shopCurrencyMode === "linked";
-  const apPending = planned.status === "available" && plan.isCalculating;
-  const ap = planned.status === "available" && !apPending ? plan.stageCalculations.totalApWithExtras : null;
-  const apText = ap == null ? (apPending ? t.calculationPending : "—") : t.approximate(ap);
+  // A failed AP calculation must not read as a result: it shows the failure with a retry instead of 0 or the last AP.
+  const apFailed = planned.status === "available" && plan.calculationFailed;
+  const apPending = planned.status === "available" && !apFailed && plan.isCalculating;
+  const ap =
+    planned.status === "available" && !apPending && !apFailed ? plan.stageCalculations.totalApWithExtras : null;
+  const apText =
+    ap == null ? (apFailed ? t.calculationFailed : apPending ? t.calculationPending : "—") : t.approximate(ap);
   const entryUid = planned.entryResourceUid;
   const entryName = nameOf(entryUid, t.entryCurrency);
   const entryCostText = planned.status === "available" ? planned.entryCost.toLocaleString() : "—";
@@ -294,14 +299,24 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
       ) : null}
       <div className="mt-3 h-px bg-v2-divider" />
       <p className="mt-3 text-xs text-v2-fg-tertiary">{t.requiredApTitle}</p>
-      <p
-        className={cn(
-          "text-2xl leading-[1.2] font-bold tabular-nums",
-          ap == null ? "text-v2-fg-tertiary" : "text-v2-ap",
-        )}
-      >
-        {apText}
-      </p>
+      {apFailed ? (
+        <div role="alert" className="mt-1 flex flex-col items-start gap-2">
+          <p className="text-sm font-medium text-v2-danger">{apText}</p>
+          <Button size="sm" onClick={plan.retryCalculation}>
+            <ArrowPathIcon className="size-4" aria-hidden="true" />
+            {t.retryCalculation}
+          </Button>
+        </div>
+      ) : (
+        <p
+          className={cn(
+            "text-2xl leading-[1.2] font-bold tabular-nums",
+            ap == null ? "text-v2-fg-tertiary" : "text-v2-ap",
+          )}
+        >
+          {apText}
+        </p>
+      )}
       <Link
         to={`/events/${loaderData.eventUid}/shop`}
         className={cn(

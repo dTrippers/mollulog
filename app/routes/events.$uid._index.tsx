@@ -15,14 +15,7 @@ import { calendarDayDifference } from "~/domain/home-portal";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
 import { getAvailableFreeRecruitmentPulls, isPickupUnavailableRecruitment } from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-notice";
-import {
-  formatInstant,
-  formatInstantDateKey,
-  nowUtcIso,
-  parseUtcTimestamp,
-  toUtcIso,
-  type UtcIsoString,
-} from "~/lib/date-time";
+import { formatInstant, formatInstantDateKey, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { conjunctionParticle } from "~/lib/korean";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
@@ -223,10 +216,6 @@ export const meta: MetaFunction<typeof loader> = ({ data, params, location }) =>
 
 // The artwork carries the name and period, so the page header keeps only its back link.
 export const handle = { ownsOpenGraphImage: true, v2HeaderTitleHidden: true } as const;
-
-function addDays(instant: UtcIsoString, days: number): UtcIsoString {
-  return toUtcIso(parseUtcTimestamp(instant).add(days, "day").toDate());
-}
 
 export default function EventIndex() {
   const data = useLoaderData<typeof loader>();
@@ -554,11 +543,12 @@ function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now:
       term: "프리미엄 대시",
       detail: (
         <span className="flex flex-col">
-          <span className="tabular-nums">
-            ~ {formatInstant(addDays(eventContent.since, PREMIUM_DASH_DAYS), { timeZone, format: "MM/DD" })}
-          </span>
+          {/* The window starts at the later of the event start and the player's first sign-up, which the page does
+              not know, so it states the rule instead of one end date. */}
+          <span className="tabular-nums">{PREMIUM_DASH_DAYS}일간</span>
           <span className="mt-1 text-xs text-v2-fg-tertiary">
-            이벤트 시작일과 블루 아카이브 최초 가입일 중 늦은 날부터 {PREMIUM_DASH_DAYS}일
+            이벤트 시작일({formatInstant(eventContent.since, { timeZone, format: "MM/DD" })})과 블루 아카이브 최초
+            가입일 중 늦은 날부터
           </span>
         </span>
       ),

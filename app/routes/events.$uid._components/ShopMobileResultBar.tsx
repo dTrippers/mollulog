@@ -1,4 +1,10 @@
-import { ChevronUpIcon, ClockIcon, ExclamationCircleIcon, ListBulletIcon } from "@heroicons/react/16/solid";
+import {
+  ChevronUpIcon,
+  ClockIcon,
+  ExclamationCircleIcon,
+  ExclamationTriangleIcon,
+  ListBulletIcon,
+} from "@heroicons/react/16/solid";
 import { MobileActionBar, useV2Page } from "~/components/v2/layout";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import type { EventShopPlanContext } from "~/lib/event-shop/plan-context";
@@ -74,6 +80,11 @@ export function ShopMobileResultBar({
                 <span className="block text-lg leading-[1.2] font-bold text-v2-fg-tertiary">—</span>
                 <span className="mt-0.5 block text-xs text-v2-fg-tertiary">살 아이템을 고르면 계산해요</span>
               </>
+            ) : slot.kind === "blocked" ? (
+              <span className="flex items-center gap-1.5 text-sm text-v2-warning">
+                <ExclamationTriangleIcon className="size-4 shrink-0" aria-hidden="true" />
+                <span className="truncate">{slot.text}</span>
+              </span>
             ) : slot.kind === "waiting" ? (
               <span className="flex items-center gap-1.5 text-sm text-v2-fg-secondary">
                 <ClockIcon className="size-4 shrink-0" aria-hidden="true" />

@@ -365,6 +365,52 @@ describe("event recruitment period notice presentation", () => {
     expect(markup).not.toContain('role="alert"');
   });
 
+  it("states the premium dash rule instead of one end date, since the end depends on the player's sign-up", () => {
+    mockedUseLoaderData.mockReturnValue({
+      eventContent: {
+        name: "미래 이벤트",
+        since: "2030-01-10T00:00:00.000Z",
+        until: "2030-01-20T00:00:00.000Z",
+        imageUrl: null,
+        type: "event",
+        runType: "first",
+        endless: false,
+        videos: [],
+        recruitmentGroupUid: "group-a",
+        recruitmentPeriod: { ...recruitmentPeriod, recruitmentType: "premium_dash" },
+        recruitments: [pickupRecruitment],
+      },
+      signedIn: false,
+      hideRecruitmentOpinions: false,
+      canFilterRecruitmentOpinions: true,
+      allComments: [],
+      commentsUnavailable: false,
+      eventUid: "future-event",
+      siblingEvents: [{ uid: "sibling-event", name: "동시 개최 이벤트" }],
+      shopPortal: { status: "ready", since: "2030-01-10T00:00:00.000Z", until: "2030-01-20T00:00:00.000Z", currencies: [] },
+      recruitmentUnavailable: false,
+      minigameType: null,
+      minigameUnavailable: false,
+    } as never);
+
+    mockLayout({
+      uid: "future-event",
+      recruitmentGroupUid: "group-a",
+      minigameType: null,
+      shopAvailability: "ready",
+      activeTab: "overview",
+      linkState: undefined,
+    });
+
+    const markup = renderToStaticMarkup(createElement(MemoryRouter, null, createElement(EventIndex)));
+
+    expect(markup).toContain("프리미엄 대시");
+    expect(markup).toContain("28일간");
+    expect(markup).toMatch(/이벤트 시작일\(01\/10\)과 블루 아카이브 최초\s+가입일 중 늦은 날부터/);
+    // The event start plus 28 days is only right for players who signed up before the event.
+    expect(markup).not.toContain("~ 02/07");
+  });
+
   it("lists the other screens in the event menu and dims the ones the event cannot use", () => {
     mockedUseLoaderData.mockReturnValue({
       eventContent: {
