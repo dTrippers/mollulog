@@ -925,6 +925,12 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   margin-bottom: var(--spacing-v2-group-gap);
 }
 
+/* Screen navigation tabs sit between the header and the screen, so they keep the header's gap below them at every
+   width, where other stacked toolbars tighten to the block gap. */
+.v2-toolbar:has([data-v2-screen-navigation-item]) {
+  margin-bottom: var(--spacing-v2-group-gap);
+}
+
 .v2-tabs {
   margin-left: -0.75rem;
 }

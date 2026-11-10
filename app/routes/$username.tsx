@@ -33,6 +33,7 @@ import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
+import { MovedMenusNotice } from "./$username._components/MovedMenusNotice";
 import { UserFollowButton } from "./$username._components/UserFollowButton";
 import { UserHeaderDetails } from "./$username._components/UserHeaderDetails";
 import { buildUserScreenItems, type UserLayoutContext } from "./$username._components/user-layout";
@@ -208,6 +209,7 @@ export default function User() {
         )}
       </ScreenNavigationFocusScope>
       <PageMain>
+        {data.isOwner ? <MovedMenusNotice /> : null}
         <Outlet context={outletContext} />
       </PageMain>
       {mobileActions ? (

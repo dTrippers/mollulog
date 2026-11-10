@@ -2,7 +2,7 @@
  * @jest-environment jsdom
  */
 import "../components/v2/layout/layout-test-polyfills";
-import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createRoutesStub, data } from "react-router";
 import { SignInProvider, useSignIn } from "~/contexts/SignInProvider";
@@ -29,6 +29,11 @@ jest.mock("~/models/recruitment-result.server", () => ({ getRecruitmentResults: 
 jest.mock("~/routes/$username._components/route-sensei.server", () => ({ getRouteSensei: jest.fn() }));
 
 import UserLayout, { ErrorBoundary } from "~/routes/$username";
+import {
+  MOVED_MENUS_NOTICE_ENDS_AT,
+  MOVED_MENUS_NOTICE_STORAGE_KEY,
+  MovedMenusNotice,
+} from "~/routes/$username._components/MovedMenusNotice";
 import { useUserLayout } from "~/routes/$username._components/user-layout";
 
 type LayoutData = {
@@ -238,6 +243,57 @@ describe("@username layout menu", () => {
     expect(document.querySelector(".v2-action-bar")).toBeNull();
   });
 });
+
+describe("@username moved menus notice", () => {
+  const duringNotice = () => MOVED_MENUS_NOTICE_ENDS_AT - 1;
+
+  beforeEach(() => {
+    localStorage.removeItem(MOVED_MENUS_NOTICE_STORAGE_KEY);
+    jest.spyOn(Date, "now").mockReturnValue(duringNotice());
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("tells only the owner where the moved menus are, with a link to their walkthrough timelines", async () => {
+    renderLayout({ isOwner: true, signedIn: true });
+
+    expect(await screen.findByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "내 공략 타임라인" }).getAttribute("href")).toBe("/timelines?mine=1");
+    expect(screen.queryByText(/관심 학생/)).toBeNull();
+  });
+
+  it("does not show the notice to a visitor", async () => {
+    renderLayout({ signedIn: true });
+
+    await screen.findByRole("heading", { level: 1, name: "@sensei" });
+    expect(screen.queryByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+  });
+
+  it("remembers a dismissal in this browser", async () => {
+    const first = render(<MemoryRouterNotice now={duringNotice} />);
+    fireEvent.click(await screen.findByRole("button", { name: "안내 닫기" }));
+    expect(screen.queryByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+    expect(localStorage.getItem(MOVED_MENUS_NOTICE_STORAGE_KEY)).toBe("1");
+    first.unmount();
+
+    render(<MemoryRouterNotice now={duringNotice} />);
+    await waitFor(() => expect(screen.queryByRole("button", { name: "안내 닫기" })).toBeNull());
+  });
+
+  it("stops showing once the notice period ends", async () => {
+    render(<MemoryRouterNotice now={() => MOVED_MENUS_NOTICE_ENDS_AT} />);
+
+    await waitFor(() => expect(screen.queryByRole("button", { name: "안내 닫기" })).toBeNull());
+    expect(screen.queryByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeNull();
+  });
+});
+
+function MemoryRouterNotice({ now }: { now: () => number }) {
+  const Stub = createRoutesStub([{ path: "/", Component: () => <MovedMenusNotice now={now} /> }]);
+  return <Stub initialEntries={["/"]} />;
+}
 
 describe("@username follow button", () => {
   it("follows with the existing action contract and reports a failure in words", async () => {
