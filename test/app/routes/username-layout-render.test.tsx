@@ -40,6 +40,9 @@ type LayoutData = {
   isOwner: boolean;
   signedIn: boolean;
   following: boolean;
+  bio: string | null;
+  friendCode: string | null;
+  followCounts: { following: number; followers: number } | null;
   recruitedStudentCount: number | null;
   pickupCount: number | null;
 };
@@ -53,6 +56,9 @@ const base: LayoutData = {
   isOwner: false,
   signedIn: false,
   following: false,
+  bio: "첫 줄\n둘째 줄",
+  friendCode: "ABCDEFGH",
+  followCounts: { following: 3, followers: 1234 },
   recruitedStudentCount: 244,
   pickupCount: 56,
 };
@@ -111,21 +117,51 @@ beforeEach(() => {
 });
 
 describe("@username layout header", () => {
-  it("shows the owner the @username title, the visibility line, and the primary 프로필 관리 button", async () => {
+  it("shows the owner the @username title and the primary 프로필 관리 button, without a visibility line", async () => {
     renderLayout({ isOwner: true, signedIn: true });
 
     expect(await screen.findByRole("heading", { level: 1, name: "@sensei" })).toBeTruthy();
-    expect(screen.getByText("프로필 공개 · 학생 성장도 나만 보기")).toBeTruthy();
+    expect(screen.queryByText(/프로필 공개|학생 성장도/)).toBeNull();
     const manage = screen.getByRole("link", { name: "프로필 관리" });
     expect(manage.getAttribute("href")).toBe("/edit");
     expect(screen.queryByRole("button", { name: "팔로우" })).toBeNull();
     expect(screen.queryByText("선생님의 정보를 확인해보세요")).toBeNull();
   });
 
-  it("shows the owner's private profile and public growth in the visibility line", async () => {
-    renderLayout({ isOwner: true, signedIn: true, profileVisibility: "private", growthVisibility: true });
+  it("marks a private profile beside the @username", async () => {
+    renderLayout({ isOwner: true, signedIn: true, profileVisibility: "private" });
 
-    expect(await screen.findByText("프로필 비공개 · 학생 성장도 공개")).toBeTruthy();
+    expect(await screen.findByRole("heading", { level: 1, name: "@sensei 비공개 프로필" })).toBeTruthy();
+  });
+
+  it("shows the friend code and the follow counts linked to the friends tabs under the @username", async () => {
+    renderLayout({ signedIn: true });
+
+    const heading = await screen.findByRole("heading", { level: 1, name: "@sensei" });
+    expect(heading.textContent).toBe("@sensei");
+    expect(screen.getByText("ABCDEFGH")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "친구 코드 복사" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "팔로잉 3" }).getAttribute("href")).toBe("/@sensei/friends?tab=following");
+    expect(screen.getByRole("link", { name: "팔로워 1,234" }).getAttribute("href")).toBe(
+      "/@sensei/friends?tab=followers",
+    );
+  });
+
+  it("shows the introduction in the header with its line breaks", async () => {
+    renderLayout({ signedIn: true });
+
+    await screen.findByRole("heading", { level: 1, name: "@sensei" });
+    const bio = screen.getByText((_, element) => element?.tagName === "P" && element.textContent === "첫 줄\n둘째 줄");
+    expect(bio.className).toContain("whitespace-pre-wrap");
+  });
+
+  it("leaves out a missing introduction and friend code and follow counts that failed to load", async () => {
+    renderLayout({ signedIn: true, bio: null, friendCode: null, followCounts: null });
+
+    await screen.findByRole("heading", { level: 1, name: "@sensei" });
+    expect(screen.queryByText(/첫 줄/)).toBeNull();
+    expect(screen.queryByText("친구 코드")).toBeNull();
+    expect(screen.queryByRole("link", { name: /^팔로/ })).toBeNull();
   });
 
   it("shows a visitor only the title and the follow button", async () => {
@@ -185,7 +221,7 @@ describe("@username layout menu", () => {
     ]);
   });
 
-  it("gives only the owner the 화면 인식·데이터 연동 shortcut in the Aside and the mobile action bar", async () => {
+  it("gives only the owner the data connect shortcut in the Aside and the mobile action bar", async () => {
     const { unmount } = renderLayout({ isOwner: true, signedIn: true });
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
@@ -193,7 +229,7 @@ describe("@username layout menu", () => {
     expect(asideLink.getAttribute("href")).toBe("/scanner");
     expect(within(asideLink).getByText("게임 스크린샷, 녹화 영상이나 외부 사이트 데이터를 반영할 수 있어요")).toBeTruthy();
     const actionBar = document.querySelector(".v2-action-bar") as HTMLElement;
-    expect(within(actionBar).getByRole("link", { name: "화면 인식·데이터 연동" }).getAttribute("href")).toBe("/scanner");
+    expect(within(actionBar).getByRole("link", { name: "데이터 연동" }).getAttribute("href")).toBe("/scanner");
     unmount();
 
     renderLayout({ signedIn: true });

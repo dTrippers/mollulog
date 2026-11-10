@@ -1,7 +1,6 @@
 import {
   CameraIcon,
   ChartBarIcon,
-  EyeIcon,
   LockClosedIcon,
   PencilSquareIcon,
   UserCircleIcon,
@@ -35,7 +34,8 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { UserFollowButton } from "./$username._components/UserFollowButton";
-import { buildUserScreenItems, getVisibilityLine, type UserLayoutContext } from "./$username._components/user-layout";
+import { UserHeaderDetails } from "./$username._components/UserHeaderDetails";
+import { buildUserScreenItems, type UserLayoutContext } from "./$username._components/user-layout";
 
 const SCANNER_LINK = {
   title: "화면 인식·데이터 연동",
@@ -60,11 +60,17 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const logger = getLogger(env, ctx, { route: "$username" });
   const isOwner = currentUser?.id === sensei.id;
 
-  const [following, recruitedStudentCount, pickupCount] = await Promise.all([
-    // Only a signed-in visitor sees a follow button, so only that visit needs the relationship.
-    currentUser && !isOwner
-      ? getFollowershipSummary(env, sensei.id, currentUser.id, { ctx }).then((summary) => summary.following)
-      : Promise.resolve(false),
+  // Only a signed-in visitor sees a follow button, so only that visit needs the relationship, and a failed lookup fails
+  // the layout there. Everywhere else the counts are secondary and drop out on failure.
+  const viewerId = currentUser && !isOwner ? currentUser.id : undefined;
+  const [followership, recruitedStudentCount, pickupCount] = await Promise.all([
+    getFollowershipSummary(env, sensei.id, viewerId, { ctx }).catch((error: unknown) => {
+      if (viewerId !== undefined) {
+        throw error;
+      }
+      logger.error("User layout followership counts failed", error);
+      return null;
+    }),
     countOrNull("recruited student", logger, async () => (await getRecruitedStudents(env, sensei.id)).length),
     countOrNull(
       "pickup record",
@@ -81,7 +87,12 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
     growthVisibility: sensei.growthVisibility ?? false,
     isOwner,
     signedIn: currentUser !== null,
-    following,
+    following: followership?.following ?? false,
+    bio: sensei.bio || null,
+    friendCode: sensei.friendCode ?? null,
+    followCounts: followership
+      ? { following: followership.followingCount, followers: followership.followerCount }
+      : null,
     recruitedStudentCount,
     pickupCount,
   };
@@ -147,19 +158,29 @@ export default function User() {
     ],
   );
 
-  const VisibilityIcon = data.profileVisibility === "public" ? EyeIcon : LockClosedIcon;
-
   return (
     <V2Page width="wide">
       <PageHeader
-        title={<span className="block truncate">@{data.username}</span>}
+        title={
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate">@{data.username}</span>
+            {data.profileVisibility === "public" ? null : (
+              <>
+                <LockClosedIcon className="size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
+                <span className="sr-only">비공개 프로필</span>
+              </>
+            )}
+          </span>
+        }
         media={<SenseiAvatar profileStudentId={data.profileStudentId} labels={data.labels} size="header" />}
-        meta={
-          data.isOwner ? (
-            <span className="inline-flex items-center gap-1" data-region="visibility">
-              <VisibilityIcon className="size-3.5 shrink-0" aria-hidden="true" />
-              {getVisibilityLine(data)}
-            </span>
+        details={
+          data.bio || data.friendCode || data.followCounts ? (
+            <UserHeaderDetails
+              username={data.username}
+              bio={data.bio}
+              friendCode={data.friendCode}
+              counts={data.followCounts}
+            />
           ) : undefined
         }
         trailing={
@@ -192,9 +213,7 @@ export default function User() {
       {mobileActions ? (
         <MobileActionBar {...mobileActions} />
       ) : data.isOwner ? (
-        <MobileActionBar
-          links={[{ key: "scanner", title: SCANNER_LINK.title, Icon: CameraIcon, to: SCANNER_LINK.to }]}
-        />
+        <MobileActionBar links={[{ key: "scanner", title: "데이터 연동", Icon: CameraIcon, to: SCANNER_LINK.to }]} />
       ) : null}
     </V2Page>
   );

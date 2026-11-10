@@ -21,6 +21,8 @@ export type PageHeaderProps = {
   // Keeps `trailing` beside the heading at every width instead of stacking it below, for a short action such as a
   // primary button. The heading truncates before the action wraps.
   trailingInline?: boolean;
+  // Full-width lines under the heading row, below the media too, such as a profile's introduction and counts.
+  details?: ReactNode;
   // Hide the header beside an aside, where the page renders `PageAsideHeader` at the top of the aside instead.
   stackedOnly?: boolean;
 };
@@ -76,11 +78,14 @@ export function PageHeader({
   trailing,
   trailingInline = false,
   stackedOnly = false,
+  details,
 }: PageHeaderProps) {
+  // A title alone beside the media, with its lines moved to `details`, sits in the middle of the row.
+  const centered = Boolean(media && details && !meta && !description && !back);
   const heading = media ? (
     <div className={cn("min-w-0", trailing && trailingInline && "flex-1")}>
       {back ? <HeaderBack back={back} titleHidden={titleHidden} /> : null}
-      <div className="flex min-w-0 items-start gap-v2-media-gap">
+      <div className={cn("flex min-w-0 gap-v2-media-gap", centered ? "items-center" : "items-start")}>
         <div className="w-[3.75rem] shrink-0">{media}</div>
         <div className="min-w-0 flex-1">
           <HeaderText title={title} description={description} meta={meta} titleHidden={titleHidden} compactMeta />
@@ -89,33 +94,45 @@ export function PageHeader({
     </div>
   ) : null;
 
-  if (!trailing) {
-    return (
-      <div className="v2-header min-w-0 pb-v2-group-gap" data-stacked-only={stackedOnly ? "true" : undefined}>
-        {heading ?? (
+  const stackedOnlyAttribute = stackedOnly ? "true" : undefined;
+  const headerClassName = "v2-header min-w-0 pb-v2-group-gap";
+  const rowClassName = trailing
+    ? cn(
+        "flex min-w-0 gap-v2-block-gap",
+        trailingInline
+          ? cn("flex-row justify-between", centered ? "items-center" : "items-start")
+          : "flex-col @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between",
+      )
+    : "min-w-0";
+  const rowContent = (
+    <>
+      {heading ??
+        (trailing ? (
+          <div className={cn("min-w-0", trailingInline && "flex-1")}>
+            <HeaderText title={title} description={description} back={back} meta={meta} titleHidden={titleHidden} />
+          </div>
+        ) : (
           <HeaderText title={title} description={description} back={back} meta={meta} titleHidden={titleHidden} />
-        )}
+        ))}
+      {trailing ? (
+        <div className={cn("min-w-0", trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0")}>
+          {trailing}
+        </div>
+      ) : null}
+    </>
+  );
+
+  if (!details) {
+    return (
+      <div data-stacked-only={stackedOnlyAttribute} className={cn(headerClassName, trailing && rowClassName)}>
+        {rowContent}
       </div>
     );
   }
   return (
-    <div
-      data-stacked-only={stackedOnly ? "true" : undefined}
-      className={cn(
-        "v2-header flex min-w-0 gap-v2-block-gap pb-v2-group-gap",
-        trailingInline
-          ? "flex-row items-start justify-between"
-          : "flex-col @min-[60rem]/page-available:flex-row @min-[60rem]/page-available:items-start @min-[60rem]/page-available:justify-between",
-      )}
-    >
-      {heading ?? (
-        <div className={cn("min-w-0", trailingInline && "flex-1")}>
-          <HeaderText title={title} description={description} back={back} meta={meta} titleHidden={titleHidden} />
-        </div>
-      )}
-      <div className={cn("min-w-0", trailingInline ? "shrink-0" : "@min-[60rem]/page-available:shrink-0")}>
-        {trailing}
-      </div>
+    <div data-stacked-only={stackedOnlyAttribute} className={headerClassName}>
+      <div className={rowClassName}>{rowContent}</div>
+      <div className="mt-3 min-w-0">{details}</div>
     </div>
   );
 }

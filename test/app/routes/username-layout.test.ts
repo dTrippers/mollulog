@@ -6,12 +6,7 @@ import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { loader } from "~/routes/$username";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
-import {
-  buildUserScreenItems,
-  formatUserCount,
-  getUserScreen,
-  getVisibilityLine,
-} from "~/routes/$username._components/user-layout";
+import { buildUserScreenItems, formatUserCount, getUserScreen } from "~/routes/$username._components/user-layout";
 
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
@@ -49,12 +44,14 @@ beforeEach(() => {
     profileVisibility: "public",
     growthVisibility: false,
     labels: [],
+    friendCode: "ABCDEFGH",
+    bio: "소개",
   } as unknown as Awaited<ReturnType<typeof getRouteSensei>>);
   mockedGetFollowershipSummary.mockResolvedValue({
     followed: false,
     following: true,
-    followerCount: 0,
-    followingCount: 0,
+    followerCount: 12,
+    followingCount: 3,
   });
   mockedGetRecruitedStudents.mockResolvedValue([{}, {}, {}] as Awaited<ReturnType<typeof getRecruitedStudents>>);
   mockedGetRecruitmentResults.mockResolvedValue([
@@ -66,6 +63,12 @@ beforeEach(() => {
 
 describe("@username layout loader", () => {
   it("returns the owner header data and counts without loading the relationship", async () => {
+    mockedGetFollowershipSummary.mockResolvedValue({
+      followed: false,
+      following: false,
+      followerCount: 12,
+      followingCount: 3,
+    });
     const result = await loader(args);
 
     expect(result).toEqual({
@@ -77,11 +80,14 @@ describe("@username layout loader", () => {
       isOwner: true,
       signedIn: true,
       following: false,
+      bio: "소개",
+      friendCode: "ABCDEFGH",
+      followCounts: { following: 3, followers: 12 },
       recruitedStudentCount: 3,
       // Only a result that is completed or has a recorded student is a pickup record, as in the pickups list.
       pickupCount: 2,
     });
-    expect(mockedGetFollowershipSummary).not.toHaveBeenCalled();
+    expect(mockedGetFollowershipSummary).toHaveBeenCalledWith(env, 1, undefined, { ctx: expect.anything() });
   });
 
   it("reads the relationship for a signed-in visitor", async () => {
@@ -95,13 +101,43 @@ describe("@username layout loader", () => {
     expect(mockedGetFollowershipSummary).toHaveBeenCalledWith(env, 1, 2, { ctx: expect.anything() });
   });
 
-  it("treats a signed-out visitor as not following without a lookup", async () => {
+  it("treats a signed-out visitor as not following and reads only the counts", async () => {
     mockedGetActiveSensei.mockResolvedValue(null);
+    mockedGetFollowershipSummary.mockResolvedValue({
+      followed: false,
+      following: false,
+      followerCount: 12,
+      followingCount: 3,
+    });
 
     const result = await loader(args);
 
-    expect(result).toMatchObject({ isOwner: false, signedIn: false, following: false });
-    expect(mockedGetFollowershipSummary).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      isOwner: false,
+      signedIn: false,
+      following: false,
+      followCounts: { following: 3, followers: 12 },
+    });
+    expect(mockedGetFollowershipSummary).toHaveBeenCalledWith(env, 1, undefined, { ctx: expect.anything() });
+  });
+
+  it("drops the follow counts when they fail to load for a visit without a follow button", async () => {
+    mockedGetActiveSensei.mockResolvedValue(null);
+    mockedGetFollowershipSummary.mockRejectedValue(new Error("database unavailable"));
+
+    const result = await loader(args);
+
+    expect(result).toMatchObject({ following: false, followCounts: null, friendCode: "ABCDEFGH" });
+    expect(logger.error).toHaveBeenCalledWith("User layout followership counts failed", expect.any(Error));
+  });
+
+  it("fails the layout when a signed-in visitor's relationship fails to load", async () => {
+    mockedGetActiveSensei.mockResolvedValue({ id: 2, username: "other" } as Awaited<
+      ReturnType<typeof getActiveSensei>
+    >);
+    mockedGetFollowershipSummary.mockRejectedValue(new Error("database unavailable"));
+
+    await expect(loader(args)).rejects.toThrow("database unavailable");
   });
 
   it("drops a count that fails to load instead of showing zero", async () => {
@@ -152,14 +188,5 @@ describe("@username layout screens", () => {
   it("omits a count that is unknown and keeps a real zero", () => {
     expect(formatUserCount(null)).toBeUndefined();
     expect(formatUserCount(0)).toBe("0");
-  });
-
-  it.each([
-    [{ profileVisibility: "public", growthVisibility: false }, "프로필 공개 · 학생 성장도 나만 보기"],
-    [{ profileVisibility: "public", growthVisibility: true }, "프로필 공개 · 학생 성장도 공개"],
-    [{ profileVisibility: "private", growthVisibility: false }, "프로필 비공개 · 학생 성장도 나만 보기"],
-    [{ profileVisibility: "private", growthVisibility: true }, "프로필 비공개 · 학생 성장도 공개"],
-  ] as const)("writes the owner's visibility line for %j", (input, line) => {
-    expect(getVisibilityLine(input)).toBe(line);
   });
 });

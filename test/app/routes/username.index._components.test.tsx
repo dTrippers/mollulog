@@ -5,31 +5,12 @@ import "../components/v2/layout/layout-test-polyfills";
 import { describe, expect, it } from "@jest/globals";
 import { render, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
-import { ProfileIntroCard } from "../../../app/routes/$username._index._components/ProfileIntroCard";
 import { ProfileRecordSummary } from "../../../app/routes/$username._index._components/ProfileRecordSummary";
 
 function renderInRouter(element: React.ReactElement) {
   const router = createMemoryRouter([{ path: "*", element }], { initialEntries: ["/"] });
   return render(<RouterProvider router={router} />);
 }
-
-describe("ProfileIntroCard", () => {
-  it("links the follower count to the followers tab", async () => {
-    renderInRouter(
-      <ProfileIntroCard username="arona" bio="소개" friendCode="ABCDEFGH" followingCount={3} followerCount={12} />,
-    );
-    expect((await screen.findByRole("link", { name: "팔로워 12" })).getAttribute("href")).toBe(
-      "/@arona/friends?tab=followers",
-    );
-    expect(screen.getByRole("link", { name: "팔로잉 3" }).getAttribute("href")).toBe("/@arona/friends?tab=following");
-  });
-
-  it("omits the bio and the friend code when they are empty", async () => {
-    renderInRouter(<ProfileIntroCard username="arona" bio={null} friendCode={null} followingCount={0} followerCount={0} />);
-    await screen.findByRole("link", { name: "팔로워 0" });
-    expect(screen.queryByText("친구 코드")).toBeNull();
-  });
-});
 
 describe("ProfileRecordSummary", () => {
   const props = { username: "arona", tierCounts: { 3: 2 }, recruitedCount: 2, totalCount: 10 };

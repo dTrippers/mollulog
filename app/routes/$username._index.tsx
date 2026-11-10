@@ -7,7 +7,6 @@ import { hasAccountLabel } from "~/domain/account-label";
 import { getLogger } from "~/lib/observability.server";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
-import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 import { COMMUNITY_FEED_PAGE_SIZE, COMMUNITY_VISIBLE_POST_TYPES } from "~/views/community";
@@ -15,7 +14,7 @@ import { enrichCommunityFeedPosts } from "~/views/community.server";
 import { getRecruitmentRecordSummary } from "~/views/recruitment-record-summary.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { useUserLayout } from "./$username._components/user-layout";
-import { OfficialAccountNotice, ProfileIntroCard } from "./$username._index._components/ProfileIntroCard";
+import { OfficialAccountNotice } from "./$username._index._components/OfficialAccountNotice";
 import {
   ProfileRecordSummary,
   type ProfileRecordSummaryData,
@@ -80,8 +79,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const page = parsePage(request);
   const logger = getLogger(env, ctx, { route: "$username._index" });
 
-  const [followership, recruitedStudents, allReleasedStudents, feed, records] = await Promise.all([
-    getFollowershipSummary(env, sensei.id, currentUser?.id, { ctx }),
+  const [recruitedStudents, allReleasedStudents, feed, records] = await Promise.all([
     getRecruitedStudents(env, sensei.id),
     getAllStudents(env),
     loadFeed(env, ctx, logger, { currentUserId: currentUser?.id, authorUserId: sensei.id, page }),
@@ -96,11 +94,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   return {
     sensei: {
       labels: sensei.labels ?? [],
-      bio: sensei.bio ?? null,
-      friendCode: sensei.friendCode ?? null,
     },
-    followingCount: followership.followingCount,
-    followerCount: followership.followerCount,
     tierCounts,
     recruitedStudentCount: recruitedStudents.length,
     totalStudentCount: allReleasedStudents.length,
@@ -136,7 +130,7 @@ export const meta: MetaFunction = ({ params }) => {
 };
 
 export default function UserIndex() {
-  const { sensei, followingCount, followerCount, tierCounts, recruitedStudentCount, totalStudentCount, records, feed } =
+  const { sensei, tierCounts, recruitedStudentCount, totalStudentCount, records, feed } =
     useLoaderData<typeof loader>();
   const { username } = useUserLayout();
   const [searchParams] = useSearchParams();
@@ -152,13 +146,6 @@ export default function UserIndex() {
   return (
     <div className="flex flex-col gap-v2-section-gap">
       {hasAccountLabel(sensei.labels, "official") ? <OfficialAccountNotice /> : null}
-      <ProfileIntroCard
-        username={username}
-        bio={sensei.bio}
-        friendCode={sensei.friendCode}
-        followingCount={followingCount}
-        followerCount={followerCount}
-      />
       <ProfileRecordSummary
         username={username}
         tierCounts={tierCounts}

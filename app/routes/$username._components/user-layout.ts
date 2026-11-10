@@ -89,18 +89,5 @@ export function buildUserScreenItems({
   ];
 }
 
-// The owner's second header line. Visitors never see it.
-export function getVisibilityLine({
-  profileVisibility,
-  growthVisibility,
-}: {
-  profileVisibility: ProfileVisibility;
-  growthVisibility: boolean;
-}): string {
-  const profile = profileVisibility === "public" ? "프로필 공개" : "프로필 비공개";
-  const growth = growthVisibility ? "학생 성장도 공개" : "학생 성장도 나만 보기";
-  return `${profile} · ${growth}`;
-}
-
 export const FOLLOW_FAILURE_MESSAGE = "팔로우하지 못했어요. 다시 시도해주세요.";
 export const UNFOLLOW_FAILURE_MESSAGE = "팔로우를 해제하지 못했어요. 다시 시도해주세요.";
