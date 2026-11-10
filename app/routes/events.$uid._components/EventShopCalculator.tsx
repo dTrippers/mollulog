@@ -31,8 +31,8 @@ export default function EventShopCalculator() {
     <>
       <PageMain>
         <div className="flex flex-col gap-10">
-          <ShopItemsSection plan={plan} />
           <ShopBonusSection plan={plan} />
+          <ShopItemsSection plan={plan} />
           <ShopStagesSection plan={plan} />
           <ShopMinigameSection plan={plan} />
           <ShopBalanceSection plan={plan} />

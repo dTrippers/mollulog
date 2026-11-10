@@ -30,27 +30,47 @@ function planWith(overrides: Partial<EventShopPlanContext> = {}) {
 }
 
 describe("shop v2 currency balance", () => {
-  it("shows the owned count as typed, before the debounced calculation echoes it", () => {
+  it("edits the owned count from its popover and applies it on save", () => {
     const updateExistingQuantity = jest.fn<(uid: string, value: number) => void>();
     const base = planWith();
-    // The calculation still holds the count from before the last keystroke.
     const plan = createEventShopPlan({
       ...base,
       state: { ...base.state, existingPaymentItemQuantities: { "event-currency": 1 } },
       actions: { ...base.actions, updateExistingQuantity },
     });
-    const view = render(createElement(ShopBalanceSection, { plan }));
-    const input = screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수");
+    render(createElement(ShopBalanceSection, { plan }));
+    fireEvent.click(screen.getByRole("button", { name: "이벤트 재화 보유 개수 입력" }));
+    const input = screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수", { selector: "input" });
     expect(input.value).toBe("1");
 
     fireEvent.change(input, { target: { value: "12" } });
+    expect(updateExistingQuantity).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "저장" }));
     expect(updateExistingQuantity).toHaveBeenLastCalledWith("event-currency", 12);
-    view.rerender(
+  });
+
+  it("lists the sources of the required and acquired counts", () => {
+    const base = planWith();
+    render(
       createElement(ShopBalanceSection, {
-        plan: { ...plan, state: { ...plan.state, existingPaymentItemQuantities: { "event-currency": 12 } } },
+        plan: {
+          ...base,
+          stageCalculations: {
+            ...base.stageCalculations,
+            itemBreakdown: {
+              ...base.stageCalculations.itemBreakdown,
+              fromRepeatedRuns: { "event-currency": 240 },
+              remaining: { "event-currency": -60 },
+            },
+          },
+        },
       }),
     );
-    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수").value).toBe("12");
+
+    expect(screen.getByText("필요 개수").nextElementSibling?.textContent).toBe("300");
+    expect(screen.getByText("획득 개수").nextElementSibling?.textContent).toBe("240");
+    expect(screen.getByText("· 퀘스트")).toBeTruthy();
+    expect(screen.getByText("부족 개수").nextElementSibling?.textContent).toBe("60");
   });
 
   it("does not read a failed calculation as enough", () => {
@@ -66,10 +86,11 @@ describe("shop v2 currency balance", () => {
     );
 
     expect(screen.getByText("계산 실패")).toBeTruthy();
-    expect(screen.queryByText("충분")).toBeNull();
+    expect(screen.queryByText("부족 개수")).toBeNull();
     expect(screen.getAllByText("—")).toHaveLength(2);
     // The owned count stays editable and keeps the saved value.
-    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수").value).toBe("500");
+    fireEvent.click(screen.getByRole("button", { name: "이벤트 재화 보유 개수 입력" }));
+    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 보유 개수", { selector: "input" }).value).toBe("500");
   });
 
   it("waits for the first calculation instead of reading its empty result as enough", () => {
@@ -78,7 +99,7 @@ describe("shop v2 currency balance", () => {
     );
 
     expect(screen.getByText("계산 중")).toBeTruthy();
-    expect(screen.queryByText("충분")).toBeNull();
+    expect(screen.queryByText("부족 개수")).toBeNull();
     expect(screen.getAllByText("—")).toHaveLength(2);
   });
 
@@ -97,15 +118,15 @@ describe("shop v2 currency balance", () => {
       }),
     );
 
-    expect(screen.getByText(/300 부족/)).toBeTruthy();
+    expect(screen.getByText("부족 개수").nextElementSibling?.textContent).toBe("300");
     expect(screen.queryByText("계산 중")).toBeNull();
-    expect(container.querySelectorAll(".opacity-50")).toHaveLength(2);
+    expect(container.querySelectorAll(".opacity-50")).toHaveLength(3);
   });
 
   it("marks a pending treasure hunt calculation as calculating, not as zero", () => {
     render(createElement(ShopBalanceSection, { plan: planWith({ resultTreasureHuntStatus: "pending" }) }));
 
     expect(screen.getByText("계산 중")).toBeTruthy();
-    expect(screen.queryByText("충분")).toBeNull();
+    expect(screen.queryByText("부족 개수")).toBeNull();
   });
 });

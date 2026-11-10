@@ -267,7 +267,7 @@ describe("event shop v2 calculator", () => {
     }
   });
 
-  it("edits owned and required currency inline and offers a reset for an overridden requirement", () => {
+  it("edits owned and target currency from popovers and offers a reset for an overridden target", () => {
     const resetOverriddenRequired = jest.fn<(uid: string) => void>();
     const base = createEventShopPlan({
       collectableResources: [
@@ -282,9 +282,13 @@ describe("event shop v2 calculator", () => {
 
     renderDom(createElement(MemoryRouter, null, createElement(EventShopCalculator)));
 
-    expect(screen.getByLabelText("이벤트 재화 보유 개수")).toBeTruthy();
-    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 필요 개수").value).toBe("1000");
-    fireEvent.click(screen.getByRole("button", { name: "계산값으로 되돌리기" }));
+    expect(screen.getByRole("button", { name: "이벤트 재화 보유 개수 입력" })).toBeTruthy();
+    expect(screen.getByText("· 입력한 목표 개수")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "이벤트 재화 목표 개수 입력" }));
+    expect(screen.getByLabelText<HTMLInputElement>("이벤트 재화 목표 개수", { selector: "input" }).value).toBe("1000");
+    fireEvent.click(
+      within(screen.getByRole("dialog", { name: "이벤트 재화 목표 개수" })).getByRole("button", { name: "초기화" }),
+    );
     expect(resetOverriddenRequired).toHaveBeenCalledWith("event-currency");
   });
 
