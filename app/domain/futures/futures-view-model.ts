@@ -353,6 +353,11 @@ export function isStoryContentType(contentType: string): boolean {
   return contentType === "main_story" || contentType === "mini_story";
 }
 
+// Contents dated by a single release or addition day rather than a period.
+export function isReleaseDatedContentType(contentType: string): boolean {
+  return isStoryContentType(contentType) || contentType === "ko_voice";
+}
+
 export function formatOpenEndedStart(startLabel: string, contentType: string): string {
   if (contentType === "ko_voice") return `${startLabel} 추가`;
   return isStoryContentType(contentType) ? `${startLabel} 공개` : `${startLabel}부터`;
