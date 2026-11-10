@@ -419,6 +419,16 @@ export async function saveStudentBasicInfoBatch(
                   conflicts.push({ studentUid: entry.studentUid, field, current: current[field] });
                 }
               }
+              // Before the nullable cutover, clearing a bond deletes its whole relationship row, with the target and the
+              // gift plan the relationship screen keeps there, so a cleared bond is refused instead.
+              if (
+                context.mode !== "nullable" &&
+                Object.hasOwn(entry.changes, "bond") &&
+                entry.changes.bond == null &&
+                current.bond != null
+              ) {
+                errors.push({ studentUid: entry.studentUid, field: "bond", message: "인연 랭크는 비울 수 없어요." });
+              }
               const next = { ...current, ...entry.changes } as StudentGrowthEditValues;
               merged.set(entry.studentUid, next);
               for (const error of validateStudentGrowthEdit(next, student, options.equipmentLimits)) {

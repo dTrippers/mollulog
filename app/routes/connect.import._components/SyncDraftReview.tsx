@@ -140,6 +140,10 @@ export default function SyncDraftReview({ draft, metadataByKey, currentValues, a
         {selectedRows.map((row) => (
           <input key={row.entry.uid} type="hidden" name="selected" value={row.entry.entryKey} />
         ))}
+        {/* Every row submits its value, whatever the display filter hides, so a selected row out of view still applies. */}
+        {rows.map((row) => (
+          <input key={row.entry.uid} type="hidden" name={`value:${row.entry.entryKey}`} value={row.raw} />
+        ))}
         {visibleRows.length === 0 ? (
           <div className="rounded-lg bg-v2-surface">
             {rows.length === 0 ? (
@@ -204,7 +208,6 @@ export default function SyncDraftReview({ draft, metadataByKey, currentValues, a
                         {isTier ? <TierFace tier={row.currentValue} /> : row.currentValue.toLocaleString("ko-KR")}
                       </span>
                       <div className={cn("flex flex-col gap-0.5", stacked ? "w-32" : "")}>
-                        <input type="hidden" name={`value:${row.entry.entryKey}`} value={row.raw} />
                         {isTier ? (
                           <TierInput
                             label={label}

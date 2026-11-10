@@ -482,7 +482,8 @@ const QUICK_FAILURE_MESSAGES = {
 
 export default function UserPage() {
   const loaderData = useLoaderData<typeof loader>();
-  const { me, noRecruited, students, view, canViewGrowth, profileVisibility, username, stateFormat } = loaderData;
+  const { me, noRecruited, students, view, canViewGrowth, growthVisibility, profileVisibility, username, stateFormat } =
+    loaderData;
   const layout = useUserLayout();
   const { stacked } = useV2Page();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -931,7 +932,9 @@ export default function UserPage() {
             <div className="flex items-center gap-2">
               <ShareStudentGrowthButton
                 url={shareUrl}
-                profilePrivate={profileVisibility === "private"}
+                blockedBy={
+                  profileVisibility === "private" ? "profile_private" : growthVisibility ? null : "growth_private"
+                }
                 onResult={(result) =>
                   showToast(result === "error" ? "failure" : "success", SHARE_RESULT_MESSAGES[result])
                 }

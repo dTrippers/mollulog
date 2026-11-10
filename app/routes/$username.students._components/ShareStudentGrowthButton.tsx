@@ -63,17 +63,31 @@ export const SHARE_RESULT_MESSAGES = {
   error: "공유 링크를 복사하지 못했어요. 다시 시도해주세요.",
 } as const;
 
+// Why a link would not show the growth: a private profile cannot be opened, and a private growth view opens as the
+// summary. Pressing the button then explains the setting instead of sharing.
+export type ShareStudentGrowthBlock = "profile_private" | "growth_private";
+
+const BLOCK_MESSAGES = {
+  profile_private: {
+    title: "프로필이 비공개라 성장 상태를 공유할 수 없어요.",
+    description: "프로필 관리에서 공개로 바꾸면 공유 링크를 만들 수 있어요.",
+  },
+  growth_private: {
+    title: "학생 성장도가 비공개라 성장 상태를 공유할 수 없어요.",
+    description: "프로필 관리에서 학생 성장도를 공개로 바꾸면 공유 링크를 만들 수 있어요.",
+  },
+} as const satisfies Record<ShareStudentGrowthBlock, { title: string; description: string }>;
+
 type ShareStudentGrowthButtonProps = {
   url: string;
-  // A private profile cannot be opened through a link, so pressing the button explains it instead of sharing.
-  profilePrivate: boolean;
+  blockedBy: ShareStudentGrowthBlock | null;
   disabled?: boolean;
   onResult: (result: ShareStudentGrowthResult | "error") => void;
 };
 
 export default function ShareStudentGrowthButton({
   url,
-  profilePrivate,
+  blockedBy,
   disabled = false,
   onResult,
 }: ShareStudentGrowthButtonProps) {
@@ -83,7 +97,7 @@ export default function ShareStudentGrowthButton({
 
   const handleShare = async () => {
     if (disabled || sharing) return;
-    if (profilePrivate) {
+    if (blockedBy) {
       setWarningOpen((open) => !open);
       return;
     }
@@ -105,16 +119,16 @@ export default function ShareStudentGrowthButton({
       <Button
         ref={triggerRef}
         disabled={disabled || sharing}
-        aria-haspopup={profilePrivate ? "dialog" : undefined}
-        aria-expanded={profilePrivate ? warningOpen : undefined}
+        aria-haspopup={blockedBy ? "dialog" : undefined}
+        aria-expanded={blockedBy ? warningOpen : undefined}
         onClick={handleShare}
       >
         <ShareIcon className="size-4" aria-hidden="true" />
         {sharing ? "공유 준비 중" : "성장 상태 공유"}
       </Button>
       <Popover
-        open={warningOpen}
-        label="프로필이 비공개라 성장 상태를 공유할 수 없어요"
+        open={warningOpen && blockedBy !== null}
+        label={blockedBy ? BLOCK_MESSAGES[blockedBy].title : ""}
         onClose={() => setWarningOpen(false)}
         returnFocusRef={triggerRef}
         className="w-72"
@@ -123,8 +137,8 @@ export default function ShareStudentGrowthButton({
           <div className="flex items-start gap-2">
             <ExclamationTriangleIcon className="mt-0.5 size-4 shrink-0 text-v2-warning" aria-hidden="true" />
             <div className="min-w-0 text-sm">
-              <p className="font-semibold text-v2-fg">프로필이 비공개라 성장 상태를 공유할 수 없어요.</p>
-              <p className="mt-0.5 text-v2-fg-secondary">프로필 관리에서 공개로 바꾸면 공유 링크를 만들 수 있어요.</p>
+              <p className="font-semibold text-v2-fg">{blockedBy ? BLOCK_MESSAGES[blockedBy].title : null}</p>
+              <p className="mt-0.5 text-v2-fg-secondary">{blockedBy ? BLOCK_MESSAGES[blockedBy].description : null}</p>
             </div>
           </div>
           <Link to="/edit" className={v2ButtonClassName({ variant: "secondary", size: "sm" })}>

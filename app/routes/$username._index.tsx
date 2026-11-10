@@ -138,6 +138,8 @@ export default function UserIndex() {
     (nextPage: number) => {
       const nextSearchParams = new URLSearchParams(searchParams);
       nextSearchParams.set("page", String(nextPage));
+      // `index` targets this screen's loader instead of the user layout's, which has no feed.
+      nextSearchParams.set("index", "");
       return `/@${username}?${nextSearchParams.toString()}`;
     },
     [searchParams, username],

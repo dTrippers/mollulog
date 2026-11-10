@@ -4,7 +4,7 @@
 import "../../layout/layout-test-polyfills";
 import { describe, expect, it, jest } from "@jest/globals";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { createRoutesStub } from "react-router";
+import { createRoutesStub, Outlet } from "react-router";
 import { type FeedPageData, InfiniteFeed } from "~/components/v2/features/feed/InfiniteFeed";
 
 // jsdom has no IntersectionObserver. The feed also loads on scroll, but these tests press the button.
@@ -32,14 +32,27 @@ const firstPage: FeedPageData = {
   failed: false,
 };
 
+// The feed sits on an index route under a layout, as on the profile: a page URL without `?index` would load the layout.
 function renderFeed(secondPage: FeedPageData) {
   const Stub = createRoutesStub([
     {
       path: "/",
-      loader: () => secondPage,
-      Component: () => (
-        <InfiniteFeed {...firstPage} emptyText="비어 있음" resetKey="arona" getPageUrl={(page) => `/?page=${page}`} />
-      ),
+      loader: () => ({ layout: true }),
+      Component: Outlet,
+      children: [
+        {
+          index: true,
+          loader: () => ({ feed: secondPage }),
+          Component: () => (
+            <InfiniteFeed
+              {...firstPage}
+              emptyText="비어 있음"
+              resetKey="arona"
+              getPageUrl={(page) => `/?page=${page}&index`}
+            />
+          ),
+        },
+      ],
     },
   ]);
   render(<Stub initialEntries={["/"]} />);

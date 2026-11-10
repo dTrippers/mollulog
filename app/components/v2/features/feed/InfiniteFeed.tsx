@@ -16,6 +16,10 @@ export type FeedPageData = {
   failed: boolean;
 };
 
+// What `getPageUrl` loads: the screen's own route loader, which returns the page under `feed`. The URL must target that
+// route itself (with `?index` for an index route), not its parent layout.
+export type FeedPageLoaderData = { feed: FeedPageData };
+
 type InfiniteFeedProps = FeedPageData & {
   emptyText: string;
   // Changes when the feed belongs to someone else, so the loaded pages start over.
@@ -36,7 +40,7 @@ export function InfiniteFeed({
   resetKey,
   getPageUrl,
 }: InfiniteFeedProps) {
-  const fetcher = useFetcher<FeedPageData>();
+  const fetcher = useFetcher<FeedPageLoaderData>();
   const revalidator = useRevalidator();
   const [posts, setPosts] = useState(initialPosts);
   const [studentsByUid, setStudentsByUid] = useState(initialStudentsByUid);
@@ -64,7 +68,7 @@ export function InfiniteFeed({
     if (fetcher.state !== "idle" || !fetcher.data || requestedResetKeyRef.current !== resetKey) {
       return;
     }
-    const data = fetcher.data;
+    const data = fetcher.data.feed;
     if (data.failed) {
       setMoreFailed(true);
       return;
