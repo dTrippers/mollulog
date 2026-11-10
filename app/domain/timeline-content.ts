@@ -9,6 +9,7 @@ export type TimelineContentType =
   | "pickup"
   | "main_story"
   | "mini_story"
+  | "ko_voice"
   | "campaign"
   | "joint_firing_drill"
   | "raid"

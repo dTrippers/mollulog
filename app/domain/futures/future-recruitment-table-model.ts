@@ -15,7 +15,7 @@ import {
   SHOW_LINK_RAID_TYPES,
   TIMELINE_ONLY_CONTENT_TYPES,
 } from "~/models/content-rules";
-import { isStoryContentType } from "./futures-view-model";
+import { formatOpenEndedStart, isReleaseDatedContentType } from "./futures-view-model";
 
 export type FutureRecruitmentTableRecruitment = {
   recruitmentType: RecruitmentTypeEnum;
@@ -130,8 +130,8 @@ export function formatAuxiliaryContentPeriodLabel({
       return null;
     }
 
-    if (isStoryContentType(contentType)) {
-      return `${formatInstant(contentStartAt, { timeZone, format: "MM/DD" })} 공개`;
+    if (isReleaseDatedContentType(contentType)) {
+      return formatOpenEndedStart(formatInstant(contentStartAt, { timeZone, format: "MM/DD" }), contentType);
     }
     return formatInstant(contentStartAt, { timeZone, format: "MM/DD HH:mm" });
   }
@@ -153,6 +153,10 @@ type InternalRecruitmentGroup = FutureRecruitmentTableRecruitmentGroup & {
 type DateKey = string;
 
 function getContentPeriod(content: FutureRecruitmentTableContent): { since: UtcIsoString; until: UtcIsoString } | null {
+  // An endless story or dubbing entry may have no end date. It is placed by its release day alone.
+  if (content.endless && content.endAt === null && isReleaseDatedContentType(content.contentType)) {
+    return { since: content.startAt, until: content.startAt };
+  }
   if (!content.endAt || getInstantTime(content.startAt) >= getInstantTime(content.endAt)) {
     return null;
   }

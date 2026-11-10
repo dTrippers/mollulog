@@ -7,6 +7,7 @@ export const CONTENT_ORDER: (EventType | RaidType)[] = [
   "immortal_event",
   "main_story",
   "mini_story",
+  "ko_voice",
   "fes",
   "pickup",
   "collab",

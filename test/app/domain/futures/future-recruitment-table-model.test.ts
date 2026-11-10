@@ -89,6 +89,41 @@ describe("buildFutureRecruitmentTableRows", () => {
     ]);
   });
 
+  it("places an endless dubbing entry without an end date by the day it is added", () => {
+    const rows = buildFutureRecruitmentTableRows([
+      content({
+        uid: "event",
+        name: "이벤트",
+        startAt: "2026-11-12T02:00:00.000Z",
+        endAt: "2026-11-26T02:00:00.000Z",
+        recruitments: [
+          recruitment({
+            studentName: "학생 A",
+            since: "2026-11-12T02:00:00.000Z",
+            until: "2026-11-26T02:00:00.000Z",
+          }),
+        ],
+      }),
+      content({
+        uid: "dubbing",
+        name: "더빙",
+        startAt: "2026-11-13T02:00:00.000Z",
+        endAt: null,
+        endless: true,
+        contentType: "ko_voice",
+      }),
+      content({
+        uid: "open-event",
+        name: "종료일 없는 이벤트",
+        startAt: "2026-11-13T02:00:00.000Z",
+        endAt: null,
+        endless: true,
+      }),
+    ]);
+
+    expect(rows.map((row) => row.events.map((item) => item.uid))).toEqual([["event", "dubbing"]]);
+  });
+
   it("uses timeline content dates for endless content recruitments", () => {
     const rows = buildFutureRecruitmentTableRows([
       content({
@@ -741,6 +776,20 @@ describe("formatAuxiliaryContentPeriodLabel", () => {
         contentType: "main_story",
       }),
     ).toBe("05/13 공개");
+  });
+
+  it("labels endless Korean dubbing by the date it is added", () => {
+    expect(
+      formatAuxiliaryContentPeriodLabel({
+        contentStartAt: "2026-05-13T02:00:00.000Z",
+        contentEndAt: "2026-05-26T02:00:00.000Z",
+        contentEndless: true,
+        rowSince: "2026-05-12T00:00:00.000Z",
+        rowUntil: "2026-05-19T00:00:00.000Z",
+        timeZone: "UTC",
+        contentType: "ko_voice",
+      }),
+    ).toBe("05/13 추가");
   });
 
   it("hides the period for endless content when it starts on the row date", () => {

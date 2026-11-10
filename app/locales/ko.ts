@@ -89,6 +89,7 @@ export const eventTypeLocale: Record<EventType, string> = {
   joint_firing_drill: "종합전술시험",
   main_story: "메인 스토리",
   mini_story: "미니 스토리",
+  ko_voice: "한국어 더빙",
   battle_pass: "배틀 패스",
   update: "점검/업데이트",
 };
@@ -100,6 +101,7 @@ export const timelineContentTypeLocale: Record<TimelineContentType, string> = {
   pickup: "픽업 모집",
   main_story: "메인 스토리",
   mini_story: "미니 스토리",
+  ko_voice: "한국어 더빙",
   campaign: "캠페인",
   joint_firing_drill: "종합전술시험",
   raid: "레이드",

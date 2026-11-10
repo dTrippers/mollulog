@@ -176,15 +176,16 @@ describe("getFutureContents minigame labels", () => {
     expect(mockedGetTimelineContents).not.toHaveBeenCalled();
   });
 
-  it("does not look up minigames for live broadcasts or raids", async () => {
+  it("does not look up minigames for live broadcasts, raids, or Korean dubbing", async () => {
     mockedGetTimelineContents.mockResolvedValue([
       { ...timelineContent, uid: "broadcast", contentType: "live" },
       { ...timelineContent, uid: "raid", contentType: "raid" },
+      { ...timelineContent, uid: "dubbing", contentType: "ko_voice", contentUid: "stray-content-uid" },
     ] as never);
 
     const result = await getFutureContents(env);
 
-    expect(result.map((content) => content.minigameType)).toEqual([null, null]);
+    expect(result.map((content) => content.minigameType)).toEqual([null, null, null]);
     expect(mockedGetEventMinigameType).not.toHaveBeenCalled();
   });
 

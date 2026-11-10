@@ -19,6 +19,7 @@ export type EventType =
   | "joint_firing_drill"
   | "main_story"
   | "mini_story"
+  | "ko_voice"
   | "collab"
   | "battle_pass"
   | "update";

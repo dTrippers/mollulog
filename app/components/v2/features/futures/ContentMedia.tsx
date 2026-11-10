@@ -4,6 +4,7 @@ import {
   MegaphoneIcon,
   ShieldCheckIcon,
   SparklesIcon,
+  SpeakerWaveIcon,
   TvIcon,
   ViewfinderCircleIcon,
 } from "@heroicons/react/24/outline";
@@ -38,6 +39,7 @@ const typeIcon: Record<string, typeof CalendarDaysIcon> = {
   live: TvIcon,
   main_story: BookOpenIcon,
   mini_story: BookOpenIcon,
+  ko_voice: SpeakerWaveIcon,
   campaign: MegaphoneIcon,
   joint_firing_drill: ViewfinderCircleIcon,
   pickup: SparklesIcon,
