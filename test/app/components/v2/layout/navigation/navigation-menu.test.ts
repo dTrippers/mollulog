@@ -201,8 +201,12 @@ describe("global navigation catalog", () => {
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
-      "/@sensei/timelines",
       "/scanner",
+    ]);
+    expect(signedIn.groups.find(({ id }) => id === "community")?.items.map(({ to }) => to)).toEqual([
+      "/community",
+      "/timelines",
+      "/timelines?mine=1",
     ]);
   });
 
@@ -325,8 +329,12 @@ describe("global navigation catalog", () => {
       "프로필",
       "모집한 학생",
       "모집 기록",
-      "공략 작성하기",
       "화면 인식·데이터 연동",
+    ]);
+    expect(signedInSections.find(({ id }) => id === "community")?.items.map(({ name }) => name)).toEqual([
+      "피드",
+      "공략 타임라인",
+      "공략 작성하기",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([
       "프로필 편집",
@@ -397,7 +405,7 @@ describe("global navigation catalog", () => {
       expect.arrayContaining([
         expect.objectContaining({ id: "profile", name: "프로필", to: "/@sensei" }),
         expect.objectContaining({ id: "my-students", name: "모집한 학생", to: "/@sensei/students" }),
-        expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/@sensei/timelines" }),
+        expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/timelines?mine=1" }),
         expect.objectContaining({ id: "mollulog-api", name: "개발자 센터", to: "/developers" }),
         expect.objectContaining({ id: "farming-calculator", name: "파밍 계산기", to: "/utils/resources/farming" }),
         expect.objectContaining({ id: "screen-scanner", name: "화면 인식·데이터 연동", to: "/scanner" }),

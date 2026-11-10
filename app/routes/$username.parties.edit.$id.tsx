@@ -10,7 +10,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (!sensei) {
     return redirect("/unauthorized");
   }
-  return redirect(params.id === "new" ? "/timelines/new" : `/@${sensei.username}/parties`);
+  return redirect(params.id === "new" ? "/timelines/new" : `/timelines/parties/@${sensei.username}`);
 };
 
 export const action = async ({ context, request }: ActionFunctionArgs) => {

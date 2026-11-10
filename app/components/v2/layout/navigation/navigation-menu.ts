@@ -241,11 +241,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "pickup-history":
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/pickups`));
     case "my-walkthroughs":
-      return Boolean(
-        currentUsername &&
-          (pathname.startsWith(`/@${currentUsername}/timelines`) ||
-            pathname.startsWith(`/@${currentUsername}/parties`)),
-      );
+      // The walkthrough list itself stays under 공략 타임라인; this entry owns the earlier parties page.
+      return Boolean(currentUsername && pathname.startsWith("/timelines/parties/"));
     case "screen-scanner":
       return isMyDataConnectionPath(pathname);
     case "mollulog-api":
@@ -259,7 +256,9 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "community-feed":
       return pathname.startsWith("/community");
     case "community-timelines":
-      return pathname === "/timelines" || pathname.startsWith("/timelines/");
+      return (
+        (pathname === "/timelines" || pathname.startsWith("/timelines/")) && !pathname.startsWith("/timelines/parties/")
+      );
     case "news":
       return pathname.startsWith("/news");
     case "contact":
@@ -572,17 +571,6 @@ export function getNavigationCatalog({
       isActive: itemIsActive("pickup-history", pathname, currentUsername),
     },
     {
-      menuId: "my-walkthroughs",
-      group: "personal",
-      surfaces: ["desktop", "more", "search"],
-      to: currentUsername ? `/@${currentUsername}/timelines` : "/unauthorized",
-      name: "공략 작성하기",
-      requiresSignIn: true,
-      OutlineIcon: QueueListIconOutline,
-      SolidIcon: QueueListIconSolid,
-      isActive: itemIsActive("my-walkthroughs", pathname, currentUsername),
-    },
-    {
       menuId: "screen-scanner",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
@@ -609,6 +597,17 @@ export function getNavigationCatalog({
       OutlineIcon: QueueListIconOutline,
       SolidIcon: QueueListIconSolid,
       isActive: itemIsActive("community-timelines", pathname, currentUsername),
+    },
+    {
+      menuId: "my-walkthroughs",
+      group: "community",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? "/timelines?mine=1" : "/unauthorized",
+      name: "공략 작성하기",
+      requiresSignIn: true,
+      OutlineIcon: QueueListIconOutline,
+      SolidIcon: QueueListIconSolid,
+      isActive: itemIsActive("my-walkthroughs", pathname, currentUsername),
     },
     {
       menuId: "news",
