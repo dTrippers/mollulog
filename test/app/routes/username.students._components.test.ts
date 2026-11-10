@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter } from "react-router";
-import { StudentSkillIcon } from "~/components/features/students";
 import { Attack, Defense, Position, RoleEnum, TacticRole } from "~/graphql/graphql";
+import { toGrowthRow } from "~/routes/$username.students._components/growth-edit-state";
 import { shareStudentGrowthUrl } from "~/routes/$username.students._components/ShareStudentGrowthButton";
-import StudentGrowthCard, { type GrowthStudent } from "~/routes/$username.students._components/StudentGrowthCard";
+import { StudentGrowthTable } from "~/routes/$username.students._components/StudentGrowthTable";
+import type { UserStudent } from "~/views/user-students.server";
 
 type TestNavigator = {
   share?: jest.MockedFunction<(data: ShareData) => Promise<void>>;
@@ -95,146 +96,79 @@ describe("student growth sharing", () => {
   });
 });
 
-describe("student growth visual contracts", () => {
-  it("renders the shared attack-colored hex skill frame", () => {
-    const markup = renderToStaticMarkup(
-      createElement(StudentSkillIcon, { attackType: Attack.Explosive, iconUrl: "https://assets.test/skill" }),
-    );
-    const mutedMarkup = renderToStaticMarkup(
-      createElement(StudentSkillIcon, {
-        attackType: Attack.Explosive,
-        iconUrl: "https://assets.test/skill",
-        muted: true,
-        size: "sm",
+const growthStudent: UserStudent = {
+  uid: "student a",
+  name: "아루",
+  attackType: Attack.Explosive,
+  defenseType: Defense.Light,
+  role: RoleEnum.Striker,
+  position: Position.Front,
+  tacticRole: TacticRole.Attacker,
+  order: 1,
+  initialTier: 3,
+  tier: 6,
+  growth: {
+    bond: 20,
+    level: 80,
+    weaponLevel: 30,
+    skillEx: 5,
+    skillNormal: 10,
+    skillEnhanced: 9,
+    skillSub: null,
+    equipment: [
+      { available: true, category: "Hat", tier: null, level: null, maxLevel: null, uid: null },
+      { available: true, category: "Gloves", tier: 5, level: 40, maxLevel: 50, uid: "gloves-5" },
+      { available: false, category: null, tier: null, level: null, maxLevel: null, uid: null },
+    ],
+    equipSpecial: 2,
+    equipSpecialAvailable: true,
+    abilityHp: 10,
+    abilityAtk: 11,
+    abilityHeal: 12,
+    weaponAvailable: true,
+  },
+};
+
+function renderTable(mode: "view" | "edit", stacked = false) {
+  const row = toGrowthRow(growthStudent);
+  if (!row) throw new Error("fixture has no growth row");
+  return renderToStaticMarkup(
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(StudentGrowthTable, {
+        rows: [row],
+        mode,
+        stacked,
+        activeTab: "basic",
+        onTabChange: () => undefined,
+        draft: {},
+        baseline: {},
+        errors: {},
+        conflicts: {},
+        disabled: false,
+        onValueChange: () => undefined,
+        getDetailHref: (uid: string) => `/students/${encodeURIComponent(uid)}#student-basic-info`,
       }),
-    );
+    ),
+  );
+}
 
-    expect(markup).toContain("text-red-600");
-    expect(markup).toContain("<svg");
-    expect(markup).toContain('src="https://assets.test/skill"');
-    expect(markup).toContain("h-12 w-[2.598rem]");
-    expect(markup).toContain('class="relative z-10 size-12 object-contain drop-shadow-sm"');
-    expect(mutedMarkup).toContain("opacity-60");
-    expect(mutedMarkup).toContain("h-10 w-[2.165rem]");
-    expect(mutedMarkup).toContain('class="relative z-10 size-10 object-contain drop-shadow-sm"');
-  });
-
-  it("renders the owner edit link with an encoded student path", () => {
-    const student = {
-      uid: "student a",
-      name: "아루",
-      attackType: Attack.Explosive,
-      defenseType: Defense.Light,
-      role: RoleEnum.Striker,
-      position: Position.Front,
-      tacticRole: TacticRole.Attacker,
-      order: 1,
-      initialTier: 3,
-      tier: 6,
-      growth: {
-        level: 80,
-        equipSpecial: 2,
-        equipSpecialAvailable: true,
-        abilityHp: 10,
-        abilityAtk: 11,
-        abilityHeal: 12,
-        abilityAvailable: true,
-        skillVisuals: {
-          ex: { iconUrl: "https://assets.test/ex", level: 5, maxLevel: 5 },
-          normal: { iconUrl: "https://assets.test/normal", level: 10, maxLevel: 10 },
-          enhanced: { iconUrl: "https://assets.test/enhanced", level: 9, maxLevel: 10 },
-          sub: { iconUrl: "https://assets.test/sub", level: 8, maxLevel: 10 },
-        },
-        equipmentVisuals: [
-          { available: true, uid: null, tier: null },
-          { available: false, uid: null, tier: null },
-          { available: true, uid: "watch-5", tier: 5 },
-        ],
-      },
-    } satisfies GrowthStudent;
-    const markup = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(StudentGrowthCard, { student, editable: true })),
-    );
+describe("student growth table", () => {
+  it("renders the read-only table with a link to the student's basic info", () => {
+    const markup = renderTable("view");
 
     expect(markup).toContain('href="/students/student%20a#student-basic-info"');
-    expect(markup).toContain('href="/students/student%20a"');
-    expect(markup).toContain('aria-label="아루 성장 상태 편집"');
-    expect(markup).toContain('viewBox="0 0 16 16"');
-    expect(markup).toContain('aria-label="아루 EX 스킬 MAX"');
-    expect(markup).toContain('aria-label="아루 강화 스킬 Lv.9"');
-    expect(markup).toContain(">Lv.9</span>");
-    expect(markup).toContain('<h4 class="sr-only">스킬</h4>');
-    expect(markup).toContain('<h4 class="sr-only">장비</h4>');
-    expect(markup).toContain('<h4 class="sr-only">개방</h4>');
-    expect(markup).toContain(">최대 체력</dt>");
-    expect(markup).toContain('aria-label="아루 장비 1 미장착"');
-    expect(markup).toContain('aria-label="아루 장비 2 해당 없음"');
-    expect(markup).toContain('aria-label="아루 애용품 T2"');
-    expect(markup).toContain(
-      'class="absolute right-1 bottom-1 whitespace-nowrap rounded-sm bg-card px-0.5 text-[10px] font-semibold leading-4 tabular-nums">미장착</span>',
-    );
-    expect(markup).toContain(">미장착</span>");
-    expect(markup).toContain(">-</span>");
+    expect(markup).toContain("아루");
+    expect(markup).toContain("미장착");
+    expect(markup).not.toContain("<input");
+  });
 
-    const unregisteredSkillMarkup = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(StudentGrowthCard, {
-          student: {
-            ...student,
-            growth: {
-              ...student.growth,
-              skillVisuals: {
-                ...student.growth.skillVisuals,
-                enhanced: { ...student.growth.skillVisuals.enhanced, level: null },
-              },
-            },
-          },
-          editable: false,
-        }),
-      ),
-    );
-    const skillTilesMarkup = unregisteredSkillMarkup.slice(
-      unregisteredSkillMarkup.indexOf('aria-label="아루 EX 스킬'),
-      unregisteredSkillMarkup.indexOf('aria-label="아루 장비'),
-    );
-    expect(skillTilesMarkup).toContain('aria-label="아루 강화 스킬 미등록"');
-    expect(skillTilesMarkup).toContain(">-</span>");
+  it("renders one input per editable value in edit mode", () => {
+    const markup = renderTable("edit");
 
-    const guestMarkup = renderToStaticMarkup(
-      createElement(MemoryRouter, null, createElement(StudentGrowthCard, { student, editable: false })),
-    );
-    expect(guestMarkup).toContain('href="/students/student%20a"');
-    expect(guestMarkup).toContain('viewBox="0 0 16 16"');
-    expect(guestMarkup).not.toContain('aria-label="아루 성장 상태 편집"');
-
-    const longName = "이름이아주길어서chevron공간을보장해야해요";
-    const longNameMarkup = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(StudentGrowthCard, {
-          student: { ...student, name: longName },
-          editable: true,
-        }),
-      ),
-    );
-    expect(longNameMarkup).toContain(`class="min-w-0 truncate break-keep">${longName}</span>`);
-    expect(longNameMarkup).toContain('viewBox="0 0 16 16"');
-
-    const noSpecialMarkup = renderToStaticMarkup(
-      createElement(
-        MemoryRouter,
-        null,
-        createElement(StudentGrowthCard, {
-          student: { ...student, growth: { ...student.growth, equipSpecialAvailable: false, equipSpecial: null } },
-          editable: false,
-        }),
-      ),
-    );
-    const equipmentMarkup = noSpecialMarkup.slice(noSpecialMarkup.indexOf("장비"), noSpecialMarkup.indexOf("개방"));
-    expect(equipmentMarkup).toContain("grid-cols-4");
-    expect(equipmentMarkup).not.toContain("애용품");
+    expect(markup).toContain("<input");
+    expect(markup).toContain('aria-label="아루 학생 Lv"');
+    expect(markup).toContain('aria-label="아루 인연 랭크"');
   });
 });

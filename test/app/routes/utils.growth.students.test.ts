@@ -395,7 +395,7 @@ describe("utils.growth.students action", () => {
     expect(response).toMatchObject({
       data: {
         code: "STUDENT_STATE_STALE",
-        error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해 주세요.",
+        error: "페이지가 최신 상태가 아니라 저장하지 못했어요. 새로고침 후 다시 입력해주세요.",
       },
       init: { status: 409 },
     });

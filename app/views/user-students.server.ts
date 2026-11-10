@@ -1,6 +1,6 @@
-import { selectUniqueMaximalSkillConfiguration } from "~/domain/student-skill-configuration";
-import { StudentSkillTypeEnum } from "~/graphql/graphql";
+import type { StudentGrowthEquipmentLimit } from "~/domain/student-growth-edit";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import type { Sensei } from "~/models/sensei";
 import {
   getAllStudents,
@@ -8,43 +8,39 @@ import {
   getStudentGrowthVisualsBatch,
   getStudentWeaponAvailability,
   type StudentGrowthEquipment,
-  type StudentGrowthVisuals,
 } from "~/models/student";
 
 export type UserStudentsViewMode = "summary" | "growth";
 
-export type UserStudentsGrowth = {
+export type UserStudentsEquipment = {
+  // False when the student has no equipment in this slot.
+  available: boolean;
+  category: string | null;
+  tier: number | null;
   level: number | null;
+  // The highest level the stored tier allows, for the "MAX" mark and the edit range.
+  maxLevel: number | null;
+  // The catalog item of the stored tier, for its image.
+  uid: string | null;
+};
+
+export type UserStudentsGrowth = {
+  bond: number | null;
+  level: number | null;
+  weaponLevel: number | null;
+  skillEx: number | null;
+  skillNormal: number | null;
+  skillEnhanced: number | null;
+  skillSub: number | null;
+  equipment: [UserStudentsEquipment, UserStudentsEquipment, UserStudentsEquipment];
   equipSpecial: number | null;
   equipSpecialAvailable: boolean;
   abilityHp: number | null;
   abilityAtk: number | null;
   abilityHeal: number | null;
-  abilityAvailable: boolean;
-  skillVisuals?: {
-    ex: UserStudentsSkillVisual;
-    normal: UserStudentsSkillVisual;
-    enhanced: UserStudentsSkillVisual;
-    sub: UserStudentsSkillVisual;
-  };
-  equipmentVisuals?: [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual];
-};
-
-export type UserStudentsGrowthWithVisuals = UserStudentsGrowth & {
-  skillVisuals: NonNullable<UserStudentsGrowth["skillVisuals"]>;
-  equipmentVisuals: NonNullable<UserStudentsGrowth["equipmentVisuals"]>;
-};
-
-export type UserStudentsSkillVisual = {
-  iconUrl: string;
-  level: number | null;
-  maxLevel: number;
-};
-
-export type UserStudentsEquipmentVisual = {
-  available: boolean;
-  uid: string | null;
-  tier: number | null;
+  // The student has a unique weapon, so the weapon level and the ability release can apply (from ★6). The stored values
+  // are raw: the screen decides from the tier it shows whether a value applies.
+  weaponAvailable: boolean;
 };
 
 export type UserStudent = {
@@ -67,11 +63,13 @@ export type UserStudentsView = {
   canViewGrowth: boolean;
   noRecruited: boolean;
   students: UserStudent[];
+  // What each equipment category and tier allows, for the edit table. Empty outside the growth view.
+  equipmentLimits: StudentGrowthEquipmentLimit[];
 };
 
 type GrowthApplicability = {
   equipSpecialAvailable: boolean;
-  equipmentAvailable: [boolean, boolean, boolean];
+  weaponAvailable: boolean;
 };
 
 export function canViewUserStudentGrowth(sensei: Sensei, viewerUserId?: number): boolean {
@@ -81,111 +79,55 @@ export function canViewUserStudentGrowth(sensei: Sensei, viewerUserId?: number):
 
 export function toUserStudentsGrowth(
   recruitedStudent: RecruitedStudent,
-  applicability: GrowthApplicability & { abilityAvailable: boolean },
-  visuals?: StudentGrowthVisuals,
-  equipmentCatalog?: StudentGrowthEquipment,
-  equipmentCategories: string[] = [],
-): UserStudentsGrowth {
-  const abilityAvailable = applicability.abilityAvailable && recruitedStudent.tier > 5;
-  const baseGrowth: UserStudentsGrowth = {
-    level: recruitedStudent.level,
-    equipSpecial: applicability.equipSpecialAvailable ? recruitedStudent.equipSpecial : null,
-    equipSpecialAvailable: applicability.equipSpecialAvailable,
-    abilityHp: abilityAvailable ? recruitedStudent.abilityHp : null,
-    abilityAtk: abilityAvailable ? recruitedStudent.abilityAtk : null,
-    abilityHeal: abilityAvailable ? recruitedStudent.abilityHeal : null,
-    abilityAvailable,
-  };
-  if (visuals === undefined && equipmentCatalog === undefined) return baseGrowth;
-  if (visuals === undefined || equipmentCatalog === undefined) {
-    throw new Error("학생 성장 시각 자료를 함께 확인하지 못했어요");
-  }
-  const selectedSkills = selectGrowthSkills(recruitedStudent, visuals);
-  const equipmentVisuals = selectEquipmentVisuals(
-    recruitedStudent,
-    equipmentCatalog,
-    applicability.equipmentAvailable,
-    equipmentCategories,
-  );
-  return {
-    ...baseGrowth,
-    skillVisuals: {
-      ex: selectedSkills.ex,
-      normal: selectedSkills.public,
-      enhanced: selectedSkills.passive,
-      sub: selectedSkills.extra_passive,
-    },
-    equipmentVisuals,
-  };
-}
-
-type GrowthSkillVisuals = Record<StudentSkillTypeEnum, UserStudentsSkillVisual>;
-
-const growthSkillFields: Array<{
-  slot: StudentSkillTypeEnum;
-  levelKey: keyof Pick<RecruitedStudent, "skillEx" | "skillNormal" | "skillEnhanced" | "skillSub">;
-}> = [
-  { slot: StudentSkillTypeEnum.Ex, levelKey: "skillEx" },
-  { slot: StudentSkillTypeEnum.Public, levelKey: "skillNormal" },
-  { slot: StudentSkillTypeEnum.Passive, levelKey: "skillEnhanced" },
-  { slot: StudentSkillTypeEnum.ExtraPassive, levelKey: "skillSub" },
-];
-
-function selectGrowthSkills(recruitedStudent: RecruitedStudent, visuals: StudentGrowthVisuals): GrowthSkillVisuals {
-  const weaponStar = recruitedStudent.tier > 5 ? recruitedStudent.tier - 5 : 0;
-  const gearTier = recruitedStudent.equipSpecial ?? 0;
-  const configuration = selectUniqueMaximalSkillConfiguration(visuals.skillConfigurations, 0, weaponStar, gearTier);
-  if (!configuration) {
-    throw new Error("학생 성장 시각 자료의 스킬 설정을 선택하지 못했어요");
-  }
-
-  const skillByUid = new Map(visuals.skills.map((skill) => [skill.uid, skill]));
-  const selected: Partial<GrowthSkillVisuals> = {};
-  for (const { slot, levelKey } of growthSkillFields) {
-    const slotData = configuration.slots.find((candidate) => candidate.slot === slot);
-    if (!slotData) {
-      throw new Error("학생 성장 시각 자료의 스킬 슬롯을 확인하지 못했어요");
-    }
-    const reference = slotData.skills.find((candidate) => candidate.position === 0);
-    if (!reference?.skillUid) {
-      throw new Error("학생 성장 시각 자료의 스킬 참조를 확인하지 못했어요");
-    }
-    const skill = skillByUid.get(reference.skillUid);
-    if (!skill || skill.skillType !== slot) {
-      throw new Error("학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요");
-    }
-    const iconUrl = skill.iconUrl?.trim();
-    if (!iconUrl) {
-      throw new Error("학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요");
-    }
-    selected[slot] = {
-      iconUrl,
-      level: recruitedStudent[levelKey],
-      maxLevel: skill.maxLevel,
-    };
-  }
-  return selected as GrowthSkillVisuals;
-}
-
-function selectEquipmentVisuals(
-  recruitedStudent: RecruitedStudent,
+  applicability: GrowthApplicability,
   equipmentCatalog: StudentGrowthEquipment,
-  equipmentAvailable: [boolean, boolean, boolean],
-  equipmentCategories: string[],
-): [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual] {
-  return [0, 1, 2].map((index) => {
-    const tier = [recruitedStudent.equip1, recruitedStudent.equip2, recruitedStudent.equip3][index];
-    if (!equipmentAvailable[index]) return { available: false, uid: null, tier: null };
+  equipmentCategories: readonly string[],
+  bond: number | null,
+): UserStudentsGrowth {
+  const tiers = [recruitedStudent.equip1, recruitedStudent.equip2, recruitedStudent.equip3];
+  const levels = [
+    recruitedStudent.equip1Level ?? null,
+    recruitedStudent.equip2Level ?? null,
+    recruitedStudent.equip3Level ?? null,
+  ];
+  const equipment = [0, 1, 2].map((index): UserStudentsEquipment => {
     const category = equipmentCategories[index];
     if (!category) {
-      throw new Error("학생 성장 시각 자료의 장비 카테고리를 확인하지 못했어요");
+      return { available: false, category: null, tier: null, level: null, maxLevel: null, uid: null };
     }
-    const equipment = equipmentCatalog.find((candidate) => candidate.category === category && candidate.tier === tier);
-    if (tier !== null && !equipment) {
+    const tier = tiers[index];
+    // A slot with no stored tier is read at tier 1, as the detail screen and the server check do.
+    const catalogItem = equipmentCatalog.find(
+      (candidate) => candidate.category === category && candidate.tier === (tier ?? 1),
+    );
+    if (tier !== null && !catalogItem) {
       throw new Error("학생 성장 시각 자료의 장비 티어를 확인하지 못했어요");
     }
-    return { available: true, uid: equipment?.uid ?? null, tier };
-  }) as [UserStudentsEquipmentVisual, UserStudentsEquipmentVisual, UserStudentsEquipmentVisual];
+    return {
+      available: true,
+      category,
+      tier,
+      level: levels[index],
+      maxLevel: catalogItem?.maxLevel ?? null,
+      uid: tier === null ? null : (catalogItem?.uid ?? null),
+    };
+  }) as UserStudentsGrowth["equipment"];
+  return {
+    bond,
+    level: recruitedStudent.level,
+    weaponLevel: recruitedStudent.weaponLevel,
+    skillEx: recruitedStudent.skillEx,
+    skillNormal: recruitedStudent.skillNormal,
+    skillEnhanced: recruitedStudent.skillEnhanced,
+    skillSub: recruitedStudent.skillSub,
+    equipment,
+    equipSpecial: recruitedStudent.equipSpecial,
+    equipSpecialAvailable: applicability.equipSpecialAvailable,
+    abilityHp: recruitedStudent.abilityHp,
+    abilityAtk: recruitedStudent.abilityAtk,
+    abilityHeal: recruitedStudent.abilityHeal,
+    weaponAvailable: applicability.weaponAvailable,
+  };
 }
 
 export async function getUserStudentsView(
@@ -208,30 +150,32 @@ export async function getUserStudentsView(
     return student ? [{ recruitedStudent, student }] : [];
   });
 
-  const applicabilityByStudentUid = new Map<string, GrowthApplicability & { abilityAvailable: boolean }>();
-  let growthVisualsByStudentUid: Map<string, StudentGrowthVisuals> | undefined;
-  let equipmentCatalog: StudentGrowthEquipment | undefined;
+  const applicabilityByStudentUid = new Map<string, GrowthApplicability>();
+  let equipmentCatalog: StudentGrowthEquipment = [];
+  let bondByStudentUid = new Map<string, number | null>();
   if (view === "growth") {
     const recruitedStudentUids = resolvedRecruitedStudents.map(({ recruitedStudent }) => recruitedStudent.studentUid);
-    const [weaponAvailabilityByStudentUid, growthVisuals, equipment] = await Promise.all([
+    const [weaponAvailabilityByStudentUid, growthVisuals, equipment, relationships] = await Promise.all([
       getStudentWeaponAvailability(env, recruitedStudentUids),
       getStudentGrowthVisualsBatch(env, recruitedStudentUids),
       resolvedRecruitedStudents.length > 0 ? getStudentGrowthEquipmentCatalog(env) : Promise.resolve([]),
+      getRelationshipLevels(env, sensei.id, recruitedStudentUids),
     ]);
-    growthVisualsByStudentUid = growthVisuals;
     equipmentCatalog = equipment;
-    for (const { recruitedStudent, student } of resolvedRecruitedStudents) {
+    bondByStudentUid = new Map(
+      relationships.map((relationship) => [relationship.studentId, relationship.currentLevel]),
+    );
+    for (const { recruitedStudent } of resolvedRecruitedStudents) {
       if (!weaponAvailabilityByStudentUid.has(recruitedStudent.studentUid)) {
         throw new Error("학생 고유무기 정보를 확인하지 못했어요");
       }
-      const growthVisual = growthVisualsByStudentUid?.get(recruitedStudent.studentUid);
+      const growthVisual = growthVisuals.get(recruitedStudent.studentUid);
       if (!growthVisual) {
         throw new Error("학생 성장 시각 자료를 확인하지 못했어요");
       }
       applicabilityByStudentUid.set(recruitedStudent.studentUid, {
         equipSpecialAvailable: growthVisual.gearAvailable,
-        equipmentAvailable: [0, 1, 2].map((index) => Boolean(student.equipments[index])) as [boolean, boolean, boolean],
-        abilityAvailable: weaponAvailabilityByStudentUid.get(recruitedStudent.studentUid) === true,
+        weaponAvailable: weaponAvailabilityByStudentUid.get(recruitedStudent.studentUid) === true,
       });
     }
   }
@@ -241,6 +185,7 @@ export async function getUserStudentsView(
     growthVisibility,
     canViewGrowth,
     noRecruited: resolvedRecruitedStudents.length === 0,
+    equipmentLimits: equipmentCatalog.map(({ category, tier, maxLevel }) => ({ category, tier, maxLevel })),
     students: allStudents.map((student) => {
       const recruitedStudent = recruitedByStudentUid.get(student.uid);
       const baseStudent: UserStudent = {
@@ -261,10 +206,10 @@ export async function getUserStudentsView(
         ...baseStudent,
         growth: toUserStudentsGrowth(
           recruitedStudent,
-          applicabilityByStudentUid.get(student.uid) as GrowthApplicability & { abilityAvailable: boolean },
-          growthVisualsByStudentUid?.get(student.uid),
+          applicabilityByStudentUid.get(student.uid) as GrowthApplicability,
           equipmentCatalog,
           student.equipments,
+          bondByStudentUid.get(student.uid) ?? null,
         ),
       };
     }),

@@ -7,13 +7,16 @@ import {
   UserCircleIcon,
   UserIcon,
 } from "@heroicons/react/16/solid";
-import { type ElementType, useCallback, useEffect, useMemo, useState } from "react";
+import { type ElementType, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import { Link, Outlet, useLoaderData, useLocation, useRevalidator, useRouteError } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
+import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
+import { LoadFailureState } from "~/components/v2/features/students/LoadFailureState";
 import {
   AsideLinks,
   MobileActionBar,
+  type MobileActionBarProps,
   PageAside,
   PageHeader,
   PageMain,
@@ -23,22 +26,16 @@ import {
   V2Page,
 } from "~/components/v2/layout";
 import { v2ButtonClassName } from "~/components/v2/primitives/Button";
-import { SenseiAvatar } from "~/components/v2/features/comments/SenseiAvatar";
-import { LoadFailureState } from "~/components/v2/features/students/LoadFailureState";
 import { isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { getLogger } from "~/lib/observability.server";
 import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
-import { getFollowershipSummary } from "~/models/followership";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
+import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { UserFollowButton } from "./$username._components/UserFollowButton";
-import {
-  buildUserScreenItems,
-  getVisibilityLine,
-  type UserLayoutContext,
-} from "./$username._components/user-layout";
+import { buildUserScreenItems, getVisibilityLine, type UserLayoutContext } from "./$username._components/user-layout";
 
 const SCANNER_LINK = {
   title: "화면 인식·데이터 연동",
@@ -105,8 +102,11 @@ export default function User() {
   const { pathname } = useLocation();
   const [asideCollapsed, setAsideCollapsedState] = useState(false);
   const setAsideCollapsed = useCallback((collapsed: boolean) => setAsideCollapsedState(collapsed), []);
+  const [asideContent, setAsideContent] = useState<ReactNode>(null);
+  const [mobileActions, setMobileActions] = useState<MobileActionBarProps | null>(null);
 
-  // A screen that collapses the Aside restores it on unmount, and a new location starts with it open again.
+  // A new location starts with the Aside open again. A screen releases its own Aside content and mobile actions when it
+  // unmounts, so they are not reset here: a reset in this effect would run after the new screen's own effects and erase them.
   // biome-ignore lint/correctness/useExhaustiveDependencies: a new pathname is the trigger
   useEffect(() => {
     setAsideCollapsedState(false);
@@ -130,6 +130,8 @@ export default function User() {
       recruitedStudentCount: data.recruitedStudentCount,
       pickupCount: data.pickupCount,
       setAsideCollapsed,
+      setAsideContent,
+      setMobileActions,
       setPanels: noop,
       setLinks: noop,
     }),
@@ -177,18 +179,19 @@ export default function User() {
         {asideCollapsed ? null : (
           <PageAside>
             <ScreenNavigation items={screens} />
-            {data.isOwner ? (
-              <AsideLinks
-                items={[{ key: "scanner", Icon: CameraIcon, ...SCANNER_LINK, transition: "forward" }]}
-              />
-            ) : null}
+            {asideContent ??
+              (data.isOwner ? (
+                <AsideLinks items={[{ key: "scanner", Icon: CameraIcon, ...SCANNER_LINK, transition: "forward" }]} />
+              ) : null)}
           </PageAside>
         )}
       </ScreenNavigationFocusScope>
       <PageMain>
         <Outlet context={outletContext} />
       </PageMain>
-      {data.isOwner ? (
+      {mobileActions ? (
+        <MobileActionBar {...mobileActions} />
+      ) : data.isOwner ? (
         <MobileActionBar
           links={[{ key: "scanner", title: SCANNER_LINK.title, Icon: CameraIcon, to: SCANNER_LINK.to }]}
         />
@@ -237,7 +240,10 @@ export function ErrorBoundary() {
   if (normalized.code === "sensei.profile_private") {
     return (
       <V2Page width="wide">
-        <PageHeader title={username ? <span className="block truncate">@{username}</span> : "프로필"} titleHidden={!username} />
+        <PageHeader
+          title={username ? <span className="block truncate">@{username}</span> : "프로필"}
+          titleHidden={!username}
+        />
         <PageMain>
           <UserStateMessage
             Icon={LockClosedIcon}

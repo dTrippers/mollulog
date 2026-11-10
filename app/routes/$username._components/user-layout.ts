@@ -1,6 +1,6 @@
-import type { ElementType } from "react";
+import type { ElementType, ReactNode } from "react";
 import { useOutletContext } from "react-router";
-import type { ScreenTabItem } from "~/components/v2/layout";
+import type { MobileActionBarProps, ScreenTabItem } from "~/components/v2/layout";
 import type { ProfileVisibility } from "~/models/sensei";
 
 export type UserScreen = "profile" | "students" | "pickups";
@@ -20,7 +20,13 @@ export type UserLayoutContext = {
   // Collapse the Aside (desktop) while a screen edits a wide table. The layout restores it when the child unmounts
   // or calls this with `false`.
   setAsideCollapsed: (collapsed: boolean) => void;
-  // Transitional: the 1.x students screen still calls these. They do nothing until that screen is migrated.
+  // A screen that needs panels or links of its own in the Aside replaces the default links under the screen menu with
+  // its own content, and releases it by passing `null`, including when it unmounts. The first
+  // server render has the default links, because the screen sets its content after it mounts.
+  setAsideContent: (content: ReactNode) => void;
+  // The same for the owner's bottom action bar on stacked layouts. A panel entry needs its PanelSheet in `setAsideContent`.
+  setMobileActions: (actions: MobileActionBarProps | null) => void;
+  // Transitional: the 1.x screens that are not migrated yet still call these. They do nothing.
   setPanels: (panels: unknown[]) => void;
   setLinks: (links: unknown) => void;
 };

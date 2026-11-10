@@ -424,7 +424,11 @@ export function getEquipmentSlotUnlockLevel(index: number): number {
 
 export function validateStudentEquipmentLevels(
   student: Pick<StudentCalculatorSource, "equipments">,
-  catalog: StudentCalculatorCatalog | null | undefined,
+  // Only the equipment list is read, so a caller that has no full catalog can pass just the list.
+  catalog:
+    | { equipment: readonly Pick<StudentCalculatorCatalog["equipment"][number], "category" | "tier" | "maxLevel">[] }
+    | null
+    | undefined,
   state: Pick<StudentCalculatorState, "equip1" | "equip2" | "equip3"> &
     Partial<Pick<StudentCalculatorState, "equip1Level" | "equip2Level" | "equip3Level">>,
 ) {
