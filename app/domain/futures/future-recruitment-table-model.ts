@@ -15,7 +15,7 @@ import {
   SHOW_LINK_RAID_TYPES,
   TIMELINE_ONLY_CONTENT_TYPES,
 } from "~/models/content-rules";
-import { isStoryContentType } from "./futures-view-model";
+import { formatOpenEndedStart, isStoryContentType } from "./futures-view-model";
 
 export type FutureRecruitmentTableRecruitment = {
   recruitmentType: RecruitmentTypeEnum;
@@ -130,8 +130,8 @@ export function formatAuxiliaryContentPeriodLabel({
       return null;
     }
 
-    if (isStoryContentType(contentType)) {
-      return `${formatInstant(contentStartAt, { timeZone, format: "MM/DD" })} 공개`;
+    if (isStoryContentType(contentType) || contentType === "ko_voice") {
+      return formatOpenEndedStart(formatInstant(contentStartAt, { timeZone, format: "MM/DD" }), contentType);
     }
     return formatInstant(contentStartAt, { timeZone, format: "MM/DD HH:mm" });
   }

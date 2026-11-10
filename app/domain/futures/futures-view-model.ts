@@ -347,17 +347,19 @@ export function getFaceStack<T extends { pickup: boolean }>(
   return { shown: ordered.slice(0, max), extra: Math.max(0, ordered.length - max) };
 }
 
-// Endless main and mini stories are dated by their release, so they read "MM/DD 공개". Other open-ended dates read "MM/DD부터".
+// Endless main and mini stories are dated by their release, so they read "MM/DD 공개". Korean dubbing is dated by
+// when it is added, so it reads "MM/DD 추가". Other open-ended dates read "MM/DD부터".
 export function isStoryContentType(contentType: string): boolean {
   return contentType === "main_story" || contentType === "mini_story";
 }
 
 export function formatOpenEndedStart(startLabel: string, contentType: string): string {
+  if (contentType === "ko_voice") return `${startLabel} 추가`;
   return isStoryContentType(contentType) ? `${startLabel} 공개` : `${startLabel}부터`;
 }
 
 // The period of a content or a list row, as both the timeline and the list show it. Open-ended dates (no end, or
-// endless) read `MM/DD부터`, or `MM/DD 공개` for endless main and mini stories. Hidden spoilers show the same period.
+// endless) read `MM/DD부터`, `MM/DD 공개` for endless main and mini stories, or `MM/DD 추가` for Korean dubbing. Hidden spoilers show the same period.
 export function formatContentPeriod({
   since,
   until,

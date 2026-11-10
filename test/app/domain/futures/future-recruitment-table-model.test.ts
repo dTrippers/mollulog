@@ -743,6 +743,20 @@ describe("formatAuxiliaryContentPeriodLabel", () => {
     ).toBe("05/13 공개");
   });
 
+  it("labels endless Korean dubbing by the date it is added", () => {
+    expect(
+      formatAuxiliaryContentPeriodLabel({
+        contentStartAt: "2026-05-13T02:00:00.000Z",
+        contentEndAt: "2026-05-26T02:00:00.000Z",
+        contentEndless: true,
+        rowSince: "2026-05-12T00:00:00.000Z",
+        rowUntil: "2026-05-19T00:00:00.000Z",
+        timeZone: "UTC",
+        contentType: "ko_voice",
+      }),
+    ).toBe("05/13 추가");
+  });
+
   it("hides the period for endless content when it starts on the row date", () => {
     expect(
       formatAuxiliaryContentPeriodLabel({

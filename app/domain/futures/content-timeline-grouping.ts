@@ -26,6 +26,8 @@ function contentPriority(content: FutureGroupableContent): number {
       return 3;
     case "mini_story":
       return 4;
+    case "ko_voice":
+      return 4.5;
     case "immortal_event":
       return 5;
     case "raid":

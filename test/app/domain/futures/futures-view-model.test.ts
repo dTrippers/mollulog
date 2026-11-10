@@ -322,6 +322,11 @@ describe("open-ended start labels", () => {
     expect(formatOpenEndedStart("05/13", "mini_story")).toBe("05/13 공개");
     expect(formatOpenEndedStart("05/13", "event")).toBe("05/13부터");
   });
+
+  it("labels Korean dubbing by the date it is added", () => {
+    expect(isStoryContentType("ko_voice")).toBe(false);
+    expect(formatOpenEndedStart("05/13", "ko_voice")).toBe("05/13 추가");
+  });
 });
 
 describe("students", () => {

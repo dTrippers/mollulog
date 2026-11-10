@@ -138,8 +138,11 @@ export async function getFutureContents(
           };
         }
 
+        // Broadcasts and Korean dubbing are entered by hand and never carry an event minigame.
         const minigameType =
-          content.contentType === "live" ? null : await getEventMinigameType(env, content, forceRefresh);
+          content.contentType === "live" || content.contentType === "ko_voice"
+            ? null
+            : await getEventMinigameType(env, content, forceRefresh);
 
         if (group) {
           return {
