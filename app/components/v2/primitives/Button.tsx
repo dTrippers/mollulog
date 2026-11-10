@@ -1,10 +1,11 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ButtonHTMLAttributes, Ref } from "react";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
 export type V2ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "text" | "link" | "danger" | "danger-subtle";
   size?: "md" | "sm";
+  ref?: Ref<HTMLButtonElement>;
 };
 
 type V2ButtonVariant = NonNullable<V2ButtonProps["variant"]>;

@@ -167,7 +167,6 @@ export function DirectoryFilterPanel({
         </StaticGroup>
       </div>
 
-
       <div>
         <FilterGroupDisclosure title="학교" selectedCount={groupCount("schools")}>
           <ChipRow>
@@ -382,7 +381,7 @@ export function DirectoryFilterPanel({
   );
 }
 
-function StaticGroup({
+export function StaticGroup({
   title,
   action,
   children,
@@ -407,11 +406,11 @@ function StaticGroup({
   );
 }
 
-function ChipRow({ children }: { children: React.ReactNode }) {
+export function ChipRow({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-wrap gap-x-1.5 gap-y-1.5 sm:gap-x-0.5">{children}</div>;
 }
 
-function DirectoryToggleChip({
+export function DirectoryToggleChip({
   pressed,
   onPressedChange,
   disabled = false,
@@ -447,7 +446,7 @@ function DirectoryToggleChip({
   );
 }
 
-function AttributeMark({ color }: { color: string }) {
+export function AttributeMark({ color }: { color: string }) {
   return <span aria-hidden="true" className={cn("mr-1 inline-block h-3 w-0.5 rounded-full", `bg-v2-attr-${color}`)} />;
 }
 

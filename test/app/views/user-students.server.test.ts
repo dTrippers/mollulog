@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { Attack, Defense } from "~/graphql/graphql";
 import { getRecruitedStudents } from "~/models/recruited-student";
+import { getRelationshipLevels } from "~/models/relationship-level";
 import type { StudentGrowthEquipment, StudentGrowthVisuals } from "~/models/student";
 import {
   getAllStudents,
@@ -14,6 +15,10 @@ jest.mock("~/models/recruited-student", () => ({
   getRecruitedStudents: jest.fn(),
 }));
 
+jest.mock("~/models/relationship-level", () => ({
+  getRelationshipLevels: jest.fn(),
+}));
+
 jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
   getStudentGrowthEquipmentCatalog: jest.fn(),
@@ -23,6 +28,7 @@ jest.mock("~/models/student", () => ({
 
 const env = {} as Env;
 const mockedGetRecruitedStudents = getRecruitedStudents as jest.MockedFunction<typeof getRecruitedStudents>;
+const mockedGetRelationshipLevels = getRelationshipLevels as jest.MockedFunction<typeof getRelationshipLevels>;
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetStudentWeaponAvailability = getStudentWeaponAvailability as jest.MockedFunction<
   typeof getStudentWeaponAvailability
@@ -117,8 +123,8 @@ const growthVisuals = {
 } as unknown as StudentGrowthVisuals;
 
 const equipmentCatalog = [
-  { uid: "hat-7", category: "hat", tier: 7 },
-  { uid: "watch-5", category: "watch", tier: 5 },
+  { uid: "hat-7", category: "hat", tier: 7, maxLevel: 60 },
+  { uid: "watch-5", category: "watch", tier: 5, maxLevel: 50 },
 ] as StudentGrowthEquipment;
 
 beforeEach(() => {
@@ -128,6 +134,7 @@ beforeEach(() => {
   mockedGetStudentWeaponAvailability.mockResolvedValue(new Map([["student-a", true]]));
   mockedGetStudentGrowthVisualsBatch.mockResolvedValue(new Map([["student-a", growthVisuals]]));
   mockedGetStudentGrowthEquipmentCatalog.mockResolvedValue(equipmentCatalog);
+  mockedGetRelationshipLevels.mockResolvedValue([{ studentId: "student-a", currentLevel: 42 }] as never);
 });
 
 describe("user students view", () => {
@@ -140,7 +147,7 @@ describe("user students view", () => {
     expect(mockedGetStudentWeaponAvailability).not.toHaveBeenCalled();
   });
 
-  it("projects only applicable public growth fields and hides stored levels and weapon state", async () => {
+  it("projects the stored growth values raw, with the catalog data the table needs", async () => {
     const result = await getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth");
 
     expect(result.view).toBe("growth");
@@ -148,36 +155,38 @@ describe("user students view", () => {
       uid: "student-a",
       tier: 6,
       growth: {
+        bond: 42,
         level: 80,
+        weaponLevel: 20,
+        skillEx: 5,
+        skillNormal: 10,
+        skillEnhanced: 9,
+        skillSub: 8,
         equipSpecial: 2,
         equipSpecialAvailable: true,
+        weaponAvailable: true,
         abilityHp: 10,
         abilityAtk: 11,
         abilityHeal: 12,
-        abilityAvailable: true,
-        skillVisuals: {
-          ex: { iconUrl: "https://assets.test/ex", level: 5, maxLevel: 5 },
-          normal: { iconUrl: "https://assets.test/normal", level: 10, maxLevel: 10 },
-          enhanced: { iconUrl: "https://assets.test/enhanced", level: 9, maxLevel: 10 },
-          sub: { iconUrl: "https://assets.test/sub", level: 8, maxLevel: 10 },
-        },
-        equipmentVisuals: [
-          { available: true, uid: "hat-7", tier: 7 },
-          { available: false, uid: null, tier: null },
-          { available: true, uid: "watch-5", tier: 5 },
+        equipment: [
+          { available: true, category: "hat", tier: 7, level: 70, maxLevel: 60, uid: "hat-7" },
+          { available: false, category: null, tier: null, level: null, maxLevel: null, uid: null },
+          { available: true, category: "watch", tier: 5, level: 30, maxLevel: 50, uid: "watch-5" },
         ],
       },
     });
-    expect(result.students[0]?.growth).not.toHaveProperty("weaponLevel");
-    expect(result.students[0]?.growth).not.toHaveProperty("skillEx");
-    expect(result.students[0]?.growth).not.toHaveProperty("skillNormal");
-    expect(result.students[0]?.growth).not.toHaveProperty("skillEnhanced");
-    expect(result.students[0]?.growth).not.toHaveProperty("skillSub");
-    expect(result.students[0]?.growth).not.toHaveProperty("equip1");
-    expect(result.students[0]?.growth).not.toHaveProperty("equip2");
-    expect(result.students[0]?.growth).not.toHaveProperty("equip3");
-    expect(result.students[0]?.growth).not.toHaveProperty("equipmentAvailable");
-    expect(result.students[0]?.growth).not.toHaveProperty("equip1Level");
+    expect(result.equipmentLimits).toEqual([
+      { category: "hat", tier: 7, maxLevel: 60 },
+      { category: "watch", tier: 5, maxLevel: 50 },
+    ]);
+  });
+
+  it("keeps a missing bond as null instead of inventing a rank", async () => {
+    mockedGetRelationshipLevels.mockResolvedValueOnce([]);
+
+    const result = await getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth");
+
+    expect(result.students[0]?.growth?.bond).toBeNull();
   });
 
   it("omits recruited rows missing from the released catalog before growth lookups", async () => {
@@ -253,54 +262,13 @@ describe("user students view", () => {
 
     const result = await getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth");
 
-    expect(result.students[0]?.growth).toMatchObject({
-      equipSpecial: null,
-      equipSpecialAvailable: false,
-    });
-  });
-
-  it("fails closed when the selected skill configuration references the wrong skill type", async () => {
-    mockedGetStudentGrowthVisualsBatch.mockResolvedValueOnce(
-      new Map([
-        [
-          "student-a",
-          {
-            ...growthVisuals,
-            skills: growthVisuals.skills.map((skill: { uid: string; skillType: string }) =>
-              skill.uid === "skill-ex" ? { ...skill, skillType: "public" } : skill,
-            ),
-          },
-        ],
-      ]) as never,
-    );
-
-    await expect(getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth")).rejects.toThrow(
-      "학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요",
-    );
-  });
-
-  it("fails closed when a selected skill has no icon URL", async () => {
-    mockedGetStudentGrowthVisualsBatch.mockResolvedValueOnce(
-      new Map([
-        [
-          "student-a",
-          {
-            ...growthVisuals,
-            skills: growthVisuals.skills.map((skill) =>
-              skill.uid === "skill-enhanced" ? { ...skill, iconUrl: null } : skill,
-            ),
-          },
-        ],
-      ]),
-    );
-
-    await expect(getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth")).rejects.toThrow(
-      "학생 성장 시각 자료의 스킬 카탈로그를 확인하지 못했어요",
-    );
+    expect(result.students[0]?.growth).toMatchObject({ equipSpecialAvailable: false });
   });
 
   it("fails closed when a stored equipment tier is missing from the shared catalog", async () => {
-    mockedGetStudentGrowthEquipmentCatalog.mockResolvedValueOnce([{ uid: "watch-5", category: "watch", tier: 5 }]);
+    mockedGetStudentGrowthEquipmentCatalog.mockResolvedValueOnce([
+      { uid: "watch-5", category: "watch", tier: 5, maxLevel: 50 },
+    ]);
 
     await expect(getUserStudentsView(env, { ...sensei, growthVisibility: true }, 2, "growth")).rejects.toThrow(
       "학생 성장 시각 자료의 장비 티어를 확인하지 못했어요",

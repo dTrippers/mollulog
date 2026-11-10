@@ -1,48 +1,15 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { useLoaderData } from "react-router";
+import type { LoaderFunctionArgs } from "react-router";
+import { redirect } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { WalkthroughTimelineList } from "~/components/features/walkthrough-timeline";
-import { getPostgresWalkthroughTimelineLikeSummaries } from "~/db/postgres/walkthrough-timeline-likes";
-import { listPostgresWalkthroughTimelinesByUser } from "~/db/postgres/walkthrough-timelines";
-import { getUserParties } from "~/models/party.server";
-import { getRouteSensei } from "./$username._components/route-sensei.server";
 
-export const meta: MetaFunction = ({ params }) => [
-  { title: `${params.username ?? ""} - 공략 타임라인 | 몰루로그`.trim() },
-];
-
+// Walkthroughs moved to the community. The signed-in user's own address opens their walkthroughs.
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request, ctx);
-  const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
-  const me = sensei.id === currentUser?.id;
-  const [hasParties, timelines] = await Promise.all([
-    me
-      ? getUserParties(env, sensei.username, { includePrivate: true }).then((parties) => parties.length > 0)
-      : false,
-    listPostgresWalkthroughTimelinesByUser(env, sensei.id, me, { ctx }),
-  ]);
-  const timelineUids = timelines.map((timeline) => timeline.uid);
-  const engagementByUid = await getPostgresWalkthroughTimelineLikeSummaries(env, timelineUids, currentUser?.id, {
-    ctx,
-  });
-  return {
-    me,
-    hasParties,
-    signedIn: currentUser !== null,
-    timelines,
-    engagementByUid,
-  };
+  const username = params.username?.replace(/^@/, "");
+  return redirect(currentUser && username === currentUser.username ? "/timelines?mine=1" : "/timelines");
 };
 
-export default function UserWalkthroughTimelinesPage() {
-  const { timelines, me, signedIn, engagementByUid } = useLoaderData<typeof loader>();
-  return (
-    <WalkthroughTimelineList
-      timelines={timelines}
-      engagementByUid={engagementByUid}
-      signedIn={signedIn}
-      showCreate={me}
-    />
-  );
+export default function UserWalkthroughTimelinesRedirect() {
+  return null;
 }

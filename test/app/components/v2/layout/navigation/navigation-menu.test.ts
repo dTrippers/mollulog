@@ -32,7 +32,7 @@ describe("global navigation catalog", () => {
   it("keeps the account trigger inactive on the owner's profile root but active on account routes", () => {
     expect(isAccountNavigationActive("/@sensei", "sensei")).toBe(false);
     expect(isAccountNavigationActive("/@sensei/", "sensei")).toBe(false);
-    expect(isAccountNavigationActive("/@sensei/friends", "sensei")).toBe(true);
+    expect(isAccountNavigationActive("/@sensei/friends", "sensei")).toBe(false);
     expect(isAccountNavigationActive("/edit", "sensei")).toBe(true);
     expect(isAccountNavigationActive("/notifications", "sensei")).toBe(true);
     expect(isAccountNavigationActive("/@sensei/students", "sensei")).toBe(false);
@@ -129,15 +129,15 @@ describe("global navigation catalog", () => {
     );
   });
 
-  it("exposes the public API screens in the personal group and marks nested pages active", () => {
+  it("exposes the public API screens in the settings group and marks nested pages active", () => {
     const items = getNavigationCatalog({ ...guestOptions, pathname: "/developers/docs" });
     const api = items.find(({ to }) => to === "/developers");
 
     expect(api).toMatchObject({
       menuId: "mollulog-api",
       name: "개발자 센터",
-      group: "personal",
-      surfaces: ["desktop", "more", "search"],
+      group: "settings",
+      surfaces: ["account", "more", "search"],
       isActive: true,
     });
     expect(getSearchableMenuItems()).toContainEqual(
@@ -151,22 +151,19 @@ describe("global navigation catalog", () => {
     expect(planner).toMatchObject({ menuId: "ap-planner", name: "AP 플래너", favoriteId: "ap-planner" });
   });
 
-  it("applies the API menu badge saved by admin to desktop and more navigation", () => {
+  it("applies the API menu badge saved by admin to the more navigation", () => {
     const { overrides, warnings } = resolveMenuBadgeOverrides([
       { menuId: "mollulog-api", labelMode: "custom", label: "베타", redDotMode: "show", startsAt: null, endsAt: null },
     ]);
     expect(warnings).toEqual([]);
     const options = { ...guestOptions, menuBadgeOverrides: overrides };
-    const desktop = getDesktopNavigation(options).groups.find(({ id }) => id === "personal");
-    const more = getMoreNavigationSections(options).find(({ id }) => id === "personal");
-    for (const group of [desktop, more]) {
-      expect(group?.items.find(({ to }) => to === "/developers")).toMatchObject({
-        menuId: "mollulog-api",
-        name: "개발자 센터",
-        badgeLabel: "베타",
-        showRedDot: true,
-      });
-    }
+    const more = getMoreNavigationSections(options).find(({ id }) => id === "settings");
+    expect(more?.items.find(({ to }) => to === "/developers")).toMatchObject({
+      menuId: "mollulog-api",
+      name: "개발자 센터",
+      badgeLabel: "베타",
+      showRedDot: true,
+    });
     expect(getNavigationCatalog(guestOptions).find(({ to }) => to === "/developers")).toMatchObject({
       badgeLabel: undefined,
       showRedDot: false,
@@ -185,14 +182,9 @@ describe("global navigation catalog", () => {
   it("uses the approved desktop group names and order", () => {
     const desktop = getDesktopNavigation(guestOptions);
 
-    expect(desktop.groups.map(({ name }) => name)).toEqual([
-      "게임 정보",
-      "플래너·계산기",
-      "커뮤니티",
-      "나의 데이터",
-      "소식·도움말",
-    ]);
-    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "personal", "news"]);
+    // A signed-out visitor has no 나의 데이터 group, because every item in it needs a sign-in.
+    expect(desktop.groups.map(({ name }) => name)).toEqual(["게임 정보", "플래너·계산기", "커뮤니티", "소식·도움말"]);
+    expect(desktop.groups.map(({ id }) => id)).toEqual(["game", "planner", "community", "news"]);
     expect(desktop.groups.flatMap(({ name }) => [name])).not.toEqual(
       expect.arrayContaining(["컨텐츠", "플래너 & 계산기", "게임 외 정보", "내 정보", "서비스"]),
     );
@@ -209,11 +201,12 @@ describe("global navigation catalog", () => {
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
-      "/@sensei/futures",
-      "/@sensei/timelines",
-      "/scanner/resource",
-      "/developers",
-      "/connect/import",
+      "/scanner",
+    ]);
+    expect(signedIn.groups.find(({ id }) => id === "community")?.items.map(({ to }) => to)).toEqual([
+      "/community",
+      "/timelines",
+      "/timelines?mine=1",
     ]);
   });
 
@@ -246,7 +239,7 @@ describe("global navigation catalog", () => {
       "/utils/raidscore",
     ]);
     expect(itemsByGroup.community).toEqual(["/community", "/timelines"]);
-    expect(itemsByGroup.personal).toEqual(["/developers"]);
+    expect(itemsByGroup.personal).toBeUndefined();
     expect(itemsByGroup.news).toEqual(["/news", "/contact"]);
   });
 
@@ -310,7 +303,6 @@ describe("global navigation catalog", () => {
       "게임 정보",
       "플래너·계산기",
       "커뮤니티",
-      "나의 데이터",
       "소식·도움말",
       "설정",
     ]);
@@ -337,43 +329,53 @@ describe("global navigation catalog", () => {
       "프로필",
       "모집한 학생",
       "모집 기록",
-      "관심 학생",
+      "화면 인식·데이터 연동",
+    ]);
+    expect(signedInSections.find(({ id }) => id === "community")?.items.map(({ name }) => name)).toEqual([
+      "피드",
+      "공략 타임라인",
       "공략 작성하기",
-      "게임 화면 인식기",
-      "개발자 센터",
-      "외부 데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "settings")?.items.map(({ name }) => name)).toEqual([
       "프로필 편집",
       "알림 설정",
+      "개발자 센터",
     ]);
   });
 
-  it("keeps the scanner and external data menus separate", () => {
-    for (const pathname of ["/scanner/resource", "/scanner/student"]) {
-      const catalog = getNavigationCatalog({ ...signedInOptions, pathname });
-      expect(catalog.find(({ menuId }) => menuId === "screen-scanner")).toMatchObject({
-        to: "/scanner/resource",
-        name: "게임 화면 인식기",
-        isActive: true,
-        requiresSignIn: true,
-      });
-      expect(catalog.find(({ menuId }) => menuId === "external-data")?.isActive).toBe(false);
-    }
+  it.each([
+    "/scanner",
+    "/scanner/resource",
+    "/scanner/student",
+    "/connect/import",
+    "/connect/export",
+    "/data-history",
+  ])("activates the single screen recognition and data connection entry at %s", (pathname) => {
+    const catalog = getNavigationCatalog({ ...signedInOptions, pathname });
+    expect(catalog.find(({ menuId }) => menuId === "screen-scanner")).toMatchObject({
+      to: "/scanner",
+      name: "화면 인식·데이터 연동",
+      group: "personal",
+      isActive: true,
+      requiresSignIn: true,
+    });
+    expect(catalog.some(({ menuId }) => (menuId as string) === "external-data")).toBe(false);
+  });
 
-    for (const pathname of ["/connect/import", "/connect/export"]) {
+  it("does not activate the entry on unrelated or lookalike paths", () => {
+    for (const pathname of ["/scanners", "/connection", "/data-history-x", "/@sensei", "/developers"]) {
       const catalog = getNavigationCatalog({ ...signedInOptions, pathname });
-      expect(catalog.find(({ menuId }) => menuId === "external-data")).toMatchObject({
-        to: "/connect/import",
-        name: "외부 데이터 연동",
-        isActive: true,
-        requiresSignIn: true,
-      });
       expect(catalog.find(({ menuId }) => menuId === "screen-scanner")?.isActive).toBe(false);
     }
   });
 
-  it("resolves saved IDs for moved account entries and the scanner and external data menus", () => {
+  it("removes the favorite students menu from the catalog", () => {
+    const catalog = getNavigationCatalog(signedInOptions);
+    expect(catalog.some(({ menuId }) => menuId === ("favorite-students" as never))).toBe(false);
+    expect(catalog.some(({ to }) => to === "/@sensei/futures")).toBe(false);
+  });
+
+  it("resolves saved IDs for moved account entries and merges the former scanner and import favorites", () => {
     const items = getAvailableNavigationFavorites(
       ["profile", "notifications", "connect-import", "scanner-resource", "news", "contact"],
       getNavigationFavoriteItems(signedInOptions),
@@ -382,8 +384,7 @@ describe("global navigation catalog", () => {
     expect(items.map(({ favoriteId, name, to }) => [favoriteId, name, to])).toEqual([
       ["profile", "프로필", "/@sensei"],
       ["notifications", "알림 설정", "/notifications"],
-      ["connect-import", "외부 데이터 연동", "/connect/import"],
-      ["scanner-resource", "게임 화면 인식기", "/scanner/resource"],
+      ["connect-import", "화면 인식·데이터 연동", "/scanner"],
       ["news", "업데이트 소식", "/news"],
       ["contact", "제안/문의", "/contact"],
     ]);
@@ -404,10 +405,10 @@ describe("global navigation catalog", () => {
       expect.arrayContaining([
         expect.objectContaining({ id: "profile", name: "프로필", to: "/@sensei" }),
         expect.objectContaining({ id: "my-students", name: "모집한 학생", to: "/@sensei/students" }),
-        expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/@sensei/timelines" }),
+        expect.objectContaining({ id: "my-walkthroughs", name: "공략 작성하기", to: "/timelines?mine=1" }),
+        expect.objectContaining({ id: "mollulog-api", name: "개발자 센터", to: "/developers" }),
         expect.objectContaining({ id: "farming-calculator", name: "파밍 계산기", to: "/utils/resources/farming" }),
-        expect.objectContaining({ id: "screen-scanner", name: "게임 화면 인식기", to: "/scanner/resource" }),
-        expect.objectContaining({ id: "external-data", name: "외부 데이터 연동", to: "/connect/import" }),
+        expect.objectContaining({ id: "screen-scanner", name: "화면 인식·데이터 연동", to: "/scanner" }),
         expect.objectContaining({ id: "notifications", name: "알림 설정", to: "/notifications" }),
       ]),
     );

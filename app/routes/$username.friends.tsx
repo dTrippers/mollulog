@@ -1,14 +1,10 @@
-import { SparklesIcon, UsersIcon } from "@heroicons/react/24/outline";
-import { useEffect, useState } from "react";
 import type { LoaderFunctionArgs } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { ErrorPage } from "~/components/features/layout";
-import { FilterButtons, SubTitle } from "~/components/primitives";
+import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
 import { getFollowershipLists } from "~/models/followership";
-import type { Sensei } from "~/models/sensei";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
-import SenseiList from "./$username.friends._components/SenseiList";
+import { FriendList, type FriendTab } from "./$username.friends._components/FriendList";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -17,45 +13,27 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   return getFollowershipLists(env, sensei.id, currentUser?.id, { ctx });
 };
 
-export default function UserFollowing() {
+// The tab lives in the URL (`?tab=followers`), so the profile's follower link and a reload land on the same list.
+export default function UserFriends() {
   const { following, followers } = useLoaderData<typeof loader>();
-
-  const [params, setParams] = useSearchParams();
-  const [senseis, setSenseis] = useState<Sensei[]>(params.get("tab") === "followers" ? followers : following);
-  useEffect(() => {
-    setSenseis(params.get("tab") === "followers" ? followers : following);
-  }, [followers, following, params]);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab: FriendTab = searchParams.get("tab") === "followers" ? "followers" : "following";
 
   return (
-    <div className="my-8">
-      <SubTitle text="친구 목록" />
-      <FilterButtons
-        surface="page"
-        Icon={UsersIcon}
-        buttonProps={[
-          {
-            text: "팔로잉",
-            active: params.get("tab") !== "followers",
-            onToggle: () => {
-              setParams({ tab: "following" }, { replace: false });
-            },
-          },
-          {
-            text: "팔로워",
-            active: params.get("tab") === "followers",
-            onToggle: () => {
-              setParams({ tab: "followers" }, { replace: false });
-            },
-          },
+    <section aria-labelledby="friends-title" className="@container flex flex-col gap-v2-block-gap">
+      <h2 id="friends-title" className="text-base font-bold text-v2-fg">
+        친구 목록
+      </h2>
+      <SectionTabs
+        label="친구 목록 구분"
+        selectedId={tab}
+        onChange={(id) => setSearchParams({ tab: id })}
+        items={[
+          { id: "following", label: `팔로잉 ${following.length.toLocaleString("en-US")}` },
+          { id: "followers", label: `팔로워 ${followers.length.toLocaleString("en-US")}` },
         ]}
-        exclusive
       />
-
-      {senseis.length === 0 ? (
-        <ErrorPage Icon={SparklesIcon} message="등록한 친구가 없어요 :(" />
-      ) : (
-        <SenseiList senseis={senseis} />
-      )}
-    </div>
+      <FriendList tab={tab} senseis={tab === "followers" ? followers : following} />
+    </section>
   );
 }

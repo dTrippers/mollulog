@@ -1,17 +1,17 @@
-import { ArchiveBoxIcon, StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
-import { StarIcon as StarIconSolid } from "@heroicons/react/24/solid";
-import type { ReactNode } from "react";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
+import { type CSSProperties, Fragment, useEffect, useMemo, useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { TierSelector } from "~/components/features/students";
+import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
+import { TierInput } from "~/components/v2/features/students/TierInput";
+import { useV2Page } from "~/components/v2/layout/V2Page";
+import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
+import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import {
-  EmptyView,
-  NumberInput,
-  type NumberInputGridNavigationInputProps,
-  ProfileImage,
-  useNumberInputGridNavigation,
-} from "~/components/primitives";
-import { EQUIPMENT_TYPE_LABELS } from "~/domain/growth-resource";
+  type NumberInputFlowNavigationInputProps,
+  useNumberInputFlowNavigation,
+} from "~/components/v2/primitives/use-number-input-flow-navigation";
 import type {
   StudentStateDraftCurrentValue,
   StudentStateDraftTargetValue,
@@ -26,7 +26,6 @@ import {
   mergeStudentStateDraftValueForUpdate,
   type StudentStateComparisonField,
   type StudentStateCurrentComparisonValue,
-  type StudentStateFieldDefinition,
   type StudentStateTargetComparisonValue,
   setStudentStateDraftFieldPresence,
   studentStateComparisonFields,
@@ -34,13 +33,20 @@ import {
   studentStateTargetFields,
 } from "~/domain/student-state";
 import { cn } from "~/lib/utils";
+import { formatVisibleName } from "~/models/student-name";
 import type { SyncDraft } from "~/models/sync-draft";
-import DraftReviewView, {
-  DraftReviewActions,
-  parseConfidence,
+import { ConnectStateMessage } from "../connect._components/ConnectStateMessage";
+import { parseConfidence } from "../connect._components/sync-draft-labels";
+import {
+  DraftApplyBar,
+  ReviewLegend,
+  ReviewWarningMark,
+  reviewChangedClassName,
+  SelectionCheckbox,
   type SyncDraftDisplayMetadata,
   type SyncDraftReviewActionData,
-} from "./DraftReviewView";
+  TierFace,
+} from "./review-shared";
 
 export type StudentStateCurrentValues = Record<string, StudentStateStoredValue>;
 
@@ -55,18 +61,11 @@ export type StudentStateStoredTargetValue = StudentStateTargetComparisonValue;
 
 export type StudentStateProposedValues = Record<string, { value: StudentStateDraftValue | null; error: string | null }>;
 
-type StudentStateDraftReviewRow = {
-  entry: SyncDraft["entries"][number];
-  metadata: SyncDraftDisplayMetadata;
-  currentValue: StudentStateCurrentValues[string];
-  proposed: StudentStateProposedValues[string];
-  draftValue: StudentStateDraftValue | null;
-  confidence: number | null;
-  currentIsUpdate: boolean;
-  targetIsUpdate: boolean;
-  submittedCurrent: StudentStateDraftValue["current"];
-  submittedTarget: StudentStateDraftValue["target"];
-};
+type Section = "current" | "target";
+type ReviewFilter = "all" | "changed" | "review";
+
+/** A recognition confidence below this needs a second look (the scanner's review uses the same line). */
+const LOW_CONFIDENCE_THRESHOLD = 0.7;
 
 type StudentStateDraftReviewProps = {
   draft: SyncDraft;
@@ -77,20 +76,25 @@ type StudentStateDraftReviewProps = {
   actionData?: SyncDraftReviewActionData;
 };
 
-type EditableStudentStateRowValue = StudentStateDraftCurrentValue | StudentStateDraftTargetValue | null;
-type NumberInputGridNavigation = ReturnType<typeof useNumberInputGridNavigation>;
+type ReviewRow = {
+  entry: SyncDraft["entries"][number];
+  metadata: SyncDraftDisplayMetadata;
+  currentValue: StudentStateStoredValue;
+  proposed: StudentStateProposedValues[string];
+  draftValue: StudentStateDraftValue | null;
+  confidence: number | null;
+  currentIsUpdate: boolean;
+  targetIsUpdate: boolean;
+  submittedCurrent: StudentStateDraftValue["current"];
+  submittedTarget: StudentStateDraftValue["target"];
+  hasGear: boolean;
+  initialTier: number;
+};
+
+type NumberInputFlow = ReturnType<typeof useNumberInputFlowNavigation>;
 
 const currentFields = studentStateCurrentFields;
 const targetFields = studentStateTargetFields;
-const comparisonFields = studentStateComparisonFields;
-type StudentStateDisplayField = Omit<StudentStateFieldDefinition, "key">;
-
-const cellBase = "border-b border-neutral-200 align-middle dark:border-neutral-700";
-const groupTopCellClass = "border-t border-neutral-200 dark:border-neutral-700";
-const studentHeaderCellClass = `${cellBase} px-3 py-2 text-left align-middle`;
-const rowHeaderCellClass = `${cellBase} w-32 px-2 py-1.5 text-left text-xs font-medium whitespace-nowrap text-neutral-400 dark:text-neutral-500`;
-const importedRowHeaderCellClass = `${cellBase} w-32 px-2 py-1.5 text-left text-xs font-medium whitespace-nowrap text-blue-500 dark:text-blue-400`;
-const headerCellClass = "w-16 px-0.5 py-1.5 text-center";
 
 export function getStudentStateDraftReviewChanges(
   draftValue: StudentStateDraftValue | null,
@@ -125,396 +129,8 @@ export function getStudentStateDraftReviewChanges(
   };
 }
 
-export default function StudentStateDraftReview({
-  draft,
-  metadataByKey,
-  currentValues,
-  proposedValues,
-  writeMode,
-  actionData,
-}: StudentStateDraftReviewProps) {
-  const navigation = useNavigation();
-  const draftFormId = "student-state-draft-review-form";
-  const initialDraftValues = useMemo(
-    () => Object.fromEntries(Object.entries(proposedValues).map(([uid, proposed]) => [uid, proposed.value])),
-    [proposedValues],
-  );
-  const [draftValues, setDraftValues] = useState(initialDraftValues);
-  const isPending = draft.status === "pending";
-
-  useEffect(() => {
-    setDraftValues(initialDraftValues);
-  }, [initialDraftValues]);
-
-  const rows: StudentStateDraftReviewRow[] = draft.entries.flatMap((entry) => {
-    const metadata = metadataByKey[entry.entryKey];
-    if (!metadata) {
-      return [];
-    }
-
-    const proposed = proposedValues[entry.uid] ?? {
-      value: null,
-      error: "학생 상태 변경안 데이터를 찾을 수 없어요",
-    };
-    const draftValue = draftValues[entry.uid] ?? proposed.value;
-    const currentValue = currentValues[entry.entryKey] ?? emptyStoredValue();
-    const initialTier = metadata.initialTier ?? 1;
-    const hasGear = metadata.hasGear ?? true;
-    const visibleFields = getVisibleComparisonFields(hasGear);
-    const { currentIsUpdate, targetIsUpdate, submittedCurrent, submittedTarget } = getStudentStateDraftReviewChanges(
-      draftValue,
-      currentValue,
-      { initialTier, hasGear },
-      writeMode,
-      visibleFields,
-    );
-
-    return [
-      {
-        entry,
-        metadata,
-        currentValue,
-        proposed,
-        draftValue,
-        confidence: parseConfidence(entry.meta),
-        currentIsUpdate,
-        targetIsUpdate,
-        submittedCurrent,
-        submittedTarget,
-      },
-    ];
-  });
-  const visibleRows = rows.filter((row) => row.proposed.error || row.currentIsUpdate || row.targetIsUpdate);
-  const errorRows = rows.filter((row) => row.proposed.error);
-  const lowConfidenceRows = visibleRows.filter((row) => row.confidence !== null && row.confidence < 0.7);
-
-  const updateCurrentValue = (entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => {
-    setDraftValues((values) => {
-      const draftValue = values[entryUid];
-      if (!draftValue?.current) {
-        return values;
-      }
-
-      return {
-        ...values,
-        [entryUid]: setStudentStateDraftFieldPresence(
-          {
-            ...draftValue,
-            current: {
-              ...draftValue.current,
-              [field]: value,
-            },
-          },
-          {
-            current: [
-              ...currentFields
-                .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "current", key))
-                .map(({ key }) => key),
-              field,
-            ],
-            target: targetFields
-              .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "target", key))
-              .map(({ key }) => key),
-          },
-        ),
-      };
-    });
-  };
-
-  const updateTargetValue = (entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => {
-    setDraftValues((values) => {
-      const draftValue = values[entryUid];
-      if (!draftValue?.target) {
-        return values;
-      }
-
-      return {
-        ...values,
-        [entryUid]: setStudentStateDraftFieldPresence(
-          {
-            ...draftValue,
-            target: {
-              ...draftValue.target,
-              [field]: value,
-            },
-          },
-          {
-            current: currentFields
-              .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "current", key))
-              .map(({ key }) => key),
-            target: [
-              ...targetFields
-                .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "target", key))
-                .map(({ key }) => key),
-              field,
-            ],
-          },
-        ),
-      };
-    });
-  };
-
-  return (
-    <DraftReviewView
-      lowConfidenceCount={lowConfidenceRows.length}
-      notices={
-        errorRows.length > 0
-          ? [
-              {
-                id: "invalid-student-state-draft-entries",
-                tone: "danger",
-                content: `읽을 수 없는 항목이 ${errorRows.length.toLocaleString()}개 있어요. 해당 항목은 반영할 수 없어요.`,
-              },
-            ]
-          : []
-      }
-      actionData={actionData}
-      actions={isPending ? <DraftReviewActions applyDisabled={errorRows.length > 0} draftFormId={draftFormId} /> : null}
-    >
-      <Form method="post" id={draftFormId} className="space-y-3">
-        <input type="hidden" name="stateFormat" value={writeMode} />
-        {visibleRows.length === 0 ? (
-          <div className="rounded-lg border border-border bg-card p-8">
-            <EmptyView Icon={ArchiveBoxIcon} text="검토할 항목이 없어요" />
-          </div>
-        ) : null}
-
-        {rows.map(({ entry, proposed, draftValue, submittedCurrent, submittedTarget }) =>
-          proposed.error || draftValue == null ? null : (
-            <Fragment key={`hidden:${entry.uid}`}>
-              <StudentStateDraftHiddenInputs
-                entryUid={entry.uid}
-                submittedCurrent={submittedCurrent}
-                submittedTarget={submittedTarget}
-                writeMode={writeMode}
-              />
-            </Fragment>
-          ),
-        )}
-
-        {visibleRows.length > 0 ? (
-          <>
-            <div className="max-w-full overflow-x-auto">
-              <div className="inline-block overflow-hidden rounded-lg border border-neutral-200 align-top dark:border-neutral-700">
-                <StudentStateComparisonTable
-                  rows={visibleRows}
-                  disabled={navigation.state === "submitting" || !isPending}
-                  onCurrentChange={updateCurrentValue}
-                  onTargetChange={updateTargetValue}
-                  writeMode={writeMode}
-                />
-              </div>
-            </div>
-            <p className="text-sm text-neutral-500 dark:text-neutral-400">
-              키보드 화살표로 각 입력칸을 이동할 수 있어요
-            </p>
-          </>
-        ) : null}
-      </Form>
-    </DraftReviewView>
-  );
-}
-
-function StudentStateComparisonTable({
-  rows,
-  disabled,
-  onCurrentChange,
-  onTargetChange,
-  writeMode,
-}: {
-  rows: StudentStateDraftReviewRow[];
-  disabled: boolean;
-  onCurrentChange: (entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => void;
-  onTargetChange: (entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => void;
-  writeMode: "legacy" | "nullable";
-}) {
-  const fields = getVisibleComparisonFields(rows.some((row) => row.metadata.hasGear ?? true));
-  const numberInputGridNavigation = useNumberInputGridNavigation();
-  let navigationRowIndex = 0;
-
-  return (
-    <table className="w-max border-collapse">
-      <tbody>
-        {rows.map((row, rowIndex) => {
-          const { entry, metadata, currentValue, proposed, draftValue, confidence, currentIsUpdate, targetIsUpdate } =
-            row;
-          const initialTier = metadata.initialTier ?? 1;
-          const importedCurrentValue = draftValue?.current ?? null;
-          const currentNavigationRowIndex = currentIsUpdate ? navigationRowIndex++ : null;
-          const targetNavigationRowIndex = targetIsUpdate ? navigationRowIndex++ : null;
-          const visibleRowCount = getVisibleStudentRowCount(row);
-
-          if (proposed.error || draftValue == null || visibleRowCount === 0) {
-            return (
-              <Fragment key={entry.uid}>
-                <StudentHeaderRow
-                  entryKey={entry.entryKey}
-                  metadata={metadata}
-                  confidence={confidence}
-                  fields={fields}
-                  isFirstRow={rowIndex === 0}
-                />
-                <tr className="align-middle">
-                  <td
-                    colSpan={fields.length + 1}
-                    className={cn(cellBase, "px-3 py-2 text-sm text-red-700 dark:text-red-300")}
-                  >
-                    {proposed.error ?? "학생 상태 변경안 데이터를 읽을 수 없어요"}
-                  </td>
-                </tr>
-              </Fragment>
-            );
-          }
-
-          return (
-            <Fragment key={entry.uid}>
-              <StudentHeaderRow
-                entryKey={entry.entryKey}
-                metadata={metadata}
-                confidence={confidence}
-                fields={fields}
-                isFirstRow={rowIndex === 0}
-              />
-              {currentIsUpdate && draftValue.current != null ? (
-                <>
-                  <ReadonlyStudentStateRow
-                    label="현재 육성 상태"
-                    value={currentValue.current}
-                    valueType="current"
-                    fields={fields}
-                    hasGear={metadata.hasGear ?? true}
-                  />
-                  <EditableStudentStateRow
-                    label="가져온 육성 상태"
-                    baseValue={currentValue.current}
-                    draftValue={importedCurrentValue}
-                    valueType="current"
-                    fields={fields}
-                    hasGear={metadata.hasGear ?? true}
-                    initialTier={initialTier}
-                    disabled={disabled}
-                    entryUid={entry.uid}
-                    navigationRowIndex={currentNavigationRowIndex ?? 0}
-                    numberInputGridNavigation={numberInputGridNavigation}
-                    writeMode={writeMode}
-                    onChange={onCurrentChange}
-                  />
-                </>
-              ) : null}
-              {targetIsUpdate && draftValue.target != null ? (
-                <>
-                  <ReadonlyStudentStateRow
-                    label="현재 육성 목표"
-                    value={currentValue.target}
-                    valueType="target"
-                    fields={fields}
-                    hasGear={metadata.hasGear ?? true}
-                  />
-                  <EditableStudentStateRow
-                    label="가져온 육성 목표"
-                    baseValue={currentValue.target}
-                    draftValue={draftValue.target}
-                    valueType="target"
-                    fields={fields}
-                    hasGear={metadata.hasGear ?? true}
-                    initialTier={initialTier}
-                    disabled={disabled}
-                    entryUid={entry.uid}
-                    navigationRowIndex={targetNavigationRowIndex ?? 0}
-                    numberInputGridNavigation={numberInputGridNavigation}
-                    writeMode={writeMode}
-                    onChange={onTargetChange}
-                  />
-                </>
-              ) : null}
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
-  );
-}
-
-function StudentHeaderRow({
-  entryKey,
-  metadata,
-  confidence,
-  fields,
-  isFirstRow,
-}: {
-  entryKey: string;
-  metadata: SyncDraftDisplayMetadata;
-  confidence: number | null;
-  fields: readonly StudentStateComparisonField[];
-  isFirstRow: boolean;
-}) {
-  const equipments = metadata.equipments ?? [];
-
-  return (
-    <tr className="bg-neutral-50 text-left text-xs font-semibold tracking-wide text-neutral-500 dark:bg-neutral-900 dark:text-neutral-400">
-      <th colSpan={2} className={cn(studentHeaderCellClass, !isFirstRow && groupTopCellClass)}>
-        <div className="flex min-w-0 items-center gap-3">
-          <ProfileImage studentUid={metadata.studentUid ?? entryKey} />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold normal-case tracking-normal text-neutral-900 dark:text-neutral-50">
-              {metadata.label}
-            </p>
-            {confidence !== null && confidence < 0.7 ? (
-              <p className="text-xs font-medium normal-case tracking-normal text-amber-700 dark:text-amber-300">
-                인식 신뢰도 {Math.round(confidence * 100)}%
-              </p>
-            ) : null}
-          </div>
-        </div>
-      </th>
-      {fields.slice(1).map((field) => (
-        <th
-          key={field.label}
-          className={cn(cellBase, !isFirstRow && groupTopCellClass, field.headerClassName ?? headerCellClass)}
-        >
-          <ColumnHeaderLabel field={field} equipments={equipments} />
-        </th>
-      ))}
-    </tr>
-  );
-}
-
 function getVisibleComparisonFields(hasGear: boolean): readonly StudentStateComparisonField[] {
-  return comparisonFields.filter((field) => hasGear || !field.gearOnly);
-}
-
-function getVisibleStudentRowCount(row: StudentStateDraftReviewRow): number {
-  if (!row.draftValue) {
-    return 0;
-  }
-
-  return (
-    Number(row.currentIsUpdate && row.draftValue.current != null) * 2 +
-    Number(row.targetIsUpdate && row.draftValue.target != null) * 2
-  );
-}
-
-function isStudentStateFieldVisible(field: StudentStateComparisonField, hasGear: boolean): boolean {
-  return hasGear || !field.gearOnly;
-}
-
-function getReadonlyCellClass(field: StudentStateComparisonField): string {
-  return cn(
-    cellBase,
-    field.dataCellClassName ?? "w-16 px-0.5 py-1.5",
-    "text-center text-xs font-medium tabular-nums text-neutral-400 dark:text-neutral-500",
-  );
-}
-
-function getTargetCellClass(field: StudentStateComparisonField): string {
-  return cn(cellBase, field.targetCellClassName ?? "w-16 px-0.5 py-1.5", "text-center");
-}
-
-function getSkeletonWidth(field: StudentStateComparisonField): string {
-  if (field.kind === "tier") {
-    return "w-24";
-  }
-  return "w-10";
+  return studentStateComparisonFields.filter((field) => hasGear || !field.gearOnly);
 }
 
 function isMinimumCurrentDraftValue(
@@ -524,340 +140,721 @@ function isMinimumCurrentDraftValue(
 ): boolean {
   return fields.every((field) => {
     const key = field.currentKey;
-    if (!key) {
-      return true;
-    }
-
+    if (!key) return true;
     const currentValue = value[key];
     const minimumValue = key === "tier" ? initialTier : field.min;
     return currentValue == null || currentValue <= minimumValue;
   });
 }
 
-function ColumnHeaderLabel({ field, equipments }: { field: StudentStateDisplayField; equipments: string[] }) {
-  if (field.kind === "tier") {
-    return <span className="sr-only">{field.label}</span>;
-  }
-
-  const equipmentLabel = getEquipmentLabel(field, equipments);
-
-  return (
-    <span className="flex flex-col items-center gap-0.5">
-      <span>{field.label}</span>
-      {equipmentLabel ? (
-        <span className="text-xs font-medium normal-case tracking-normal text-neutral-400 dark:text-neutral-500">
-          {equipmentLabel}
-        </span>
-      ) : null}
-    </span>
-  );
-}
-
-function ReadonlyStudentStateRow({
-  label,
-  value,
-  valueType,
-  fields,
-  hasGear,
-}: {
+// The review groups in column order. A field is found by its current key, which every comparison field has.
+type ReviewGroup = {
   label: string;
-  value: StudentStateStoredCurrentValue | StudentStateStoredTargetValue;
-  valueType: "current" | "target";
-  fields: readonly StudentStateComparisonField[];
-  hasGear: boolean;
-}) {
-  if (valueType === "current" && getStudentStateValue(value, "tier") == null) {
-    return (
-      <tr className="relative align-middle">
-        <td className={rowHeaderCellClass}>{label}</td>
-        <td colSpan={fields.length} className={cn(cellBase, "relative px-3 py-2")}>
-          <div className="pointer-events-none flex select-none items-center gap-2 opacity-20 blur-sm">
-            {fields.map((field) => (
-              <div key={field.label} className={cn("h-4 rounded-sm bg-muted", getSkeletonWidth(field))} />
-            ))}
-          </div>
-          <div className="absolute inset-0 flex items-center justify-center">
-            <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">아직 모집하지 않은 학생이에요</p>
-          </div>
-        </td>
-      </tr>
-    );
-  }
+  fields: readonly { currentKey: keyof StudentStateStoredCurrentValue; column: string; width: string; name: string }[];
+};
 
-  return (
-    <tr className="align-middle">
-      <td className={rowHeaderCellClass}>{label}</td>
-      {fields.map((field) => {
-        const key = valueType === "current" ? field.currentKey : field.targetKey;
-        const isFieldVisible = isStudentStateFieldVisible(field, hasGear);
-        return (
-          <td key={field.label} className={getReadonlyCellClass(field)}>
-            {key && isFieldVisible ? (
-              <StudentStateReadonlyCell field={field} value={getStudentStateValue(value, key)} />
-            ) : (
-              "-"
-            )}
-          </td>
-        );
-      })}
-    </tr>
-  );
+const REVIEW_GROUPS: readonly ReviewGroup[] = [
+  { label: "", fields: [{ currentKey: "tier", column: "성급", width: "3.75rem", name: "성급이" }] },
+  {
+    label: "기본 정보",
+    fields: [
+      { currentKey: "level", column: "Lv", width: "2.75rem", name: "Lv가" },
+      { currentKey: "weaponLevel", column: "고유무기", width: "3.25rem", name: "고유무기 Lv가" },
+      { currentKey: "bond", column: "인연", width: "2.75rem", name: "인연 랭크가" },
+    ],
+  },
+  {
+    label: "스킬",
+    fields: [
+      { currentKey: "skillEx", column: "EX", width: "2.5rem", name: "EX 스킬이" },
+      { currentKey: "skillNormal", column: "기본", width: "2.5rem", name: "기본 스킬이" },
+      { currentKey: "skillEnhanced", column: "강화", width: "2.5rem", name: "강화 스킬이" },
+      { currentKey: "skillSub", column: "서브", width: "2.5rem", name: "서브 스킬이" },
+    ],
+  },
+  {
+    label: "장비 티어",
+    fields: [
+      { currentKey: "equip1", column: "1", width: "2.75rem", name: "장비 1 티어가" },
+      { currentKey: "equip2", column: "2", width: "2.75rem", name: "장비 2 티어가" },
+      { currentKey: "equip3", column: "3", width: "2.75rem", name: "장비 3 티어가" },
+    ],
+  },
+  { label: "", fields: [{ currentKey: "equipSpecial", column: "애용품", width: "3.25rem", name: "애용품이" }] },
+  {
+    label: "능력 해방",
+    fields: [
+      { currentKey: "abilityHp", column: "HP", width: "2.75rem", name: "HP 해방이" },
+      { currentKey: "abilityAtk", column: "공격력", width: "3.25rem", name: "공격력 해방이" },
+      { currentKey: "abilityHeal", column: "치유력", width: "3.25rem", name: "치유력 해방이" },
+    ],
+  },
+];
+
+function findComparisonField(currentKey: keyof StudentStateStoredCurrentValue): StudentStateComparisonField {
+  const field = studentStateComparisonFields.find((candidate) => candidate.currentKey === currentKey);
+  if (!field) throw new Error(`Unknown student state field: ${currentKey}`);
+  return field;
 }
 
-function StudentStateReadonlyCell({ field, value }: { field: StudentStateDisplayField; value: number | null }) {
-  return <span>{formatFieldValue(field, value)}</span>;
+function getSectionKey(field: StudentStateComparisonField, section: Section): string | undefined {
+  return section === "current" ? field.currentKey : field.targetKey;
 }
 
-function EditableStudentStateRow({
-  label,
-  baseValue,
-  draftValue,
-  valueType,
-  fields,
-  hasGear,
-  initialTier,
-  disabled,
-  entryUid,
-  navigationRowIndex,
-  numberInputGridNavigation,
-  writeMode,
-  onChange,
-}: {
-  label: string;
-  baseValue: StudentStateStoredCurrentValue | StudentStateStoredTargetValue;
-  draftValue: EditableStudentStateRowValue;
-  valueType: "current" | "target";
-  fields: readonly StudentStateComparisonField[];
-  hasGear: boolean;
-  initialTier: number;
-  disabled: boolean;
-  entryUid: string;
-  navigationRowIndex: number;
-  numberInputGridNavigation: NumberInputGridNavigation;
-  writeMode: "legacy" | "nullable";
-  onChange:
-    | ((entryUid: string, field: keyof StudentStateStoredCurrentValue, value: number | null) => void)
-    | ((entryUid: string, field: keyof StudentStateStoredTargetValue, value: number | null) => void);
-}) {
-  return (
-    <tr className="align-middle">
-      <td className={importedRowHeaderCellClass}>{label}</td>
-      {draftValue == null ? (
-        <td colSpan={fields.length} className={`${cellBase} bg-blue-50/40 px-3 py-2 dark:bg-sky-400/10`}>
-          <p className="text-center text-xs font-medium text-neutral-400 dark:text-neutral-500">
-            아직 모집하지 않은 학생이에요
-          </p>
-        </td>
-      ) : null}
-      {draftValue == null
-        ? null
-        : fields.map((field, fieldIndex) => {
-            const key = valueType === "current" ? field.currentKey : field.targetKey;
-            const isFieldVisible = isStudentStateFieldVisible(field, hasGear);
-            const base = key && isFieldVisible ? getStudentStateValue(baseValue, key) : null;
-            const imported = key && isFieldVisible ? getStudentStateValue(draftValue, key) : null;
-            const isChanged =
-              key != null &&
-              isFieldVisible &&
-              isStudentStateComparisonFieldUpdateTarget({
-                field,
-                valueType,
-                baseValue,
-                draftValue,
-                initialTier,
-                hasGear,
-                writeMode,
-              });
-            const isDecreased = isChanged && base != null && imported != null && imported < base;
-            return (
-              <td
-                key={field.label}
-                className={cn(
-                  getTargetCellClass(field),
-                  key == null && "bg-background text-muted-foreground dark:bg-background",
-                  isChanged && "bg-blue-50/70 dark:bg-sky-400/10",
-                  isDecreased && "bg-red-100/80 dark:bg-red-950/40",
-                )}
-              >
-                {key && isFieldVisible ? (
-                  <EditableStudentStateCell
-                    field={field}
-                    value={imported}
-                    initialTier={initialTier}
-                    isChanged={isChanged}
-                    isDecreased={isDecreased}
-                    disabled={disabled}
-                    inputProps={numberInputGridNavigation.getInputProps({
-                      rowIndex: navigationRowIndex,
-                      columnIndex: fieldIndex,
-                      disabled,
-                    })}
-                    onChange={(value) => {
-                      if (valueType === "current") {
-                        (
-                          onChange as (
-                            entryUid: string,
-                            field: keyof StudentStateStoredCurrentValue,
-                            value: number | null,
-                          ) => void
-                        )(
-                          entryUid,
-                          key as keyof StudentStateStoredCurrentValue,
-                          field.kind === "tier" ? (value ?? 1) : value,
-                        );
-                        return;
-                      }
-
-                      (
-                        onChange as (
-                          entryUid: string,
-                          field: keyof StudentStateStoredTargetValue,
-                          value: number | null,
-                        ) => void
-                      )(
-                        entryUid,
-                        key as keyof StudentStateStoredTargetValue,
-                        field.kind === "tier" ? (value ?? 1) : value,
-                      );
-                    }}
-                  />
-                ) : (
-                  "-"
-                )}
-              </td>
-            );
-          })}
-    </tr>
-  );
-}
-
-function getStudentStateValue(value: object, key: string): number | null {
+function getStoredNumber(value: object | null | undefined, key: string | undefined): number | null {
+  if (!value || !key) return null;
   const entry = (value as Record<string, unknown>)[key];
   return typeof entry === "number" ? entry : null;
 }
 
-function isStudentStateComparisonFieldUpdateTarget({
-  field,
-  valueType,
-  baseValue,
-  draftValue,
-  initialTier,
-  hasGear,
-  writeMode,
-}: {
-  field: StudentStateComparisonField;
-  valueType: "current" | "target";
-  baseValue: StudentStateStoredCurrentValue | StudentStateStoredTargetValue;
-  draftValue: Exclude<EditableStudentStateRowValue, null>;
-  initialTier: number;
-  hasGear: boolean;
-  writeMode: "legacy" | "nullable";
-}): boolean {
-  if (valueType === "current") {
-    const key = field.currentKey;
-    if (!key) {
-      return false;
-    }
-    return isStudentStateCurrentFieldUpdateTarget(
-      key,
-      draftValue as StudentStateDraftCurrentValue,
-      baseValue as StudentStateStoredCurrentValue,
-      { initialTier, hasGear },
-      writeMode,
-    );
+function isFieldUpdateTarget(
+  row: ReviewRow,
+  section: Section,
+  field: StudentStateComparisonField,
+  writeMode: "legacy" | "nullable",
+): boolean {
+  const isUpdate = section === "current" ? row.currentIsUpdate : row.targetIsUpdate;
+  const draftSection = row.draftValue?.[section];
+  if (!isUpdate || !draftSection) return false;
+  if (section === "current") {
+    return field.currentKey
+      ? isStudentStateCurrentFieldUpdateTarget(
+          field.currentKey,
+          draftSection as StudentStateDraftCurrentValue,
+          row.currentValue.current,
+          { initialTier: row.initialTier, hasGear: row.hasGear },
+          writeMode,
+        )
+      : false;
   }
+  return field.targetKey
+    ? isStudentStateTargetFieldUpdateTarget(
+        field.targetKey,
+        draftSection as StudentStateDraftTargetValue,
+        row.currentValue.target,
+        { initialTier: row.initialTier, hasGear: row.hasGear },
+        writeMode,
+      )
+    : false;
+}
 
-  const key = field.targetKey;
-  if (!key) {
-    return false;
-  }
-  return isStudentStateTargetFieldUpdateTarget(
-    key,
-    draftValue as StudentStateDraftTargetValue,
-    baseValue as StudentStateStoredTargetValue,
-    { initialTier, hasGear },
-    writeMode,
+type FieldState = {
+  field: StudentStateComparisonField;
+  group: ReviewGroup["fields"][number];
+  key: string | undefined;
+  visible: boolean;
+  imported: number | null;
+  stored: number | null;
+  changed: boolean;
+  decreased: boolean;
+};
+
+function getFieldStates(row: ReviewRow, section: Section, writeMode: "legacy" | "nullable"): FieldState[] {
+  return REVIEW_GROUPS.flatMap((group) =>
+    group.fields.map((groupField) => {
+      const field = findComparisonField(groupField.currentKey);
+      const key = getSectionKey(field, section);
+      const visible = key != null && (row.hasGear || !field.gearOnly);
+      const imported = visible ? getStoredNumber(row.draftValue?.[section], key) : null;
+      const stored = visible ? getStoredNumber(row.currentValue[section], key) : null;
+      const changed = visible && isFieldUpdateTarget(row, section, field, writeMode);
+      return {
+        field,
+        group: groupField,
+        key,
+        visible,
+        imported,
+        stored,
+        changed,
+        decreased: changed && imported != null && stored != null && imported < stored,
+      };
+    }),
   );
 }
 
-function formatFieldValue(field: StudentStateDisplayField, value: number | null): ReactNode {
-  return field.kind === "tier" ? formatTier(value, { muted: true }) : formatPlainValue(value);
+function getWarningReasons(row: ReviewRow, section: Section, writeMode: "legacy" | "nullable"): string[] {
+  const reasons: string[] = [];
+  if (row.confidence !== null && row.confidence < LOW_CONFIDENCE_THRESHOLD) {
+    reasons.push("인식 신뢰도가 낮아요.");
+  }
+  for (const state of getFieldStates(row, section, writeMode)) {
+    if (state.decreased) reasons.push(`${state.group.name} 지금 값보다 낮아져요.`);
+  }
+  return reasons;
 }
 
-function EditableStudentStateCell({
-  field,
-  value,
-  initialTier,
-  isChanged,
-  isDecreased,
-  disabled,
-  inputProps,
-  onChange,
-}: {
-  field: StudentStateDisplayField;
-  value: number | null;
-  initialTier: number;
-  isChanged: boolean;
-  isDecreased: boolean;
-  disabled: boolean;
-  inputProps?: NumberInputGridNavigationInputProps;
-  onChange: (value: number | null) => void;
-}) {
-  if (field.kind === "tier") {
-    return (
-      <div className={cn("flex flex-col items-center gap-1", disabled && "pointer-events-none opacity-60")}>
-        <TierSelector
-          initialTier={initialTier}
-          currentTier={value ?? initialTier}
-          iconSize="sm"
-          onTierChange={(tier) => onChange(tier)}
-        />
-        {isDecreased ? <DecreaseWarningLabel /> : null}
+export default function StudentStateDraftReview({
+  draft,
+  metadataByKey,
+  currentValues,
+  proposedValues,
+  writeMode,
+  actionData,
+}: StudentStateDraftReviewProps) {
+  const { stacked } = useV2Page();
+  const flow = useNumberInputFlowNavigation();
+  const formId = "student-state-draft-review-form";
+  const initialDraftValues = useMemo(
+    () => Object.fromEntries(Object.entries(proposedValues).map(([uid, proposed]) => [uid, proposed.value])),
+    [proposedValues],
+  );
+  const [draftValues, setDraftValues] = useState(initialDraftValues);
+  const [deselected, setDeselected] = useState<ReadonlySet<string>>(new Set());
+  const [section, setSection] = useState<Section>("current");
+  const [filter, setFilter] = useState<ReviewFilter>("changed");
+  const navigation = useNavigation();
+  const submitting = navigation.state === "submitting";
+
+  useEffect(() => {
+    setDraftValues(initialDraftValues);
+    setDeselected(new Set());
+  }, [initialDraftValues]);
+
+  const rows: ReviewRow[] = draft.entries.flatMap((entry) => {
+    const metadata = metadataByKey[entry.entryKey];
+    if (!metadata) return [];
+    const proposed = proposedValues[entry.uid] ?? { value: null, error: "가져온 학생 데이터를 읽을 수 없어요" };
+    const draftValue = draftValues[entry.uid] ?? proposed.value;
+    const currentValue = currentValues[entry.entryKey] ?? emptyStoredValue();
+    const initialTier = metadata.initialTier ?? 1;
+    const hasGear = metadata.hasGear ?? true;
+    const changes = getStudentStateDraftReviewChanges(
+      draftValue,
+      currentValue,
+      { initialTier, hasGear },
+      writeMode,
+      getVisibleComparisonFields(hasGear),
+    );
+    return [
+      {
+        entry,
+        metadata,
+        currentValue,
+        proposed,
+        draftValue,
+        confidence: parseConfidence(entry.meta),
+        hasGear,
+        initialTier,
+        ...changes,
+      },
+    ];
+  });
+
+  const hasSection = (row: ReviewRow, target: Section) =>
+    row.proposed.error != null || row.draftValue?.[target] != null;
+  const sections = (["current", "target"] as const).filter((target) =>
+    rows.some((row) => row.draftValue?.[target] != null),
+  );
+  const activeSection: Section = sections.includes(section) ? section : (sections[0] ?? "current");
+  const tabRows = rows.filter((row) => hasSection(row, activeSection));
+  const isChangedIn = (row: ReviewRow, target: Section) =>
+    target === "current" ? row.currentIsUpdate : row.targetIsUpdate;
+  const needsReview = (row: ReviewRow) =>
+    row.proposed.error != null || getWarningReasons(row, activeSection, writeMode).length > 0;
+  const counts = {
+    all: tabRows.length,
+    changed: tabRows.filter((row) => row.proposed.error != null || isChangedIn(row, activeSection)).length,
+    review: tabRows.filter(needsReview).length,
+  };
+  const visibleRows = tabRows.filter((row) =>
+    filter === "all"
+      ? true
+      : filter === "changed"
+        ? row.proposed.error != null || isChangedIn(row, activeSection)
+        : needsReview(row),
+  );
+
+  const isSelectable = (row: ReviewRow) => row.proposed.error == null && (row.currentIsUpdate || row.targetIsUpdate);
+  const selectedRows = rows.filter((row) => isSelectable(row) && !deselected.has(row.entry.entryKey));
+  const unselectedCount = rows.filter((row) => isSelectable(row) && deselected.has(row.entry.entryKey)).length;
+  const changedValueCount = selectedRows.reduce(
+    (total, row) =>
+      total +
+      getFieldStates(row, "current", writeMode).filter((state) => state.changed).length +
+      getFieldStates(row, "target", writeMode).filter((state) => state.changed).length,
+    0,
+  );
+  const visibleSelectable = visibleRows.filter(isSelectable);
+  const selectedVisibleCount = visibleSelectable.filter((row) => !deselected.has(row.entry.entryKey)).length;
+  const allVisibleSelected = visibleSelectable.length > 0 && selectedVisibleCount === visibleSelectable.length;
+
+  const toggleRow = (entryKey: string, selected: boolean) =>
+    setDeselected((current) => {
+      const next = new Set(current);
+      if (selected) next.delete(entryKey);
+      else next.add(entryKey);
+      return next;
+    });
+  const toggleVisible = (selected: boolean) =>
+    setDeselected((current) => {
+      const next = new Set(current);
+      for (const row of visibleSelectable) {
+        if (selected) next.delete(row.entry.entryKey);
+        else next.add(row.entry.entryKey);
+      }
+      return next;
+    });
+
+  const updateValue = (entryUid: string, target: Section, field: string, value: number | null) => {
+    setDraftValues((values) => {
+      const draftValue = values[entryUid];
+      const draftSection = draftValue?.[target];
+      if (!draftValue || !draftSection) return values;
+      const providedCurrent = currentFields
+        .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "current", key))
+        .map(({ key }) => key as string);
+      const providedTarget = targetFields
+        .filter(({ key }) => isStudentStateDraftFieldProvided(draftValue, "target", key))
+        .map(({ key }) => key as string);
+      return {
+        ...values,
+        [entryUid]: setStudentStateDraftFieldPresence(
+          { ...draftValue, [target]: { ...draftSection, [field]: value } } as StudentStateDraftValue,
+          {
+            current: target === "current" ? [...providedCurrent, field] : providedCurrent,
+            target: target === "target" ? [...providedTarget, field] : providedTarget,
+          },
+        ),
+      };
+    });
+  };
+
+  const fieldErrors = actionData?.fieldErrors ?? {};
+  const invalidInputCount = Object.keys(fieldErrors).length;
+  const tabItems = sections.map((target) => ({
+    id: target,
+    label: `${target === "current" ? "학생 현재 상태" : "육성 목표"} ${rows.filter((row) => row.draftValue?.[target] != null).length.toLocaleString("ko-KR")}`,
+  }));
+
+  const table =
+    visibleRows.length === 0 ? (
+      <div className="rounded-lg bg-v2-surface">
+        {tabRows.length === 0 ? (
+          <ConnectStateMessage Icon={ArchiveBoxIcon} title="검토할 항목이 없어요" />
+        ) : (
+          <ConnectStateMessage
+            Icon={ArchiveBoxIcon}
+            title="바뀌는 값이 없어요"
+            description="가져온 값이 모두 지금 값과 같아요. 전체를 눌러 모든 학생을 볼 수 있어요."
+          />
+        )}
+      </div>
+    ) : stacked ? (
+      <ul className="flex flex-col gap-v2-list-gap">
+        {visibleRows.map((row) => (
+          <li key={row.entry.uid} className="rounded-lg bg-v2-surface p-v2-block-p">
+            <ReviewCard
+              row={row}
+              section={activeSection}
+              writeMode={writeMode}
+              flow={flow}
+              selected={isSelectable(row) && !deselected.has(row.entry.entryKey)}
+              selectable={isSelectable(row)}
+              disabled={submitting}
+              fieldError={fieldErrors[row.entry.entryKey]}
+              onSelectedChange={(selected) => toggleRow(row.entry.entryKey, selected)}
+              onValueChange={(field, value) => updateValue(row.entry.uid, activeSection, field, value)}
+            />
+          </li>
+        ))}
+      </ul>
+    ) : (
+      <div className="overflow-x-auto rounded-lg bg-v2-surface py-1">
+        <table className="w-max min-w-full border-collapse">
+          <thead>
+            <ReviewTableHead
+              allSelected={allVisibleSelected}
+              someSelected={selectedVisibleCount > 0 && !allVisibleSelected}
+              disabled={visibleSelectable.length === 0}
+              onToggle={toggleVisible}
+            />
+          </thead>
+          <tbody>
+            {visibleRows.map((row) => (
+              <ReviewTableRow
+                key={row.entry.uid}
+                row={row}
+                section={activeSection}
+                writeMode={writeMode}
+                flow={flow}
+                selected={isSelectable(row) && !deselected.has(row.entry.entryKey)}
+                selectable={isSelectable(row)}
+                disabled={submitting}
+                fieldError={fieldErrors[row.entry.entryKey]}
+                onSelectedChange={(selected) => toggleRow(row.entry.entryKey, selected)}
+                onValueChange={(field, value) => updateValue(row.entry.uid, activeSection, field, value)}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
     );
-  }
 
   return (
-    <div
-      className={cn("mx-auto flex w-14 flex-col items-center gap-0.5", disabled && "pointer-events-none opacity-60")}
-    >
-      <NumberInput
-        nullable
-        size="sm"
-        showDecrease={false}
-        showIncrease={false}
-        minValue={field.min}
-        maxValue={field.max}
-        value={value}
-        disabled={disabled}
-        inputProps={{
-          ...inputProps,
-          className: cn("font-semibold text-neutral-950 dark:text-neutral-50", inputProps?.className),
-        }}
-        controlClassName={cn(
-          !isChanged && "border-neutral-300 bg-white/70 dark:border-neutral-700 dark:bg-neutral-950/60",
-          isChanged && "border-blue-300 bg-white dark:border-sky-500 dark:bg-neutral-950",
-          isDecreased && "border-red-300 bg-red-50 dark:border-red-900 dark:bg-red-950/20",
-        )}
-        onChange={onChange}
+    <div className={cn("flex flex-col gap-v2-block-gap", stacked && "pb-28")}>
+      <SectionTabs
+        items={tabItems}
+        selectedId={activeSection}
+        onChange={(id) => setSection(id === "target" ? "target" : "current")}
+        label="가져온 데이터 종류"
       />
-      {isDecreased ? <DecreaseWarningLabel /> : null}
+      <fieldset className="m-0 min-w-0 border-0 p-0 flex flex-wrap items-center gap-2" aria-label="검토 필터">
+        <ToggleChip pressed={filter === "all"} onPressedChange={() => setFilter("all")}>
+          전체 {counts.all.toLocaleString("ko-KR")}
+        </ToggleChip>
+        <ToggleChip pressed={filter === "changed"} onPressedChange={() => setFilter("changed")}>
+          바뀌는 학생만 {counts.changed.toLocaleString("ko-KR")}
+        </ToggleChip>
+        <ToggleChip pressed={filter === "review"} onPressedChange={() => setFilter("review")}>
+          확인 필요 {counts.review.toLocaleString("ko-KR")}
+        </ToggleChip>
+        {stacked ? null : (
+          <span className="ml-auto text-xs text-v2-fg-tertiary">화살표 키로 입력칸 사이를 이동할 수 있어요.</span>
+        )}
+      </fieldset>
+      <ReviewLegend />
+      <Form method="post" id={formId} className="flex flex-col gap-v2-block-gap">
+        <input type="hidden" name="stateFormat" value={writeMode} />
+        {selectedRows.map((row) => (
+          <Fragment key={`selected:${row.entry.uid}`}>
+            <input type="hidden" name="selected" value={row.entry.entryKey} />
+            <StudentStateDraftHiddenInputs
+              entryUid={row.entry.uid}
+              submittedCurrent={row.submittedCurrent}
+              submittedTarget={row.submittedTarget}
+              writeMode={writeMode}
+            />
+          </Fragment>
+        ))}
+        {table}
+      </Form>
+      <DraftApplyBar
+        applyFormId={formId}
+        summary={`학생 ${selectedRows.length.toLocaleString("ko-KR")}명 · 바뀌는 값 ${changedValueCount.toLocaleString("ko-KR")}개`}
+        discardNote={
+          unselectedCount > 0
+            ? `선택하지 않은 학생 ${unselectedCount.toLocaleString("ko-KR")}명의 값은 반영되지 않고 삭제돼요.`
+            : "선택하지 않은 학생의 값은 반영되지 않고 삭제돼요."
+        }
+        canApply={!submitting && selectedRows.length > 0}
+        actionData={actionData}
+        invalidInputCount={invalidInputCount}
+      />
     </div>
   );
 }
 
-function DecreaseWarningLabel() {
-  return <span className="text-xs font-medium text-red-700 dark:text-red-300">기존보다 값이 감소했어요</span>;
+const groupCellClassName = "px-1.5 py-2 align-top";
+const headerCellClassName = "px-1.5 text-left text-xs font-medium text-v2-fg-tertiary";
+
+function gridStyle(group: ReviewGroup, mobile: boolean): CSSProperties {
+  return {
+    gridTemplateColumns: mobile
+      ? `repeat(${group.fields.length}, minmax(0, 1fr))`
+      : group.fields.map((field) => field.width).join(" "),
+  };
 }
 
-function getEquipmentLabel(field: StudentStateDisplayField, equipments: string[]): string | undefined {
-  const index = field.equipmentIndex;
-  if (index == null) {
-    return undefined;
-  }
+function ReviewTableHead({
+  allSelected,
+  someSelected,
+  disabled,
+  onToggle,
+}: {
+  allSelected: boolean;
+  someSelected: boolean;
+  disabled: boolean;
+  onToggle: (selected: boolean) => void;
+}) {
+  return (
+    <>
+      <tr>
+        <th className="pl-v2-block-p" />
+        {REVIEW_GROUPS.map((group) => (
+          <th
+            key={group.fields[0]?.currentKey}
+            className={cn(headerCellClassName, "pt-2 pb-1 font-semibold text-v2-fg-secondary")}
+          >
+            {group.label}
+          </th>
+        ))}
+        <th />
+      </tr>
+      <tr>
+        <th scope="col" className={cn(headerCellClassName, "pb-1 pl-v2-block-p")}>
+          <span className="inline-flex items-center gap-2">
+            <SelectionCheckbox
+              checked={allSelected}
+              mixed={someSelected}
+              disabled={disabled}
+              label="보이는 학생 모두 선택"
+              onCheckedChange={onToggle}
+            />
+            학생
+          </span>
+        </th>
+        {REVIEW_GROUPS.map((group) => (
+          <th key={group.fields[0]?.currentKey} scope="colgroup" className={cn(headerCellClassName, "pb-1")}>
+            <div className="grid text-center" style={gridStyle(group, false)}>
+              {group.fields.map((field) => (
+                <span key={field.currentKey}>{field.column}</span>
+              ))}
+            </div>
+          </th>
+        ))}
+        <th scope="col" className={cn(headerCellClassName, "pr-v2-block-p pb-1 text-right")}>
+          변화
+        </th>
+      </tr>
+    </>
+  );
+}
 
-  const equipmentType = equipments[index];
-  return equipmentType ? (EQUIPMENT_TYPE_LABELS[equipmentType] ?? equipmentType) : undefined;
+type RowProps = {
+  row: ReviewRow;
+  section: Section;
+  writeMode: "legacy" | "nullable";
+  flow: NumberInputFlow;
+  selected: boolean;
+  selectable: boolean;
+  disabled: boolean;
+  fieldError?: string;
+  onSelectedChange: (selected: boolean) => void;
+  onValueChange: (field: string, value: number | null) => void;
+};
+
+function ReviewTableRow(props: RowProps) {
+  const { row, section, writeMode, selected, selectable, fieldError, onSelectedChange } = props;
+  const failed = row.proposed.error != null || row.draftValue?.[section] == null;
+  const states = failed ? [] : getFieldStates(row, section, writeMode);
+  const changedCount = states.filter((state) => state.changed).length;
+  return (
+    <tr className={cn("border-t border-v2-divider first:border-t-0", selectable && !selected && "opacity-60")}>
+      <td className="py-2 pl-v2-block-p align-top">
+        <div className="flex items-center gap-2">
+          <SelectionCheckbox
+            checked={selected}
+            disabled={!selectable}
+            label={`${row.metadata.label} 반영`}
+            onCheckedChange={onSelectedChange}
+          />
+          <ReviewStudentIdentity row={row} section={section} writeMode={writeMode} fieldError={fieldError} />
+        </div>
+      </td>
+      {failed ? (
+        <td colSpan={REVIEW_GROUPS.length + 1} className="px-1.5 py-2 text-sm text-v2-danger">
+          {row.proposed.error ?? "가져온 학생 데이터를 읽을 수 없어요"}
+        </td>
+      ) : (
+        <>
+          {REVIEW_GROUPS.map((group) => (
+            <td key={group.fields[0]?.currentKey} className={groupCellClassName}>
+              <ReviewGroupFields group={group} states={states} mobile={false} {...props} />
+            </td>
+          ))}
+          <td className="py-2 pr-v2-block-p text-right align-top text-xs text-v2-fg-tertiary tabular-nums">
+            {changedCount > 0 ? `${changedCount.toLocaleString("ko-KR")}개` : ""}
+          </td>
+        </>
+      )}
+    </tr>
+  );
+}
+
+function ReviewCard(props: RowProps) {
+  const { row, section, writeMode, selected, selectable, fieldError, onSelectedChange } = props;
+  const failed = row.proposed.error != null || row.draftValue?.[section] == null;
+  const states = failed ? [] : getFieldStates(row, section, writeMode);
+  const changedCount = states.filter((state) => state.changed).length;
+  return (
+    <div className={cn("flex flex-col gap-3", selectable && !selected && "opacity-60")}>
+      <div className="flex items-center gap-2">
+        <SelectionCheckbox
+          checked={selected}
+          disabled={!selectable}
+          label={`${row.metadata.label} 반영`}
+          onCheckedChange={onSelectedChange}
+        />
+        <div className="min-w-0 flex-1">
+          <ReviewStudentIdentity row={row} section={section} writeMode={writeMode} fieldError={fieldError} />
+        </div>
+        {changedCount > 0 ? (
+          <span className="shrink-0 text-xs text-v2-fg-tertiary tabular-nums">
+            {changedCount.toLocaleString("ko-KR")}개 변화
+          </span>
+        ) : null}
+      </div>
+      {failed ? (
+        <p className="text-sm text-v2-danger">{row.proposed.error ?? "가져온 학생 데이터를 읽을 수 없어요"}</p>
+      ) : (
+        <div className="grid grid-cols-1 gap-3">
+          {REVIEW_GROUPS.filter((group) =>
+            group.fields.some((field) => states.some((state) => state.group === field && state.visible)),
+          ).map((group) => (
+            <div key={group.fields[0]?.currentKey} className="flex min-w-0 flex-col gap-1.5">
+              <p className="text-sm font-semibold text-v2-fg-secondary">{group.label || group.fields[0]?.column}</p>
+              <div
+                className="grid text-center text-xs leading-4 text-v2-fg-tertiary"
+                style={gridStyle(group, true)}
+                aria-hidden="true"
+              >
+                {group.fields.map((field) => (
+                  <span key={field.currentKey}>{field.column}</span>
+                ))}
+              </div>
+              <ReviewGroupFields group={group} states={states} mobile {...props} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewStudentIdentity({
+  row,
+  section,
+  writeMode,
+  fieldError,
+}: {
+  row: ReviewRow;
+  section: Section;
+  writeMode: "legacy" | "nullable";
+  fieldError?: string;
+}) {
+  const { name, variant } = splitVisibleStudentName(row.metadata.label);
+  const reasons = row.proposed.error == null ? getWarningReasons(row, section, writeMode) : [];
+  return (
+    <div className="flex min-w-0 items-center gap-2">
+      <span className="block shrink-0">
+        <StudentThumb
+          studentUid={row.metadata.studentUid ?? row.entry.entryKey}
+          name={row.metadata.label}
+          variant={null}
+          recruitmentLabel=""
+          isNew={false}
+          favorite={NO_FAVORITE_LABEL}
+          compact
+          showCaption={false}
+        />
+      </span>
+      <div className="min-w-0">
+        <div className="flex min-w-0 items-center gap-1">
+          <span className="truncate text-sm font-medium text-v2-fg" title={formatVisibleName(row.metadata.label)}>
+            {name}
+          </span>
+          <ReviewWarningMark reasons={reasons} />
+        </div>
+        {variant ? <span className="block truncate text-xs text-v2-fg-tertiary">{variant}</span> : null}
+        {fieldError ? <span className="block text-xs text-v2-danger">{fieldError}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+const NO_FAVORITE_LABEL = { visible: false, icon: "unfavorited", countText: null, accessibleName: "" } as const;
+
+// A segment of a grouped box: no border or corners of its own, and a focus ring drawn inside, so the group clips nothing.
+const segmentInputClassName =
+  "rounded-none border-0 bg-transparent px-0 outline-offset-[-2px] [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+
+// One group of values: one bordered box split by inner rules, with the caption line (the saved value) under each value.
+function ReviewGroupFields({
+  group,
+  states,
+  mobile,
+  row,
+  section,
+  flow,
+  disabled,
+  onValueChange,
+}: RowProps & { group: ReviewGroup; states: FieldState[]; mobile: boolean }) {
+  const groupStates = states.filter((state) => group.fields.includes(state.group));
+  if (!groupStates.some((state) => state.visible) && !mobile) {
+    return <span className="block text-center text-sm text-v2-fg-tertiary">—</span>;
+  }
+  const studentName = row.metadata.label;
+  return (
+    <div className="flex flex-col">
+      <div
+        className="grid divide-x divide-v2-control-border overflow-hidden rounded-md border border-v2-control-border bg-v2-surface focus-within:border-v2-control-border-strong"
+        style={gridStyle(group, mobile)}
+      >
+        {groupStates.map((state) => {
+          const label = `${studentName} ${section === "target" ? "목표 " : ""}${state.field.label}`;
+          if (!state.visible) {
+            return (
+              <span
+                key={state.group.currentKey}
+                className="flex min-h-7 items-center justify-center text-sm text-v2-fg-tertiary"
+              >
+                —
+              </span>
+            );
+          }
+          const warning = state.decreased;
+          const cellClassName = cn(
+            segmentInputClassName,
+            state.changed ? reviewChangedClassName : "text-v2-fg-secondary focus:text-v2-fg",
+            warning && "bg-v2-warning-subtle",
+          );
+          if (state.field.kind === "tier") {
+            return (
+              <TierInput
+                key={state.group.currentKey}
+                label={studentName}
+                value={state.imported}
+                initialTier={row.initialTier}
+                min={state.field.min}
+                // Both tier fields define their max (9: the exclusive weapon levels after ★5); the type only makes it optional.
+                max={state.field.max ?? 9}
+                disabled={disabled}
+                warning={warning}
+                compact
+                flowProps={flow.getInputProps({ disabled })}
+                onChange={(tier) => onValueChange(state.key as string, tier)}
+                className={cn(cellClassName, "h-full")}
+              />
+            );
+          }
+          return (
+            <NumberInput
+              key={state.group.currentKey}
+              {...(flow.getInputProps({ disabled }) as NumberInputFlowNavigationInputProps)}
+              compact
+              min={state.field.min}
+              max={state.field.max}
+              value={state.imported ?? ""}
+              disabled={disabled}
+              warning={warning}
+              className={cellClassName}
+              aria-label={label}
+              onChange={(event) => {
+                const next = event.currentTarget.value === "" ? null : Number(event.currentTarget.value);
+                onValueChange(state.key as string, next);
+              }}
+            />
+          );
+        })}
+      </div>
+      <div className="grid" style={gridStyle(group, mobile)}>
+        {groupStates.map((state) => (
+          <span
+            key={state.group.currentKey}
+            className="block h-4 truncate text-center text-[0.6875rem] leading-4 text-v2-fg-tertiary tabular-nums"
+          >
+            {state.changed && state.stored != null ? (
+              <>
+                <span className="sr-only">지금 값 </span>
+                {state.field.kind === "tier" ? <TierFace tier={state.stored} /> : state.stored}
+                {state.decreased ? <span aria-hidden="true"> ↓</span> : null}
+              </>
+            ) : null}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function StudentStateDraftHiddenInputs({
@@ -955,33 +952,4 @@ function emptyStoredValue(): StudentStateStoredValue {
       targetAbilityHeal: null,
     },
   };
-}
-
-function formatTier(value: number | null, options?: { muted?: boolean }): ReactNode {
-  return value == null ? "-" : <TierStars tier={value} muted={options?.muted ?? false} />;
-}
-
-function formatPlainValue(value: number | null): ReactNode {
-  return value == null ? "-" : value.toLocaleString();
-}
-
-function TierStars({ tier, muted }: { tier: number; muted: boolean }) {
-  return (
-    <span role="img" className={cn("inline-flex items-center", muted && "opacity-80")} aria-label={`${tier}성`}>
-      {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((eachTier) => {
-        const Icon = eachTier <= tier ? StarIconSolid : StarIconOutline;
-        return (
-          <Icon
-            key={eachTier}
-            className={cn(
-              muted ? "size-3.5" : "size-4",
-              eachTier <= 5 ? "text-yellow-500" : "text-teal-500",
-              eachTier === 5 && "mr-1",
-              eachTier > tier && "opacity-25",
-            )}
-          />
-        );
-      })}
-    </span>
-  );
 }

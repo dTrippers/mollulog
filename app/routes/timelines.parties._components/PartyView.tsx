@@ -23,11 +23,10 @@ type PartyViewProps = {
     name: string;
     tier: number | null;
   }[];
-  deletable?: boolean;
   raids?: RaidScheduleListItem[];
 };
 
-export default function PartyView({ party, sensei, students, deletable, raids }: PartyViewProps) {
+export default function PartyView({ party, sensei, students, raids }: PartyViewProps) {
   const [memoOpened, setMemoOpened] = useState(false);
   const studentsMap = new Map(students.map((student) => [student.uid, student]));
 
@@ -49,20 +48,7 @@ export default function PartyView({ party, sensei, students, deletable, raids }:
   }
 
   return (
-    <ActionCard
-      actions={
-        deletable
-          ? [
-              {
-                text: "삭제",
-                color: "red",
-                danger: true,
-                form: { method: "post", hiddenInputs: [{ name: "uid", value: party.uid }] },
-              },
-            ]
-          : []
-      }
-    >
+    <ActionCard actions={[]}>
       <div className="-mt-4">
         <SubTitle text={party.name} />
       </div>

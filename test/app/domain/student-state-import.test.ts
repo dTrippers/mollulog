@@ -370,7 +370,7 @@ describe("student-state-import", () => {
   it("rejects unknown or empty input with a user-facing error", () => {
     expect(() => parseStudentStateImport("")).toThrow("가져올 데이터를 입력해주세요.");
     expect(() => parseStudentStateImport('{"items":[]}')).toThrow(
-      "SchaleDB 또는 Justin163 학생 데이터 JSON을 인식하지 못했어요.",
+      "데이터를 가져오지 못했어요. SchaleDB 또는 Justin163 플래너에서 내보낸 데이터를 그대로 붙여넣었는지 확인해주세요.",
     );
   });
 

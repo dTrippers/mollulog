@@ -4,6 +4,12 @@ import { describe, expect, it } from "@jest/globals";
 
 const ROUTES_DIRECTORY = join(process.cwd(), "app", "routes");
 const MODELS_DIRECTORY = join(process.cwd(), "app", "models");
+// These only redirect to a moved page and read no profile data. The new page applies its own profile guard.
+const REDIRECT_ONLY_ROUTES = new Set([
+  "$username.futures.tsx",
+  "$username.parties._index.tsx",
+  "$username.timelines.tsx",
+]);
 
 describe("profile route privacy guard", () => {
   it("keeps PostgreSQL profile lookup out of the client-visible layout module", () => {
@@ -12,15 +18,18 @@ describe("profile route privacy guard", () => {
       join(ROUTES_DIRECTORY, "$username._components", "route-sensei.server.ts"),
       "utf8",
     );
+    // The layout loader may call the guard, but only through the server-only module, so the lookup never reaches the
+    // client bundle.
     expect(layoutSource).not.toContain("~/models/sensei");
-    expect(layoutSource).not.toContain("getRouteSensei");
+    expect(layoutSource).not.toMatch(/function getRouteSensei/);
+    expect(layoutSource).toContain('import { getRouteSensei } from "./$username._components/route-sensei.server";');
     expect(serverSource).toContain("getSenseiByUsername");
   });
 
   it("keeps every public @username data route behind getRouteSensei as a coarse architecture backstop", () => {
     const unguardedRoutes = readdirSync(ROUTES_DIRECTORY)
       .filter((file) => file.startsWith("$username") && file.endsWith(".tsx"))
-      .filter((file) => !file.includes(".edit."))
+      .filter((file) => !file.includes(".edit.") && !REDIRECT_ONLY_ROUTES.has(file))
       .filter((file) => {
         const source = readFileSync(join(ROUTES_DIRECTORY, file), "utf8");
         const hasDataHandler = /export const (?:loader|action)\s*=/.test(source);

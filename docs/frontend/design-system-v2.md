@@ -174,6 +174,7 @@ These rules come from the product owner's reviews of design proposals and implem
 - A calculated result that is not ready or failed shows that state. Never show it as 0, 충분, or any other value it does not have.
 - A result for a currency allows several acquisition and consumption sources. A display with one slot per currency is a defect.
 - UI copy uses the domain terms below and polite, neutral wording. Avoid casual or condescending words (갖고 있는, 키운다) and labels that read as a judgment of the user (운).
+- A notice about one item (a student, a row) sits at that item, as an inline mark or icon beside its name, not as a notice at the top of the screen.
 
 ### Domain terms
 
@@ -207,10 +208,11 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 
 - Density is two separate judgments. Controls stay compact (see `min-h-v2-control-min` and `min-h-v2-input-min`); do not enlarge them. Space between elements is generous enough that a block with many elements does not look cramped; when it does, add space between elements or quiet secondary ones, not larger controls.
 - UI that appears and disappears, such as a save status, never sits in the layout flow, where it pushes the content below it. Use an overlay: autosave status uses `primitives/SaveToast`.
-- Group with spacing and surfaces, not borders. Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal.
+- Group with spacing and surfaces, not borders. Items in a list have no borders between them; keep a divider only where it separates a different kind of row, such as the row that adds a goal. The bordered field for values of one domain, below, is the exception.
 - One page uses one content width. Sections, banners, and notices in Main share the same maximum width, so their edges line up.
 - Elements of the same kind keep one width and even spacing whatever their number: three tier targets do not stretch to fill a row, and a column of owned currencies is evenly spaced.
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
+- Inputs for values of one domain, such as skill levels or equipment slots, share one bordered field split by internal dividers, as in the scanner review. A hint below a field, such as the current value, sits in its own row so the fields stay aligned.
 
 ## Motion
 
@@ -291,6 +293,7 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
 - `PageHeader` takes `titleHidden` to keep its title and meta in the screen-reader tree while visually hiding them.
+- `PageHeader` takes `trailingInline` with `trailing` to keep a short action, such as a primary button, beside the heading at every width instead of below it under 60rem. The heading truncates before the action wraps. The `/@username` header uses it with `media` (`SenseiAvatar size="header"`).
 - `V2Page` takes `toolbarSpan="full"` to put the toolbar on its own full-width row above the Aside and Main, so a toolbar shared by several screens (such as the event detail tabs) stays in place whether or not a screen has an Aside. It also adds a full-width notice row for `PageNotice`, which renders a page-level `StatusNotice` between the toolbar and the content. `PageNotice` has no area without `toolbarSpan="full"`.
 - `PageHeader stackedOnly` hides the Header at 48rem and wider beside an Aside, and the page grid drops the header row so the Aside and the Toolbar start at the top. The page renders the same header first in `PageAside` with `PageAsideHeader`, which keeps the back link, media, title, and meta. The Aside then sticks at the content's top padding, level with the Toolbar. The student detail page uses it so its tabs and body are not pushed down by a header that only fills the Aside's width.
 

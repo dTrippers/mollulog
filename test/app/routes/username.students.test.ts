@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { createStudentFilterState } from "~/components/features/students/StudentFilter";
-import { serializeStudentFilterStateCookie } from "~/components/features/students/student-filter-cookie";
-import { Attack, Defense } from "~/graphql/graphql";
+import { Attack } from "~/graphql/graphql";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import {
   addRecruitedStudents,
@@ -11,23 +9,25 @@ import {
   removeRecruitedStudent,
   upsertRecruitedStudent,
 } from "~/models/recruited-student";
-import { getAllStudents, getAllStudentsMap } from "~/models/student";
+import { getStudentStateWriteMode } from "~/models/relationship-level";
 import {
-  getUserPageHasParties,
-  getUserPageLinks,
-  getUserPagePresentation,
-  shouldShowUserLegacyPartySwitcher,
-} from "~/routes/$username";
+  getAllStudents,
+  getAllStudentsMap,
+  getStudentGrowthEquipmentCatalog,
+  getStudentGrowthVisualsBatch,
+} from "~/models/student";
+import {
+  StudentBasicInfoBatchConflictError,
+  StudentBasicInfoBatchValidationError,
+  saveStudentBasicInfoBatch,
+} from "~/models/student-basic-info";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
+import { action, loader } from "~/routes/$username.students";
 import {
-  action,
-  getStudentScannerLinks,
-  growthPrivateCalloutDismissalStorageKey,
-  loader,
-  parseGrowthPrivateCalloutDismissal,
-  USER_STUDENT_FILTER_COOKIE_NAME,
-  USER_STUDENT_FILTER_SORTS,
-} from "~/routes/$username.students";
+  createStudentsFilterState,
+  STUDENTS_FILTER_COOKIE_NAME,
+} from "~/routes/$username.students._components/students-filter";
+import { getUserStudentsView } from "~/views/user-students.server";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -54,31 +54,30 @@ jest.mock("~/models/recruited-student", () => ({
 jest.mock("~/models/student", () => ({
   getAllStudents: jest.fn(),
   getAllStudentsMap: jest.fn(),
-  getStudentWeaponAvailability: jest.fn(),
+  getStudentGrowthEquipmentCatalog: jest.fn(),
+  getStudentGrowthVisualsBatch: jest.fn(),
 }));
 
-jest.mock("~/components/features/students", () => ({
-  getFilteredStudentUids: jest.fn(),
-  StudentCards: jest.fn(() => null),
-  StudentFilter: jest.fn(() => null),
-  TierSelector: jest.fn(() => null),
-  usePersistentStudentFilterState: jest.fn(() => [
-    {
-      attackTypes: [],
-      defenseTypes: [],
-      roles: [],
-      tacticRoles: [],
-      positions: [],
-      sort: "recent",
-    },
-    jest.fn(),
-  ]),
+jest.mock("~/models/relationship-level", () => ({
+  getStudentStateWriteMode: jest.fn(),
 }));
 
-jest.mock("~/components/primitives", () => ({
-  Button: jest.fn(() => null),
-  SubTitle: jest.fn(() => null),
-  Toggle: jest.fn(() => null),
+jest.mock("~/models/student-basic-info", () => ({
+  saveStudentBasicInfoBatch: jest.fn(),
+  StudentBasicInfoBatchConflictError: class StudentBasicInfoBatchConflictError extends Error {
+    constructor(public conflicts: unknown[]) {
+      super("conflict");
+    }
+  },
+  StudentBasicInfoBatchValidationError: class StudentBasicInfoBatchValidationError extends Error {
+    constructor(public errors: unknown[]) {
+      super("invalid");
+    }
+  },
+}));
+
+jest.mock("~/views/user-students.server", () => ({
+  getUserStudentsView: jest.fn(),
 }));
 
 const env = { HYPERDRIVE: { connectionString: "postgres://test" } } as unknown as Env;
@@ -92,6 +91,13 @@ const mockedGetAllStudentsMap = getAllStudentsMap as jest.MockedFunction<typeof 
 const mockedRemoveRecruitedStudent = removeRecruitedStudent as jest.MockedFunction<typeof removeRecruitedStudent>;
 const mockedUpsertRecruitedStudent = upsertRecruitedStudent as jest.MockedFunction<typeof upsertRecruitedStudent>;
 const mockedAddRecruitedStudents = addRecruitedStudents as jest.MockedFunction<typeof addRecruitedStudents>;
+const mockedGetUserStudentsView = getUserStudentsView as jest.MockedFunction<typeof getUserStudentsView>;
+const mockedGetStudentStateWriteMode = getStudentStateWriteMode as jest.MockedFunction<typeof getStudentStateWriteMode>;
+const mockedSaveBatch = saveStudentBasicInfoBatch as jest.MockedFunction<typeof saveStudentBasicInfoBatch>;
+const mockedGetGrowthVisuals = getStudentGrowthVisualsBatch as jest.MockedFunction<typeof getStudentGrowthVisualsBatch>;
+const mockedGetEquipmentCatalog = getStudentGrowthEquipmentCatalog as jest.MockedFunction<
+  typeof getStudentGrowthEquipmentCatalog
+>;
 const logger = {
   debug: jest.fn(),
   info: jest.fn(),
@@ -107,10 +113,10 @@ function createActionArgs(formData: FormData, method = "POST") {
   } as never;
 }
 
-function createLoaderArgs(cookie?: string) {
+function createLoaderArgs(cookie?: string, search = "") {
   return {
     context: { cloudflare: { env, ctx: {} as ExecutionContext } },
-    request: new Request("https://mollulog.test/@sensei/students", {
+    request: new Request(`https://mollulog.test/@sensei/students${search}`, {
       headers: cookie ? { Cookie: cookie } : undefined,
     }),
     params: { username: "@sensei" },
@@ -150,129 +156,54 @@ beforeEach(() => {
   mockedRemoveRecruitedStudent.mockResolvedValue(undefined);
   mockedUpsertRecruitedStudent.mockResolvedValue(undefined);
   mockedAddRecruitedStudents.mockResolvedValue(undefined);
-});
-
-describe("@username layout owner presentation", () => {
-  it("reads the legacy party control availability from child route data", () => {
-    expect(getUserPageHasParties([{ data: { hasParties: true } }])).toBe(true);
-    expect(getUserPageHasParties([{ data: { hasParties: false } }])).toBe(false);
-    expect(getUserPageHasParties([{ data: { parties: [{ uid: "party-1" }] } }])).toBe(false);
-  });
-
-  it("keeps another user's public profile presentation for a signed-in viewer", () => {
-    const presentation = getUserPagePresentation("/@other/students", "other", false);
-
-    expect(presentation).toMatchObject({
-      title: "@other",
-      description: "선생님의 정보를 확인해보세요",
-    });
-    expect(presentation.screens?.map(({ text }) => text)).toEqual([
-      "프로필 정보",
-      "모집한 학생",
-      "모집 이력/통계",
-      "관심 학생",
-      "공략 타임라인",
-      "편성/공략",
-    ]);
-    expect(presentation.screens?.find(({ text }) => text === "모집한 학생")).toBeDefined();
-  });
-
-  it("uses five personal data tabs on the owner's landing page and data routes", () => {
-    const students = getUserPagePresentation("/@sensei/students", "sensei", true);
-    expect(students.title).toBe("나의 데이터");
-    expect(students.description).toBeUndefined();
-    expect(students.screens?.map(({ text }) => text)).toEqual([
-      "프로필",
-      "모집한 학생",
-      "모집 기록",
-      "관심 학생",
-      "공략 작성하기",
-    ]);
-    expect(students.screens?.[1]).toMatchObject({ link: "/@sensei/students", active: true });
-
-    for (const pathname of ["/@sensei", "/@sensei/"]) {
-      const profile = getUserPagePresentation(pathname, "sensei", true);
-      expect(profile).toMatchObject({ title: "나의 데이터", description: undefined, isOwnerProfileLanding: true });
-      expect(profile.screens?.map(({ text }) => text)).toEqual([
-        "프로필",
-        "모집한 학생",
-        "모집 기록",
-        "관심 학생",
-        "공략 작성하기",
-      ]);
-      expect(profile.screens?.[0]).toMatchObject({ link: "/@sensei", active: true });
-      expect(profile.screens?.slice(1).every(({ active }) => !active)).toBe(true);
-    }
-
-    const parties = getUserPagePresentation("/@sensei/parties", "sensei", true);
-    expect(parties.screens?.find(({ text }) => text === "공략 작성하기")).toMatchObject({ active: true });
-  });
-
-  it("shows the legacy route switch only for the owner when party data exists", () => {
-    expect(shouldShowUserLegacyPartySwitcher("/@sensei/timelines", "sensei", true, true)).toBe(true);
-    expect(shouldShowUserLegacyPartySwitcher("/@sensei/parties", "sensei", true, false)).toBe(false);
-    expect(shouldShowUserLegacyPartySwitcher("/@sensei/parties/edit/1", "sensei", true, true)).toBe(false);
-    expect(shouldShowUserLegacyPartySwitcher("/@other/parties", "other", false, true)).toBe(false);
-  });
+  mockedSaveBatch.mockResolvedValue(undefined as never);
+  mockedGetGrowthVisuals.mockResolvedValue(new Map([["student-a", { gearAvailable: false }]]) as never);
+  mockedGetEquipmentCatalog.mockResolvedValue([{ uid: "hat-1", category: "Hat", tier: 1, maxLevel: 10 }] as never);
 });
 
 describe("@username students loader", () => {
-  it("configures the scanner link only for the owner's student page", () => {
-    const ownerLinks = getStudentScannerLinks(true);
-    expect(ownerLinks).toMatchObject([
-      {
-        title: "영상 인식기",
-        description: "게임 내 학생 리스트 화면을 녹화하여 학생 정보를 가져올 수 있어요",
-        to: "/scanner/student",
-      },
-    ]);
-    expect(getStudentScannerLinks(false)).toBeUndefined();
+  const emptyView = {
+    students: [],
+    noRecruited: true,
+    view: "summary",
+    growthVisibility: true,
+    canViewGrowth: true,
+    equipmentLimits: [],
+  };
 
-    expect(getUserPageLinks("students", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBe(ownerLinks);
-    expect(getUserPageLinks("students", "other", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
-    expect(getUserPageLinks("profile", "sensei", { username: "sensei", links: ownerLinks ?? [] })).toBeUndefined();
+  it("seeds the first render from the students filter cookie without the search text", async () => {
+    mockedGetUserStudentsView.mockResolvedValue(emptyView as never);
+    const state = { ...createStudentsFilterState("tier"), attackTypes: [Attack.Explosive], search: "아루" };
+    const cookieValue = encodeURIComponent(JSON.stringify(state));
+
+    const result = await loader(createLoaderArgs(`${STUDENTS_FILTER_COOKIE_NAME}=${cookieValue}`));
+
+    expect(result.filterState).toEqual({ ...createStudentsFilterState("tier"), attackTypes: [Attack.Explosive] });
   });
 
-  it("parses only the own growth callout dismissal from browser storage", () => {
-    expect(growthPrivateCalloutDismissalStorageKey).toBe("mollulog::dismissed-growth-private-callout");
-    expect(parseGrowthPrivateCalloutDismissal(null)).toBe(false);
-    expect(parseGrowthPrivateCalloutDismissal("[]")).toBe(false);
-    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["other-notice"]))).toBe(false);
-    expect(parseGrowthPrivateCalloutDismissal(JSON.stringify(["student-growth-private"]))).toBe(true);
-    expect(parseGrowthPrivateCalloutDismissal("invalid")).toBe(false);
+  it("gives the owner the stored state format only for the growth view", async () => {
+    mockedGetUserStudentsView.mockResolvedValue({ ...emptyView, view: "growth" } as never);
+    mockedGetStudentStateWriteMode.mockResolvedValue("nullable" as never);
+
+    const growth = await loader(createLoaderArgs(undefined, "?view=growth"));
+    expect(growth.stateFormat).toBe("nullable");
+    expect(mockedGetUserStudentsView).toHaveBeenLastCalledWith(env, expect.anything(), 1, "growth");
+
+    mockedGetStudentStateWriteMode.mockClear();
+    const summary = await loader(createLoaderArgs());
+    expect(summary.stateFormat).toBeNull();
+    expect(mockedGetStudentStateWriteMode).not.toHaveBeenCalled();
   });
 
-  it("seeds the first render from the user student filter cookie", async () => {
-    const state = {
-      ...createStudentFilterState("tier"),
-      attackTypes: [Attack.Explosive],
-      search: "아루",
-    };
-    const cookieValue = serializeStudentFilterStateCookie(
-      { defaultSort: "recent", allowedSorts: USER_STUDENT_FILTER_SORTS },
-      state,
-    );
-    mockedGetRecruitedStudents.mockResolvedValueOnce([{ studentUid: "student-a", tier: 4 }] as never);
-    mockedGetAllStudents.mockResolvedValueOnce([
-      {
-        uid: "student-a",
-        name: "아루",
-        attackType: Attack.Explosive,
-        defenseType: Defense.Light,
-        role: "striker",
-        position: "front",
-        tacticRole: "attacker",
-        order: 1,
-        initialTier: 3,
-      },
-    ] as never);
+  it("does not read the state format for a visitor", async () => {
+    mockedGetUserStudentsView.mockResolvedValue({ ...emptyView, view: "growth" } as never);
+    mockedGetActiveSensei.mockResolvedValueOnce({ id: 9, uid: "sensei-9", username: "visitor" } as never);
 
-    const result = await loader(createLoaderArgs(`${USER_STUDENT_FILTER_COOKIE_NAME}=${cookieValue}`));
+    const result = await loader(createLoaderArgs(undefined, "?view=growth"));
 
-    expect(result.filterState).toEqual({
-      ...createStudentFilterState("tier"),
-      attackTypes: [Attack.Explosive],
-    });
+    expect(result.me).toBe(false);
+    expect(result.stateFormat).toBeNull();
+    expect(mockedGetStudentStateWriteMode).not.toHaveBeenCalled();
   });
 });
 
@@ -514,6 +445,141 @@ describe("@username students action", () => {
     expect(mockedCaptureServerError).toHaveBeenCalledWith(
       writeError,
       expect.objectContaining({ route: "username.students.action", operation: "single-write" }),
+    );
+  });
+});
+
+function growthFormData(overrides: { entries?: unknown; stateFormat?: string } = {}) {
+  const formData = new FormData();
+  formData.append("intent", "save-growth");
+  formData.append("stateFormat", overrides.stateFormat ?? "nullable");
+  formData.append(
+    "entries",
+    JSON.stringify(overrides.entries ?? [{ studentUid: "student-a", changes: { tier: 5 }, expected: { tier: 4 } }]),
+  );
+  return formData;
+}
+
+describe("@username students growth save", () => {
+  beforeEach(() => {
+    mockedGetAllStudents.mockResolvedValue([
+      { uid: "student-a", initialTier: 3, equipments: ["Hat", "Gloves", "Shoes"] },
+    ] as never);
+  });
+
+  it("saves every changed student in one batch with the catalog limits", async () => {
+    const response = expectDataResult<{ ok: boolean; saved: number }>(await action(createActionArgs(growthFormData())));
+
+    expect(response.data).toEqual({ ok: true, saved: 1 });
+    expect(mockedSaveBatch).toHaveBeenCalledTimes(1);
+    expect(mockedSaveBatch).toHaveBeenCalledWith(
+      env,
+      1,
+      [{ studentUid: "student-a", changes: { tier: 5 }, expected: { tier: 4 } }],
+      expect.objectContaining({
+        requestMode: "nullable",
+        equipmentLimits: [{ category: "Hat", tier: 1, maxLevel: 10 }],
+      }),
+    );
+  });
+
+  it.each([
+    ["unknown state format", growthFormData({ stateFormat: "other" })],
+    ["a non-array payload", growthFormData({ entries: {} })],
+    ["an unknown field", growthFormData({ entries: [{ studentUid: "student-a", changes: { hp: 1 }, expected: {} }] })],
+    ["an empty change set", growthFormData({ entries: [{ studentUid: "student-a", changes: {}, expected: {} }] })],
+    [
+      "a non-numeric value",
+      growthFormData({ entries: [{ studentUid: "student-a", changes: { tier: "5" }, expected: {} }] }),
+    ],
+  ])("rejects %s before touching the database", async (_name, formData) => {
+    const response = expectDataResult<{ ok: boolean; code: string }>(await action(createActionArgs(formData)));
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data).toMatchObject({ ok: false, code: "FAILED" });
+    expect(mockedSaveBatch).not.toHaveBeenCalled();
+  });
+
+  it("reports a student the catalog does not know as a validation failure", async () => {
+    const response = expectDataResult<{ code: string; errors: { studentUid: string }[] }>(
+      await action(
+        createActionArgs(
+          growthFormData({ entries: [{ studentUid: "student-x", changes: { tier: 5 }, expected: { tier: 4 } }] }),
+        ),
+      ),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data.code).toBe("INVALID");
+    expect(response.data.errors[0]?.studentUid).toBe("student-x");
+    expect(mockedSaveBatch).not.toHaveBeenCalled();
+  });
+
+  it("returns the values another screen changed as a conflict", async () => {
+    const conflicts = [{ studentUid: "student-a", field: "tier", current: 6 }];
+    mockedSaveBatch.mockRejectedValueOnce(new StudentBasicInfoBatchConflictError(conflicts as never));
+
+    const response = expectDataResult<{ code: string; conflicts: unknown[] }>(
+      await action(createActionArgs(growthFormData())),
+    );
+
+    expect(response.init?.status).toBe(409);
+    expect(response.data).toEqual({ ok: false, code: "CONFLICT", conflicts });
+  });
+
+  it("returns per-student validation failures from the model", async () => {
+    const errors = [{ studentUid: "student-a", field: "level", message: "학생 Lv은 1부터 90까지 입력할 수 있어요" }];
+    mockedSaveBatch.mockRejectedValueOnce(new StudentBasicInfoBatchValidationError(errors as never));
+
+    const response = expectDataResult<{ code: string; errors: unknown[] }>(
+      await action(createActionArgs(growthFormData())),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data).toEqual({ ok: false, code: "INVALID", errors });
+  });
+
+  it("reports an unexpected failure without exposing the raw error", async () => {
+    const failure = new Error("connection reset by peer");
+    mockedSaveBatch.mockRejectedValueOnce(failure);
+
+    const response = expectDataResult<{ code: string; error: string }>(
+      await action(createActionArgs(growthFormData())),
+    );
+
+    expect(response.init?.status).toBe(500);
+    expect(response.data.code).toBe("FAILED");
+    expect(response.data.error).not.toContain("connection reset");
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(
+      failure,
+      expect.objectContaining({ operation: "growth-save", entryCount: 1 }),
+    );
+  });
+
+  it("does not let a visitor save", async () => {
+    mockedGetRouteSensei.mockResolvedValueOnce({ id: 2, uid: "sensei-2", username: "other" } as never);
+
+    const response = expectDataResult<{ error: string }>(await action(createActionArgs(growthFormData())));
+
+    expect(response.init?.status).toBe(403);
+    expect(mockedSaveBatch).not.toHaveBeenCalled();
+  });
+});
+
+describe("@username students single remove", () => {
+  it("reports a failed remove instead of throwing", async () => {
+    const failure = new Error("database unavailable");
+    mockedRemoveRecruitedStudent.mockRejectedValueOnce(failure);
+    const formData = new FormData();
+    formData.append("studentUid", "student-a");
+
+    const response = expectDataResult<{ error: string }>(await action(createActionArgs(formData, "DELETE")));
+
+    expect(response.init?.status).toBe(500);
+    expect(response.data.error).toBe("학생을 제외하지 못했어요. 잠시 후 다시 시도해주세요.");
+    expect(mockedCaptureServerError).toHaveBeenCalledWith(
+      failure,
+      expect.objectContaining({ operation: "single-remove" }),
     );
   });
 });

@@ -48,15 +48,6 @@ export async function getContentComments(
   return (await getPostgresContentComments(env, [contentId], userId, options))[contentId] ?? [];
 }
 
-export async function getContentsComments(
-  env: Env,
-  contentIds: string[],
-  userId?: number,
-  options: ContentCommentReadOptions = {},
-): Promise<Record<string, ContentCommentWithSensei[]>> {
-  return getPostgresContentComments(env, contentIds, userId, options);
-}
-
 export async function getContentsCommentSummaries(
   env: Env,
   contentIds: string[],

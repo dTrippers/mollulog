@@ -182,6 +182,7 @@ const studentGrowthEquipmentQuery = graphql(`
         uid
         category
         tier
+        maxLevel
       }
     }
   }
@@ -349,7 +350,7 @@ export type StudentGrowthVisuals = {
   skills: Array<{ uid: string; skillType: StudentSkillTypeEnum; iconUrl: string | null; maxLevel: number }>;
 };
 
-export type StudentGrowthEquipment = Array<{ uid: string; category: string; tier: number }>;
+export type StudentGrowthEquipment = Array<{ uid: string; category: string; tier: number; maxLevel: number }>;
 
 const STUDENT_GROWTH_VISUALS_TTL = 7 * 24 * 60 * 60;
 
@@ -397,7 +398,7 @@ export async function getStudentGrowthVisualsBatch(
   );
 }
 
-const studentGrowthEquipmentKey = cacheKey("source", "student-growth-equipment", 1, "all");
+const studentGrowthEquipmentKey = cacheKey("source", "student-growth-equipment", 2, "all");
 
 async function fetchStudentGrowthEquipmentFromBaql(): Promise<StudentGrowthEquipment> {
   const { data, error } = await runQuery(studentGrowthEquipmentQuery, {});

@@ -15,9 +15,12 @@ import { PageHeader } from "~/components/v2/layout/PageHeader";
 import { PageMain } from "~/components/v2/layout/PageMain";
 import { PageToolbar } from "~/components/v2/layout/PageToolbar";
 import { PanelSheet } from "~/components/v2/layout/PanelSheet";
+import { ScreenNavigation } from "~/components/v2/layout/ScreenNavigation";
 import { ScreenTabs } from "~/components/v2/layout/ScreenTabs";
+import { ScreenNavigationFocusScope } from "~/components/v2/layout/screen-navigation-focus";
 import { V2Page, type V2PanelRequest } from "~/components/v2/layout/V2Page";
 import { Button } from "~/components/v2/primitives/Button";
+import { getConnectScreenItems } from "./connect._components/connect-navigation";
 import ScannerJobsPanel from "./scanner._components/ScannerJobsPanel";
 import type { ScannerUploadQuota } from "./scanner._components/UploadQuotaMeter";
 import { getScannerQuotaDisplayState, useScannerQuota } from "./scanner._components/useScannerQuota";
@@ -77,40 +80,47 @@ export default function ScannerLayout() {
           </ScannerQuota>
         }
       />
-      <PageToolbar>
-        <ScreenTabs
-          items={[
-            {
-              key: "resource",
-              text: "아이템",
-              Icon: ArchiveBoxIcon,
-              link: "/scanner/resource",
-              active: pathname.startsWith("/scanner/resource"),
-            },
-            {
-              key: "student",
-              text: "학생 성장도",
-              Icon: AcademicCapIcon,
-              link: "/scanner/student",
-              active: pathname.startsWith("/scanner/student"),
-            },
-          ]}
-        />
-      </PageToolbar>
-      <PageMain>
-        <Outlet context={quotaContext} />
-      </PageMain>
-      <PageAside>
-        <PanelSheet panelId="jobs" title="진행 상황" description="최근 7일 동안의 인식 작업" Icon={ClockIcon}>
-          <ScannerJobsPanel />
-        </PanelSheet>
-        <div className="flex justify-end">
-          <Button variant="secondary" className="text-xs" onClick={() => setIsFeedbackOpen(true)}>
-            <ChatBubbleOvalLeftIcon className="size-4" aria-hidden="true" />
-            {FEEDBACK_TITLE}
-          </Button>
-        </div>
-      </PageAside>
+      <ScreenNavigationFocusScope>
+        <PageToolbar>
+          {/* The group's screens come first on stacked layouts. The scanner's own tabs keep a scope of their own. */}
+          {isStacked ? <ScreenTabs items={getConnectScreenItems("scanner", "tabs")} /> : null}
+          <ScreenNavigationFocusScope>
+            <ScreenTabs
+              items={[
+                {
+                  key: "resource",
+                  text: "아이템",
+                  Icon: ArchiveBoxIcon,
+                  link: "/scanner/resource",
+                  active: pathname.startsWith("/scanner/resource"),
+                },
+                {
+                  key: "student",
+                  text: "학생 성장도",
+                  Icon: AcademicCapIcon,
+                  link: "/scanner/student",
+                  active: pathname.startsWith("/scanner/student"),
+                },
+              ]}
+            />
+          </ScreenNavigationFocusScope>
+        </PageToolbar>
+        <PageMain>
+          <Outlet context={quotaContext} />
+        </PageMain>
+        <PageAside>
+          <ScreenNavigation items={getConnectScreenItems("scanner", "aside")} />
+          <PanelSheet panelId="jobs" title="진행 상황" description="최근 7일 동안의 인식 작업" Icon={ClockIcon}>
+            <ScannerJobsPanel />
+          </PanelSheet>
+          <div className="flex justify-end">
+            <Button variant="secondary" className="text-xs" onClick={() => setIsFeedbackOpen(true)}>
+              <ChatBubbleOvalLeftIcon className="size-4" aria-hidden="true" />
+              {FEEDBACK_TITLE}
+            </Button>
+          </div>
+        </PageAside>
+      </ScreenNavigationFocusScope>
       <div className={isMobileActionBarHidden ? "hidden" : undefined}>
         <MobileActionBar
           links={[

@@ -9,8 +9,9 @@ export type CommentThreadActions = {
   onReply: (parentCommentUid: string, body: string, visibility: CommentVisibility) => void;
   onUpdate: (commentUid: string, body: string, visibility: CommentVisibility) => void;
   onDelete: (commentUid: string) => void;
-  onPin: (commentUid: string) => void;
-  onUnpin: () => void;
+  // Omit both for a thread that cannot pin.
+  onPin?: (commentUid: string) => void;
+  onUnpin?: () => void;
 };
 
 // Opinions and replies read oldest first, in posting order.
@@ -85,8 +86,8 @@ export function CommentThread({
             onReply={() => setReplyingTo(replying ? null : comment.uid)}
             onEdit={() => setEditingUid(editing ? null : comment.uid)}
             onDelete={() => confirmDelete(comment.uid)}
-            onPin={() => actions.onPin(comment.uid)}
-            onUnpin={actions.onUnpin}
+            onPin={actions.onPin && actions.onUnpin ? () => actions.onPin?.(comment.uid) : undefined}
+            onUnpin={actions.onPin && actions.onUnpin ? actions.onUnpin : undefined}
             editor={
               editing ? (
                 <CommentComposer
@@ -123,8 +124,6 @@ export function CommentThread({
                       onReply={() => undefined}
                       onEdit={() => setEditingUid(replyEditing ? null : reply.uid)}
                       onDelete={() => confirmDelete(reply.uid)}
-                      onPin={() => undefined}
-                      onUnpin={() => undefined}
                       editor={
                         replyEditing ? (
                           <CommentComposer
