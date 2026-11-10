@@ -5,8 +5,20 @@ import {
   type RecruitmentPoolSnapshot,
 } from "~/domain/recruitment-simulator";
 
+export const CALL_CHARGE_MIDPOINT = 100;
+export const CALL_CHARGE_CEILING = 200;
+
+export type CallChargeAdjustment = typeof CALL_CHARGE_MIDPOINT | typeof CALL_CHARGE_CEILING;
+
+export type CallChargeDrawResult = RecruitmentDrawResult & {
+  /** The charge value this slot reached when a charge adjustment decided it; null for normal-rate slots. */
+  adjustment: CallChargeAdjustment | null;
+  /** Whether this slot granted the active pickup and reset the charge to 0. */
+  resetCharge: boolean;
+};
+
 export type CallChargeTenPullResult = {
-  results: RecruitmentDrawResult[];
+  results: CallChargeDrawResult[];
   charge: number;
 };
 
@@ -35,23 +47,26 @@ export function simulateCallChargeTenPull({
 }): CallChargeTenPullResult {
   const pickup = snapshot.pickupStudents.find((student) => student.uid === activePickupStudentUid);
   if (!pickup) throw new Error("Active pickup student is missing from the recruitment snapshot");
-  // The charge guarantees grant a three-star pickup; other pickups are not modeled.
-  if (pickup.initialTier !== 3) throw new Error("Call-charge simulation supports only three-star pickups");
+  const pickupRarity = pickup.initialTier;
+  if (pickupRarity !== 2 && pickupRarity !== 3) {
+    throw new Error("Call-charge simulation supports only two-star or three-star pickups");
+  }
 
   const rateTable = createDefaultRecruitmentRateTable(snapshot, activePickupStudentUid);
-  const results: RecruitmentDrawResult[] = [];
+  const pickupResult: RecruitmentDrawResult = { rarity: pickupRarity, pickup: true, student: pickup };
+  const results: CallChargeDrawResult[] = [];
   let charge = startingCharge;
 
   for (let slot = 0; slot < 10; slot += 1) {
     charge += 1;
     let result: RecruitmentDrawResult;
-    if (charge === 100) {
-      result =
-        random() < 0.5
-          ? { rarity: 3, pickup: true, student: pickup }
-          : drawNonPickupThreeStar(snapshot, activePickupStudentUid, random);
-    } else if (charge === 200) {
-      result = { rarity: 3, pickup: true, student: pickup };
+    let adjustment: CallChargeAdjustment | null = null;
+    if (charge === CALL_CHARGE_MIDPOINT) {
+      adjustment = CALL_CHARGE_MIDPOINT;
+      result = random() < 0.5 ? pickupResult : drawNonPickupThreeStar(snapshot, activePickupStudentUid, random);
+    } else if (charge === CALL_CHARGE_CEILING) {
+      adjustment = CALL_CHARGE_CEILING;
+      result = pickupResult;
     } else {
       result = drawRecruitmentSingleSlot({
         snapshot,
@@ -62,8 +77,9 @@ export function simulateCallChargeTenPull({
       });
     }
 
-    results.push(result);
-    if (result.pickup && result.student.uid === activePickupStudentUid) charge = 0;
+    const resetCharge = result.pickup && result.student.uid === activePickupStudentUid;
+    results.push({ ...result, adjustment, resetCharge });
+    if (resetCharge) charge = 0;
   }
 
   return { results, charge };

@@ -13,7 +13,7 @@ function student(uid: string, initialTier: SimulationStudent["initialTier"] = 3)
   };
 }
 
-const pickup = student("pickup");
+const pickup = { ...student("pickup"), recruitmentType: "usual" as RecruitmentPoolSnapshot["recruitmentType"] };
 const nonPickup = student("non-pickup");
 const snapshot: RecruitmentPoolSnapshot = {
   recruitmentGroupUid: "group",
@@ -41,7 +41,7 @@ describe("simulateCallChargeTenPull", () => {
       random: seededRandom(seededValues()),
     });
 
-    expect(results[9]).toEqual({ rarity: 3, pickup: false, student: nonPickup });
+    expect(results[9]).toMatchObject({ rarity: 3, pickup: false, student: nonPickup });
     expect(charge).toBe(100);
 
     const pickupAt100 = simulateCallChargeTenPull({
@@ -50,7 +50,7 @@ describe("simulateCallChargeTenPull", () => {
       startingCharge: 90,
       random: seededRandom(seededValues({ 27: 0.1 })),
     });
-    expect(pickupAt100.results[9]).toEqual({ rarity: 3, pickup: true, student: pickup });
+    expect(pickupAt100.results[9]).toMatchObject({ rarity: 3, pickup: true, student: pickup });
     expect(pickupAt100.charge).toBe(0);
   });
 
@@ -62,7 +62,7 @@ describe("simulateCallChargeTenPull", () => {
       random: seededRandom(seededValues()),
     });
 
-    expect(results[9]).toEqual({ rarity: 3, pickup: true, student: pickup });
+    expect(results[9]).toMatchObject({ rarity: 3, pickup: true, student: pickup });
     expect(charge).toBe(0);
   });
 
@@ -74,7 +74,7 @@ describe("simulateCallChargeTenPull", () => {
       random: seededRandom(seededValues({ 0: 0.1 })),
     });
 
-    expect(results[0]).toEqual({ rarity: 3, pickup: true, student: pickup });
+    expect(results[0]).toMatchObject({ rarity: 3, pickup: true, student: pickup });
     expect(charge).toBe(9);
   });
 
@@ -85,7 +85,7 @@ describe("simulateCallChargeTenPull", () => {
       startingCharge: 90,
       random: seededRandom(seededValues({ 27: 0.49 })),
     });
-    expect(below.results[9]).toEqual({ rarity: 3, pickup: true, student: pickup });
+    expect(below.results[9]).toMatchObject({ rarity: 3, pickup: true, student: pickup });
 
     const atThreshold = simulateCallChargeTenPull({
       snapshot,
@@ -93,7 +93,7 @@ describe("simulateCallChargeTenPull", () => {
       startingCharge: 90,
       random: seededRandom(seededValues({ 27: 0.5 })),
     });
-    expect(atThreshold.results[9]).toEqual({ rarity: 3, pickup: false, student: nonPickup });
+    expect(atThreshold.results[9]).toMatchObject({ rarity: 3, pickup: false, student: nonPickup });
   });
 
   it("keeps the two-star-or-better guarantee on the tenth slot between charge guarantees", () => {
@@ -117,14 +117,70 @@ describe("simulateCallChargeTenPull", () => {
     expect(charge).toBe(10);
   });
 
-  it("rejects an active pickup that is not a three-star student", () => {
-    const twoStarPickup = student("two-star-pickup", 2);
-    expect(() =>
-      simulateCallChargeTenPull({
-        snapshot: { ...snapshot, pickupStudents: [twoStarPickup] },
-        activePickupStudentUid: twoStarPickup.uid,
-        startingCharge: 190,
-      }),
-    ).toThrow("Call-charge simulation supports only three-star pickups");
+  it("marks the slots decided by a charge adjustment and the slots that reset the charge", () => {
+    const missAt100 = simulateCallChargeTenPull({
+      snapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 90,
+      random: seededRandom(seededValues()),
+    });
+    expect(missAt100.results[9]).toMatchObject({ adjustment: 100, resetCharge: false });
+    expect(missAt100.results.slice(0, 9).every((result) => result.adjustment === null && !result.resetCharge)).toBe(
+      true,
+    );
+
+    const hitAt200 = simulateCallChargeTenPull({
+      snapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 190,
+      random: seededRandom(seededValues()),
+    });
+    expect(hitAt200.results[9]).toMatchObject({ adjustment: 200, resetCharge: true });
+
+    const normalHit = simulateCallChargeTenPull({
+      snapshot,
+      activePickupStudentUid: pickup.uid,
+      startingCharge: 0,
+      random: seededRandom(seededValues({ 0: 0.001, 1: 0.001 })),
+    });
+    expect(normalHit.results[0]).toMatchObject({ pickup: true, adjustment: null, resetCharge: true });
+  });
+
+  it("applies the same adjustments to a two-star pickup", () => {
+    const twoStarPickup = {
+      ...student("two-star-pickup", 2),
+      recruitmentType: "usual" as typeof pickup.recruitmentType,
+    };
+    const twoStarSnapshot: RecruitmentPoolSnapshot = {
+      ...snapshot,
+      pickupStudents: [twoStarPickup],
+      nonPickupStudentsByTier: { tier1: [], tier2: [student("two-star", 2)], tier3: [nonPickup] },
+    };
+
+    const at100 = simulateCallChargeTenPull({
+      snapshot: twoStarSnapshot,
+      activePickupStudentUid: twoStarPickup.uid,
+      startingCharge: 90,
+      random: seededRandom(seededValues({ 27: 0.1 })),
+    });
+    expect(at100.results[9]).toMatchObject({ rarity: 2, pickup: true, student: twoStarPickup, adjustment: 100 });
+    expect(at100.charge).toBe(0);
+
+    const missAt100 = simulateCallChargeTenPull({
+      snapshot: twoStarSnapshot,
+      activePickupStudentUid: twoStarPickup.uid,
+      startingCharge: 90,
+      random: seededRandom(seededValues()),
+    });
+    expect(missAt100.results[9]).toMatchObject({ rarity: 3, pickup: false, student: nonPickup, adjustment: 100 });
+
+    const at200 = simulateCallChargeTenPull({
+      snapshot: twoStarSnapshot,
+      activePickupStudentUid: twoStarPickup.uid,
+      startingCharge: 190,
+      random: seededRandom(seededValues()),
+    });
+    expect(at200.results[9]).toMatchObject({ rarity: 2, pickup: true, student: twoStarPickup, adjustment: 200 });
+    expect(at200.charge).toBe(0);
   });
 });
