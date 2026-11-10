@@ -28,8 +28,9 @@ export type CommentItemProps = {
   onReply: () => void;
   onEdit: () => void;
   onDelete: () => void;
-  onPin: () => void;
-  onUnpin: () => void;
+  // Omit both for a thread that cannot pin, such as a feed post's comments.
+  onPin?: () => void;
+  onUnpin?: () => void;
   // The inline editor replaces the body while editing.
   editor?: ReactNode;
   // Reply list and inline reply composer, rendered under the body in the content column.
@@ -56,7 +57,7 @@ export function CommentItem({
 }: CommentItemProps) {
   const top = level === "top";
   const own = comment.sensei.me;
-  const pinnable = top && own;
+  const pinnable = top && own && onPin !== undefined && onUnpin !== undefined;
   const isPrivate = comment.visibility === "private";
   const username = comment.sensei.username;
   const menuItems: ActionMenuItem[] = [
@@ -66,7 +67,7 @@ export function CommentItem({
             key: "pin",
             label: comment.pinned ? "고정 해제" : "고정",
             icon: comment.pinned ? BookmarkIcon : BookmarkOutlineIcon,
-            onSelect: comment.pinned ? onUnpin : onPin,
+            onSelect: () => (comment.pinned ? onUnpin : onPin)?.(),
           },
         ]
       : []),
@@ -75,13 +76,7 @@ export function CommentItem({
   ];
 
   const actions = editing ? (
-    <IconButton
-      icon={XMarkIcon}
-      label="수정 취소"
-      onClick={onEdit}
-      disabled={submitting}
-      className="-my-2"
-    />
+    <IconButton icon={XMarkIcon} label="수정 취소" onClick={onEdit} disabled={submitting} className="-my-2" />
   ) : (
     // The buttons center on the name line and overflow it instead of growing it, so the name stays level with the avatar top.
     <div className="-my-2 flex shrink-0 items-center">
@@ -98,7 +93,7 @@ export function CommentItem({
           icon={comment.pinned ? BookmarkIcon : BookmarkOutlineIcon}
           label="의견 고정"
           pressed={comment.pinned}
-          onClick={comment.pinned ? onUnpin : onPin}
+          onClick={() => (comment.pinned ? onUnpin : onPin)?.()}
           disabled={submitting}
           className="max-lg:hidden"
         />
