@@ -1,8 +1,10 @@
+import { ArchiveBoxIcon, CheckCircleIcon, TrashIcon } from "@heroicons/react/24/outline";
 import { useRef } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, redirect, useActionData, useLoaderData } from "react-router";
+import { data, Link, redirect, useActionData, useLoaderData, useRevalidator, useRouteError } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { Page } from "~/components/features/layout";
+import { LoadFailureState } from "~/components/v2/features/students/LoadFailureState";
+import { v2ButtonClassName } from "~/components/v2/primitives/Button";
 import {
   parseStudentStateDraftValue,
   type StudentStateDraftCurrentValue,
@@ -18,8 +20,11 @@ import {
   STUDENT_STATE_STALE_MESSAGE,
   StudentStateMergeConflictError,
 } from "~/domain/student-state-errors";
-import { routeError } from "~/lib/http-errors";
 import { createAnalyticsEventsCookie } from "~/lib/analytics-redirect.server";
+import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
+import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
+import { cn } from "~/lib/utils";
 import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResourceMap } from "~/models/item-catalog";
 import { getRecruitedStudents, getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -32,13 +37,19 @@ import {
   getSyncDraft,
   normalizeSyncDraftEntryValue,
   type SyncDraft,
+  SyncDraftAlreadyProcessedError,
   type SyncDraftEntry,
   type SyncDraftEntryUpdateInput,
+  SyncDraftNotFoundError,
+  SyncDraftSelectionError,
   type SyncDraftStudentStateMetadata,
   type SyncDraftType,
 } from "~/models/sync-draft";
 import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
-import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/DraftReviewView";
+import { ConnectStateMessage } from "./connect._components/ConnectStateMessage";
+import { ConnectScreenLayout } from "./connect._components/connect-navigation";
+import { draftStatusLabel, formatDraftTimestamp, syncDraftTypeLabel } from "./connect._components/sync-draft-labels";
+import type { SyncDraftDisplayMetadata, SyncDraftReviewActionData } from "./connect.import._components/review-types";
 import StudentStateDraftReview, {
   type StudentStateCurrentValues,
   type StudentStateProposedValues,
@@ -49,6 +60,8 @@ type ActionData = SyncDraftReviewActionData;
 
 export const meta: MetaFunction = () => [{ title: "가져온 데이터 검토 | 몰루로그" }];
 
+const DRAFT_NOT_FOUND_MESSAGE = "가져온 데이터를 찾을 수 없어요";
+
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const env = context.cloudflare.env;
   const currentUser = await getActiveSensei(env, request);
@@ -58,12 +71,23 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const draftUid = params.draftUid;
   if (!draftUid) {
-    throw routeError(404, "sync_draft.not_found", "변경안을 찾을 수 없어요");
+    throw routeError(404, "sync_draft.not_found", DRAFT_NOT_FOUND_MESSAGE);
   }
 
   const draft = await getSyncDraft(env, currentUser.id, draftUid);
   if (!draft) {
-    throw routeError(404, "sync_draft.not_found", "변경안을 찾을 수 없어요");
+    throw routeError(404, "sync_draft.not_found", DRAFT_NOT_FOUND_MESSAGE);
+  }
+
+  // An applied or deleted draft only shows its state, so it needs none of the review's data.
+  if (draft.status !== "pending") {
+    return {
+      draft,
+      metadataByKey: {} as Record<string, SyncDraftDisplayMetadata>,
+      currentValues: {} as Record<string, number> | StudentStateCurrentValues,
+      proposedStudentStateValues: undefined as StudentStateProposedValues | undefined,
+      writeMode: "legacy" as "legacy" | "nullable",
+    };
   }
 
   const entryKeys = draft.entries.map((entry) => entry.entryKey);
@@ -79,42 +103,49 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 };
 
 export const action = async ({ context, request, params }: ActionFunctionArgs) => {
-  const { env } = context.cloudflare;
+  const { env, ctx } = context.cloudflare;
+  const logger = getLogger(env, ctx, { route: "connect.import.draft" });
   const currentUser = await getActiveSensei(env, request);
   if (!currentUser) {
-    return data<ActionData>({ error: "로그인이 필요해요" }, { status: 401 });
+    return data<ActionData>({ code: "unauthorized" }, { status: 401 });
   }
 
   const draftUid = params.draftUid;
   if (!draftUid) {
-    return data<ActionData>({ error: "변경안을 찾을 수 없어요" }, { status: 404 });
+    return data<ActionData>({ code: "not_found" }, { status: 404 });
   }
 
   const formData = await request.formData();
-  const intent = formData.get("intent");
+  const rawIntent = formData.get("intent");
+  const intent = rawIntent === "apply" || rawIntent === "discard" ? rawIntent : undefined;
 
   try {
     if (intent === "apply") {
       const draft = await getSyncDraft(env, currentUser.id, draftUid);
       if (!draft) {
-        return data<ActionData>({ intent, error: "변경안을 찾을 수 없어요" }, { status: 404 });
+        return data<ActionData>({ intent, code: "not_found" }, { status: 404 });
       }
       if (draft.status !== "pending") {
-        return data<ActionData>({ intent, error: "이미 처리된 변경안이에요" }, { status: 400 });
+        return data<ActionData>({ intent, code: "already_processed" }, { status: 409 });
       }
+      // The form submits the students (or items) the user kept selected. Only they are applied; the others are
+      // discarded together with the rest of the draft.
+      const selectedEntryKeys = parseSelectedEntryKeys(formData);
+      const selection = new Set(selectedEntryKeys);
       const parsedForm =
         draft.type === "student_state"
-          ? parseStudentStateDraftFormData(draft, formData)
-          : parseDraftEntryFormData(draft, formData);
+          ? parseStudentStateDraftFormData(draft, formData, selection)
+          : parseDraftEntryFormData(draft, formData, selection);
       const { fieldErrors } = parsedForm;
       if (Object.keys(fieldErrors).length > 0) {
-        return data<ActionData>({ intent, error: "입력값을 확인해주세요.", fieldErrors }, { status: 400 });
+        return data<ActionData>({ intent, code: "invalid_input", fieldErrors }, { status: 400 });
       }
 
       const metadataByKey =
         draft.type === "student_state" ? toStudentStateApplyMetadata(await loadDraftMetadata(env, draft)) : undefined;
       await applySyncDraft(env, currentUser.id, draftUid, {
         entryUpdates: parsedForm.entries,
+        selectedEntryKeys,
         mergeReviewedStudentState: draft.type === "student_state",
         studentStateMetadataByKey: metadataByKey,
         studentStateRequestMode: draft.type === "student_state" ? parseStudentStateRequestMode(formData) : null,
@@ -135,29 +166,35 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       return redirect("/connect/import");
     }
 
-    return data<ActionData>({ error: "지원하지 않는 요청이에요" }, { status: 400 });
+    return data<ActionData>({ code: "unsupported" }, { status: 400 });
   } catch (error) {
+    if (error instanceof SyncDraftNotFoundError) {
+      return data<ActionData>({ intent, code: "not_found" }, { status: 404 });
+    }
+    if (error instanceof SyncDraftAlreadyProcessedError) {
+      return data<ActionData>({ intent, code: "already_processed" }, { status: 409 });
+    }
+    if (error instanceof SyncDraftSelectionError) {
+      return data<ActionData>({ intent, code: "invalid_selection", error: error.message }, { status: 400 });
+    }
     if (isStaleStudentStateRequestError(error)) {
-      return data<ActionData>(
-        { intent: typeof intent === "string" ? toActionIntent(intent) : undefined, error: STUDENT_STATE_STALE_MESSAGE },
-        { status: 409 },
-      );
+      return data<ActionData>({ intent, code: "conflict", error: STUDENT_STATE_STALE_MESSAGE }, { status: 409 });
     }
     if (error instanceof StudentStateMergeConflictError) {
-      return data<ActionData>(
-        { intent: typeof intent === "string" ? toActionIntent(intent) : undefined, error: error.message },
-        { status: 409 },
-      );
+      return data<ActionData>({ intent, code: "conflict", error: error.message }, { status: 409 });
     }
+    // Anything else is an unexpected failure: it is logged, and the screen words it.
+    logger.error("connect import draft action failed", error);
     return data<ActionData>(
-      {
-        intent: typeof intent === "string" ? toActionIntent(intent) : undefined,
-        error: error instanceof Error ? error.message : "변경안을 처리하지 못했어요",
-      },
-      { status: 400 },
+      { intent, code: intent === "discard" ? "discard_failed" : "apply_failed" },
+      { status: 500 },
     );
   }
 };
+
+function parseSelectedEntryKeys(formData: FormData): string[] {
+  return formData.getAll("selected").flatMap((value) => (typeof value === "string" ? [value] : []));
+}
 
 export default function ConnectDraftDetailPage() {
   const { draft, metadataByKey, currentValues, proposedStudentStateValues, writeMode } = useLoaderData<typeof loader>();
@@ -169,7 +206,9 @@ export default function ConnectDraftDetailPage() {
   const reviewMode = pinnedReviewMode.current.mode;
 
   const review =
-    draft.type === "student_state" ? (
+    draft.status !== "pending" ? (
+      <ProcessedDraftState draft={draft} />
+    ) : draft.type === "student_state" ? (
       <StudentStateDraftReview
         draft={draft}
         metadataByKey={metadataByKey}
@@ -188,15 +227,103 @@ export default function ConnectDraftDetailPage() {
     );
 
   return (
-    <Page
+    <ConnectScreenLayout
+      current="import"
       title="가져온 데이터 검토"
       description="가져온 데이터를 확인하고 잘못된 값을 수정하여 반영할 수 있어요"
-      backward={{ title: "데이터 가져오기", to: "/connect/import" }}
-      contentWidth="full"
-      layout="vertical"
+      back={{ title: "데이터 가져오기", to: "/connect/import" }}
+      meta={<DraftMeta draft={draft} />}
     >
       {review}
-    </Page>
+    </ConnectScreenLayout>
+  );
+}
+
+function DraftMeta({ draft }: { draft: SyncDraft }) {
+  const source = draft.toolName ?? syncDraftTypeLabel(draft.type);
+  const timestamp = formatDraftTimestamp(draft.createdAt);
+  return (
+    <>
+      <span>{timestamp ? `${source} · ${timestamp}` : source}</span>
+      <span
+        className={cn(
+          "rounded-md px-1.5 py-0.5 text-xs font-semibold",
+          draft.status === "applied"
+            ? "bg-v2-success-subtle text-v2-success"
+            : draft.status === "pending"
+              ? "bg-v2-accent-subtle text-v2-accent"
+              : "bg-v2-inset text-v2-fg-secondary",
+        )}
+      >
+        {draftStatusLabel(draft.status)}
+      </span>
+    </>
+  );
+}
+
+// An applied, deleted or expired draft is read-only: the state replaces the review, and nothing can be applied again.
+function ProcessedDraftState({ draft }: { draft: SyncDraft }) {
+  const isStudentData = draft.type !== "item_inventory";
+  const content =
+    draft.status === "applied"
+      ? {
+          Icon: CheckCircleIcon,
+          title: "반영됨",
+          description: [
+            "이미 프로필에 반영한 데이터라 다시 반영할 수 없어요.",
+            isStudentData ? "지금 값은 모집한 학생에서 확인할 수 있어요." : null,
+          ],
+        }
+      : draft.status === "discarded"
+        ? {
+            Icon: TrashIcon,
+            title: "삭제됨",
+            description: ["이미 삭제한 데이터라 반영할 수 없어요.", "반영하려면 데이터를 새로 가져와주세요."],
+          }
+        : {
+            Icon: ArchiveBoxIcon,
+            title: "만료됨",
+            description: ["기간이 지난 데이터라 반영할 수 없어요.", "반영하려면 데이터를 새로 가져와주세요."],
+          };
+  return (
+    <div className="rounded-lg bg-v2-surface">
+      <ConnectStateMessage
+        Icon={content.Icon}
+        title={content.title}
+        description={content.description.filter(Boolean).join("\n")}
+      />
+    </div>
+  );
+}
+
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const revalidator = useRevalidator();
+  const normalized = normalizeRouteError(error);
+
+  return (
+    <ConnectScreenLayout
+      current="import"
+      title="가져온 데이터 검토"
+      back={{ title: "데이터 가져오기", to: "/connect/import" }}
+    >
+      {isServerRouteError(normalized) ? (
+        <LoadFailureState title="가져온 데이터를 불러오지 못했어요" onRetry={() => revalidator.revalidate()} />
+      ) : (
+        <div className="rounded-lg bg-v2-surface">
+          <ConnectStateMessage
+            Icon={ArchiveBoxIcon}
+            title={DRAFT_NOT_FOUND_MESSAGE}
+            description="주소가 잘못되었거나 다른 계정의 데이터일 수 있어요."
+            action={
+              <Link to="/connect/import" className={v2ButtonClassName({ variant: "secondary" })}>
+                데이터 가져오기로 돌아가기
+              </Link>
+            }
+          />
+        </div>
+      )}
+    </ConnectScreenLayout>
   );
 }
 
@@ -330,11 +457,12 @@ async function loadCurrentValues(
   return getUserResourceInventoryMapByItemUids(env, userId, entryKeys);
 }
 
-function parseDraftEntryFormData(draft: SyncDraft, formData: FormData) {
+function parseDraftEntryFormData(draft: SyncDraft, formData: FormData, selection?: ReadonlySet<string>) {
   const entries: SyncDraftEntryUpdateInput[] = [];
   const fieldErrors: Record<string, string> = {};
 
   for (const entry of draft.entries) {
+    if (selection && !selection.has(entry.entryKey)) continue;
     const rawValue = formData.get(`value:${entry.entryKey}`);
     try {
       entries.push({
@@ -357,11 +485,16 @@ const studentStateTargetDraftFields = [
   ...studentStateTargetFields.map((field) => field.key),
 ] as const satisfies readonly (keyof StudentStateDraftTargetValue)[];
 
-export function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData) {
+/**
+ * Reads the review form's values. With a selection, only those entries are read: the others are not applied, so
+ * their values are neither parsed nor validated.
+ */
+export function parseStudentStateDraftFormData(draft: SyncDraft, formData: FormData, selection?: ReadonlySet<string>) {
   const entries: SyncDraftEntryUpdateInput[] = [];
   const fieldErrors: Record<string, string> = {};
 
   for (const entry of draft.entries) {
+    if (selection && !selection.has(entry.entryKey)) continue;
     try {
       const currentSection = parseStudentStateSection(
         formData,
@@ -473,12 +606,4 @@ function parseStudentStateDraftValues(entries: SyncDraftEntry[]): StudentStatePr
       }
     }),
   );
-}
-
-function toActionIntent(intent: string): ActionData["intent"] {
-  if (intent === "apply" || intent === "discard") {
-    return intent;
-  }
-
-  return undefined;
 }

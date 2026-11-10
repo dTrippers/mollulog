@@ -430,6 +430,144 @@ describe("sync-draft", () => {
     ]);
   });
 
+  describe("selected entries", () => {
+    function seedTwoStudentDraft(db: FakePostgresClient) {
+      db.drafts.push(createDraftRow());
+      db.entries.push(
+        createEntryRow({
+          id: 1,
+          uid: "entry-a",
+          entryKey: "20048",
+          valueJson: JSON.stringify({
+            current: {
+              level: 90,
+              tier: 6,
+              skillEx: 5,
+              skillNormal: 10,
+              skillEnhanced: 10,
+              skillSub: 10,
+              equip1: 10,
+              equip2: 9,
+              equip3: 8,
+              equipSpecial: 2,
+              bond: null,
+            },
+            target: {
+              targetLevel: 90,
+              targetTier: 8,
+              targetSkillEx: 5,
+              targetSkillNormal: 10,
+              targetSkillEnhanced: 10,
+              targetSkillSub: 10,
+              targetEquip1: 10,
+              targetEquip2: 10,
+              targetEquip3: 10,
+              targetEquipSpecial: 2,
+            },
+          }),
+        }),
+        createEntryRow({
+          id: 2,
+          uid: "entry-b",
+          entryKey: "10000",
+          value: 5,
+          valueJson: JSON.stringify({
+            current: {
+              level: 80,
+              tier: 5,
+              skillEx: 3,
+              skillNormal: 7,
+              skillEnhanced: 7,
+              skillSub: 7,
+              equip1: 5,
+              equip2: 5,
+              equip3: 5,
+              equipSpecial: null,
+              bond: null,
+            },
+            target: null,
+          }),
+        }),
+      );
+    }
+
+    it("applies only the selected students and marks the whole draft applied", async () => {
+      const { db, env } = createEnv();
+      seedTwoStudentDraft(db);
+
+      await applySyncDraft(env, 1, "draft-a", { mergeReviewedStudentState: false, selectedEntryKeys: ["20048"] });
+
+      expect(db.drafts[0]).toMatchObject({ status: "applied" });
+      expect(db.recruitedStudents.map((row) => row.studentUid)).toEqual(["20048"]);
+      expect(db.studentGrowths.map((row) => row.studentUid)).toEqual(["20048"]);
+      expect(db.tables.student_states.map((row) => row.studentUid)).toEqual(["20048"]);
+    });
+
+    it("records data history only for the applied students", async () => {
+      const { db, env } = createEnv();
+      seedTwoStudentDraft(db);
+
+      await applySyncDraft(env, 1, "draft-a", { mergeReviewedStudentState: false, selectedEntryKeys: ["10000"] });
+
+      const audited = db.tables.student_state_audits.map((row) => JSON.stringify(row));
+      expect(audited.length).toBeGreaterThan(0);
+      for (const row of audited) {
+        expect(row).toContain("10000");
+        expect(row).not.toContain("20048");
+      }
+    });
+
+    it("keeps the unselected entries stored but never applies them later", async () => {
+      const { db, env } = createEnv();
+      seedTwoStudentDraft(db);
+
+      await applySyncDraft(env, 1, "draft-a", { mergeReviewedStudentState: false, selectedEntryKeys: ["20048"] });
+      await expect(applySyncDraft(env, 1, "draft-a")).rejects.toThrow("이미 처리된 Draft예요");
+
+      expect(db.recruitedStudents.map((row) => row.studentUid)).toEqual(["20048"]);
+    });
+
+    it.each([
+      ["an empty selection", [], "반영할 항목을 선택해주세요"],
+      ["a student the draft does not have", ["99999"], "반영할 항목이 가져온 데이터와 일치하지 않아요"],
+      ["a repeated student", ["20048", "20048"], "중복된 반영 항목이 있어요"],
+      ["a blank key", ["20048", " "], "반영할 항목을 찾을 수 없어요"],
+    ])("rejects %s without changing anything", async (_label, selectedEntryKeys, message) => {
+      const { db, env } = createEnv();
+      seedTwoStudentDraft(db);
+
+      await expect(
+        applySyncDraft(env, 1, "draft-a", { mergeReviewedStudentState: false, selectedEntryKeys }),
+      ).rejects.toThrow(message);
+
+      expect(db.drafts[0]).toMatchObject({ status: "pending" });
+      expect(db.recruitedStudents).toEqual([]);
+      expect(db.tables.student_state_audits).toEqual([]);
+    });
+
+    it("applies every entry when no selection is given", async () => {
+      const { db, env } = createEnv();
+      seedTwoStudentDraft(db);
+
+      await applySyncDraft(env, 1, "draft-a");
+
+      expect(db.recruitedStudents.map((row) => row.studentUid).sort()).toEqual(["10000", "20048"]);
+    });
+
+    it("applies the selected item inventory entries only", async () => {
+      const { db, env } = createEnv();
+      db.drafts.push(createDraftRow({ type: "item_inventory" }));
+      db.entries.push(
+        createEntryRow({ id: 1, uid: "entry-a", entryKey: "item-a", value: 3, valueJson: null }),
+        createEntryRow({ id: 2, uid: "entry-b", entryKey: "item-b", value: 5, valueJson: null }),
+      );
+
+      await applySyncDraft(env, 1, "draft-a", { mergeReviewedStudentState: false, selectedEntryKeys: ["item-b"] });
+
+      expect(db.drafts[0]).toMatchObject({ status: "applied" });
+    });
+  });
+
   it("updates more than 500 draft entries with bounded VALUES statements", async () => {
     const { db, env } = createEnv();
     db.drafts.push(createDraftRow({ type: "item_inventory" }));

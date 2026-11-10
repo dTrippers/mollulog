@@ -45,6 +45,11 @@ export type ApplySyncDraftOptions = {
   entryUpdates?: SyncDraftEntryUpdateInput[];
   /** The semantics the reviewing page rendered with; a student-state apply is rejected when it no longer matches. */
   studentStateRequestMode?: StudentStateRequestMode | null;
+  /**
+   * Entry keys (a student or item id) to apply. The whole draft still becomes applied, and the entries left out are
+   * discarded: they are not written and no history is recorded for them. Omit it to apply every entry.
+   */
+  selectedEntryKeys?: string[];
 };
 
 export const syncDraftsTable = pgSyncDraftsTable;
@@ -119,6 +124,27 @@ function toIso(value: Date | string | null): string | null {
  */
 export class SyncDraftPersistenceError extends Error {
   override readonly name = "SyncDraftPersistenceError";
+}
+
+/** The draft does not exist for this user. */
+export class SyncDraftNotFoundError extends Error {
+  override readonly name = "SyncDraftNotFoundError";
+  constructor() {
+    super("Draft를 찾을 수 없어요");
+  }
+}
+
+/** The draft was already applied, discarded or expired. */
+export class SyncDraftAlreadyProcessedError extends Error {
+  override readonly name = "SyncDraftAlreadyProcessedError";
+  constructor() {
+    super("이미 처리된 Draft예요");
+  }
+}
+
+/** The submitted selection is empty, repeats a key, or names an entry the draft does not have. */
+export class SyncDraftSelectionError extends Error {
+  override readonly name = "SyncDraftSelectionError";
 }
 
 export function toSyncDraftSource(source: string): SyncDraftSource {
@@ -422,9 +448,17 @@ export async function updateSyncDraftEntries(
   });
 }
 
-async function writeSyncDraftEntryUpdates(db: SyncDraftDb, draft: SyncDraft, entries: SyncDraftEntryUpdateInput[]) {
+async function writeSyncDraftEntryUpdates(
+  db: SyncDraftDb,
+  draft: SyncDraft,
+  entries: SyncDraftEntryUpdateInput[],
+  selection: Set<string> | null = null,
+) {
   const normalizedEntries = normalizeSyncDraftEntryUpdates(draft.type, entries);
-  assertEntryKeysMatchDraft(draft.entries, normalizedEntries);
+  assertEntryKeysMatchDraft(
+    selection ? draft.entries.filter((entry) => selection.has(entry.entryKey)) : draft.entries,
+    normalizedEntries,
+  );
   const now = new Date();
   for (let offset = 0; offset < normalizedEntries.length; offset += PG_WRITE_CHUNK_SIZE) {
     const chunk = normalizedEntries.slice(offset, offset + PG_WRITE_CHUNK_SIZE);
@@ -455,14 +489,18 @@ export async function applySyncDraft(
     const db = drizzle(client);
     await db.transaction(async (tx) => {
       let draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, true);
+      const selection = options.selectedEntryKeys ? resolveSyncDraftSelection(draft, options.selectedEntryKeys) : null;
       if (options.entryUpdates) {
-        await writeSyncDraftEntryUpdates(tx, draft, options.entryUpdates);
+        await writeSyncDraftEntryUpdates(tx, draft, options.entryUpdates, selection);
         draft = await getPendingOwnedSyncDraftFromDb(tx, userId, draftUid, false);
       }
+      const appliedDraftEntries = selection
+        ? draft.entries.filter((entry) => selection.has(entry.entryKey))
+        : draft.entries;
       const normalizedEntries =
         draft.type === "student_state"
-          ? parseStudentStateDraftEntries(draft.entries)
-          : normalizeSyncDraftEntryUpdates(draft.type, draft.entries);
+          ? parseStudentStateDraftEntries(appliedDraftEntries)
+          : normalizeSyncDraftEntryUpdates(draft.type, appliedDraftEntries);
       await applyEntries(tx, userId, draft.type, normalizedEntries, {
         preserveNullStudentStateFields: draft.source === "first_party_ocr",
         sourceRef: draftUid,
@@ -478,6 +516,21 @@ export async function applySyncDraft(
         .where(and(eq(syncDraftsTable.uid, draftUid), eq(syncDraftsTable.userId, userId)));
     });
   });
+}
+
+/** Validates a selection against the draft's own entries and returns it as a set. */
+function resolveSyncDraftSelection(draft: SyncDraft, selectedEntryKeys: string[]): Set<string> {
+  const selection = new Set<string>();
+  const draftKeys = new Set(draft.entries.map((entry) => entry.entryKey));
+  for (const rawKey of selectedEntryKeys) {
+    const key = rawKey.trim();
+    if (!key) throw new SyncDraftSelectionError("반영할 항목을 찾을 수 없어요");
+    if (selection.has(key)) throw new SyncDraftSelectionError("중복된 반영 항목이 있어요");
+    if (!draftKeys.has(key)) throw new SyncDraftSelectionError("반영할 항목이 가져온 데이터와 일치하지 않아요");
+    selection.add(key);
+  }
+  if (selection.size === 0) throw new SyncDraftSelectionError("반영할 항목을 선택해주세요");
+  return selection;
 }
 
 export async function discardSyncDraft(env: Env, userId: number, draftUid: string) {
@@ -496,7 +549,7 @@ export async function discardSyncDraft(env: Env, userId: number, draftUid: strin
           ),
         )
         .returning({ uid: syncDraftsTable.uid });
-      if (result.length === 0) throw new Error("이미 처리된 Draft예요");
+      if (result.length === 0) throw new SyncDraftAlreadyProcessedError();
     });
   });
 }
@@ -513,8 +566,8 @@ async function getPendingOwnedSyncDraftFromDb(
     .where(and(eq(syncDraftsTable.uid, draftUid), eq(syncDraftsTable.userId, userId)));
   const rows = lock ? await query.for("update") : await query;
   const draft = rows[0];
-  if (!draft) throw new Error("Draft를 찾을 수 없어요");
-  if (draft.status !== "pending") throw new Error("이미 처리된 Draft예요");
+  if (!draft) throw new SyncDraftNotFoundError();
+  if (draft.status !== "pending") throw new SyncDraftAlreadyProcessedError();
   const entries = await db
     .select()
     .from(syncDraftEntriesTable)

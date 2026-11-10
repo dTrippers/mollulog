@@ -1,17 +1,30 @@
 import { ArchiveBoxIcon } from "@heroicons/react/24/outline";
 import { useEffect, useMemo, useState } from "react";
 import { Form, useNavigation } from "react-router";
-import { EmptyView, ResourceCard } from "~/components/primitives";
+import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
+import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
+import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
+import { TierInput } from "~/components/v2/features/students/TierInput";
+import { useV2Page } from "~/components/v2/layout/V2Page";
+import { NumberInput } from "~/components/v2/primitives/NumberInput";
+import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
+import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
+import { useNumberInputFlowNavigation } from "~/components/v2/primitives/use-number-input-flow-navigation";
 import { getEquipmentResourceTierLabel } from "~/domain/growth-resource";
 import { cn } from "~/lib/utils";
-import StudentPortrait from "~/components/primitives/StudentPortrait";
 import type { SyncDraft, SyncDraftType } from "~/models/sync-draft";
-import DraftReviewView, {
-  DraftReviewActions,
-  parseConfidence,
+import { ConnectStateMessage } from "../connect._components/ConnectStateMessage";
+import { parseConfidence, syncDraftTypeLabel } from "../connect._components/sync-draft-labels";
+import {
+  DraftApplyBar,
+  ReviewLegend,
+  ReviewWarningMark,
+  reviewChangedClassName,
+  SelectionCheckbox,
   type SyncDraftDisplayMetadata,
   type SyncDraftReviewActionData,
-} from "./DraftReviewView";
+  TierFace,
+} from "./review-shared";
 
 type SyncDraftReviewProps = {
   draft: SyncDraft;
@@ -20,234 +33,300 @@ type SyncDraftReviewProps = {
   actionData?: SyncDraftReviewActionData;
 };
 
+type Filter = "all" | "changed" | "review";
+
+const LOW_CONFIDENCE_THRESHOLD = 0.7;
+const NO_FAVORITE_LABEL = { visible: false, icon: "unfavorited", countText: null, accessibleName: "" } as const;
+
+/** The review of a student-tier or an item-inventory draft: one value per entry, applied per selected entry. */
 export default function SyncDraftReview({ draft, metadataByKey, currentValues, actionData }: SyncDraftReviewProps) {
+  const { stacked } = useV2Page();
   const navigation = useNavigation();
-  const draftFormId = "sync-draft-review-form";
+  const flow = useNumberInputFlowNavigation();
+  const formId = "sync-draft-review-form";
+  const isTier = draft.type === "student_tier";
+  const subject = isTier ? "학생" : "아이템";
   const initialValues = useMemo(
     () => Object.fromEntries(draft.entries.map((entry) => [entry.entryKey, String(entry.value)])),
     [draft.entries],
   );
   const [proposedValues, setProposedValues] = useState(initialValues);
-  const isPending = draft.status === "pending";
-  const rows = draft.entries.flatMap((entry) => {
-    const metadata = metadataByKey[entry.entryKey];
-    if (!metadata) {
-      return [];
-    }
-
-    const proposedValue = Number(proposedValues[entry.entryKey] ?? entry.value);
-    const currentValue = currentValues[entry.entryKey] ?? 0;
-    return [
-      {
-        entry,
-        metadata,
-        currentValue,
-        proposedValue,
-        delta: Number.isFinite(proposedValue) ? proposedValue - currentValue : 0,
-        confidence: parseConfidence(entry.meta),
-      },
-    ];
-  });
-  const lowConfidenceRows = rows.filter((row) => row.confidence !== null && row.confidence < 0.7);
+  const [deselected, setDeselected] = useState<ReadonlySet<string>>(new Set());
+  const [filter, setFilter] = useState<Filter>("changed");
+  const submitting = navigation.state === "submitting";
 
   useEffect(() => {
     setProposedValues(initialValues);
+    setDeselected(new Set());
   }, [initialValues]);
 
+  const rows = draft.entries.flatMap((entry) => {
+    const metadata = metadataByKey[entry.entryKey];
+    if (!metadata) return [];
+    const raw = proposedValues[entry.entryKey] ?? String(entry.value);
+    const proposedValue = raw.trim() === "" ? Number.NaN : Number(raw);
+    const currentValue = currentValues[entry.entryKey] ?? 0;
+    const delta = Number.isFinite(proposedValue) ? proposedValue - currentValue : 0;
+    const confidence = parseConfidence(entry.meta);
+    const reasons: string[] = [];
+    if (confidence !== null && confidence < LOW_CONFIDENCE_THRESHOLD) reasons.push("인식 신뢰도가 낮아요.");
+    if (delta < 0) reasons.push(isTier ? "성급이 지금 값보다 낮아져요." : "보유 수량이 지금 값보다 낮아져요.");
+    return [
+      { entry, metadata, raw, proposedValue, currentValue, delta, reasons, valid: Number.isFinite(proposedValue) },
+    ];
+  });
+  type Row = (typeof rows)[number];
+
+  const isChanged = (row: Row) => row.delta !== 0 || !row.valid;
+  const counts = {
+    all: rows.length,
+    changed: rows.filter(isChanged).length,
+    review: rows.filter((row) => row.reasons.length > 0).length,
+  };
+  const visibleRows = rows.filter((row) =>
+    filter === "all" ? true : filter === "changed" ? isChanged(row) : row.reasons.length > 0,
+  );
+  const selectedRows = rows.filter((row) => isChanged(row) && !deselected.has(row.entry.entryKey));
+  const unselectedCount = rows.filter((row) => isChanged(row) && deselected.has(row.entry.entryKey)).length;
+  const visibleSelectable = visibleRows.filter(isChanged);
+  const selectedVisibleCount = visibleSelectable.filter((row) => !deselected.has(row.entry.entryKey)).length;
+  const allVisibleSelected = visibleSelectable.length > 0 && selectedVisibleCount === visibleSelectable.length;
+  const fieldErrors = actionData?.fieldErrors ?? {};
+
+  const toggleRow = (entryKey: string, selected: boolean) =>
+    setDeselected((current) => {
+      const next = new Set(current);
+      if (selected) next.delete(entryKey);
+      else next.add(entryKey);
+      return next;
+    });
+  const toggleVisible = (selected: boolean) =>
+    setDeselected((current) => {
+      const next = new Set(current);
+      for (const row of visibleSelectable) {
+        if (selected) next.delete(row.entry.entryKey);
+        else next.add(row.entry.entryKey);
+      }
+      return next;
+    });
+  const setValue = (entryKey: string, value: string) =>
+    setProposedValues((values) => ({ ...values, [entryKey]: value }));
+
+  const headerLabel = isTier ? "학생" : "아이템";
   return (
-    <DraftReviewView
-      lowConfidenceCount={lowConfidenceRows.length}
-      actionData={actionData}
-      actions={isPending ? <DraftReviewActions draftFormId={draftFormId} /> : null}
-    >
-      <Form method="post" id={draftFormId}>
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <div className="grid grid-cols-6 border-b border-border bg-muted/60 px-3 py-2 text-xs font-semibold text-muted-foreground">
-            <span className="col-span-3">항목</span>
-            <span className="text-right">현재값</span>
-            <span className="text-right">반영할 값</span>
-            <span className="text-right">변화</span>
+    <div className={cn("flex flex-col gap-v2-block-gap", stacked && "pb-28")}>
+      <SectionTabs
+        items={[{ id: draft.type, label: `${syncDraftTypeLabel(draft.type)} ${rows.length.toLocaleString("ko-KR")}` }]}
+        selectedId={draft.type}
+        onChange={() => {}}
+        label="가져온 데이터 종류"
+      />
+      <fieldset className="m-0 min-w-0 border-0 p-0 flex flex-wrap items-center gap-2" aria-label="검토 필터">
+        <ToggleChip pressed={filter === "all"} onPressedChange={() => setFilter("all")}>
+          전체 {counts.all.toLocaleString("ko-KR")}
+        </ToggleChip>
+        <ToggleChip pressed={filter === "changed"} onPressedChange={() => setFilter("changed")}>
+          바뀌는 {subject}만 {counts.changed.toLocaleString("ko-KR")}
+        </ToggleChip>
+        <ToggleChip pressed={filter === "review"} onPressedChange={() => setFilter("review")}>
+          확인 필요 {counts.review.toLocaleString("ko-KR")}
+        </ToggleChip>
+        {stacked ? null : (
+          <span className="ml-auto text-xs text-v2-fg-tertiary">화살표 키로 입력칸 사이를 이동할 수 있어요.</span>
+        )}
+      </fieldset>
+      <ReviewLegend showCurrentHint={false} />
+      <Form method="post" id={formId} className="flex flex-col gap-v2-block-gap">
+        {selectedRows.map((row) => (
+          <input key={row.entry.uid} type="hidden" name="selected" value={row.entry.entryKey} />
+        ))}
+        {visibleRows.length === 0 ? (
+          <div className="rounded-lg bg-v2-surface">
+            {rows.length === 0 ? (
+              <ConnectStateMessage Icon={ArchiveBoxIcon} title="검토할 항목이 없어요" />
+            ) : (
+              <ConnectStateMessage
+                Icon={ArchiveBoxIcon}
+                title="바뀌는 값이 없어요"
+                description={`가져온 값이 모두 지금 값과 같아요. 전체를 눌러 모든 ${subject}을 볼 수 있어요.`}
+              />
+            )}
           </div>
-          {rows.length === 0 ? (
-            <div className="p-8">
-              <EmptyView Icon={ArchiveBoxIcon} text="검토할 항목이 없어요" />
-            </div>
-          ) : (
-            <div className="overflow-auto">
-              {rows.map(({ entry, metadata, currentValue, proposedValue, delta, confidence }) => {
-                const fieldError = actionData?.fieldErrors?.[entry.entryKey];
+        ) : (
+          <div className="rounded-lg bg-v2-surface py-1">
+            {stacked ? null : (
+              <div className="grid grid-cols-[minmax(0,1fr)_5rem_8rem_5rem] items-center gap-3 px-v2-block-p py-2 text-xs font-medium text-v2-fg-tertiary">
+                <span className="inline-flex items-center gap-2">
+                  <SelectionCheckbox
+                    checked={allVisibleSelected}
+                    mixed={selectedVisibleCount > 0 && !allVisibleSelected}
+                    disabled={visibleSelectable.length === 0}
+                    label={`보이는 ${subject} 모두 선택`}
+                    onCheckedChange={toggleVisible}
+                  />
+                  {headerLabel}
+                </span>
+                <span className="text-right">{isTier ? "지금 값" : "보유 수량"}</span>
+                <span className="text-center">반영할 값</span>
+                <span className="text-right">변화</span>
+              </div>
+            )}
+            <ul>
+              {visibleRows.map((row) => {
+                const selectable = isChanged(row);
+                const selected = selectable && !deselected.has(row.entry.entryKey);
+                const fieldError = fieldErrors[row.entry.entryKey];
+                const label = row.metadata.label;
                 return (
-                  <div
-                    key={entry.uid}
+                  <li
+                    key={row.entry.uid}
                     className={cn(
-                      "grid grid-cols-6 items-center gap-2 border-b border-border px-3 py-2 text-sm last:border-b-0",
-                      delta !== 0 && "bg-blue-50/70 dark:bg-blue-950/20",
-                      confidence !== null && confidence < 0.7 && "bg-amber-50/70 dark:bg-amber-950/20",
+                      "border-t border-v2-divider px-v2-block-p py-2 first:border-t-0",
+                      stacked
+                        ? "flex flex-col gap-2"
+                        : "grid grid-cols-[minmax(0,1fr)_5rem_8rem_5rem] items-center gap-3",
+                      selectable && !selected && "opacity-60",
                     )}
                   >
-                    <div className="col-span-3 flex min-w-0 items-center gap-2">
-                      <DraftEntryIcon type={draft.type} entryKey={entry.entryKey} metadata={metadata} />
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{metadata.label}</p>
-                        {confidence !== null && confidence < 0.7 ? (
-                          <p className="text-xs text-amber-700 dark:text-amber-300">
-                            인식 신뢰도 {Math.round(confidence * 100)}%
-                          </p>
-                        ) : null}
-                      </div>
-                    </div>
-                    <span className="text-right tabular-nums text-muted-foreground">
-                      {formatDraftValue(draft.type, currentValue)}
-                    </span>
-                    <div className="min-w-0 text-right">
-                      <DraftValueEditor
-                        type={draft.type}
-                        name={`value:${entry.entryKey}`}
-                        value={proposedValues[entry.entryKey] ?? String(entry.value)}
-                        disabled={!isPending || navigation.state === "submitting"}
-                        error={fieldError}
-                        onChange={(value) =>
-                          setProposedValues((values) => ({
-                            ...values,
-                            [entry.entryKey]: value,
-                          }))
-                        }
+                    <div className="flex min-w-0 items-center gap-2">
+                      <SelectionCheckbox
+                        checked={selected}
+                        disabled={!selectable}
+                        label={`${label} 반영`}
+                        onCheckedChange={(next) => toggleRow(row.entry.entryKey, next)}
                       />
+                      <EntryIdentity type={draft.type} entryKey={row.entry.entryKey} metadata={row.metadata} />
+                      <ReviewWarningMark reasons={row.reasons} />
                     </div>
-                    <span
-                      className={cn(
-                        "text-right text-xs font-semibold tabular-nums",
-                        delta > 0 && "text-blue-600 dark:text-blue-300",
-                        delta < 0 && "text-red-600 dark:text-red-300",
-                        delta === 0 && "text-muted-foreground",
-                      )}
-                    >
-                      {formatDelta(draft.type, delta)}
-                    </span>
-                  </div>
+                    <div className={cn(stacked ? "flex items-center gap-3 pl-6" : "contents")}>
+                      <span className={cn("text-sm tabular-nums text-v2-fg-secondary", stacked ? "" : "text-right")}>
+                        {stacked ? <span className="mr-1 text-xs text-v2-fg-tertiary">지금 값</span> : null}
+                        {isTier ? <TierFace tier={row.currentValue} /> : row.currentValue.toLocaleString("ko-KR")}
+                      </span>
+                      <div className={cn("flex flex-col gap-0.5", stacked ? "w-32" : "")}>
+                        <input type="hidden" name={`value:${row.entry.entryKey}`} value={row.raw} />
+                        {isTier ? (
+                          <TierInput
+                            label={label}
+                            value={row.valid ? row.proposedValue : null}
+                            initialTier={row.metadata.initialTier ?? 1}
+                            min={1}
+                            max={9}
+                            disabled={submitting}
+                            warning={row.delta < 0}
+                            compact
+                            flowProps={flow.getInputProps({ disabled: submitting })}
+                            onChange={(tier) => setValue(row.entry.entryKey, String(tier))}
+                            className={row.delta !== 0 ? reviewChangedClassName : undefined}
+                          />
+                        ) : (
+                          <NumberInput
+                            {...flow.getInputProps({ disabled: submitting })}
+                            compact
+                            formatThousands
+                            min={0}
+                            value={row.raw}
+                            disabled={submitting}
+                            warning={row.delta < 0}
+                            aria-label={`${label} 반영할 값`}
+                            aria-invalid={fieldError ? true : undefined}
+                            className={cn(row.delta !== 0 && reviewChangedClassName, fieldError && "border-v2-danger")}
+                            onChange={(event) => setValue(row.entry.entryKey, event.currentTarget.value)}
+                          />
+                        )}
+                        {fieldError ? <span className="text-xs text-v2-danger">{fieldError}</span> : null}
+                      </div>
+                      <span
+                        className={cn(
+                          "text-xs font-medium tabular-nums",
+                          stacked ? "" : "text-right",
+                          row.delta < 0 ? "text-v2-danger" : row.delta > 0 ? "text-v2-fg" : "text-v2-fg-tertiary",
+                        )}
+                      >
+                        {formatDelta(draft.type, row.delta)}
+                      </span>
+                    </div>
+                  </li>
                 );
               })}
-            </div>
-          )}
-        </div>
+            </ul>
+          </div>
+        )}
       </Form>
-    </DraftReviewView>
+      <DraftApplyBar
+        applyFormId={formId}
+        summary={
+          isTier
+            ? `학생 ${selectedRows.length.toLocaleString("ko-KR")}명`
+            : `아이템 ${selectedRows.length.toLocaleString("ko-KR")}개`
+        }
+        discardNote={
+          unselectedCount > 0
+            ? `선택하지 않은 ${isTier ? "학생" : "아이템"} ${unselectedCount.toLocaleString("ko-KR")}${isTier ? "명" : "개"}의 값은 반영되지 않고 삭제돼요.`
+            : `선택하지 않은 ${isTier ? "학생" : "아이템"}의 값은 반영되지 않고 삭제돼요.`
+        }
+        canApply={!submitting && selectedRows.length > 0}
+        actionData={actionData}
+        invalidInputCount={Object.keys(fieldErrors).length}
+      />
+    </div>
   );
 }
 
-function DraftEntryIcon({
+function EntryIdentity({
   type,
   entryKey,
   metadata,
 }: {
   type: SyncDraftType;
   entryKey: string;
-  metadata?: SyncDraftDisplayMetadata;
+  metadata: SyncDraftDisplayMetadata;
 }) {
   if (type === "student_tier") {
+    const { name, variant } = splitVisibleStudentName(metadata.label);
     return (
-      <StudentPortrait
-        uid={metadata?.studentUid ?? entryKey}
-        alt="학생 이미지"
-        className="size-10 shrink-0 rounded-md bg-muted object-cover"
-        haloScale="72%"
-      />
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="block shrink-0">
+          <StudentThumb
+            studentUid={metadata.studentUid ?? entryKey}
+            name={metadata.label}
+            variant={null}
+            recruitmentLabel=""
+            isNew={false}
+            favorite={NO_FAVORITE_LABEL}
+            compact
+            showCaption={false}
+          />
+        </span>
+        <div className="min-w-0">
+          <span className="block truncate text-sm font-medium text-v2-fg">{name}</span>
+          {variant ? <span className="block truncate text-xs text-v2-fg-tertiary">{variant}</span> : null}
+        </div>
+      </div>
     );
   }
 
-  const resource = metadata?.item;
-  if (!resource) {
-    return <div className="size-10 shrink-0 rounded-md border border-border bg-muted" />;
-  }
-
+  const resource = metadata.item;
   return (
-    <ResourceCard
-      itemUid={resource.uid}
-      resourceType={resource.type}
-      rarity={resource.rarity}
-      name={resource.name}
-      label={getEquipmentResourceTierLabel(resource.uid) ?? undefined}
-      size="md"
-    />
-  );
-}
-
-function DraftValueEditor({
-  type,
-  name,
-  value,
-  disabled,
-  error,
-  onChange,
-}: {
-  type: SyncDraftType;
-  name: string;
-  value: string;
-  disabled: boolean;
-  error?: string;
-  onChange: (value: string) => void;
-}) {
-  const inputClassName = cn(
-    "ml-auto min-h-9 w-24 rounded-md border border-input bg-background px-2 py-1 text-right text-sm font-semibold tabular-nums text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
-    error && "border-destructive focus:border-destructive focus:ring-destructive/20",
-  );
-
-  return (
-    <div className="flex flex-col items-end gap-1">
-      {type === "student_tier" ? (
-        <select
-          name={name}
-          value={value}
-          disabled={disabled}
-          aria-invalid={error ? true : undefined}
-          className={inputClassName}
-          onChange={(event) => onChange(event.target.value)}
-        >
-          {Array.from({ length: 9 }, (_, index) => index + 1).map((tier) => (
-            <option key={tier} value={tier}>
-              {tier}성
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type="number"
-          name={name}
-          min={0}
-          step={1}
-          inputMode="numeric"
-          value={value}
-          disabled={disabled}
-          aria-invalid={error ? true : undefined}
-          className={cn(
-            inputClassName,
-            "[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none",
-          )}
-          onChange={(event) => onChange(event.target.value)}
+    <div className="flex min-w-0 items-center gap-2">
+      {resource ? (
+        <ResourceThumb
+          itemUid={resource.uid}
+          resourceType={resource.type}
+          rarity={resource.rarity}
+          name={resource.name}
+          label={getEquipmentResourceTierLabel(resource.uid) ?? undefined}
+          size="md"
         />
-      )}
-      {error ? <p className="max-w-40 text-right text-xs text-red-600 dark:text-red-300">{error}</p> : null}
+      ) : null}
+      <span className="truncate text-sm font-medium text-v2-fg">{metadata.label}</span>
     </div>
   );
 }
 
-function formatDraftValue(type: SyncDraftType, value: number): string {
-  if (type === "student_tier" || type === "student_state") {
-    return value > 0 ? `${value}성` : "-";
-  }
-
-  return value.toLocaleString();
-}
-
 function formatDelta(type: SyncDraftType, delta: number): string {
-  if (delta === 0) {
-    return "-";
-  }
-
-  const prefix = delta > 0 ? "+" : "";
-  if (type === "student_tier" || type === "student_state") {
-    return `${prefix}${delta}성`;
-  }
-
-  return `${prefix}${delta.toLocaleString()}`;
+  if (delta === 0) return "";
+  const sign = delta > 0 ? "+" : "-";
+  const amount = Math.abs(delta).toLocaleString("ko-KR");
+  return type === "student_tier" ? `${sign}${amount}단계` : `${sign}${amount}개`;
 }
