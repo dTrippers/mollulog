@@ -33,6 +33,7 @@ import {
   MOVED_MENUS_NOTICE_ENDS_AT,
   MOVED_MENUS_NOTICE_STORAGE_KEY,
   MovedMenusNotice,
+  useMovedMenusNotice,
 } from "~/routes/$username._components/MovedMenusNotice";
 import { useUserLayout } from "~/routes/$username._components/user-layout";
 
@@ -258,11 +259,24 @@ describe("@username moved menus notice", () => {
     jest.restoreAllMocks();
   });
 
-  it("tells only the owner where the moved menus are, with a link to their walkthrough timelines", async () => {
+  it("tells only the owner where the moved menus are, under the Aside menu and above the screen while the Aside is hidden", async () => {
     renderLayout({ isOwner: true, signedIn: true });
 
-    expect(await screen.findByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeTruthy();
-    expect(screen.getByRole("link", { name: "내 공략 타임라인" }).getAttribute("href")).toBe("/timelines?mine=1");
+    const aside = await screen.findByRole("complementary", { name: "보조 도구" });
+    expect(await within(aside).findByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeTruthy();
+    expect(within(aside).getByRole("link", { name: "내 공략 타임라인" }).getAttribute("href")).toBe("/timelines?mine=1");
+    const notices = screen.getAllByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.");
+    expect(notices).toHaveLength(2);
+    const stacked = notices.find((notice) => !aside.contains(notice));
+    expect(stacked?.closest(".v2-stacked-only")).toBeTruthy();
+  });
+
+  it("closes both copies of the notice at once", async () => {
+    renderLayout({ isOwner: true, signedIn: true });
+
+    const [close] = await screen.findAllByRole("button", { name: "안내 닫기" });
+    fireEvent.click(close as HTMLElement);
+    expect(screen.queryAllByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toHaveLength(0);
   });
 
   it("does not show the notice to a visitor", async () => {
@@ -291,8 +305,13 @@ describe("@username moved menus notice", () => {
   });
 });
 
+function NoticeWithState({ now }: { now: () => number }) {
+  const notice = useMovedMenusNotice(now);
+  return notice.visible ? <MovedMenusNotice onDismiss={notice.dismiss} /> : null;
+}
+
 function MemoryRouterNotice({ now }: { now: () => number }) {
-  const Stub = createRoutesStub([{ path: "/", Component: () => <MovedMenusNotice now={now} /> }]);
+  const Stub = createRoutesStub([{ path: "/", Component: () => <NoticeWithState now={now} /> }]);
   return <Stub initialEntries={["/"]} />;
 }
 

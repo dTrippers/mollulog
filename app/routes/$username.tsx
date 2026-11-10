@@ -34,7 +34,7 @@ import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
-import { MovedMenusNotice } from "./$username._components/MovedMenusNotice";
+import { MovedMenusNotice, useMovedMenusNotice } from "./$username._components/MovedMenusNotice";
 import { UserFollowButton } from "./$username._components/UserFollowButton";
 import { UserHeaderDetails } from "./$username._components/UserHeaderDetails";
 import { buildUserScreenItems, type UserLayoutContext } from "./$username._components/user-layout";
@@ -117,6 +117,8 @@ export default function User() {
   const setAsideCollapsed = useCallback((collapsed: boolean) => setAsideCollapsedState(collapsed), []);
   const [asideContent, setAsideContent] = useState<ReactNode>(null);
   const [mobileActions, setMobileActions] = useState<MobileActionBarProps | null>(null);
+  const movedMenusNotice = useMovedMenusNotice();
+  const showMovedMenusNotice = data.isOwner && movedMenusNotice.visible;
 
   // A new location starts with the Aside open again. A screen releases its own Aside content and mobile actions when it
   // unmounts, so they are not reset here: a reset in this effect would run after the new screen's own effects and erase them.
@@ -202,6 +204,7 @@ export default function User() {
         {asideCollapsed ? null : (
           <PageAside>
             <ScreenNavigation items={screens} />
+            {showMovedMenusNotice ? <MovedMenusNotice onDismiss={movedMenusNotice.dismiss} /> : null}
             {asideContent ??
               (data.isOwner ? (
                 <AsideLinks items={[{ key: "scanner", Icon: CameraIcon, ...SCANNER_LINK, transition: "forward" }]} />
@@ -210,7 +213,10 @@ export default function User() {
         )}
       </ScreenNavigationFocusScope>
       <PageMain>
-        {data.isOwner ? <MovedMenusNotice /> : null}
+        {/* While the Aside is hidden, the notice stands above the screen instead. */}
+        {showMovedMenusNotice ? (
+          <MovedMenusNotice onDismiss={movedMenusNotice.dismiss} className="v2-stacked-only mb-v2-group-gap" />
+        ) : null}
         <Outlet context={outletContext} />
       </PageMain>
       {mobileActions ? (
