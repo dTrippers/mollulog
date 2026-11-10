@@ -243,4 +243,91 @@ describe("event recruitment simulator screen", () => {
     fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "초기화" }));
     expect(screen.queryByTestId("action-bar")).toBeNull();
   });
+
+  it("starts the next pull from stack 0 after a reset", () => {
+    const startingCharges: number[] = [];
+    mockCallChargePull = (startingCharge) => {
+      startingCharges.push(startingCharge);
+      return callChargePull(startingCharge + 10);
+    };
+    render(<EventRecruitmentSimulator />);
+    selectKisaki();
+    fireEvent.click(screen.getByRole("button", { name: "10회 모집" }));
+    fireEvent.click(screen.getByRole("button", { name: "10회 모집" }));
+
+    fireEvent.click(within(screen.getByTestId("action-bar")).getByRole("button", { name: "초기화" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "초기화" }));
+    fireEvent.click(screen.getByRole("button", { name: "10회 모집" }));
+
+    expect(startingCharges).toEqual([0, 10, 0]);
+    expect(within(screen.getByTestId("action-bar")).getByText("모집 스택 10")).toBeTruthy();
+  });
+
+  it("stops a running repeat and clears the results when the pickup changes", () => {
+    jest.useFakeTimers();
+    const startingCharges: number[] = [];
+    mockCallChargePull = (startingCharge) => {
+      startingCharges.push(startingCharge);
+      return callChargePull(startingCharge + 10);
+    };
+    render(<EventRecruitmentSimulator />);
+    selectKisaki();
+    fireEvent.click(screen.getByRole("button", { name: "특정 학생을 뽑을 때까지 모집" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "슌(수영복) 선택, 선택 안 됨" }).at(-1) as HTMLElement);
+    act(() => {
+      jest.advanceTimersByTime(1000);
+    });
+    expect(startingCharges).toHaveLength(3);
+
+    fireEvent.click(screen.getAllByRole("button", { name: "슌(수영복) 선택, 선택 안 됨" })[0] as HTMLElement);
+    act(() => {
+      jest.advanceTimersByTime(2000);
+    });
+
+    expect(startingCharges).toHaveLength(3);
+    expect(screen.queryByTestId("action-bar")).toBeNull();
+    expect(screen.queryByText("뽑을 때까지 모집 중")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "10회 모집" }));
+    expect(startingCharges.at(-1)).toBe(0);
+  });
+
+  it("counts a target that appears in a manual pull after stopping", () => {
+    jest.useFakeTimers();
+    let pulls = 0;
+    mockCallChargePull = (startingCharge) => {
+      pulls += 1;
+      return pulls === 2
+        ? callChargePull(startingCharge + 10, { 6: { rarity: 3, pickup: true, student: mockSnapshot.pickupStudents[1] } })
+        : callChargePull(startingCharge + 10);
+    };
+    render(<EventRecruitmentSimulator />);
+    selectKisaki();
+    fireEvent.click(screen.getByRole("button", { name: "특정 학생을 뽑을 때까지 모집" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "슌(수영복) 선택, 선택 안 됨" }).at(-1) as HTMLElement);
+    fireEvent.click(within(screen.getByTestId("action-bar")).getByRole("button", { name: "중지" }));
+    expect(screen.getByText("뽑기 전에 중지했어요")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "10회 모집" }));
+
+    expect(screen.getByText("17회째에 뽑았어요")).toBeTruthy();
+  });
+
+  it("stops the repeat timer when the screen unmounts", () => {
+    jest.useFakeTimers();
+    let pulls = 0;
+    mockCallChargePull = (startingCharge) => {
+      pulls += 1;
+      return callChargePull(startingCharge + 10);
+    };
+    const { unmount } = render(<EventRecruitmentSimulator />);
+    selectKisaki();
+    fireEvent.click(screen.getByRole("button", { name: "특정 학생을 뽑을 때까지 모집" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "슌(수영복) 선택, 선택 안 됨" }).at(-1) as HTMLElement);
+    expect(pulls).toBe(1);
+
+    unmount();
+    jest.advanceTimersByTime(2000);
+
+    expect(pulls).toBe(1);
+  });
 });
