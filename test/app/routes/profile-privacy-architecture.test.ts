@@ -12,8 +12,11 @@ describe("profile route privacy guard", () => {
       join(ROUTES_DIRECTORY, "$username._components", "route-sensei.server.ts"),
       "utf8",
     );
+    // The layout loader may call the guard, but only through the server-only module, so the lookup never reaches the
+    // client bundle.
     expect(layoutSource).not.toContain("~/models/sensei");
-    expect(layoutSource).not.toContain("getRouteSensei");
+    expect(layoutSource).not.toMatch(/function getRouteSensei/);
+    expect(layoutSource).toContain('import { getRouteSensei } from "./$username._components/route-sensei.server";');
     expect(serverSource).toContain("getSenseiByUsername");
   });
 

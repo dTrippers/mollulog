@@ -10,7 +10,6 @@ import {
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconOutline,
   EnvelopeIcon as EnvelopeIconOutline,
   FireIcon as FireIconOutline,
-  HeartIcon as HeartIconOutline,
   HomeIcon as HomeIconOutline,
   IdentificationIcon as IdentificationIconOutline,
   ListBulletIcon as ListBulletIconOutline,
@@ -35,7 +34,6 @@ import {
   EllipsisHorizontalCircleIcon as EllipsisHorizontalCircleIconSolid,
   EnvelopeIcon as EnvelopeIconSolid,
   FireIcon as FireIconSolid,
-  HeartIcon as HeartIconSolid,
   HomeIcon as HomeIconSolid,
   ListBulletIcon as ListBulletIconSolid,
   MapIcon as MapIconSolid,
@@ -191,6 +189,14 @@ export function isEventShopNavigationPath(pathname: string): boolean {
   return pathname === "/utils/event-shop" || /^\/events\/[^/]+\/shop(?:\/|$)/.test(pathname);
 }
 
+// The "화면 인식·데이터 연동" entry covers the screen scanner, the data import and export, and the change history.
+export function isMyDataConnectionPath(pathname: string): boolean {
+  const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
+  return ["/scanner", "/connect", "/data-history"].some(
+    (root) => normalizedPathname === root || normalizedPathname.startsWith(`${root}/`),
+  );
+}
+
 function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsername: string | null): boolean {
   const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
   switch (menuId) {
@@ -234,8 +240,6 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/students`));
     case "pickup-history":
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/pickups`));
-    case "favorite-students":
-      return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/futures`));
     case "my-walkthroughs":
       return Boolean(
         currentUsername &&
@@ -243,13 +247,15 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
             pathname.startsWith(`/@${currentUsername}/parties`)),
       );
     case "screen-scanner":
-      return pathname === "/scanner" || pathname.startsWith("/scanner/");
+      return isMyDataConnectionPath(pathname);
     case "mollulog-api":
       return pathname === "/developers" || pathname.startsWith("/developers/");
-    case "external-data":
-      return pathname === "/connect" || pathname.startsWith("/connect/");
     case "profile":
-      return Boolean(currentUsername && normalizedPathname === `/@${currentUsername}`);
+      return Boolean(
+        currentUsername &&
+          (normalizedPathname === `/@${currentUsername}` ||
+            normalizedPathname.startsWith(`/@${currentUsername}/friends`)),
+      );
     case "community-feed":
       return pathname.startsWith("/community");
     case "community-timelines":
@@ -264,10 +270,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
 function accountIsActive(pathname: string, currentUsername: string | null): boolean {
   const normalizedPathname = pathname.replace(/\/+$/, "") || "/";
   return Boolean(
-    currentUsername &&
-      (normalizedPathname.startsWith(`/@${currentUsername}/friends`) ||
-        normalizedPathname.startsWith("/edit") ||
-        normalizedPathname.startsWith("/notifications")),
+    currentUsername && (normalizedPathname.startsWith("/edit") || normalizedPathname.startsWith("/notifications")),
   );
 }
 
@@ -569,17 +572,6 @@ export function getNavigationCatalog({
       isActive: itemIsActive("pickup-history", pathname, currentUsername),
     },
     {
-      menuId: "favorite-students",
-      group: "personal",
-      surfaces: ["desktop", "more", "search"],
-      to: currentUsername ? `/@${currentUsername}/futures` : "/unauthorized",
-      name: "관심 학생",
-      requiresSignIn: true,
-      OutlineIcon: HeartIconOutline,
-      SolidIcon: HeartIconSolid,
-      isActive: itemIsActive("favorite-students", pathname, currentUsername),
-    },
-    {
       menuId: "my-walkthroughs",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
@@ -594,36 +586,15 @@ export function getNavigationCatalog({
       menuId: "screen-scanner",
       group: "personal",
       surfaces: ["desktop", "more", "search"],
-      to: "/scanner/resource",
-      name: "게임 화면 인식기",
+      to: "/scanner",
+      name: "화면 인식·데이터 연동",
+      // Saved favorites of the former scanner and data import entries keep resolving to this one entry.
       favoriteId: "scanner-resource",
+      legacyFavoriteIds: ["connect-import"],
       requiresSignIn: true,
       OutlineIcon: CameraIconOutline,
       SolidIcon: CameraIconSolid,
       isActive: itemIsActive("screen-scanner", pathname, currentUsername),
-    },
-    {
-      menuId: "mollulog-api",
-      group: "personal",
-      surfaces: ["desktop", "more", "search"],
-      to: "/developers",
-      name: "개발자 센터",
-      description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
-      OutlineIcon: CodeBracketIconOutline,
-      SolidIcon: CodeBracketIconSolid,
-      isActive: itemIsActive("mollulog-api", pathname, currentUsername),
-    },
-    {
-      menuId: "external-data",
-      group: "personal",
-      surfaces: ["desktop", "more", "search"],
-      to: "/connect/import",
-      name: "외부 데이터 연동",
-      favoriteId: "connect-import",
-      requiresSignIn: true,
-      OutlineIcon: ArrowsRightLeftIconOutline,
-      SolidIcon: ArrowsRightLeftIconSolid,
-      isActive: itemIsActive("external-data", pathname, currentUsername),
     },
     {
       menuId: "community-timelines",
@@ -694,6 +665,17 @@ export function getNavigationCatalog({
       SolidIcon: Cog6ToothIconSolid,
       isActive: pathname.startsWith("/notifications"),
       requiresSignIn: true,
+    },
+    {
+      menuId: "mollulog-api",
+      group: "settings",
+      surfaces: ["account", "more", "search"],
+      to: "/developers",
+      name: "개발자 센터",
+      description: "외부 도구에서 모집 학생 데이터를 읽고 바꿔요",
+      OutlineIcon: CodeBracketIconOutline,
+      SolidIcon: CodeBracketIconSolid,
+      isActive: itemIsActive("mollulog-api", pathname, currentUsername),
     },
     {
       group: "account",

@@ -182,4 +182,25 @@ describe("V2Page layout parts", () => {
       globalThis.ResizeObserver = original;
     }
   });
+
+  it("keeps a trailing action beside the heading at every width only when asked to", () => {
+    const { container, rerender } = renderLayout(
+      <V2Page width="wide">
+        <PageHeader title="프로필" trailing={<button type="button">관리</button>} />
+      </V2Page>,
+    );
+    expect(container.querySelector(".v2-header")?.className).toContain("flex-col");
+
+    rerender(
+      <MemoryRouter>
+        <V2Page width="wide">
+          <PageHeader title="프로필" trailing={<button type="button">관리</button>} trailingInline />
+        </V2Page>
+      </MemoryRouter>,
+    );
+    const header = container.querySelector(".v2-header");
+    expect(header?.className).toContain("flex-row");
+    expect(header?.className).not.toContain("flex-col");
+    expect(screen.getByRole("button", { name: "관리" })).toBeTruthy();
+  });
 });

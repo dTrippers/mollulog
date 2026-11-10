@@ -26,11 +26,9 @@ export const NAVIGATION_MENU_IDS = [
   "profile",
   "my-students",
   "pickup-history",
-  "favorite-students",
   "my-walkthroughs",
   "screen-scanner",
   "mollulog-api",
-  "external-data",
   "news",
   "contact",
 ] as const;

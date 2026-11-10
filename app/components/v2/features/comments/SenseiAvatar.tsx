@@ -15,7 +15,7 @@ export function SenseiAvatar({
 }: {
   profileStudentId: string | null;
   labels?: readonly AccountLabel[] | readonly string[];
-  size?: "default" | "compact";
+  size?: "default" | "compact" | "header";
 }) {
   const primary = getPrimaryAccountLabel(labels);
   const presentation = primary ? ACCOUNT_LABEL_PRESENTATIONS[primary] : null;
@@ -30,7 +30,7 @@ export function SenseiAvatar({
       <span
         className={cn(
           "flex items-center justify-center overflow-hidden rounded-full bg-v2-inset text-v2-fg-tertiary",
-          size === "compact" ? "size-6" : "size-8",
+          size === "compact" ? "size-6" : size === "header" ? "size-14" : "size-8",
         )}
       >
         {presentation?.profileImageUrl && showImage ? (
@@ -54,7 +54,7 @@ export function SenseiAvatar({
         ) : !presentation?.profileImageUrl && fallbackPresentation.kind === "concealed" ? (
           <StudentPortrait uid={profileStudentId} className="size-full rounded-full object-cover" />
         ) : (
-          <UserIcon className={size === "compact" ? "size-3.5" : "size-4"} aria-hidden="true" />
+          <UserIcon className={size === "compact" ? "size-3.5" : size === "header" ? "size-6" : "size-4"} aria-hidden="true" />
         )}
       </span>
       {presentation ? (
@@ -62,7 +62,7 @@ export function SenseiAvatar({
           role="img"
           aria-label={presentation.name}
           title={presentation.name}
-          className="absolute -right-0.5 -bottom-0.5 flex size-3.5 items-center justify-center"
+          className={cn("absolute -right-0.5 -bottom-0.5 flex items-center justify-center", size === "header" ? "size-5" : "size-3.5")}
         >
           <span aria-hidden="true" className="absolute inset-[26%] rounded-full bg-v2-surface" />
           <CheckBadgeIcon className="relative size-full text-v2-fg" aria-hidden="true" />
