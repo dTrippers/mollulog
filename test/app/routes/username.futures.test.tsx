@@ -8,6 +8,7 @@ import { createRoutesStub, Outlet } from "react-router";
 import { equipmentCategoryImageUrl } from "~/models/assets";
 import {
   buildFavoriteEvent,
+  countDaysUntilStart,
   type FavoriteEvent,
   selectFavoriteEventContents,
 } from "~/routes/$username.futures._components/favorite-events";
@@ -16,6 +17,7 @@ jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }))
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
 jest.mock("~/models/content.server", () => ({ getContentsComments: jest.fn() }));
 jest.mock("~/models/favorite-students", () => ({ getUserFavoritedStudents: jest.fn() }));
+jest.mock("~/models/sensei", () => ({ getHideRecruitmentOpinions: jest.fn() }));
 jest.mock("~/models/student", () => ({ getAllStudentsMap: jest.fn(), getStudentSkillItemsBatch: jest.fn() }));
 jest.mock("~/views/futures", () => ({ getFutureContents: jest.fn() }));
 jest.mock("~/routes/$username._components/route-sensei.server", () => ({ getRouteSensei: jest.fn() }));
@@ -24,6 +26,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { getContentsComments } from "~/models/content.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getAllStudentsMap, getStudentSkillItemsBatch } from "~/models/student";
 import { getRouteSensei } from "~/routes/$username._components/route-sensei.server";
 import UserFavoriteStudents, { loader } from "~/routes/$username.futures";
@@ -133,7 +136,13 @@ describe("favorite events", () => {
       now,
     });
 
-    expect(event.daysUntilStart).toBe(3);
+    expect(event).toEqual(
+      expect.objectContaining({
+        contentType: "event",
+        since: "2026-11-13T02:00:00.000Z",
+        until: "2026-11-27T02:00:00.000Z",
+      }),
+    );
     expect(event.students).toEqual([
       expect.objectContaining({
         key: "arona",
@@ -179,6 +188,26 @@ describe("favorite events", () => {
     expect(buildFavoriteEvent({ ...base, opinions: null }).opinion).toBeNull();
   });
 
+  it("keeps an unannounced end as unknown", () => {
+    const event = buildFavoriteEvent({
+      content: content("event-1", { endAt: null }) as never,
+      favoriteKeys: new Set(["arona"]),
+      studentsByUid,
+      skillItemsByUid: new Map(),
+      opinions: [],
+      ownerUsername: "sensei",
+      now,
+    });
+    expect(event.until).toBeNull();
+  });
+
+  it("counts the days until the start in the display time zone", () => {
+    expect(countDaysUntilStart("2026-11-13T02:00:00.000Z", now, "Asia/Seoul")).toBe(3);
+    // 2026-11-11 01:00 KST, for an event starting at 11:00 KST the same day: still November 10 in UTC.
+    expect(countDaysUntilStart("2026-11-11T02:00:00.000Z", "2026-11-10T16:00:00.000Z", "Asia/Seoul")).toBe(0);
+    expect(countDaysUntilStart("2026-11-11T02:00:00.000Z", "2026-11-10T16:00:00.000Z", "UTC")).toBe(1);
+  });
+
   it("uses the equipment category images", () => {
     expect(equipmentCategoryImageUrl("hat")).toBe("https://assets.mollulog.net/assets/images/equipments/hat");
   });
@@ -197,6 +226,7 @@ describe("favorite students loader", () => {
     jest.useFakeTimers({ now: new Date(now), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
     jest.mocked(getLogger).mockReturnValue(logger as never);
     jest.mocked(getActiveSensei).mockResolvedValue(null);
+    jest.mocked(getHideRecruitmentOpinions).mockResolvedValue(true);
     jest.mocked(getRouteSensei).mockResolvedValue({ id: 7, username: "sensei" } as never);
     jest.mocked(getUserFavoritedStudents).mockResolvedValue([{ studentId: "arona", contentId: "event-1" }] as never);
     jest.mocked(getFutureContents).mockResolvedValue([content("event-1"), content("event-2")] as never);
@@ -215,7 +245,14 @@ describe("favorite students loader", () => {
 
     expect(getUserFavoritedStudents).toHaveBeenCalledWith(expect.anything(), 7, undefined, expect.anything());
     expect(getStudentSkillItemsBatch).toHaveBeenCalledWith(expect.anything(), ["arona"]);
-    expect(getContentsComments).toHaveBeenCalledWith(expect.anything(), ["event-1"], undefined, expect.anything());
+    expect(getHideRecruitmentOpinions).toHaveBeenCalledWith(expect.anything(), null, expect.anything());
+    expect(getContentsComments).toHaveBeenCalledWith(
+      expect.anything(),
+      ["event-1"],
+      undefined,
+      expect.objectContaining({ hideRecruitmentOpinions: true }),
+    );
+    expect(result.now).toBe(now);
     expect(result.events.map((event) => [event.uid, event.students.map(({ key }) => key), event.opinion])).toEqual([
       ["event-1", ["arona"], { count: 1, hasRecentOpinion: false, pinnedBody: "꼭 모집할 예정" }],
     ]);
@@ -231,6 +268,21 @@ describe("favorite students loader", () => {
     expect(logger.error).toHaveBeenCalled();
   });
 
+  it("marks the opinion summaries failed when the viewer's opinion setting cannot be read", async () => {
+    jest.mocked(getHideRecruitmentOpinions).mockRejectedValue(new Error("db down"));
+
+    const result = await loader(args);
+
+    expect(getContentsComments).not.toHaveBeenCalled();
+    expect(result.events[0]?.opinion).toBeNull();
+  });
+
+  it("fails the screen when the materials cannot be loaded", async () => {
+    jest.mocked(getStudentSkillItemsBatch).mockRejectedValue(new Error("baql down"));
+
+    await expect(loader(args)).rejects.toThrow("baql down");
+  });
+
   it("fails the screen when the favorites cannot be loaded", async () => {
     jest.mocked(getUserFavoritedStudents).mockRejectedValue(new Error("db down"));
 
@@ -244,7 +296,7 @@ describe("favorite students screen", () => {
       {
         path: "/:username",
         Component: () => <Outlet context={{ username: "sensei", isOwner }} />,
-        children: [{ path: "futures", loader: () => ({ events }), Component: UserFavoriteStudents }],
+        children: [{ path: "futures", loader: () => ({ events, now }), Component: UserFavoriteStudents }],
       },
     ]);
     render(<Stub initialEntries={["/@sensei/futures"]} />);
@@ -270,6 +322,13 @@ describe("favorite students screen", () => {
     expect(within(card).getByText("폭발")).toBeTruthy();
     expect(within(card).getByRole("list", { name: "아로나 육성 재료" })).toBeTruthy();
     expect(within(card).getByText("의견을 불러오지 못했어요")).toBeTruthy();
+  });
+
+  it("shows an unannounced end as an open-ended period", async () => {
+    renderScreen([{ ...event, until: null }], false);
+
+    const card = await screen.findByRole("article", { name: "이벤트 event-1" });
+    expect(within(card).getByText("2026/11/13부터")).toBeTruthy();
   });
 
   it("offers the owner a way to register favorites when there are none, and not a visitor", async () => {

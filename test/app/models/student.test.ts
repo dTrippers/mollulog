@@ -1,7 +1,13 @@
 import { describe, expect, it, jest } from "@jest/globals";
 import { Attack, Defense, RoleEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
-import { getAllStudents, getStudentForms, getStudentWeaponAvailability, syncRawStudents } from "~/models/student";
+import {
+  getAllStudents,
+  getStudentForms,
+  getStudentSkillItemsBatch,
+  getStudentWeaponAvailability,
+  syncRawStudents,
+} from "~/models/student";
 
 jest.mock("~/lib/baql", () => ({
   runQuery: jest.fn(),
@@ -34,6 +40,16 @@ describe("student weapon availability", () => {
       ]),
     );
     expect(result.has("omitted")).toBe(false);
+  });
+});
+
+describe("student skill items", () => {
+  it("fails instead of returning students without skill items when the query fails", async () => {
+    mockedRunQuery.mockResolvedValueOnce({ data: undefined, error: new Error("baql down") } as never);
+
+    await expect(getStudentSkillItemsBatch({ DISABLE_CACHE: "true" } as unknown as Env, ["arona"])).rejects.toThrow(
+      "baql down",
+    );
   });
 });
 

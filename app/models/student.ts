@@ -571,7 +571,11 @@ function buildStudentSkillItemsCacheKey(uid: string): string {
 }
 
 async function fetchStudentSkillItemsFromBaql(uids: string[]): Promise<Map<string, StudentSkillItems>> {
-  const { data } = await runQuery(studentSkillItemsQuery, { uids });
+  // A failed query must not be cached as students without skill items.
+  const { data, error } = await runQuery(studentSkillItemsQuery, { uids });
+  if (error) {
+    throw error;
+  }
   const itemsByUid = new Map<string, StudentSkillItems>(
     (data?.students ?? []).map((student) => [
       student.uid,

@@ -12,15 +12,24 @@ import { formatInstant } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
 import { equipmentTypeLocale } from "~/locales/ko";
 import { equipmentCategoryImageUrl } from "~/models/assets";
-import type { FavoriteEvent, FavoriteEventOpinion, FavoriteEventStudent } from "./favorite-events";
+import { formatOpenEndedStart } from "~/domain/futures/futures-view-model";
+import type { UtcIsoString } from "~/lib/date-time";
+import {
+  countDaysUntilStart,
+  type FavoriteEvent,
+  type FavoriteEventOpinion,
+  type FavoriteEventStudent,
+} from "./favorite-events";
 
 const NO_FAVORITE_LABEL = { visible: false, icon: "unfavorited", countText: null, accessibleName: "" } as const;
 const OPINION_PREVIEW_LENGTH = 50;
 
 // One event with the favorite students the profile owner registered for it: each student's attributes and the
 // equipment and artifact items they need, then the event's opinion summary.
-export function FavoriteEventCard({ event }: { event: FavoriteEvent }) {
+export function FavoriteEventCard({ event, now }: { event: FavoriteEvent; now: UtcIsoString }) {
   const timeZone = useDisplayTimeZone();
+  const start = formatInstant(event.since, { timeZone, format: "YYYY/MM/DD" });
+  const daysUntilStart = countDaysUntilStart(event.since, now, timeZone);
   const titleId = `favorite-event-${event.uid}`;
 
   return (
@@ -43,13 +52,14 @@ export function FavoriteEventCard({ event }: { event: FavoriteEvent }) {
             </Link>
           </h3>
           <p className="mt-1 text-xs tabular-nums text-v2-fg-secondary">
-            {formatInstant(event.since, { timeZone, format: "YYYY/MM/DD" })} ~{" "}
-            {formatInstant(event.until, { timeZone, format: "YYYY/MM/DD" })}
+            {event.until === null
+              ? formatOpenEndedStart(start, event.contentType)
+              : `${start} ~ ${formatInstant(event.until, { timeZone, format: "YYYY/MM/DD" })}`}
           </p>
         </div>
-        {event.daysUntilStart > 0 ? (
+        {daysUntilStart > 0 ? (
           <span className="shrink-0 rounded-md border border-v2-divider px-2 py-1 text-sm font-bold tabular-nums text-v2-fg">
-            D-{event.daysUntilStart}
+            D-{daysUntilStart}
           </span>
         ) : null}
       </header>

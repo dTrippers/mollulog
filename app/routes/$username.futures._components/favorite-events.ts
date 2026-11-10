@@ -1,5 +1,5 @@
 import type { Attack, Defense, RecruitmentTypeEnum } from "~/graphql/graphql";
-import { parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
+import { formatInstantDateKey, parseUtcTimestamp, type UtcIsoString } from "~/lib/date-time";
 import { recruitmentLabelLocale, schoolNameLocale } from "~/locales/ko";
 import type { ContentCommentWithSensei } from "~/models/content";
 import type { Role } from "~/models/content.d";
@@ -34,10 +34,10 @@ export type FavoriteEventOpinion = {
 export type FavoriteEvent = {
   uid: string;
   name: string;
+  contentType: string;
   since: UtcIsoString;
-  until: UtcIsoString;
-  // Days until the event starts, counted in UTC days. Zero or less once it has started.
-  daysUntilStart: number;
+  // `null` when the end is not announced yet.
+  until: UtcIsoString | null;
   students: FavoriteEventStudent[];
   opinion: FavoriteEventOpinion;
 };
@@ -132,14 +132,20 @@ export function buildFavoriteEvent({
   return {
     uid: content.uid,
     name: content.name,
+    contentType: content.contentType,
     since: content.startAt,
-    until: content.endAt ?? content.startAt,
-    daysUntilStart: parseUtcTimestamp(content.startAt)
-      .startOf("day")
-      .diff(parseUtcTimestamp(now).startOf("day"), "day"),
+    until: content.endAt,
     students,
     opinion: opinions === null ? null : summarizeOpinions(opinions, ownerUsername, now),
   };
+}
+
+// Days until an event starts, counted in calendar days of the time zone its dates are shown in, so the count agrees with
+// the displayed start date. Zero or less once the start day has come.
+export function countDaysUntilStart(since: UtcIsoString, now: UtcIsoString, timeZone: string): number {
+  const startDay = parseUtcTimestamp(`${formatInstantDateKey(since, timeZone)}T00:00:00Z`);
+  const today = parseUtcTimestamp(`${formatInstantDateKey(now, timeZone)}T00:00:00Z`);
+  return startDay.diff(today, "day");
 }
 
 function summarizeOpinions(

@@ -8,6 +8,7 @@ import { getLogger } from "~/lib/observability.server";
 import { cn } from "~/lib/utils";
 import { type ContentCommentWithSensei, getContentsComments } from "~/models/content.server";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
+import { getHideRecruitmentOpinions } from "~/models/sensei";
 import { getAllStudentsMap, getStudentSkillItemsBatch } from "~/models/student";
 import { getFutureContents } from "~/views/futures";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
@@ -46,17 +47,23 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
   );
 
   // The opinions are a summary under each event, so a failed lookup marks that summary failed instead of failing the page.
+  // They follow the viewer's setting for recruitment results, as on the event screen.
+  const loadOpinions = async () => {
+    const hideRecruitmentOpinions = await getHideRecruitmentOpinions(env, currentUser, { ctx });
+    return getContentsComments(env, contentUids, currentUser?.id, { hideRecruitmentOpinions, ctx });
+  };
   const [skillItemsByUid, opinionsByContent] = await Promise.all([
     getStudentSkillItemsBatch(env, studentUids),
     contentUids.length === 0
       ? Promise.resolve<Record<string, ContentCommentWithSensei[]>>({})
-      : getContentsComments(env, contentUids, currentUser?.id, { ctx }).catch((error: unknown) => {
+      : loadOpinions().catch((error: unknown) => {
           logger.error("Favorite students opinions failed to load", error);
           return null;
         }),
   ]);
 
   return {
+    now,
     events: selected.map(({ content, favoriteKeys }) =>
       buildFavoriteEvent({
         content,
@@ -77,7 +84,7 @@ export function ErrorBoundary() {
 }
 
 export default function UserFavoriteStudents() {
-  const { events } = useLoaderData<typeof loader>();
+  const { events, now } = useLoaderData<typeof loader>();
   const { isOwner } = useUserLayout();
 
   return (
@@ -101,7 +108,7 @@ export default function UserFavoriteStudents() {
           ) : null}
         </div>
       ) : (
-        events.map((event) => <FavoriteEventCard key={event.uid} event={event} />)
+        events.map((event) => <FavoriteEventCard key={event.uid} event={event} now={now} />)
       )}
     </section>
   );
