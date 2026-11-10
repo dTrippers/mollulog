@@ -16,7 +16,7 @@ import {
   getVisibleTier3StudentUids,
   loader,
   shouldSkipTier3StudentListInitially,
-} from "../../../app/routes/$username.pickups.edit.$id";
+} from "../../../app/routes/$username_.pickups.edit.$id";
 
 jest.mock("~/auth/authenticator.server", () => ({
   getActiveSensei: jest.fn(),
@@ -29,6 +29,7 @@ jest.mock("~/models/pickup-history.server", () => ({
 jest.mock("~/models/recruitment-result.server", () => ({
   getRecruitmentResult: jest.fn(),
   getRecruitmentResultComment: jest.fn(),
+  getRecruitmentResults: jest.fn(async () => []),
   upsertRecruitmentResult: jest.fn(),
 }));
 
@@ -45,6 +46,7 @@ jest.mock("~/domain/recruitment-result", () => ({
   getRecruitmentResultTier3CountFromPickupHistory: jest.fn((history: { result: { tier3Count: number }[] }) =>
     history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
   ),
+  isRecordedRecruitmentResult: jest.fn(() => true),
   mergeEditableRecruitmentResultStudents: jest.fn(),
   resolveRecruitmentResultStudents: jest.fn(
     (

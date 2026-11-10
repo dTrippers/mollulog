@@ -1,15 +1,15 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
-import { data, redirect, useLoaderData } from "react-router";
+import { data, redirect, useLoaderData, useRevalidator } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { AddContentButton } from "~/components/features/editor";
-import { SubTitle } from "~/components/primitives";
+import { LoadFailureState } from "~/components/v2/features/students/LoadFailureState";
 import {
   getRecruitmentResultCountStats,
   isRecordedRecruitmentResult,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { compareInstantAsc, compareInstantDesc } from "~/lib/date-time";
+import { compareInstantAsc, compareInstantDesc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { getLogger } from "~/lib/observability.server";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
   deleteRecruitmentResult,
@@ -22,13 +22,16 @@ import {
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
-import PickupHistoryView from "./$username.pickups._components/PickupHistoryView";
+import { useUserLayout } from "./$username._components/user-layout";
+import PickupHistoryList from "./$username.pickups._components/PickupHistoryList";
+import PickupStats from "./$username.pickups._components/PickupStats";
+import { DELETE_FAILED } from "./$username.pickups._components/pickup-record";
 
 export const meta: MetaFunction = ({ params }) => {
   return [
-    { title: `${params.username || ""} - 모집 이력 | 몰루로그`.trim() },
+    { title: `${params.username || ""} - 모집 기록 | 몰루로그`.trim() },
     { name: "description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
-    { name: "og:title", content: `${params.username || ""} - 모집 이력 | 몰루로그`.trim() },
+    { name: "og:title", content: `${params.username || ""} - 모집 기록 | 몰루로그`.trim() },
     { name: "og:description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
   ];
 };
@@ -48,10 +51,16 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   const formData = await request.formData();
   const uid = formData.get("uid");
   if (typeof uid !== "string" || uid.length === 0) {
-    throw routeError(400, "pickup_history.uid_missing", "삭제할 모집 이력을 확인할 수 없어요");
+    throw routeError(400, "pickup_history.uid_missing", "삭제할 모집 기록을 확인할 수 없어요");
   }
 
-  await deleteRecruitmentResult(env, sensei.id, uid);
+  try {
+    await deleteRecruitmentResult(env, sensei.id, uid);
+  } catch (error) {
+    // The card names the failure at its own record, so the action answers with data instead of the 500 page.
+    getLogger(env, ctx, { route: "$username.pickups" }).error("Recruitment result delete failed", error, { uid });
+    return data({ error: DELETE_FAILED, uid }, { status: 500 });
+  }
   return redirect(`/@${sensei.username}/pickups`);
 };
 
@@ -82,6 +91,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const poolStudentsMap = new Map(poolStudents.map((student) => [student.uid, student] as const));
   const timelineContentsByGroupUid = groupTimelineContentsByRecruitmentGroupUid(timelineContents);
 
+  const logger = getLogger(env, ctx, { route: "$username.pickups" });
   let tier3Count = 0;
   let tier3DrawCount = 0;
   let tier3RateCount = 0;
@@ -90,17 +100,19 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   let pickupRateCount = 0;
   let totalTrial = 0;
   let missingTrialCount = 0;
+  let hasFesRecord = false;
+  // A record whose linked students or event cannot be resolved takes its own place in the list as a failure.
+  const unavailableRecords: { uid: string; since: UtcIsoString }[] = [];
 
-  const aggregatedHistories = recruitmentResults
-    .filter(isRecordedRecruitmentResult)
-    .map((result) => {
+  const aggregatedHistories = recruitmentResults.filter(isRecordedRecruitmentResult).flatMap((result) => {
+    try {
       const group = groupMap.get(result.recruitmentGroupUid);
       const timelineContents = [...(timelineContentsByGroupUid.get(result.recruitmentGroupUid) ?? [])].sort((a, b) =>
         compareInstantAsc(a.startAt, b.startAt),
       );
       const firstTimelineContent = timelineContents[0];
       if (!firstTimelineContent) {
-        throw routeError(500, "pickup_history.timeline_content_missing", "모집 이력 정보를 불러오지 못했어요", {
+        throw routeError(500, "pickup_history.timeline_content_missing", "모집 기록 정보를 불러오지 못했어요", {
           eventId: result.recruitmentGroupUid,
         });
       }
@@ -121,6 +133,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       );
       const currentStats = getRecruitmentResultCountStats(result, resolveLookup);
 
+      // Totals change only after the whole record resolved, so a failed record never half-counts.
       tier3Count += currentStats.tier3Count;
       tier3DrawCount += currentStats.tier3DrawCount;
       pickupCount += currentStats.pickupCount;
@@ -132,39 +145,57 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
         pickupRateCount += currentStats.pickupRateCount;
         totalTrial += result.trial;
       }
+      if (group?.recruitmentType === "fes") {
+        hasFesRecord = true;
+      }
       const comment = result.commentPostUid ? (commentMap.get(result.commentPostUid) ?? null) : null;
 
-      return {
+      return [
+        {
+          uid: result.uid,
+          event: {
+            events: timelineContents.map((content) => ({ uid: content.uid, name: content.name })),
+            logoContentUid: firstTimelineContent.contentUid ?? null,
+            type: group?.recruitmentType ?? "pickup",
+            since: firstTimelineContent.startAt,
+          },
+          trial: result.trial,
+          recruitedStudents: students,
+          exchangedStudents,
+          stats: {
+            totalTrial: currentStats.totalTrial,
+            tier3Count: currentStats.tier3Count,
+            pickupCount: currentStats.pickupCount,
+          },
+          comment: comment
+            ? {
+                ...comment,
+                sensei: {
+                  username: sensei.username,
+                  profileStudentId: sensei.profileStudentId,
+                },
+              }
+            : null,
+        },
+      ];
+    } catch (error) {
+      logger.error("Recruitment record could not be resolved", error, {
+        recruitmentResultUid: result.uid,
+        recruitmentGroupUid: result.recruitmentGroupUid,
+      });
+      unavailableRecords.push({
         uid: result.uid,
-        event: {
-          events: timelineContents.map((content) => ({ uid: content.uid, name: content.name })),
-          type: group?.recruitmentType ?? "pickup",
-          since: firstTimelineContent.startAt,
-        },
-        trial: result.trial,
-        recruitedStudents: students,
-        exchangedStudents,
-        stats: {
-          totalTrial: currentStats.totalTrial,
-          tier3Count: currentStats.tier3Count,
-          pickupCount: currentStats.pickupCount,
-        },
-        comment: comment
-          ? {
-              ...comment,
-              sensei: {
-                username: sensei.username,
-                profileStudentId: sensei.profileStudentId,
-              },
-            }
-          : null,
-      };
-    })
-    .sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
+        since: toUtcIso(result.completedAt ?? result.createdAt),
+      });
+      return [];
+    }
+  });
+  aggregatedHistories.sort((a, b) => compareInstantDesc(a.event.since, b.event.since));
 
   return {
     me: sensei.username === currentUser?.username,
     recruitmentHistories: aggregatedHistories,
+    unavailableRecords,
     recruitmentStats: {
       trial: totalTrial,
       tier3Count,
@@ -174,63 +205,30 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       pickupDrawCount,
       pickupRateCount,
       missingTrialCount,
+      hasFesRecord,
     },
   };
 };
 
+export function ErrorBoundary() {
+  const revalidator = useRevalidator();
+  return <LoadFailureState title="모집 기록을 불러오지 못했어요" onRetry={() => revalidator.revalidate()} />;
+}
+
 export default function UserPickups() {
-  const { recruitmentHistories, recruitmentStats, me } = useLoaderData<typeof loader>();
+  const { recruitmentHistories, unavailableRecords, recruitmentStats, me } = useLoaderData<typeof loader>();
+  const { username } = useUserLayout();
+  const recordCount = recruitmentHistories.length + unavailableRecords.length;
 
   return (
-    <div className="my-8">
-      <SubTitle text="모집 통계" />
-      <div className="grid grid-cols-3 rounded-lg bg-card px-2 py-4 shadow-md shadow-black/5 dark:shadow-sm dark:shadow-black/20 md:px-4 md:py-6">
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground md:text-base">총 모집 횟수</p>
-          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.trial} 회</p>
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground md:text-base">★3 획득 수</p>
-          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.tier3Count} 회</p>
-          {recruitmentStats.trial > 0 && (
-            <p className="text-xs text-muted-foreground md:text-sm">
-              {((recruitmentStats.tier3RateCount / recruitmentStats.trial) * 100).toFixed(2)} %
-            </p>
-          )}
-        </div>
-        <div className="text-center">
-          <p className="text-xs text-muted-foreground md:text-base">★3 픽업 획득 수</p>
-          <p className="text-lg font-bold text-foreground md:text-2xl">{recruitmentStats.pickupCount} 회</p>
-          {recruitmentStats.trial > 0 && (
-            <p className="text-xs text-muted-foreground md:text-sm">
-              {((recruitmentStats.pickupRateCount / recruitmentStats.trial) * 100).toFixed(2)} %
-            </p>
-          )}
-        </div>
-      </div>
-      <p className="mt-4 text-xs text-muted-foreground md:text-sm">
-        페스 기간에 모집한 ★3 학생은 확률을 0.5배로 계산했어요.
-      </p>
-
-      <SubTitle text="모집 이력" />
-      {me && <AddContentButton text="새로운 모집 이력 추가하기" link="/my?path=pickups/edit/new" />}
-      {recruitmentHistories.length === 0 && <p className="my-16 text-center">아직 모집 이력이 없어요</p>}
-      {recruitmentHistories.map(({ uid, event, recruitedStudents, exchangedStudents, trial, stats, comment }) => {
-        return (
-          <PickupHistoryView
-            key={uid}
-            uid={uid}
-            event={event}
-            recruitedStudents={recruitedStudents}
-            exchangedStudents={exchangedStudents}
-            trial={trial}
-            stats={stats}
-            comment={comment}
-            trialMissing={trial === null}
-            editable={me}
-          />
-        );
-      })}
+    <div className="flex flex-col gap-v2-section-gap">
+      <PickupStats stats={recruitmentStats} recordCount={recordCount} unavailableCount={unavailableRecords.length} />
+      <PickupHistoryList
+        username={username}
+        histories={recruitmentHistories}
+        unavailableRecords={unavailableRecords}
+        editable={me}
+      />
     </div>
   );
 }
