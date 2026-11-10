@@ -3,6 +3,7 @@ import {
   ChevronRightIcon,
   EyeIcon,
   EyeSlashIcon,
+  InformationCircleIcon,
   MapIcon,
   PencilSquareIcon,
   RectangleStackIcon,
@@ -28,6 +29,8 @@ import {
   getFreeRecruitmentNotice,
   isPickupUnavailableRecruitment,
   PICKUP_UNAVAILABLE_NOTICE,
+  RECRUITMENT_STACK_GUIDE_ANCHOR,
+  RECRUITMENT_STACK_GUIDE_EVENT_UID,
 } from "~/domain/recruitment-notice";
 import { formatInstant, formatInstantDateKey, isInstantAfter, type UtcIsoString } from "~/lib/date-time";
 import { cn } from "~/lib/utils";
@@ -47,8 +50,8 @@ import { TrailingIconText } from "../../primitives/TrailingIconText";
 import { StudentSlot } from "../students/StudentSlot";
 import { StudentThumbList } from "../students/StudentThumbList";
 import { ContentMedia } from "./ContentMedia";
-import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { FeatureBanner } from "./FeatureBanner";
+import { ContentHighlightOverlay } from "./FeaturedContentBanner";
 import { getFutureMediaTypeLabel } from "./labels";
 import { OpinionRow } from "./OpinionRow";
 import { RemainingLabel } from "./RemainingLabel";
@@ -173,6 +176,11 @@ function TimelineItem({
   const bannerShown = (bannerId: FutureBannerId) => dismissedBanners !== null && !dismissedBanners.has(bannerId);
   const studentAnalysisBanner = !hidden && studentAnalysisKey && bannerShown("student-analysis");
   const pendingBanner = !hidden && pendingKey && bannerShown("pending-student-favorite");
+  // The event overview explains this event's free recruits and stack while the free recruits can still be used.
+  const stackGuideBanner =
+    linkable &&
+    content.uid === RECRUITMENT_STACK_GUIDE_EVENT_UID &&
+    specialCases.some((specialCase) => specialCase.kind === "perk-free");
 
   const title = hidden ? null : linkable ? (
     <Link
@@ -276,6 +284,25 @@ function TimelineItem({
               openKey={openStudentKey}
               onOpenKeyChange={setOpenStudentKey}
             />
+            {stackGuideBanner ? (
+              <Link
+                to={`${content.link}#${RECRUITMENT_STACK_GUIDE_ANCHOR}`}
+                state={content.navigationState}
+                prefetch="intent"
+                className={cn(
+                  "group flex w-fit max-w-[40rem] items-center gap-2 rounded-lg bg-v2-accent-subtle py-2 pr-2 pl-2.5 text-xs leading-4 text-v2-fg",
+                  v2FocusRing,
+                )}
+                {...getV2LinkTransitionProps("forward", () => onOpenContent(content.uid))}
+              >
+                <InformationCircleIcon className="size-4 shrink-0 text-v2-accent" aria-hidden="true" />
+                <span className="min-w-0 font-medium break-keep">무료 모집 횟수와 특별 스택에 대해 확인해 보세요</span>
+                <span className="inline-flex shrink-0 items-center font-semibold whitespace-nowrap text-v2-accent group-hover:underline">
+                  안내 보기
+                  <ChevronRightIcon className="size-3.5" aria-hidden="true" />
+                </span>
+              </Link>
+            ) : null}
             {studentAnalysisBanner || pendingBanner ? (
               <div className="space-y-2">
                 {studentAnalysisBanner ? (

@@ -961,13 +961,14 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
 .v2-range-slider::-webkit-slider-runnable-track {
   height: 0.25rem;
   border-radius: 999px;
-  background: linear-gradient(to right, var(--v2-fg) 0 var(--v2-range-progress), var(--v2-inset) var(--v2-range-progress) 100%);
+  background: linear-gradient(to right, var(--v2-fg) 0 var(--v2-range-progress), var(--v2-range-track, var(--v2-inset)) var(--v2-range-progress) 100%);
 }
 
 .v2-range-slider::-moz-range-track {
   height: 0.25rem;
   border-radius: 999px;
-  background: var(--v2-inset);
+  /* Unfilled track. Set --v2-range-track on an inset background, where the default disappears. */
+  background: var(--v2-range-track, var(--v2-inset));
 }
 
 .v2-range-slider::-moz-range-progress {

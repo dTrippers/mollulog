@@ -35,6 +35,13 @@ export function withoutFreeRecruitmentTags(tags: readonly string[]): string[] {
   return tags.filter((tag) => !isFreeRecruitmentTag(tag));
 }
 
+// The 2026-11-10 recruitment revamp turned recruitment points into stacks, and this event's pickup came with 200 free
+// recruits. Players mixed up the free recruits, which expire, with the stack they build, which carries over to the next
+// fes recruitment. The event overview explains the difference for this event only, and the futures timeline links to it
+// while the free recruits can still be used.
+export const RECRUITMENT_STACK_GUIDE_EVENT_UID = "pandemonium-cruise";
+export const RECRUITMENT_STACK_GUIDE_ANCHOR = "recruit-stack-guide";
+
 export const PICKUP_UNAVAILABLE_NOTICE = {
   label: "픽업 불가",
   description: "아래 학생은 픽업이 불가하며 다른 학생의 픽업에서 ‘픽뚫’로만 모집할 수 있어요.",

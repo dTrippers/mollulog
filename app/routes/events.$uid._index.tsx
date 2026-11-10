@@ -13,7 +13,11 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { calendarDayDifference } from "~/domain/home-portal";
 import { filterRecruitmentsByStudentUids, getRecruitmentFavoriteKey } from "~/domain/recruitment-identity";
-import { getAvailableFreeRecruitmentPulls, isPickupUnavailableRecruitment } from "~/domain/recruitment-notice";
+import {
+  getAvailableFreeRecruitmentPulls,
+  isPickupUnavailableRecruitment,
+  RECRUITMENT_STACK_GUIDE_EVENT_UID,
+} from "~/domain/recruitment-notice";
 import { getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-notice";
 import { formatInstant, formatInstantDateKey, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { conjunctionParticle } from "~/lib/korean";
@@ -35,6 +39,7 @@ import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~
 import { EventOpinions } from "./events.$uid._components/EventOpinions";
 import type { EventLayoutContext } from "./events.$uid._components/event-screens";
 import { type EventShopPortalData, getEventShopPortalData } from "./events.$uid._components/event-shop-availability";
+import { RecruitmentStackGuide } from "./events.$uid._components/RecruitmentStackGuide";
 import { EventShopPicker } from "./events.$uid._components/shop/EventShopPicker";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
@@ -335,6 +340,7 @@ export default function EventIndex() {
                   </div>
                 ))}
               </div>
+              {showsRecruitmentStackGuide(data) ? <RecruitmentStackGuide /> : null}
             </section>
           ) : null}
 
@@ -398,6 +404,11 @@ function OverviewMenu({ layout }: { layout: EventLayoutContext }) {
       />
     </nav>
   );
+}
+
+// The stack guide explains this event's free recruits, so it shows only while they can still be used.
+function showsRecruitmentStackGuide(data: EventLoaderData): boolean {
+  return data.eventUid === RECRUITMENT_STACK_GUIDE_EVENT_UID && data.freeRecruitmentPulls > 0;
 }
 
 function SectionTitle({ id, children }: { id: string; children: ReactNode }) {
@@ -569,7 +580,8 @@ function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now:
           </Fragment>
         ))}
       </dl>
-      {data.freeRecruitmentPulls > 0 ? (
+      {/* The stack guide below the pickup students covers this rule for its event. */}
+      {data.freeRecruitmentPulls > 0 && !showsRecruitmentStackGuide(data) ? (
         <WarningNotice label="이월 불가">남은 무료 모집 횟수는 다음 모집으로 넘어가지 않아요</WarningNotice>
       ) : null}
     </div>

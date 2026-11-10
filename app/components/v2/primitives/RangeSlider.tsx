@@ -1,4 +1,4 @@
-import { useId, type CSSProperties, type InputHTMLAttributes } from "react";
+import { type CSSProperties, type InputHTMLAttributes, useId } from "react";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../layout/styles";
 
@@ -8,6 +8,7 @@ export type RangeSliderProps = Omit<InputHTMLAttributes<HTMLInputElement>, "type
   min: number;
   max: number;
   valuePrefix?: string;
+  valueSuffix?: string;
   accessibleLabel?: string;
   showValue?: boolean;
   layout?: "inline" | "stacked";
@@ -23,6 +24,7 @@ export function RangeSlider({
   min,
   max,
   valuePrefix,
+  valueSuffix,
   accessibleLabel,
   showValue = true,
   layout = "inline",
@@ -44,7 +46,7 @@ export function RangeSlider({
       {...props}
       id={inputId}
       type="range"
-      aria-label={`${accessibleLabel ?? label} ${valuePrefix ?? ""}${safeValue}`}
+      aria-label={`${accessibleLabel ?? label} ${valuePrefix ?? ""}${safeValue}${valueSuffix ?? ""}`}
       min={min}
       max={safeMax}
       value={safeValue}
@@ -61,13 +63,18 @@ export function RangeSlider({
   );
   const valueLabel = showValue ? (
     <span className={cn("shrink-0 text-right text-sm font-semibold text-v2-fg tabular-nums", valueClassName)}>
-      {valuePrefix}{safeValue}
+      {valuePrefix}
+      {safeValue}
+      {valueSuffix}
     </span>
   ) : null;
 
   if (layout === "stacked") {
     return (
-      <label htmlFor={inputId} className={cn("flex min-w-0 flex-col gap-1", disabled && disabledAppearance === "all" && "opacity-50")}>
+      <label
+        htmlFor={inputId}
+        className={cn("flex min-w-0 flex-col gap-1", disabled && disabledAppearance === "all" && "opacity-50")}
+      >
         <span className="flex min-w-0 items-center justify-between gap-2 text-xs text-v2-fg-tertiary">
           <span className="min-w-0 truncate">{label}</span>
           {valueLabel}
@@ -78,7 +85,13 @@ export function RangeSlider({
   }
 
   return (
-    <label htmlFor={inputId} className={cn("grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-xs", disabled && disabledAppearance === "all" && "opacity-50")}>
+    <label
+      htmlFor={inputId}
+      className={cn(
+        "grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-xs",
+        disabled && disabledAppearance === "all" && "opacity-50",
+      )}
+    >
       <span className="min-w-0 truncate text-xs text-v2-fg-tertiary">{label}</span>
       {rangeInput}
       {valueLabel}
