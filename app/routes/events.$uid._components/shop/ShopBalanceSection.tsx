@@ -137,6 +137,8 @@ function BalanceCard({
           label={`${resource.name} 목표 개수`}
           buttonLabel="목표 개수 입력"
           value={required}
+          // Before the calculation settles, the computed target is a placeholder zero that must not seed an override.
+          disabled={!settled && override === undefined}
           onSave={(value) => plan.actions.updateOverriddenRequired(uid, value)}
           onReset={override !== undefined ? () => plan.actions.resetOverriddenRequired(uid) : undefined}
         />
@@ -182,24 +184,32 @@ function EditableQuantity({
   label,
   buttonLabel,
   value,
+  disabled = false,
   onSave,
   onReset,
 }: {
   label: string;
   buttonLabel: string;
   value: number;
+  disabled?: boolean;
   onSave: (value: number) => void;
   onReset?: () => void;
 }) {
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [editValue, setEditValue] = useState(value);
+  // The popover returns focus only on Escape, so its own buttons hand focus back to the trigger they unmount from.
+  const close = () => {
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
   return (
     <>
       <button
         ref={triggerRef}
         type="button"
         aria-label={`${label} 입력`}
+        disabled={disabled}
         onClick={() => {
           setEditValue(value);
           setOpen(true);
@@ -221,7 +231,7 @@ function EditableQuantity({
           onSubmit={(event) => {
             event.preventDefault();
             onSave(editValue);
-            setOpen(false);
+            close();
           }}
         >
           <p className="text-sm text-v2-fg-secondary">{label}</p>
@@ -241,7 +251,7 @@ function EditableQuantity({
                 variant="danger-subtle"
                 onClick={() => {
                   onReset();
-                  setOpen(false);
+                  close();
                 }}
               >
                 초기화
@@ -250,7 +260,7 @@ function EditableQuantity({
               <span />
             )}
             <div className="flex gap-2">
-              <Button size="sm" onClick={() => setOpen(false)}>
+              <Button size="sm" onClick={close}>
                 취소
               </Button>
               <Button size="sm" type="submit" variant="primary">
