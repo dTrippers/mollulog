@@ -4,7 +4,7 @@ import {
   BookmarkIcon as BookmarkOutlineIcon,
   EllipsisHorizontalIcon,
 } from "@heroicons/react/24/outline";
-import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { formatThousands } from "~/domain/futures/futures-view-model";
 import type { UtcIsoString } from "~/lib/date-time";
@@ -45,7 +45,7 @@ export type OpinionInlineListProps = {
 
 // Opinions read inline on the page, oldest first like the full thread, so the newest sit right above the composer. Only
 // the newest few show at first, and older ones load above them. Each opinion shows its first reply, and the rest of the
-// conversation opens in the full thread.
+// conversation unfolds in place. Writing and editing replies still happen in the full thread.
 export function OpinionInlineList({
   title,
   comments,
@@ -190,6 +190,15 @@ function InlineOpinion({
   onOpenThread: () => void;
 }) {
   const [firstReply, ...moreReplies] = sortByCreatedAt(comment.subcomments ?? []);
+  const [repliesExpanded, setRepliesExpanded] = useState(false);
+  // The unfold button leaves the page when pressed, so focus moves to the first reply it revealed.
+  const firstRevealedReplyRef = useRef<HTMLLIElement>(null);
+  const focusRevealedReply = useRef(false);
+  useEffect(() => {
+    if (!repliesExpanded || !focusRevealedReply.current) return;
+    focusRevealedReply.current = false;
+    firstRevealedReplyRef.current?.focus();
+  }, [repliesExpanded]);
   const own = comment.sensei.me;
   const menuItems: ActionMenuItem[] = [
     {
@@ -234,34 +243,30 @@ function InlineOpinion({
         </div>
         <p className="mt-1 text-sm leading-[1.55] wrap-break-word whitespace-pre-line text-v2-fg">{comment.body}</p>
         {firstReply ? (
-          <div className="mt-2.5 grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2">
-            <Link
-              to={`/@${firstReply.sensei.username}`}
-              aria-label={`@${firstReply.sensei.username} 프로필`}
-              className="self-start rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-            >
-              <SenseiAvatar
-                profileStudentId={firstReply.sensei.profileStudentId}
-                labels={firstReply.sensei.labels}
-                size="compact"
+          <ol className="mt-2.5 flex flex-col gap-2.5">
+            {(repliesExpanded ? [firstReply, ...moreReplies] : [firstReply]).map((reply, index) => (
+              <InlineReply
+                key={reply.uid}
+                reply={reply}
+                now={now}
+                itemRef={index === 1 ? firstRevealedReplyRef : undefined}
               />
-            </Link>
-            <div className="min-w-0">
-              <OpinionMeta comment={firstReply} now={now} size="reply" />
-              <ClampedReply key={`${firstReply.uid}:${firstReply.body}`} body={firstReply.body} />
-              {moreReplies.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={onOpenThread}
-                  className="mt-1 rounded-sm text-xs font-semibold text-v2-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
-                >
-                  답글 {formatThousands(moreReplies.length)}개 더 보기
-                </button>
-              ) : null}
-            </div>
-          </div>
+            ))}
+          </ol>
         ) : null}
-        {canReply && moreReplies.length === 0 ? (
+        {moreReplies.length > 0 && !repliesExpanded ? (
+          <button
+            type="button"
+            onClick={() => {
+              focusRevealedReply.current = true;
+              setRepliesExpanded(true);
+            }}
+            className="mt-1 ml-8 rounded-sm text-xs font-semibold text-v2-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          >
+            답글 {formatThousands(moreReplies.length)}개 더 보기
+          </button>
+        ) : null}
+        {canReply && (moreReplies.length === 0 || repliesExpanded) ? (
           <button
             type="button"
             onClick={onOpenThread}
@@ -270,6 +275,36 @@ function InlineOpinion({
             답글 달기
           </button>
         ) : null}
+      </div>
+    </li>
+  );
+}
+
+function InlineReply({
+  reply,
+  now,
+  itemRef,
+}: {
+  reply: NestedComment;
+  now: UtcIsoString;
+  itemRef?: Ref<HTMLLIElement>;
+}) {
+  return (
+    <li
+      ref={itemRef}
+      tabIndex={itemRef ? -1 : undefined}
+      className="grid grid-cols-[1.5rem_minmax(0,1fr)] gap-x-2 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+    >
+      <Link
+        to={`/@${reply.sensei.username}`}
+        aria-label={`@${reply.sensei.username} 프로필`}
+        className="self-start rounded-full focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      >
+        <SenseiAvatar profileStudentId={reply.sensei.profileStudentId} labels={reply.sensei.labels} size="compact" />
+      </Link>
+      <div className="min-w-0">
+        <OpinionMeta comment={reply} now={now} size="reply" />
+        <ClampedReply key={`${reply.uid}:${reply.body}`} body={reply.body} />
       </div>
     </li>
   );

@@ -10,6 +10,7 @@ import {
   type OpinionInlineListProps,
 } from "~/components/v2/features/comments/OpinionInlineList";
 import type { NestedComment } from "~/models/content";
+import { stubCoarsePointer } from "./pointer-media-stub";
 
 function comment(uid: string, createdAt: string, pinned = false): NestedComment {
   return {
@@ -23,7 +24,7 @@ function comment(uid: string, createdAt: string, pinned = false): NestedComment 
   } as NestedComment;
 }
 
-function renderList(comments: NestedComment[]) {
+function renderList(comments: NestedComment[], overrides: Partial<OpinionInlineListProps> = {}) {
   const noop = () => undefined;
   const props: OpinionInlineListProps = {
     title: "의견",
@@ -42,6 +43,7 @@ function renderList(comments: NestedComment[]) {
     onOpenThread: noop,
     onRetry: noop,
     onRequestSignIn: noop,
+    ...overrides,
   };
   render(
     <MemoryRouter>
@@ -118,5 +120,46 @@ describe("OpinionInlineList", () => {
       expect(screen.getByText(/첫 줄/).className).not.toContain("line-clamp-3");
       expect(screen.queryByRole("button", { name: "더 보기" })).toBeNull();
     });
+  });
+
+  it("unfolds the remaining replies in place instead of opening the full thread", () => {
+    let opened = 0;
+    const parent = comment("a", "2026-11-01T00:00:00.000Z");
+    const replies = ["x", "y", "z"].map((uid, index) => ({
+      ...comment(uid, `2026-11-0${index + 2}T00:00:00.000Z`),
+      body: `답글 ${uid}`,
+    }));
+    renderList([{ ...parent, subcomments: [replies[2], replies[0], replies[1]] } as NestedComment], {
+      onOpenThread: () => {
+        opened += 1;
+      },
+    });
+
+    expect(screen.getByText("답글 x")).toBeTruthy();
+    expect(screen.queryByText("답글 y")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "답글 2개 더 보기" }));
+    expect(screen.getAllByText(/^답글 [xyz]$/).map((node) => node.textContent)).toEqual(["답글 x", "답글 y", "답글 z"]);
+    expect(screen.queryByRole("button", { name: "답글 2개 더 보기" })).toBeNull();
+    expect(opened).toBe(0);
+    expect(document.activeElement?.textContent).toContain("답글 y");
+  });
+
+  it("offers the reply composer only once every reply is on the page", () => {
+    stubCoarsePointer(false);
+    let opened = 0;
+    const parent = comment("a", "2026-11-01T00:00:00.000Z");
+    const replies = ["x", "y"].map((uid, index) => comment(uid, `2026-11-0${index + 2}T00:00:00.000Z`));
+    renderList([{ ...parent, subcomments: replies } as NestedComment], {
+      signedIn: true,
+      onOpenThread: () => {
+        opened += 1;
+      },
+    });
+
+    expect(screen.queryByRole("button", { name: "답글 달기" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "답글 1개 더 보기" }));
+    fireEvent.click(screen.getByRole("button", { name: "답글 달기" }));
+    expect(opened).toBe(1);
   });
 });
