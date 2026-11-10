@@ -186,20 +186,21 @@ describe("@username layout header", () => {
 });
 
 describe("@username layout menu", () => {
-  it("lists 프로필, 모집한 학생, 모집 기록 with counts in the Aside for a visitor, without the removed entries", async () => {
+  it("lists 프로필, 모집한 학생, 모집 기록, 관심 학생 in the Aside for a visitor, without the moved entries", async () => {
     renderLayout();
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
     const nav = within(aside).getByRole("navigation", { name: "화면 탐색" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["프로필", "모집한 학생244", "모집 기록56"]);
+    expect(links.map((link) => link.textContent)).toEqual(["프로필", "모집한 학생244", "모집 기록56", "관심 학생"]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
+      "/@sensei/futures",
     ]);
     expect(links[0]?.getAttribute("aria-current")).toBe("page");
-    for (const removed of ["관심 학생", "공략 작성하기", "공략 타임라인", "편성/공략"]) {
+    for (const removed of ["공략 작성하기", "공략 타임라인", "편성/공략"]) {
       expect(screen.queryByText(removed)).toBeNull();
     }
     expect(within(aside).queryByText("화면 인식·데이터 연동")).toBeNull();
@@ -223,6 +224,7 @@ describe("@username layout menu", () => {
       "프로필",
       "모집한 학생",
       "모집 기록0",
+      "관심 학생",
     ]);
   });
 
@@ -261,7 +263,6 @@ describe("@username moved menus notice", () => {
 
     expect(await screen.findByText("공략 타임라인과 편성은 커뮤니티에서 확인해주세요.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "내 공략 타임라인" }).getAttribute("href")).toBe("/timelines?mine=1");
-    expect(screen.queryByText(/관심 학생/)).toBeNull();
   });
 
   it("does not show the notice to a visitor", async () => {

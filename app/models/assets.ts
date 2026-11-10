@@ -47,6 +47,11 @@ export function equipmentImageUrl(equipment: string): string {
   return resourceImageUrl("equipment", equipment);
 }
 
+// A generic image for an equipment category (hat, gloves, ...), for a student's equipment slots without a tier.
+export function equipmentCategoryImageUrl(category: string): string {
+  return `https://assets.mollulog.net/assets/images/equipments/${encodeURIComponent(category)}`;
+}
+
 export function terrainAdaptationIconUrl(rank: "D" | "C" | "B" | "A" | "S" | "SS"): string {
   return `https://assets.mollulog.net/assets/images/ui/terrain-${rank}.png`;
 }

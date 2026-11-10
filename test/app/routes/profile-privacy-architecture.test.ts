@@ -5,11 +5,7 @@ import { describe, expect, it } from "@jest/globals";
 const ROUTES_DIRECTORY = join(process.cwd(), "app", "routes");
 const MODELS_DIRECTORY = join(process.cwd(), "app", "models");
 // These only redirect to a moved page and read no profile data. The new page applies its own profile guard.
-const REDIRECT_ONLY_ROUTES = new Set([
-  "$username.futures.tsx",
-  "$username.parties._index.tsx",
-  "$username.timelines.tsx",
-]);
+const REDIRECT_ONLY_ROUTES = new Set(["$username.parties._index.tsx", "$username.timelines.tsx"]);
 
 describe("profile route privacy guard", () => {
   it("keeps PostgreSQL profile lookup out of the client-visible layout module", () => {

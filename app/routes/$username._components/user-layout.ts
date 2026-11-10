@@ -3,7 +3,7 @@ import { useOutletContext } from "react-router";
 import type { MobileActionBarProps, ScreenTabItem } from "~/components/v2/layout";
 import type { ProfileVisibility } from "~/models/sensei";
 
-export type UserScreen = "profile" | "students" | "pickups";
+export type UserScreen = "profile" | "students" | "pickups" | "futures";
 
 // What a child of the `/@username` layout can read. The layout loader owns it, so a child never has to reload it.
 export type UserLayoutContext = {
@@ -44,6 +44,7 @@ export function getUserScreen(pathname: string, username: string): UserScreen | 
   }
   if (normalized === `${root}/students` || normalized.startsWith(`${root}/students/`)) return "students";
   if (normalized === `${root}/pickups` || normalized.startsWith(`${root}/pickups/`)) return "pickups";
+  if (normalized === `${root}/futures`) return "futures";
   return null;
 }
 
@@ -51,7 +52,12 @@ export function formatUserCount(count: number | null): string | undefined {
   return count === null ? undefined : count.toLocaleString("en-US");
 }
 
-export type UserScreenIcons = { profile: ElementType; students: ElementType; pickups: ElementType };
+export type UserScreenIcons = {
+  profile: ElementType;
+  students: ElementType;
+  pickups: ElementType;
+  futures: ElementType;
+};
 
 // One list feeds the Aside menu on desktop and the tabs under the header on mobile.
 export function buildUserScreenItems({
@@ -85,6 +91,13 @@ export function buildUserScreenItems({
       Icon: icons.pickups,
       link: `/@${username}/pickups`,
       active: screen === "pickups",
+    },
+    {
+      key: "futures",
+      text: "관심 학생",
+      Icon: icons.futures,
+      link: `/@${username}/futures`,
+      active: screen === "futures",
     },
   ];
 }

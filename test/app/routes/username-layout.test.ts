@@ -163,25 +163,27 @@ describe("@username layout screens", () => {
     expect(getUserScreen("/@sensei/students", "sensei")).toBe("students");
     expect(getUserScreen("/@sensei/pickups/edit/1", "sensei")).toBe("pickups");
     expect(getUserScreen("/@sensei/friends", "sensei")).toBe("profile");
-    expect(getUserScreen("/@sensei/futures", "sensei")).toBeNull();
+    expect(getUserScreen("/@sensei/futures", "sensei")).toBe("futures");
+    expect(getUserScreen("/@sensei/timelines", "sensei")).toBeNull();
     expect(getUserScreen("/@sensei/studentsx", "sensei")).toBeNull();
     expect(getUserScreen("/@other/students", "sensei")).toBeNull();
   });
 
-  it("builds the same three menu items for the owner and a visitor, with counts", () => {
+  it("builds the same four menu items for the owner and a visitor, with counts", () => {
     const Icon = () => null;
     const items = buildUserScreenItems({
       username: "sensei",
       pathname: "/@sensei/pickups",
       recruitedStudentCount: 1234,
       pickupCount: 56,
-      icons: { profile: Icon, students: Icon, pickups: Icon },
+      icons: { profile: Icon, students: Icon, pickups: Icon, futures: Icon },
     });
 
     expect(items.map(({ text, label, link, active }) => [text, label, link, active])).toEqual([
       ["프로필", undefined, "/@sensei", false],
       ["모집한 학생", "1,234", "/@sensei/students", false],
       ["모집 기록", "56", "/@sensei/pickups", true],
+      ["관심 학생", undefined, "/@sensei/futures", false],
     ]);
   });
 

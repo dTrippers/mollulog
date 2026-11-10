@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { loader as futuresLoader } from "~/routes/$username.futures";
 import { loader as partiesLoader } from "~/routes/$username.parties._index";
 import { loader as editPartyLoader } from "~/routes/$username.parties.edit.$id";
 import { loader as timelinesLoader } from "~/routes/$username.timelines";
@@ -27,10 +26,6 @@ beforeEach(() => {
 });
 
 describe("former profile routes", () => {
-  it("sends the favorite students page to the integrated planner", () => {
-    expect(location(futuresLoader())).toBe("/planner");
-  });
-
   it("opens the signed-in user's walkthroughs from their own timelines address", async () => {
     mockGetActiveSensei.mockResolvedValue({ id: 1, username: "sensei" } as never);
 

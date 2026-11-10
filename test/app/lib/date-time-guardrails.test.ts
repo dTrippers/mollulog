@@ -25,6 +25,7 @@ const migratedViewFiles = [
   "app/components/features/raids/RaidStatisticsSlotCount.tsx",
   "app/components/features/raids/RaidVideosScreen.tsx",
   "app/routes/$username.pickups._components/PickupHistoryView.tsx",
+  "app/routes/$username.futures._components/FavoriteEventCard.tsx",
 ];
 
 const migratedModelFiles = [

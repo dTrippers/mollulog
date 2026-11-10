@@ -1,6 +1,7 @@
 import {
   CameraIcon,
   ChartBarIcon,
+  HeartIcon,
   LockClosedIcon,
   PencilSquareIcon,
   UserCircleIcon,
@@ -129,7 +130,7 @@ export default function User() {
     pathname,
     recruitedStudentCount: data.recruitedStudentCount,
     pickupCount: data.pickupCount,
-    icons: { profile: UserCircleIcon, students: UserIcon, pickups: ChartBarIcon },
+    icons: { profile: UserCircleIcon, students: UserIcon, pickups: ChartBarIcon, futures: HeartIcon },
   });
 
   const outletContext = useMemo<UserLayoutContext>(
