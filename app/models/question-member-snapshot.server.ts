@@ -103,11 +103,14 @@ const databaseSources: SnapshotSources = {
   getUserResourceInventoryMapByItemUids,
 };
 
+/** The snapshot without the recruitment plan check, which the question view adds from the planner calculation. */
+export type QuestionMemberSnapshotBase = Omit<MemberSnapshot, "recruitmentCheck">;
+
 export async function buildQuestionMemberSnapshot(
   env: Env,
   senseiId: number,
   sources: SnapshotSources = databaseSources,
-): Promise<MemberSnapshot> {
+): Promise<QuestionMemberSnapshotBase> {
   const [recruitedStudents, relationshipLevels, favorites, parties, plannerState] = await Promise.all([
     sources.getRecruitedStudents(env, senseiId),
     sources.getRelationshipLevels(env, senseiId),

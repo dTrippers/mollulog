@@ -114,6 +114,7 @@ function makeDependencies(overrides: Partial<ChatActionDependencies> = {}): Chat
       resources: null,
       recruitmentPlans: [],
       accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
     }),
     runQuestion: async () => ({ ok: true, result: answer }),
     renderAnswer: (answer) => answer,
@@ -396,6 +397,7 @@ describe("AI chatbot page and resource action", () => {
       resources: null,
       recruitmentPlans: [],
       accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [],
       formations: [],
@@ -624,6 +626,7 @@ describe("AI chatbot page and resource action", () => {
       resources: null,
       recruitmentPlans: [],
       accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [{ studentUid: "student-a", contentId: "pickup-a" }],
       formations: [
@@ -676,6 +679,7 @@ describe("AI chatbot page and resource action", () => {
       resources: null,
       recruitmentPlans: [],
       accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [],
       favorites: [],
       formations: [],
@@ -745,6 +749,7 @@ describe("AI chatbot page and resource action", () => {
       resources: null,
       recruitmentPlans: [],
       accountLevel: null,
+      recruitmentCheck: { status: "input_required" as const },
       students: [
         {
           studentUid: "x".repeat(131_073),

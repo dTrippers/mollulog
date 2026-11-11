@@ -40,7 +40,46 @@ export type MemberSnapshot = {
     targetTiers: Array<{ studentUid: string; targetTier: number }>;
   }>;
   accountLevel: number | null;
+  recruitmentCheck: MemberSnapshotRecruitmentCheck;
 };
+
+export type MemberSnapshotRange = { low: number; high: number };
+
+/** The pyroxene planner's recruitment plan check, as the planner screen calculates it. */
+export type MemberSnapshotRecruitmentCheck =
+  | { status: "input_required" }
+  | { status: "failed" }
+  | {
+      status: "available";
+      resourcesInputAt: string;
+      ownedStatesAvailable: boolean;
+      events: Array<{
+        plannerEventUid: string;
+        eventName: string;
+        startAt: string;
+        endAt: string;
+        basis: "average" | "average_pity" | "ceil" | "manual";
+        pulls: number;
+        pullRange: MemberSnapshotRange | null;
+        freePulls: number;
+        pyroxeneBefore: number;
+        pyroxeneBeforeRange: MemberSnapshotRange | null;
+        spent: { pyroxene: number; oneTimeTicket: number; tenTimeTicket: number };
+        pyroxeneAfter: number;
+        pyroxeneAfterRange: MemberSnapshotRange | null;
+        shortfall: number;
+        surplus: number;
+        status: "enough" | "caution" | "short";
+        ownedApplied: boolean;
+        targets: Array<{
+          studentUid: string;
+          targetTier: number;
+          owned: { tier: number | null; eleph: number } | null;
+          remainingEleph: number | null;
+          copies: number;
+        }>;
+      }>;
+    };
 
 export type QuestionRequest = {
   question: string;
@@ -62,7 +101,14 @@ export type SourceKind = "knowledge" | "student" | "schedule" | "raid_stats" | "
 export type SourceSubject = { type: "student"; uid: string } | { type: "raid_boss"; boss: string };
 export type AnswerSource = { sourceId: string; kind: SourceKind; label: string; subject?: SourceSubject };
 export type QuestionRunEvent =
-  | { type: "tool_started"; callId: string; round: number; toolName: string; target: string | null; subject?: SourceSubject }
+  | {
+      type: "tool_started";
+      callId: string;
+      round: number;
+      toolName: string;
+      target: string | null;
+      subject?: SourceSubject;
+    }
   | { type: "tool_completed"; callId: string; round: number; toolName: string; ok: boolean; sources: AnswerSource[] };
 
 export function parseSourceSubject(value: unknown): SourceSubject | undefined {
@@ -81,7 +127,13 @@ export function parseSourceSubject(value: unknown): SourceSubject | undefined {
 export type AnswerBlock =
   | { type: "plaintext"; text: string }
   | { type: "markdown"; text: string; html?: string }
-  | { type: "bar_chart"; title: string; unit: "percent" | "fraction" | "count" | "none"; categories: string[]; series: AnswerChartSeries[] };
+  | {
+      type: "bar_chart";
+      title: string;
+      unit: "percent" | "fraction" | "count" | "none";
+      categories: string[];
+      series: AnswerChartSeries[];
+    };
 /** A points chart has one unnamed series whose bars each come from a different source. */
 export type AnswerChartSeries =
   | { name: string; values: Array<number | null>; sourceId: string; subject?: SourceSubject }
@@ -89,7 +141,9 @@ export type AnswerChartSeries =
 export type Answer = { text: string; blocks: AnswerBlock[]; sources: AnswerSource[]; limitations: string[] };
 
 function record(value: unknown): Record<string, unknown> | null {
-  return value !== null && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
 }
 
 export function parseAnswerBlocks(value: unknown, fallbackText: string): AnswerBlock[] {
@@ -100,18 +154,59 @@ export function parseAnswerBlocks(value: unknown, fallbackText: string): AnswerB
     if (block?.type !== "bar_chart") return [];
     const categories = block.categories;
     const seriesInput = block.series;
-    if (typeof block.title !== "string" || !block.title.trim() || !["percent", "fraction", "count", "none"].includes(String(block.unit)) || !Array.isArray(categories) || categories.length < 1 || categories.length > 8 || !categories.every((item) => typeof item === "string" && item.trim() !== "") || new Set(categories).size !== categories.length || !Array.isArray(seriesInput) || seriesInput.length < 1 || seriesInput.length > 3) return [];
+    if (
+      typeof block.title !== "string" ||
+      !block.title.trim() ||
+      !["percent", "fraction", "count", "none"].includes(String(block.unit)) ||
+      !Array.isArray(categories) ||
+      categories.length < 1 ||
+      categories.length > 8 ||
+      !categories.every((item) => typeof item === "string" && item.trim() !== "") ||
+      new Set(categories).size !== categories.length ||
+      !Array.isArray(seriesInput) ||
+      seriesInput.length < 1 ||
+      seriesInput.length > 3
+    )
+      return [];
     const unit = block.unit as "percent" | "fraction" | "count" | "none";
     const series = seriesInput.flatMap((candidateSeries): AnswerChartSeries[] => {
       const item = record(candidateSeries);
-      if (!item || !Array.isArray(item.values) || item.values.length !== categories.length || !item.values.every((value) => value === null || (typeof value === "number" && Number.isFinite(value) && (unit === "percent" ? value >= 0 && value <= 100 : unit === "fraction" ? value >= 0 && value <= 1 : true)))) return [];
+      if (
+        !item ||
+        !Array.isArray(item.values) ||
+        item.values.length !== categories.length ||
+        !item.values.every(
+          (value) =>
+            value === null ||
+            (typeof value === "number" &&
+              Number.isFinite(value) &&
+              (unit === "percent"
+                ? value >= 0 && value <= 100
+                : unit === "fraction"
+                  ? value >= 0 && value <= 1
+                  : true)),
+        )
+      )
+        return [];
       const values = item.values as Array<number | null>;
       if (item.name === null) {
         const sourceIds = item.sourceIds;
-        if (seriesInput.length !== 1 || !Array.isArray(sourceIds) || sourceIds.length < 1 || !sourceIds.every((sourceId) => typeof sourceId === "string" && sourceId.trim() !== "")) return [];
+        if (
+          seriesInput.length !== 1 ||
+          !Array.isArray(sourceIds) ||
+          sourceIds.length < 1 ||
+          !sourceIds.every((sourceId) => typeof sourceId === "string" && sourceId.trim() !== "")
+        )
+          return [];
         return [{ name: null, values, sourceIds: sourceIds as string[] }];
       }
-      if (typeof item.name !== "string" || !item.name.trim() || typeof item.sourceId !== "string" || !item.sourceId.trim()) return [];
+      if (
+        typeof item.name !== "string" ||
+        !item.name.trim() ||
+        typeof item.sourceId !== "string" ||
+        !item.sourceId.trim()
+      )
+        return [];
       const subject = item.subject === undefined ? undefined : parseSourceSubject(item.subject);
       return [{ name: item.name, sourceId: item.sourceId, values, ...(subject ? { subject } : {}) }];
     });
@@ -145,7 +240,13 @@ export type RunInfo = {
   promptVersion: string;
   artifactHash: string;
   usage: RunUsage;
-  answerBlockMetrics?: { chartBlocksChecked: number; chartBlocksPassed: number; chartBlocksDropped: number; chartRewriteCount: number; unsupportedMarkdownCount: number };
+  answerBlockMetrics?: {
+    chartBlocksChecked: number;
+    chartBlocksPassed: number;
+    chartBlocksDropped: number;
+    chartRewriteCount: number;
+    unsupportedMarkdownCount: number;
+  };
 };
 export type SourceRecord = {
   sourceId: string;
