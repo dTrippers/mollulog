@@ -430,7 +430,7 @@ export function QuestionChat({
     ? "로그인하면 쓸 수 있어요"
     : consentUnavailable
       ? "설정을 불러오지 못했어요. 잠시 후 다시 시도해 주세요."
-      : "보유 학생, 관심 학생, 편성을 함께 보내요";
+      : "보유 학생, 관심 학생, 편성, 재화와 모집 계획을 함께 보내요";
 
   useLayoutEffect(() => {
     const textarea = textareaRef.current;
@@ -919,9 +919,12 @@ export function QuestionChat({
             스위치를 켜 두면 질문할 때마다 몰루로그에 저장된 아래 정보를 질문과 함께 외부 AI 모델 제공사에 전달해요.
           </p>
           <ul className="border-l-2 border-v2-divider pl-3">
-            <li>· 보유 학생</li>
+            <li>· 보유 학생과 엘레프</li>
             <li>· 관심 학생</li>
             <li>· 편성</li>
+            <li>· 청휘석, 모집 티켓, 모집 스택</li>
+            <li>· 청휘석 플래너의 모집 계획</li>
+            <li>· 계정 레벨</li>
           </ul>
           <p>전달한 정보는 질문, 답변과 함께 기록으로 저장돼요.</p>
           <p>동의는 계정에 저장되어 스위치를 끌 때까지 유지돼요. 스위치를 끄면 동의가 취소돼요.</p>

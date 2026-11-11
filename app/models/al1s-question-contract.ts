@@ -5,8 +5,9 @@ export type JsonObject = { [key: string]: JsonValue };
 export type Profile = "public" | "member" | "internal";
 export type QuestionContext = { region: string; asOf: string };
 export type HistoryMessage = { role: "user" | "assistant"; text: string };
+/** Member snapshot v2 (AL-1S docs/contracts.md). A null value means the user has not entered it. */
 export type MemberSnapshot = {
-  version: 1;
+  version: 2;
   students: Array<{
     studentUid: string;
     star: number;
@@ -16,6 +17,7 @@ export type MemberSnapshot = {
     equipmentTiers: [number | null, number | null, number | null];
     equipSpecial: number | null;
     relationshipLevel: number | null;
+    eleph: number | null;
   }>;
   favorites: Array<{ studentUid: string; contentId: string }>;
   formations: Array<{
@@ -24,6 +26,20 @@ export type MemberSnapshot = {
     seasonIndex: number | null;
     studentUids: Array<Array<string | null>>;
   }>;
+  resources: {
+    inputAt: string;
+    pyroxene: number;
+    oneTimeTicket: number;
+    tenTimeTicket: number;
+    recruitmentStacks: { regular: number; limited: number } | null;
+  } | null;
+  recruitmentPlans: Array<{
+    recruitmentGroupUid: string;
+    completed: boolean;
+    expectedTrials: number | null;
+    targetTiers: Array<{ studentUid: string; targetTier: number }>;
+  }>;
+  accountLevel: number | null;
 };
 
 export type QuestionRequest = {
@@ -38,7 +54,7 @@ export const REQUEST_LIMITS = {
   questionCodePoints: 8192,
   historyMessages: 6,
   historyMessageCodePoints: 4000,
-  memberSnapshotBytes: 65536,
+  memberSnapshotBytes: 131072,
 } as const;
 
 export type AnswerStatus = "answered" | "needs_clarification" | "insufficient_evidence";
