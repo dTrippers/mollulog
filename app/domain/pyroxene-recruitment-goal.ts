@@ -63,6 +63,15 @@ export function getRecruitmentTargetCopies(targetTier: RecruitmentTargetTier, ow
   return 1 + Math.ceil(afterFirstCopy / DUPLICATE_ELEPH);
 }
 
+/**
+ * Eleph the student still lacks for the target tier, after its held eleph. An unowned student counts from
+ * its initial tier (★3), which the first copy gives.
+ */
+export function getRecruitmentRemainingEleph(targetTier: RecruitmentTargetTier, owned?: RecruitmentOwnedState): number {
+  const startTier = owned?.tier ?? UNOWNED_START_TIER;
+  return Math.max(0, calculateCumulativeTierEleph(startTier, targetTier) - (owned?.eleph ?? 0));
+}
+
 /** Merges owned tiers and held eleph for the given students; returns null when either source is unavailable. */
 export function buildRecruitmentOwnedSnapshot(
   readAt: string,

@@ -68,11 +68,8 @@ import {
   getActivePyroxenePackages,
   numberTargetEvents,
 } from "~/domain/pyroxene-planner-view";
-import {
-  buildRecruitmentOwnedSnapshot,
-  EMPTY_RECRUITMENT_STACKS,
-  type RecruitmentStacks,
-} from "~/domain/pyroxene-recruitment-goal";
+import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import { buildPlannerEventDataMap } from "~/domain/pyroxene-recruitment-plan-check";
 import { buildPyroxeneDisplayTimeline } from "~/domain/pyroxene-schedule";
 import {
   collectedSourceKeyForEventReward,
@@ -85,16 +82,11 @@ import {
   getAttendanceStartDate,
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
-import {
-  getPyroxenePlanEndDate,
-  type PickupResources,
-  type PyroxeneTimelineEventData,
-} from "~/domain/pyroxene-timeline";
+import { getPyroxenePlanEndDate, type PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
 import { canonicalLink, socialMeta } from "~/lib/seo";
-import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
 import {
@@ -106,20 +98,18 @@ import {
   createPyroxeneOwnedResource,
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
-  getPyroxeneUserState,
   updateCollectedSources,
   updatePyroxenePlannerOptions,
   upsertCollectedSources,
   upsertPyroxeneEventData,
 } from "~/models/pyroxene-planner";
-import { getRecruitedStudents } from "~/models/recruited-student";
 import {
   deleteRecruitmentResult,
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result.server";
-import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
+import { loadPyroxenePlannerAccount } from "~/views/pyroxene-planner-account";
 import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._components/action-data";
 
 // recharts is large, so the chart loads apart from the planner's first bundle.
@@ -139,6 +129,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
   if (!currentUser) {
     return {
+      signedIn: false,
       contents,
       selectedEventUid,
       favoritedStudents: [],
@@ -159,76 +150,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     };
   }
 
-  // User state reads share one PostgreSQL client; unrelated repositories remain parallel.
-  const recruitmentGroupUids = contents.flatMap((content) =>
-    content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
-  );
-
-  const ownedReadAt = new Date().toISOString();
-  const favoritedStudentsPromise = getUserFavoritedStudents(env, currentUser.id, undefined, { ctx });
-  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents, favoriteHeldEleph] =
-    await Promise.all([
-      favoritedStudentsPromise,
-      getPyroxeneUserState(env, currentUser.id, { ctx }),
-      getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
-      getRecruitedStudents(env, currentUser.id),
-      favoritedStudentsPromise
-        .then((items) =>
-          getUserResourceInventoryMapByItemUids(
-            env,
-            currentUser.id,
-            items.map(({ studentId }) => studentId),
-          ),
-        )
-        .catch(() => null),
-    ]);
-
-  return {
-    signedIn: true,
-    contents,
-    selectedEventUid,
-    favoritedStudents: favoritedStudents.map(({ contentId, studentId }) => ({
-      contentUid: contentId,
-      studentUid: studentId,
-    })),
-    latestResources: {
-      pyroxene: pyroxeneState.latestResources?.pyroxene ?? 0,
-      oneTimeTicket: pyroxeneState.latestResources?.oneTimeTicket ?? 0,
-      tenTimeTicket: pyroxeneState.latestResources?.tenTimeTicket ?? 0,
-      inputAt: pyroxeneState.latestResources?.inputAt ?? null,
-      recruitmentStacks: pyroxeneState.latestResources?.recruitmentStacks ?? EMPTY_RECRUITMENT_STACKS,
-    },
-    timelineItems: pyroxeneState.timelineItems,
-    calcOptions: pyroxeneState.options,
-    eventData: pyroxeneState.eventData,
-    recruitmentResultCompletions: recruitmentResults.flatMap((result) => {
-      if (!result.completedAt) {
-        return [];
-      }
-
-      const content = contents.find(
-        (content) => content.kind === "event" && content.recruitmentGroupUid === result.recruitmentGroupUid,
-      );
-      return content
-        ? [
-            {
-              eventUid: content.uid,
-              recruitmentGroupUid: result.recruitmentGroupUid,
-              recruitmentResultUid: result.uid as string | null,
-            },
-          ]
-        : [];
-    }),
-    recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
-    // Null when held eleph is unavailable; the timeline then counts targets as unowned and the page says so.
-    recruitmentOwnedSnapshot: buildRecruitmentOwnedSnapshot(
-      ownedReadAt,
-      favoritedStudents.map(({ studentId }) => studentId),
-      Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier])),
-      favoriteHeldEleph,
-    ),
-    collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
-  };
+  const account = await loadPyroxenePlannerAccount(env, currentUser.id, contents, ctx);
+  return { signedIn: true, contents, selectedEventUid, ...account };
 };
 
 function preserveApChargeExceptions(
@@ -1149,15 +1072,10 @@ export default function PyroxenePlanner() {
     );
   };
 
-  const eventDataMap = useMemo(() => {
-    const map = new Map<string, PlannerEventData & PyroxeneTimelineEventData>();
-    for (const { eventUid, ...rest } of localEventData) map.set(eventUid, { ...rest, completed: false });
-    for (const completion of localCompletions) {
-      const existing = map.get(completion.eventUid);
-      map.set(completion.eventUid, { expectedTrials: null, ...existing, completed: true });
-    }
-    return map;
-  }, [localEventData, localCompletions]);
+  const eventDataMap = useMemo(
+    () => buildPlannerEventDataMap(localEventData, localCompletions),
+    [localEventData, localCompletions],
+  );
   // A completion saved in this visit has no record uid until the loader runs again, so it opens the editor on its event,
   // which finds the saved record.
   const recordEditLinks = useMemo(
