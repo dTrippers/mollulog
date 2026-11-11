@@ -63,14 +63,15 @@ export function mapQuestionSnapshotResources(
   };
 }
 
-// Planner event data is keyed by the BAQL recruitment group uid; targetTiers holds only targets above ★3.
+// Planner event data is keyed by the planner event uid (a timeline content uid, or `group:<uid>` for a
+// recruitment shared by several events); targetTiers holds only targets above ★3.
 export function mapQuestionSnapshotRecruitmentPlans(
   eventData: PlannerStateDocumentV1["pyroxene"]["eventData"],
 ): MemberSnapshot["recruitmentPlans"] {
   return Object.entries(eventData)
     .sort(([left], [right]) => left.localeCompare(right))
-    .map(([recruitmentGroupUid, data]) => ({
-      recruitmentGroupUid,
+    .map(([plannerEventUid, data]) => ({
+      plannerEventUid,
       completed: data.completed,
       expectedTrials: data.expectedTrials,
       targetTiers: Object.entries(data.targetTiers ?? {})

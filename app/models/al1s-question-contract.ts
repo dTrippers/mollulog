@@ -34,7 +34,7 @@ export type MemberSnapshot = {
     recruitmentStacks: { regular: number; limited: number } | null;
   } | null;
   recruitmentPlans: Array<{
-    recruitmentGroupUid: string;
+    plannerEventUid: string;
     completed: boolean;
     expectedTrials: number | null;
     targetTiers: Array<{ studentUid: string; targetTier: number }>;

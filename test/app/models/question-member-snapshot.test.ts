@@ -290,12 +290,12 @@ describe("question member snapshot student and favorite mapping", () => {
     });
     expect(snapshot.recruitmentPlans).toEqual([
       {
-        recruitmentGroupUid: "5-5th-fes",
+        plannerEventUid: "5-5th-fes",
         completed: false,
         expectedTrials: 200,
         targetTiers: [{ studentUid: "owned-b", targetTier: 7 }],
       },
-      { recruitmentGroupUid: "dive-into-ocean", completed: false, expectedTrials: null, targetTiers: [] },
+      { plannerEventUid: "dive-into-ocean", completed: false, expectedTrials: null, targetTiers: [] },
     ]);
     expect(snapshot.accountLevel).toBe(90);
   });
