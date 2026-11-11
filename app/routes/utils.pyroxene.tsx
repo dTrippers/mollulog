@@ -68,7 +68,11 @@ import {
   getActivePyroxenePackages,
   numberTargetEvents,
 } from "~/domain/pyroxene-planner-view";
-import { EMPTY_RECRUITMENT_STACKS, type RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
+import {
+  buildRecruitmentOwnedSnapshot,
+  EMPTY_RECRUITMENT_STACKS,
+  type RecruitmentStacks,
+} from "~/domain/pyroxene-recruitment-goal";
 import { buildPyroxeneDisplayTimeline } from "~/domain/pyroxene-schedule";
 import {
   collectedSourceKeyForEventReward,
@@ -114,6 +118,7 @@ import {
   getRecruitmentResultsByRecruitmentGroupUids,
   setRecruitmentResultCompletion,
 } from "~/models/recruitment-result.server";
+import { getUserResourceInventoryMapByItemUids } from "~/models/user-resource-inventory";
 import { getPyroxenePlannerContents } from "~/views/pyroxene";
 import { type ActionData, decodePyroxeneActionPayload } from "./utils.pyroxene._components/action-data";
 
@@ -149,6 +154,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       eventData: [],
       recruitmentResultCompletions: [],
       recruitedStudentUids: [],
+      recruitmentOwnedSnapshot: undefined,
       collectedSourceKeys: [],
     };
   }
@@ -158,12 +164,24 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
     content.kind === "event" && content.recruitmentGroupUid ? [content.recruitmentGroupUid] : [],
   );
 
-  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents] = await Promise.all([
-    getUserFavoritedStudents(env, currentUser.id, undefined, { ctx }),
-    getPyroxeneUserState(env, currentUser.id, { ctx }),
-    getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
-    getRecruitedStudents(env, currentUser.id),
-  ]);
+  const ownedReadAt = new Date().toISOString();
+  const favoritedStudentsPromise = getUserFavoritedStudents(env, currentUser.id, undefined, { ctx });
+  const [favoritedStudents, pyroxeneState, recruitmentResults, recruitedStudents, favoriteHeldEleph] =
+    await Promise.all([
+      favoritedStudentsPromise,
+      getPyroxeneUserState(env, currentUser.id, { ctx }),
+      getRecruitmentResultsByRecruitmentGroupUids(env, currentUser.id, recruitmentGroupUids),
+      getRecruitedStudents(env, currentUser.id),
+      favoritedStudentsPromise
+        .then((items) =>
+          getUserResourceInventoryMapByItemUids(
+            env,
+            currentUser.id,
+            items.map(({ studentId }) => studentId),
+          ),
+        )
+        .catch(() => null),
+    ]);
 
   return {
     signedIn: true,
@@ -202,6 +220,13 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
         : [];
     }),
     recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
+    // Null when held eleph is unavailable; the timeline then counts targets as unowned and the page says so.
+    recruitmentOwnedSnapshot: buildRecruitmentOwnedSnapshot(
+      ownedReadAt,
+      favoritedStudents.map(({ studentId }) => studentId),
+      Object.fromEntries(recruitedStudents.map(({ studentUid, tier }) => [studentUid, tier])),
+      favoriteHeldEleph,
+    ),
     collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
   };
 };
@@ -1176,6 +1201,7 @@ export default function PyroxenePlanner() {
     collectedSourceKeys: localCollectedSourceKeys,
     endDate: planEndDate,
     recruitmentStacks: stacks,
+    ownedSnapshot: loaderData.recruitmentOwnedSnapshot ?? undefined,
   });
   const displayTimeline = useMemo(
     () => buildPyroxeneDisplayTimeline(timeline, scheduleItems, initialDate ?? new Date(), initialResources),
@@ -1302,6 +1328,10 @@ export default function PyroxenePlanner() {
     <StatusNotice tone="danger">{revisionConflictError}</StatusNotice>
   ) : ownedResourceSaveError ? (
     <StatusNotice tone="danger">{ownedResourceSaveError}</StatusNotice>
+  ) : signedIn && loaderData.recruitmentOwnedSnapshot === null ? (
+    <StatusNotice tone="warning">
+      보유 학생이나 엘레프 정보를 확인할 수 없어 모집 목표를 미보유 기준으로 계산했어요.
+    </StatusNotice>
   ) : signedIn && hasGuestLegacyConflicts ? (
     <StatusNotice tone="warning" action={<ImportLink />}>
       이전 화면과 이 화면에서 같은 항목을 다르게 바꾼 계획이 있어요. 내용을 확인하고 사용할 값을 선택해주세요.

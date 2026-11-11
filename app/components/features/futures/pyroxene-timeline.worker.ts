@@ -22,6 +22,7 @@ workerScope.onmessage = (event) => {
     collectedSourceKeys,
     endDate,
     recruitmentStacks,
+    ownedSnapshot,
   } = event.data;
   const timeline = buildTimeline(
     initialResources,
@@ -33,6 +34,7 @@ workerScope.onmessage = (event) => {
     collectedSourceKeys,
     endDate,
     recruitmentStacks,
+    ownedSnapshot,
   );
   workerScope.postMessage({ id, timeline: serializeTimeline(timeline) });
 };

@@ -1,7 +1,7 @@
 import dayjs from "dayjs";
 import type { PyroxeneCalculationOptions } from "~/domain/pyroxene-planner";
+import type { RecruitmentOwnedSnapshot, RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import type { RecruitmentStacks } from "~/domain/pyroxene-recruitment-goal";
 import type {
   PickupResources,
   PyroxeneTimelineEventData,
@@ -34,6 +34,7 @@ export type PyroxeneTimelineWorkerRequest = {
   collectedSourceKeys: string[];
   endDate?: Date;
   recruitmentStacks: RecruitmentStacks;
+  ownedSnapshot?: RecruitmentOwnedSnapshot;
 };
 
 export type PyroxeneTimelineWorkerResponse = {
