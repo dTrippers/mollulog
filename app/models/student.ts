@@ -81,12 +81,14 @@ const studentDetailQuery = graphql(`
       studentVariant {
         uid
         isMulticlass
-        primaryStudent { uid name }
+        primaryStudent {
+          uid name
+          # A multiclass form is recruited as its primary form, so a non-primary form has no recruitments of its own.
+          recruitments {
+            recruitmentGroup { uid }
+          }
+        }
         students { uid name position tacticRole }
-      }
-      recruitments {
-        since rerun
-        recruitmentGroup { uid startAt endAt }
       }
       catalog {
         profile {
@@ -528,6 +530,32 @@ async function fetchStudentFormsFromBaql(): Promise<Record<string, StudentForm>>
  */
 export async function getStudentForms(env: Env): Promise<Record<string, StudentForm>> {
   return fetchLazySourceCached(env, studentFormsKey, fetchStudentFormsFromBaql, STUDENT_FORM_UIDS_TTL);
+}
+
+const studentPrimaryUidQuery = graphql(`
+  query StudentPrimaryUid($uid: String!) {
+    student(uid: $uid) {
+      uid
+      studentVariant { primaryStudent { uid } }
+    }
+  }
+`);
+
+// Records shared by every form of a multiclass student (gradings, growth state) are keyed by the primary form's uid.
+// Read uncached from BAQL: a stale or incomplete form cache would file a form's records under its own uid.
+// Returns null when BAQL has no such student.
+export async function getPrimaryStudentUid(_env: Env, uid: string): Promise<string | null> {
+  const { data, error } = await runQuery(studentPrimaryUidQuery, { uid });
+  if (error) {
+    throw error;
+  }
+  if (!data) {
+    throw new Error("BAQL student primary uid response is missing data");
+  }
+  if (!data.student) {
+    return null;
+  }
+  return data.student.studentVariant.primaryStudent.uid;
 }
 
 export async function getStudentGradeDetail(_env: Env, uid: string) {

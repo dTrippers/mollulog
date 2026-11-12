@@ -143,7 +143,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 
   const currentUser = await currentUserPromise;
   const writeModePromise = currentUser ? getStudentStateWriteMode(env) : Promise.resolve("legacy" as const);
-  const recruitmentGroupUids = student.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
+  const primaryStudent = student.studentVariant.primaryStudent;
+  const recruitmentGroupUids = primaryStudent.recruitments.map(({ recruitmentGroup }) => recruitmentGroup.uid);
   const variantPrimaryStudentUids = student.character.studentVariants.map((variant) => variant.primaryStudent.uid);
   const recruitedStudentsPromise = currentUser ? getRecruitedStudents(env, currentUser.id) : Promise.resolve([]);
   const relationshipLevelsPromise = currentUser
@@ -161,8 +162,8 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     writeMode,
   ] = await Promise.all([
     getTimelineContentsByRecruitmentGroupUids(publicReadEnv, recruitmentGroupUids, { ctx }),
-    getTagCountsByStudent(env, uid),
-    getStudentGradingsByStudentWithUsers(env, uid, true, currentUser?.id),
+    getTagCountsByStudent(env, primaryStudent.uid),
+    getStudentGradingsByStudentWithUsers(env, primaryStudent.uid, true, currentUser?.id),
     allRaidsPromise,
     recruitedStudentsPromise,
     relationshipLevelsPromise,
@@ -181,7 +182,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
     });
   }
 
-  const stateStudentUid = student.studentVariant.primaryStudent.uid;
+  const stateStudentUid = primaryStudent.uid;
   const myStudentState =
     recruitedStudents.find((recruitedStudent) => recruitedStudent.studentUid === stateStudentUid) ?? null;
   const sortedGradings = [...allGradings].sort((a, b) => {
@@ -203,7 +204,7 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
         relationshipLevel.currentLevel,
       ]),
     ),
-    recruitments: getStudentRelevantTimelineContents(timelineContents, recruitmentGroupUids, student.uid).map(
+    recruitments: getStudentRelevantTimelineContents(timelineContents, recruitmentGroupUids, primaryStudent.uid).map(
       (content) => ({
         uid: content.uid,
         name: content.name,

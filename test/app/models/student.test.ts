@@ -3,6 +3,7 @@ import { Attack, Defense, RoleEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import {
   getAllStudents,
+  getPrimaryStudentUid,
   getStudentForms,
   getStudentSkillItemsBatch,
   getStudentWeaponAvailability,
@@ -112,5 +113,31 @@ describe("student forms", () => {
       "10143": { ...swimsuitShunForm("10143", "슌(수영복)"), primaryUid: "10143", formIndex: 1 },
       "10144": { ...swimsuitShunForm("10144", "슈에링(수영복)"), primaryUid: "10143", formIndex: 2 },
     });
+  });
+});
+
+describe("primary student uid", () => {
+  const env = { DISABLE_CACHE: "true" } as unknown as Env;
+
+  it("reads the primary form from BAQL instead of the cached form list", async () => {
+    mockedRunQuery.mockResolvedValueOnce({
+      data: { student: { uid: "10144", studentVariant: { primaryStudent: { uid: "10143" } } } },
+      error: undefined,
+    } as never);
+
+    await expect(getPrimaryStudentUid(env, "10144")).resolves.toBe("10143");
+    expect(mockedRunQuery).toHaveBeenLastCalledWith(expect.anything(), { uid: "10144" });
+  });
+
+  it("returns null for a student BAQL does not have", async () => {
+    mockedRunQuery.mockResolvedValueOnce({ data: { student: null }, error: undefined } as never);
+
+    await expect(getPrimaryStudentUid(env, "missing")).resolves.toBeNull();
+  });
+
+  it("fails instead of treating the uid as its own primary when BAQL fails", async () => {
+    mockedRunQuery.mockResolvedValueOnce({ data: undefined, error: new Error("baql down") } as never);
+
+    await expect(getPrimaryStudentUid(env, "10144")).rejects.toThrow("baql down");
   });
 });

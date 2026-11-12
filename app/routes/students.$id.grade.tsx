@@ -11,7 +11,7 @@ import { ToggleChip } from "~/components/v2/primitives/ToggleChip";
 import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { getStudentGradeDetail } from "~/models/student";
+import { getPrimaryStudentUid, getStudentGradeDetail } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading.server";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
@@ -33,8 +33,12 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
   }
 
   let student: Awaited<ReturnType<typeof getStudentGradeDetail>>;
+  let gradingStudentUid: string | null;
   try {
-    student = await getStudentGradeDetail(env, studentUid);
+    [student, gradingStudentUid] = await Promise.all([
+      getStudentGradeDetail(env, studentUid),
+      getPrimaryStudentUid(env, studentUid),
+    ]);
   } catch (error) {
     logger.error("Failed to load student grading detail", error);
     if (isStudentNotFoundError(error)) {
@@ -48,10 +52,10 @@ export const loader = async ({ params, request, context }: LoaderFunctionArgs) =
     throw routeError(500, "student.load_failed", "학생 정보를 불러오지 못했어요");
   }
 
-  const existingGrading = await getStudentGrading(env, currentUser.id, studentUid, true);
-  if (!student) {
+  if (!student || !gradingStudentUid) {
     throw routeError(404, "student.not_found", "해당하는 학생 정보가 없어요");
   }
+  const existingGrading = await getStudentGrading(env, currentUser.id, gradingStudentUid, true);
   return {
     student,
     existingGrading: existingGrading || null,
@@ -76,9 +80,22 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
     return redirect(`/students/${studentUid}`);
   }
 
+  let gradingStudentUid: string | null;
+  try {
+    gradingStudentUid = await getPrimaryStudentUid(env, studentUid);
+  } catch (error) {
+    logger.error("Failed to resolve the primary student for grading", error, {
+      currentUserId: currentUser.id,
+    });
+    return { error: "학생 정보를 확인하지 못했어요. 잠시 후 다시 시도해주세요" };
+  }
+  if (!gradingStudentUid) {
+    return { error: "존재하지 않는 학생이에요" };
+  }
+
   if (intent === "delete") {
     try {
-      await deleteStudentGrading(env, currentUser.id, studentUid);
+      await deleteStudentGrading(env, currentUser.id, gradingStudentUid);
       return redirect(`/students/${studentUid}`);
     } catch (error) {
       logger.error("Error deleting grading", error, {
@@ -95,7 +112,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
 
   const selectedTags = formData.getAll("tags") as StudentGradingTagValue[];
   try {
-    await upsertStudentGrading(env, currentUser.id, studentUid, comment || null, selectedTags);
+    await upsertStudentGrading(env, currentUser.id, gradingStudentUid, comment || null, selectedTags);
     return redirect(`/students/${studentUid}`);
   } catch (error) {
     logger.error("Error saving grading", error, {

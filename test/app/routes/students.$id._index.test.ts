@@ -89,8 +89,7 @@ beforeEach(() => {
     student: {
       uid: "student-a",
       released: true,
-      recruitments: [],
-      studentVariant: { primaryStudent: { uid: "student-a" } },
+      studentVariant: { primaryStudent: { uid: "student-a", recruitments: [] } },
       character: { studentVariants: [{ primaryStudent: { uid: "student-a" } }] },
     },
   });
@@ -107,6 +106,45 @@ beforeEach(() => {
     knowledgeEntries: [],
     knowledgeLookupStatus: "available",
     knowledgeLookupError: null,
+  });
+});
+
+describe("student detail loader for a multiclass form", () => {
+  it("reads recruitments and gradings of the primary form on a non-primary form page", async () => {
+    mockGetStudentDetailData.mockResolvedValueOnce({
+      studentCatalog: {},
+      student: {
+        uid: "form-2",
+        name: "폼 2",
+        released: true,
+        studentVariant: {
+          primaryStudent: { uid: "form-1", recruitments: [{ recruitmentGroup: { uid: "group-1" } }] },
+        },
+        character: { studentVariants: [{ primaryStudent: { uid: "form-1" } }] },
+      },
+    });
+    mockGetTimelineContentsByRecruitmentGroupUids.mockResolvedValueOnce([
+      {
+        uid: "pickup-1",
+        name: "픽업",
+        startAt: "2026-10-13T02:00:00.000Z",
+        endAt: "2026-10-27T02:00:00.000Z",
+        imageUrl: null,
+        recruitmentGroupUid: "group-1",
+        recruitmentStudentUids: ["form-1"],
+      },
+    ]);
+
+    const result = await loader({
+      params: { id: "form-2" },
+      context: { cloudflare: { env, ctx: undefined } },
+      request: new Request("https://mollulog.test/students/form-2"),
+    } as never);
+
+    expect(mockGetTimelineContentsByRecruitmentGroupUids).toHaveBeenCalledWith(env, ["group-1"], { ctx: undefined });
+    expect(result.recruitments.map(({ uid }) => uid)).toEqual(["pickup-1"]);
+    expect(mockGetTagCountsByStudent).toHaveBeenCalledWith(env, "form-1");
+    expect(mockGetStudentGradingsByStudentWithUsers).toHaveBeenCalledWith(env, "form-1", true, 1);
   });
 });
 
