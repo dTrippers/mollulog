@@ -1326,37 +1326,43 @@ export function buildResourceGroups(
 
   const shortageOverride = filter.shortageOnly === true;
   const hasNameOrRarityFilter = filter.search.trim().length > 0 || filter.rarities.length > 0;
-  return (
-    Array.from(grouped.entries())
-      .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
-      .map(([kindOrder, groupResources]) => {
-        const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
-        const mode = shortageOverride ? "shortage" : resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
-        const policy = getCategoryDisplayPolicy(kindOrder);
-        const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
-        const modeResources = groupResources.filter(
-          (resource) =>
-            mode === "all" ||
-            mode === "shortage" ||
-            resource.requiredAmount > 0 ||
-            (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null &&
-              ((quantities[getInventoryUid(resource)] ?? 0) > 0 ||
-                hasEquipmentTypeRequirement(groupResources, getUniversalEquipmentBlueprintTypeKey(resource.uid)))) ||
-            (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
-              (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
-            (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
-              (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
-            (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
-        );
-        const filteredResources = filterResourceInventoryResources(
-          modeResources.map((resource) => ({
-            ...resource,
-            shortage: shortageByUid.get(getInventoryUid(resource)) ?? false,
-          })),
-          { ...filter, shortageOnly: mode === "shortage" },
-        );
+  return Array.from(grouped.entries())
+    .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
+    .map(([kindOrder, groupResources]) => {
+      const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
+      const mode = shortageOverride ? "shortage" : resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
+      const policy = getCategoryDisplayPolicy(kindOrder);
+      const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
+      const modeResources = groupResources.filter(
+        (resource) =>
+          mode === "all" ||
+          mode === "shortage" ||
+          resource.requiredAmount > 0 ||
+          (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null &&
+            ((quantities[getInventoryUid(resource)] ?? 0) > 0 ||
+              hasEquipmentTypeRequirement(groupResources, getUniversalEquipmentBlueprintTypeKey(resource.uid)))) ||
+          (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
+            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
+          (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
+            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
+          (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
+      );
+      const filteredResources = filterResourceInventoryResources(
+        modeResources.map((resource) => ({
+          ...resource,
+          shortage: shortageByUid.get(getInventoryUid(resource)) ?? false,
+        })),
+        { ...filter, shortageOnly: mode === "shortage" },
+      );
+      // Name and rarity filters hide categories without a match. In the shortage tab, a category
+      // whose resources match them stays visible with its empty state even when none are short.
+      const keepWhenEmpty =
+        !hasNameOrRarityFilter ||
+        (mode === "shortage" &&
+          filterResourceInventoryResources(groupResources, { ...filter, shortageOnly: false }).length > 0);
 
-        return {
+      return {
+        group: {
           kindOrder,
           resources: filteredResources,
           allocationResources: groupResources,
@@ -1364,12 +1370,12 @@ export function buildResourceGroups(
           mode,
           shortageOverride,
           hasNeededResources,
-        };
-      })
-      // The shortage filter keeps empty categories so their placeholder stays visible;
-      // name and rarity filters still hide categories without a match.
-      .filter((group) => group.resources.length > 0 || !hasNameOrRarityFilter)
-  );
+        },
+        keepWhenEmpty,
+      };
+    })
+    .filter(({ group, keepWhenEmpty }) => group.resources.length > 0 || keepWhenEmpty)
+    .map(({ group }) => group);
 }
 
 export function buildInventoryResources(

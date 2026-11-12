@@ -742,6 +742,37 @@ describe("resource inventory filter", () => {
     expect(groups).toEqual([]);
   });
 
+  it("keeps shortage-mode categories whose resources match the name or rarity filter even with no shortage", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+    const stocked = { "1": 3, "2": 3, "3": 3 };
+    const allRarities = RESOURCE_INVENTORY_RARITY_OPTIONS.map(({ value }) => value);
+
+    const overridden = buildResourceGroups(
+      inventoryResources,
+      {},
+      { search: "", rarities: allRarities, shortageOnly: true },
+      0,
+      stocked,
+    );
+    expect(overridden.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
+
+    const shortageTab = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "shortage" },
+      { search: "hammer", rarities: [] },
+      0,
+      stocked,
+    );
+    expect(shortageTab.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
+  });
+
   it("keeps only known category modes when restoring them from storage", () => {
     expect(normalizeCategoryModes({ "3": "shortage", "4": "needed", "5": "unknown", abc: "all", "6": 1 })).toEqual({
       3: "shortage",
