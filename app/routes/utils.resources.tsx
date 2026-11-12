@@ -8,10 +8,13 @@ import { loadGrowthPlannerData } from "./utils.growth._components/growth-data.se
 import type { GrowthLayoutContext, GrowthStudent } from "./utils.growth._components/types";
 import {
   createResourceInventoryFilterState,
+  normalizeStoredResourceInventoryFilter,
   type ResourceInventoryFilterState,
+  type StoredResourceInventoryFilter,
 } from "./utils.resources._components/ResourceInventoryFilterPanel";
 
 const FARMING_SETTINGS_STORAGE_KEY = "mollulog::resources::farming-settings";
+const RESOURCE_INVENTORY_FILTER_STORAGE_KEY = "mollulog::resources::inventory-filter";
 
 export type FarmingPlannerSettings = {
   showNormal: boolean;
@@ -49,6 +52,7 @@ export default function ResourcePlannerLayout() {
   const [farmingSettings, setFarmingSettings] = useState(DEFAULT_FARMING_SETTINGS);
   const [resourceInventoryFilter, setResourceInventoryFilter] = useState(createResourceInventoryFilterState);
   const [farmingSettingsHydrated, setFarmingSettingsHydrated] = useState(false);
+  const [resourceInventoryFilterHydrated, setResourceInventoryFilterHydrated] = useState(false);
   const managedStudentListKey = loaderData.managedStudents.map((student) => student.uid).join(":");
   const syncedManagedStudentListKeyRef = useRef(managedStudentListKey);
 
@@ -65,6 +69,24 @@ export default function ResourcePlannerLayout() {
       // Ignore localStorage errors.
     }
   }, [farmingSettings, farmingSettingsHydrated]);
+
+  useEffect(() => {
+    const storedFilter = readStoredResourceInventoryFilter();
+    // The search text is not remembered; keep whatever the user typed before hydration.
+    setResourceInventoryFilter((current) => ({ ...current, ...storedFilter }));
+    setResourceInventoryFilterHydrated(true);
+  }, []);
+
+  const { rarities: filterRarities, shortageOnly: filterShortageOnly } = resourceInventoryFilter;
+  useEffect(() => {
+    if (!resourceInventoryFilterHydrated) return;
+    try {
+      const stored: StoredResourceInventoryFilter = { rarities: filterRarities, shortageOnly: filterShortageOnly };
+      localStorage.setItem(RESOURCE_INVENTORY_FILTER_STORAGE_KEY, JSON.stringify(stored));
+    } catch {
+      // Ignore localStorage errors.
+    }
+  }, [filterRarities, filterShortageOnly, resourceInventoryFilterHydrated]);
 
   useEffect(() => {
     if (syncedManagedStudentListKeyRef.current === managedStudentListKey) return;
@@ -123,4 +145,13 @@ function normalizeFarmingSettings(value: unknown): FarmingPlannerSettings {
         ? settings.prioritizeHighTier
         : DEFAULT_FARMING_SETTINGS.prioritizeHighTier,
   };
+}
+
+function readStoredResourceInventoryFilter(): Partial<StoredResourceInventoryFilter> {
+  try {
+    const saved = localStorage.getItem(RESOURCE_INVENTORY_FILTER_STORAGE_KEY);
+    return saved ? normalizeStoredResourceInventoryFilter(JSON.parse(saved)) : {};
+  } catch {
+    return {};
+  }
 }

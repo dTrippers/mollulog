@@ -20,9 +20,11 @@ import {
   EquipmentSubGroups,
   formatCharacterExpEquivalent,
   getResourceInventoryEmptyText,
+  normalizeCategoryModes,
 } from "~/routes/utils.resources._components/ResourceInventoryEditor";
 import {
   filterResourceInventoryResources,
+  normalizeStoredResourceInventoryFilter,
   RESOURCE_INVENTORY_RARITY_OPTIONS,
   type ResourceInventoryFilterState,
 } from "~/routes/utils.resources._components/ResourceInventoryFilterPanel";
@@ -640,6 +642,124 @@ describe("resource inventory filter", () => {
     expect(filteredGroups).toEqual([]);
   });
 
+  it("shows only short resources in a category set to the shortage mode", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: resource.uid === "3" ? 0 : 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      { [GROWTH_RESOURCE_KIND_ORDER.favor]: "shortage" },
+      { search: "", rarities: [] },
+      0,
+      { "1": 3, "2": 1 },
+    );
+
+    expect(groups.map((group) => [group.mode, group.shortageOverride])).toEqual([["shortage", false]]);
+    expect(groups[0]?.resources.map((resource) => resource.uid)).toEqual(["2"]);
+  });
+
+  it("overrides every category mode with the shortage filter and restores them when it is cleared", () => {
+    const favorResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: resource.uid === "1" ? 3 : 0,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+    const elephResource = {
+      uid: "9001",
+      name: "학생 엘레프",
+      rarity: 1,
+      type: ResourceTypeEnum.Item,
+      category: "secretstone",
+      subCategory: null,
+      requiredAmount: 5,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.eleph,
+    };
+    const categoryModes = {
+      [GROWTH_RESOURCE_KIND_ORDER.favor]: "all",
+      [GROWTH_RESOURCE_KIND_ORDER.eleph]: "needed",
+    } as const;
+    const quantities = { "1": 0, "9001": 5 };
+
+    const overridden = buildResourceGroups(
+      [...favorResources, elephResource],
+      categoryModes,
+      { search: "", rarities: [], shortageOnly: true },
+      0,
+      quantities,
+    );
+    expect(
+      overridden.map((group) => [group.kindOrder, group.mode, group.shortageOverride, group.resources.length]),
+    ).toEqual(
+      expect.arrayContaining([
+        [GROWTH_RESOURCE_KIND_ORDER.favor, "shortage", true, 1],
+        [GROWTH_RESOURCE_KIND_ORDER.eleph, "shortage", true, 0],
+      ]),
+    );
+    expect(overridden).toHaveLength(2);
+
+    const restored = buildResourceGroups(
+      [...favorResources, elephResource],
+      categoryModes,
+      { search: "", rarities: [], shortageOnly: false },
+      0,
+      quantities,
+    );
+    expect(restored.map((group) => [group.kindOrder, group.mode, group.shortageOverride])).toEqual(
+      expect.arrayContaining([
+        [GROWTH_RESOURCE_KIND_ORDER.favor, "all", false],
+        [GROWTH_RESOURCE_KIND_ORDER.eleph, "needed", false],
+      ]),
+    );
+  });
+
+  it("still hides categories without a match when a name filter is combined with the shortage filter", () => {
+    const inventoryResources = resources.map((resource) => ({
+      ...resource,
+      type: ResourceTypeEnum.Item,
+      category: "favor",
+      subCategory: null,
+      requiredAmount: 3,
+      kindOrder: GROWTH_RESOURCE_KIND_ORDER.favor,
+    }));
+
+    const groups = buildResourceGroups(
+      inventoryResources,
+      {},
+      { search: "zzz", rarities: [], shortageOnly: true },
+      0,
+      {},
+    );
+
+    expect(groups).toEqual([]);
+  });
+
+  it("keeps only known category modes when restoring them from storage", () => {
+    expect(normalizeCategoryModes({ "3": "shortage", "4": "needed", "5": "unknown", abc: "all", "6": 1 })).toEqual({
+      3: "shortage",
+      4: "needed",
+    });
+    expect(normalizeCategoryModes(null)).toEqual({});
+    expect(normalizeCategoryModes(["all"])).toEqual({});
+  });
+
+  it("restores only valid rarity and shortage filter values from storage", () => {
+    expect(normalizeStoredResourceInventoryFilter({ rarities: [4, 4, 9, "2", 1], shortageOnly: true })).toEqual({
+      rarities: [4, 1],
+      shortageOnly: true,
+    });
+    expect(normalizeStoredResourceInventoryFilter({ search: "망치", shortageOnly: "yes" })).toEqual({});
+    expect(normalizeStoredResourceInventoryFilter("broken")).toEqual({});
+  });
+
   it("does not classify a resource as short when its choice boxes cover the final deficit", () => {
     const inventoryResources = [
       {
@@ -672,7 +792,7 @@ describe("resource inventory filter", () => {
       { "101001": 0, "150028": 5 },
     );
 
-    expect(groups).toEqual([]);
+    expect(groups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("keeps shared equipment choice-box allocation stable when shortage filtering narrows tiles", () => {
@@ -835,7 +955,7 @@ describe("resource inventory filter", () => {
       { "101004": 0, "150031": 0, "501000": 7 },
     );
 
-    expect(groups).toEqual([]);
+    expect(groups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("keeps shared skill-material choice-box allocation stable when shortage filtering narrows tiles", () => {
@@ -912,7 +1032,7 @@ describe("resource inventory filter", () => {
       10_000,
       { "13": 1 },
     );
-    expect(coveredGroups).toEqual([]);
+    expect(coveredGroups.map((group) => [group.mode, group.resources.length])).toEqual([["shortage", 0]]);
   });
 
   it("formats activity-report equivalents as floored natural-number counts", () => {

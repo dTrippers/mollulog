@@ -44,8 +44,8 @@ import {
   getUniversalEquipmentBlueprintTypeKey,
 } from "~/domain/growth-resource";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
-import { cn } from "~/lib/utils";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { cn } from "~/lib/utils";
 import { getGrowthPlannerCatalogResourceKindOrder, type ItemCatalogResource } from "~/models/item-catalog";
 import {
   filterResourceInventoryResources,
@@ -69,7 +69,10 @@ type ResourceInventoryEditorActionData = {
   savedAt?: number;
 };
 
-type ResourceMode = "needed" | "all";
+export type ResourceMode = "all" | "needed" | "shortage";
+
+const RESOURCE_MODES: readonly ResourceMode[] = ["all", "needed", "shortage"];
+const CATEGORY_MODES_STORAGE_KEY = "mollulog::resources::inventory-category-modes";
 
 type NumberInputFlowNavigation = ReturnType<typeof useNumberInputFlowNavigation>;
 
@@ -84,6 +87,8 @@ type ResourceGroupView = {
   resources: InventoryResource[];
   allocationResources: InventoryResource[];
   policy: CategoryDisplayPolicy;
+  mode: ResourceMode;
+  shortageOverride: boolean;
   hasNeededResources: boolean;
 };
 
@@ -95,17 +100,17 @@ type CategoryDisplayPolicy = {
 
 const DEFAULT_CATEGORY_POLICY: CategoryDisplayPolicy = {
   defaultMode: "needed",
-  modes: ["all", "needed"],
+  modes: ["all", "needed", "shortage"],
   emptyNeededDefaultMode: "all",
 };
 const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
   [GROWTH_RESOURCE_KIND_ORDER.eleph]: {
     defaultMode: "needed",
-    modes: ["all", "needed"],
+    modes: ["all", "needed", "shortage"],
     emptyNeededDefaultMode: "needed",
   },
   [GROWTH_RESOURCE_KIND_ORDER.characterExp]: { defaultMode: "all", modes: ["all"] },
-  [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed"] },
+  [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed", "shortage"] },
 };
 const CHARACTER_EXP_KIND_ORDER = GROWTH_RESOURCE_KIND_ORDER.characterExp;
 const CATEGORY_SCROLL_OFFSET = 80;
@@ -122,7 +127,7 @@ export default function ResourceInventoryEditor({
   const submittedQuantitiesRef = useRef<Record<string, number> | null>(null);
   const [baseQuantities, setBaseQuantities] = useState<Record<string, number>>(ownedQuantities);
   const [draftQuantities, setDraftQuantities] = useState<Record<string, number>>(ownedQuantities);
-  const [categoryModes, setCategoryModes] = useState<Record<number, ResourceMode>>({});
+  const [categoryModes, setCategoryModes] = usePersistedCategoryModes();
   const numberInputFlowNavigation = useNumberInputFlowNavigation();
 
   const inventoryResources = useMemo(
@@ -209,7 +214,6 @@ export default function ResourceInventoryEditor({
             >
               <ResourceGroup
                 group={group}
-                mode={resolveCategoryMode(group.kindOrder, categoryModes, group.hasNeededResources)}
                 ownedQuantities={baseQuantities}
                 draftQuantities={draftQuantities}
                 requiredCharacterExp={requiredResources.characterExp}
@@ -266,6 +270,56 @@ function CreditRequirementSummary({ credit }: { credit: number }) {
       </div>
     </SectionCard>
   );
+}
+
+function usePersistedCategoryModes(): [
+  Record<number, ResourceMode>,
+  Dispatch<SetStateAction<Record<number, ResourceMode>>>,
+] {
+  const [categoryModes, setCategoryModes] = useState<Record<number, ResourceMode>>({});
+  const [hydrated, setHydrated] = useState(false);
+
+  useEffect(() => {
+    const storedModes = readStoredCategoryModes();
+    // Modes chosen before hydration (such as a category query) take precedence over stored ones.
+    setCategoryModes((current) => ({ ...storedModes, ...current }));
+    setHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(CATEGORY_MODES_STORAGE_KEY, JSON.stringify(categoryModes));
+    } catch {
+      // Ignore localStorage errors.
+    }
+  }, [categoryModes, hydrated]);
+
+  return [categoryModes, setCategoryModes];
+}
+
+function readStoredCategoryModes(): Record<number, ResourceMode> {
+  try {
+    const saved = localStorage.getItem(CATEGORY_MODES_STORAGE_KEY);
+    return saved ? normalizeCategoryModes(JSON.parse(saved)) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function normalizeCategoryModes(value: unknown): Record<number, ResourceMode> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const modes: Record<number, ResourceMode> = {};
+  for (const [key, mode] of Object.entries(value)) {
+    const kindOrder = Number(key);
+    if (Number.isInteger(kindOrder) && RESOURCE_MODES.includes(mode as ResourceMode)) {
+      modes[kindOrder] = mode as ResourceMode;
+    }
+  }
+  return modes;
 }
 
 function useUnsavedChangesGuard({ hasChanges }: { hasChanges: boolean }) {
@@ -380,7 +434,6 @@ function useScrollIntoCategoryOnQuery({
 
 function ResourceGroup({
   group,
-  mode,
   ownedQuantities,
   draftQuantities,
   requiredCharacterExp,
@@ -389,7 +442,6 @@ function ResourceGroup({
   onQuantityChange,
 }: {
   group: ResourceGroupView;
-  mode: ResourceMode;
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
   requiredCharacterExp: number;
@@ -397,7 +449,7 @@ function ResourceGroup({
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
 }) {
-  const { kindOrder, resources, allocationResources, policy } = group;
+  const { kindOrder, resources, allocationResources, policy, mode, shortageOverride } = group;
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   const isFavorGroup = kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor;
   return (
@@ -415,13 +467,16 @@ function ResourceGroup({
       ) : null}
       {policy.modes.length > 1 ? (
         <div className="px-3 pt-2">
-          <CategoryModeSwitch kindOrder={kindOrder} mode={mode} onModeChange={onModeChange} />
+          <CategoryModeSwitch
+            kindOrder={kindOrder}
+            mode={mode}
+            disabled={shortageOverride}
+            onModeChange={onModeChange}
+          />
         </div>
       ) : null}
       {resources.length === 0 ? (
-        <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-          {mode === "needed" ? "학생들의 성장 목표를 선택하여 필요 재화량을 계산해보세요" : "표시할 재화가 없어요"}
-        </div>
+        <div className="px-3 py-6 text-center text-sm text-muted-foreground">{getResourceGroupEmptyText(mode)}</div>
       ) : kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipment ? (
         <EquipmentSubGroups
           resources={resources}
@@ -459,21 +514,42 @@ function ResourceGroup({
   );
 }
 
+const CATEGORY_MODE_LABELS: Record<ResourceMode, string> = {
+  all: "전체",
+  needed: "필요한 재화",
+  shortage: "부족한 재화",
+};
+
+function getResourceGroupEmptyText(mode: ResourceMode): string {
+  switch (mode) {
+    case "needed":
+      return "학생들의 성장 목표를 선택하여 필요 재화량을 계산해보세요";
+    case "shortage":
+      return "부족한 재화가 없어요";
+    case "all":
+      return "표시할 재화가 없어요";
+  }
+}
+
 function CategoryModeSwitch({
   kindOrder,
   mode,
+  disabled,
   onModeChange,
 }: {
   kindOrder: number;
   mode: ResourceMode;
+  disabled: boolean;
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
 }) {
   return (
     <FilterButtons
-      buttonProps={[
-        { text: "전체", active: mode === "all", onToggle: () => onModeChange(kindOrder, "all") },
-        { text: "필요한 재화", active: mode === "needed", onToggle: () => onModeChange(kindOrder, "needed") },
-      ]}
+      buttonProps={RESOURCE_MODES.map((buttonMode) => ({
+        text: CATEGORY_MODE_LABELS[buttonMode],
+        active: mode === buttonMode,
+        disabled,
+        onToggle: () => onModeChange(kindOrder, buttonMode),
+      }))}
       exclusive
       atLeastOne
       size="sm"
@@ -1248,44 +1324,52 @@ export function buildResourceGroups(
     }
   }
 
-  const hasActiveFilter = isResourceInventoryFilterActive(filter);
-  return Array.from(grouped.entries())
-    .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
-    .map(([kindOrder, groupResources]) => {
-      const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
-      const mode = resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
-      const policy = getCategoryDisplayPolicy(kindOrder);
-      const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
-      const modeResources = groupResources.filter(
-        (resource) =>
-          mode === "all" ||
-          resource.requiredAmount > 0 ||
-          (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null &&
-            ((quantities[getInventoryUid(resource)] ?? 0) > 0 ||
-              hasEquipmentTypeRequirement(groupResources, getUniversalEquipmentBlueprintTypeKey(resource.uid)))) ||
-          (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
-            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
-          (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
-            (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
-          (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
-      );
-      const filteredResources = filterResourceInventoryResources(
-        modeResources.map((resource) => ({
-          ...resource,
-          shortage: shortageByUid.get(getInventoryUid(resource)) ?? false,
-        })),
-        filter,
-      );
+  const shortageOverride = filter.shortageOnly === true;
+  const hasNameOrRarityFilter = filter.search.trim().length > 0 || filter.rarities.length > 0;
+  return (
+    Array.from(grouped.entries())
+      .sort(([a], [b]) => compareGrowthResourceKindOrder(a, b))
+      .map(([kindOrder, groupResources]) => {
+        const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
+        const mode = shortageOverride ? "shortage" : resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
+        const policy = getCategoryDisplayPolicy(kindOrder);
+        const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
+        const modeResources = groupResources.filter(
+          (resource) =>
+            mode === "all" ||
+            mode === "shortage" ||
+            resource.requiredAmount > 0 ||
+            (getUniversalEquipmentBlueprintTypeKey(resource.uid) !== null &&
+              ((quantities[getInventoryUid(resource)] ?? 0) > 0 ||
+                hasEquipmentTypeRequirement(groupResources, getUniversalEquipmentBlueprintTypeKey(resource.uid)))) ||
+            (getEquipmentBlueprintChoiceBoxTier(resource.uid) !== null &&
+              (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
+            (getSkillMaterialChoiceBoxRarity(resource.uid) !== null &&
+              (quantities[getInventoryUid(resource)] ?? 0) > 0) ||
+            (kindOrder === CHARACTER_EXP_KIND_ORDER && requiredCharacterExp > 0),
+        );
+        const filteredResources = filterResourceInventoryResources(
+          modeResources.map((resource) => ({
+            ...resource,
+            shortage: shortageByUid.get(getInventoryUid(resource)) ?? false,
+          })),
+          { ...filter, shortageOnly: mode === "shortage" },
+        );
 
-      return {
-        kindOrder,
-        resources: filteredResources,
-        allocationResources: groupResources,
-        policy,
-        hasNeededResources,
-      };
-    })
-    .filter((group) => group.resources.length > 0 || !hasActiveFilter);
+        return {
+          kindOrder,
+          resources: filteredResources,
+          allocationResources: groupResources,
+          policy,
+          mode,
+          shortageOverride,
+          hasNeededResources,
+        };
+      })
+      // The shortage filter keeps empty categories so their placeholder stays visible;
+      // name and rarity filters still hide categories without a match.
+      .filter((group) => group.resources.length > 0 || !hasNameOrRarityFilter)
+  );
 }
 
 export function buildInventoryResources(
