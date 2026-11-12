@@ -213,6 +213,8 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 - Elements of the same kind keep one width and even spacing whatever their number: three tier targets do not stretch to fill a row, and a column of owned currencies is evenly spaced.
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
 - Inputs for values of one domain, such as skill levels or equipment slots, share one bordered field split by internal dividers, as in the scanner review. A hint below a field, such as the current value, sits in its own row so the fields stay aligned.
+- A horizontal bar list with a label column and a value column lays all rows out on one shared grid: the label and value columns take the width of their widest content, and the bar takes all the remaining width. Do not reserve fixed-width label or value columns, which leave the bar short and a wide gap before short values.
+- Mark the row that holds the Sensei's own student (내 학생) by highlighting the whole row with a faint fill and hairline ring, with a "내 학생 성장도" legend below the list, as in the student statistics growth chart. Do not add inline "내 학생" text or a separate marker on the bar.
 
 ## Motion
 

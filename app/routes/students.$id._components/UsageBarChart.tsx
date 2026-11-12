@@ -3,6 +3,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { Button } from "~/components/v2/primitives/Button";
 import { Skeleton } from "~/components/v2/primitives/Skeleton";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { cn } from "~/lib/utils";
 
 type UsageChartCardProps = {
   title: string;
@@ -22,7 +23,9 @@ type UsageBarListProps<T> = {
   renderLabel: (row: T) => ReactNode;
   renderDescription?: (row: T) => ReactNode;
   renderSubLabel?: (row: T) => ReactNode;
-  renderMarker?: (row: T) => boolean;
+  isHighlighted?: (row: T) => boolean;
+  /** Read out on a highlighted row, which is otherwise marked only by its fill. */
+  highlightLabel?: string;
   renderValue: (row: T) => ReactNode;
   getBarStyle?: (row: T) => CSSProperties;
 };
@@ -50,7 +53,20 @@ export function UsageChartCard({ title, loading = false, failed = false, onRetry
   );
 }
 
-export function UsageBarList<T>({ variant, rows, getKey, getRatio, renderLabel, renderDescription, renderSubLabel, renderMarker, renderValue, getBarStyle }: UsageBarListProps<T>) {
+// The row the signed-in Sensei's own student falls in: a faint fill with a hairline ring, pulled out
+// by its own padding so the label, bar, and value columns stay aligned with the other rows.
+const MY_TIER_HIGHLIGHT_CLASS_NAME = "-mx-1.5 rounded-md bg-v2-fg/8 px-1.5 ring-1 ring-v2-fg/15";
+
+export function UsageBarLegendHighlight({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-2.5 flex items-center gap-1.5 text-xs leading-[1.43] text-v2-fg-tertiary">
+      <span className="size-3 shrink-0 rounded-[3px] bg-v2-fg/8 ring-1 ring-v2-fg/15" aria-hidden="true" />
+      {children}
+    </p>
+  );
+}
+
+export function UsageBarList<T>({ variant, rows, getKey, getRatio, renderLabel, renderDescription, renderSubLabel, isHighlighted, highlightLabel, renderValue, getBarStyle }: UsageBarListProps<T>) {
   if (variant === "boss") {
     return (
       <div className="space-y-3">
@@ -87,24 +103,32 @@ export function UsageBarList<T>({ variant, rows, getKey, getRatio, renderLabel, 
     );
   }
 
+  // One grid for every row: the label and value columns take their widest content, and the bar takes the rest.
   return (
-    <div className="space-y-1.5">
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-2.5 gap-y-1.5">
       {rows.map((row) => {
         const ratio = getRatio(row);
         const description = renderDescription?.(row);
+        const highlighted = isHighlighted?.(row) ?? false;
         return (
-          <div key={getKey(row)} className="grid min-h-[26px] grid-cols-[5.75rem_minmax(0,1fr)_7.5rem] items-center gap-2.5 text-[13px] leading-[1.43]">
+          <div
+            key={getKey(row)}
+            className={cn(
+              "col-span-3 grid min-h-[26px] grid-cols-subgrid items-center text-[13px] leading-[1.43]",
+              highlighted && MY_TIER_HIGHLIGHT_CLASS_NAME,
+            )}
+          >
             <div className="min-w-0">
               <div className="inline-flex min-w-0 items-center gap-1 whitespace-nowrap font-medium text-v2-fg">
                 {renderLabel(row)}
                 {description ? <small className="text-[11px] font-normal text-v2-fg-tertiary">{description}</small> : null}
-                {renderSubLabel ? <small className="ml-1 text-[11px] font-normal text-v2-fg-tertiary">{renderSubLabel(row)}</small> : null}
+                {highlighted && highlightLabel ? <span className="sr-only">{highlightLabel}</span> : null}
               </div>
             </div>
             <div className="min-w-0">
-              <div className="relative h-2 w-full overflow-visible rounded-full bg-v2-inset">
+              {/* The highlight fill matches the inset track, so the highlighted row lifts its track. */}
+              <div className={cn("h-2 w-full rounded-full", highlighted ? "bg-v2-fg/12" : "bg-v2-inset")}>
                 <div className="h-full rounded-full" style={{ width: `${Math.min(Math.max(ratio, 0), 1) * 100}%`, minWidth: ratio > 0 ? 2 : undefined, backgroundColor: "var(--v2-fg-secondary)", ...getBarStyle?.(row) }} />
-                {renderMarker?.(row) ? <span className="absolute -top-1 -bottom-1 w-0.5 rounded-sm bg-v2-fg" style={{ left: `${Math.min(Math.max(ratio, 0), 1) * 100}%` }} aria-hidden="true" /> : null}
               </div>
             </div>
             <div className="whitespace-nowrap text-right text-[13px] text-v2-fg-secondary tabular-nums">{renderValue(row)}</div>

@@ -145,10 +145,12 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
   }, [draftValue]);
 
   return (
-    <fieldset
+    // biome-ignore lint/a11y/useSemanticElements: A <fieldset> does not stretch its flex content to its own height in Chromium, which left the step buttons and the input stuck to the top of the control.
+    <div
+      role="group"
       aria-label={accessibleLabel}
       className={cn(
-        "m-0 flex h-7 min-w-0 items-stretch rounded-md border border-v2-control-border-strong bg-v2-surface p-0 text-sm text-v2-fg dark:border-v2-control-border",
+        "flex h-7 min-w-0 items-stretch rounded-md border border-v2-control-border-strong bg-v2-surface text-sm text-v2-fg dark:border-v2-control-border",
         warning && "bg-v2-warning-subtle",
         v2FocusRing,
         className,
@@ -211,7 +213,7 @@ const GroupedNumberInput = forwardRef<HTMLInputElement, GroupedNumberInputProps>
           최대
         </StepButton>
       ) : null}
-    </fieldset>
+    </div>
   );
 });
 

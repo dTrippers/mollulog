@@ -1,12 +1,14 @@
 import { formatTierKey, formatTierLabel, TIER_COLORS } from "./raidTierVisual";
 import type { StudentRaidInvestment } from "./StudentRaidSummaryModel";
-import { UsageBarList, UsageChartCard } from "./UsageBarChart";
+import { UsageBarLegendHighlight, UsageBarList, UsageChartCard } from "./UsageBarChart";
 
 type InvestmentChartRow = { id: string; tier: number; includedTiers: number[]; count: number; ratio: number };
 
 export default function StudentRaidInvestmentChart({ investment, signedIn }: { investment: StudentRaidInvestment; signedIn: boolean }) {
   const rows = buildInvestmentRows(investment);
   const insight = getInvestmentInsight(rows);
+  const myTier = signedIn ? investment.myTier : null;
+  const isMyTierRow = (row: InvestmentChartRow) => myTier !== null && row.includedTiers.includes(myTier);
   return (
     <UsageChartCard title="성장도별 출전 비율" empty={investment.ownCount === 0} emptyText="모집 편성 기록이 없어요.">
       <UsageBarList
@@ -16,11 +18,12 @@ export default function StudentRaidInvestmentChart({ investment, signedIn }: { i
         getRatio={(row) => row.ratio}
         renderLabel={(row) => <TierBadge tier={row.tier} />}
         renderDescription={(row) => row.id === "tier-5-and-unique-1" ? "5성 포함" : row.id === "tier-3-or-lower" ? "이하" : null}
-        renderSubLabel={(row) => signedIn && investment.myTier !== null && row.includedTiers.includes(investment.myTier) ? "내 학생" : null}
-        renderMarker={(row) => signedIn && investment.myTier !== null && row.includedTiers.includes(investment.myTier)}
+        isHighlighted={isMyTierRow}
+        highlightLabel="내 학생"
         renderValue={(row) => <><strong className="font-medium text-v2-fg">{formatPercent(row.ratio)}</strong> · {row.count.toLocaleString()}회</>}
         getBarStyle={(row) => ({ backgroundColor: TIER_COLORS[formatTierKey(row.tier)] })}
       />
+      {rows.some(isMyTierRow) ? <UsageBarLegendHighlight>내 학생 성장도</UsageBarLegendHighlight> : null}
       {insight ? <p className="mt-3 border-t border-v2-divider pt-[10px] text-[13px] leading-[1.43] text-v2-fg-secondary"><span className="font-semibold text-v2-fg">{insight.label}</span> · {insight.description}</p> : null}
     </UsageChartCard>
   );
