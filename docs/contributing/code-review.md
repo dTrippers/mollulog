@@ -53,9 +53,14 @@ single owner for commands and claim-to-evidence mapping.
 - Is intent-based action branching verified on the server?
 - Is the boundary between route-local and shared UI intact?
 - For changed user-visible flows, are the relevant loading, empty, failure,
-  retry/control adjacency, focus-recovery, keyboard, and mobile fixed-bar states
-  handled? Check the relevant render and interaction evidence; concrete
-  accessibility or changed-UX deviations are must-fix findings.
+  retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
+  the relevant render and interaction evidence; a concrete changed-UX deviation
+  is a must-fix finding.
+- Accessibility must-fix findings are a control that cannot be operated with the
+  keyboard, an interactive control without an accessible name, information
+  conveyed only by an image or color, and body text too low in contrast to read.
+  Live-region announcements, `aria-busy`, focus placement after closing an
+  element, and tooltip Escape handling are not must-fix unless they block a flow.
 
 ## Recommended
 
