@@ -749,7 +749,7 @@ function EditPickupForm() {
         >
           {barMessage}
         </span>
-        <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="ml-auto flex items-center gap-2">
           {isEditing ? (
             <Button variant="danger-subtle" disabled={deleting || saving} onClick={() => setDeleteOpen(true)}>
               삭제
@@ -757,7 +757,6 @@ function EditPickupForm() {
           ) : null}
           <Button
             variant="primary"
-            className="flex-1 sm:flex-none"
             disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
             onClick={handleSave}
           >
