@@ -88,4 +88,13 @@ describe("HintChip", () => {
   it("gives the detail to a screen reader while closed", () => {
     expect(renderChip().textContent).toContain("상세 문구");
   });
+
+  it("shows the chip variant's label and opens its detail on tap", () => {
+    render(<HintChip variant="chip" label="선택권" description="대상 학생 중 한 명을 골라 모집합니다." />);
+    const chip = screen.getByRole("button");
+    expect(chip.textContent).toBe("선택권: 대상 학생 중 한 명을 골라 모집합니다.");
+    fireEvent.pointerDown(chip, pointer("touch"));
+    fireEvent.click(chip, { detail: 1 });
+    expect(screen.getByRole("dialog").textContent).toContain("대상 학생 중 한 명을 골라 모집합니다.");
+  });
 });

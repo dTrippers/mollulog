@@ -8,6 +8,7 @@ import { getStudentGearData } from "~/models/growth-resource";
 import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { warmRaidCache } from "~/models/raid";
+import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
@@ -68,6 +69,9 @@ async function executeCacheRefreshTask(env: Env, ctx: ExecutionContext, name: Ca
       return;
     case "getCampaignFarmingStages":
       await getCampaignFarmingStages(env, true);
+      return;
+    case "getRecruitTicketSource":
+      await getRecruitTicketSource(env, true);
       return;
     case "getEventList":
       await getEventList(env, undefined, true, ctx);

@@ -6,6 +6,7 @@ import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { warmRaidCache } from "~/models/raid";
+import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
@@ -71,6 +72,10 @@ jest.mock("~/models/stage", () => ({
   getCampaignFarmingStages: jest.fn(),
 }));
 
+jest.mock("~/models/recruit-ticket", () => ({
+  getRecruitTicketSource: jest.fn(),
+}));
+
 jest.mock("~/models/growth-resource", () => ({
   getStudentGearData: jest.fn(),
   getStudentSkillCosts: jest.fn(),
@@ -128,6 +133,7 @@ const mockedGetFurnitureCatalogSource = getFurnitureCatalogSource as jest.Mocked
   typeof getFurnitureCatalogSource
 >;
 const mockedGetCampaignFarmingStages = getCampaignFarmingStages as jest.MockedFunction<typeof getCampaignFarmingStages>;
+const mockedGetRecruitTicketSource = getRecruitTicketSource as jest.MockedFunction<typeof getRecruitTicketSource>;
 const mockedGetStudentGearData = getStudentGearData as jest.MockedFunction<typeof getStudentGearData>;
 const mockedGetStudentSkillCosts = getStudentSkillCosts as jest.MockedFunction<typeof getStudentSkillCosts>;
 const mockedWarmRecruitmentCache = warmRecruitmentCache as jest.MockedFunction<typeof warmRecruitmentCache>;
@@ -169,6 +175,7 @@ beforeEach(() => {
   mockedGetItemCatalogResources.mockResolvedValue([]);
   mockedGetFurnitureCatalogSource.mockResolvedValue({ furnitures: [], themes: [] });
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
+  mockedGetRecruitTicketSource.mockResolvedValue({ products: [], pools: [], items: {} });
   mockedReconcileOcrJobs.mockResolvedValue();
   mockedPublishPendingOcrOutbox.mockResolvedValue(0);
 });
@@ -217,6 +224,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetItemCatalogResources).toHaveBeenCalledWith(env, true);
     expect(mockedGetFurnitureCatalogSource).toHaveBeenCalledWith(env, true);
     expect(mockedGetCampaignFarmingStages).toHaveBeenCalledWith(env, true);
+    expect(mockedGetRecruitTicketSource).toHaveBeenCalledWith(env, true);
     expect(kv.put).toHaveBeenCalledWith(
       SOURCE_WARM_MARKER_KEY,
       JSON.stringify({ _ver: 2, data: true, cachedAt: now }),
@@ -269,6 +277,7 @@ describe("runScheduledJobs", () => {
     expect(mockedGetItemCatalogResources).not.toHaveBeenCalled();
     expect(mockedGetFurnitureCatalogSource).not.toHaveBeenCalled();
     expect(mockedGetCampaignFarmingStages).not.toHaveBeenCalled();
+    expect(mockedGetRecruitTicketSource).not.toHaveBeenCalled();
     expect(mockedGetAllStudents).toHaveBeenCalledWith(env, true);
     expect(mockedGetStudentSkillItemsBatch).toHaveBeenCalledWith(env, ["10000", "10001"], false);
     expect(mockedGetStudentSkillCosts).toHaveBeenCalledWith(env, ["10000", "10001"], false);

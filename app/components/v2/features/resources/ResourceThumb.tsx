@@ -4,8 +4,9 @@ import { resourceCountLabel } from "~/domain/event-shop/utils";
 import { cn } from "~/lib/utils";
 import { type ResourceImageType, resourceImageUrl } from "~/models/assets";
 
-// drop (32px) and tile (48px) are the shop calculator's stage drop and item tile sizes.
-export type ResourceThumbSize = "sm" | "drop" | "md" | "tile" | "lg";
+// drop (32px) and tile (48px) are the shop calculator's stage drop and item tile sizes. card is a card's leading icon:
+// 40px on a phone and 48px from sm.
+export type ResourceThumbSize = "sm" | "drop" | "md" | "tile" | "card" | "lg";
 
 export type ResourceThumbProps = {
   itemUid: string;
@@ -29,6 +30,7 @@ const sizeClassName = {
   drop: "size-8",
   md: "size-10",
   tile: "size-12",
+  card: "size-10 sm:size-12",
   lg: "size-12 md:size-14",
 } as const;
 

@@ -224,6 +224,7 @@ describe("global navigation catalog", () => {
       "/students",
       "/mainstory",
       "/furniture",
+      "/products/recruit-tickets",
       "/coupons",
     ]);
     expect(adminGameDestinations).toEqual([...itemsByGroup.game, "/chat"]);
@@ -312,6 +313,7 @@ describe("global navigation catalog", () => {
       "학생부",
       "메인 스토리",
       "가구 도감",
+      "상품 / 패키지",
       "쿠폰",
     ]);
     expect(guestSections.flatMap(({ items }) => items).some(({ to }) => to === "/chat")).toBe(false);
@@ -440,6 +442,15 @@ describe("global navigation catalog", () => {
         ({ menuId }) => menuId === "resource-planner",
       )?.isActive,
     ).toBe(false);
+  });
+
+  it("activates the products menu on every products page and nowhere else", () => {
+    const isActive = (pathname: string) =>
+      getNavigationCatalog({ ...guestOptions, pathname }).find(({ menuId }) => menuId === "products")?.isActive;
+    expect(isActive("/products")).toBe(true);
+    expect(isActive("/products/recruit-tickets")).toBe(true);
+    expect(isActive("/productsx")).toBe(false);
+    expect(isActive("/coupons")).toBe(false);
   });
 
   it("activates the profile menu only on the signed-in owner's root, including a trailing slash", () => {
