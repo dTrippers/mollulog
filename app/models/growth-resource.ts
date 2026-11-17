@@ -1,11 +1,13 @@
 import {
   addGrowthResourceItemToMap,
   calculateAbilityReleaseRequirements,
+  calculateEquipmentRequiredExp,
   calculateEquipmentResourceItems,
   calculateGearResourceItems,
   calculateLevelRequiredExp,
   calculateSkillResourceItems,
   calculateTierResourceItems,
+  calculateWeaponRequiredExp,
   type GrowthResourceItem,
   type GrowthResourceStudentInput,
   type ItemMetadata,
@@ -16,6 +18,11 @@ import {
   type StudentGrowthResourceRequirements,
   sortGrowthResourceItems,
 } from "~/domain/growth-resource";
+import {
+  emptyWeaponExpByBonusFamily,
+  getWeaponExpBonusFamily,
+  type WeaponExpByBonusFamily,
+} from "~/domain/growth-material-exp";
 import { graphql } from "~/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, cacheQuery, fetchLazySourceCachedBatch } from "~/lib/cache";
@@ -166,6 +173,8 @@ function buildStudentGearDataCacheKey(uid: string): string {
 type MutableRequirements = {
   items: Map<string, GrowthResourceItem>;
   characterExp: number;
+  equipmentExp: number;
+  weaponExp: WeaponExpByBonusFamily;
   credit: number;
   skillUnavailable: boolean;
 };
@@ -191,6 +200,8 @@ export async function getStudentGrowthResourceRequirements(
       acc[student.uid] = {
         items: new Map<string, GrowthResourceItem>(),
         characterExp: 0,
+        equipmentExp: 0,
+        weaponExp: emptyWeaponExpByBonusFamily(),
         credit: 0,
         skillUnavailable: false,
       };
@@ -202,6 +213,9 @@ export async function getStudentGrowthResourceRequirements(
   for (const student of normalizedStudents) {
     addItems(requirements[student.uid], calculateTierResourceItems(student));
     requirements[student.uid].characterExp += calculateLevelRequiredExp(student);
+    requirements[student.uid].equipmentExp += calculateEquipmentRequiredExp(student);
+    requirements[student.uid].weaponExp[getWeaponExpBonusFamily(allStudentsMap[student.uid]?.weaponType)] +=
+      calculateWeaponRequiredExp(student);
     addItems(
       requirements[student.uid],
       calculateEquipmentResourceItems(student, allStudentsMap[student.uid]?.equipments ?? []),
@@ -266,6 +280,8 @@ export async function getStudentGrowthResourceRequirements(
       {
         items: sortGrowthResourceItems(Array.from(requirement.items.values())),
         characterExp: requirement.characterExp,
+        equipmentExp: requirement.equipmentExp,
+        weaponExp: requirement.weaponExp,
         credit: requirement.credit,
         skillUnavailable: requirement.skillUnavailable,
       },

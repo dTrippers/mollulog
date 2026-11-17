@@ -26,6 +26,7 @@ export type Student = {
   birthday: string | null;
   role: Role;
   equipments: string[];
+  weaponType: string | null;
   released: boolean;
 };
 
@@ -34,7 +35,7 @@ export type StudentMap = { [id: string]: Student };
 const allStudentsQuery = graphql(`
   query AllStudents {
     students {
-      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments released
+      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments weaponType released
     }
   }
 `);
@@ -308,7 +309,7 @@ export async function getAllStudentsMap(env: Env, includeUnreleased = false): Pr
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = cacheKey("source", "student", 1, "all");
+const rawStudentsKey = cacheKey("source", "student", 2, "all");
 
 async function fetchStudentsFromBaql(): Promise<Student[]> {
   const result = await runQuery(allStudentsQuery, {});

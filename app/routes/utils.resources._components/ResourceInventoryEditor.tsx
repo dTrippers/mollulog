@@ -43,6 +43,14 @@ import {
   getSkillMaterialResourceChoiceBoxUid,
   getUniversalEquipmentBlueprintTypeKey,
 } from "~/domain/growth-resource";
+import {
+  allocateWeaponExpMaterials,
+  emptyWeaponExpByBonusFamily,
+  getEquipmentExpStoneExp,
+  getWeaponExpMaterial,
+  type WeaponExpFamily,
+} from "~/domain/growth-material-exp";
+import { ResourceTypeEnum } from "~/graphql/graphql";
 import { buildOcrInventoryCatalogResources } from "~/domain/ocr-resource-identity";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
@@ -110,9 +118,19 @@ const CATEGORY_DISPLAY_POLICIES: Record<number, CategoryDisplayPolicy> = {
     emptyNeededDefaultMode: "needed",
   },
   [GROWTH_RESOURCE_KIND_ORDER.characterExp]: { defaultMode: "all", modes: ["all"] },
+  // EXP materials are compared as total EXP, so their tiles have no per-item requirement to filter by.
+  [GROWTH_RESOURCE_KIND_ORDER.equipmentExp]: { defaultMode: "all", modes: ["all"] },
+  [GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth]: { defaultMode: "all", modes: ["all"] },
   [GROWTH_RESOURCE_KIND_ORDER.favor]: { defaultMode: "all", modes: ["all", "needed", "shortage"] },
 };
 const CHARACTER_EXP_KIND_ORDER = GROWTH_RESOURCE_KIND_ORDER.characterExp;
+
+export type RequiredMaterialExp = Pick<AggregatedGrowthResourceRequirements, "equipmentExp" | "weaponExp">;
+
+const NO_REQUIRED_MATERIAL_EXP: RequiredMaterialExp = {
+  equipmentExp: 0,
+  weaponExp: emptyWeaponExpByBonusFamily(),
+};
 const CATEGORY_SCROLL_OFFSET = 80;
 
 export default function ResourceInventoryEditor({
@@ -147,10 +165,21 @@ export default function ResourceInventoryEditor({
     [baseQuantities, draftQuantities, inventoryResources],
   );
 
+  const requiredMaterialExp = useMemo(
+    () => ({ equipmentExp: requiredResources.equipmentExp, weaponExp: requiredResources.weaponExp }),
+    [requiredResources.equipmentExp, requiredResources.weaponExp],
+  );
   const resourceGroups = useMemo(
     () =>
-      buildResourceGroups(inventoryResources, categoryModes, filter, requiredResources.characterExp, draftQuantities),
-    [categoryModes, draftQuantities, filter, inventoryResources, requiredResources.characterExp],
+      buildResourceGroups(
+        inventoryResources,
+        categoryModes,
+        filter,
+        requiredResources.characterExp,
+        draftQuantities,
+        requiredMaterialExp,
+      ),
+    [categoryModes, draftQuantities, filter, inventoryResources, requiredMaterialExp, requiredResources.characterExp],
   );
   const submitError = fetcher.data?.error ?? error;
   const isSubmitting = fetcher.state !== "idle";
@@ -217,6 +246,7 @@ export default function ResourceInventoryEditor({
                 ownedQuantities={baseQuantities}
                 draftQuantities={draftQuantities}
                 requiredCharacterExp={requiredResources.characterExp}
+                requiredMaterialExp={requiredMaterialExp}
                 numberInputFlowNavigation={numberInputFlowNavigation}
                 onModeChange={changeCategoryMode}
                 onQuantityChange={(resourceUid, quantity) => {
@@ -437,6 +467,7 @@ function ResourceGroup({
   ownedQuantities,
   draftQuantities,
   requiredCharacterExp,
+  requiredMaterialExp,
   numberInputFlowNavigation,
   onModeChange,
   onQuantityChange,
@@ -445,6 +476,7 @@ function ResourceGroup({
   ownedQuantities: Record<string, number>;
   draftQuantities: Record<string, number>;
   requiredCharacterExp: number;
+  requiredMaterialExp: RequiredMaterialExp;
   numberInputFlowNavigation: NumberInputFlowNavigation;
   onModeChange: (kindOrder: number, mode: ResourceMode) => void;
   onQuantityChange: (resourceUid: string, quantity: number) => void;
@@ -452,6 +484,12 @@ function ResourceGroup({
   const { kindOrder, resources, allocationResources, policy, mode, shortageOverride } = group;
   const isCharacterExpGroup = kindOrder === CHARACTER_EXP_KIND_ORDER;
   const isFavorGroup = kindOrder === GROWTH_RESOURCE_KIND_ORDER.favor;
+  const materialExpBalance = calculateMaterialExpBalance(
+    kindOrder,
+    allocationResources,
+    draftQuantities,
+    requiredMaterialExp,
+  );
   return (
     <SectionCard className="overflow-hidden space-y-0 p-0 md:p-0">
       <div className="px-3 pt-3">
@@ -464,6 +502,9 @@ function ResourceGroup({
       </div>
       {isCharacterExpGroup ? (
         <CharacterExpSummary requiredCharacterExp={requiredCharacterExp} draftQuantities={draftQuantities} />
+      ) : null}
+      {materialExpBalance ? (
+        <MaterialExpSummary balance={materialExpBalance} note={MATERIAL_EXP_NOTES[kindOrder]} />
       ) : null}
       {policy.modes.length > 1 ? (
         <div className="px-3 pt-2">
@@ -557,7 +598,7 @@ function CategoryModeSwitch({
   );
 }
 
-function SkillMaterialSubGroups({
+export function SkillMaterialSubGroups({
   resources,
   allocationResources,
   ownedQuantities,
@@ -634,14 +675,16 @@ function SkillMaterialSubGroups({
           <div className="flex flex-wrap">
             {skillMaterialResources.map((resource) => {
               const choiceBoxUid = getSkillMaterialResourceChoiceBoxUid(resource);
+              const draftQuantity = draftQuantities[getInventoryUid(resource)] ?? 0;
               return (
                 <ResourceTile
                   key={getInventoryUid(resource)}
                   resource={resource}
                   currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
-                  draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
+                  draftQuantity={draftQuantity}
                   showRequiredMetrics
-                  showRequiredBalance={choiceBoxUid === null}
+                  // A short item shows its choice-box and remaining-shortage split instead of its own balance.
+                  showRequiredBalance={choiceBoxUid === null || draftQuantity >= resource.requiredAmount}
                   metrics={choiceBoxAllocation.itemMetricsByUid.get(getInventoryUid(resource))}
                   inputProps={numberInputFlowNavigation.getInputProps()}
                   onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
@@ -795,14 +838,16 @@ export function EquipmentSubGroups({
 
   const renderDirectResource = (resource: InventoryResource) => {
     const demand = allocationDemandByUid.get(getInventoryUid(resource));
+    const draftQuantity = draftQuantities[getInventoryUid(resource)] ?? 0;
     return (
       <ResourceTile
         key={getInventoryUid(resource)}
         resource={resource}
         currentQuantity={ownedQuantities[getInventoryUid(resource)] ?? 0}
-        draftQuantity={draftQuantities[getInventoryUid(resource)] ?? 0}
+        draftQuantity={draftQuantity}
         showRequiredMetrics
-        showRequiredBalance={false}
+        // A short blueprint shows its choice-box, universal, and remaining-shortage split instead of its own balance.
+        showRequiredBalance={draftQuantity >= resource.requiredAmount}
         metrics={demand ? buildDirectBlueprintMetrics(demand) : undefined}
         inputProps={numberInputFlowNavigation.getInputProps()}
         onQuantityChange={(quantity) => onQuantityChange(getInventoryUid(resource), quantity)}
@@ -1167,6 +1212,98 @@ function CharacterExpSummaryItem({
   );
 }
 
+const MATERIAL_EXP_NOTES: Record<number, string> = {
+  [GROWTH_RESOURCE_KIND_ORDER.equipmentExp]: "장비는 티어마다 최대 레벨까지 올린다고 보고 계산해요.",
+  [GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth]:
+    "무기 종류에 맞는 재료와 공이는 1.5배 경험치로, 나머지 재료는 기본 경험치로 계산해요.",
+};
+
+export type MaterialExpBalance = {
+  requiredExp: number;
+  ownedExp: number;
+  /** Surplus when positive, shortage when negative. */
+  balance: number;
+};
+
+export function MaterialExpSummary({ balance, note }: { balance: MaterialExpBalance; note?: string }) {
+  const hasTarget = balance.requiredExp > 0;
+  return (
+    <div className="border-b border-border px-3 py-3">
+      <div className={cn("grid grid-cols-1 gap-2", hasTarget && "sm:grid-cols-3")}>
+        {hasTarget ? <MaterialExpSummaryItem label="필요 경험치" value={balance.requiredExp} /> : null}
+        <MaterialExpSummaryItem label="보유 경험치" value={balance.ownedExp} />
+        {hasTarget ? (
+          <MaterialExpSummaryItem
+            label={balance.balance >= 0 ? "여유 경험치" : "부족 경험치"}
+            value={Math.abs(balance.balance)}
+            valueClassName={cn(
+              balance.balance >= 0 && "text-emerald-600 dark:text-emerald-400",
+              balance.balance < 0 && "text-red-600 dark:text-red-300",
+            )}
+          />
+        ) : null}
+      </div>
+      {hasTarget && note ? <p className="mt-2 px-1 text-xs text-muted-foreground">{note}</p> : null}
+    </div>
+  );
+}
+
+function MaterialExpSummaryItem({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: number;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="px-1 py-1">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <p className={cn("mt-1 text-sm font-semibold tabular-nums text-foreground", valueClassName)}>
+        {value.toLocaleString()}
+      </p>
+    </div>
+  );
+}
+
+/** Compares the owned and required EXP of an EXP-material category. Returns null for other categories. */
+export function calculateMaterialExpBalance(
+  kindOrder: number,
+  resources: InventoryResource[],
+  quantities: Record<string, number>,
+  required: RequiredMaterialExp,
+): MaterialExpBalance | null {
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.equipmentExp) {
+    let ownedExp = 0;
+    for (const resource of resources) {
+      const exp = resource.type === ResourceTypeEnum.Equipment ? getEquipmentExpStoneExp(resource.uid) : null;
+      if (exp !== null) {
+        ownedExp += (quantities[getInventoryUid(resource)] ?? 0) * exp;
+      }
+    }
+    return { requiredExp: required.equipmentExp, ownedExp, balance: ownedExp - required.equipmentExp };
+  }
+
+  if (kindOrder === GROWTH_RESOURCE_KIND_ORDER.uniqueWeaponGrowth) {
+    const ownedBaseExpByFamily: Record<WeaponExpFamily, number> = { a: 0, b: 0, c: 0, z: 0 };
+    for (const resource of resources) {
+      const material = resource.type === ResourceTypeEnum.Equipment ? getWeaponExpMaterial(resource.uid) : null;
+      if (material !== null) {
+        ownedBaseExpByFamily[material.family] += (quantities[getInventoryUid(resource)] ?? 0) * material.exp;
+      }
+    }
+    const allocation = allocateWeaponExpMaterials(required.weaponExp, ownedBaseExpByFamily);
+    return {
+      requiredExp: allocation.requiredExp,
+      ownedExp: allocation.ownedExp,
+      balance: allocation.surplusExp - allocation.shortageExp,
+    };
+  }
+
+  return null;
+}
+
 function scrollToCategoryElement(element: HTMLElement) {
   element.scrollIntoView({ block: "start", inline: "nearest" });
 
@@ -1239,6 +1376,7 @@ function buildResourceShortageByUid(
   kindOrder: number,
   requiredCharacterExp: number,
   quantities: Record<string, number>,
+  requiredMaterialExp: RequiredMaterialExp,
 ): Map<string, boolean> {
   const shortageByUid = new Map(
     resources.map((resource) => [
@@ -1252,6 +1390,15 @@ function buildResourceShortageByUid(
       requiredCharacterExp > 0 && calculateOwnedCharacterExp(quantities) < requiredCharacterExp;
     for (const resource of resources) {
       shortageByUid.set(getInventoryUid(resource), characterExpShortage);
+    }
+    return shortageByUid;
+  }
+
+  const materialExpBalance = calculateMaterialExpBalance(kindOrder, resources, quantities, requiredMaterialExp);
+  if (materialExpBalance) {
+    // Any stone or material can make up an EXP shortage, so the whole category is short together.
+    for (const resource of resources) {
+      shortageByUid.set(getInventoryUid(resource), materialExpBalance.balance < 0);
     }
     return shortageByUid;
   }
@@ -1313,6 +1460,7 @@ export function buildResourceGroups(
   filter: ResourceInventoryFilterState,
   requiredCharacterExp: number,
   quantities: Record<string, number>,
+  requiredMaterialExp: RequiredMaterialExp = NO_REQUIRED_MATERIAL_EXP,
 ): ResourceGroupView[] {
   const grouped = new Map<number, InventoryResource[]>();
   for (const resource of resources) {
@@ -1332,7 +1480,13 @@ export function buildResourceGroups(
       const hasNeededResources = groupResources.some((resource) => resource.requiredAmount > 0);
       const mode = shortageOverride ? "shortage" : resolveCategoryMode(kindOrder, categoryModes, hasNeededResources);
       const policy = getCategoryDisplayPolicy(kindOrder);
-      const shortageByUid = buildResourceShortageByUid(groupResources, kindOrder, requiredCharacterExp, quantities);
+      const shortageByUid = buildResourceShortageByUid(
+        groupResources,
+        kindOrder,
+        requiredCharacterExp,
+        quantities,
+        requiredMaterialExp,
+      );
       const modeResources = groupResources.filter(
         (resource) =>
           mode === "all" ||

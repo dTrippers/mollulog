@@ -17,6 +17,8 @@ function requirement(items: StudentGrowthResourceRequirements["items"]): Student
   return {
     items,
     characterExp: 0,
+    equipmentExp: 0,
+    weaponExp: { a: 0, b: 0, c: 0, none: 0 },
     credit: 0,
     skillUnavailable: false,
   };

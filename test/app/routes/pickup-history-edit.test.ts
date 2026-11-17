@@ -430,6 +430,7 @@ describe("pickup history editor loader", () => {
         birthday: "0000-01-01",
         role: "striker",
         equipments: [],
+        weaponType: null,
         released: true,
       },
     ]);

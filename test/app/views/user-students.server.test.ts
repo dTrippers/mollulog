@@ -65,6 +65,7 @@ const student = {
   initialTier: 3,
   released: true,
   equipments: ["hat", "", "watch"],
+  weaponType: null,
   familyName: null,
   altNames: [],
   school: "게헨나",
