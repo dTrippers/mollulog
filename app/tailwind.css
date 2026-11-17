@@ -490,6 +490,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-accent: var(--v2-accent);
   --color-v2-accent-subtle: var(--v2-accent-subtle);
   --color-v2-on-accent: var(--v2-on-accent);
+  --color-v2-accent-solid: var(--v2-accent-solid);
+  --color-v2-on-accent-solid: var(--v2-on-accent-solid);
   --color-v2-link: var(--v2-link);
   --color-v2-on-media: var(--v2-on-media);
   --color-v2-hover: var(--v2-hover);
@@ -594,6 +596,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-accent: oklch(0.53 0.13 252);
   --v2-accent-subtle: oklch(0.955 0.03 250);
   --v2-on-accent: oklch(1 0 0);
+  /* One saturated blue in both themes for a filled accent button, from the DS 1.0 primary. */
+  --v2-accent-solid: oklch(0.623 0.214 259.815);
+  --v2-on-accent-solid: oklch(0.985 0 0);
   --v2-link: var(--v2-accent);
   --v2-on-media: oklch(1 0 0);
   --v2-hover: oklch(0.205 0 0 / 5%);

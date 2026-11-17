@@ -25,6 +25,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
 | `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
 | `bg-v2-accent`, `text-v2-on-accent` | `oklch(0.53 0.13 252)` / `oklch(1 0 0)` | `oklch(0.74 0.11 250)` / `oklch(0.205 0 0)` | Accent fill and its foreground |
+| `bg-v2-accent-solid`, `text-v2-on-accent-solid` | `oklch(0.623 0.214 259.815)` / `oklch(0.985 0 0)` | same | `primary` button fill, the DS 1.0 primary blue with white text in both themes. Send and consent buttons that stand in for `primary` use it too |
 | `bg-v2-accent-subtle` | `oklch(0.955 0.03 250)` | `oklch(0.32 0.04 250)` | Subtle accent surface |
 | `text-v2-link` | `var(--v2-accent)` | `var(--v2-accent)` | Underlined links in news post Markdown |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
@@ -434,7 +435,7 @@ Every event detail tab uses `width="wide"` with `toolbarSpan="full"`, so the tab
 - Listed resources use `ResourceThumb` with `quantity` in a `gap-1` row. A resource that is the subject of its own design may keep that design.
 - The shop grid keeps its tile, which mirrors the in-game shop: 2 columns on mobile and 4 from a 40rem container. From a 48rem container the currency tabs (`SectionTabs verticalWhenWide`) become a left column, as in the game.
 - Student bonus pickers keep one card size in every view: 7 portrait-only columns on mobile, and more named columns as the page widens.
-- Buttons have four roles: `primary` for the one main action on a screen, `secondary`, `danger`, and `link` for navigation.
+- Buttons have four roles: `primary` (solid blue, `bg-v2-accent-solid`) for the one main action on a screen, `secondary`, `danger`, and `link` for navigation.
 - A data-error notice and its report action share one line: small tertiary text with an icon, and a `size="sm"` `Button` at the end of the line. Do not make the report action a full-width button, a card, or a row of its own.
 - Cleared stages are grouped by type (스토리, 노말, 챌린지).
 - Chips and number inputs are 28px.

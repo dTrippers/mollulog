@@ -180,7 +180,7 @@ function PickupActions({ username, uid }: { username: string; uid: string }) {
   };
 
   return (
-    <div className="mt-v2-group-gap flex flex-wrap items-center justify-end gap-x-3 gap-y-2 border-t border-v2-divider pt-v2-block-gap">
+    <div className="mt-v2-group-gap flex flex-wrap items-center justify-end gap-2">
       {deleteFailed ? (
         <StatusNotice tone="danger" className="mr-auto">
           모집 기록을 삭제하지 못했어요. 다시 시도해주세요.

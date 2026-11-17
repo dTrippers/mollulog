@@ -14,7 +14,7 @@ import {
   useSearchParams,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { PageActionBar, PageHeader, PageMain, useV2Page, V2Page } from "~/components/v2/layout";
+import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { Dialog } from "~/components/v2/primitives/Dialog";
@@ -28,6 +28,7 @@ import {
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
+import { CALL_CHARGE_ANCHOR_TIMELINE_UID, getRecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { compareInstantAsc, compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -43,6 +44,7 @@ import {
 } from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
 import {
+  getTimelineContent,
   getTimelineContentsByRecruitmentGroupUids,
   groupTimelineContentsByRecruitmentGroupUid,
 } from "~/models/timeline-content.server";
@@ -137,11 +139,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
 
   const now = nowUtcIso();
 
-  const [allGroups, allStudentsList, allRecruitmentResults] = await Promise.all([
+  const [allGroups, allStudentsList, allRecruitmentResults, callChargeAnchor] = await Promise.all([
     getAllHistoricalRecruitmentGroups(env),
     getAllStudents(env),
     getRecruitmentResults(env, sensei.id),
+    getTimelineContent(publicReadEnv, CALL_CHARGE_ANCHOR_TIMELINE_UID, { ctx }),
   ]);
+  if (!callChargeAnchor) {
+    throw new Error(`call-charge anchor timeline is missing: ${CALL_CHARGE_ANCHOR_TIMELINE_UID}`);
+  }
   // Saving a record for a recruitment that already has one overwrites it, so the form warns about those.
   const existingRecordUids: Record<string, string> = {};
   for (const result of allRecruitmentResults) {
@@ -188,6 +194,8 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       since: toUtcIso(group.startAt),
       until: group.endAt ? toUtcIso(group.endAt) : null,
       isSpoiler: groupTimelineContents.some((content) => content.isSpoiler),
+      // The call-charge recruitment system replaced recruitment point exchange with stacks.
+      exchangeable: getRecruitmentRuleSet(group.startAt, callChargeAnchor.startAt) === "legacy_points",
       recruitments: group.recruitments
         .filter((r) => r.pickup && r.student)
         .map((r) => ({
@@ -274,6 +282,21 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     await getTimelineContentsByRecruitmentGroupUids(publicReadEnv, [data.eventUid], { ctx })
   ).sort((a, b) => compareInstantAsc(a.startAt, b.startAt));
   const timelineContent = groupTimelineContents[0];
+  const callChargeAnchor = await getTimelineContent(publicReadEnv, CALL_CHARGE_ANCHOR_TIMELINE_UID, { ctx });
+  if (!callChargeAnchor) {
+    throw new Error(`call-charge anchor timeline is missing: ${CALL_CHARGE_ANCHOR_TIMELINE_UID}`);
+  }
+  const exchangeable = getRecruitmentRuleSet(recruitmentGroup.startAt, callChargeAnchor.startAt) === "legacy_points";
+  if (!exchangeable && (data.exchangedStudentIds?.length ?? 0) > 0) {
+    throw routeError(
+      400,
+      "pickup_history.exchange_unavailable",
+      "이 모집에서는 모집 포인트로 학생을 교환할 수 없어요",
+      {
+        recruitmentGroupUid: data.eventUid,
+      },
+    );
+  }
   const exchangeableStudentMap = new Map(
     recruitmentGroup.recruitments.flatMap((recruitment) => {
       if (!canExchangeRecruitmentStudent(recruitment)) {
@@ -414,7 +437,6 @@ function SectionHeading({ title, description }: { title: string; description?: s
 function EditPickupForm() {
   const { username, events, tier3Students, currentPickupHistory, existingRecordUids } = useLoaderData<typeof loader>();
   const [searchParams] = useSearchParams();
-  const { stacked } = useV2Page();
   const isEditing = currentPickupHistory !== null;
 
   let initialEventUid: string | null = null;
@@ -468,7 +490,7 @@ function EditPickupForm() {
     tier3Count,
     tier3StudentCount: submittedTier3StudentUids.length,
     skipTier3StudentList,
-    exchangedStudentCount: exchangedStudentUids.length,
+    exchangedStudentCount: selectedEvent?.exchangeable === false ? 0 : exchangedStudentUids.length,
   });
 
   // An issue shows under its field once the user has worked on that field, or as soon as it contradicts what was
@@ -485,6 +507,8 @@ function EditPickupForm() {
   const inlineMessage = (field: PickupRecordField) => inlineIssues.find((issue) => issue.field === field)?.message;
 
   const existingRecordUid = !isEditing && eventUid ? existingRecordUids[eventUid] : undefined;
+  // Before an event is chosen the exchange field stays, blocked, as it did before the call-charge system.
+  const exchangeable = selectedEvent?.exchangeable ?? true;
   const exchangeCountLimit = Math.floor((totalCount ?? 0) / 200);
   const exchangeableStudents =
     selectedEvent?.recruitments.flatMap((recruitment) =>
@@ -511,7 +535,7 @@ function EditPickupForm() {
     const payload: ActionData = {
       eventUid,
       result: [{ trial: totalCount, tier3Count, tier3StudentIds: submittedTier3StudentUids }],
-      exchangedStudentIds: exchangedStudentUids,
+      exchangedStudentIds: exchangeable ? exchangedStudentUids : [],
       comment: comment.trim() || null,
     };
     saveFetcher.submit(payload, { method: "post", encType: "application/json" });
@@ -542,12 +566,14 @@ function EditPickupForm() {
   } else if (issues.length > 0) {
     barMessage = issues[0].message;
   } else {
-    barMessage = "저장하면 ★3 학생과 교환 학생이 모집한 학생에 추가돼요.";
+    barMessage = exchangeable
+      ? "저장하면 ★3 학생과 교환 학생이 모집한 학생에 추가돼요."
+      : "저장하면 ★3 학생이 모집한 학생에 추가돼요.";
   }
 
   return (
-    <div className={cn("flex flex-col gap-v2-block-gap", stacked && "pb-24")}>
-      <div className="flex flex-col divide-y divide-v2-divider rounded-lg bg-v2-surface">
+    <div className="flex flex-col gap-v2-block-gap">
+      <div className="flex flex-col rounded-lg bg-v2-surface">
         <section className="flex flex-col gap-3 p-v2-block-p">
           <SectionHeading title="모집 이벤트" description="모집을 진행한 이벤트를 선택해주세요." />
           {isEditing && !initialEvent ? (
@@ -588,7 +614,11 @@ function EditPickupForm() {
           <div className="flex items-start justify-between gap-3">
             <SectionHeading
               title="모집 결과"
-              description="총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
+              description={
+                exchangeable
+                  ? "총 모집 횟수와 획득한 ★3 학생, 모집 포인트 교환 학생을 입력해주세요."
+                  : "총 모집 횟수와 획득한 ★3 학생을 입력해주세요."
+              }
             />
             <Button
               size="sm"
@@ -674,7 +704,7 @@ function EditPickupForm() {
             }
           />
 
-          {exchangeCountLimit > 0 || totalCount === undefined || totalCount <= 0 ? (
+          {exchangeable && (exchangeCountLimit > 0 || totalCount === undefined || totalCount <= 0) ? (
             <PickupStudentPicker
               label="모집 포인트 교환 학생"
               description={
@@ -711,42 +741,29 @@ function EditPickupForm() {
         </section>
       </div>
 
-      <PageActionBar
-        placement={stacked ? "fixed" : "sticky"}
-        expandActions={stacked}
-        className={stacked ? "px-4 lg:px-v2-block-p" : undefined}
-        summary={
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {isEditing ? (
-              <Button
-                variant="danger-subtle"
-                size="sm"
-                disabled={deleting || saving}
-                onClick={() => setDeleteOpen(true)}
-              >
-                삭제
-              </Button>
-            ) : null}
-            <span
-              role={barTone === "danger" ? "alert" : "status"}
-              className={cn(
-                "min-w-0 text-xs font-normal",
-                barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary",
-              )}
-            >
-              {barMessage}
-            </span>
-          </div>
-        }
-      >
-        <Button
-          variant="primary"
-          disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
-          onClick={handleSave}
+      {/* The save row closes the form in the page flow, with no bar of its own. */}
+      <div className="flex flex-wrap items-center justify-between gap-v2-block-gap">
+        <span
+          role={barTone === "danger" ? "alert" : "status"}
+          className={cn("min-w-0 text-xs", barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary")}
         >
-          {saving ? "저장 중…" : saveFailed ? "다시 시도" : "모집 결과 저장"}
-        </Button>
-      </PageActionBar>
+          {barMessage}
+        </span>
+        <div className="ml-auto flex items-center gap-2">
+          {isEditing ? (
+            <Button variant="danger-subtle" disabled={deleting || saving} onClick={() => setDeleteOpen(true)}>
+              삭제
+            </Button>
+          ) : null}
+          <Button
+            variant="primary"
+            disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
+            onClick={handleSave}
+          >
+            {saving ? "저장 중…" : saveFailed ? "다시 시도" : "모집 결과 저장"}
+          </Button>
+        </div>
+      </div>
 
       <Dialog
         open={deleteOpen}

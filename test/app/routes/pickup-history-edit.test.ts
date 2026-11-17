@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { mergeEditableRecruitmentResultStudents } from "~/domain/recruitment-result";
 import { Attack, Defense } from "~/graphql/graphql";
@@ -10,7 +10,7 @@ import {
   upsertRecruitmentResult,
 } from "~/models/recruitment-result.server";
 import { getAllStudents } from "~/models/student";
-import { getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
+import { getTimelineContent, getTimelineContentsByRecruitmentGroupUids } from "~/models/timeline-content.server";
 import {
   action,
   getVisibleTier3StudentUids,
@@ -85,6 +85,7 @@ jest.mock("~/models/student", () => ({
 
 jest.mock("~/models/timeline-content.server", () => ({
   ...jest.requireActual<typeof import("~/models/timeline-content.server")>("~/models/timeline-content.server"),
+  getTimelineContent: jest.fn(),
   getTimelineContentsByRecruitmentGroupUids: jest.fn(),
 }));
 
@@ -106,6 +107,7 @@ const mockedUpsertRecruitmentResult = upsertRecruitmentResult as jest.MockedFunc
 const mockedGetAllStudents = getAllStudents as jest.MockedFunction<typeof getAllStudents>;
 const mockedGetTimelineContentsByRecruitmentGroupUids =
   getTimelineContentsByRecruitmentGroupUids as jest.MockedFunction<typeof getTimelineContentsByRecruitmentGroupUids>;
+const mockedGetTimelineContent = getTimelineContent as jest.MockedFunction<typeof getTimelineContent>;
 const mockedGetAllHistoricalRecruitmentGroups = getAllHistoricalRecruitmentGroups as unknown as jest.MockedFunction<
   (...args: unknown[]) => Promise<unknown[]>
 >;
@@ -148,6 +150,16 @@ function createGroup(uid: string, startAt: string) {
     ],
   };
 }
+
+// The call-charge recruitment system starts with this timeline content.
+const CALL_CHARGE_ANCHOR_START_AT = "2026-11-10T02:00:00.000Z";
+
+beforeEach(() => {
+  mockedGetTimelineContent.mockResolvedValue({
+    uid: "pandemonium-cruise",
+    startAt: CALL_CHARGE_ANCHOR_START_AT,
+  } as Awaited<ReturnType<typeof getTimelineContent>>);
+});
 
 afterEach(() => {
   jest.useRealTimers();
@@ -215,6 +227,53 @@ describe("pickup history editor loader", () => {
       "gojinraigou-rerun",
       "magical-heavy-caliber",
     ]);
+    expect(result.events.every((event: { exchangeable: boolean }) => event.exchangeable)).toBe(true);
+  });
+
+  it("offers no recruitment point exchange for recruitments of the call-charge system", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-11-25T00:00:00.000Z").getTime());
+
+    const legacyGroup = createGroup("before-call-charge", "2026-11-03T02:00:00Z");
+    const callChargeGroup = createGroup("call-charge", CALL_CHARGE_ANCHOR_START_AT);
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([legacyGroup, callChargeGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-before",
+        name: "이전 모집",
+        startAt: "2026-11-03T02:00:00Z",
+        recruitmentGroupUid: "before-call-charge",
+      },
+      {
+        uid: "content-after",
+        name: "신규 모집",
+        startAt: CALL_CHARGE_ANCHOR_START_AT,
+        recruitmentGroupUid: "call-charge",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new"),
+      params: { username: "@sensei", id: "new" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(
+      Object.fromEntries(
+        result.events.map((event: { uid: string; exchangeable: boolean }) => [event.uid, event.exchangeable]),
+      ),
+    ).toEqual({ "before-call-charge": true, "call-charge": false });
   });
 
   it("collapses a group shared by two events into one option with joined names", async () => {
@@ -511,6 +570,37 @@ describe("pickup history editor loader", () => {
           },
         },
       },
+      init: { status: 400 },
+    });
+    expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
+  });
+
+  it("rejects exchange students for a recruitment of the call-charge system", async () => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("call-charge", CALL_CHARGE_ANCHOR_START_AT));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      { uid: "content-after", name: "신규 모집", recruitmentGroupUid: "call-charge" },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await expect(
+      action({
+        context: { cloudflare: { env } },
+        request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+          method: "POST",
+          body: JSON.stringify({
+            eventUid: "call-charge",
+            result: [{ trial: 200, tier3Count: 0, tier3StudentIds: [] }],
+            exchangedStudentIds: ["10129"],
+          }),
+        }),
+        params: { username: "@sensei", id: "new" },
+      } as never),
+    ).rejects.toMatchObject({
+      data: { error: { code: "pickup_history.exchange_unavailable" } },
       init: { status: 400 },
     });
     expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
