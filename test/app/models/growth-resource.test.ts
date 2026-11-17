@@ -1069,6 +1069,30 @@ describe("growth-resource", () => {
     ]);
   });
 
+  it("sums equipment EXP and each weapon bonus family's EXP across students", () => {
+    const aggregated = aggregateGrowthResourceRequirements([
+      {
+        characterExp: 0,
+        equipmentExp: 40231,
+        weaponExp: { a: 4355, b: 0, c: 1000, none: 0 },
+        credit: 0,
+        skillUnavailable: false,
+        items: [],
+      },
+      {
+        characterExp: 0,
+        equipmentExp: 50961,
+        weaponExp: { a: 7400, b: 14525, c: 0, none: 300 },
+        credit: 0,
+        skillUnavailable: false,
+        items: [],
+      },
+    ]);
+
+    expect(aggregated.equipmentExp).toBe(91192);
+    expect(aggregated.weaponExp).toEqual({ a: 11755, b: 14525, c: 1000, none: 300 });
+  });
+
   it("keeps colliding resource uids distinct by resource type", () => {
     const aggregated = aggregateGrowthResourceRequirements([
       {
