@@ -7,3 +7,4 @@ export { default as NotificationHistoryPopover } from "./NotificationHistoryPopo
 export * from "./navigation-menu";
 export { getOverlayScrollbarMetrics, OverlayScrollArea } from "./OverlayScrollArea";
 export { getPageSiteBannerSlot, SiteBanner, shouldRenderGlobalSiteBanner } from "./SiteBanner";
+export { useSiteBannerDismissal } from "./use-site-banner-dismissal";

@@ -1,3 +1,4 @@
+import { XMarkIcon } from "@heroicons/react/16/solid";
 import { Link } from "react-router";
 import {
   getSiteBannerPageScreen,
@@ -15,14 +16,39 @@ export type SiteBannerSlot = SiteBannerScreen;
 type SiteBannerProps = {
   banner: SiteBannerData;
   slot: SiteBannerSlot;
+  onDismiss: (uid: string) => void;
   className?: string;
 };
 
-const slotClassNames: Record<SiteBannerSlot, string> = {
-  desktop_navigation: "w-full rounded-md px-3 py-2 text-xs leading-4",
-  mobile_header: "w-full px-4 py-2 text-sm leading-5",
-  futures_top: "mb-4 w-full rounded-lg px-3 py-2.5 text-sm leading-5 sm:px-4",
-  community_top: "mb-4 w-full rounded-lg px-3 py-2.5 text-sm leading-5 sm:px-4",
+type SlotStyle = {
+  container: string;
+  // Padding plus room on the right for the close button.
+  link: string;
+  // Keeps the close button vertically centered on the first line of text.
+  close: string;
+};
+
+const slotStyles: Record<SiteBannerSlot, SlotStyle> = {
+  desktop_navigation: {
+    container: "w-full rounded-md",
+    link: "py-2 pl-3 pr-8 text-xs leading-4",
+    close: "top-1 right-1",
+  },
+  mobile_header: {
+    container: "w-full",
+    link: "py-2 pl-4 pr-10 text-sm leading-5",
+    close: "top-1.5 right-2.5",
+  },
+  futures_top: {
+    container: "mb-4 w-full rounded-lg",
+    link: "py-2.5 pl-3 pr-9 text-sm leading-5 sm:pl-4",
+    close: "top-2 right-2",
+  },
+  community_top: {
+    container: "mb-4 w-full rounded-lg",
+    link: "py-2.5 pl-3 pr-9 text-sm leading-5 sm:pl-4",
+    close: "top-2 right-2",
+  },
 };
 
 const presetClassNames: Record<SiteBannerPreset, string> = {
@@ -33,31 +59,42 @@ const presetClassNames: Record<SiteBannerPreset, string> = {
   black: "bg-v2-banner-black text-v2-banner-black-fg",
 };
 
-export function SiteBanner({ banner, slot, className }: SiteBannerProps) {
+export function SiteBanner({ banner, slot, onDismiss, className }: SiteBannerProps) {
   if (!banner.screens.includes(slot) || !isValidSiteBannerLink(banner.link)) {
     return null;
   }
 
+  const style = slotStyles[slot];
   const linkClassName = cn(
-    "block font-normal transition-opacity duration-v2-fast ease-v2-standard hover:opacity-90",
-    presetClassNames[banner.colorPreset],
-    slotClassNames[slot],
+    "block rounded-[inherit] font-normal transition-opacity duration-v2-fast ease-v2-standard hover:opacity-90",
+    style.link,
     v2FocusRing,
-    className,
   );
 
-  if (banner.link.startsWith("https://")) {
-    return (
-      <a href={banner.link} target="_blank" rel="noopener noreferrer" className={linkClassName}>
-        {banner.message}
-      </a>
-    );
-  }
-
   return (
-    <Link to={banner.link} className={linkClassName}>
-      {banner.message}
-    </Link>
+    <div className={cn("relative", presetClassNames[banner.colorPreset], style.container, className)}>
+      {banner.link.startsWith("https://") ? (
+        <a href={banner.link} target="_blank" rel="noopener noreferrer" className={linkClassName}>
+          {banner.message}
+        </a>
+      ) : (
+        <Link to={banner.link} className={linkClassName}>
+          {banner.message}
+        </Link>
+      )}
+      <button
+        type="button"
+        aria-label="배너 닫기"
+        onClick={() => onDismiss(banner.uid)}
+        className={cn(
+          "absolute inline-flex size-6 cursor-pointer items-center justify-center rounded-md opacity-70 transition-[opacity,background-color] duration-v2-fast ease-v2-standard hover:bg-current/10 hover:opacity-100",
+          style.close,
+          v2FocusRing,
+        )}
+      >
+        <XMarkIcon className="size-3.5" aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 

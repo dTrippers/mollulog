@@ -15,9 +15,11 @@ const banner: SiteBannerData = {
   screens: ["desktop_navigation", "mobile_header", "futures_top", "community_top"],
 };
 
+const noop = () => undefined;
+
 describe("SiteBanner slot typography", () => {
   it("uses compact text only in the desktop navigation slot", () => {
-    const desktop = renderToStaticMarkup(<SiteBanner banner={banner} slot="desktop_navigation" />);
+    const desktop = renderToStaticMarkup(<SiteBanner banner={banner} slot="desktop_navigation" onDismiss={noop} />);
 
     expect(desktop).toContain("text-xs leading-4");
     expect(desktop).not.toContain("text-sm");
@@ -26,10 +28,23 @@ describe("SiteBanner slot typography", () => {
   it.each(["mobile_header", "futures_top", "community_top"] satisfies SiteBannerSlot[])(
     "keeps the standard text size in the %s slot",
     (slot) => {
-      const markup = renderToStaticMarkup(<SiteBanner banner={banner} slot={slot} />);
+      const markup = renderToStaticMarkup(<SiteBanner banner={banner} slot={slot} onDismiss={noop} />);
 
       expect(markup).toContain("text-sm leading-5");
       expect(markup).not.toContain("text-xs");
+    },
+  );
+});
+
+describe("SiteBanner close button", () => {
+  it.each(["desktop_navigation", "mobile_header", "futures_top", "community_top"] satisfies SiteBannerSlot[])(
+    "renders a close button beside the link in the %s slot",
+    (slot) => {
+      const markup = renderToStaticMarkup(<SiteBanner banner={banner} slot={slot} onDismiss={noop} />);
+
+      expect(markup).toContain('aria-label="배너 닫기"');
+      // The button must stay outside the link so closing never follows it.
+      expect(markup).toMatch(/<\/a><button/);
     },
   );
 });

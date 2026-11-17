@@ -28,6 +28,7 @@ import {
   getPageSiteBannerSlot,
   shouldRenderGlobalSiteBanner,
   SiteBanner,
+  useSiteBannerDismissal,
 } from "./components/v2/layout/navigation";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { HaloModeProvider } from "./contexts/HaloModeContext";
@@ -74,6 +75,7 @@ import { shouldKeepStudentDirectoryScrollOnNavigation } from "./routes/students.
 import styles from "./tailwind.css?url";
 import type { NavigationBarContents } from "./views/navigation";
 import { getNavigationBarContents } from "./views/navigation";
+import { excludeDismissedSiteBanner } from "./domain/site-banner";
 import { getSiteBanner } from "./views/site-banner";
 import { submitPreference } from "./lib/preference-submission.client";
 
@@ -135,7 +137,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       desktopNavigationCollapsed: preference.desktopNavigationCollapsed,
       desktopNavigationExpandedGroups: preference.desktopNavigationExpandedGroups,
       navigationBarContents,
-      siteBanner,
+      siteBanner: excludeDismissedSiteBanner(siteBanner, preference.dismissedSiteBannerUids),
       publicEnv: {
         STAGE: env.STAGE ?? "local",
         FRONT_SENTRY_DSN: env.FRONT_SENTRY_DSN ?? "",
@@ -268,7 +270,7 @@ export default function App() {
     desktopNavigationCollapsed,
     desktopNavigationExpandedGroups,
     navigationBarContents,
-    siteBanner,
+    siteBanner: loadedSiteBanner,
   } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
@@ -278,6 +280,7 @@ export default function App() {
   const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
     normalizeMobileNavigationIds(initialMobileNavigationIds),
   );
+  const { siteBanner, dismissSiteBanner } = useSiteBannerDismissal(loadedSiteBanner);
   const loadingBarRef = useRef<LoadingBarRef>(null);
   const submittedTimeZoneRef = useRef<string | null>(null);
 
@@ -506,6 +509,7 @@ export default function App() {
               unreadNotificationCount={navigationBarContents.unreadNotificationCount}
               menuBadgeOverrides={navigationBarContents.menuBadgeOverrides}
               siteBanner={siteBanner}
+              onDismissSiteBanner={dismissSiteBanner}
             />
           )}
           <div
@@ -525,7 +529,9 @@ export default function App() {
               <div className="grow">
                 <TimeZoneProvider timeZone={displayTimeZone} resolved={displayTimeZoneResolved}>
                   <StudentCardPopupProvider key={routeParamsKey}>
-                    {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
+                    {pageBannerSlot && siteBanner ? (
+                      <SiteBanner banner={siteBanner} slot={pageBannerSlot} onDismiss={dismissSiteBanner} />
+                    ) : null}
                     <Outlet
                       context={
                         {
