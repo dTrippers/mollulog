@@ -174,7 +174,7 @@ export function CommentComposer({
         label={submitLabel}
         disabled={!canSubmit}
         onClick={submit}
-        className="bg-v2-fg text-v2-canvas hover:bg-v2-fg hover:text-v2-canvas hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled"
+        className="bg-v2-accent-solid text-v2-on-accent-solid hover:bg-v2-accent-solid hover:text-v2-on-accent-solid hover:opacity-90 disabled:bg-v2-inset disabled:text-v2-fg-disabled"
       />
     </div>
   );

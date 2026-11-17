@@ -644,6 +644,6 @@ function InactiveAccountScreen({ username, profileStudentId }: { username: strin
 
 function consentButtonClassName(variant: "primary" | "secondary") {
   return `inline-flex min-h-8 items-center justify-center rounded-md px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus ${
-    variant === "primary" ? "bg-v2-fg text-v2-canvas" : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover"
+    variant === "primary" ? "bg-v2-accent-solid text-v2-on-accent-solid hover:opacity-90" : "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover"
   }`;
 }

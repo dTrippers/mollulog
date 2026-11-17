@@ -12,7 +12,7 @@ type V2ButtonVariant = NonNullable<V2ButtonProps["variant"]>;
 type V2ButtonSize = NonNullable<V2ButtonProps["size"]>;
 
 const variantClassName = {
-  primary: "bg-v2-fg text-v2-canvas hover:opacity-90 active:opacity-80",
+  primary: "bg-v2-accent-solid text-v2-on-accent-solid hover:opacity-90 active:opacity-80 disabled:bg-v2-inset",
   secondary: "bg-v2-inset text-v2-fg hover:bg-v2-filled-hover active:bg-v2-filled-hover",
   text: "text-v2-fg-secondary hover:text-v2-fg hover:bg-v2-hover active:bg-v2-filled-hover",
   link: "px-0 text-v2-fg-secondary enabled:hover:text-v2-fg",

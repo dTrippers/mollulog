@@ -743,27 +743,27 @@ function EditPickupForm() {
 
       {/* The save row closes the form in the page flow, with no bar of its own. */}
       <div className="flex flex-wrap items-center justify-between gap-v2-block-gap">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+        <span
+          role={barTone === "danger" ? "alert" : "status"}
+          className={cn("min-w-0 text-xs", barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary")}
+        >
+          {barMessage}
+        </span>
+        <div className="flex w-full items-center gap-2 sm:w-auto">
           {isEditing ? (
-            <Button variant="danger-subtle" size="sm" disabled={deleting || saving} onClick={() => setDeleteOpen(true)}>
+            <Button variant="danger-subtle" disabled={deleting || saving} onClick={() => setDeleteOpen(true)}>
               삭제
             </Button>
           ) : null}
-          <span
-            role={barTone === "danger" ? "alert" : "status"}
-            className={cn("min-w-0 text-xs", barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary")}
+          <Button
+            variant="primary"
+            className="flex-1 sm:flex-none"
+            disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
+            onClick={handleSave}
           >
-            {barMessage}
-          </span>
+            {saving ? "저장 중…" : saveFailed ? "다시 시도" : "모집 결과 저장"}
+          </Button>
         </div>
-        <Button
-          variant="primary"
-          className="w-full bg-v2-accent-solid text-v2-on-accent-solid disabled:bg-v2-inset sm:w-auto"
-          disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
-          onClick={handleSave}
-        >
-          {saving ? "저장 중…" : saveFailed ? "다시 시도" : "모집 결과 저장"}
-        </Button>
       </div>
 
       <Dialog
