@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   addDismissedSiteBannerUid,
+  excludeDismissedSiteBanner,
   getSiteBannerPageScreen,
   isSiteBannerActive,
   isSiteBannerPreset,
@@ -78,5 +79,16 @@ describe("dismissed site banner uids", () => {
     expect(next).toHaveLength(MAX_DISMISSED_SITE_BANNER_UIDS);
     expect(next[0]).toBe("banner-1");
     expect(next.at(-1)).toBe("latest");
+  });
+});
+
+describe("excludeDismissedSiteBanner", () => {
+  it("drops only a banner whose uid was dismissed", () => {
+    const item = { uid: "banner" };
+
+    expect(excludeDismissedSiteBanner(item, ["banner"])).toBeNull();
+    expect(excludeDismissedSiteBanner(item, ["other"])).toBe(item);
+    expect(excludeDismissedSiteBanner(item, undefined)).toBe(item);
+    expect(excludeDismissedSiteBanner(null, ["banner"])).toBeNull();
   });
 });

@@ -104,3 +104,10 @@ export function addDismissedSiteBannerUid(current: readonly string[], uid: unkno
 
   return normalizeDismissedSiteBannerUids([...current.filter((existing) => existing !== uid), uid]);
 }
+
+export function excludeDismissedSiteBanner<T extends Pick<SiteBanner, "uid">>(
+  banner: T | null,
+  dismissedUids: readonly string[] | undefined,
+): T | null {
+  return banner && dismissedUids?.includes(banner.uid) ? null : banner;
+}

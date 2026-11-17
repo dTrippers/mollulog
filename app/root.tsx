@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import {
   Links,
@@ -28,6 +28,7 @@ import {
   getPageSiteBannerSlot,
   shouldRenderGlobalSiteBanner,
   SiteBanner,
+  useSiteBannerDismissal,
 } from "./components/v2/layout/navigation";
 import { SignInProvider, useSignIn } from "./contexts/SignInProvider";
 import { HaloModeProvider } from "./contexts/HaloModeContext";
@@ -74,6 +75,7 @@ import { shouldKeepStudentDirectoryScrollOnNavigation } from "./routes/students.
 import styles from "./tailwind.css?url";
 import type { NavigationBarContents } from "./views/navigation";
 import { getNavigationBarContents } from "./views/navigation";
+import { excludeDismissedSiteBanner } from "./domain/site-banner";
 import { getSiteBanner } from "./views/site-banner";
 import { submitPreference } from "./lib/preference-submission.client";
 
@@ -135,7 +137,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       desktopNavigationCollapsed: preference.desktopNavigationCollapsed,
       desktopNavigationExpandedGroups: preference.desktopNavigationExpandedGroups,
       navigationBarContents,
-      siteBanner: siteBanner && preference.dismissedSiteBannerUids?.includes(siteBanner.uid) ? null : siteBanner,
+      siteBanner: excludeDismissedSiteBanner(siteBanner, preference.dismissedSiteBannerUids),
       publicEnv: {
         STAGE: env.STAGE ?? "local",
         FRONT_SENTRY_DSN: env.FRONT_SENTRY_DSN ?? "",
@@ -278,14 +280,7 @@ export default function App() {
   const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
     normalizeMobileNavigationIds(initialMobileNavigationIds),
   );
-  // Hides a dismissed banner right away. The loader drops it on later requests once the preference cookie is saved.
-  const [dismissedSiteBannerUids, setDismissedSiteBannerUids] = useState<string[]>([]);
-  const siteBanner =
-    loadedSiteBanner && !dismissedSiteBannerUids.includes(loadedSiteBanner.uid) ? loadedSiteBanner : null;
-  const dismissSiteBanner = useCallback((uid: string) => {
-    setDismissedSiteBannerUids((current) => (current.includes(uid) ? current : [...current, uid]));
-    void submitPreference({ dismissedSiteBannerUid: uid }).catch(() => undefined);
-  }, []);
+  const { siteBanner, dismissSiteBanner } = useSiteBannerDismissal(loadedSiteBanner);
   const loadingBarRef = useRef<LoadingBarRef>(null);
   const submittedTimeZoneRef = useRef<string | null>(null);
 
