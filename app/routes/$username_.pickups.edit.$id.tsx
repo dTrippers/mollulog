@@ -14,7 +14,7 @@ import {
   useSearchParams,
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { PageActionBar, PageHeader, PageMain, V2Page } from "~/components/v2/layout";
+import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { Dialog } from "~/components/v2/primitives/Dialog";
@@ -741,43 +741,30 @@ function EditPickupForm() {
         </section>
       </div>
 
-      {/* The bar stays in the page flow on every layout; on stacked layouts it sticks above the mobile navigation bar. */}
-      <PageActionBar
-        expandActions
-        className="bottom-[var(--mobile-nav-height)] lg:bottom-0"
-        summary={
-          <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-            {isEditing ? (
-              <Button
-                variant="danger-subtle"
-                size="sm"
-                disabled={deleting || saving}
-                onClick={() => setDeleteOpen(true)}
-              >
-                삭제
-              </Button>
-            ) : null}
-            <span
-              role={barTone === "danger" ? "alert" : "status"}
-              className={cn(
-                "min-w-0 text-xs font-normal",
-                barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary",
-              )}
-            >
-              {barMessage}
-            </span>
-          </div>
-        }
-      >
+      {/* The save row closes the form in the page flow, with no bar of its own. */}
+      <div className="flex flex-wrap items-center justify-between gap-v2-block-gap">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+          {isEditing ? (
+            <Button variant="danger-subtle" size="sm" disabled={deleting || saving} onClick={() => setDeleteOpen(true)}>
+              삭제
+            </Button>
+          ) : null}
+          <span
+            role={barTone === "danger" ? "alert" : "status"}
+            className={cn("min-w-0 text-xs", barTone === "danger" ? "text-v2-danger" : "text-v2-fg-secondary")}
+          >
+            {barMessage}
+          </span>
+        </div>
         <Button
           variant="primary"
-          className="bg-v2-accent text-v2-on-accent disabled:bg-v2-inset"
+          className="w-full bg-v2-accent-solid text-v2-on-accent-solid disabled:bg-v2-inset sm:w-auto"
           disabled={(issues.length > 0 && !saveFailed) || saving || deleting}
           onClick={handleSave}
         >
           {saving ? "저장 중…" : saveFailed ? "다시 시도" : "모집 결과 저장"}
         </Button>
-      </PageActionBar>
+      </div>
 
       <Dialog
         open={deleteOpen}

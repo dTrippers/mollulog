@@ -25,6 +25,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 | `text-v2-fg-secondary` | `oklch(0.439 0 0)` | `oklch(0.85 0 0)` | Secondary text, figures |
 | `text-v2-fg-tertiary` | `oklch(0.52 0 0)` | `oklch(0.78 0 0)` | Types, labels, remaining time (text that must be read, 4.5:1 or higher) |
 | `bg-v2-accent`, `text-v2-on-accent` | `oklch(0.53 0.13 252)` / `oklch(1 0 0)` | `oklch(0.74 0.11 250)` / `oklch(0.205 0 0)` | Accent fill and its foreground |
+| `bg-v2-accent-solid`, `text-v2-on-accent-solid` | `oklch(0.623 0.214 259.815)` / `oklch(0.985 0 0)` | same | Filled accent button, the DS 1.0 primary blue with white text in both themes (the recruitment record save button) |
 | `bg-v2-accent-subtle` | `oklch(0.955 0.03 250)` | `oklch(0.32 0.04 250)` | Subtle accent surface |
 | `text-v2-link` | `var(--v2-accent)` | `var(--v2-accent)` | Underlined links in news post Markdown |
 | `text-v2-on-media` | `oklch(1 0 0)` | `oklch(1 0 0)` | Text on a scrim |
