@@ -1350,6 +1350,8 @@ describe("getEventMinigameType", () => {
     if (!queryCall) throw new Error("Expected the focused minigame type query to run.");
     const queryText = print(queryCall[0]);
     expect(queryText).toContain("minigameConfigs(runType: $runType)");
+    expect(queryText).toMatch(/stages\(runType: \$runType\) \{\s+uid\s+\}/);
+    expect(queryText).toMatch(/shopResources\(runType: \$runType\) \{\s+uid\s+\}/);
     expect(queryText).toContain("minigameType");
     // Stages and shop items are read only as uids, to tell a run with nothing entered yet from one without a minigame.
     expect(queryText).not.toContain("rewards");

@@ -1286,6 +1286,19 @@ describe("admin cache refresh scope", () => {
     ).rejects.toThrow(`KV write failed: ${routeKey}`);
   });
 
+  it("returns a forced source value outside the scope when only its KV write fails", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, kv } = createEnv(null);
+    kv.put.mockRejectedValue(new Error("KV PUT failed: 500"));
+
+    await expect(
+      fetchSourceCached(env, "source::student::v1::all", async () => ["fresh-student"], true, {
+        rejectOnForcedRefresh: true,
+      }),
+    ).resolves.toEqual(["fresh-student"]);
+    expect(kv.put).toHaveBeenCalledTimes(1);
+  });
+
   it("rejects a forced refresh whose KV write the open circuit skipped", async () => {
     jest.useFakeTimers();
     jest.spyOn(console, "warn").mockImplementation(() => undefined);
