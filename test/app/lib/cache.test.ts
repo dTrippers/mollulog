@@ -1270,4 +1270,64 @@ describe("admin cache refresh scope", () => {
       ),
     ).rejects.toThrow("loader failed");
   });
+
+  it("rejects a forced refresh whose KV write fails, and only that one", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, kv } = createEnv(null);
+    kv.put.mockRejectedValue(new Error("KV PUT failed: 500"));
+    const fn = jest.fn(async () => ["fresh-event"]);
+
+    await expect(fetchRouteCached(env, undefined, routeKey, fn, true)).resolves.toEqual(["fresh-event"]);
+    await expect(
+      runInCacheRefreshScope(createCacheRefreshScope(), () => fetchRouteCached(env, undefined, routeKey, fn, false)),
+    ).resolves.toEqual(["fresh-event"]);
+    await expect(
+      runInCacheRefreshScope(createCacheRefreshScope(), () => fetchRouteCached(env, undefined, routeKey, fn, true)),
+    ).rejects.toThrow(`KV write failed: ${routeKey}`);
+  });
+
+  it("rejects a forced refresh whose KV write the open circuit skipped", async () => {
+    jest.useFakeTimers();
+    jest.spyOn(console, "warn").mockImplementation(() => undefined);
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const { env, kv } = createEnv(null);
+    kv.put.mockImplementationOnce(
+      () =>
+        new Promise<undefined>(() => {
+          // Never settles; this trips the KV circuit.
+        }),
+    );
+    const scope = createCacheRefreshScope();
+    const fn = jest.fn(async () => ["fresh-event"]);
+
+    const first = runInCacheRefreshScope(scope, () =>
+      fetchRouteCached(env, undefined, "route::futures::v5::all", fn, true),
+    );
+    const firstRejection = expect(first).rejects.toThrow("KV write failed: route::futures::v5::all");
+    await jest.advanceTimersByTimeAsync(2_000);
+    await firstRejection;
+
+    kv.put.mockClear();
+    await expect(
+      runInCacheRefreshScope(scope, () => fetchRouteCached(env, undefined, routeKey, fn, true)),
+    ).rejects.toThrow(`KV write skipped while the KV circuit is open: ${routeKey}`);
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("rejects a forced batch load whose KV write fails", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => undefined);
+    const entry = { key: "a", dataKey: "source::thing::v1::uid=a" };
+    const { env, kv } = createKeyedEnv(new Map());
+    kv.put.mockRejectedValue(new Error("KV PUT failed: 500"));
+    const loadMissing = async () => new Map([["a", "fresh-a"]]);
+
+    await expect(fetchLazySourceCachedBatch(env, [entry], loadMissing, 60, true)).resolves.toEqual(
+      new Map([["a", "fresh-a"]]),
+    );
+    await expect(
+      runInCacheRefreshScope(createCacheRefreshScope(), () =>
+        fetchLazySourceCachedBatch(env, [entry], loadMissing, 60, true),
+      ),
+    ).rejects.toThrow(`KV write failed: ${entry.dataKey}`);
+  });
 });

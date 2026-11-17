@@ -794,7 +794,7 @@ describe("getEventShopContent", () => {
       env,
       "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.any(Object), {
@@ -827,7 +827,7 @@ describe("getEventShopContent", () => {
       env,
       "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       true,
     );
   });
@@ -842,7 +842,7 @@ describe("getEventShopContent", () => {
       env,
       "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
   });
@@ -1321,6 +1321,8 @@ describe("getEventMinigameType", () => {
       queryResult({
         eventContent: {
           minigameConfigs: [{ minigameType: "dice" }, { minigameType: "treasure_hunt" }],
+          stages: [],
+          shopResources: [],
         },
       }) as never,
     );
@@ -1335,9 +1337,9 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v2::contentUid=shop-content::runType=rerun",
+      "source::event-minigame-type::v3::contentUid=shop-content::runType=rerun",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       true,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
@@ -1349,13 +1351,16 @@ describe("getEventMinigameType", () => {
     const queryText = print(queryCall[0]);
     expect(queryText).toContain("minigameConfigs(runType: $runType)");
     expect(queryText).toContain("minigameType");
-    expect(queryText).not.toContain("shopResources");
-    expect(queryText).not.toContain("stages(");
+    // Stages and shop items are read only as uids, to tell a run with nothing entered yet from one without a minigame.
+    expect(queryText).not.toContain("rewards");
+    expect(queryText).not.toContain("purchaseTiers");
     expect(queryText).not.toContain("bonuses(");
   });
 
   it("falls back to contentUid and caches successful absence by run type", async () => {
-    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: { minigameConfigs: [] } }) as never);
+    mockedRunQuery.mockResolvedValue(
+      queryResult({ eventContent: { minigameConfigs: [], stages: [{ uid: "stage-1" }], shopResources: [] } }) as never,
+    );
 
     await expect(
       getEventMinigameType(
@@ -1366,9 +1371,9 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).toHaveBeenCalledWith(
       env,
-      "source::event-minigame-type::v2::contentUid=base-content::runType=permanent",
+      "source::event-minigame-type::v3::contentUid=base-content::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
     expect(mockedRunQuery).toHaveBeenCalledWith(expect.anything(), {
@@ -1423,7 +1428,7 @@ describe("getEventMinigameType", () => {
       env,
       "source::event-shop::v6::contentUid=linked-event::runType=permanent",
       expect.any(Function),
-      7 * 24 * 60 * 60,
+      expect.any(Function),
       false,
     );
 
@@ -1474,5 +1479,54 @@ describe("getEventMinigameType", () => {
 
     expect(mockedFetchLazySourceCached).not.toHaveBeenCalled();
     expect(mockedRunQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe("event snapshots that BAQL has not filled yet", () => {
+  const staticTtl = 7 * 24 * 60 * 60;
+  const unregisteredTtl = 10 * 60;
+
+  function lastFreshTtl(): (data: unknown) => number {
+    const call = mockedFetchLazySourceCached.mock.calls.at(-1);
+    if (!call || typeof call[3] !== "function") throw new Error("Expected a data-dependent fresh TTL.");
+    return call[3] as (data: unknown) => number;
+  }
+
+  it("rechecks a missing or itemless shop soon and keeps a filled shop for the static TTL", async () => {
+    mockedGetTimelineContent.mockResolvedValue(createTimelineContent());
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent: null }) as never);
+
+    await expect(getEventShopContent(env, "main-story-timeline")).resolves.toBeNull();
+    const ttl = lastFreshTtl();
+
+    expect(ttl(null)).toBe(unregisteredTtl);
+    expect(ttl({ stages: [{}], shopResources: [], eventRewardBonus: [], minigameConfig: null })).toBe(unregisteredTtl);
+    expect(ttl({ stages: [], shopResources: [{}], eventRewardBonus: [], minigameConfig: null })).toBe(staticTtl);
+  });
+
+  it.each([
+    ["no event content", null, null, unregisteredTtl],
+    ["nothing entered for the run", { minigameConfigs: [], stages: [], shopResources: [] }, null, unregisteredTtl],
+    ["stages without a minigame", { minigameConfigs: [], stages: [{ uid: "s" }], shopResources: [] }, null, staticTtl],
+    [
+      "shop items without a minigame",
+      { minigameConfigs: [], stages: [], shopResources: [{ uid: "r" }] },
+      null,
+      staticTtl,
+    ],
+    [
+      "a minigame",
+      { minigameConfigs: [{ minigameType: "card_flip" }], stages: [], shopResources: [] },
+      "card_flip",
+      staticTtl,
+    ],
+  ])("caches the minigame type for %s with the matching fresh TTL", async (_label, eventContent, type, expectedTtl) => {
+    mockedRunQuery.mockResolvedValue(queryResult({ eventContent }) as never);
+
+    await expect(getEventMinigameType(env, createEventMetadata({ runType: "rerun" }))).resolves.toBe(type);
+
+    const call = mockedFetchLazySourceCached.mock.calls.at(-1);
+    const cached = await (call?.[2] as () => Promise<unknown>)();
+    expect(lastFreshTtl()(cached)).toBe(expectedTtl);
   });
 });

@@ -16,6 +16,9 @@ import { getTimelineContent, getTimelineContents } from "./timeline-content.serv
 
 const EVENT_CONTENTS_LIST_CACHE_KEY = cacheKey("source", "event-content", 2, "list");
 const EVENT_STATIC_CONTENT_TTL = 7 * 24 * 60 * 60;
+// An upcoming event is often listed in BAQL before its shop or minigame is entered. Keeping that empty snapshot for
+// the static TTL would hide data entered later for a week, so an empty snapshot stays fresh only briefly.
+const EVENT_UNREGISTERED_CONTENT_TTL = 10 * 60;
 
 function toRunTypeEnum(runType: RunType): RunTypeEnum {
   if (runType === "rerun") return RunTypeEnum.Rerun;
@@ -363,9 +366,21 @@ const eventContentMinigameTypeQuery = graphql(`
       minigameConfigs(runType: $runType) {
         minigameType
       }
+      stages(runType: $runType) {
+        uid
+      }
+      shopResources(runType: $runType) {
+        uid
+      }
     }
   }
 `);
+
+type CachedEventMinigameType = {
+  minigameType: MinigameConfig["minigameType"] | null;
+  /** Whether BAQL had any stage, shop item, or minigame for the run when this was cached. */
+  registered: boolean;
+};
 
 type EventContentData = NonNullable<EventContentShopContentQuery["eventContent"]>;
 type EventStageRewardResource = NonNullable<EventContentData["stages"][number]["rewards"][number]["resource"]>;
@@ -1059,7 +1074,8 @@ export async function getEventShopContentForMetadata(env: Env, metadata: EventMe
         minigameConfig: transformMinigameConfigs(minigameConfigs),
       };
     },
-    EVENT_STATIC_CONTENT_TTL,
+    // The shop screens show "no data" for a missing or itemless shop, so that snapshot must not outlive data entry.
+    (shop) => (shop === null || shop.shopResources.length === 0 ? EVENT_UNREGISTERED_CONTENT_TTL : EVENT_STATIC_CONTENT_TTL),
     forceRefresh,
   );
 }
@@ -1076,9 +1092,9 @@ export async function getEventMinigameType(
   }
 
   const { runType } = metadata;
-  return fetchLazySourceCached(
+  const cached = await fetchLazySourceCached<CachedEventMinigameType>(
     env,
-    cacheKey("source", "event-minigame-type", 2, cacheQuery({ contentUid, runType })),
+    cacheKey("source", "event-minigame-type", 3, cacheQuery({ contentUid, runType })),
     async () => {
       const { data, error } = await runQuery(eventContentMinigameTypeQuery, {
         eventUid: contentUid,
@@ -1088,10 +1104,17 @@ export async function getEventMinigameType(
         throw error ?? new Error("Failed to fetch event minigame type.");
       }
 
-      const minigameType = data.eventContent?.minigameConfigs[0]?.minigameType;
-      return (minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
+      const content = data.eventContent;
+      const minigameType = (content?.minigameConfigs[0]?.minigameType as MinigameConfig["minigameType"] | undefined) ?? null;
+      return {
+        minigameType,
+        registered:
+          minigameType !== null || (content !== null && (content.stages.length > 0 || content.shopResources.length > 0)),
+      };
     },
-    EVENT_STATIC_CONTENT_TTL,
+    // Many events have no minigame at all, so only a run with nothing entered yet is rechecked soon.
+    ({ registered }) => (registered ? EVENT_STATIC_CONTENT_TTL : EVENT_UNREGISTERED_CONTENT_TTL),
     forceRefresh,
   );
+  return cached.minigameType;
 }

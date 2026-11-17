@@ -216,7 +216,24 @@ async function readKvCacheValue<T>(env: Env, dataKey: string): Promise<ParsedCac
   }
 }
 
-async function writeKvCacheValue<T>(env: Env, dataKey: string, data: T, cachedAt: number, expirationTtl: number) {
+/** Whether this write belongs to a forced refresh of the admin cache refresh job, which must not lose it silently. */
+function isScopedForcedRefresh(forceRefresh: boolean): boolean {
+  return forceRefresh && getCacheRefreshScope() !== undefined;
+}
+
+/**
+ * Writes a cache value. A failed or skipped write is normally only logged: the caller already has the value, and a
+ * later request regenerates the missing entry. With `rejectOnFailure` it throws instead, so the admin cache refresh
+ * job reports a task as done only when the caches it forced were actually saved.
+ */
+async function writeKvCacheValue<T>(
+  env: Env,
+  dataKey: string,
+  data: T,
+  cachedAt: number,
+  expirationTtl: number,
+  rejectOnFailure = false,
+) {
   const envelope: CacheEnvelope<T> = {
     _ver: 2,
     data,
@@ -224,6 +241,9 @@ async function writeKvCacheValue<T>(env: Env, dataKey: string, data: T, cachedAt
   };
 
   if (shouldSkipKv(env)) {
+    if (rejectOnFailure) {
+      throw new Error(`KV write skipped while the KV circuit is open: ${dataKey}`);
+    }
     return;
   }
 
@@ -237,6 +257,9 @@ async function writeKvCacheValue<T>(env: Env, dataKey: string, data: T, cachedAt
     warnIoFailure("kv.put", dataKey, error, KV_TIMEOUT_MS);
     if (isTimeoutError(error)) {
       tripKvCircuit(env, "kv.put");
+    }
+    if (rejectOnFailure) {
+      throw new Error(`KV write failed: ${dataKey}`, { cause: error });
     }
   }
 }
@@ -535,7 +558,7 @@ async function fetchCachedInternal<T>(
       // Cold miss / maxStale-exceeded regeneration. `coalesceRefresh` (SWR routes)
       // shares one regeneration across concurrent callers; non-SWR callers are
       // already coalesced one level up in `fetchCached`.
-      const runRefresh = () => refreshCacheValue(env, cacheKey, fn, expirationTtl);
+      const runRefresh = () => refreshCacheValue(env, cacheKey, fn, expirationTtl, isScopedForcedRefresh(forceRefresh));
       const data = coalesceRefresh ? await coalesceRefresh(runRefresh) : await runRefresh();
       return data;
     } catch (error) {
@@ -557,6 +580,7 @@ async function refreshCacheValue<T>(
   cacheKey: string,
   fn: () => Promise<T>,
   expirationTtl: number,
+  rejectOnWriteFailure = false,
 ): Promise<T> {
   const data = await watchIo("cache.fn", withTimeout(fn(), getCacheFnTimeoutMs(), "cache.fn"), {
     dataKey: cacheKey,
@@ -567,7 +591,7 @@ async function refreshCacheValue<T>(
     cachedAt: Date.now(),
   };
 
-  await writeKvCacheValue(env, cacheKey, envelope.data, envelope.cachedAt, expirationTtl);
+  await writeKvCacheValue(env, cacheKey, envelope.data, envelope.cachedAt, expirationTtl, rejectOnWriteFailure);
   return data;
 }
 
@@ -755,7 +779,7 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
 
     // The admin cache refresh job must not report stale values as a successful refresh.
     const missingWithoutStale = missingKeys.filter((key) => !staleValues.has(key));
-    if (missingWithoutStale.length > 0 || (forceRefresh && getCacheRefreshScope())) {
+    if (missingWithoutStale.length > 0 || isScopedForcedRefresh(forceRefresh)) {
       throw error;
     }
 
@@ -778,7 +802,14 @@ export async function fetchLazySourceCachedBatch<K extends string, T>(
     async (entry) => {
       const data = loadedValues.get(entry.key) as T;
       freshValues.set(entry.key, data);
-      await writeKvCacheValue(env, entry.dataKey, data, cachedAt, SOURCE_CACHE_EXPIRATION_TTL);
+      await writeKvCacheValue(
+        env,
+        entry.dataKey,
+        data,
+        cachedAt,
+        SOURCE_CACHE_EXPIRATION_TTL,
+        isScopedForcedRefresh(forceRefresh),
+      );
     },
   );
 
