@@ -20,15 +20,16 @@ import { Checkbox } from "~/components/v2/primitives/Checkbox";
 import { Dialog } from "~/components/v2/primitives/Dialog";
 import { NumberInput } from "~/components/v2/primitives/NumberInput";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { CALL_CHARGE_ANCHOR_TIMELINE_UID, getRecruitmentRuleSet } from "~/domain/recruitment-cost";
 import {
   createRecruitmentResultStudentsFromPickupHistory,
   getRecruitmentResultTier3CountFromPickupHistory,
   getRecruitmentResultTrialFromPickupHistory,
   isRecordedRecruitmentResult,
+  isValidOffPickupSelection,
   mergeEditableRecruitmentResultStudents,
   resolveRecruitmentResultStudents,
 } from "~/domain/recruitment-result";
-import { CALL_CHARGE_ANCHOR_TIMELINE_UID, getRecruitmentRuleSet } from "~/domain/recruitment-cost";
 import { compareInstantAsc, compareInstantDesc, isInstantBefore, nowUtcIso, toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
@@ -86,6 +87,7 @@ type EditablePickupHistory = Omit<PickupHistory, "result"> & {
     trial: number | null;
     tier3Count: number;
     tier3StudentIds: string[];
+    tier3StudentOffPickup?: boolean[];
   }[];
   comment?: string | null;
   exchangedStudentIds?: string[];
@@ -211,12 +213,15 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   if (params.id && params.id !== "new") {
     if (currentRecruitmentResult) {
       const recruitmentGroup = allGroups.find((group) => group.uid === currentRecruitmentResult.recruitmentGroupUid);
-      const tier3StudentIds = resolveRecruitmentResultStudents(currentRecruitmentResult.recruitedStudents, {
+      const storedStudents = currentRecruitmentResult.recruitedStudents.filter(({ studentUid }) => studentUid);
+      // Resolution keeps the order and length of the stored entries, so each resolved student pairs with its entry.
+      const tier3Students = resolveRecruitmentResultStudents(storedStudents, {
         allStudentsMap,
         group: recruitmentGroup,
-      })
-        .filter((student) => student.tier === 3)
-        .map((student) => student.uid);
+      }).flatMap((student, index) =>
+        student.tier === 3 ? [{ uid: student.uid, offPickup: storedStudents[index]?.offPickup === true }] : [],
+      );
+      const tier3StudentIds = tier3Students.map((student) => student.uid);
       currentPickupHistory = {
         uid: currentRecruitmentResult.uid,
         userId: currentRecruitmentResult.userId,
@@ -226,6 +231,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
             trial: currentRecruitmentResult.trial,
             tier3Count: currentRecruitmentResult.tier3Count ?? tier3StudentIds.length,
             tier3StudentIds,
+            tier3StudentOffPickup: tier3Students.map((student) => student.offPickup),
           },
         ],
         rawResult: currentRecruitmentResult.rawResult,
@@ -340,6 +346,11 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       isPickupRecruitmentStudent(recruitment) ? [recruitment.student.uid] : [],
     ),
   );
+  if (!data.result.every((trial) => isValidOffPickupSelection(trial, pickupStudentUids))) {
+    throw routeError(400, "pickup_history.off_pickup_student_invalid", "픽업 외로 고른 학생을 확인할 수 없어요", {
+      recruitmentGroupUid: data.eventUid,
+    });
+  }
   const groupStudentInitialTiers = Object.fromEntries(
     recruitmentGroup.recruitments.flatMap((recruitment) =>
       recruitment.student ? [[recruitment.student.uid, recruitment.student.initialTier] as const] : [],
@@ -449,6 +460,7 @@ function EditPickupForm() {
   let initialTotalCount: number | undefined;
   let initialTier3Count: number | undefined;
   let initialTier3StudentUids: string[] | undefined;
+  const initialOffPickupFlags: boolean[] = [];
   if (currentPickupHistory?.result) {
     const recordedTrials = currentPickupHistory.result
       .map((trial) => trial.trial)
@@ -457,6 +469,8 @@ function EditPickupForm() {
     for (const trial of currentPickupHistory.result) {
       initialTier3Count = (initialTier3Count ?? 0) + trial.tier3Count;
       initialTier3StudentUids = (initialTier3StudentUids ?? ([] as string[])).concat(trial.tier3StudentIds);
+      const offPickup = "tier3StudentOffPickup" in trial ? trial.tier3StudentOffPickup : undefined;
+      initialOffPickupFlags.push(...trial.tier3StudentIds.map((_, index) => offPickup?.[index] === true));
     }
   }
 
@@ -466,6 +480,8 @@ function EditPickupForm() {
   const [totalCount, setTotalCount] = useState(initialTotalCount);
   const [tier3Count, setTier3Count] = useState(initialTier3Count);
   const [tier3StudentUids, setTier3StudentUids] = useState(initialTier3StudentUids ?? []);
+  // Parallel to tier3StudentUids: true where the user chose 픽업 외 for that draw.
+  const [offPickupFlags, setOffPickupFlags] = useState(initialOffPickupFlags);
   const [skipTier3StudentList, setSkipTier3StudentList] = useState(
     shouldSkipTier3StudentListInitially(initialTier3Count, initialTier3StudentUids),
   );
@@ -484,6 +500,10 @@ function EditPickupForm() {
 
   const visibleTier3StudentUids = getVisibleTier3StudentUids(tier3StudentUids, tier3Count);
   const submittedTier3StudentUids = skipTier3StudentList ? [] : visibleTier3StudentUids;
+  const updateTier3StudentUids = (uids: string[], removedIndex?: number) => {
+    setOffPickupFlags((prev) => reconcileOffPickupFlags(visibleTier3StudentUids, prev, uids, removedIndex));
+    setTier3StudentUids(uids);
+  };
   const issues = getPickupRecordIssues({
     eventUid,
     totalCount,
@@ -519,6 +539,23 @@ function EditPickupForm() {
       isPickupRecruitmentStudent(recruitment) ? [recruitment.student.uid] : [],
     ) ?? [],
   );
+  // A choice counts only on a pickup student of the chosen recruitment.
+  const visibleOffPickupFlags = visibleTier3StudentUids.map(
+    (uid, index) => pickupUids.has(uid) && offPickupFlags[index] === true,
+  );
+  const submittedOffPickupFlags = skipTier3StudentList ? [] : visibleOffPickupFlags;
+  const pickupDrawCount = visibleTier3StudentUids.filter(
+    (uid, index) => pickupUids.has(uid) && !visibleOffPickupFlags[index],
+  ).length;
+  const offPickupDrawCount = visibleOffPickupFlags.filter(Boolean).length;
+  const hasPickupDraw = visibleTier3StudentUids.some((uid) => pickupUids.has(uid));
+  const toggleOffPickup = (index: number) => {
+    setOffPickupFlags((prev) => {
+      const next = tier3StudentUids.map((_, at) => prev[at] === true);
+      next[index] = !next[index];
+      return next;
+    });
+  };
 
   const handleTotalCountChange = (value?: number) => {
     setTotalCount(value);
@@ -534,7 +571,14 @@ function EditPickupForm() {
     }
     const payload: ActionData = {
       eventUid,
-      result: [{ trial: totalCount, tier3Count, tier3StudentIds: submittedTier3StudentUids }],
+      result: [
+        {
+          trial: totalCount,
+          tier3Count,
+          tier3StudentIds: submittedTier3StudentUids,
+          tier3StudentOffPickup: submittedOffPickupFlags,
+        },
+      ],
       exchangedStudentIds: exchangeable ? exchangedStudentUids : [],
       comment: comment.trim() || null,
     };
@@ -586,6 +630,8 @@ function EditPickupForm() {
               onSelect={(uid) => {
                 setEventUid(uid);
                 setExchangedStudentUids([]);
+                // A choice made for the previous recruitment's pickup students does not carry over.
+                setOffPickupFlags([]);
               }}
             />
           )}
@@ -638,6 +684,7 @@ function EditPickupForm() {
                 handleTotalCountChange(importedTotal);
                 setTier3Count(importedTier3);
                 setTier3StudentUids(tier3StudentIds);
+                setOffPickupFlags([]);
                 setSkipTier3StudentList(false);
                 setTouched((prev) => ({ ...prev, totalCount: true, tier3Count: true }));
               }}
@@ -675,12 +722,18 @@ function EditPickupForm() {
 
           <PickupStudentPicker
             label="모집한 ★3 학생"
+            description={
+              hasPickupDraw && !skipTier3StudentList
+                ? "픽업 대상 학생을 그 학생의 픽업 모집이 아닌 곳에서 얻었다면 사진 아래 ‘픽업’을 눌러 ‘픽업 외’로 바꿔주세요. ‘픽업 외’로 바꾼 학생은 픽업 수에서만 빠져요."
+                : undefined
+            }
             options={tier3Students}
             pickupUids={pickupUids}
             selectedUids={visibleTier3StudentUids}
+            pickupChoice={{ offPickupFlags: visibleOffPickupFlags, onToggle: toggleOffPickup }}
             maxCount={tier3Count}
-            onChange={(uids) => {
-              setTier3StudentUids(uids);
+            onChange={(uids, removedIndex) => {
+              updateTier3StudentUids(uids, removedIndex);
               setTouched((prev) => ({ ...prev, tier3Students: true }));
             }}
             blockedReason={tier3Count === undefined ? "총 모집 횟수와 ★3 횟수를 먼저 입력해주세요." : undefined}
@@ -690,7 +743,21 @@ function EditPickupForm() {
               tier3Count !== undefined && tier3Count > 0 ? (
                 <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-v2-fg-tertiary">
                   {skipTier3StudentList ? null : (
-                    <span className="tabular-nums">{submittedTier3StudentUids.length}명 선택됨</span>
+                    <span className="tabular-nums">
+                      {submittedTier3StudentUids.length}명 선택됨
+                      {selectedEvent ? (
+                        <>
+                          {" · 픽업 "}
+                          <span className="font-semibold text-v2-fg-secondary">{pickupDrawCount}명</span>
+                          {offPickupDrawCount > 0 ? (
+                            <>
+                              {" · 픽업 외 "}
+                              <span className="font-semibold text-v2-fg-secondary">{offPickupDrawCount}명</span>
+                            </>
+                          ) : null}
+                        </>
+                      ) : null}
+                    </span>
                   )}
                   <Checkbox
                     id="pickup-skip-tier3"
@@ -783,6 +850,24 @@ function EditPickupForm() {
       </Dialog>
     </div>
   );
+}
+
+// Keeps each draw's choice with its draw when the picker removes one draw or appends one. Any other change, such as an
+// import, starts every draw as 픽업.
+export function reconcileOffPickupFlags(
+  prevUids: string[],
+  prevFlags: boolean[],
+  nextUids: string[],
+  removedIndex?: number,
+): boolean[] {
+  const flagAt = (index: number) => prevFlags[index] === true;
+  if (removedIndex !== undefined && nextUids.length === prevUids.length - 1) {
+    return prevUids.flatMap((_, index) => (index === removedIndex ? [] : [flagAt(index)]));
+  }
+  if (nextUids.length === prevUids.length + 1 && prevUids.every((uid, index) => nextUids[index] === uid)) {
+    return [...prevUids.map((_, index) => flagAt(index)), false];
+  }
+  return nextUids.map(() => false);
 }
 
 function CountField({

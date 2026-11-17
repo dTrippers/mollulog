@@ -6,6 +6,8 @@ export type PickupHistory = {
     trial: number;
     tier3Count: number;
     tier3StudentIds: string[];
+    // Parallel to tier3StudentIds: true where the user chose 픽업 외 for that draw of a pickup student.
+    tier3StudentOffPickup?: boolean[];
     tier2Count?: number;
     tier1Count?: number;
   }[];

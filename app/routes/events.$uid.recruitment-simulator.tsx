@@ -341,7 +341,7 @@ export default function EventRecruitmentSimulator() {
     <PageMain>
       <div className="w-full max-w-3xl space-y-v2-section-gap">
         <section className="space-y-v2-block-gap">
-          <h2 className="text-base font-semibold text-v2-fg">픽업 학생</h2>
+          <h2 className="text-base font-semibold text-v2-fg">픽업 대상 학생</h2>
           <div className="-mx-v2-block-p flex gap-2 overflow-x-auto px-v2-block-p pb-1">
             {snapshot.pickupStudents.map((student) => {
               const selected = selectedPickupStudentUid === student.uid;
@@ -675,7 +675,7 @@ function TargetStudentChooser({
             목표 학생을 선택해주세요
           </h3>
           <p className="mt-1 text-xs text-v2-fg-secondary">
-            픽업 학생을 바로 고르거나, 픽업 외 학생을 검색할 수 있어요.
+            픽업 대상 학생을 바로 고르거나, 픽업 외 학생을 검색할 수 있어요.
           </p>
         </div>
         <Button size="sm" onClick={onClose}>

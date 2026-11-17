@@ -494,7 +494,7 @@ function RecruitmentStudents({
             <div className="flex flex-wrap items-start gap-x-8 gap-y-3">
               {pickups.length > 0 ? (
                 <StudentBlock
-                  label={others.length > 0 ? "픽업" : null}
+                  label={others.length > 0 ? "픽업 대상" : null}
                   entries={pickups}
                   signedIn={signedIn}
                   openKey={openKey}

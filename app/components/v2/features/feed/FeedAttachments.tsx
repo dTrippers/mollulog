@@ -18,7 +18,7 @@ function PickupAvatars({
 }) {
   return (
     <span className="flex items-center gap-1">
-      <span className="mr-0.5">픽업</span>
+      <span className="mr-0.5">픽업 대상</span>
       {students.map((student) => (
         <span key={student.uid} title={student.name} className="inline-flex">
           <RoundStudentImage studentUid={student.uid} alt={student.name} size={6} />

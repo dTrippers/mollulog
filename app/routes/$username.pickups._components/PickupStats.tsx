@@ -1,4 +1,9 @@
+import { InformationCircleIcon } from "@heroicons/react/16/solid";
+import { type ReactNode, type RefObject, useRef, useState } from "react";
+import { v2FocusRing } from "~/components/v2/layout/styles";
+import { Popover } from "~/components/v2/primitives/Popover";
 import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
+import { cn } from "~/lib/utils";
 import { formatCount, formatRate } from "./pickup-record";
 
 type PickupStatsProps = {
@@ -15,11 +20,28 @@ type PickupStatsProps = {
   unavailableCount: number;
 };
 
-function StatTile({ label, value, rate }: { label: string; value: string | null; rate?: string }) {
+function StatTile({
+  label,
+  value,
+  rate,
+  labelAction,
+  valueAction,
+}: {
+  label: string;
+  value: string | null;
+  rate?: string;
+  // Beside the label from the md breakpoint, and at the end of the value row below it, where the narrow tile would
+  // otherwise wrap the label.
+  labelAction?: ReactNode;
+  valueAction?: ReactNode;
+}) {
   return (
     <div className="min-w-0 rounded-lg bg-v2-surface p-v2-tile-p md:p-v2-block-p">
-      <p className="text-xs text-v2-fg-tertiary">{label}</p>
-      <p className="mt-1 text-xl leading-tight font-bold text-v2-fg tabular-nums md:text-2xl">
+      <p className="flex items-center gap-1 text-xs whitespace-nowrap text-v2-fg-tertiary">
+        {label}
+        {labelAction}
+      </p>
+      <p className="mt-1 flex items-center text-xl leading-tight font-bold text-v2-fg tabular-nums md:text-2xl">
         {value === null ? (
           <>
             <span aria-hidden="true">–</span>
@@ -31,9 +53,62 @@ function StatTile({ label, value, rate }: { label: string; value: string | null;
             <span className="ml-0.5 text-xs font-normal text-v2-fg-secondary">회</span>
           </>
         )}
+        {valueAction}
       </p>
       {rate ? <p className="mt-0.5 text-xs text-v2-fg-tertiary tabular-nums">{rate}</p> : null}
     </div>
+  );
+}
+
+function usePickupCountHelp() {
+  const labelButtonRef = useRef<HTMLButtonElement>(null);
+  const valueButtonRef = useRef<HTMLButtonElement>(null);
+  const [openFrom, setOpenFrom] = useState<RefObject<HTMLButtonElement | null> | null>(null);
+  const button = (ref: RefObject<HTMLButtonElement | null>, className: string) => (
+    <button
+      ref={ref}
+      type="button"
+      aria-label="★3 픽업 획득 수 설명"
+      aria-haspopup="dialog"
+      aria-expanded={openFrom === ref}
+      onClick={() => setOpenFrom((prev) => (prev === ref ? null : ref))}
+      className={cn(
+        "size-[1.125rem] shrink-0 cursor-pointer items-center justify-center rounded-sm bg-v2-inset text-v2-fg-tertiary hover:bg-v2-filled-hover",
+        v2FocusRing,
+        className,
+      )}
+    >
+      <InformationCircleIcon className="size-3" aria-hidden="true" />
+    </button>
+  );
+  return {
+    labelAction: button(labelButtonRef, "hidden md:inline-flex"),
+    valueAction: (
+      <>
+        {button(valueButtonRef, "ml-auto inline-flex md:hidden")}
+        <Popover
+          open={openFrom !== null}
+          label="★3 픽업 획득 수 설명"
+          onClose={() => setOpenFrom(null)}
+          returnFocusRef={openFrom ?? labelButtonRef}
+          focusPanelIfNoFocusable
+          className="w-[min(17.5rem,calc(100vw-2rem))] px-3.5 py-3 text-[0.8125rem] leading-normal font-normal text-v2-fg-secondary"
+        >
+          <p className="mb-1 font-semibold text-v2-fg">★3 픽업 획득 수</p>
+          <p>
+            픽업으로 얻은 학생만 세어요. ‘픽업 외’로 고른 학생은 픽업 획득 수와 확률에서는 빠지고, ★3 획득 수와 확률에는
+            그대로 들어가요.
+          </p>
+        </Popover>
+      </>
+    ),
+  };
+}
+
+function PickupCountTile({ value, rate }: { value: string | null; rate?: string }) {
+  const { labelAction, valueAction } = usePickupCountHelp();
+  return (
+    <StatTile label="★3 픽업 획득 수" value={value} rate={rate} labelAction={labelAction} valueAction={valueAction} />
   );
 }
 
@@ -54,8 +129,7 @@ export default function PickupStats({ stats, recordCount, unavailableCount }: Pi
           value={empty ? null : formatCount(stats.tier3Count)}
           rate={!empty && hasTrial ? formatRate(stats.tier3RateCount, stats.trial) : undefined}
         />
-        <StatTile
-          label="★3 픽업 획득 수"
+        <PickupCountTile
           value={empty ? null : formatCount(stats.pickupCount)}
           rate={!empty && hasTrial ? formatRate(stats.pickupRateCount, stats.trial) : undefined}
         />

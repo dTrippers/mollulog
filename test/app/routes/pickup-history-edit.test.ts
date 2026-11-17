@@ -15,6 +15,7 @@ import {
   action,
   getVisibleTier3StudentUids,
   loader,
+  reconcileOffPickupFlags,
   shouldSkipTier3StudentListInitially,
 } from "../../../app/routes/$username_.pickups.edit.$id";
 
@@ -47,6 +48,9 @@ jest.mock("~/domain/recruitment-result", () => ({
     history.result.reduce((sum, trial) => sum + trial.tier3Count, 0),
   ),
   isRecordedRecruitmentResult: jest.fn(() => true),
+  isValidOffPickupSelection:
+    jest.requireActual<typeof import("~/domain/recruitment-result")>("~/domain/recruitment-result")
+      .isValidOffPickupSelection,
   mergeEditableRecruitmentResultStudents: jest.fn(),
   resolveRecruitmentResultStudents: jest.fn(
     (
@@ -180,6 +184,54 @@ describe("pickup history editor state helpers", () => {
     expect(shouldSkipTier3StudentListInitially(5, [])).toBe(true);
     expect(shouldSkipTier3StudentListInitially(5, ["hina", "aru", "mika"])).toBe(false);
     expect(shouldSkipTier3StudentListInitially(0, [])).toBe(false);
+  });
+});
+
+describe("pickup history editor 픽업 외 choice", () => {
+  it("keeps each draw's choice when a draw is removed, even between draws of the same student", () => {
+    expect(reconcileOffPickupFlags(["neru", "neru", "hina"], [false, true, false], ["neru", "hina"], 0)).toEqual([
+      true,
+      false,
+    ]);
+  });
+
+  it("starts an added draw as 픽업 and keeps the others", () => {
+    expect(reconcileOffPickupFlags(["neru"], [true], ["neru", "neru"])).toEqual([true, false]);
+  });
+
+  it("starts every draw as 픽업 when the list is replaced", () => {
+    expect(reconcileOffPickupFlags(["neru", "hina"], [true, false], ["hina", "neru"])).toEqual([false, false]);
+  });
+
+  it("rejects a 픽업 외 choice on a student that is not a pickup student of the recruitment", async () => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z"));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      { uid: "content-decagrammaton-armed", name: "데카그라마톤 무장", recruitmentGroupUid: "decagrammaton-armed" },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    await expect(
+      action({
+        context: { cloudflare: { env } },
+        request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+          method: "POST",
+          body: JSON.stringify({
+            eventUid: "decagrammaton-armed",
+            result: [{ trial: 100, tier3Count: 1, tier3StudentIds: ["10000"], tier3StudentOffPickup: [true] }],
+            exchangedStudentIds: [],
+          }),
+        }),
+        params: { username: "@sensei", id: "new" },
+      } as never),
+    ).rejects.toMatchObject({
+      data: { error: { code: "pickup_history.off_pickup_student_invalid" } },
+      init: { status: 400 },
+    });
+    expect(mockedUpsertRecruitmentResult).not.toHaveBeenCalled();
   });
 });
 
@@ -428,6 +480,7 @@ describe("pickup history editor loader", () => {
         trial: 100,
         tier3Count: 0,
         tier3StudentIds: [],
+        tier3StudentOffPickup: [],
       },
     ]);
   });
@@ -515,6 +568,7 @@ describe("pickup history editor loader", () => {
         trial: 100,
         tier3Count: 2,
         tier3StudentIds: ["10129", "10129"],
+        tier3StudentOffPickup: [false, false],
       },
     ]);
   });

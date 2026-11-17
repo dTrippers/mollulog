@@ -5,6 +5,10 @@ export type RecruitmentResultStudent = {
   studentUid: string;
   tier: number;
   pickup: boolean;
+  // Set only when the user chose 픽업 외 for a pickup student of the group: the student came from a window other than
+  // its own pickup. A group bundles several concurrent pickups, so group data alone cannot tell. Records saved before
+  // the choice existed have no flag and count as 픽업.
+  offPickup?: true;
 };
 
 export type RecruitmentCompletionMeta = {

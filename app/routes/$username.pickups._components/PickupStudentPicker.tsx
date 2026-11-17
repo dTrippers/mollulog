@@ -1,4 +1,4 @@
-import { PlusIcon, XMarkIcon } from "@heroicons/react/16/solid";
+import { ArrowsRightLeftIcon, PlusIcon, XMarkIcon } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
 import { type ReactNode, useId, useRef, useState } from "react";
 import { RoundStudentImage } from "~/components/v2/features/students/RoundStudentImage";
@@ -28,11 +28,16 @@ type PickupStudentPickerProps = {
   // Beside the label, such as the "선택하지 않기" checkbox.
   labelAction?: ReactNode;
   options: PickupStudentOption[];
-  // Uids that come first in the list and carry the "픽업" mark.
+  // Uids that come first in the search list and carry the "픽업 대상" mark there. A selected one carries "픽업" on its
+  // portrait, or the pickup choice chip below it.
   pickupUids?: ReadonlySet<string>;
   selectedUids: string[];
+  // With it, each selected pickup student gets a chip below its portrait that switches the draw between 픽업 and 픽업 외.
+  // The flags run parallel to selectedUids.
+  pickupChoice?: { offPickupFlags: boolean[]; onToggle: (index: number) => void };
   maxCount?: number;
-  onChange: (uids: string[]) => void;
+  // removedIndex is set when the change removes the draw at that position.
+  onChange: (uids: string[], removedIndex?: number) => void;
   // Shown instead of the tiles while the answer to an earlier input is missing.
   blockedReason?: string;
   // Keeps the footer but drops the portraits and the add tile, for a list the user chose not to enter.
@@ -50,6 +55,7 @@ export default function PickupStudentPicker({
   options,
   pickupUids,
   selectedUids,
+  pickupChoice,
   maxCount,
   onChange,
   blockedReason,
@@ -58,6 +64,7 @@ export default function PickupStudentPicker({
   footer,
 }: PickupStudentPickerProps) {
   const titleId = useId();
+  const descriptionId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,7 +92,11 @@ export default function PickupStudentPicker({
         </p>
         {labelAction}
       </div>
-      {description ? <p className="text-xs text-v2-fg-tertiary">{description}</p> : null}
+      {description ? (
+        <p id={descriptionId} className="text-xs text-v2-fg-tertiary">
+          {description}
+        </p>
+      ) : null}
       {blockedReason ? (
         <p className="mt-2 text-sm text-v2-fg-tertiary">{blockedReason}</p>
       ) : (
@@ -97,20 +108,35 @@ export default function PickupStudentPicker({
                   const option = byUid.get(uid);
                   if (!option) return null;
                   const { name, variant } = splitVisibleStudentName(option.name);
+                  const isPickup = pickupUids?.has(uid) === true;
+                  const offPickup = pickupChoice?.offPickupFlags[index] === true;
                   return (
                     // The same student can be selected twice, so the position joins the key.
                     // biome-ignore lint/suspicious/noArrayIndexKey: duplicates are valid and the list is edited by position
-                    <li key={`${uid}-${index}`} className="relative">
+                    <li key={`${uid}-${index}`} className="relative flex w-14 flex-col sm:w-16">
                       <StudentThumb
                         studentUid={uid}
                         name={name}
                         variant={variant}
-                        recruitmentLabel={pickupUids?.has(uid) ? "픽업" : undefined}
+                        recruitmentLabel={isPickup && !pickupChoice ? "픽업" : undefined}
                       />
+                      {isPickup && pickupChoice ? (
+                        <PickupChoiceChip
+                          studentName={formatPickerName(option.name)}
+                          offPickup={offPickup}
+                          describedBy={description ? descriptionId : undefined}
+                          onToggle={() => pickupChoice.onToggle(index)}
+                        />
+                      ) : null}
                       <button
                         type="button"
                         aria-label={`${formatPickerName(option.name)} 제거`}
-                        onClick={() => onChange(selectedUids.filter((_, position) => position !== index))}
+                        onClick={() =>
+                          onChange(
+                            selectedUids.filter((_, position) => position !== index),
+                            index,
+                          )
+                        }
                         className={cn(
                           "absolute top-0.5 right-0.5 flex size-5 cursor-pointer items-center justify-center rounded-full bg-v2-scrim text-v2-on-media",
                           v2FocusRing,
@@ -179,7 +205,7 @@ export default function PickupStudentPicker({
                             {variant ? <span className="ml-1 text-xs text-v2-fg-tertiary">{variant}</span> : null}
                           </span>
                           {pickupUids?.has(option.uid) ? (
-                            <span className="text-xs text-v2-fg-secondary">픽업</span>
+                            <span className="text-xs text-v2-fg-secondary">픽업 대상</span>
                           ) : null}
                           {selectedUids.includes(option.uid) ? (
                             <span className="text-xs text-v2-fg-tertiary">선택됨</span>
@@ -199,6 +225,40 @@ export default function PickupStudentPicker({
       )}
       {error ? <FieldError>{error}</FieldError> : null}
     </fieldset>
+  );
+}
+
+// Both states read as a button: 픽업 is filled like a selected chip, 픽업 외 is a bordered surface button. The swap icon
+// marks that a press switches the state. The visible word is the accessible name, so it changes with the state.
+function PickupChoiceChip({
+  studentName,
+  offPickup,
+  describedBy,
+  onToggle,
+}: {
+  studentName: string;
+  offPickup: boolean;
+  describedBy?: string;
+  onToggle: () => void;
+}) {
+  const label = offPickup ? "픽업 외" : "픽업";
+  return (
+    <button
+      type="button"
+      aria-label={`${studentName} ${label}`}
+      aria-describedby={describedBy}
+      onClick={onToggle}
+      className={cn(
+        "mt-1 flex min-h-7 w-full cursor-pointer items-center justify-center gap-0.5 rounded-md px-1 text-[0.6875rem] font-semibold tracking-tight whitespace-nowrap active:opacity-80",
+        offPickup
+          ? "bg-v2-surface text-v2-fg shadow-xs ring-1 ring-v2-control-border-strong ring-inset hover:bg-v2-hover"
+          : "bg-v2-selected text-v2-on-selected hover:opacity-90",
+        v2FocusRing,
+      )}
+    >
+      {label}
+      <ArrowsRightLeftIcon className="size-2.5 shrink-0 opacity-85" aria-hidden="true" />
+    </button>
   );
 }
 

@@ -101,7 +101,7 @@ function EventSummary({
         </span>
         {withPickups && pickups.length > 0 ? (
           <>
-            <span className="sr-only">픽업 학생 {pickups.map(({ name }) => name).join(", ")}</span>
+            <span className="sr-only">픽업 대상 학생 {pickups.map(({ name }) => name).join(", ")}</span>
             <span aria-hidden="true" className="mt-1.5 flex flex-wrap gap-1">
               {pickups.map(({ uid }) => (
                 <RoundStudentImage key={uid} studentUid={uid} size="md" />

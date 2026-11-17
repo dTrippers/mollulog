@@ -321,7 +321,7 @@ export default function EventIndex() {
 
           {recruitmentGroups.length > 0 ? (
             <section data-region="recruit-students" aria-labelledby="pickup-title" className="flex flex-col gap-3">
-              <SectionTitle id="pickup-title">픽업 학생</SectionTitle>
+              <SectionTitle id="pickup-title">픽업 대상 학생</SectionTitle>
               {facts}
               <div className="flex flex-col gap-3">
                 {recruitmentGroups.map((group, index) => (
