@@ -1,7 +1,8 @@
 /** @jest-environment jsdom */
 
 import "../layout-test-polyfills";
-import { beforeAll, describe, expect, it, jest } from "@jest/globals";
+import { afterEach, beforeAll, describe, expect, it, jest } from "@jest/globals";
+import { useState } from "react";
 import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { createMemoryRouter, RouterProvider } from "react-router";
 import NavigationBar from "~/components/v2/layout/navigation/NavigationBar";
@@ -78,45 +79,50 @@ describe("mobile header banner height", () => {
     })) as unknown as typeof window.matchMedia;
   });
 
-  function renderNavigation(siteBanner: SiteBannerData | null) {
-    const router = createMemoryRouter(
-      [
-        {
-          path: "*",
-          element: (
-            <NavigationBar
-              currentUsername={null}
-              isAdmin={false}
-              currentProfileStudentId={null}
-              favoriteNavigationIds={[]}
-              mobileNavigationIds={["feed", "students"]}
-              darkMode={false}
-              setDarkMode={() => undefined}
-              upcomingEvent={null}
-              hasRecentNews={false}
-              hasOngoingRaid={false}
-              hasUnconsumedCoupons={false}
-              hasUnreadFeedbackReplies={false}
-              unreadNotificationCount={0}
-              menuBadgeOverrides={{}}
-              siteBanner={siteBanner}
-              onDismissSiteBanner={() => undefined}
-            />
-          ),
-        },
-      ],
-      { initialEntries: ["/news"] },
-    );
-    return render(<RouterProvider router={router} />);
-  }
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
 
-  it("overrides the server height estimate with zero once the banner is gone", () => {
-    const view = renderNavigation(banner);
-    expect(screen.getAllByRole("button", { name: "배너 닫기" }).length).toBeGreaterThan(0);
+  it("drops the reserved height to zero when the banner is dismissed in the mounted header", () => {
+    jest.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({ height: 40 } as DOMRect);
+    let setSiteBanner: (next: SiteBannerData | null) => void = () => undefined;
 
-    view.unmount();
-    renderNavigation(null);
+    function Harness() {
+      const [siteBanner, setState] = useState<SiteBannerData | null>(banner);
+      setSiteBanner = setState;
+      return (
+        <NavigationBar
+          currentUsername={null}
+          isAdmin={false}
+          currentProfileStudentId={null}
+          favoriteNavigationIds={[]}
+          mobileNavigationIds={["feed", "students"]}
+          darkMode={false}
+          setDarkMode={() => undefined}
+          upcomingEvent={null}
+          hasRecentNews={false}
+          hasOngoingRaid={false}
+          hasUnconsumedCoupons={false}
+          hasUnreadFeedbackReplies={false}
+          unreadNotificationCount={0}
+          menuBadgeOverrides={{}}
+          siteBanner={siteBanner}
+          onDismissSiteBanner={() => setState(null)}
+        />
+      );
+    }
 
-    expect(document.documentElement.style.getPropertyValue("--mobile-site-banner-measured-height")).toBe("0px");
+    const router = createMemoryRouter([{ path: "*", element: <Harness /> }], { initialEntries: ["/news"] });
+    render(<RouterProvider router={router} />);
+    const measuredHeight = () =>
+      document.documentElement.style.getPropertyValue("--mobile-site-banner-measured-height");
+
+    expect(measuredHeight()).toBe("40px");
+
+    act(() => {
+      setSiteBanner(null);
+    });
+
+    expect(measuredHeight()).toBe("0px");
   });
 });
