@@ -573,6 +573,107 @@ describe("pickup history editor loader", () => {
     ]);
   });
 
+  it("pairs each stored 픽업 외 flag with its own draw and saves it back unchanged", async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-05-27T00:00:00.000Z").getTime());
+
+    const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
+    historicalGroup.recruitments.push({
+      ...historicalGroup.recruitments[0],
+      recruitmentType: "given",
+      studentName: "토키(무장)",
+      student: {
+        ...historicalGroup.recruitments[0].student,
+        uid: "16019",
+        name: "토키(무장)",
+        initialTier: 1,
+      },
+    });
+    mockedGetAllHistoricalRecruitmentGroups.mockResolvedValue([historicalGroup]);
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue({
+      uid: "result-with-given",
+      userId: 1,
+      recruitmentGroupUid: "decagrammaton-armed",
+      contentUid: "content-decagrammaton-armed",
+      completedAt: "2026-05-26T02:00:00.000Z",
+      recruitedStudents: [
+        { studentUid: "16019", tier: 3, pickup: true },
+        { studentUid: "10129", tier: 3, pickup: true },
+        { studentUid: "10129", tier: 3, pickup: false, offPickup: true },
+      ],
+      exchangedStudents: [],
+      trial: 100,
+      rawResult: null,
+      commentPostUid: null,
+      createdAt: "2026-05-26T02:00:00.000Z",
+      updatedAt: "2026-05-26T02:00:00.000Z",
+    });
+    mockedGetRecruitmentResultComment.mockResolvedValue(null);
+    mockedGetAllStudents.mockResolvedValue([
+      {
+        uid: "10129",
+        name: "스즈미(매지컬)",
+        familyName: null,
+        altNames: [],
+        school: "trinity",
+        initialTier: 3,
+        order: 1,
+        attackType: Attack.Explosive,
+        defenseType: Defense.Light,
+        position: "front",
+        tacticRole: "attacker",
+        birthday: "0000-01-01",
+        role: "striker",
+        equipments: [],
+        weaponType: null,
+        released: true,
+      },
+    ]);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const result = await loader({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/result-with-given"),
+      params: { username: "@sensei", id: "result-with-given" },
+    } as never);
+    if (result instanceof Response) {
+      throw new Error(`Expected pickup history editor data, got redirect to ${result.headers.get("Location")}`);
+    }
+
+    expect(result.currentPickupHistory?.result).toEqual([
+      {
+        trial: 100,
+        tier3Count: 2,
+        tier3StudentIds: ["10129", "10129"],
+        tier3StudentOffPickup: [false, true],
+      },
+    ]);
+    const history = result.currentPickupHistory;
+    if (!history) throw new Error("Expected the stored record");
+    const actualDomain =
+      jest.requireActual<typeof import("~/domain/recruitment-result")>("~/domain/recruitment-result");
+    expect(
+      actualDomain.createRecruitmentResultStudentsFromPickupHistory(
+        { result: history.result.map((trial) => ({ ...trial, trial: trial.trial ?? 0 })) },
+        new Set(["10129"]),
+      ),
+    ).toEqual([
+      { studentUid: "10129", tier: 3, pickup: true },
+      { studentUid: "10129", tier: 3, pickup: false, offPickup: true },
+    ]);
+  });
+
   it("rejects given students submitted as exchange students", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
     historicalGroup.recruitments.push({

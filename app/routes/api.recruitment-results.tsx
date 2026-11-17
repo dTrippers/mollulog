@@ -182,6 +182,16 @@ export const action = async ({ context, request }: ActionFunctionArgs) => {
     return data({ success: true, result });
   }
 
+  // 픽업 외 is set only through the record editor, which checks it against the group's pickup students.
+  if (
+    (actionData.action === "complete" || actionData.action === "upsert") &&
+    [...(actionData.recruitedStudents ?? []), ...(actionData.exchangedStudents ?? [])].some(
+      (student) => student.offPickup !== undefined,
+    )
+  ) {
+    return data({ error: "offPickup is not accepted here" }, { status: 400 });
+  }
+
   if (actionData.action === "complete") {
     const result = await setRecruitmentResultCompletion(env, currentUser.id, actionData.recruitmentGroupUid, true, {
       contentUid: actionData.contentUid ?? null,

@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, jest } from "@jest/globals
 import { getActiveSensei } from "../../../app/auth/authenticator.server";
 import { RecruitmentTypeEnum } from "../../../app/graphql/graphql";
 import { getUserFavoritedStudents } from "../../../app/models/favorite-students";
-import { addRecruitedStudentToResult, deleteRecruitmentResult } from "../../../app/models/recruitment-result.server";
+import {
+  addRecruitedStudentToResult,
+  deleteRecruitmentResult,
+  setRecruitmentResultCompletion,
+  upsertRecruitmentResult,
+} from "../../../app/models/recruitment-result.server";
 import { action } from "../../../app/routes/api.recruitment-results";
 import { getFutureContents } from "../../../app/views/futures";
 
@@ -180,6 +185,21 @@ describe("api.recruitment-results", () => {
     expect(response.init?.status).toBe(400);
     expect(response.data.error).toBe("Recruitment completion is not allowed");
     expect(mockedAddRecruitedStudentToResult).not.toHaveBeenCalled();
+  });
+
+  it.each(["upsert", "complete"])("rejects an offPickup flag sent through %s", async (actionName) => {
+    const response = expectDataResult<{ error: string }>(
+      await action(
+        createActionArgs({
+          action: actionName,
+          recruitmentGroupUid: "group-a",
+          recruitedStudents: [{ studentUid: "not-pickup", tier: 3, pickup: false, offPickup: true }],
+        }),
+      ),
+    );
+    expect(response.init?.status).toBe(400);
+    expect(upsertRecruitmentResult).not.toHaveBeenCalled();
+    expect(setRecruitmentResultCompletion).not.toHaveBeenCalled();
   });
 
   it("deletes recruitment history", async () => {
