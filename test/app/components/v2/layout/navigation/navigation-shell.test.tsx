@@ -35,6 +35,7 @@ function renderNavigation(
             unreadNotificationCount={0}
             menuBadgeOverrides={{}}
             siteBanner={null}
+            onDismissSiteBanner={() => undefined}
           />
         ),
       },
@@ -67,6 +68,7 @@ function renderProfileRootNavigation(pathname: string): string {
           unreadNotificationCount={0}
           menuBadgeOverrides={{}}
           siteBanner={null}
+          onDismissSiteBanner={() => undefined}
         />
         <Outlet />
       </>

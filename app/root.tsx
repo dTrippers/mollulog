@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { LinksFunction, LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import {
   Links,
@@ -135,7 +135,7 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       desktopNavigationCollapsed: preference.desktopNavigationCollapsed,
       desktopNavigationExpandedGroups: preference.desktopNavigationExpandedGroups,
       navigationBarContents,
-      siteBanner,
+      siteBanner: siteBanner && preference.dismissedSiteBannerUids?.includes(siteBanner.uid) ? null : siteBanner,
       publicEnv: {
         STAGE: env.STAGE ?? "local",
         FRONT_SENTRY_DSN: env.FRONT_SENTRY_DSN ?? "",
@@ -268,7 +268,7 @@ export default function App() {
     desktopNavigationCollapsed,
     desktopNavigationExpandedGroups,
     navigationBarContents,
-    siteBanner,
+    siteBanner: loadedSiteBanner,
   } = loaderData;
 
   const [darkMode, setDarkMode] = useState(loaderData.darkMode);
@@ -278,6 +278,14 @@ export default function App() {
   const [mobileNavigationIds, setMobileNavigationIds] = useState<MobileNavigationPair>(() =>
     normalizeMobileNavigationIds(initialMobileNavigationIds),
   );
+  // Hides a dismissed banner right away. The loader drops it on later requests once the preference cookie is saved.
+  const [dismissedSiteBannerUids, setDismissedSiteBannerUids] = useState<string[]>([]);
+  const siteBanner =
+    loadedSiteBanner && !dismissedSiteBannerUids.includes(loadedSiteBanner.uid) ? loadedSiteBanner : null;
+  const dismissSiteBanner = useCallback((uid: string) => {
+    setDismissedSiteBannerUids((current) => (current.includes(uid) ? current : [...current, uid]));
+    void submitPreference({ dismissedSiteBannerUid: uid }).catch(() => undefined);
+  }, []);
   const loadingBarRef = useRef<LoadingBarRef>(null);
   const submittedTimeZoneRef = useRef<string | null>(null);
 
@@ -506,6 +514,7 @@ export default function App() {
               unreadNotificationCount={navigationBarContents.unreadNotificationCount}
               menuBadgeOverrides={navigationBarContents.menuBadgeOverrides}
               siteBanner={siteBanner}
+              onDismissSiteBanner={dismissSiteBanner}
             />
           )}
           <div
@@ -525,7 +534,9 @@ export default function App() {
               <div className="grow">
                 <TimeZoneProvider timeZone={displayTimeZone} resolved={displayTimeZoneResolved}>
                   <StudentCardPopupProvider key={routeParamsKey}>
-                    {pageBannerSlot && siteBanner ? <SiteBanner banner={siteBanner} slot={pageBannerSlot} /> : null}
+                    {pageBannerSlot && siteBanner ? (
+                      <SiteBanner banner={siteBanner} slot={pageBannerSlot} onDismiss={dismissSiteBanner} />
+                    ) : null}
                     <Outlet
                       context={
                         {

@@ -73,6 +73,7 @@ type NavigationBarProps = {
   unreadNotificationCount: number;
   menuBadgeOverrides: Partial<Record<NavigationMenuId, ResolvedMenuBadgeOverride>>;
   siteBanner: SiteBannerData | null;
+  onDismissSiteBanner: (uid: string) => void;
 };
 
 type NavigationSearchVariant = "desktop" | "mobile" | "rail";
@@ -361,6 +362,7 @@ export default function NavigationBar({
   unreadNotificationCount,
   menuBadgeOverrides,
   siteBanner,
+  onDismissSiteBanner,
 }: NavigationBarProps) {
   const matches = useMatches();
   const location = useLocation();
@@ -444,6 +446,14 @@ export default function NavigationBar({
   const handleOpenBanner = useCallback(
     (anchorEl: HTMLButtonElement) => openFlyout({ id: "site-banner", title: "사이트 배너", kind: "banner", anchorEl }),
     [openFlyout],
+  );
+  const handleDismissSiteBanner = useCallback(
+    (uid: string) => {
+      // The rail trigger disappears with the banner, so there is nothing to return focus to.
+      setActiveFlyout((current) => (current?.kind === "banner" ? null : current));
+      onDismissSiteBanner(uid);
+    },
+    [onDismissSiteBanner],
   );
   const handleRailNotificationChange = useCallback((isOpen: boolean) => {
     setRailNotificationOpen(isOpen);
@@ -622,7 +632,7 @@ export default function NavigationBar({
 
           {desktopBannerVisible && siteBanner ? (
             <div className="shrink-0 px-3 pb-2">
-              <SiteBanner banner={siteBanner} slot="desktop_navigation" />
+              <SiteBanner banner={siteBanner} slot="desktop_navigation" onDismiss={handleDismissSiteBanner} />
             </div>
           ) : null}
 
@@ -702,7 +712,7 @@ export default function NavigationBar({
                 <NavigationSearch key={`rail:${searchResetKey}`} variant="rail" />
               ) : activeFlyout.kind === "banner" ? (
                 siteBanner ? (
-                  <SiteBanner banner={siteBanner} slot="desktop_navigation" />
+                  <SiteBanner banner={siteBanner} slot="desktop_navigation" onDismiss={handleDismissSiteBanner} />
                 ) : null
               ) : activeFlyout.group ? (
                 activeFlyout.group.items.length === 0 && activeFlyout.group.id === "favorites" ? (
@@ -732,6 +742,7 @@ export default function NavigationBar({
         searchResetKey={searchResetKey}
         pathname={pathname}
         siteBanner={siteBanner}
+        onDismissSiteBanner={onDismissSiteBanner}
       />
 
       <MobileBottomNavigation
@@ -928,6 +939,7 @@ function MobileBrandHeader({
   searchResetKey,
   pathname,
   siteBanner,
+  onDismissSiteBanner,
 }: {
   currentUsername: string | null;
   unreadNotificationCount: number;
@@ -935,6 +947,7 @@ function MobileBrandHeader({
   searchResetKey: string;
   pathname: string;
   siteBanner: SiteBannerData | null;
+  onDismissSiteBanner: (uid: string) => void;
 }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isNotificationOpen, setIsNotificationOpen] = useState(false);
@@ -944,7 +957,12 @@ function MobileBrandHeader({
     const root = document.documentElement;
     const shouldRenderBanner = siteBanner ? shouldRenderGlobalSiteBanner(siteBanner, "mobile_header", pathname) : false;
     const updateHeight = () => {
-      const height = shouldRenderBanner ? (bannerRef.current?.getBoundingClientRect().height ?? 0) : 0;
+      if (!shouldRenderBanner) {
+        // An explicit zero overrides the server's estimate after the banner is dismissed on the client.
+        root.style.setProperty("--mobile-site-banner-measured-height", "0px");
+        return;
+      }
+      const height = bannerRef.current?.getBoundingClientRect().height ?? 0;
       if (height > 0) {
         root.style.setProperty("--mobile-site-banner-measured-height", `${Math.ceil(height)}px`);
       } else {
@@ -1026,7 +1044,7 @@ function MobileBrandHeader({
 
       {siteBanner && shouldRenderGlobalSiteBanner(siteBanner, "mobile_header", pathname) ? (
         <div ref={bannerRef}>
-          <SiteBanner banner={siteBanner} slot="mobile_header" />
+          <SiteBanner banner={siteBanner} slot="mobile_header" onDismiss={onDismissSiteBanner} />
         </div>
       ) : null}
     </header>

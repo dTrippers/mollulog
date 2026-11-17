@@ -1,8 +1,8 @@
-import type { Preference } from "~/auth/preference.server";
+import type { PreferenceSubmission } from "~/auth/preference.server";
 
 let preferenceSubmissionQueue: Promise<unknown> = Promise.resolve();
 
-export function submitPreference(preference: Preference): Promise<Response> {
+export function submitPreference(preference: PreferenceSubmission): Promise<Response> {
   const submission = preferenceSubmissionQueue.then(() =>
     fetch("/api/preference", {
       method: "POST",
