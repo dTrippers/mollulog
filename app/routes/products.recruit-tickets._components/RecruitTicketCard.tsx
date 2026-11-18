@@ -115,7 +115,7 @@ function TierLabel({ tier }: { tier: number }) {
   return (
     <span className="inline-flex items-center gap-px tabular-nums">
       {tier <= 5 ? (
-        <StarIcon className="size-2.5 shrink-0" aria-hidden="true" />
+        <StarIcon className="size-2.5 shrink-0 text-v2-star" aria-hidden="true" />
       ) : (
         <img src="/icons/exclusive_weapon.png" alt="" className="size-3 shrink-0" />
       )}
