@@ -1572,3 +1572,21 @@ export const pgChatMessagesTable = pgTable(
   },
   (table) => [uniqueIndex("chat_messages_conversation_seq_uidx").on(table.conversationId, table.seq)],
 );
+
+// Recruitment ticket cards shown on the 상품 / 패키지 › 모집권 tab; only shown cards have a row. A product card is
+// (productUid, itemUid). A card outside products has one row per item with a null productUid.
+export const pgRecruitTicketsTable = pgTable(
+  "recruit_tickets",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    productUid: text("product_uid"),
+    itemUid: text("item_uid").notNull(),
+    createdAt: timestamptz("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("recruit_tickets_product_item_uidx")
+      .on(table.productUid, table.itemUid)
+      .where(sql`${table.productUid} is not null`),
+    uniqueIndex("recruit_tickets_item_uidx").on(table.itemUid).where(sql`${table.productUid} is null`),
+  ],
+);

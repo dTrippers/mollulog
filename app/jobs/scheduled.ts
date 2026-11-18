@@ -11,6 +11,7 @@ import { getItemCatalogResources } from "~/models/item-catalog";
 import { getMainStories } from "~/models/main-story";
 import { publishPendingOcrOutbox, reconcileOcrJobs } from "~/models/ocr-job";
 import { warmRaidCache } from "~/models/raid";
+import { getRecruitTicketSource } from "~/models/recruit-ticket";
 import { warmRecruitmentCache } from "~/models/recruitment";
 import { getAllStudentsFavoriteItems } from "~/models/resource";
 import { getCampaignFarmingStages } from "~/models/stage";
@@ -121,6 +122,7 @@ async function refreshForcedSourceCaches(env: Env, ctx?: ExecutionContext): Prom
     () => getItemCatalogResources(env, true),
     () => getFurnitureCatalogSource(env, true),
     () => getCampaignFarmingStages(env, true),
+    () => getRecruitTicketSource(env, true),
   ];
 
   await runSourceRefreshTasks(tasks, "One or more hourly forced source refresh tasks failed");

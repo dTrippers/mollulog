@@ -51,7 +51,8 @@ export type StudentThumbProps = {
   headerPortrait?: boolean;
   // Internal route link for a directory card. Links prefetch on intent and use the forward transition.
   linkTo?: string;
-  // A directory's sort or display value replaces the recruitment label in the scrim.
+  // A directory's sort or display value replaces the recruitment label in the scrim, or in the top-right label with an
+  // overlay caption.
   scrimLabel?: ReactNode;
   scrimAriaLabel?: string;
   fluid?: boolean;
@@ -140,12 +141,12 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
           <span className="block truncate text-[0.6875rem] leading-tight font-bold tracking-tighter">{name}</span>
         </span>
       ) : null}
-      {overlayCaption && showRecruitmentLabel && recruitmentLabel ? (
+      {overlayCaption && (scrimLabel != null || (showRecruitmentLabel && recruitmentLabel)) ? (
         <span
           aria-hidden="true"
-          className="absolute top-0.5 right-0.5 rounded-sm bg-v2-scrim px-1 text-[0.5625rem] leading-4 font-medium text-v2-on-media"
+          className="absolute top-0.5 right-0.5 flex items-center rounded-sm bg-v2-scrim px-1 text-[0.5625rem] leading-4 font-medium text-v2-on-media"
         >
-          {recruitmentLabel}
+          {scrimLabel ?? recruitmentLabel}
         </span>
       ) : null}
       {showBand ? (

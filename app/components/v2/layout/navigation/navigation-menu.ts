@@ -17,6 +17,7 @@ import {
   MegaphoneIcon as MegaphoneIconOutline,
   QueueListIcon as QueueListIconOutline,
   RectangleGroupIcon as RectangleGroupIconOutline,
+  ShoppingBagIcon as ShoppingBagIconOutline,
   SparklesIcon as SparklesIconOutline,
   TicketIcon as TicketIconOutline,
   UserCircleIcon as UserCircleIconOutline,
@@ -40,6 +41,7 @@ import {
   MegaphoneIcon as MegaphoneIconSolid,
   QueueListIcon as QueueListIconSolid,
   RectangleGroupIcon as RectangleGroupIconSolid,
+  ShoppingBagIcon as ShoppingBagIconSolid,
   SparklesIcon as SparklesIconSolid,
   TicketIcon as TicketIconSolid,
   UserCircleIcon as UserCircleIconSolid,
@@ -214,6 +216,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return pathname.startsWith("/mainstory");
     case "furniture-catalog":
       return pathname === "/furniture" || pathname.startsWith("/furniture/");
+    case "products":
+      return pathname === "/products" || pathname.startsWith("/products/");
     case "coupons":
       return pathname.startsWith("/coupons");
     case "ai-question":
@@ -386,6 +390,18 @@ export function getNavigationCatalog({
       OutlineIcon: NAVIGATION_ICONS["furniture-catalog"].OutlineIcon,
       SolidIcon: NAVIGATION_ICONS["furniture-catalog"].SolidIcon,
       isActive: itemIsActive("furniture-catalog", pathname, currentUsername),
+    },
+    {
+      menuId: "products",
+      group: "game",
+      surfaces: ["desktop", "more", "search"],
+      to: "/products/recruit-tickets",
+      name: "상품 / 패키지",
+      favoriteId: "products",
+      description: "모집권으로 모집할 수 있는 학생을 확인해보세요",
+      OutlineIcon: ShoppingBagIconOutline,
+      SolidIcon: ShoppingBagIconSolid,
+      isActive: itemIsActive("products", pathname, currentUsername),
     },
     {
       menuId: "coupons",

@@ -54,6 +54,7 @@ export const SOURCE_CACHE_REFRESH_TASK_PHASES: readonly (readonly SourceCacheRef
     "getItemCatalogResources",
     "getFurnitureCatalogSource",
     "getCampaignFarmingStages",
+    "getRecruitTicketSource",
   ],
   ["warmStudentSkillItems", "warmStudentGearData", "warmActiveUpcomingEventContent"],
 ];

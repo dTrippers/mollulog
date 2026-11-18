@@ -13,6 +13,7 @@ export const SOURCE_CACHE_REFRESH_TASK_NAMES = [
   "getItemCatalogResources",
   "getFurnitureCatalogSource",
   "getCampaignFarmingStages",
+  "getRecruitTicketSource",
 ] as const;
 
 export const ROUTE_CACHE_REFRESH_TASK_NAMES = [
@@ -77,6 +78,7 @@ export const CACHE_REFRESH_TASK_LABELS: Record<CacheRefreshTaskName, string> = {
   getItemCatalogResources: "아이템 카탈로그",
   getFurnitureCatalogSource: "가구 카탈로그",
   getCampaignFarmingStages: "캠페인 파밍 스테이지",
+  getRecruitTicketSource: "모집권 목록",
   getEventList: "이벤트 목록 화면",
   getIndexContents: "홈 화면",
   getFutureContents: "미래시 화면",

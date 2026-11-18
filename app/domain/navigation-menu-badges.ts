@@ -10,6 +10,7 @@ export const NAVIGATION_MENU_IDS = [
   "students",
   "main-story",
   "furniture-catalog",
+  "products",
   "coupons",
   "ai-question",
   "integrated-planner",

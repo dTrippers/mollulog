@@ -8,8 +8,9 @@ export type HintChipProps = {
   label: string;
   description: string;
   // `warning` shows the label with a warning icon. `info` shows only an ⓘ icon; the label is read by screen readers and
-  // heads the popover.
-  variant?: "warning" | "info";
+  // heads the popover. `chip` shows the label in an accent chip followed by an ⓘ icon, for a category whose meaning
+  // opens on demand.
+  variant?: "warning" | "info" | "chip";
   className?: string;
 };
 
@@ -73,7 +74,9 @@ export function HintChip({ label, description, variant = "warning", className }:
         className={cn(
           variant === "warning"
             ? "inline-flex cursor-help items-center gap-1 rounded-sm text-xs font-semibold whitespace-nowrap text-v2-warning"
-            : "inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full text-v2-fg-tertiary hover:text-v2-fg-secondary",
+            : variant === "chip"
+              ? "inline-flex h-5 shrink-0 cursor-help items-center gap-0.5 rounded-sm bg-v2-accent-subtle pr-1 pl-1.5 text-xs font-semibold whitespace-nowrap text-v2-accent"
+              : "inline-flex size-5 shrink-0 cursor-help items-center justify-center rounded-full text-v2-fg-tertiary hover:text-v2-fg-secondary",
           v2FocusRing,
           className,
         )}
@@ -98,6 +101,12 @@ export function HintChip({ label, description, variant = "warning", className }:
           <>
             <ExclamationTriangleIcon className="size-3.5 shrink-0" aria-hidden="true" />
             {label}
+            <span className="sr-only">: {description}</span>
+          </>
+        ) : variant === "chip" ? (
+          <>
+            {label}
+            <InformationCircleIcon className="size-3.5 shrink-0 opacity-80" aria-hidden="true" />
             <span className="sr-only">: {description}</span>
           </>
         ) : (
