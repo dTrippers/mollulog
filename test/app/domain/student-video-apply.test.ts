@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { OcrPublicError } from "~/domain/ocr";
 import { buildStudentVideoSyncDraftEntries } from "~/domain/student-video-apply";
 import fixture from "../../fixtures/student-detail-video-result.v1.json";
 
@@ -104,6 +105,82 @@ describe("student video selective apply adapter", () => {
           new Set(["10000"]),
         ),
       ).toThrow("미장착 상태라 반영할 수 없어요");
+    }
+  });
+
+  it("names the confirmed field that breaks the growth rules for the tier", () => {
+    const cases = [
+      {
+        current: { tier: 3, level: 90, weaponLevel: 1 },
+        confirmedFields: ["tier", "level", "weaponLevel"],
+        field: "weaponLevel",
+      },
+      {
+        current: { tier: 5, abilityHp: 0, abilityAtk: 2 },
+        confirmedFields: ["tier", "abilityHp", "abilityAtk"],
+        field: "abilityAtk",
+      },
+      { current: { tier: 7, skillEx: 6 }, confirmedFields: ["tier", "skillEx"], field: "skillEx" },
+      { current: { tier: 10 }, confirmedFields: ["tier"], field: "tier" },
+    ];
+    for (const { current, confirmedFields, field } of cases) {
+      let thrown: unknown;
+      try {
+        buildStudentVideoSyncDraftEntries(
+          fixture,
+          { students: [{ studentUid: "10000", current, confirmedFields }] },
+          new Set(["10000"]),
+        );
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(OcrPublicError);
+      expect((thrown as OcrPublicError).details).toEqual({ reason: "growth_rule_violation", field });
+    }
+  });
+
+  it("tags each rejection with a stable reason code", () => {
+    const cases = [
+      { request: {}, reason: "students_missing", field: undefined },
+      {
+        request: { students: [{ studentUid: "10000", current: { tier: 7 }, confirmedFields: ["level"] }] },
+        reason: "tier_not_confirmed",
+        field: "tier",
+      },
+      {
+        request: { students: [{ studentUid: "10000", current: { tier: 7 }, confirmedFields: ["tier", "tier"] }] },
+        reason: "confirmed_field_duplicated",
+        field: "tier",
+      },
+      {
+        request: {
+          students: [{ studentUid: "10000", current: { tier: 7 }, confirmedFields: ["tier", "equipSpecial"] }],
+        },
+        reason: "field_not_equipped",
+        field: "equipSpecial",
+      },
+      {
+        request: {
+          students: [{ studentUid: "10000", current: { tier: 7, level: "90" }, confirmedFields: ["tier", "level"] }],
+        },
+        reason: "field_value_not_integer",
+        field: "level",
+      },
+      {
+        request: { students: [{ studentUid: "10000", current: { tier: 7 }, confirmedFields: ["tier", "secret"] }] },
+        reason: "confirmed_field_unknown",
+        field: undefined,
+      },
+    ];
+    for (const { request, reason, field } of cases) {
+      let thrown: unknown;
+      try {
+        buildStudentVideoSyncDraftEntries(fixture, request, new Set(["10000"]));
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown).toBeInstanceOf(OcrPublicError);
+      expect((thrown as OcrPublicError).details).toEqual({ reason, field });
     }
   });
 

@@ -81,7 +81,7 @@ describe("OCR student apply contract", () => {
   });
 
   it("reports confirmed values that conflict with the stored student state as a rule error", async () => {
-    mockedCreateAndApply.mockRejectedValueOnce(new StudentStateMergeConflictError());
+    mockedCreateAndApply.mockRejectedValueOnce(new StudentStateMergeConflictError(["abilityHp", "abilityAtk"]));
     const response = expectDataResult<{ error: string }>(
       await action({
         request: new Request("https://mollulog.net/api/ocr/jobs/job-1/apply", {
@@ -100,5 +100,64 @@ describe("OCR student apply contract", () => {
     expect(response.init?.status).toBe(400);
     expect(response.data.error).toBe("학생 성장도 값이 현재 성장 규칙에 맞지 않아요");
     expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith("OCR job application rejected", {
+      jobKind: "student_detail_video_v1",
+      status: 400,
+      reason: "stored_state_conflict",
+      field: "abilityHp,abilityAtk",
+    });
+  });
+
+  it("logs the rejection reason and field name of a submitted value without logging the value", async () => {
+    const response = expectDataResult<{ error: string }>(
+      await action({
+        request: new Request("https://mollulog.net/api/ocr/jobs/job-1/apply", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            students: [
+              {
+                studentUid: "10000",
+                current: { tier: 3, level: 90, weaponLevel: 1 },
+                confirmedFields: ["tier", "level", "weaponLevel"],
+              },
+            ],
+          }),
+        }),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(response.data.error).toBe("학생 성장도 값이 현재 성장 규칙에 맞지 않아요");
+    expect(mockedCreateAndApply).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledTimes(1);
+    expect(logger.warn).toHaveBeenCalledWith("OCR job application rejected", {
+      jobKind: "student_detail_video_v1",
+      status: 400,
+      reason: "growth_rule_violation",
+      field: "weaponLevel",
+    });
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it("logs a missing job without a job kind", async () => {
+    mockedGetOcrJob.mockResolvedValueOnce(null);
+    const response = expectDataResult<{ error: string }>(
+      await action({
+        request: new Request("https://mollulog.net/api/ocr/jobs/job-1/apply", { method: "POST", body: "{}" }),
+        context: { cloudflare: { env, ctx } },
+        params: { jobUid: "job-1" },
+      } as never),
+    );
+
+    expect(response.init?.status).toBe(400);
+    expect(logger.warn).toHaveBeenCalledWith("OCR job application rejected", {
+      jobKind: undefined,
+      status: 400,
+      reason: "job_not_found",
+      field: undefined,
+    });
   });
 });

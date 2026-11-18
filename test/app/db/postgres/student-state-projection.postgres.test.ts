@@ -1500,7 +1500,11 @@ describePostgres("student-state projection against isolated PostgreSQL", () => {
       const auditCountBeforeMergeConflict = (await admin.query("SELECT id FROM student_state_audits WHERE user_id = 9"))
         .rows.length;
       await expect(importStudentState({ tier: 5 }, null)).rejects.toThrow(StudentStateMergeConflictError);
+      await expect(importStudentState({ tier: 5 }, null)).rejects.toMatchObject({ fields: ["weaponLevel"] });
       await expect(importStudentState(null, { targetTier: 6 })).rejects.toThrow(StudentStateMergeConflictError);
+      await expect(importStudentState(null, { targetTier: 6 })).rejects.toMatchObject({
+        fields: ["targetWeaponLevel"],
+      });
       await expect(
         createAndApplySyncDraft(modelEnv, canonicalUserId, {
           source: "first_party_ocr",

@@ -1140,9 +1140,13 @@ function assertMergedStateFitsTier(
   const merged = mergeStoredFields(stored, patch, tierBoundCurrentFields);
   try {
     assertWeaponLevelRange(merged.weaponLevel, merged.tier, "고유무기 레벨");
+  } catch {
+    throw new StudentStateMergeConflictError(["weaponLevel"]);
+  }
+  try {
     assertAbilityReleaseAvailable([merged.abilityHp, merged.abilityAtk, merged.abilityHeal], merged.tier, "능력 해방");
   } catch {
-    throw new StudentStateMergeConflictError();
+    throw new StudentStateMergeConflictError(releasedAbilityFields(merged, ["abilityHp", "abilityAtk", "abilityHeal"]));
   }
 }
 
@@ -1155,14 +1159,28 @@ function assertMergedTargetFitsTier(
   const tier = merged.targetTier ?? currentTier;
   try {
     assertWeaponLevelRange(merged.targetWeaponLevel, tier, "목표 고유무기 레벨");
+  } catch {
+    throw new StudentStateMergeConflictError(["targetWeaponLevel"]);
+  }
+  try {
     assertAbilityReleaseAvailable(
       [merged.targetAbilityHp, merged.targetAbilityAtk, merged.targetAbilityHeal],
       tier,
       "목표 능력 해방",
     );
   } catch {
-    throw new StudentStateMergeConflictError();
+    throw new StudentStateMergeConflictError(
+      releasedAbilityFields(merged, ["targetAbilityHp", "targetAbilityAtk", "targetAbilityHeal"]),
+    );
   }
+}
+
+/** The ability fields that hold a release level, which is what the ability-release rule rejects below its tier. */
+function releasedAbilityFields<Field extends string>(
+  merged: Record<Field, number | null>,
+  fields: readonly Field[],
+): Field[] {
+  return fields.filter((field) => (merged[field] ?? 0) > 0);
 }
 
 function shouldApplyCanonicalStudentStateField(

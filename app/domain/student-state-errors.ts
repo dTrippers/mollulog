@@ -26,8 +26,12 @@ export const STUDENT_STATE_MERGE_CONFLICT_MESSAGE = "다른 곳에서 값이 변
 
 /** Submitted student-state values no longer fit the stored values they are merged with at write time. */
 export class StudentStateMergeConflictError extends Error {
-  constructor() {
+  /** Names of the merged fields that break the tier rule, for logs; never their values. */
+  readonly fields: readonly string[];
+
+  constructor(fields: readonly string[] = []) {
     super(STUDENT_STATE_MERGE_CONFLICT_MESSAGE);
     this.name = "StudentStateMergeConflictError";
+    this.fields = fields;
   }
 }
