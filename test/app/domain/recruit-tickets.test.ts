@@ -2,6 +2,7 @@ import { describe, expect, it } from "@jest/globals";
 import {
   buildRecruitTicketCards,
   itemCardKey,
+  LAST_POOLS_GRACE_MS,
   productCardKey,
   type RecruitTicketItemSource,
   type RecruitTicketPoolSource,
@@ -98,9 +99,20 @@ describe("selectCurrentPools", () => {
     expect(selectCurrentPools([nextWeek, later], time)?.pools).toEqual([nextWeek]);
   });
 
-  it("is null when every pool has closed", () => {
+  it("keeps the pools that closed last while BAQL has no next ones", () => {
+    const earlier = pool({
+      uid: "d",
+      itemUid: "1",
+      startAt: at("2026-11-03T02:00:00.000Z"),
+      endAt: at("2026-11-10T02:00:00.000Z"),
+    });
+    const last = pool({ uid: "e", itemUid: "1", startAt: at("2026-11-10T02:00:00.000Z"), endAt: NOW });
+    expect(selectCurrentPools([earlier, last], time)?.pools).toEqual([last]);
+  });
+
+  it("is null when the last pools closed longer ago than the grace period", () => {
     const closed = pool({ uid: "d", itemUid: "1", startAt: at("2026-11-01T00:00:00.000Z"), endAt: NOW });
-    expect(selectCurrentPools([closed], time)).toBeNull();
+    expect(selectCurrentPools([closed], time + LAST_POOLS_GRACE_MS)).toBeNull();
   });
 });
 
@@ -208,6 +220,32 @@ describe("buildRecruitTicketCards", () => {
     const [card] = build(source, [{ productUid: "p1", itemUid: "1" }]).cards;
     expect(card.students.map((student) => student.uid)).toEqual(["10002", "10001"]);
     expect(card.targetsChangeAt).toBe("2026-11-24T02:00:00.000Z");
+  });
+
+  it("keeps a product's last targets with the change notice after its pools close before BAQL has the next ones", () => {
+    const source = {
+      products: [
+        product({
+          uid: "p1",
+          startAt: at("2026-09-15T02:00:00.000Z"),
+          endAt: at("2027-03-09T02:00:00.000Z"),
+          contents: [{ itemUid: "1" }],
+          pools: [
+            pool({
+              uid: "a",
+              itemUid: "1",
+              startAt: at("2026-11-10T02:00:00.000Z"),
+              endAt: at("2026-11-17T02:00:00.000Z"),
+              studentUids: ["10001", "10002"],
+            }),
+          ],
+        }),
+      ],
+      items: { "1": item("1") },
+    };
+    const [card] = build(source, [{ productUid: "p1", itemUid: "1" }]).cards;
+    expect(card.students.map((student) => student.uid)).toEqual(["10002", "10001"]);
+    expect(card.targetsChangeAt).toBe("2026-11-17T02:00:00.000Z");
   });
 
   it("uses the first pools of a product that starts later", () => {

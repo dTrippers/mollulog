@@ -150,8 +150,13 @@ function minInstant(values: Array<UtcIsoString | null>): UtcIsoString | null {
   return result;
 }
 
-// The pools that give the ticket's students at `at`: those open then, or else the next ones to open. Null when every
-// pool has closed.
+// How long a ticket keeps the targets of its last pools after they close. A weekly banner ends before the BAQL sync that
+// brings the next one (a day or more later), so the card keeps its last targets, with the change notice, meanwhile.
+// Two weeks also cover a missed sync.
+export const LAST_POOLS_GRACE_MS = 14 * 24 * 60 * 60 * 1000;
+
+// The pools that give the ticket's students at `at`: those open then, or else the next ones to open, or else the ones
+// that closed last within the grace period. Null when none is left.
 export function selectCurrentPools(pools: RecruitTicketPoolSource[], at: number): CurrentPools | null {
   const open = pools.filter(
     (pool) => (pool.startAt === null || time(pool.startAt) <= at) && (pool.endAt === null || at < time(pool.endAt)),
@@ -160,8 +165,14 @@ export function selectCurrentPools(pools: RecruitTicketPoolSource[], at: number)
 
   const upcoming = pools.filter((pool) => pool.startAt !== null && time(pool.startAt) > at);
   const nextStart = minInstant(upcoming.map((pool) => pool.startAt));
-  if (nextStart === null) return null;
-  return { pools: upcoming.filter((pool) => pool.startAt === nextStart) };
+  if (nextStart !== null) return { pools: upcoming.filter((pool) => pool.startAt === nextStart) };
+
+  const closed = pools.filter(
+    (pool) => pool.endAt !== null && time(pool.endAt) <= at && at - time(pool.endAt) < LAST_POOLS_GRACE_MS,
+  );
+  if (closed.length === 0) return null;
+  const lastEnd = Math.max(...closed.map((pool) => time(pool.endAt as string)));
+  return { pools: closed.filter((pool) => time(pool.endAt as string) === lastEnd) };
 }
 
 function unionStudentUids(pools: RecruitTicketPoolSource[]): string[] {

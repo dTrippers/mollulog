@@ -1,11 +1,12 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { pgRecruitTicketsTable } from "~/db/postgres/schema";
-import type {
-  RecruitTicketItemSource,
-  RecruitTicketPoolSource,
-  RecruitTicketProductSource,
-  RecruitTicketSelection,
-  RecruitTicketSource,
+import {
+  LAST_POOLS_GRACE_MS,
+  type RecruitTicketItemSource,
+  type RecruitTicketPoolSource,
+  type RecruitTicketProductSource,
+  type RecruitTicketSelection,
+  type RecruitTicketSource,
 } from "~/domain/recruit-tickets";
 import { graphql } from "~/graphql";
 import type {
@@ -18,7 +19,7 @@ import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { toUtcIso } from "~/lib/date-time";
 import { withPostgresClient } from "~/lib/postgres.server";
 
-const RECRUIT_TICKET_SOURCE_CACHE_KEY = cacheKey("source", "recruit-ticket", 2, "gl");
+const RECRUIT_TICKET_SOURCE_CACHE_KEY = cacheKey("source", "recruit-ticket", 3, "gl");
 const PRODUCT_PAGE_SIZE = 100;
 // Every GL product (some hundreds) in one request where possible, so the source stays within the regeneration deadline.
 const PRODUCT_ITEMS_PAGE_SIZE = 1000;
@@ -165,8 +166,8 @@ async function readItems(uids: string[]): Promise<Record<string, RecruitTicketIt
   return items;
 }
 
-// GL products on sale now or later, the pools open now or later, the items they give, and the items any GL product gives.
-// An item BAQL does not have is absent from `items`.
+// GL products on sale now or later, the pools open now or later or closed within the grace period, the items they give,
+// and the items any GL product gives. An item BAQL does not have is absent from `items`.
 export async function getRecruitTicketSource(env: Env, forceRefresh = false): Promise<RecruitTicketSource> {
   return fetchSourceCached(
     env,
@@ -175,7 +176,8 @@ export async function getRecruitTicketSource(env: Env, forceRefresh = false): Pr
       const now = new Date();
       const [products, pools, productItemUids] = await Promise.all([
         readProducts(now),
-        readPools(now),
+        // Pools that closed within the grace period too, for a ticket whose next pools BAQL does not have yet.
+        readPools(new Date(now.getTime() - LAST_POOLS_GRACE_MS)),
         readProductItemUids(),
       ]);
       const itemUids = [
