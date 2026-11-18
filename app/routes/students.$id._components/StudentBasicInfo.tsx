@@ -4,7 +4,7 @@ import { StarIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
-import { calculateStudentStats, getEquipmentMaxLevel, getEquipmentSlotUnlockLevel, renderStudentSkillDescriptionParts, resolveStudentCalculatorState, type StudentCalculatorCatalog, type StudentCalculatorSource, type StudentCalculatorState, type DisplayedStudentSkill, selectDisplayedStudentSkills, selectStudentSkills } from "~/domain/student-calculator";
+import { calculateStudentStats, getEquipmentMaxLevel, getEquipmentSlotUnlockLevel, renderStudentSkillDescriptionParts, resolveStudentCalculatorState, type StudentCalculatorCatalog, type StudentCalculatorSource, type StudentCalculatorState, type DisplayedLinkedStudentSkill, type DisplayedStudentSkill, selectDisplayedStudentSkills, selectStudentSkills } from "~/domain/student-calculator";
 import { createStudentGrowthDraftStorageKey, parseStudentGrowthDraft, serializeStudentGrowthDraft } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
@@ -486,10 +486,6 @@ function SkillRow({ row, entries, attackType, last, onLevelChange }: {
   onLevelChange: (value: number) => void;
 }) {
   const { skill } = row;
-  const linkedSkills = row.linkedSkills.map(({ skill: linked, link }) => ({
-    ...linked,
-    label: link.kind === "additional" ? "추가" : skillSelectionConditionLabels[link.condition],
-  }));
   return (
     <div className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-x-[14px] gap-y-1 px-0 pt-[14px] pb-[15px] first:pt-0 last:pb-0 md:grid-cols-[2.5rem_minmax(0,1fr)_9.5rem]">
       <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} size="sm" />
@@ -501,22 +497,35 @@ function SkillRow({ row, entries, attackType, last, onLevelChange }: {
           className="text-sm leading-[1.43] font-semibold text-v2-fg"
         />
         {row.showsOwnDescription ? <SkillDescription skill={skill} entries={entries} /> : null}
-        {linkedSkills.map((linked) => (
-          <div key={linked.uid} className="mt-2 border-l-2 border-v2-divider pl-3">
-            <span className="text-xs leading-[1.43] text-v2-fg-tertiary">{linked.label}</span>
-            <SkillName
-              name={linked.name}
-              cost={exSkillCost(linked, skill.slot, skill.selectedLevel)}
-              className="text-sm leading-[1.43] text-v2-fg"
-            />
-            <SkillDescription skill={{ ...linked, selectedLevel: skill.selectedLevel }} entries={entries} />
-          </div>
+        {row.linkedSkills.map((linked) => (
+          <LinkedSkill key={linked.skill.uid} linked={linked} slot={skill.slot} level={skill.selectedLevel} entries={entries} />
         ))}
       </div>
       <div className="col-span-2 md:col-span-1 [&_label_span]:!leading-[1.43]">
         <RangeSlider layout="stacked" label="레벨" value={skill.selectedLevel} min={1} max={skill.maxLevel} onChange={onLevelChange} />
       </div>
       {!last ? <span aria-hidden="true" className="absolute inset-x-0 bottom-0 h-px bg-v2-divider" /> : null}
+    </div>
+  );
+}
+
+function LinkedSkill({ linked, slot, level, entries }: {
+  linked: DisplayedLinkedStudentSkill;
+  slot: StudentSkillTypeEnum;
+  level: number;
+  entries: PublicKnowledgeEntry[];
+}) {
+  const { skill, link } = linked;
+  return (
+    <div className="mt-2 border-l-2 border-v2-divider pl-3">
+      <span className="text-xs leading-[1.43] text-v2-fg-tertiary">
+        {link.kind === "additional" ? "추가" : skillSelectionConditionLabels[link.condition]}
+      </span>
+      <SkillName name={skill.name} cost={exSkillCost(skill, slot, level)} className="text-sm leading-[1.43] text-v2-fg" />
+      <SkillDescription skill={{ ...skill, selectedLevel: level }} entries={entries} />
+      {linked.linkedSkills.map((child) => (
+        <LinkedSkill key={child.skill.uid} linked={child} slot={slot} level={level} entries={entries} />
+      ))}
     </div>
   );
 }

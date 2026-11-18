@@ -1025,7 +1025,47 @@ describe("student calculator", () => {
 
       expect(rows).toHaveLength(1);
       expect(rows[0].linkedSkills).toEqual([
-        { skill: skills[2], link: { kind: "selectable", condition: StudentSkillSelectionCondition.Enemy } },
+        {
+          skill: skills[2],
+          link: { kind: "selectable", condition: StudentSkillSelectionCondition.Enemy },
+          linkedSkills: [],
+        },
+      ]);
+    });
+
+    it("keeps the links of a hidden entry beneath the linked skill it repeats", () => {
+      // 미카(수영복): CH0294Ex01 repeats the self choice of CH0294SelectEx01 and adds CH0294Ex03.
+      const skills = [
+        displaySkill("select-ex", {
+          name: "잊을 수 없는 추억",
+          selectableSkills: [
+            { condition: StudentSkillSelectionCondition.Enemy, skillUid: "ex-enemy" },
+            { condition: StudentSkillSelectionCondition.Self, skillUid: "ex-self" },
+          ],
+        }),
+        displaySkill("ex-self-slot", { name: "조용한 다짐", additionalSkillUids: ["ex-release"] }),
+        displaySkill("ex-enemy", { name: "밤하늘의 유성" }),
+        displaySkill("ex-self", { name: "조용한 다짐" }),
+        displaySkill("ex-release", { name: "조금은 여유롭게" }),
+      ];
+      const rows = selectDisplayedStudentSkills(
+        [
+          selected(skills[0], StudentSkillTypeEnum.Ex, 0),
+          selected(skills[1], StudentSkillTypeEnum.Ex, 1),
+          selected(skills[2], StudentSkillTypeEnum.Ex, 2),
+        ],
+        skills,
+      );
+
+      expect(rows).toHaveLength(1);
+      expect(
+        rows[0].linkedSkills.map(({ skill, linkedSkills }) => [
+          skill.uid,
+          linkedSkills.map((child) => child.skill.uid),
+        ]),
+      ).toEqual([
+        ["ex-enemy", []],
+        ["ex-self", ["ex-release"]],
       ]);
     });
 
