@@ -7,6 +7,7 @@ import {
   resolveStudentCalculatorState,
   type StudentCalculatorCatalog,
   type StudentCalculatorSource,
+  selectDisplayedStudentSkills,
   selectStudentSkills,
   validateStudentEquipmentLevels,
 } from "~/domain/student-calculator";
@@ -16,6 +17,7 @@ import {
   StudentCatalogStatModifierKind,
   StudentSkillModifierActivation,
   StudentSkillModifierPersistence,
+  StudentSkillSelectionCondition,
   StudentSkillTypeEnum,
 } from "~/graphql/graphql";
 
@@ -964,7 +966,121 @@ describe("student calculator", () => {
       { key: "value-4", text: "400%", dynamic: true, emphasized: true },
     ]);
   });
+
+  describe("displayed skills", () => {
+    it("shows entries that repeat the same skill text in a slot once", () => {
+      // CH0346Public01/02 (이로하(수영복)) differ only by uid.
+      const skills = [
+        displaySkill("public-1", { name: "피차 고생인데." }),
+        displaySkill("public-2", { name: "피차 고생인데." }),
+        displaySkill("passive-1", { name: "약점이 드러났네요." }),
+      ];
+      const rows = selectDisplayedStudentSkills(
+        [
+          selected(skills[0], StudentSkillTypeEnum.Public, 0),
+          selected(skills[1], StudentSkillTypeEnum.Public, 1),
+          selected(skills[2], StudentSkillTypeEnum.Passive, 0),
+        ],
+        skills,
+      );
+
+      expect(rows.map((row) => row.skill.uid)).toEqual(["public-1", "passive-1"]);
+    });
+
+    it("hides entries that repeat a linked skill and keeps the links once", () => {
+      // CH0187GearPublic01 links GearPublic02; GearPublic03 repeats 01 and GearPublic04 repeats 02 (토키).
+      const skills = [
+        displaySkill("gear-1", { name: "전술적 판단+", template: "해제 시", additionalSkillUids: ["gear-2"] }),
+        displaySkill("gear-2", { name: "전술적 판단+", template: "전환 시" }),
+        displaySkill("gear-3", { name: "전술적 판단+", template: "해제 시" }),
+        displaySkill("gear-4", { name: "전술적 판단+", template: "전환 시" }),
+      ];
+      const rows = selectDisplayedStudentSkills(
+        [
+          selected(skills[0], StudentSkillTypeEnum.Public, 0),
+          selected(skills[2], StudentSkillTypeEnum.Public, 2),
+          selected(skills[3], StudentSkillTypeEnum.Public, 3),
+        ],
+        skills,
+      );
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].skill.uid).toBe("gear-1");
+      expect(rows[0].linkedSkills.map(({ skill, link }) => [skill.uid, link.kind])).toEqual([["gear-2", "additional"]]);
+    });
+
+    it("moves the links of a hidden entry onto the entry it repeats", () => {
+      const skills = [
+        displaySkill("ex-1", { name: "EX" }),
+        displaySkill("ex-2", {
+          name: "EX",
+          selectableSkills: [{ condition: StudentSkillSelectionCondition.Enemy, skillUid: "ex-enemy" }],
+        }),
+        displaySkill("ex-enemy", { name: "적 EX" }),
+      ];
+      const rows = selectDisplayedStudentSkills(
+        [selected(skills[0], StudentSkillTypeEnum.Ex, 0), selected(skills[1], StudentSkillTypeEnum.Ex, 1)],
+        skills,
+      );
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0].linkedSkills).toEqual([
+        { skill: skills[2], link: { kind: "selectable", condition: StudentSkillSelectionCondition.Enemy } },
+      ]);
+    });
+
+    it("keeps entries whose displayed values or slots differ", () => {
+      const base = displaySkill("public-1", { name: "같은 이름", values: ["10%"] });
+      const otherValue = displaySkill("public-2", { name: "같은 이름", values: ["20%"] });
+      const otherIcon = displaySkill("public-3", { name: "같은 이름", values: ["10%"], iconUrl: "other.webp" });
+      const otherSlot = displaySkill("passive-1", { name: "같은 이름", values: ["10%"] });
+      const rows = selectDisplayedStudentSkills(
+        [
+          selected(base, StudentSkillTypeEnum.Public, 0),
+          selected(otherValue, StudentSkillTypeEnum.Public, 1),
+          selected(otherIcon, StudentSkillTypeEnum.Public, 2),
+          selected(otherSlot, StudentSkillTypeEnum.Passive, 0),
+        ],
+        [base, otherValue, otherIcon, otherSlot],
+      );
+
+      expect(rows.map((row) => row.skill.uid)).toEqual(["public-1", "public-2", "public-3", "passive-1"]);
+    });
+  });
 });
+
+type DisplaySkill = StudentCalculatorSource["skills"][number];
+
+function displaySkill(
+  uid: string,
+  options: {
+    name: string;
+    template?: string;
+    values?: string[];
+    iconUrl?: string;
+    additionalSkillUids?: string[];
+    selectableSkills?: DisplaySkill["selectableSkills"];
+  },
+): DisplaySkill {
+  return {
+    uid,
+    skillType: StudentSkillTypeEnum.Public,
+    name: options.name,
+    iconUrl: options.iconUrl ?? "icon.webp",
+    maxLevel: 10,
+    levels: [{ level: 1, cost: 0, statModifiers: [] }],
+    description: {
+      template: options.template ?? "공격력 {{1}} 증가",
+      parameters: [{ id: 1, emphasized: true, values: [{ level: 1, text: options.values?.[0] ?? "10%" }] }],
+    },
+    additionalSkillUids: options.additionalSkillUids ?? [],
+    selectableSkills: options.selectableSkills ?? [],
+  } as DisplaySkill;
+}
+
+function selected(skill: DisplaySkill, slot: StudentSkillTypeEnum, position: number) {
+  return { ...skill, slot, position, selectedLevel: 1 };
+}
 
 function createCatalog(): StudentCalculatorCatalog {
   return {

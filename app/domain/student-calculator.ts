@@ -317,6 +317,78 @@ export function selectStudentSkills(
   );
 }
 
+export type StudentSkillLinkKind =
+  | { kind: "additional" }
+  | { kind: "selectable"; condition: StudentCalculatorSource["skills"][number]["selectableSkills"][number]["condition"] };
+
+export type DisplayedStudentSkill = {
+  skill: SelectedStudentSkill;
+  linkedSkills: Array<{ skill: StudentCalculatorSource["skills"][number]; link: StudentSkillLinkKind }>;
+};
+
+/**
+ * Game data can split one skill into several entries that share the same text, one per trigger or target
+ * (for example CH0346Public01/02, or CH0187GearPublic03 repeating GearPublic01 and GearPublic04 repeating
+ * its additional skill GearPublic02). The game shows each such skill once, so within a slot this keeps the
+ * first entry with a given displayed content and moves the links of a hidden entry onto the entry it repeats.
+ * Stat calculation keeps using every entry from selectStudentSkills.
+ */
+export function selectDisplayedStudentSkills(
+  selected: readonly SelectedStudentSkill[],
+  allSkills: StudentCalculatorSource["skills"],
+): DisplayedStudentSkill[] {
+  const skillByUid = new Map(allSkills.map((skill) => [skill.uid, skill]));
+  const rows: DisplayedStudentSkill[] = [];
+  let slot: StudentSkillTypeEnum | null = null;
+  let rowByContent = new Map<string, DisplayedStudentSkill>();
+
+  for (const skill of selected) {
+    if (skill.slot !== slot) {
+      slot = skill.slot;
+      rowByContent = new Map();
+    }
+    const content = displayedSkillContent(skill);
+    const existing = rowByContent.get(content);
+    const row = existing ?? { skill, linkedSkills: [] };
+    if (!existing) {
+      rows.push(row);
+      rowByContent.set(content, row);
+    }
+    const links: Array<{ uid: string; link: StudentSkillLinkKind }> = [
+      ...skill.additionalSkillUids.map((uid) => ({ uid, link: { kind: "additional" } as const })),
+      ...skill.selectableSkills.map(({ skillUid, condition }) => ({ uid: skillUid, link: { kind: "selectable", condition } as const })),
+    ];
+    for (const { uid, link } of links) {
+      const linked = skillByUid.get(uid);
+      if (!linked) continue;
+      const linkedContent = displayedSkillContent(linked);
+      if (rowByContent.has(linkedContent)) continue;
+      row.linkedSkills.push({ skill: linked, link });
+      rowByContent.set(linkedContent, row);
+    }
+  }
+  return rows;
+}
+
+function displayedSkillContent(skill: StudentCalculatorSource["skills"][number]): string {
+  return JSON.stringify([
+    skill.name,
+    skill.iconUrl,
+    skill.maxLevel,
+    skill.levels.map((level) => [level.level, level.cost]),
+    skill.description
+      ? [
+          skill.description.template,
+          skill.description.parameters.map((parameter) => [
+            parameter.id,
+            parameter.emphasized,
+            parameter.values.map((value) => [value.level, value.text]),
+          ]),
+        ]
+      : null,
+  ]);
+}
+
 export function renderStudentSkillDescription(
   skill: Pick<SelectedStudentSkill, "description" | "selectedLevel">,
 ): string | null {

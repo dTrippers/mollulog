@@ -4,7 +4,7 @@ import { StarIcon } from "@heroicons/react/24/solid";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { Link, useFetcher, useLocation, useNavigationType } from "react-router";
-import { calculateStudentStats, getEquipmentMaxLevel, getEquipmentSlotUnlockLevel, renderStudentSkillDescriptionParts, resolveStudentCalculatorState, type StudentCalculatorCatalog, type StudentCalculatorSource, type StudentCalculatorState, selectStudentSkills } from "~/domain/student-calculator";
+import { calculateStudentStats, getEquipmentMaxLevel, getEquipmentSlotUnlockLevel, renderStudentSkillDescriptionParts, resolveStudentCalculatorState, type StudentCalculatorCatalog, type StudentCalculatorSource, type StudentCalculatorState, type DisplayedStudentSkill, selectDisplayedStudentSkills, selectStudentSkills } from "~/domain/student-calculator";
 import { createStudentGrowthDraftStorageKey, parseStudentGrowthDraft, serializeStudentGrowthDraft } from "~/domain/student-growth-draft";
 import { getWeaponLevelMaxByTier } from "~/domain/student-growth-state";
 import { isStaleStudentStateActionResult, STUDENT_STATE_STALE_MESSAGE } from "~/domain/student-state-errors";
@@ -124,7 +124,10 @@ export default function StudentBasicInfo({
     () => calculateStudentStats(student, catalog, state, relatedFavorStates, includeSkillEffects),
     [student, catalog, state, relatedFavorStates, includeSkillEffects],
   );
-  const selectedSkills = useMemo(() => selectStudentSkills(student, state), [student, state]);
+  const displayedSkills = useMemo(
+    () => selectDisplayedStudentSkills(selectStudentSkills(student, state), student.skills),
+    [student, state],
+  );
   const statValues = useMemo(() => new Map(stats.map(({ stat, value }) => [stat, value])), [stats]);
   const primaryStatValues = primaryStats.flatMap(({ stat, label }) => {
     const value = statValues.get(stat);
@@ -356,18 +359,17 @@ export default function StudentBasicInfo({
       <section className="mt-6">
         <SectionHeading title="스킬" />
         <div className="overflow-hidden rounded-lg bg-v2-surface p-v2-block-p">
-          {selectedSkills.length === 0 ? (
+          {displayedSkills.length === 0 ? (
             <p className="text-sm leading-[1.43] text-v2-fg-secondary">현재 상태에 맞는 스킬 정보를 불러오지 못했어요</p>
           ) : (
-            selectedSkills.map((skill, index) => (
+            displayedSkills.map((row, index) => (
               <SkillRow
-                key={`${skill.slot}-${skill.position}-${skill.uid}`}
-                skill={skill}
-                allSkills={student.skills}
+                key={`${row.skill.slot}-${row.skill.position}-${row.skill.uid}`}
+                row={row}
                 entries={knowledgeEntries}
                 attackType={student.attackType}
-                last={index === selectedSkills.length - 1}
-                onLevelChange={(value) => updateState(skillFieldForSlot(skill.slot), value)}
+                last={index === displayedSkills.length - 1}
+                onLevelChange={(value) => updateState(skillFieldForSlot(row.skill.slot), value)}
               />
             ))
           )}
@@ -476,21 +478,18 @@ export function GrowthSummaryRow({
   );
 }
 
-function SkillRow({ skill, allSkills, entries, attackType, last, onLevelChange }: {
-  skill: ReturnType<typeof selectStudentSkills>[number];
-  allSkills: StudentCalculatorSource["skills"];
+function SkillRow({ row, entries, attackType, last, onLevelChange }: {
+  row: DisplayedStudentSkill;
   entries: PublicKnowledgeEntry[];
   attackType: Attack;
   last: boolean;
   onLevelChange: (value: number) => void;
 }) {
-  const linkedSkills = [
-    ...skill.additionalSkillUids.map((uid) => ({ uid, label: "추가" })),
-    ...skill.selectableSkills.map(({ skillUid, condition }) => ({ uid: skillUid, label: skillSelectionConditionLabels[condition] })),
-  ].flatMap(({ uid, label }) => {
-    const linked = allSkills.find((candidate) => candidate.uid === uid);
-    return linked ? [{ ...linked, label }] : [];
-  });
+  const { skill } = row;
+  const linkedSkills = row.linkedSkills.map(({ skill: linked, link }) => ({
+    ...linked,
+    label: link.kind === "additional" ? "추가" : skillSelectionConditionLabels[link.condition],
+  }));
   return (
     <div className="relative grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-x-[14px] gap-y-1 px-0 pt-[14px] pb-[15px] first:pt-0 last:pb-0 md:grid-cols-[2.5rem_minmax(0,1fr)_9.5rem]">
       <StudentSkillIcon attackType={attackType} iconUrl={skill.iconUrl} size="sm" />
