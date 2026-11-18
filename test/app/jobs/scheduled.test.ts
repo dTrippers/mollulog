@@ -175,7 +175,7 @@ beforeEach(() => {
   mockedGetItemCatalogResources.mockResolvedValue([]);
   mockedGetFurnitureCatalogSource.mockResolvedValue({ furnitures: [], themes: [] });
   mockedGetCampaignFarmingStages.mockResolvedValue([]);
-  mockedGetRecruitTicketSource.mockResolvedValue({ products: [], pools: [], items: {} });
+  mockedGetRecruitTicketSource.mockResolvedValue({ products: [], pools: [], items: {}, productItemUids: [] });
   mockedReconcileOcrJobs.mockResolvedValue();
   mockedPublishPendingOcrOutbox.mockResolvedValue(0);
 });

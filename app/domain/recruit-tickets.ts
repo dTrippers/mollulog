@@ -1,7 +1,7 @@
 import { getInstantTime, type UtcIsoString } from "~/lib/date-time";
 
 // Recruitment ticket cards for the 상품 / 패키지 › 모집권 tab. A card is a ticket in a product (one per product and ticket
-// item), or tickets outside products that share a name and target students. Only the cards an operator chose to show
+// item), or tickets no product gives that share a name and target students. Only the cards an operator chose to show
 // (see the recruit_tickets table) reach the tab.
 
 export type RecruitTicketKind = "select" | "fixed";
@@ -66,6 +66,8 @@ export type RecruitTicketItemSource = {
   name: string;
   gachaTicketType: string | null;
   imageUrl: string | null;
+  // The last time a held ticket can be used; null for one that never expires.
+  expiresAt: UtcIsoString | null;
 };
 
 export type RecruitTicketSource = {
@@ -73,6 +75,8 @@ export type RecruitTicketSource = {
   // Pools of every item, open at or after the time the source was read.
   pools: RecruitTicketPoolSource[];
   items: Record<string, RecruitTicketItemSource>;
+  // Items any GL client product gives, whether or not it is still on sale. Such a ticket only gets product cards.
+  productItemUids: string[];
 };
 
 export type RecruitTicketStudentSource = {
@@ -100,9 +104,11 @@ export type RecruitTicketCard = {
   product: { uid: string; name: string } | null;
   iconUrl: string | null;
   iconItemUid: string;
-  // A product's sale period, or the ticket banner's period. Null start: no period (a selection ticket).
+  // A product card's sale period; null on a card outside products.
   periodStartAt: UtcIsoString | null;
   periodEndAt: UtcIsoString | null;
+  // A card outside products: the last time its tickets can be used, null when one never expires. Null on a product card.
+  usableUntil: UtcIsoString | null;
   // When the current target students stop being the targets while the ticket stays on sale or in use.
   targetsChangeAt: UtcIsoString | null;
   students: RecruitTicketCardStudent[];
@@ -123,6 +129,11 @@ type CurrentPools = {
 type Candidate = Omit<RecruitTicketCard, "students" | "iconUrl" | "iconItemUid"> & {
   itemUids: string[];
   studentUids: string[];
+};
+
+type ItemGroup = Omit<Candidate, "key" | "usableUntil" | "targetsChangeAt"> & {
+  // The end of the first item's current pools, for the target change notice.
+  poolsEndAt: UtcIsoString | null;
 };
 
 function time(instant: UtcIsoString): number {
@@ -156,12 +167,26 @@ function unionStudentUids(pools: RecruitTicketPoolSource[]): string[] {
 }
 
 // The time the current targets may change, shown only when the ticket outlasts the current pools: a product still on
-// sale after they close, or a ticket outside products, which the player keeps.
-function targetsChangeAt(current: CurrentPools, cardEndAt: UtcIsoString | null): UtcIsoString | null {
-  const poolsEndAt = minInstant(current.pools.map((pool) => pool.endAt));
+// sale after they close, or a ticket outside products still usable then. A null card end never ends.
+function targetsChangeAt(poolsEndAt: UtcIsoString | null, cardEndAt: UtcIsoString | null): UtcIsoString | null {
   if (poolsEndAt === null) return null;
   if (cardEndAt !== null && time(cardEndAt) <= time(poolsEndAt)) return null;
   return poolsEndAt;
+}
+
+function poolsEndAtOf(current: CurrentPools): UtcIsoString | null {
+  return minInstant(current.pools.map((pool) => pool.endAt));
+}
+
+// The latest expiry of the items, or null when one of them never expires.
+function lastUsableAt(itemUids: string[], items: Record<string, RecruitTicketItemSource>): UtcIsoString | null {
+  let result: UtcIsoString | null = null;
+  for (const itemUid of itemUids) {
+    const expiresAt = items[itemUid]?.expiresAt ?? null;
+    if (expiresAt === null) return null;
+    if (result === null || time(expiresAt) > time(result)) result = expiresAt;
+  }
+  return result;
 }
 
 function compareUid(a: string, b: string): number {
@@ -208,7 +233,8 @@ function productCandidates(
         product: { uid: product.uid, name: product.name },
         periodStartAt: product.startAt,
         periodEndAt: product.endAt,
-        targetsChangeAt: targetsChangeAt(current, product.endAt),
+        usableUntil: null,
+        targetsChangeAt: targetsChangeAt(poolsEndAtOf(current), product.endAt),
         itemUids: [itemUid],
         studentUids: unionStudentUids(current.pools),
       });
@@ -223,14 +249,17 @@ function itemCandidates(
   problems: RecruitTicketCardProblem[],
   wantedItem: (itemUid: string) => boolean,
 ): Candidate[] {
+  // A ticket a product gives gets product cards only, also after the product's sale has ended.
+  const productItemUids = new Set(source.productItemUids);
   const poolsByItem = new Map<string, RecruitTicketPoolSource[]>();
   for (const pool of source.pools) {
+    if (productItemUids.has(pool.itemUid)) continue;
     const pools = poolsByItem.get(pool.itemUid) ?? [];
     pools.push(pool);
     poolsByItem.set(pool.itemUid, pools);
   }
 
-  const byGroup = new Map<string, Candidate>();
+  const byGroup = new Map<string, ItemGroup>();
   for (const [itemUid, pools] of [...poolsByItem].sort(([a], [b]) => compareUid(a, b))) {
     const current = selectCurrentPools(pools, now);
     if (current === null) continue;
@@ -250,8 +279,9 @@ function itemCandidates(
       }
       continue;
     }
+    // An expired ticket cannot be used any more, so it is left out without a problem.
+    if (item.expiresAt !== null && time(item.expiresAt) <= now) continue;
 
-    const bannerPools = current.pools.filter((pool) => pool.sourceType === "banner");
     const studentUids = unionStudentUids(current.pools).sort(compareUid);
     const groupKey = JSON.stringify([kind, item.name, studentUids]);
     const existing = byGroup.get(groupKey);
@@ -260,19 +290,26 @@ function itemCandidates(
       continue;
     }
     byGroup.set(groupKey, {
-      key: "",
       kind,
       title: item.name,
       product: null,
-      periodStartAt: minInstant(bannerPools.map((pool) => pool.startAt)),
-      periodEndAt: minInstant(bannerPools.map((pool) => pool.endAt)),
-      targetsChangeAt: targetsChangeAt(current, null),
+      periodStartAt: null,
+      periodEndAt: null,
+      poolsEndAt: poolsEndAtOf(current),
       itemUids: [itemUid],
       studentUids,
     });
   }
 
-  return [...byGroup.values()].map((candidate) => ({ ...candidate, key: itemCardKey(candidate.itemUids) }));
+  return [...byGroup.values()].map(({ poolsEndAt, ...group }) => {
+    const usableUntil = lastUsableAt(group.itemUids, source.items);
+    return {
+      ...group,
+      key: itemCardKey(group.itemUids),
+      usableUntil,
+      targetsChangeAt: targetsChangeAt(poolsEndAt, usableUntil),
+    };
+  });
 }
 
 export function productCardKey(productUid: string, itemUid: string): string {
@@ -284,10 +321,16 @@ export function itemCardKey(itemUids: string[]): string {
 }
 
 function compareCards(a: Candidate, b: Candidate): number {
-  // Cards with a period come first, by start; selection tickets without one follow.
+  // Product cards with a sale start come first, by start; the other cards follow, the ones usable for the shortest
+  // time first and the ones that never expire last.
   if ((a.periodStartAt === null) !== (b.periodStartAt === null)) return a.periodStartAt === null ? 1 : -1;
   if (a.periodStartAt !== null && b.periodStartAt !== null) {
     const diff = time(a.periodStartAt) - time(b.periodStartAt);
+    if (diff !== 0) return diff;
+  } else if ((a.usableUntil === null) !== (b.usableUntil === null)) {
+    return a.usableUntil === null ? 1 : -1;
+  } else if (a.usableUntil !== null && b.usableUntil !== null) {
+    const diff = time(a.usableUntil) - time(b.usableUntil);
     if (diff !== 0) return diff;
   }
   const title = a.title.localeCompare(b.title, "ko");

@@ -8,14 +8,20 @@ import type {
   RecruitTicketSource,
 } from "~/domain/recruit-tickets";
 import { graphql } from "~/graphql";
-import type { RecruitTicketPoolsQuery, RecruitTicketProductsQuery } from "~/graphql/graphql";
+import type {
+  RecruitTicketPoolsQuery,
+  RecruitTicketProductItemsQuery,
+  RecruitTicketProductsQuery,
+} from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
 import { cacheKey, fetchSourceCached } from "~/lib/cache";
 import { toUtcIso } from "~/lib/date-time";
 import { withPostgresClient } from "~/lib/postgres.server";
 
-const RECRUIT_TICKET_SOURCE_CACHE_KEY = cacheKey("source", "recruit-ticket", 1, "gl");
+const RECRUIT_TICKET_SOURCE_CACHE_KEY = cacheKey("source", "recruit-ticket", 2, "gl");
 const PRODUCT_PAGE_SIZE = 100;
+// Every GL product (some hundreds) in one request where possible, so the source stays within the regeneration deadline.
+const PRODUCT_ITEMS_PAGE_SIZE = 1000;
 const ITEM_QUERY_CHUNK_SIZE = 200;
 
 const recruitTicketProductsQuery = graphql(`
@@ -36,6 +42,15 @@ const recruitTicketProductsQuery = graphql(`
   }
 `);
 
+const recruitTicketProductItemsQuery = graphql(`
+  query RecruitTicketProductItems($after: String, $first: Int) {
+    shopProducts(region: gl, after: $after, first: $first) {
+      nodes { clientUid contents { rewardType rewardUid } }
+      pageInfo { hasNextPage endCursor }
+    }
+  }
+`);
+
 const recruitTicketPoolsQuery = graphql(`
   query RecruitTicketPools($openAfter: ISO8601DateTime) {
     itemStudentPools(region: gl, openAfter: $openAfter) {
@@ -46,7 +61,7 @@ const recruitTicketPoolsQuery = graphql(`
 
 const recruitTicketItemsQuery = graphql(`
   query RecruitTicketItems($uids: [String!]) {
-    items(uids: $uids) { uid name gachaTicketType imageUrl(region: gl) }
+    items(uids: $uids) { uid name gachaTicketType imageUrl(region: gl) expiresAt(region: gl) }
   }
 `);
 
@@ -101,6 +116,26 @@ async function readProducts(endAfter: Date): Promise<RecruitTicketProductSource[
   }
 }
 
+// Items any GL client product gives, ended products included. Planned products (no clientUid) are left out.
+async function readProductItemUids(): Promise<string[]> {
+  const itemUids = new Set<string>();
+  let after: string | null = null;
+  for (;;) {
+    const { data, error } = await runQuery(recruitTicketProductItemsQuery, { after, first: PRODUCT_ITEMS_PAGE_SIZE });
+    if (error) throw error;
+    if (!data) throw new Error("BAQL shop product items response is missing data");
+    const page: RecruitTicketProductItemsQuery["shopProducts"] = data.shopProducts;
+    for (const node of page.nodes) {
+      if (node.clientUid === null) continue;
+      for (const content of node.contents) if (content.rewardType === "item") itemUids.add(content.rewardUid);
+    }
+    const { hasNextPage, endCursor } = page.pageInfo;
+    if (!hasNextPage) return [...itemUids].sort();
+    if (!endCursor) throw new Error("BAQL shop product items page is missing its end cursor");
+    after = endCursor;
+  }
+}
+
 async function readPools(openAfter: Date): Promise<RecruitTicketPoolSource[]> {
   const { data, error } = await runQuery(recruitTicketPoolsQuery, { openAfter });
   if (error) throw error;
@@ -123,28 +158,33 @@ async function readItems(uids: string[]): Promise<Record<string, RecruitTicketIt
         name,
         gachaTicketType: item.gachaTicketType,
         imageUrl: item.imageUrl?.trim() || null,
+        expiresAt: optionalInstant(item.expiresAt),
       };
     }
   }
   return items;
 }
 
-// GL products on sale now or later, the pools open now or later, and the items they give. An item BAQL does not have is
-// absent from `items`.
+// GL products on sale now or later, the pools open now or later, the items they give, and the items any GL product gives.
+// An item BAQL does not have is absent from `items`.
 export async function getRecruitTicketSource(env: Env, forceRefresh = false): Promise<RecruitTicketSource> {
   return fetchSourceCached(
     env,
     RECRUIT_TICKET_SOURCE_CACHE_KEY,
     async () => {
       const now = new Date();
-      const [products, pools] = await Promise.all([readProducts(now), readPools(now)]);
+      const [products, pools, productItemUids] = await Promise.all([
+        readProducts(now),
+        readPools(now),
+        readProductItemUids(),
+      ]);
       const itemUids = [
         ...new Set([
           ...products.flatMap((product) => product.pools.map((pool) => pool.itemUid)),
           ...pools.map((pool) => pool.itemUid),
         ]),
       ].sort();
-      return { products, pools, items: await readItems(itemUids) };
+      return { products, pools, items: await readItems(itemUids), productItemUids };
     },
     forceRefresh,
     { rejectOnForcedRefresh: true },

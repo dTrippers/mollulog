@@ -30,6 +30,7 @@ function item(uid: string, overrides: Partial<RecruitTicketItemSource> = {}): Re
     name: `티켓 ${uid}`,
     gachaTicketType: "select_recruit",
     imageUrl: `https://img/${uid}.png`,
+    expiresAt: null,
     ...overrides,
   };
 }
@@ -53,7 +54,7 @@ function build(
   recruitedStudentUids: ReadonlySet<string> | null = null,
 ) {
   return buildRecruitTicketCards({
-    source: { products: [], pools: [], items: {}, ...source },
+    source: { products: [], pools: [], items: {}, productItemUids: [], ...source },
     students: STUDENTS,
     selections,
     recruitedStudentUids,
@@ -148,6 +149,7 @@ describe("buildRecruitTicketCards", () => {
       iconUrl: "https://img/1.png",
       periodStartAt: "2026-11-17T02:00:00.000Z",
       periodEndAt: "2026-12-01T02:00:00.000Z",
+      usableUntil: null,
       targetsChangeAt: null,
     });
   });
@@ -310,10 +312,54 @@ describe("buildRecruitTicketCards", () => {
       [itemCardKey(["11", "12"]), "12"],
       [itemCardKey(["13"]), "13"],
     ]);
-    expect(cards[0]).toMatchObject({ product: null, periodStartAt: null, targetsChangeAt: null });
+    expect(cards[0]).toMatchObject({ product: null, periodStartAt: null, usableUntil: null, targetsChangeAt: null });
   });
 
-  it("gives a ticket banner outside products its banner period and notes the weekly change", () => {
+  it("leaves tickets any product gives off the cards outside products, also after the sale", () => {
+    const selection = { sourceType: "selection", studentUids: ["10001"] };
+    const source = {
+      pools: [pool({ uid: "a", itemUid: "1", ...selection }), pool({ uid: "b", itemUid: "2", ...selection })],
+      items: { "1": item("1"), "2": item("2") },
+      productItemUids: ["1"],
+    };
+    const { cards, problems } = build(source, [
+      { productUid: null, itemUid: "1" },
+      { productUid: null, itemUid: "2" },
+    ]);
+    expect(cards.map((card) => card.key)).toEqual([itemCardKey(["2"])]);
+    expect(problems).toEqual([]);
+  });
+
+  it("drops expired tickets and shows when the rest can be used until", () => {
+    const selection = { sourceType: "selection", studentUids: ["10001"] };
+    const source = {
+      pools: [
+        pool({ uid: "a", itemUid: "1", ...selection }),
+        pool({ uid: "b", itemUid: "2", ...selection }),
+        pool({ uid: "c", itemUid: "3", ...selection }),
+        pool({ uid: "d", itemUid: "4", ...selection, studentUids: ["10002"] }),
+        pool({ uid: "e", itemUid: "5", ...selection, studentUids: ["10002"] }),
+        pool({ uid: "f", itemUid: "6", ...selection, studentUids: ["10004"] }),
+      ],
+      items: {
+        "1": item("1", { name: "선택권", expiresAt: NOW }),
+        "2": item("2", { name: "선택권", expiresAt: at("2026-12-01T01:59:59.000Z") }),
+        "3": item("3", { name: "선택권", expiresAt: at("2026-12-15T01:59:59.000Z") }),
+        "4": item("4", { name: "선택권", expiresAt: at("2026-12-01T01:59:59.000Z") }),
+        "5": item("5", { name: "선택권" }),
+        "6": item("6", { name: "선택권", expiresAt: at("2026-11-01T00:00:00.000Z") }),
+      },
+    };
+    const selections = ["1", "2", "3", "4", "5", "6"].map((itemUid) => ({ productUid: null, itemUid }));
+    const { cards, problems } = build(source, selections);
+    expect(cards.map((card) => [card.key, card.usableUntil])).toEqual([
+      [itemCardKey(["2", "3"]), "2026-12-15T01:59:59.000Z"],
+      [itemCardKey(["4", "5"]), null],
+    ]);
+    expect(problems).toEqual([]);
+  });
+
+  it("notes the weekly change of a ticket banner outside products only while the ticket is still usable", () => {
     const source = {
       pools: [
         pool({
@@ -335,13 +381,18 @@ describe("buildRecruitTicketCards", () => {
     };
     const [card] = build(source, [{ productUid: null, itemUid: "1" }]).cards;
     expect(card).toMatchObject({
-      periodStartAt: "2026-11-17T02:00:00.000Z",
-      periodEndAt: "2026-11-24T02:00:00.000Z",
+      periodStartAt: null,
+      periodEndAt: null,
+      usableUntil: null,
       targetsChangeAt: "2026-11-24T02:00:00.000Z",
     });
+
+    const expiring = { "1": item("1", { gachaTicketType: "three_star", expiresAt: at("2026-11-24T01:59:59.000Z") }) };
+    const [expiringCard] = build({ ...source, items: expiring }, [{ productUid: null, itemUid: "1" }]).cards;
+    expect(expiringCard).toMatchObject({ usableUntil: "2026-11-24T01:59:59.000Z", targetsChangeAt: null });
   });
 
-  it("sorts cards with a period by start, then cards without one", () => {
+  it("sorts product cards by sale start, then the other cards by how long they are usable", () => {
     const contents = (itemUid: string) => [{ itemUid }];
     const source = {
       products: [
@@ -358,17 +409,31 @@ describe("buildRecruitTicketCards", () => {
           pools: [pool({ uid: "b", itemUid: "1", studentUids: ["10001"] })],
         }),
       ],
-      pools: [pool({ uid: "c", itemUid: "2", sourceType: "selection", studentUids: ["10001"] })],
-      items: { "1": item("1"), "2": item("2") },
+      pools: [
+        pool({ uid: "c", itemUid: "2", sourceType: "selection", studentUids: ["10001"] }),
+        pool({ uid: "d", itemUid: "3", sourceType: "selection", studentUids: ["10002"] }),
+        pool({ uid: "e", itemUid: "4", sourceType: "selection", studentUids: ["10004"] }),
+      ],
+      items: {
+        "1": item("1"),
+        "2": item("2"),
+        "3": item("3", { expiresAt: at("2027-01-01T00:00:00.000Z") }),
+        "4": item("4", { expiresAt: at("2026-12-01T00:00:00.000Z") }),
+      },
+      productItemUids: ["1"],
     };
     const { cards } = build(source, [
       { productUid: "late", itemUid: "1" },
       { productUid: "early", itemUid: "1" },
       { productUid: null, itemUid: "2" },
+      { productUid: null, itemUid: "3" },
+      { productUid: null, itemUid: "4" },
     ]);
     expect(cards.map((card) => card.key)).toEqual([
       productCardKey("early", "1"),
       productCardKey("late", "1"),
+      itemCardKey(["4"]),
+      itemCardKey(["3"]),
       itemCardKey(["2"]),
     ]);
   });

@@ -7,7 +7,11 @@ import { splitVisibleStudentName } from "~/components/v2/features/students/split
 import { HintChip } from "~/components/v2/primitives/HintChip";
 import { RECRUIT_TICKET_KIND_COPY, type RecruitTicketCard as RecruitTicketCardData } from "~/domain/recruit-tickets";
 import type { UtcIsoString } from "~/lib/date-time";
-import { formatRecruitTicketPeriod, formatRecruitTicketTargetsNotice } from "./recruit-ticket-format";
+import {
+  formatRecruitTicketPeriod,
+  formatRecruitTicketTargetsNotice,
+  formatRecruitTicketUsableUntil,
+} from "./recruit-ticket-format";
 
 // A long list shows this many cells, the last one being the "+n" tile: two rows of five on a phone.
 const VISIBLE_CELLS = 10;
@@ -25,6 +29,7 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
   const [expanded, setExpanded] = useState(false);
   const kind = RECRUIT_TICKET_KIND_COPY[card.kind];
   const period = formatRecruitTicketPeriod(card.periodStartAt, card.periodEndAt, timeZone, now);
+  const usableUntil = card.usableUntil ? formatRecruitTicketUsableUntil(card.usableUntil, timeZone, now) : null;
   const hiddenCount =
     expanded || card.students.length <= VISIBLE_CELLS ? 0 : card.students.length - (VISIBLE_CELLS - 1);
   const visible = hiddenCount > 0 ? card.students.slice(0, VISIBLE_CELLS - 1) : card.students;
@@ -41,7 +46,7 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
             </h3>
             <HintChip variant="chip" label={kind.label} description={kind.description} />
           </div>
-          {/* The product and the period each take their own line. */}
+          {/* The product and the period each take their own line; a card outside products shows how long it is usable. */}
           <dl className="mt-1 space-y-1 text-[0.8125rem] leading-5 text-v2-fg-secondary empty:hidden">
             {card.product ? (
               <div className="flex items-start gap-2">
@@ -53,6 +58,12 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
               <div className="flex items-start gap-2">
                 <dt className={metaLabelClassName}>기간</dt>
                 <dd className="tabular-nums">{period}</dd>
+              </div>
+            ) : null}
+            {usableUntil ? (
+              <div className="flex items-start gap-2">
+                <dt className={metaLabelClassName}>사용 기한</dt>
+                <dd className="tabular-nums">{usableUntil}</dd>
               </div>
             ) : null}
           </dl>
