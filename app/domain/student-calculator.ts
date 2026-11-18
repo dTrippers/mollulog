@@ -323,6 +323,11 @@ export type StudentSkillLinkKind =
 
 export type DisplayedStudentSkill = {
   skill: SelectedStudentSkill;
+  /**
+   * A skill with selectable skills only frames the choice: the game stores a placeholder as its own text
+   * ("" at level 1, "0" above, for every such skill in BAQL), so only its choices are described.
+   */
+  showsOwnDescription: boolean;
   linkedSkills: Array<{ skill: StudentCalculatorSource["skills"][number]; link: StudentSkillLinkKind }>;
 };
 
@@ -349,7 +354,7 @@ export function selectDisplayedStudentSkills(
     }
     const content = displayedSkillContent(skill);
     const existing = rowByContent.get(content);
-    const row = existing ?? { skill, linkedSkills: [] };
+    const row = existing ?? { skill, showsOwnDescription: skill.selectableSkills.length === 0, linkedSkills: [] };
     if (!existing) {
       rows.push(row);
       rowByContent.set(content, row);

@@ -1029,6 +1029,34 @@ describe("student calculator", () => {
       ]);
     });
 
+    it("describes a selectable skill only through its choices", () => {
+      // CH0294SelectEx01 (미카(수영복)) stores "" at level 1 and "0" above as its own text.
+      const skills = [
+        displaySkill("select-ex", {
+          name: "잊을 수 없는 추억",
+          template: "{{1}}",
+          values: ["0"],
+          selectableSkills: [
+            { condition: StudentSkillSelectionCondition.Enemy, skillUid: "ex-enemy" },
+            { condition: StudentSkillSelectionCondition.Self, skillUid: "ex-self" },
+          ],
+        }),
+        displaySkill("ex-enemy", { name: "밤하늘의 유성" }),
+        displaySkill("ex-self", { name: "조용한 다짐" }),
+        displaySkill("public-1", { name: "일반" }),
+      ];
+      const rows = selectDisplayedStudentSkills(
+        [selected(skills[0], StudentSkillTypeEnum.Ex, 0), selected(skills[3], StudentSkillTypeEnum.Public, 0)],
+        skills,
+      );
+
+      expect(rows.map((row) => [row.skill.uid, row.showsOwnDescription])).toEqual([
+        ["select-ex", false],
+        ["public-1", true],
+      ]);
+      expect(rows[0].linkedSkills.map(({ skill }) => skill.uid)).toEqual(["ex-enemy", "ex-self"]);
+    });
+
     it("keeps entries whose displayed values or slots differ", () => {
       const base = displaySkill("public-1", { name: "같은 이름", values: ["10%"] });
       const otherValue = displaySkill("public-2", { name: "같은 이름", values: ["20%"] });

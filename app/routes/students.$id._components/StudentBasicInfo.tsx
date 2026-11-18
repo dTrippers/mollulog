@@ -500,7 +500,7 @@ function SkillRow({ row, entries, attackType, last, onLevelChange }: {
           cost={exSkillCost(skill, skill.slot, skill.selectedLevel)}
           className="text-sm leading-[1.43] font-semibold text-v2-fg"
         />
-        <SkillDescription skill={skill} entries={entries} />
+        {row.showsOwnDescription ? <SkillDescription skill={skill} entries={entries} /> : null}
         {linkedSkills.map((linked) => (
           <div key={linked.uid} className="mt-2 border-l-2 border-v2-divider pl-3">
             <span className="text-xs leading-[1.43] text-v2-fg-tertiary">{linked.label}</span>
