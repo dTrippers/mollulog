@@ -188,6 +188,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 | 대상 스테이지 | The stages the calculation may use | 켜 둔 스테이지 |
 | 필요 소탕 | The sweeps the calculation requires; extra sweeps the user enters are 추가 소탕 | 자동 소탕 |
 | 모집 기간 | The period a recruitment banner runs | 모집 |
+| 사용 기한 | The last time a ticket or item can be used (BAQL Item.expiresAt); a product's sale period is 기간 | 유효기간, 모집 기간 |
 | 모집 횟수 | A count of recruits (pulls), in 회 | 필요 인원, n명 |
 | 10회 모집 티켓 | The in-game 10-pull ticket, including the one bought with mileage | 마일리지 티켓 |
 | 픽업 외 모집 가능 | A student also obtainable outside its pickup | 픽업 아님 |
