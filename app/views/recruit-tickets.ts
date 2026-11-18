@@ -4,7 +4,8 @@ import { getRecruitTicketSelections, getRecruitTicketSource } from "~/models/rec
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudents } from "~/models/student";
 
-// The cards of the 모집권 tab. A signed-in Sensei's students that are not recruited yet are marked and listed first.
+// The cards of the 모집권 tab. A signed-in Sensei's students that are not recruited yet are marked and listed first,
+// and recruited ones show their tier.
 export async function getRecruitTicketsView(
   env: Env,
   senseiId: number | null,
@@ -22,7 +23,7 @@ export async function getRecruitTicketsView(
       students.map(({ uid, name, initialTier, order }) => [uid, { uid, name, initialTier, order }] as const),
     ),
     selections,
-    recruitedStudentUids: recruitedTiers === null ? null : new Set(Object.keys(recruitedTiers)),
+    recruitedTiers: recruitedTiers === null ? null : new Map(Object.entries(recruitedTiers)),
     now: nowUtcIso(),
   });
 }

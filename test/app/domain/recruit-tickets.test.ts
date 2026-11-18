@@ -51,13 +51,13 @@ const STUDENTS = new Map<string, RecruitTicketStudentSource>(
 function build(
   source: Partial<RecruitTicketSource>,
   selections: RecruitTicketSelection[],
-  recruitedStudentUids: ReadonlySet<string> | null = null,
+  recruitedTiers: ReadonlyMap<string, number> | null = null,
 ) {
   return buildRecruitTicketCards({
     source: { products: [], pools: [], items: {}, productItemUids: [], ...source },
     students: STUDENTS,
     selections,
-    recruitedStudentUids,
+    recruitedTiers,
     now: NOW,
   });
 }
@@ -267,7 +267,7 @@ describe("buildRecruitTicketCards", () => {
     expect(card.students.map((student) => student.uid)).toEqual(["10001"]);
   });
 
-  it("puts unrecruited students first, each group newest first", () => {
+  it("puts unrecruited students first, each group newest first, with the recruited students' tiers", () => {
     const source = {
       products: [
         product({
@@ -279,15 +279,21 @@ describe("buildRecruitTicketCards", () => {
       items: { "1": item("1") },
     };
     const selections = [{ productUid: "p1", itemUid: "1" }];
-    const [card] = build(source, selections, new Set(["10004", "10003"])).cards;
+    const recruitedTiers = new Map([
+      ["10004", 7],
+      ["10003", 3],
+    ]);
+    const [card] = build(source, selections, recruitedTiers).cards;
     expect(card.students).toEqual([
-      { uid: "10002", name: "나", unrecruited: true },
-      { uid: "10001", name: "가", unrecruited: true },
-      { uid: "10004", name: "라", unrecruited: false },
-      { uid: "10003", name: "다", unrecruited: false },
+      { uid: "10002", name: "나", unrecruited: true, tier: null },
+      { uid: "10001", name: "가", unrecruited: true, tier: null },
+      { uid: "10004", name: "라", unrecruited: false, tier: 7 },
+      { uid: "10003", name: "다", unrecruited: false, tier: 3 },
     ]);
     const [signedOut] = build(source, selections, null).cards;
-    expect(signedOut.students.map((student) => student.unrecruited)).toEqual([false, false, false, false]);
+    expect(signedOut.students.map(({ unrecruited, tier }) => ({ unrecruited, tier }))).toEqual(
+      Array(4).fill({ unrecruited: false, tier: null }),
+    );
   });
 
   it("merges tickets outside products with the same name and students, and shows a chosen one's icon", () => {

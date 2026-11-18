@@ -22,7 +22,3 @@ export function formatRecruitTicketPeriod(
 export function formatRecruitTicketUsableUntil(usableUntil: UtcIsoString, timeZone: string, now: UtcIsoString): string {
   return `${formatDate(usableUntil, timeZone, now, false)}까지`;
 }
-
-export function formatRecruitTicketTargetsNotice(at: UtcIsoString, timeZone: string, now: UtcIsoString): string {
-  return `${formatDate(at, timeZone, now, true)} 이후에는 대상 학생이 바뀔 수 있어요.`;
-}

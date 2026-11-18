@@ -1,21 +1,20 @@
+import { StarIcon } from "@heroicons/react/16/solid";
 import { ClockIcon } from "@heroicons/react/24/outline";
 import { useState } from "react";
 import { ResourceThumb } from "~/components/v2/features/resources/ResourceThumb";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
 import { StudentThumbList } from "~/components/v2/features/students/StudentThumbList";
 import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
+import { getTierMeaning } from "~/components/v2/features/students/TierInput";
 import { HintChip } from "~/components/v2/primitives/HintChip";
 import { RECRUIT_TICKET_KIND_COPY, type RecruitTicketCard as RecruitTicketCardData } from "~/domain/recruit-tickets";
 import type { UtcIsoString } from "~/lib/date-time";
-import {
-  formatRecruitTicketPeriod,
-  formatRecruitTicketTargetsNotice,
-  formatRecruitTicketUsableUntil,
-} from "./recruit-ticket-format";
+import { formatRecruitTicketPeriod, formatRecruitTicketUsableUntil } from "./recruit-ticket-format";
 
 // A long list shows this many cells, the last one being the "+n" tile: two rows of five on a phone.
 const VISIBLE_CELLS = 10;
 const UNRECRUITED_LABEL = "미모집";
+const TARGETS_NOTICE = "대상 학생이 바뀔 수 있어요.";
 const metaLabelClassName =
   "inline-flex h-5 shrink-0 items-center rounded-sm bg-v2-inset px-1.5 text-xs font-semibold text-v2-fg-secondary";
 
@@ -79,10 +78,12 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
                 name={name}
                 variant={variant}
                 recruitmentLabel={student.unrecruited ? UNRECRUITED_LABEL : undefined}
+                scrimLabel={student.tier !== null ? <TierLabel tier={student.tier} /> : undefined}
                 captionPlacement="overlay"
                 overlayOnMobile
               />
               {student.unrecruited ? <span className="sr-only">, {UNRECRUITED_LABEL}</span> : null}
+              {student.tier !== null ? <span className="sr-only">, {getTierMeaning(student.tier)}</span> : null}
             </li>
           );
         })}
@@ -102,9 +103,23 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
       {card.targetsChangeAt ? (
         <p className="mt-3 flex items-start gap-1.5 text-xs leading-[1.125rem] text-v2-fg-secondary">
           <ClockIcon className="mt-px size-4 shrink-0 text-v2-fg-tertiary" aria-hidden="true" />
-          <span>{formatRecruitTicketTargetsNotice(card.targetsChangeAt, timeZone, now)}</span>
+          <span>{TARGETS_NOTICE}</span>
         </p>
       ) : null}
     </section>
+  );
+}
+
+// A recruited student's tier: a star and the number up to ★5, then the exclusive weapon icon and its level.
+function TierLabel({ tier }: { tier: number }) {
+  return (
+    <span className="inline-flex items-center gap-px tabular-nums">
+      {tier <= 5 ? (
+        <StarIcon className="size-2.5 shrink-0" aria-hidden="true" />
+      ) : (
+        <img src="/icons/exclusive_weapon.png" alt="" className="size-3 shrink-0" />
+      )}
+      {tier <= 5 ? tier : tier - 5}
+    </span>
   );
 }

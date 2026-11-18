@@ -95,6 +95,8 @@ export type RecruitTicketCardStudent = {
   uid: string;
   name: string;
   unrecruited: boolean;
+  // The Sensei's tier (1-5 stars, then 6-9 for exclusive weapon 1-4); null when not recruited or signed out.
+  tier: number | null;
 };
 
 export type RecruitTicketCard = {
@@ -342,14 +344,14 @@ export function buildRecruitTicketCards({
   source,
   students,
   selections,
-  recruitedStudentUids,
+  recruitedTiers,
   now,
 }: {
   source: RecruitTicketSource;
   students: ReadonlyMap<string, RecruitTicketStudentSource>;
   selections: RecruitTicketSelection[];
-  // Null when signed out: no student is marked as not recruited.
-  recruitedStudentUids: ReadonlySet<string> | null;
+  // The Sensei's recruited students and their tiers. Null when signed out: no student is marked as not recruited.
+  recruitedTiers: ReadonlyMap<string, number> | null;
   now: UtcIsoString;
 }): RecruitTicketCardsResult {
   const nowTime = time(now);
@@ -396,7 +398,7 @@ export function buildRecruitTicketCards({
       ...card,
       iconItemUid,
       iconUrl: source.items[iconItemUid]?.imageUrl ?? null,
-      students: orderStudents(targets, recruitedStudentUids),
+      students: orderStudents(targets, recruitedTiers),
     });
   }
   return { cards, problems };
@@ -405,13 +407,14 @@ export function buildRecruitTicketCards({
 // Students the Sensei has not recruited come first; each group follows the student catalog order, newest first.
 function orderStudents(
   targets: RecruitTicketStudentSource[],
-  recruitedStudentUids: ReadonlySet<string> | null,
+  recruitedTiers: ReadonlyMap<string, number> | null,
 ): RecruitTicketCardStudent[] {
   const byOrder = [...targets].sort((a, b) => b.order - a.order || compareUid(a.uid, b.uid));
   const students = byOrder.map((student) => ({
     uid: student.uid,
     name: student.name,
-    unrecruited: recruitedStudentUids !== null && !recruitedStudentUids.has(student.uid),
+    unrecruited: recruitedTiers !== null && !recruitedTiers.has(student.uid),
+    tier: recruitedTiers?.get(student.uid) ?? null,
   }));
   return [...students.filter((student) => student.unrecruited), ...students.filter((student) => !student.unrecruited)];
 }
