@@ -1,3 +1,4 @@
+import { isStudentReleased } from "~/domain/student-release";
 import { graphql } from "~/graphql";
 import type { Attack, Defense, StudentGrowthVisualsQuery, StudentSkillTypeEnum } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
@@ -8,6 +9,7 @@ import {
   fetchLazySourceCachedBatch,
   fetchSourceCached,
 } from "~/lib/cache";
+import { toUtcIso } from "~/lib/date-time";
 import type { Position, TacticRole } from "./content.d";
 
 export type Role = "striker" | "special";
@@ -27,15 +29,19 @@ export type Student = {
   role: Role;
   equipments: string[];
   weaponType: string | null;
+  /** Decided from the GL release time when the student is read, not stored in the source cache. */
   released: boolean;
 };
+
+/** A student as the source cache stores it: the release time instead of a release state that goes stale. */
+type CachedStudent = Omit<Student, "released"> & { releaseAt: string | null };
 
 export type StudentMap = { [id: string]: Student };
 
 const allStudentsQuery = graphql(`
   query AllStudents {
     students {
-      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments weaponType released
+      uid name familyName altNames school initialTier order attackType defenseType position tacticRole birthday role equipments weaponType releaseAt
     }
   }
 `);
@@ -293,25 +299,21 @@ const studentGradeDetailQuery = graphql(`
 `);
 
 export async function getAllStudents(env: Env, includeUnreleased = false): Promise<Student[]> {
-  const rawStudents = await getRawStudents(env);
-  if (includeUnreleased) {
-    return rawStudents;
-  }
-  return rawStudents.filter(({ released }) => released);
+  const students = await getRawStudents(env);
+  return includeUnreleased ? students : students.filter(({ released }) => released);
 }
 
 export async function getAllStudentsMap(env: Env, includeUnreleased = false): Promise<StudentMap> {
-  const rawStudents = await getRawStudents(env);
-  const students = includeUnreleased ? rawStudents : rawStudents.filter(({ released }) => released);
+  const students = await getAllStudents(env, includeUnreleased);
   return students.reduce((acc, student) => {
     acc[student.uid] = student;
     return acc;
   }, {} as StudentMap);
 }
 
-const rawStudentsKey = cacheKey("source", "student", 2, "all");
+const rawStudentsKey = cacheKey("source", "student", 3, "all");
 
-async function fetchStudentsFromBaql(): Promise<Student[]> {
+async function fetchStudentsFromBaql(): Promise<CachedStudent[]> {
   const result = await runQuery(allStudentsQuery, {});
   if (result.error) {
     throw result.error;
@@ -319,17 +321,29 @@ async function fetchStudentsFromBaql(): Promise<Student[]> {
   if (!result.data || !Array.isArray(result.data.students)) {
     throw new Error("BAQL student catalog response is missing students");
   }
-  return result.data.students satisfies Student[];
+  return result.data.students.map(
+    ({ releaseAt, ...student }) =>
+      ({ ...student, releaseAt: releaseAt === null ? null : toUtcIso(releaseAt) }) satisfies CachedStudent,
+  );
+}
+
+function toStudents(cachedStudents: CachedStudent[], now = Date.now()): Student[] {
+  return cachedStudents.map(({ releaseAt, ...student }) => ({
+    ...student,
+    released: isStudentReleased(releaseAt, now),
+  }));
 }
 
 export async function syncRawStudents(env: Env, forceRefresh = true): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh, {
-    rejectOnForcedRefresh: true,
-  });
+  return toStudents(
+    await fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, forceRefresh, {
+      rejectOnForcedRefresh: true,
+    }),
+  );
 }
 
 async function getRawStudents(env: Env): Promise<Student[]> {
-  return fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false);
+  return toStudents(await fetchSourceCached(env, rawStudentsKey, fetchStudentsFromBaql, false));
 }
 
 export async function getStudentDetail(env: Env, uid: string) {

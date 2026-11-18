@@ -1,3 +1,4 @@
+import { isStudentReleased } from "~/domain/student-release";
 import { graphql } from "~/graphql";
 import type { StudentDirectoryQuery, StudentTerrainAdaptationRank } from "~/graphql/graphql";
 import { runQuery } from "~/lib/baql";
@@ -60,7 +61,6 @@ const studentDirectoryQuery = graphql(`
       birthday
       role
       equipments
-      released
       catalog {
         profile {
           age
@@ -77,9 +77,14 @@ const studentDirectoryQuery = graphql(`
   }
 `);
 
-const STUDENT_DIRECTORY_CACHE_KEY = cacheKey("source", "student-directory", 2, "all");
+/** A directory student as the source cache stores it, without the release state that goes stale. */
+type CachedStudentDirectoryStudent = Omit<StudentDirectoryStudent, "released">;
 
-function normalizeStudentDirectoryStudent(student: StudentDirectoryQuery["students"][number]): StudentDirectoryStudent {
+const STUDENT_DIRECTORY_CACHE_KEY = cacheKey("source", "student-directory", 3, "all");
+
+function normalizeStudentDirectoryStudent(
+  student: StudentDirectoryQuery["students"][number],
+): CachedStudentDirectoryStudent {
   return {
     uid: student.uid,
     name: student.name,
@@ -104,7 +109,6 @@ function normalizeStudentDirectoryStudent(student: StudentDirectoryQuery["studen
     birthday: student.birthday,
     role: student.role,
     equipments: student.equipments,
-    released: student.released,
     catalog: student.catalog
       ? {
           profile: {
@@ -122,7 +126,7 @@ function normalizeStudentDirectoryStudent(student: StudentDirectoryQuery["studen
   };
 }
 
-async function fetchStudentDirectoryFromBaql(): Promise<StudentDirectoryStudent[]> {
+async function fetchStudentDirectoryFromBaql(): Promise<CachedStudentDirectoryStudent[]> {
   const result = await runQuery(studentDirectoryQuery, {});
   if (result.error) {
     throw result.error;
@@ -134,16 +138,27 @@ async function fetchStudentDirectoryFromBaql(): Promise<StudentDirectoryStudent[
   return result.data.students.map(normalizeStudentDirectoryStudent);
 }
 
+function toStudentDirectoryStudents(
+  cachedStudents: CachedStudentDirectoryStudent[],
+  now = Date.now(),
+): StudentDirectoryStudent[] {
+  return cachedStudents.map((student) => ({ ...student, released: isStudentReleased(student.releaseAt, now) }));
+}
+
 export async function syncStudentDirectory(env: Env, forceRefresh = true): Promise<StudentDirectoryStudent[]> {
-  return fetchSourceCached(env, STUDENT_DIRECTORY_CACHE_KEY, fetchStudentDirectoryFromBaql, forceRefresh, {
-    rejectOnForcedRefresh: true,
-  });
+  return toStudentDirectoryStudents(
+    await fetchSourceCached(env, STUDENT_DIRECTORY_CACHE_KEY, fetchStudentDirectoryFromBaql, forceRefresh, {
+      rejectOnForcedRefresh: true,
+    }),
+  );
 }
 
 export async function getStudentDirectoryStudents(
   env: Env,
   includeUnreleased = false,
 ): Promise<StudentDirectoryStudent[]> {
-  const students = await fetchSourceCached(env, STUDENT_DIRECTORY_CACHE_KEY, fetchStudentDirectoryFromBaql, false);
+  const students = toStudentDirectoryStudents(
+    await fetchSourceCached(env, STUDENT_DIRECTORY_CACHE_KEY, fetchStudentDirectoryFromBaql, false),
+  );
   return includeUnreleased ? students : students.filter(({ released }) => released);
 }
