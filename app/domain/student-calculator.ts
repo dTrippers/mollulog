@@ -319,7 +319,10 @@ export function selectStudentSkills(
 
 export type StudentSkillLinkKind =
   | { kind: "additional" }
-  | { kind: "selectable"; condition: StudentCalculatorSource["skills"][number]["selectableSkills"][number]["condition"] };
+  | {
+      kind: "selectable";
+      condition: StudentCalculatorSource["skills"][number]["selectableSkills"][number]["condition"];
+    };
 
 export type DisplayedStudentSkill = {
   skill: SelectedStudentSkill;
@@ -361,7 +364,10 @@ export function selectDisplayedStudentSkills(
     }
     const links: Array<{ uid: string; link: StudentSkillLinkKind }> = [
       ...skill.additionalSkillUids.map((uid) => ({ uid, link: { kind: "additional" } as const })),
-      ...skill.selectableSkills.map(({ skillUid, condition }) => ({ uid: skillUid, link: { kind: "selectable", condition } as const })),
+      ...skill.selectableSkills.map(({ skillUid, condition }) => ({
+        uid: skillUid,
+        link: { kind: "selectable", condition } as const,
+      })),
     ];
     for (const { uid, link } of links) {
       const linked = skillByUid.get(uid);
