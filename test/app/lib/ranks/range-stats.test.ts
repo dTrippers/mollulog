@@ -1,5 +1,7 @@
-import { describe, expect, it, jest } from "@jest/globals";
-import { convertRangeStats } from "~/lib/ranks/range-stats";
+import { beforeEach, describe, expect, it, jest } from "@jest/globals";
+import { Defense } from "~/graphql/graphql";
+import { fetchProtobuf } from "~/lib/ranks/base";
+import { convertRangeStats, fetchRangeStats } from "~/lib/ranks/range-stats";
 
 jest.mock("~/lib/ranks/base", () => ({
   RANK_API_BASE_URL: "http://localhost:8080",
@@ -59,5 +61,51 @@ describe("convertRangeStats", () => {
       slotsByTier: [],
       assistsByTier: [],
     });
+  });
+});
+
+describe("fetchRangeStats", () => {
+  const fetchProtobufMock = fetchProtobuf as jest.MockedFunction<typeof fetchProtobuf>;
+
+  function requestedParams(): URLSearchParams {
+    const { url } = fetchProtobufMock.mock.calls.at(-1)?.[0] ?? { url: "" };
+    return new URL(url).searchParams;
+  }
+
+  beforeEach(() => {
+    fetchProtobufMock.mockReset();
+    fetchProtobufMock.mockResolvedValue({ sampleSize: 0, partyCounts: [], studentUsage: [], oftenUsedParties: [] });
+  });
+
+  it("requests a difficulty band by difficulty without score bounds", async () => {
+    await fetchRangeStats({
+      raidType: "elimination",
+      season: 38,
+      defenseType: Defense.Heavy,
+      difficulty: "insane",
+      topParties: 5,
+    });
+
+    const params = requestedParams();
+    expect(params.get("difficulty")).toBe("insane");
+    expect(params.has("scoreGte")).toBe(false);
+    expect(params.has("scoreLt")).toBe(false);
+    expect(params.get("topParties")).toBe("5");
+  });
+
+  it("requests a score range without difficulty", async () => {
+    await fetchRangeStats({
+      raidType: "total_assault",
+      season: 85,
+      defenseType: Defense.Heavy,
+      scoreGte: 100,
+      scoreLt: 200,
+      topParties: 20,
+    });
+
+    const params = requestedParams();
+    expect(params.has("difficulty")).toBe(false);
+    expect(params.get("scoreGte")).toBe("100");
+    expect(params.get("scoreLt")).toBe("200");
   });
 });

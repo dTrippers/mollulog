@@ -144,14 +144,20 @@ export type RangeStats = {
   oftenUsedParties: RangeStatsOftenUsedParty[];
 };
 
-export type FetchRangeStatsParams = {
+type FetchRangeStatsBaseParams = {
   raidType: RaidType;
   season: number;
   defenseType: Defense;
-  scoreGte?: number;
-  scoreLt?: number;
   topParties?: number;
 };
+
+// The Ranks API rejects `difficulty` together with score bounds, so a request names either a
+// difficulty band or a score range, never both.
+export type FetchRangeStatsParams = FetchRangeStatsBaseParams &
+  (
+    | { difficulty: string; scoreGte?: never; scoreLt?: never }
+    | { difficulty?: never; scoreGte?: number; scoreLt?: number }
+  );
 
 export async function fetchRangeStats(params: FetchRangeStatsParams): Promise<RangeStats> {
   const queryParams = new URLSearchParams({
@@ -160,6 +166,9 @@ export async function fetchRangeStats(params: FetchRangeStatsParams): Promise<Ra
     defenseType: params.defenseType,
   });
 
+  if (params.difficulty !== undefined) {
+    queryParams.set("difficulty", params.difficulty);
+  }
   if (params.scoreGte !== undefined) {
     queryParams.set("scoreGte", String(params.scoreGte));
   }

@@ -38,6 +38,10 @@ export type ScoreRange = {
 };
 
 type SelectedRange = {
+  // Set when the range is a whole difficulty band chosen from the rail, not a drag. Range stats
+  // are then requested by difficulty, because score bounds rebuilt from the band's per-second
+  // buckets drop the entries of its fastest clear second.
+  difficulty?: string;
   scoreRanges: ScoreRange[];
   displayRange: {
     xStart: number;
@@ -283,27 +287,7 @@ export default function RaidScoreHistogram({
     setRangeStatsLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const response = selectedRange
-          ? mergeRangeStats(
-              await Promise.all(
-                selectedRange.scoreRanges.map((range) =>
-                  fetchRangeStats({
-                    raidType,
-                    season,
-                    defenseType,
-                    scoreGte: range.gte,
-                    scoreLt: range.lt,
-                    topParties: selectedRange.scoreRanges.length > 1 ? 20 : 5,
-                  }),
-                ),
-              ),
-            )
-          : await fetchRangeStats({
-              raidType,
-              season,
-              defenseType,
-              topParties: 5,
-            });
+        const response = await fetchSelectedRangeStats({ raidType, season, defenseType, range: selectedRange });
         if (cancelled) {
           return;
         }
@@ -944,7 +928,8 @@ function distributionToSelectedRange(
   distribution: ClearTimeDistribution,
   selectedBandKey: string,
 ): SelectedRange | null {
-  return rowsToSelection(buildClearTimeChartData(distribution, selectedBandKey).rows);
+  const selection = rowsToSelection(buildClearTimeChartData(distribution, selectedBandKey).rows);
+  return selection ? { ...selection, difficulty: selectedBandKey } : null;
 }
 
 function timeBucketToScoreRange(
@@ -1233,6 +1218,39 @@ function getOftenUsedPartySignature(party: RangeStats["oftenUsedParties"][number
   return JSON.stringify(party.parties);
 }
 
+async function fetchSelectedRangeStats({
+  raidType,
+  season,
+  defenseType,
+  range,
+}: {
+  raidType: RaidType;
+  season: number;
+  defenseType: Defense;
+  range: SelectedRange | null;
+}): Promise<RangeStats> {
+  if (!range) {
+    return fetchRangeStats({ raidType, season, defenseType, topParties: 5 });
+  }
+  if (range.difficulty) {
+    return fetchRangeStats({ raidType, season, defenseType, difficulty: range.difficulty, topParties: 5 });
+  }
+  return mergeRangeStats(
+    await Promise.all(
+      range.scoreRanges.map((scoreRange) =>
+        fetchRangeStats({
+          raidType,
+          season,
+          defenseType,
+          scoreGte: scoreRange.gte,
+          scoreLt: scoreRange.lt,
+          topParties: range.scoreRanges.length > 1 ? 20 : 5,
+        }),
+      ),
+    ),
+  );
+}
+
 function getRangeStatsCacheKey(params: {
   raidType: RaidType;
   season: number;
@@ -1241,6 +1259,9 @@ function getRangeStatsCacheKey(params: {
 }) {
   if (!params.range) {
     return `${params.raidType}:${params.season}:${params.defenseType}:all`;
+  }
+  if (params.range.difficulty) {
+    return `${params.raidType}:${params.season}:${params.defenseType}:difficulty:${params.range.difficulty}`;
   }
   const rangeKey = params.range.scoreRanges.map((range) => `${range.gte}:${range.lt ?? "open"}`).join(",");
   return `${params.raidType}:${params.season}:${params.defenseType}:${rangeKey}`;
@@ -1251,7 +1272,7 @@ function isSameRange(left: ScoreRange, right: ScoreRange): boolean {
 }
 
 function isSameSelectedRange(left: SelectedRange, right: SelectedRange): boolean {
-  if (left.scoreRanges.length !== right.scoreRanges.length) {
+  if (left.difficulty !== right.difficulty || left.scoreRanges.length !== right.scoreRanges.length) {
     return false;
   }
   return left.scoreRanges.every((range, index) => isSameRange(range, right.scoreRanges[index]));
@@ -1313,4 +1334,3 @@ function formatScoreInput(value: string): string {
 function formatRatio(ratio: number): string {
   return `${(ratio * 100).toFixed(1)}%`;
 }
-
