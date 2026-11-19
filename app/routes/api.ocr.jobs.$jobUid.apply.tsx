@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { data } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { OcrPublicError, toPublicOcrError } from "~/domain/ocr";
+import { OcrPublicError, rejectOcrApply, toPublicOcrError } from "~/domain/ocr";
 import {
   buildOcrInventoryReview,
   evaluateOcrInventoryReview,
@@ -29,15 +29,20 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
   if (!sensei) return data({ error: "로그인이 필요해요" }, { status: 401 });
   if (!params.jobUid) return data({ error: "OCR 작업 UID가 필요해요" }, { status: 400 });
 
+  let jobKind: string | undefined;
   try {
     const job = await getOcrJob(env, sensei.id, params.jobUid, { ctx });
-    if (job?.status !== "review_ready") throw new OcrPublicError("검토할 수 있는 인식 결과가 없어요");
+    jobKind = job?.jobKind;
+    if (!job) throw rejectOcrApply("검토할 수 있는 인식 결과가 없어요", "job_not_found");
+    if (job.status !== "review_ready") {
+      throw rejectOcrApply("검토할 수 있는 인식 결과가 없어요", "job_not_review_ready");
+    }
 
     const existing = await getSyncDraftBySourceRef(env, sensei.id, "first_party_ocr", job.uid);
     if (existing?.status === "applied") {
       return data({ application: toApplication(existing), alreadyApplied: true });
     }
-    if (existing) throw new OcrPublicError("이미 처리 중인 인식 결과예요");
+    if (existing) throw rejectOcrApply("이미 처리 중인 인식 결과예요", "application_in_progress");
 
     if (job.jobKind === "student_detail_video_v1" || job.jobKind === "student_detail_images_v1") {
       const studentsMap = await getAllStudentsMap(env, true);
@@ -56,7 +61,11 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
       }).catch((error) => {
         // OCR confirms only some fields, so values left stored can conflict without a concurrent edit.
         if (error instanceof StudentStateMergeConflictError) {
-          throw new OcrPublicError("학생 성장도 값이 현재 성장 규칙에 맞지 않아요");
+          throw rejectOcrApply(
+            "학생 성장도 값이 현재 성장 규칙에 맞지 않아요",
+            "stored_state_conflict",
+            error.fields.length > 0 ? error.fields.join(",") : undefined,
+          );
         }
         throw error;
       });
@@ -68,15 +77,26 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
 
     const requestBody = await request.json().catch(() => null);
     if (hasOwn(requestBody, "items")) {
-      throw new OcrPublicError("이 인식 결과는 현재 검토 화면에서 반영할 수 없어요");
+      throw rejectOcrApply("이 인식 결과는 현재 검토 화면에서 반영할 수 없어요", "unsupported_item_payload");
     }
     if (!hasOwn(requestBody, "cells")) {
-      throw new OcrPublicError("반영할 셀을 선택해주세요");
+      throw rejectOcrApply("반영할 셀을 선택해주세요", "cells_missing");
     }
     return await applyCellReview(env, sensei.id, job, requestBody);
   } catch (error) {
     const publicError = toPublicOcrError(error, "인식 결과를 반영하지 못했어요. 잠시 후 다시 시도해 주세요.");
-    if (!publicError.expected) logger.error("OCR job application failed", error);
+    if (!publicError.expected) {
+      logger.error("OCR job application failed", error);
+    } else {
+      // Only fixed codes and field names: the request body, recognized values and student state stay out of logs.
+      const details = error instanceof OcrPublicError ? error.details : {};
+      logger.warn("OCR job application rejected", {
+        jobKind,
+        status: publicError.status,
+        reason: details.reason,
+        field: details.field,
+      });
+    }
     return data({ error: publicError.message }, { status: publicError.status });
   }
 };
@@ -88,29 +108,31 @@ async function applyCellReview(
   requestBody: unknown,
 ) {
   const body = asRecord(requestBody);
-  if (!body) throw new OcrPublicError("반영할 셀을 확인해주세요");
+  if (!body) throw rejectOcrApply("반영할 셀을 확인해주세요", "cells_invalid");
   if (!Number.isSafeInteger(body.resultGeneration) || (body.resultGeneration as number) !== job.generation) {
-    throw new OcrPublicError("인식 결과가 최신 상태가 아니에요. 결과를 새로고침해 주세요", 409);
+    throw new OcrPublicError("인식 결과가 최신 상태가 아니에요. 결과를 새로고침해 주세요", 409, {
+      reason: "result_generation_stale",
+    });
   }
   const resources = buildOcrInventoryCatalogResources(await getItemCatalogResources(env));
   const review = normalizeOcrInventoryReviewResourceUids(buildOcrInventoryReview(job.result, job.images), resources);
   if (review.reviewMode !== "cells") {
-    throw new OcrPublicError("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.");
+    throw rejectOcrApply("인식 결과를 확인하지 못했어요. 새로 업로드해 주세요.", "review_mode_unsupported");
   }
   let patches: OcrCellPatch[];
   try {
     patches = parseOcrCellPatches(body.cells);
   } catch {
-    throw new OcrPublicError("반영할 셀 정보를 확인해주세요");
+    throw rejectOcrApply("반영할 셀 정보를 확인해주세요", "cells_invalid");
   }
   for (const patch of patches) {
-    if (!getOcrReviewCell(review, patch)) throw new OcrPublicError("존재하지 않는 셀은 반영할 수 없어요");
+    if (!getOcrReviewCell(review, patch)) throw rejectOcrApply("존재하지 않는 셀은 반영할 수 없어요", "cell_not_found");
   }
 
   const catalogUids = new Set(resources.map((resource) => resource.inventoryUid));
   for (const patch of patches) {
     if (patch.itemUid && !catalogUids.has(patch.itemUid)) {
-      throw new OcrPublicError("현재 아이템 카탈로그에 없는 아이템은 반영할 수 없어요");
+      throw rejectOcrApply("현재 아이템 카탈로그에 없는 아이템은 반영할 수 없어요", "item_not_in_catalog");
     }
   }
 
@@ -124,9 +146,9 @@ async function applyCellReview(
   const evaluation = evaluateOcrInventoryReview(review, patches, catalogUids, currentQuantities);
   if (evaluation.changedEntries.length === 0) {
     if (evaluation.safeEntries.length === 0) {
-      throw new OcrPublicError("안전하게 반영할 수 있는 인식 항목이 없어요");
+      throw rejectOcrApply("안전하게 반영할 수 있는 인식 항목이 없어요", "no_safe_entries");
     }
-    throw new OcrPublicError("변경된 수량이 없어요");
+    throw rejectOcrApply("변경된 수량이 없어요", "no_changed_quantities");
   }
 
   const applied = await createAndApplySyncDraft(env, userId, {

@@ -174,6 +174,13 @@ describe("OCR cell apply", () => {
     );
     expect(response.init?.status).toBe(409);
     expect(mockedCreateAndApply).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith("OCR job application rejected", {
+      jobKind: "item_inventory_images_v1",
+      status: 409,
+      reason: "result_generation_stale",
+      field: undefined,
+    });
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it("partially applies safe changed cells and reports omitted duplicates", async () => {

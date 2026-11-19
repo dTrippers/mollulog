@@ -111,15 +111,56 @@ export class OcrTaskResultRejectedError extends Error {
   override readonly name = "OcrTaskResultRejectedError";
 }
 
+/** Stable codes for an expected rejection when a recognition result is applied, aggregated in logs instead of messages. */
+export type OcrApplyRejectionReason =
+  | "job_not_found"
+  | "job_not_review_ready"
+  | "application_in_progress"
+  | "unsupported_item_payload"
+  | "cells_missing"
+  | "cells_invalid"
+  | "result_generation_stale"
+  | "review_mode_unsupported"
+  | "cell_not_found"
+  | "item_not_in_catalog"
+  | "no_safe_entries"
+  | "no_changed_quantities"
+  | "students_missing"
+  | "student_duplicated"
+  | "student_invalid"
+  | "student_not_in_result"
+  | "student_not_in_catalog"
+  | "confirmed_fields_missing"
+  | "confirmed_field_unknown"
+  | "confirmed_field_duplicated"
+  | "tier_not_confirmed"
+  | "field_not_equipped"
+  | "field_value_not_integer"
+  | "current_state_invalid"
+  | "growth_rule_violation"
+  | "stored_state_conflict";
+
+export type OcrPublicErrorDetails = {
+  reason?: OcrApplyRejectionReason;
+  /** A field name from the fixed schema; never a submitted or recognized value. */
+  field?: string;
+};
+
 export class OcrPublicError extends Error {
   override readonly name = "OcrPublicError";
 
   constructor(
     message: string,
     readonly status = 400,
+    readonly details: OcrPublicErrorDetails = {},
   ) {
     super(message);
   }
+}
+
+/** An expected 400 rejection while applying a recognition result, tagged for log aggregation. */
+export function rejectOcrApply(message: string, reason: OcrApplyRejectionReason, field?: string): OcrPublicError {
+  return new OcrPublicError(message, 400, { reason, field });
 }
 
 export function toPublicOcrError(
