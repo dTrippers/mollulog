@@ -27,6 +27,10 @@ type SaveTarget = {
 
 type SaveRequest = { target: SaveTarget; score: number | null };
 
+function saveTargetKey(target: SaveTarget): string {
+  return `${target.server}:${target.raidType}:${target.seasonIndex}:${target.defenseType}`;
+}
+
 class ChartScoreSaveError extends Error {
   constructor(
     message: string,
@@ -109,21 +113,34 @@ export function useRaidChartMyScore({
     mode === "record" && context && side && recordDefenseType
       ? { server: side.server, raidType: context.raidType, seasonIndex: side.seasonIndex, defenseType: recordDefenseType }
       : null;
-  const valueKey = target
-    ? `record:${target.server}:${target.raidType}:${target.seasonIndex}:${target.defenseType}`
-    : `local:${storageKey}`;
+  const valueKey = target ? `record:${saveTargetKey(target)}` : `local:${storageKey}`;
 
   const [value, setValue] = useState("");
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [status, setStatus] = useState<RaidChartSaveStatus>({ kind: "idle" });
   const [toastId, setToastId] = useState<number | null>(null);
 
+  // One save at a time, so an older score can never land after a newer one. Saves typed while one is on its way wait
+  // in line, the newest for each defense type and server, so a score typed for another defense type is never dropped.
+  const inFlightRef = useRef<SaveRequest | null>(null);
+  const queuedRef = useRef(new Map<string, SaveRequest>());
+  const lastFailedRef = useRef<SaveRequest | null>(null);
+  // The score the record will hold once the saves on their way land: the newest one sent or waiting for the target.
+  const requestedScoreOf = useCallback((key: string): { score: number | null } | null => {
+    const queued = queuedRef.current.get(key);
+    if (queued) return { score: queued.score };
+    const inFlight = inFlightRef.current;
+    return inFlight && saveTargetKey(inFlight.target) === key ? { score: inFlight.score } : null;
+  }, []);
+
   // The saved score the value starts from, read when the key changes rather than after every save.
   const savedScoreRef = useRef(savedScore);
   savedScoreRef.current = savedScore;
   useEffect(() => {
     if (valueKey.startsWith("record:")) {
-      const saved = savedScoreRef.current;
+      // Coming back to a defense type whose score is still being saved shows that score, not the older saved one.
+      const requested = requestedScoreOf(valueKey.slice("record:".length));
+      const saved = requested ? requested.score : savedScoreRef.current;
       setValue(saved === null ? "" : saved.toLocaleString());
     } else {
       try {
@@ -134,7 +151,7 @@ export function useRaidChartMyScore({
     }
     setStatus({ kind: "idle" });
     setLoadedKey(valueKey);
-  }, [valueKey, storageKey]);
+  }, [valueKey, storageKey, requestedScoreOf]);
 
   // Browser-only modes keep the score in localStorage, as before records.
   useEffect(() => {
@@ -147,16 +164,14 @@ export function useRaidChartMyScore({
     }
   }, [value, valueKey, loadedKey, storageKey]);
 
-  const inFlightRef = useRef(false);
-  const queuedRef = useRef<SaveRequest | null>(null);
-  const lastFailedRef = useRef<SaveRequest | null>(null);
-  const send = useCallback(async (request: SaveRequest) => {
-    // One save at a time, so an older score can never land after a newer one.
+  const send = useCallback(async function sendNow(request: SaveRequest): Promise<void> {
     if (inFlightRef.current) {
-      queuedRef.current = request;
+      const key = saveTargetKey(request.target);
+      queuedRef.current.delete(key);
+      queuedRef.current.set(key, request);
       return;
     }
-    inFlightRef.current = true;
+    inFlightRef.current = request;
     setStatus({ kind: "saving" });
     try {
       const saved = await postChartScore(request);
@@ -169,13 +184,14 @@ export function useRaidChartMyScore({
       setStatus({ kind: "failed", message: failure.message, retryable: failure.retryable });
       lastFailedRef.current = request;
     } finally {
-      inFlightRef.current = false;
-      const queued = queuedRef.current;
-      queuedRef.current = null;
-      if (queued) void send(queued);
+      inFlightRef.current = null;
+      const next = queuedRef.current.values().next();
+      if (!next.done) {
+        queuedRef.current.delete(saveTargetKey(next.value.target));
+        void sendNow(next.value);
+      }
     }
   }, []);
-
   useEffect(() => {
     if (toastId === null) return;
     const timer = setTimeout(() => setToastId(null), TOAST_DURATION_MS);
@@ -203,13 +219,17 @@ export function useRaidChartMyScore({
     }
     if (!target) return;
     const score = parseChartScoreInput(next);
-    if (score === savedScore) {
+    // Compared with the save on its way, if any, so typing back the saved score while a newer one is being saved still
+    // saves it.
+    const requested = requestedScoreOf(saveTargetKey(target));
+    if (score === (requested ? requested.score : savedScore)) {
       if (status.kind === "failed") setStatus({ kind: "idle" });
       return;
     }
-    // Emptying the input removes the score only from a record that holds nothing but scores. Any other record keeps
-    // its score, and the record line goes on showing it.
-    if (score === null && !(record?.scoreOnly && savedScore !== null)) return;
+    // Emptying the input removes the score only from a record that holds nothing but scores; the server keeps any
+    // other record as it is, and the record line goes on showing it. With no record yet, the score being saved makes
+    // a score-only record, so emptying removes that.
+    if (score === null && record && !record.scoreOnly) return;
     const request = { target, score };
     pendingRef.current = {
       request,

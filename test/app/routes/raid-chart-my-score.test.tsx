@@ -200,6 +200,78 @@ describe("useRaidChartMyScore with a record", () => {
     expect(result.current.savedScore).toBe(42_000_000);
   });
 
+  function holdFirstResponse() {
+    let release: () => void = () => {};
+    const firstResponse = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const defaultRespond = respond;
+    respond = async (call) => {
+      if (fetchCalls.length === 1) await firstResponse;
+      return defaultRespond(call);
+    };
+    return async () => {
+      await act(async () => {
+        release();
+        await jest.advanceTimersByTimeAsync(0);
+      });
+    };
+  }
+
+  it("saves the score typed back to the saved one while a newer score is on its way", async () => {
+    const release = holdFirstResponse();
+    const { result } = renderMyScore({ context: context() });
+
+    act(() => result.current.onChange("41000000"));
+    await advance(1000);
+    act(() => result.current.onChange("40000000"));
+    await advance(1000);
+    await release();
+
+    expect(fetchCalls.map((call) => call.body.score)).toEqual([41_000_000, 40_000_000]);
+    expect(result.current.savedScore).toBe(40_000_000);
+    expect(result.current.value).toBe("40,000,000");
+  });
+
+  it("removes the first score when the input is emptied while that score is on its way", async () => {
+    const release = holdFirstResponse();
+    const { result } = renderMyScore({ context: context({ kr: { ...context().kr, record: null } }) });
+
+    act(() => result.current.onChange("41000000"));
+    await advance(1000);
+    act(() => result.current.onChange(""));
+    await advance(1000);
+    respond = async () => jsonResponse(200, { ok: true, record: null });
+    await release();
+
+    expect(fetchCalls.map((call) => call.body.score)).toEqual([41_000_000, null]);
+    expect(result.current.record).toBeNull();
+  });
+
+  it("keeps the newest waiting score of every defense type while one save is on its way", async () => {
+    const release = holdFirstResponse();
+    const { result, rerender } = renderMyScore({ context: context() });
+
+    act(() => result.current.onChange("41000000"));
+    rerender({ context: context(), defenseType: "elastic" });
+    await advance(0);
+    act(() => result.current.onChange("30000000"));
+    rerender({ context: context(), defenseType: "light" });
+    await advance(0);
+    act(() => result.current.onChange("20000000"));
+    rerender({ context: context(), defenseType: "heavy" });
+    await advance(0);
+    // Back on the defense type being saved, the input shows the score on its way.
+    expect(result.current.value).toBe("41,000,000");
+    await release();
+
+    expect(fetchCalls.map((call) => [call.body.defenseType, call.body.score])).toEqual([
+      ["heavy", 41_000_000],
+      ["elastic", 30_000_000],
+      ["light", 20_000_000],
+    ]);
+  });
+
   it("shows the server's message for a rejected score and offers a retry for a failed save", async () => {
     respond = async () => jsonResponse(400, { ok: false, message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." });
     const { result } = renderMyScore({ context: context() });
