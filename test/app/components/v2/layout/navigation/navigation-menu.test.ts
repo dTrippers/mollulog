@@ -201,6 +201,7 @@ describe("global navigation catalog", () => {
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
+      "/@sensei/raids",
       "/scanner",
     ]);
     expect(signedIn.groups.find(({ id }) => id === "community")?.items.map(({ to }) => to)).toEqual([
@@ -331,6 +332,7 @@ describe("global navigation catalog", () => {
       "프로필",
       "모집한 학생",
       "모집 기록",
+      "총력전·대결전 기록",
       "화면 인식·데이터 연동",
     ]);
     expect(signedInSections.find(({ id }) => id === "community")?.items.map(({ name }) => name)).toEqual([

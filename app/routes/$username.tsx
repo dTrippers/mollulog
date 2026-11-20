@@ -4,10 +4,11 @@ import {
   HeartIcon,
   LockClosedIcon,
   PencilSquareIcon,
+  TrophyIcon,
   UserCircleIcon,
   UserIcon,
 } from "@heroicons/react/16/solid";
-import { type ElementType, type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import type { LoaderFunctionArgs, ShouldRevalidateFunction } from "react-router";
 import { Link, Outlet, useLoaderData, useLocation, useRevalidator, useRouteError } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
@@ -32,11 +33,13 @@ import { isServerRouteError, normalizeRouteError } from "~/lib/route-error";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import { getFollowershipSummary } from "~/models/followership";
 import { getRecruitedStudents } from "~/models/recruited-student";
+import { countRaidRecords } from "~/models/raid-record";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { MovedMenusNotice, useMovedMenusNotice } from "./$username._components/MovedMenusNotice";
 import { UserFollowButton } from "./$username._components/UserFollowButton";
 import { UserHeaderDetails } from "./$username._components/UserHeaderDetails";
+import { UserStateMessage } from "./$username._components/UserStateMessage";
 import { buildUserScreenItems, type UserLayoutContext } from "./$username._components/user-layout";
 
 const SCANNER_LINK = {
@@ -65,7 +68,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   // Only a signed-in visitor sees a follow button, so only that visit needs the relationship, and a failed lookup fails
   // the layout there. Everywhere else the counts are secondary and drop out on failure.
   const viewerId = currentUser && !isOwner ? currentUser.id : undefined;
-  const [followership, recruitedStudentCount, pickupCount] = await Promise.all([
+  const [followership, recruitedStudentCount, pickupCount, raidRecordCount] = await Promise.all([
     getFollowershipSummary(env, sensei.id, viewerId, { ctx }).catch((error: unknown) => {
       if (viewerId !== undefined) {
         throw error;
@@ -79,6 +82,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       logger,
       async () => (await getRecruitmentResults(env, sensei.id)).filter(isRecordedRecruitmentResult).length,
     ),
+    countOrNull("raid record", logger, () => countRaidRecords(env, sensei.id, { ctx })),
   ]);
 
   return {
@@ -97,6 +101,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
       : null,
     recruitedStudentCount,
     pickupCount,
+    raidRecordCount,
   };
 };
 
@@ -132,7 +137,14 @@ export default function User() {
     pathname,
     recruitedStudentCount: data.recruitedStudentCount,
     pickupCount: data.pickupCount,
-    icons: { profile: UserCircleIcon, students: UserIcon, pickups: ChartBarIcon, futures: HeartIcon },
+    raidRecordCount: data.raidRecordCount,
+    icons: {
+      profile: UserCircleIcon,
+      students: UserIcon,
+      pickups: ChartBarIcon,
+      futures: HeartIcon,
+      raids: TrophyIcon,
+    },
   });
 
   const outletContext = useMemo<UserLayoutContext>(
@@ -144,6 +156,7 @@ export default function User() {
       growthVisibility: data.growthVisibility,
       recruitedStudentCount: data.recruitedStudentCount,
       pickupCount: data.pickupCount,
+      raidRecordCount: data.raidRecordCount,
       setAsideCollapsed,
       setAsideContent,
       setMobileActions,
@@ -158,6 +171,7 @@ export default function User() {
       data.growthVisibility,
       data.recruitedStudentCount,
       data.pickupCount,
+      data.raidRecordCount,
       setAsideCollapsed,
     ],
   );
@@ -225,20 +239,6 @@ export default function User() {
         <MobileActionBar links={[{ key: "scanner", title: "데이터 연동", Icon: CameraIcon, to: SCANNER_LINK.to }]} />
       ) : null}
     </V2Page>
-  );
-}
-
-function UserStateMessage({ Icon, title, description }: { Icon: ElementType; title: string; description?: string }) {
-  return (
-    <div role="status" className="flex flex-col items-center gap-3 px-6 py-24 text-center">
-      <span className="flex size-10 items-center justify-center rounded-lg bg-v2-inset">
-        <Icon className="size-5 text-v2-fg-secondary" aria-hidden="true" />
-      </span>
-      <div>
-        <p className="text-base font-semibold text-v2-fg">{title}</p>
-        {description ? <p className="mt-1 text-sm text-v2-fg-tertiary">{description}</p> : null}
-      </div>
-    </div>
   );
 }
 

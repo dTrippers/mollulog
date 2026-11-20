@@ -236,6 +236,17 @@ const migratedRouteFiles: string[] = [
   "routes/$username.pickups._components/pickup-record.ts",
   "routes/$username.pickups._index.tsx",
   "routes/$username_.pickups.edit.$id.tsx",
+  "routes/$username._components/UserStateMessage.tsx",
+  "routes/$username.raids._index.tsx",
+  "routes/$username.raids._components/RaidRecordPageError.tsx",
+  "routes/$username.raids._components/raid-record-form.server.ts",
+  "routes/$username.raids._components/raid-record-list-query.ts",
+  "routes/$username.raids._components/raid-record-owner.server.ts",
+  "routes/$username.raids._components/raid-record-table.server.ts",
+  "routes/$username_.raids.$id.tsx",
+  "routes/$username_.raids.$id_.edit.tsx",
+  "routes/$username_.raids.new.tsx",
+  "routes/$username_.raids.table.tsx",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];

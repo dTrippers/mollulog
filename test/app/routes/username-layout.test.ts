@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
 import { getFollowershipSummary } from "~/models/followership";
+import { countRaidRecords } from "~/models/raid-record";
 import { getRecruitedStudents } from "~/models/recruited-student";
 import { getRecruitmentResults } from "~/models/recruitment-result.server";
 import { loader } from "~/routes/$username";
@@ -11,6 +12,7 @@ import { buildUserScreenItems, formatUserCount, getUserScreen } from "~/routes/$
 jest.mock("~/auth/authenticator.server", () => ({ getActiveSensei: jest.fn() }));
 jest.mock("~/lib/observability.server", () => ({ getLogger: jest.fn() }));
 jest.mock("~/models/followership", () => ({ getFollowershipSummary: jest.fn() }));
+jest.mock("~/models/raid-record", () => ({ countRaidRecords: jest.fn() }));
 jest.mock("~/models/recruited-student", () => ({ getRecruitedStudents: jest.fn() }));
 jest.mock("~/models/recruitment-result.server", () => ({ getRecruitmentResults: jest.fn() }));
 jest.mock("~/routes/$username._components/route-sensei.server", () => ({ getRouteSensei: jest.fn() }));
@@ -20,6 +22,7 @@ const mockedGetRouteSensei = jest.mocked(getRouteSensei);
 const mockedGetFollowershipSummary = jest.mocked(getFollowershipSummary);
 const mockedGetRecruitedStudents = jest.mocked(getRecruitedStudents);
 const mockedGetRecruitmentResults = jest.mocked(getRecruitmentResults);
+const mockedCountRaidRecords = jest.mocked(countRaidRecords);
 const logger = { error: jest.fn(), warn: jest.fn(), info: jest.fn(), debug: jest.fn() };
 
 const env = {} as Env;
@@ -59,6 +62,7 @@ beforeEach(() => {
     recorded({ recruitedStudents: [{ studentUid: "a" }] }),
     recorded(),
   ] as unknown as Awaited<ReturnType<typeof getRecruitmentResults>>);
+  mockedCountRaidRecords.mockResolvedValue(4);
 });
 
 describe("@username layout loader", () => {
@@ -86,6 +90,7 @@ describe("@username layout loader", () => {
       recruitedStudentCount: 3,
       // Only a result that is completed or has a recorded student is a pickup record, as in the pickups list.
       pickupCount: 2,
+      raidRecordCount: 4,
     });
     expect(mockedGetFollowershipSummary).toHaveBeenCalledWith(env, 1, undefined, { ctx: expect.anything() });
   });
@@ -149,6 +154,15 @@ describe("@username layout loader", () => {
     expect(logger.error).toHaveBeenCalledWith("User layout pickup record count failed", expect.any(Error));
   });
 
+  it("drops the raid record count when it fails to load", async () => {
+    mockedCountRaidRecords.mockRejectedValue(new Error("database unavailable"));
+
+    const result = await loader(args);
+
+    expect(result).toMatchObject({ pickupCount: 2, raidRecordCount: null });
+    expect(logger.error).toHaveBeenCalledWith("User layout raid record count failed", expect.any(Error));
+  });
+
   it("lets a private or unknown profile error reach the layout error boundary", async () => {
     mockedGetRouteSensei.mockRejectedValue(new Error("sensei.profile_private"));
 
@@ -164,19 +178,23 @@ describe("@username layout screens", () => {
     expect(getUserScreen("/@sensei/pickups/edit/1", "sensei")).toBe("pickups");
     expect(getUserScreen("/@sensei/friends", "sensei")).toBe("profile");
     expect(getUserScreen("/@sensei/futures", "sensei")).toBe("futures");
+    expect(getUserScreen("/@sensei/raids", "sensei")).toBe("raids");
+    expect(getUserScreen("/@sensei/raids/abc/edit", "sensei")).toBe("raids");
+    expect(getUserScreen("/@sensei/raidsx", "sensei")).toBeNull();
     expect(getUserScreen("/@sensei/timelines", "sensei")).toBeNull();
     expect(getUserScreen("/@sensei/studentsx", "sensei")).toBeNull();
     expect(getUserScreen("/@other/students", "sensei")).toBeNull();
   });
 
-  it("builds the same four menu items for the owner and a visitor, with counts", () => {
+  it("builds the same five menu items for the owner and a visitor, with counts", () => {
     const Icon = () => null;
     const items = buildUserScreenItems({
       username: "sensei",
       pathname: "/@sensei/pickups",
       recruitedStudentCount: 1234,
       pickupCount: 56,
-      icons: { profile: Icon, students: Icon, pickups: Icon, futures: Icon },
+      raidRecordCount: 7,
+      icons: { profile: Icon, students: Icon, pickups: Icon, futures: Icon, raids: Icon },
     });
 
     expect(items.map(({ text, label, link, active }) => [text, label, link, active])).toEqual([
@@ -184,6 +202,7 @@ describe("@username layout screens", () => {
       ["모집한 학생", "1,234", "/@sensei/students", false],
       ["모집 기록", "56", "/@sensei/pickups", true],
       ["관심 학생", undefined, "/@sensei/futures", false],
+      ["총력전·대결전 기록", "7", "/@sensei/raids", false],
     ]);
   });
 

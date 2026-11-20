@@ -51,6 +51,7 @@ type LayoutData = {
   followCounts: { following: number; followers: number } | null;
   recruitedStudentCount: number | null;
   pickupCount: number | null;
+  raidRecordCount: number | null;
 };
 
 const base: LayoutData = {
@@ -67,6 +68,7 @@ const base: LayoutData = {
   followCounts: { following: 3, followers: 1234 },
   recruitedStudentCount: 244,
   pickupCount: 56,
+  raidRecordCount: 7,
 };
 
 function ChildScreen() {
@@ -187,18 +189,25 @@ describe("@username layout header", () => {
 });
 
 describe("@username layout menu", () => {
-  it("lists 프로필, 모집한 학생, 모집 기록, 관심 학생 in the Aside for a visitor, without the moved entries", async () => {
+  it("lists 프로필, 모집한 학생, 모집 기록, 관심 학생, 총력전·대결전 기록 in the Aside for a visitor, without the moved entries", async () => {
     renderLayout();
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
     const nav = within(aside).getByRole("navigation", { name: "화면 탐색" });
     const links = within(nav).getAllByRole("link");
-    expect(links.map((link) => link.textContent)).toEqual(["프로필", "모집한 학생244", "모집 기록56", "관심 학생"]);
+    expect(links.map((link) => link.textContent)).toEqual([
+      "프로필",
+      "모집한 학생244",
+      "모집 기록56",
+      "관심 학생",
+      "총력전·대결전 기록7",
+    ]);
     expect(links.map((link) => link.getAttribute("href"))).toEqual([
       "/@sensei",
       "/@sensei/students",
       "/@sensei/pickups",
       "/@sensei/futures",
+      "/@sensei/raids",
     ]);
     expect(links[0]?.getAttribute("aria-current")).toBe("page");
     for (const removed of ["공략 작성하기", "공략 타임라인", "편성/공략"]) {
@@ -218,7 +227,7 @@ describe("@username layout menu", () => {
   });
 
   it("omits a count that could not be loaded", async () => {
-    renderLayout({ recruitedStudentCount: null, pickupCount: 0 });
+    renderLayout({ recruitedStudentCount: null, pickupCount: 0, raidRecordCount: null });
     const aside = await screen.findByRole("complementary", { name: "보조 도구" });
 
     expect(within(aside).getAllByRole("link").map((link) => link.textContent)).toEqual([
@@ -226,6 +235,7 @@ describe("@username layout menu", () => {
       "모집한 학생",
       "모집 기록0",
       "관심 학생",
+      "총력전·대결전 기록",
     ]);
   });
 

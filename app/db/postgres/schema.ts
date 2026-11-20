@@ -17,6 +17,12 @@ import type { CouponReward } from "~/domain/coupon";
 import type { FeedbackAdditional } from "~/domain/feedback";
 import type { OcrJobKind, OcrTaskMessage } from "~/domain/ocr";
 import type { PlannerStateDocumentV1 } from "~/domain/planner-state";
+import type {
+  RaidRecordParty,
+  RaidRecordRaidType,
+  RaidRecordScore,
+  RaidRecordServer,
+} from "~/domain/raid-record";
 import type { SiteBannerPreset, SiteBannerScreen } from "~/domain/site-banner";
 import type {
   MenuBadgeLabelMode,
@@ -1588,5 +1594,34 @@ export const pgRecruitTicketsTable = pgTable(
       .on(table.productUid, table.itemUid)
       .where(sql`${table.productUid} is not null`),
     uniqueIndex("recruit_tickets_item_uidx").on(table.itemUid).where(sql`${table.productUid} is null`),
+  ],
+);
+
+// A Sensei's own result in one 총력전 or 대결전 season on one game server; one row per (user, server, raid type, season).
+export const pgRaidRecordsTable = pgTable(
+  "raid_records",
+  {
+    id: bigint({ mode: "number" }).primaryKey().generatedByDefaultAsIdentity(),
+    uid: text().notNull(),
+    userId: integer("user_id").notNull(),
+    server: text().$type<RaidRecordServer>().notNull(),
+    raidType: text("raid_type").$type<RaidRecordRaidType>().notNull(),
+    seasonIndex: integer("season_index").notNull(),
+    scores: jsonb().$type<RaidRecordScore[]>().notNull(),
+    rank: integer(),
+    rankRecordedAt: exactTimestamptz("rank_recorded_at"),
+    memo: text().notNull().default(""),
+    parties: jsonb().$type<RaidRecordParty[]>().notNull().default([]),
+    createdAt: exactTimestamptz("created_at").notNull().defaultNow(),
+    updatedAt: exactTimestamptz("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("raid_records_uid_uidx").on(table.uid),
+    uniqueIndex("raid_records_user_server_raid_season_uidx").on(
+      table.userId,
+      table.server,
+      table.raidType,
+      table.seasonIndex,
+    ),
   ],
 );

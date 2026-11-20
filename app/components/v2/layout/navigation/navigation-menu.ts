@@ -244,6 +244,8 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/students`));
     case "pickup-history":
       return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/pickups`));
+    case "raid-records":
+      return Boolean(currentUsername && pathname.startsWith(`/@${currentUsername}/raids`));
     case "my-walkthroughs":
       // The walkthrough list itself stays under 공략 타임라인; this entry owns the earlier parties page.
       return Boolean(currentUsername && pathname.startsWith("/timelines/parties/"));
@@ -585,6 +587,17 @@ export function getNavigationCatalog({
       OutlineIcon: NAVIGATION_ICONS["pickup-history"].OutlineIcon,
       SolidIcon: NAVIGATION_ICONS["pickup-history"].SolidIcon,
       isActive: itemIsActive("pickup-history", pathname, currentUsername),
+    },
+    {
+      menuId: "raid-records",
+      group: "personal",
+      surfaces: ["desktop", "more", "search"],
+      to: currentUsername ? `/@${currentUsername}/raids` : "/unauthorized",
+      name: "총력전·대결전 기록",
+      requiresSignIn: true,
+      OutlineIcon: NAVIGATION_ICONS["raid-records"].OutlineIcon,
+      SolidIcon: NAVIGATION_ICONS["raid-records"].SolidIcon,
+      isActive: itemIsActive("raid-records", pathname, currentUsername),
     },
     {
       menuId: "screen-scanner",

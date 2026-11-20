@@ -37,7 +37,12 @@ type RectMetrics = NumberInputFlowNavigationRect & {
 
 const SAME_ROW_EPSILON = 1;
 
-export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectOnFocus?: boolean } = {}) {
+// `enterMovesDown` makes Enter move to the cell below, the way a spreadsheet does, for screens that are a table of
+// entries rather than a form Enter would submit.
+export function useNumberInputFlowNavigation({
+  selectOnFocus = true,
+  enterMovesDown = false,
+}: { selectOnFocus?: boolean; enterMovesDown?: boolean } = {}) {
   const gridId = useId();
 
   const selectInputValue = useCallback(
@@ -74,7 +79,7 @@ export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectO
           return;
         }
 
-        const direction = getDirection(event.key);
+        const direction = enterMovesDown && event.key === "Enter" ? "down" : getDirection(event.key);
         if (!direction) {
           return;
         }
@@ -89,7 +94,7 @@ export function useNumberInputFlowNavigation({ selectOnFocus = true }: { selectO
         selectInputValue(targetInput);
       },
     }),
-    [gridId, selectInputValue],
+    [gridId, selectInputValue, enterMovesDown],
   );
 
   return { getInputProps };

@@ -27,6 +27,7 @@ export const NAVIGATION_MENU_IDS = [
   "profile",
   "my-students",
   "pickup-history",
+  "raid-records",
   "my-walkthroughs",
   "screen-scanner",
   "mollulog-api",

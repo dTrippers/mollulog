@@ -3,37 +3,48 @@ import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildRaidPartyStudentMap, RaidListItem } from "~/components/features/raids";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, SubTitle } from "~/components/primitives";
-import { raidTypeToParam } from "~/domain/raid";
+import { raidTypeFromParam, raidTypeToParam } from "~/domain/raid";
 import { getSameOccurrenceRaids } from "~/domain/raid-group";
 import { fetchRaidOverview } from "~/lib/ranks/overview";
 import type { RaidType } from "~/models/content.d";
 import { getRaidDefenseTypeSetKey } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
 import { getAllStudentsMap, getStudentForms } from "~/models/student";
+import { loadRaidChartRecordContext } from "~/views/raid-records";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidScoreHistogram from "./raids.$raidType.$seasonIndex._components/RaidScoreHistogram";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
 
-export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-  const { env } = context.cloudflare;
+export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
+  const { env, ctx } = context.cloudflare;
   const [rawAllStudents, studentForms, sensei] = await Promise.all([
     getAllStudentsMap(env, true),
     getStudentForms(env),
     getActiveSensei(env, request),
   ]);
   const allStudents = buildRaidPartyStudentMap(rawAllStudents, studentForms);
-  const recruitedStudentTiers = sensei ? await getRecruitedStudentTiers(env, sensei.id) : {};
+  const seasonIndex = Number.parseInt(params.seasonIndex ?? "", 10);
+  const [recruitedStudentTiers, myRecordContext] = sensei
+    ? await Promise.all([
+        getRecruitedStudentTiers(env, sensei.id),
+        params.raidType && Number.isInteger(seasonIndex)
+          ? loadRaidChartRecordContext(env, sensei, raidTypeFromParam(params.raidType), seasonIndex, ctx)
+          : null,
+      ])
+    : [{}, null];
 
   return {
     allStudents,
     recruitedStudentTiers,
     hasRecruitedStudentData: sensei !== null,
+    myRecordContext,
   };
 };
 
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType, defenseTypeSet } = useOutletContext<RaidPageContext>();
-  const { allStudents, recruitedStudentTiers, hasRecruitedStudentData } = useLoaderData<typeof loader>();
+  const { allStudents, recruitedStudentTiers, hasRecruitedStudentData, myRecordContext } =
+    useLoaderData<typeof loader>();
   const raidPath = `/raids/${raidTypeToParam(currentRaid.raidType)}/${currentRaid.seasonIndex}`;
 
   // Past hostings of the same boss + terrain (excluding current raid)
@@ -122,6 +133,7 @@ export default function RaidSummary() {
         allStudents={allStudents}
         recruitedStudentTiers={recruitedStudentTiers}
         hasRecruitedStudentData={hasRecruitedStudentData}
+        myRecordContext={myRecordContext}
       />
 
       {sameBossRaids.length > 0 && (
