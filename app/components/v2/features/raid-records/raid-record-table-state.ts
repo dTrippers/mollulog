@@ -1,4 +1,10 @@
-import type { RaidRecordDefenseType, RaidRecordRankStatus } from "~/domain/raid-record";
+import {
+  InvalidRaidRecordError,
+  parseRaidRecordRank,
+  parseRaidRecordScore,
+  type RaidRecordDefenseType,
+  type RaidRecordRankStatus,
+} from "~/domain/raid-record";
 import { isInstantBefore } from "~/lib/date-time";
 import type { RaidRecordTableRowView } from "~/views/raid-records";
 
@@ -93,6 +99,12 @@ export function raidTableRowErrors(
     });
   }
   for (const { defenseType, score } of scores) {
+    // The same range the save checks, such as a score of 0.
+    const rangeError = rangeErrorOf(() => parseRaidRecordScore(score));
+    if (rangeError) {
+      errors.push({ field: "score", defenseType, message: rangeError });
+      continue;
+    }
     const maxScore = maxScores[defenseType];
     if (typeof maxScore === "number" && score > maxScore) {
       errors.push({
@@ -103,7 +115,21 @@ export function raidTableRowErrors(
     }
   }
   if (draft.rank === null) errors.push({ field: "rank", message: "순위를 입력해 주세요." });
+  else {
+    const rangeError = rangeErrorOf(() => parseRaidRecordRank(draft.rank));
+    if (rangeError) errors.push({ field: "rank", message: rangeError });
+  }
   return errors;
+}
+
+function rangeErrorOf(parse: () => unknown): string | null {
+  try {
+    parse();
+    return null;
+  } catch (error) {
+    if (error instanceof InvalidRaidRecordError) return error.message;
+    throw error;
+  }
 }
 
 function rankStatusAt(rankConfirmAt: string | null, now: string): RaidRecordRankStatus {

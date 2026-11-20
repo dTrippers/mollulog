@@ -93,6 +93,14 @@ describe("raid record table errors", () => {
     expect(raidTableRowErrors(saved, initialRaidTableDraft(saved))).toEqual([]);
   });
 
+  it("marks a score or rank of 0 before the save, like the save does", () => {
+    const empty = row("total_assault", null);
+    expect(raidTableRowErrors(empty, draft({ special: 0 }, 0))).toEqual([
+      { field: "score", defenseType: "special", message: "점수를 확인해 주세요." },
+      { field: "rank", message: "순위를 확인해 주세요." },
+    ]);
+  });
+
   it("asks for a rank and a score in a changed row", () => {
     const empty = row("total_assault", null);
     expect(raidTableRowErrors(empty, draft({ special: 30_000_000 }, null))).toEqual([
