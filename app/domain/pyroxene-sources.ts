@@ -134,6 +134,29 @@ export function getBlueArchiveGameDate(now: Date | string = new Date()): dayjs.D
   return dayjs(now).tz("Asia/Seoul").subtract(4, "hour").startOf("day");
 }
 
+/**
+ * The instant a one-off purchase or direct gain counts from. A gain dated on the current game day is one still to
+ * come, so it keeps the time it is recorded instead of 04:00 and stays after inventory entered earlier that day.
+ */
+export function normalizePyroxeneOneOffGainAt(date: Date | string, now: Date | string = new Date()): string {
+  const eventAt = normalizePyroxeneTimelineEventAt(date);
+  if (!getBlueArchiveGameDate(eventAt).isSame(getBlueArchiveGameDate(now))) return eventAt;
+  return dayjs(now).toISOString();
+}
+
+function isOneOffGainSource(source: PyroxeneTimelineItem["source"]): boolean {
+  return source === "buy" || source === "other";
+}
+
+/** Normalizes a timeline record's instant for its source; see {@link normalizePyroxeneOneOffGainAt}. */
+export function normalizePyroxeneTimelineRecordAt(
+  date: Date | string,
+  source: PyroxeneTimelineItem["source"],
+  now: Date | string = new Date(),
+): string {
+  return isOneOffGainSource(source) ? normalizePyroxeneOneOffGainAt(date, now) : normalizePyroxeneTimelineEventAt(date);
+}
+
 export function calculatePackageStartDateFromRemainingDays(
   remainingDays: number,
   packageDurationDays: number,
@@ -190,13 +213,14 @@ type OptimisticTimelineItemInput = {
   repeatIntervalDays?: number | null;
   repeatCount?: number | null;
   autoRepurchase?: boolean;
+  now?: Date | string;
 };
 
 function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): PyroxeneTimelineItem {
   return {
     uid: input.uid ?? nanoid(8),
     userId: 0,
-    eventAt: normalizePyroxeneTimelineEventAt(input.eventAt),
+    eventAt: normalizePyroxeneTimelineRecordAt(input.eventAt, input.source, input.now),
     source: input.source,
     description: input.description,
     pyroxeneDelta: input.pyroxeneDelta ?? 0,
@@ -213,6 +237,7 @@ type OptimisticBuyTimelineOptions = {
   repeatType?: PyroxeneTimelineRepeatType;
   monthlyCount?: number;
   uid?: string;
+  now?: Date | string;
 };
 
 function normalizeMonthlyCount(monthlyCount: number | undefined): number {
@@ -237,6 +262,7 @@ export function createOptimisticBuyTimelineItems(
       description: "청휘석 구매",
       pyroxeneDelta: quantity * normalizedMonthlyCount,
       repeatType: options.repeatType,
+      now: options.now,
     }),
   ];
 }
@@ -328,6 +354,7 @@ export function createOptimisticOtherTimelineItems(
   description: string,
   date: Date,
   uid?: string,
+  now?: Date | string,
 ): PyroxeneTimelineItem[] {
   return [
     createOptimisticTimelineItem({
@@ -338,6 +365,7 @@ export function createOptimisticOtherTimelineItems(
       pyroxeneDelta: resources.pyroxene,
       oneTimeTicketDelta: resources.oneTimeTicket,
       tenTimeTicketDelta: resources.tenTimeTicket,
+      now,
     }),
   ];
 }

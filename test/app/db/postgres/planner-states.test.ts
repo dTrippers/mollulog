@@ -395,6 +395,44 @@ describe("PostgreSQL planner state writes", () => {
     expect(new Set(touchedTables(client))).toEqual(new Set(["planner_states"]));
   });
 
+  it("keeps the recorded time for a one-off gain dated on the current game day", async () => {
+    const recordedAt = "2026-08-05T12:15:00.000Z"; // 21:15 KST on 08/05
+    jest.useFakeTimers({ now: new Date(recordedAt), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const client = clientWithDocument();
+      const options = { createClient: () => client as unknown as Client };
+
+      await createPostgresOtherPyroxeneGain(env, 7, "2026-08-04T15:00:00.000Z", 20, 0, 0, "Today", "today", options);
+      await createPostgresBuyPyroxene(env, 7, "2026-08-04T15:00:00.000Z", 600, { ...options, uid: "buy-today" });
+      await createPostgresOtherPyroxeneGain(
+        env,
+        7,
+        "2026-08-05T15:00:00.000Z",
+        20,
+        0,
+        0,
+        "Tomorrow",
+        "tomorrow",
+        options,
+      );
+      await createPostgresPyroxeneApPackage(env, 7, "2026-08-04T15:00:00.000Z", false, "ap-today", options);
+
+      const eventAtByUid = Object.fromEntries(
+        storedDocument(client).pyroxene.records.map(({ uid, eventAt }) => [uid, eventAt]),
+      );
+      expect(eventAtByUid).toEqual(
+        expect.objectContaining({
+          today: recordedAt,
+          "buy-today": recordedAt,
+          tomorrow: "2026-08-05T19:00:00.000Z",
+          "ap-today::ap": "2026-08-04T19:00:00.000Z",
+        }),
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("rejects a timeline record whose uid already exists", async () => {
     const client = clientWithDocument();
     const originalDocument = client.tables.planner_states?.[0]?.document;

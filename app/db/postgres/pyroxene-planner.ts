@@ -17,6 +17,7 @@ import type { RecruitmentStacks, RecruitmentTargetTiers } from "~/domain/pyroxen
 import {
   extractPyroxeneTimelineBaseUid,
   normalizePyroxeneTimelineEventAt,
+  normalizePyroxeneTimelineRecordAt,
   PYROXENE_AP_PACKAGE_CONFIG,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
@@ -95,14 +96,14 @@ type TimelineRecordInput = Pick<PlannerStateTimelineRecord, "uid" | "source" | "
     eventAt: Date | string;
   };
 
-function timelineEventAt(date: Date | string): string {
-  return normalizeInstant(normalizePyroxeneTimelineEventAt(date));
+function timelineEventAt(date: Date | string, source: PlannerStateTimelineRecord["source"]): string {
+  return normalizeInstant(normalizePyroxeneTimelineRecordAt(date, source));
 }
 
 function timelineRecord(input: TimelineRecordInput): PlannerStateTimelineRecord {
   return {
     uid: input.uid,
-    eventAt: timelineEventAt(input.eventAt),
+    eventAt: timelineEventAt(input.eventAt, input.source),
     source: input.source,
     repeatType: input.repeatType ?? "fixed_days",
     repeatIntervalDays: input.repeatIntervalDays ?? null,
@@ -398,7 +399,7 @@ export function updatePostgresPyroxeneOneOffTimelineItem(
         isEditable(record)
           ? {
               ...record,
-              eventAt: timelineEventAt(input.date),
+              eventAt: timelineEventAt(input.date, input.source),
               description: input.description,
               pyroxeneDelta: input.pyroxeneDelta,
               oneTimeTicketDelta: input.oneTimeTicketDelta,

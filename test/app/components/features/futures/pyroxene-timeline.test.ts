@@ -1,4 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
+import { createOptimisticOtherTimelineItems } from "~/domain/pyroxene-sources";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
 import type { PyroxenePlannerOptions } from "../../../../../app/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "../../../../../app/domain/pyroxene-schedule";
@@ -51,6 +52,43 @@ function favoritedPickupRecruitmentWithUid(uid: string) {
 }
 
 describe("pyroxene-timeline", () => {
+  it("counts a direct gain dated today after inventory entered earlier that day", () => {
+    const inventoryInputAt = new Date("2026-11-17T13:38:00+09:00");
+    const recordedAt = "2026-11-17T12:15:00.000Z"; // 21:15 KST
+    const gain = (date: string, uid: string): PyroxeneScheduleItem => {
+      const [item] = createOptimisticOtherTimelineItems(
+        { pyroxene: 1118, oneTimeTicket: 0, tenTimeTicket: 0 },
+        "직접 등록",
+        new Date(date),
+        uid,
+        recordedAt,
+      );
+      return {
+        onetimeGain: {
+          uid: item.uid,
+          source: "other",
+          date: new Date(item.eventAt),
+          description: item.description,
+          pyroxeneDelta: item.pyroxeneDelta,
+        },
+      };
+    };
+
+    const timeline = buildTimeline(
+      initialResources,
+      inventoryInputAt,
+      new Map(),
+      [gain("2026-11-17T00:00:00+09:00", "today"), gain("2026-11-16T00:00:00+09:00", "yesterday")],
+      defaultOptions,
+      undefined,
+      [],
+      new Date("2026-12-31T00:00:00+09:00"),
+    );
+
+    expect(timeline.find((entry) => entry.source.uid === "today")?.accumulatedResources.pyroxene).toBe(2118);
+    expect(timeline.some((entry) => entry.source.uid === "yesterday")).toBe(false);
+  });
+
   it("accumulates one-time gain after initial resources", () => {
     const timeline = buildTimeline(
       initialResources,
