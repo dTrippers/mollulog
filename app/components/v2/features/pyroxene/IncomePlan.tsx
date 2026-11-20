@@ -99,12 +99,13 @@ function RowAction({ icon: Icon, label, onClick }: { icon: ElementType; label: s
 /** Shows or hides a source in the schedule. Hidden sources still count in the calculation. */
 function VisibilityToggle({
   label,
-  text,
+  part,
   visible,
   onToggle,
 }: {
   label: string;
-  text?: string;
+  // A part of a row's source, such as 일일 for 임무.
+  part?: string;
   visible: boolean;
   onToggle: () => void;
 }) {
@@ -118,7 +119,7 @@ function VisibilityToggle({
       onClick={onToggle}
       className={cn(
         ROW_ACTION_CLASS_NAME,
-        text ? "px-2" : "w-8",
+        "px-2",
         visible
           ? "bg-v2-accent-subtle text-v2-accent hover:bg-v2-accent-subtle/80"
           : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover hover:text-v2-fg",
@@ -126,7 +127,8 @@ function VisibilityToggle({
       )}
     >
       <Icon className="size-4" aria-hidden="true" />
-      {text}
+      {part ? `${part} ` : ""}
+      {visible ? "표시" : "숨김"}
     </button>
   );
 }
@@ -144,8 +146,9 @@ function SourceRow({
 }) {
   return (
     <div className="flex flex-col py-1.5">
-      <div className="flex min-h-8 items-center gap-2">
-        <span className="min-w-0 flex-1">
+      {/* Actions that do not fit beside the label move to their own line, aligned to the end. */}
+      <div className="flex min-h-8 flex-wrap items-center justify-end gap-x-2 gap-y-1">
+        <span className="mr-auto min-w-0 flex-1 basis-auto">
           <span className="block text-sm text-v2-fg">{label}</span>
           {detail ? <span className="block text-xs text-v2-fg-tertiary tabular-nums">{detail}</span> : null}
         </span>
@@ -209,10 +212,10 @@ export function IncomePlanPanel({
   const [dialog, setDialog] = useState<IncomeDialog>(null);
   const exceptionCount = options.consumption.apChargeExceptions.length;
   const display = options.timeline.display;
-  const visibility = (type: TimelineSourceType, label: string, text?: string) => (
+  const visibility = (type: TimelineSourceType, label: string, part?: string) => (
     <VisibilityToggle
       label={label}
-      text={text}
+      part={part}
       visible={display.includes(type)}
       onToggle={() =>
         handlers.onOptionsChange({
@@ -283,11 +286,11 @@ export function IncomePlanPanel({
           }
         />
         <SourceRow
-          label="직접 등록"
+          label="기타 획득"
           actions={
             <>
-              <RowAction icon={PlusIcon} label="직접 등록 추가" onClick={() => onAdd("other")} />
-              {visibility("other", "직접 등록")}
+              <RowAction icon={PlusIcon} label="기타 획득 추가" onClick={() => onAdd("other")} />
+              {visibility("other", "기타 획득")}
             </>
           }
         />
@@ -308,14 +311,14 @@ export function IncomePlanPanel({
           }
         />
       </PlanGroup>
-      <PlanGroup label="반복 구매">
+      <PlanGroup label="기간 패키지">
         <SourceRow
           label="청휘석 패키지"
           actions={
             <>
               <RowAction icon={PlusIcon} label="청휘석 패키지 추가" onClick={() => onAdd("monthly")} />
-              {visibility("package_onetime", "청휘석 패키지 초회", "초회")}
-              {visibility("package_daily", "청휘석 패키지 일간", "일간")}
+              {visibility("package_onetime", "청휘석 패키지 초회 지급", "초회")}
+              {visibility("package_daily", "청휘석 패키지 일간 지급", "일간")}
             </>
           }
         >
@@ -554,7 +557,7 @@ const addTabs: { id: AddTab; label: string }[] = [
   { id: "buy", label: "청휘석 구매" },
   { id: "monthly", label: "청휘석 패키지" },
   { id: "ap", label: "AP 패키지" },
-  { id: "other", label: "직접 등록" },
+  { id: "other", label: "기타 획득" },
 ];
 
 /** Rendered by the route so a closing panel sheet cannot remount and reopen it. */

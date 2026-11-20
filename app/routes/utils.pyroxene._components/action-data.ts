@@ -27,6 +27,7 @@ type SaveOwnedResourcesAction = {
     recruitmentStacks?: RecruitmentStacks;
     eventUid?: string | null;
     collectedSourceKeys?: string[];
+    uncollectedSourceKeys?: string[];
   };
 };
 
@@ -317,6 +318,7 @@ export function decodePyroxeneActionPayload(value: unknown, method: string): Act
           recruitmentStacks: readOptionalRecruitmentStacks(payload),
           eventUid,
           collectedSourceKeys: readSourceKeys(payload, "collectedSourceKeys"),
+          uncollectedSourceKeys: readSourceKeys(payload, "uncollectedSourceKeys"),
         },
       };
     }

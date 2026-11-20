@@ -42,7 +42,7 @@ export function ResourceIcon({ resource, className }: { resource: PyroxeneResour
 
 const statusContent: Record<PyroxeneEventStatus, { label: string; className: string; Icon: typeof CheckIcon }> = {
   enough: { label: "충분", className: "bg-v2-success-subtle text-v2-success", Icon: CheckIcon },
-  caution: { label: "주의", className: "bg-v2-warning-subtle text-v2-warning", Icon: ExclamationTriangleIcon },
+  caution: { label: "부족 가능", className: "bg-v2-warning-subtle text-v2-warning", Icon: ExclamationTriangleIcon },
   short: { label: "부족", className: "bg-v2-danger-subtle text-v2-danger", Icon: ExclamationCircleIcon },
 };
 
@@ -62,13 +62,12 @@ export function StatusPill({ status }: { status: PyroxeneEventStatus }) {
 }
 
 /**
- * Shared columns for the schedule: date, content, change, balance, actions. Mobile keeps the numbers in fixed widths so
- * they line up across separate rows.
- *
- * Income rows use their own flex layout on stacked containers (see IncomeRowView) and join this grid when wide.
+ * Shared columns for the schedule: date, content, change, balance, actions. Narrow containers keep the numbers in fixed
+ * widths so they line up across separate rows, and a long title wraps inside its own column. Wide containers match the
+ * event cards.
  */
 export const SCHEDULE_GRID_CLASS_NAME =
-  "grid grid-cols-[3rem_minmax(0,1fr)_4rem_3.5rem_1.75rem] gap-x-1.5 gap-y-0.5 @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:gap-x-3 @2xl:gap-y-0";
+  "grid grid-cols-[3rem_minmax(0,1fr)_4.25rem_3.5rem_auto] gap-x-1.5 @2xl:grid-cols-[3.25rem_minmax(0,1fr)_6rem_7rem_4.5rem] @2xl:gap-x-3";
 
 export function balanceClassName(value: number): string {
   return value < 0 ? "text-v2-danger" : "text-v2-fg";

@@ -4,9 +4,12 @@ import { MAX_RECRUITMENT_STACK, type RecruitmentStacks } from "~/domain/pyroxene
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 import { Button } from "../../primitives/Button";
+import { Checkbox } from "../../primitives/Checkbox";
 import { NumberInput } from "../../primitives/NumberInput";
 import {
   formatAmount,
+  formatSigned,
+  KST,
   PlannerDialog,
   PYROXENE_RESOURCE_LABELS,
   type PyroxeneResourceKey,
@@ -15,6 +18,9 @@ import {
 } from "./pyroxene-ui";
 
 export type OwnedResourceValues = { resources: PickupResources; stacks: RecruitmentStacks };
+
+/** An event reward that may already be in the owned resources. */
+export type ReceivableReward = { sourceKey: string; label: string; pyroxene: number; date: Date };
 
 const RESOURCE_ORDER: PyroxeneResourceKey[] = ["pyroxene", "tenTimeTicket", "oneTimeTicket"];
 const STACK_ORDER = ["regular", "limited"] as const;
@@ -62,6 +68,8 @@ export function OwnedResourcesDialog({
   submitLabel,
   description,
   initialValues,
+  rewards = [],
+  initialReceived = [],
   onClose,
   onSubmit,
 }: {
@@ -70,14 +78,20 @@ export function OwnedResourcesDialog({
   submitLabel: string;
   description?: string;
   initialValues: OwnedResourceValues;
+  // Rewards of started events still ahead in the schedule; the owned resources may already include them.
+  rewards?: ReceivableReward[];
+  initialReceived?: readonly string[];
   onClose: () => void;
-  onSubmit: (values: OwnedResourceValues) => void;
+  onSubmit: (values: OwnedResourceValues, received: ReadonlySet<string>) => void;
 }) {
   const [values, setValues] = useState(initialValues);
+  const [received, setReceived] = useState<ReadonlySet<string>>(new Set(initialReceived));
   const idPrefix = useId();
   useEffect(() => {
-    if (open) setValues(initialValues);
-  }, [open, initialValues]);
+    if (!open) return;
+    setValues(initialValues);
+    setReceived(new Set(initialReceived));
+  }, [open, initialValues, initialReceived]);
 
   return (
     <PlannerDialog
@@ -87,7 +101,7 @@ export function OwnedResourcesDialog({
       footer={
         <>
           <Button onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => onSubmit(values)}>
+          <Button variant="primary" onClick={() => onSubmit(values, received)}>
             {submitLabel}
           </Button>
         </>
@@ -142,10 +156,40 @@ export function OwnedResourcesDialog({
             </div>
           </div>
         ))}
-        <p className="text-xs text-v2-fg-tertiary">
-          개편 규칙의 모집에서 쌓인 횟수예요. 200회째에 픽업 학생을 확정으로 얻고, 픽업 학생을 얻으면 0으로 돌아가요.
-        </p>
       </div>
+      {rewards.length > 0 ? (
+        <section className="flex flex-col gap-2 border-t border-v2-divider pt-4">
+          <h3 className="text-sm font-semibold text-v2-fg">이미 받은 보상</h3>
+          <ul className="flex flex-col gap-2">
+            {rewards.map((reward) => (
+              <li key={reward.sourceKey} className="flex items-start gap-3">
+                <Checkbox
+                  id={`${idPrefix}-${reward.sourceKey}`}
+                  checked={received.has(reward.sourceKey)}
+                  onCheckedChange={(checked) =>
+                    setReceived((current) => {
+                      const next = new Set(current);
+                      if (checked) next.add(reward.sourceKey);
+                      else next.delete(reward.sourceKey);
+                      return next;
+                    })
+                  }
+                >
+                  {/* Content names carry their own line breaks, as in the schedule. */}
+                  <span className="break-keep whitespace-pre-line">{reward.label}</span>
+                </Checkbox>
+                <span className="ml-auto flex shrink-0 flex-col items-end text-sm tabular-nums">
+                  <span className="inline-flex items-center gap-0.5 font-semibold text-v2-fg">
+                    <ResourceIcon resource="pyroxene" className="my-0 size-4" />
+                    {formatSigned(reward.pyroxene)}
+                  </span>
+                  <span className="text-xs text-v2-fg-tertiary">{dayjs(reward.date).tz(KST).format("MM/DD")} 지급</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
     </PlannerDialog>
   );
 }

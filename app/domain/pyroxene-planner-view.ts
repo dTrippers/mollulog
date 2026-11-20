@@ -58,23 +58,14 @@ export type PlannerIncomeRow = {
   collectedSourceKey?: string;
   collectable: boolean;
   collected: boolean;
+  // The hidden sources an aggregate row adds up, one per source type in timeline order.
+  breakdown?: { type: TimelineSourceType; label: string; delta: PickupResources }[];
 };
 
 export type PlannerTimelineRow =
   | { kind: "year"; key: string; year: number }
   | { kind: "event"; key: string; entry: TimelineEntry; marker: number | null }
-  | { kind: "income"; key: string; row: PlannerIncomeRow }
-  | {
-      kind: "income-group";
-      key: string;
-      from: Dayjs;
-      to: Dayjs;
-      rows: PlannerIncomeRow[];
-      delta: number;
-      balance: number;
-      // The row shown while the group is collapsed: the first named income, or the first row when all are repeated.
-      leadIndex: number;
-    };
+  | { kind: "income"; key: string; row: PlannerIncomeRow };
 
 export type PlannerTimelineRowOptions = {
   display: readonly TimelineSourceType[];
@@ -105,6 +96,10 @@ function addResources(left: PickupResources, right: PickupResources): PickupReso
   };
 }
 
+function hasChange(delta: PickupResources): boolean {
+  return delta.pyroxene !== 0 || delta.oneTimeTicket !== 0 || delta.tenTimeTicket !== 0;
+}
+
 function isEventShown(entry: TimelineEntry, options: PlannerTimelineRowOptions): boolean {
   const event = entry.source.event;
   if (!event || !options.hideUntargeted) return true;
@@ -113,9 +108,9 @@ function isEventShown(entry: TimelineEntry, options: PlannerTimelineRowOptions):
 }
 
 /**
- * Builds the rows of the schedule. Income between two events forms one group. Inside a group, sources the display
- * filter shows and that carry a description or a deletable record get their own row. The rest join one aggregate row,
- * so the group total always equals the sum of its rows and hidden sources still count.
+ * Builds the rows of the schedule. Between two events, sources the display filter shows and that carry a description
+ * or a deletable record get their own row. The rest join one aggregate row with a per-source breakdown, so hidden
+ * sources still count and their amounts can be looked up.
  */
 export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTimelineRowOptions): PlannerTimelineRow[] {
   const rows: PlannerTimelineRow[] = [];
@@ -135,16 +130,24 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
     pending = [];
     // Each row keeps the timeline position its balance belongs to, so balances read in time order.
     const positioned: { row: PlannerIncomeRow; position: number }[] = [];
-    let aggregate: { first: TimelineEntry; last: TimelineEntry; lastIndex: number; delta: PickupResources } | null =
-      null;
+    let aggregate: {
+      first: TimelineEntry;
+      last: TimelineEntry;
+      lastIndex: number;
+      delta: PickupResources;
+      byType: Map<TimelineSourceType, PickupResources>;
+    } | null = null;
     entries.forEach((entry, index) => {
       const { source } = entry;
       const itemUid = source.uid && DELETABLE_SOURCE_TYPES.has(source.type) ? source.uid : undefined;
       const ownRow = display.has(source.type) && (!!source.description || !!itemUid);
       if (!ownRow) {
+        const byType = aggregate?.byType ?? new Map<TimelineSourceType, PickupResources>();
+        const typeDelta = byType.get(source.type);
+        byType.set(source.type, typeDelta ? addResources(typeDelta, entry.resourceDelta) : entry.resourceDelta);
         aggregate = aggregate
           ? { ...aggregate, last: entry, lastIndex: index, delta: addResources(aggregate.delta, entry.resourceDelta) }
-          : { first: entry, last: entry, lastIndex: index, delta: entry.resourceDelta };
+          : { first: entry, last: entry, lastIndex: index, delta: entry.resourceDelta, byType };
         return;
       }
       const collectedSourceKey =
@@ -176,47 +179,31 @@ export function buildPlannerTimelineRows(timeline: Timeline, options: PlannerTim
       last: TimelineEntry;
       lastIndex: number;
       delta: PickupResources;
+      byType: Map<TimelineSourceType, PickupResources>;
     } | null;
-    if (
-      repeated &&
-      (repeated.delta.pyroxene !== 0 || repeated.delta.oneTimeTicket !== 0 || repeated.delta.tenTimeTicket !== 0)
-    ) {
+    if (repeated && hasChange(repeated.delta)) {
       positioned.push({
         // The aggregate sits where its last entry is: its balance is the balance at that moment.
         position: repeated.lastIndex,
         row: {
           key: `aggregate-${repeated.first.date.valueOf()}`,
           date: repeated.last.date,
-          label: "미표시 수급처",
+          label: "숨긴 항목 합계",
           type: "aggregate",
           delta: repeated.delta,
           balance: repeated.last.accumulatedResources.pyroxene,
           collectable: false,
           collected: false,
+          breakdown: [...repeated.byType]
+            .filter(([, delta]) => hasChange(delta))
+            .map(([type, delta]) => ({ type, label: pyroxeneSourceLabel(type), delta })),
         },
       });
     }
-    const incomeRows = positioned.sort((a, b) => a.position - b.position).map(({ row }) => row);
-    if (incomeRows.length === 0) return;
-    const first = entries[0];
-    const last = entries[entries.length - 1];
-    pushYear(first.date);
-    if (incomeRows.length === 1) {
-      rows.push({ kind: "income", key: `income-${incomeRows[0].key}`, row: incomeRows[0] });
-      return;
+    for (const { row } of positioned.sort((a, b) => a.position - b.position)) {
+      pushYear(row.date);
+      rows.push({ kind: "income", key: `income-${row.key}`, row });
     }
-    const namedIndex = incomeRows.findIndex((row) => row.type !== "aggregate");
-    rows.push({
-      kind: "income-group",
-      key: `group-${first.date.valueOf()}-${incomeRows[0].key}`,
-      from: first.date,
-      to: last.date,
-      rows: incomeRows,
-      // The actual balance change: a collected row shows its original reward, which is already counted.
-      delta: entries.reduce((sum, entry) => sum + entry.resourceDelta.pyroxene, 0),
-      balance: last.accumulatedResources.pyroxene,
-      leadIndex: Math.max(0, namedIndex),
-    });
   };
 
   for (const entry of timeline) {

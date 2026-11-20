@@ -1891,7 +1891,7 @@ function ResourceSourceSummary({ resources, inputAt }: { resources: PickupResour
 }
 
 function PlannerOptionsSummary({ options }: { options: PyroxenePlannerOptions }) {
-  const pickupChance = { average: "평균 (천장 미반영)", average_pity: "평균 (천장 반영)", ceil: "천장" }[
+  const pickupChance = { average: "평균 (천장 미반영)", average_pity: "평균", ceil: "천장" }[
     options.event.pickupChance
   ];
   const raidTier = { platinum: "플래티넘", gold: "골드", silver: "실버", bronze: "브론즈" }[options.raid.tier];

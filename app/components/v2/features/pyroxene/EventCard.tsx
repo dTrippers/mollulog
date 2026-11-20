@@ -139,15 +139,18 @@ function ResourceUnit({
   amount,
   delta,
   large = false,
+  showUsage = true,
   children,
 }: {
   resource: PyroxeneResourceKey;
   amount: number;
   delta: number;
   large?: boolean;
+  // Wide layouts show the usage in the change column instead.
+  showUsage?: boolean;
   children?: ReactNode;
 }) {
-  const usage = usageText(delta);
+  const usage = showUsage ? usageText(delta) : null;
   return (
     <div className="flex flex-col items-end">
       <span className="flex items-center gap-1">
@@ -167,8 +170,36 @@ function ResourceUnit({
   );
 }
 
+/** What the recruitment uses, one resource per line, for the change column of wide layouts. */
+function ResourceUsage({ entry, className }: { entry: TimelineEntry; className?: string }) {
+  const delta = entry.resourceDelta;
+  const changed = (["pyroxene", "tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
+  return (
+    <span className={cn("flex-col items-end gap-0.5 pt-0.5 text-sm font-semibold tabular-nums", className)}>
+      {changed.length === 0 ? <span className="text-v2-fg-tertiary">—</span> : null}
+      {changed.map((resource) => (
+        <span
+          key={resource}
+          className={cn("inline-flex items-center gap-0.5", delta[resource] < 0 ? "text-v2-danger" : "text-v2-success")}
+        >
+          <ResourceIcon resource={resource} className="my-0 size-5" />
+          {formatSigned(delta[resource])}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** What is left of each resource after the recruitment, grouped by resource. */
-function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?: string }) {
+function ResourceLedger({
+  entry,
+  showUsage = true,
+  className,
+}: {
+  entry: TimelineEntry;
+  showUsage?: boolean;
+  className?: string;
+}) {
   const plan = entry.pickupPlan;
   if (!plan) return null;
   const delta = entry.resourceDelta;
@@ -186,13 +217,14 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         {status ? <StatusPill status={status} /> : null}
       </span>
       <div className="flex flex-col items-end gap-2.5">
-        <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} large>
+        <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} showUsage={showUsage} large>
           {range ? (
             <span className="mt-1.5 flex flex-col items-end text-xs text-v2-fg-tertiary">
-              <span className="text-[0.625rem] leading-3">상하위 10% 범위</span>
+              <span className="text-[0.625rem] leading-3">예상 범위 (80%)</span>
               <span>
                 {/* A low end below zero means bad luck can run the balance short. */}
-                <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
+                <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>
+                {" ~ "}
                 {formatAmount(range.high)}
               </span>
             </span>
@@ -201,7 +233,13 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         {tickets.length > 0 ? (
           <div className="flex flex-wrap justify-end gap-x-4 gap-y-2.5">
             {tickets.map((resource) => (
-              <ResourceUnit key={resource} resource={resource} amount={after[resource]} delta={delta[resource]} />
+              <ResourceUnit
+                key={resource}
+                resource={resource}
+                amount={after[resource]}
+                delta={delta[resource]}
+                showUsage={showUsage}
+              />
             ))}
           </div>
         ) : null}
@@ -285,7 +323,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         {completed ? (
           <span className="inline-flex h-5.5 items-center gap-0.5 rounded-full bg-v2-success-subtle px-2 text-xs font-semibold text-v2-success">
             <CheckIcon className="size-3.5" aria-hidden="true" />
-            완료
+            모집 완료
           </span>
         ) : null}
         {ruleIsLegacy ? (
@@ -338,7 +376,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
       ) : null}
       <OwnedResourcesDialog
         open={dialog === "complete"}
-        title="완료 기록"
+        title="모집 완료 기록"
         submitLabel="기록"
         description="모집을 마친 뒤 남은 재화와 스택을 입력해주세요. 예상값으로 채워 두었어요."
         initialValues={completionValues}
@@ -460,7 +498,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                   showSelectedIndicator={false}
                   captionPlacement="overlay"
                   overlayOnMobile
-                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "목표로 추가"}
+                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "관심 학생으로 추가"}
                   favorite={{
                     visible: student.favorited,
                     icon: "favorited",
@@ -523,7 +561,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               {plan.basis === "manual" ? (
                 <span className="inline-flex items-center gap-0.5 text-v2-fg-tertiary">
                   <PencilIcon className="size-3" aria-hidden="true" />
-                  직접
+                  직접 입력
                 </span>
               ) : plan.basisOverridden ? (
                 <span className="rounded bg-v2-accent-subtle px-1 text-xs leading-5 font-medium text-v2-accent">
@@ -553,13 +591,13 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           {plan ? (
             <Button size="sm" onClick={() => setDialog("target")}>
               <PencilIcon className="size-3" aria-hidden="true" />
-              목표 설정
+              모집 횟수 설정
             </Button>
           ) : null}
           {canComplete ? (
             <Button size="sm" onClick={() => setDialog("complete")}>
               <CheckIcon className="size-3" aria-hidden="true" />
-              완료 기록
+              모집 완료 기록
             </Button>
           ) : null}
           {completed && canRecordCompletion ? (
@@ -576,7 +614,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
                 handlers.onDeleteCompletion(event.uid);
               }}
             >
-              {confirmingDelete ? "정말 삭제할까요?" : "완료 기록 삭제"}
+              {confirmingDelete ? "정말 삭제할까요?" : "모집 기록 삭제"}
             </Button>
           ) : null}
         </div>
@@ -584,9 +622,8 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
 
       {plan ? (
         <>
-          {/* The change column stays empty: each resource shows its usage under what is left. */}
-          <span className="hidden @2xl:block" />
-          <ResourceLedger entry={entry} className="hidden @2xl:flex" />
+          <ResourceUsage entry={entry} className="hidden @2xl:flex" />
+          <ResourceLedger entry={entry} showUsage={false} className="hidden @2xl:flex" />
         </>
       ) : (
         <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @2xl:block">—</span>
@@ -631,7 +668,7 @@ function TargetDialog({
         value,
         label: PICKUP_BASIS_SHORT_LABELS[value],
       })),
-      { value: "manual" as const, label: "직접" },
+      { value: "manual" as const, label: "직접 입력" },
     ],
     [defaultBasis, savedBasis],
   );
@@ -639,7 +676,7 @@ function TargetDialog({
   return (
     <PlannerDialog
       open={open}
-      title="목표 설정"
+      title="모집 횟수 설정"
       onClose={onClose}
       footer={
         <>

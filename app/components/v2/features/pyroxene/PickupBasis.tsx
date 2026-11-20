@@ -12,8 +12,8 @@ import { Button } from "../../primitives/Button";
 import { PlannerDialog } from "./pyroxene-ui";
 
 export const PICKUP_BASIS_SHORT_LABELS: Record<PyroxenePickupChance, string> = {
-  average: "평균",
-  average_pity: "평균+천장",
+  average: "평균 (천장 미반영)",
+  average_pity: "평균",
   ceil: "천장",
 };
 
@@ -143,14 +143,14 @@ export function CalculationMethodDialog({
             ))}
           </ul>
           <p className="text-v2-fg-secondary">
-            목표 학생은 목표 성급까지 필요한 횟수로 계산해요. 이벤트에서 직접 입력한 횟수가 있으면 그 횟수를 써요.
+            관심 학생은 목표 성급까지 필요한 횟수로 계산해요. 이벤트에서 직접 입력한 횟수가 있으면 그 횟수를 써요.
           </p>
         </section>
         <section className="flex flex-col gap-1">
           <h3 className="font-semibold text-v2-fg">예상 범위</h3>
           <p className="text-v2-fg-secondary">
             {assumptions.showsRange
-              ? "상하위 10% 이내는 모집 운이 좋은 경우(상위 10%)부터 나쁜 경우(하위 10%)까지의 범위예요. 실제 결과가 이 범위를 벗어날 확률은 약 20%예요."
+              ? "예상 범위 (80%)는 모집 운이 좋은 경우(상위 10%)부터 나쁜 경우(하위 10%)까지의 범위예요. 실제 결과가 이 범위를 벗어날 확률은 약 20%예요."
               : "천장 기준은 천장까지 모집하는 경우만 계산하므로 범위를 표시하지 않아요."}
           </p>
         </section>
