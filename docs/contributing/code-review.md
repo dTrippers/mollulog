@@ -38,6 +38,15 @@ single owner for commands and claim-to-evidence mapping.
 - Are sort/display fields such as `createdAt` and `updatedAt` present where the
   behavior requires them?
 - Are retry, draft, and save states preserved according to the changed flow?
+- Can a save overwrite a newer value? A screen that saves values it read earlier
+  checks that the record has not changed since, not only that it still exists.
+  An autosave compares a new value with the newest one already sent or waiting,
+  not with the last saved one, and keeps a waiting save per target, so no input
+  is dropped while an earlier save is in flight.
+- Does code that handles a PostgreSQL error, such as a unique violation, read it
+  through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
+  errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
+  and a check on the thrown error itself never matches.
 
 ### Auth and security
 
