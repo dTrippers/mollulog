@@ -49,6 +49,11 @@ single owner for commands and claim-to-evidence mapping.
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,
   and a check on the thrown error itself never matches.
+- Does one user action that saves several parts write them in one update or
+  transaction, so a failure cannot keep some parts and drop the others?
+- Does a save write only what the user changed? A combined save, such as a
+  dialog that edits two things, must not refresh a timestamp or baseline (an
+  input time, for example) of the part the user left untouched.
 
 ### Auth and security
 
@@ -59,11 +64,13 @@ single owner for commands and claim-to-evidence mapping.
 
 ### React, accessibility, and rendering
 
-- Are `useEffect` dependencies complete, and is `meta` present when the screen
-  needs it? A page anonymous visitors can open needs `socialMeta` card tags in
-  every `meta` branch that renders with 200, including empty and fallback
-  states. A child route's `meta` replaces its parent's, so a fallback branch
-  cannot rely on the parent's tags.
+- Are `useEffect` dependencies complete and stable, and is `meta` present when
+  the screen needs it? An effect that sets state must not depend on a value
+  created anew on each render, such as a default `[]` or `{}` prop or an inline
+  object, or it re-renders without end. A page anonymous visitors can open
+  needs `socialMeta` card tags in every `meta` branch that renders with 200,
+  including empty and fallback states. A child route's `meta` replaces its
+  parent's, so a fallback branch cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
 - Is the boundary between route-local and shared UI intact?
 - Is an image that fills a frame sized only by `aspect-ratio` pinned to the
