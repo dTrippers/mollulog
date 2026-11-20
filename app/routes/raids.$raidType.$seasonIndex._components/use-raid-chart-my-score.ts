@@ -3,6 +3,9 @@ import type { RaidRecordDefenseType, RaidRecordRaidType, RaidRecordServer } from
 import type { RaidChartScoreActionData } from "~/routes/api.raid-records.chart-score";
 import type { RaidChartRecordContextView, RaidChartRecordView, RaidChartSeasonView } from "~/views/raid-records";
 
+// The localStorage key prefix of the browser-only "내 점수", followed by `:<raidType>:<jpSeasonIndex>:<defenseType>`.
+export const MY_SCORE_STORAGE_PREFIX = "raid-clear-time-distribution:my-score";
+
 const SAVE_DELAY_MS = 1_000;
 const TOAST_DURATION_MS = 2_500;
 const SAVE_FAILED_MESSAGE = "저장하지 못했어요.";
@@ -17,6 +20,8 @@ export type RaidChartSaveStatus =
   | { kind: "idle" }
   | { kind: "saving" }
   | { kind: "failed"; message: string; retryable: boolean };
+
+const IDLE: RaidChartSaveStatus = { kind: "idle" };
 
 type SaveTarget = {
   server: RaidRecordServer;
@@ -84,6 +89,8 @@ async function postChartScore({ target, score }: SaveRequest): Promise<RaidChart
 }
 
 // The season chart's "내 점수" value, kept in the browser or saved to the Sensei's record a second after typing stops.
+// The season page keeps it above the chart, which unmounts while another defense type loads, so a save on its way and
+// its status survive the switch. Each server, season, and defense type has its own save status, retry, and toast.
 export function useRaidChartMyScore({
   storageKey,
   context,
@@ -104,27 +111,39 @@ export function useRaidChartMyScore({
 
   const side: RaidChartSeasonView | null = context ? (server === "jp" && context.jp ? context.jp : context.kr) : null;
   const recordDefenseType =
-    side?.started && side.scoreDefenseTypes.find((entry) => entry === defenseType) ? (defenseType as RaidRecordDefenseType) : null;
+    side?.started && side.scoreDefenseTypes.find((entry) => entry === defenseType)
+      ? (defenseType as RaidRecordDefenseType)
+      : null;
   const mode: RaidChartMyScoreMode =
     context && side && recordDefenseType ? "record" : side?.server === "kr" && !side.started ? "unstarted" : "local";
   const record = side ? records[side.server] : null;
   const savedScore = mode === "record" ? savedScoreOf(record, defenseType) : null;
   const target: SaveTarget | null =
     mode === "record" && context && side && recordDefenseType
-      ? { server: side.server, raidType: context.raidType, seasonIndex: side.seasonIndex, defenseType: recordDefenseType }
+      ? {
+          server: side.server,
+          raidType: context.raidType,
+          seasonIndex: side.seasonIndex,
+          defenseType: recordDefenseType,
+        }
       : null;
   const valueKey = target ? `record:${saveTargetKey(target)}` : `local:${storageKey}`;
 
   const [value, setValue] = useState("");
   const [loadedKey, setLoadedKey] = useState<string | null>(null);
-  const [status, setStatus] = useState<RaidChartSaveStatus>({ kind: "idle" });
-  const [toastId, setToastId] = useState<number | null>(null);
+  const [statusByKey, setStatusByKey] = useState<Record<string, RaidChartSaveStatus>>({});
+  const setStatusOf = useCallback((key: string, next: RaidChartSaveStatus) => {
+    setStatusByKey((current) => ({ ...current, [key]: next }));
+  }, []);
+  const targetKey = target ? saveTargetKey(target) : null;
+  const status = targetKey ? (statusByKey[targetKey] ?? IDLE) : IDLE;
+  const [toast, setToast] = useState<{ key: string; id: number } | null>(null);
 
   // One save at a time, so an older score can never land after a newer one. Saves typed while one is on its way wait
   // in line, the newest for each defense type and server, so a score typed for another defense type is never dropped.
   const inFlightRef = useRef<SaveRequest | null>(null);
   const queuedRef = useRef(new Map<string, SaveRequest>());
-  const lastFailedRef = useRef<SaveRequest | null>(null);
+  const lastFailedRef = useRef(new Map<string, SaveRequest>());
   // The score the record will hold once the saves on their way land: the newest one sent or waiting for the target.
   const requestedScoreOf = useCallback((key: string): { score: number | null } | null => {
     const queued = queuedRef.current.get(key);
@@ -149,7 +168,6 @@ export function useRaidChartMyScore({
         setValue("");
       }
     }
-    setStatus({ kind: "idle" });
     setLoadedKey(valueKey);
   }, [valueKey, storageKey, requestedScoreOf]);
 
@@ -164,39 +182,45 @@ export function useRaidChartMyScore({
     }
   }, [value, valueKey, loadedKey, storageKey]);
 
-  const send = useCallback(async function sendNow(request: SaveRequest): Promise<void> {
-    if (inFlightRef.current) {
-      const key = saveTargetKey(request.target);
-      queuedRef.current.delete(key);
-      queuedRef.current.set(key, request);
-      return;
-    }
-    inFlightRef.current = request;
-    setStatus({ kind: "saving" });
-    try {
-      const saved = await postChartScore(request);
-      setRecords((current) => ({ ...current, [request.target.server]: saved }));
-      setStatus({ kind: "idle" });
-      if (request.score !== null) setToastId(Date.now());
-    } catch (error) {
-      const failure =
-        error instanceof ChartScoreSaveError ? error : new ChartScoreSaveError(SAVE_FAILED_MESSAGE, true);
-      setStatus({ kind: "failed", message: failure.message, retryable: failure.retryable });
-      lastFailedRef.current = request;
-    } finally {
-      inFlightRef.current = null;
-      const next = queuedRef.current.values().next();
-      if (!next.done) {
-        queuedRef.current.delete(saveTargetKey(next.value.target));
-        void sendNow(next.value);
+  const send = useCallback(
+    async function sendNow(request: SaveRequest): Promise<void> {
+      if (inFlightRef.current) {
+        const key = saveTargetKey(request.target);
+        queuedRef.current.delete(key);
+        queuedRef.current.set(key, request);
+        return;
       }
-    }
-  }, []);
+      const key = saveTargetKey(request.target);
+      inFlightRef.current = request;
+      setStatusOf(key, { kind: "saving" });
+      try {
+        const saved = await postChartScore(request);
+        setRecords((current) => ({ ...current, [request.target.server]: saved }));
+        lastFailedRef.current.delete(key);
+        // A newer score for the same target is still waiting, so this one is not the final state yet.
+        if (!queuedRef.current.has(key)) setStatusOf(key, IDLE);
+        if (request.score !== null) setToast({ key, id: Date.now() });
+      } catch (error) {
+        const failure =
+          error instanceof ChartScoreSaveError ? error : new ChartScoreSaveError(SAVE_FAILED_MESSAGE, true);
+        setStatusOf(key, { kind: "failed", message: failure.message, retryable: failure.retryable });
+        lastFailedRef.current.set(key, request);
+      } finally {
+        inFlightRef.current = null;
+        const next = queuedRef.current.values().next();
+        if (!next.done) {
+          queuedRef.current.delete(saveTargetKey(next.value.target));
+          void sendNow(next.value);
+        }
+      }
+    },
+    [setStatusOf],
+  );
   useEffect(() => {
-    if (toastId === null) return;
-    const timer = setTimeout(() => setToastId(null), TOAST_DURATION_MS);
+    if (toast === null) return;
+    const timer = setTimeout(() => setToast(null), TOAST_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [toastId]);
+  }, [toast]);
 
   // A save waiting for the typing pause. Changing the defense type or server, or leaving the page, sends it at once.
   const pendingRef = useRef<{ timer: ReturnType<typeof setTimeout>; request: SaveRequest } | null>(null);
@@ -223,7 +247,7 @@ export function useRaidChartMyScore({
     // saves it.
     const requested = requestedScoreOf(saveTargetKey(target));
     if (score === (requested ? requested.score : savedScore)) {
-      if (status.kind === "failed") setStatus({ kind: "idle" });
+      if (status.kind === "failed") setStatusOf(saveTargetKey(target), IDLE);
       return;
     }
     // Emptying the input removes the score only from a record that holds nothing but scores; the server keeps any
@@ -241,7 +265,7 @@ export function useRaidChartMyScore({
   };
 
   const retry = () => {
-    const failed = lastFailedRef.current;
+    const failed = targetKey ? lastFailedRef.current.get(targetKey) : undefined;
     if (failed) void send(failed);
   };
 
@@ -257,6 +281,9 @@ export function useRaidChartMyScore({
     savedScore,
     status,
     retry,
-    toastVisible: toastId !== null,
+    // The toast belongs to the target whose score was saved, not to whatever the chart shows when the save lands.
+    toastVisible: toast !== null && toast.key === targetKey,
   };
 }
+
+export type RaidChartMyScore = ReturnType<typeof useRaidChartMyScore>;

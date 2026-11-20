@@ -13,7 +13,7 @@ import type { RaidChartRecordContextView } from "~/views/raid-records";
 import { CHART_MARGIN_RIGHT, formatDifficulty, formatTimeLabel } from "./raid-score-histogram-format";
 import { RaidChartRecordLine, RaidChartSaveToast, RaidChartServerChoice } from "./RaidChartMyRecord";
 import RaidScoreRangeDetail from "./RaidScoreRangeDetail";
-import { parseChartScoreInput, useRaidChartMyScore } from "./use-raid-chart-my-score";
+import { parseChartScoreInput, type RaidChartMyScore } from "./use-raid-chart-my-score";
 
 // recharts is large, so the bars load separately and the distribution fetch is not held behind that download.
 const RaidScoreHistogramBars = lazy(() => import("./RaidScoreHistogramBars"));
@@ -35,6 +35,8 @@ type RaidScoreHistogramProps = {
   hasRecruitedStudentData: boolean;
   // The signed-in Sensei's record of the season, which "내 점수" reads and saves. Null for guests.
   myRecordContext: RaidChartRecordContextView | null;
+  // "내 점수", kept by the season page so a save on its way survives this chart unmounting for another defense type.
+  myScore: RaidChartMyScore;
 };
 
 export type ScoreRange = {
@@ -83,7 +85,6 @@ export type ScoreMarker = {
 const rangeStatsCache = new Map<string, RangeStats>();
 const reportedDifficultyBandStatsMismatches = new Set<string>();
 const RANGE_STATS_CACHE_MAX_SIZE = 50;
-const MY_SCORE_STORAGE_PREFIX = "raid-clear-time-distribution:my-score";
 const CHART_PADDING_PX = 12;
 const Y_AXIS_WIDTH = 42;
 const CHART_SKELETON_BARS = [
@@ -110,6 +111,7 @@ export default function RaidScoreHistogram({
   recruitedStudentTiers,
   hasRecruitedStudentData,
   myRecordContext,
+  myScore,
 }: RaidScoreHistogramProps) {
   const [overviewDistribution, setOverviewDistribution] = useState<ClearTimeDistribution | null>(null);
   const [chartDistribution, setChartDistribution] = useState<ClearTimeDistribution | null>(null);
@@ -119,11 +121,6 @@ export default function RaidScoreHistogram({
   const [rangeStats, setRangeStats] = useState<RangeStats | null>(null);
   const [rangeStatsLoading, setRangeStatsLoading] = useState(false);
   const [rangeStatsLoadedKey, setRangeStatsLoadedKey] = useState<string | null>(null);
-  const myScore = useRaidChartMyScore({
-    storageKey: `${MY_SCORE_STORAGE_PREFIX}:${raidType}:${season}:${defenseType}`,
-    context: myRecordContext,
-    defenseType,
-  });
 
   useEffect(() => {
     let cancelled = false;

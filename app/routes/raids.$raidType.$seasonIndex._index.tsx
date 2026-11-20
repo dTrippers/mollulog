@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { type LoaderFunctionArgs, useLoaderData, useOutletContext } from "react-router";
+import {
+  type LoaderFunctionArgs,
+  type ShouldRevalidateFunctionArgs,
+  useLoaderData,
+  useOutletContext,
+} from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { buildRaidPartyStudentMap, RaidListItem } from "~/components/features/raids";
 import { EmptyView, HorizontalScroll, LoadingSkeleton, SubTitle } from "~/components/primitives";
@@ -14,6 +19,10 @@ import { loadRaidChartRecordContext } from "~/views/raid-records";
 import type { RaidPageContext } from "./raids.$raidType.$seasonIndex";
 import RaidScoreHistogram from "./raids.$raidType.$seasonIndex._components/RaidScoreHistogram";
 import RaidUnavailableState from "./raids.$raidType.$seasonIndex._components/RaidUnavailableState";
+import {
+  MY_SCORE_STORAGE_PREFIX,
+  useRaidChartMyScore,
+} from "./raids.$raidType.$seasonIndex._components/use-raid-chart-my-score";
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -41,6 +50,18 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   };
 };
 
+// The loader reads nothing from the search params, so switching the defense type does not reload it. A reload then
+// could also read the record before a "내 점수" save sent at the switch lands, and show the older score.
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  if (!formMethod && currentUrl.pathname === nextUrl.pathname) return false;
+  return defaultShouldRevalidate;
+}
+
 export default function RaidSummary() {
   const { currentRaid, allRaids, defenseType, defenseTypeSet } = useOutletContext<RaidPageContext>();
   const { allStudents, recruitedStudentTiers, hasRecruitedStudentData, myRecordContext } =
@@ -55,6 +76,11 @@ export default function RaidSummary() {
   const [error, setError] = useState<string | null>(null);
 
   const jpSeasonIndex = currentRaid.jpSchedule?.seasonIndex ?? null;
+  const myScore = useRaidChartMyScore({
+    storageKey: `${MY_SCORE_STORAGE_PREFIX}:${currentRaid.raidType}:${jpSeasonIndex}:${defenseType}`,
+    context: myRecordContext,
+    defenseType,
+  });
 
   useEffect(() => {
     if (jpSeasonIndex === null) {
@@ -134,6 +160,7 @@ export default function RaidSummary() {
         recruitedStudentTiers={recruitedStudentTiers}
         hasRecruitedStudentData={hasRecruitedStudentData}
         myRecordContext={myRecordContext}
+        myScore={myScore}
       />
 
       {sameBossRaids.length > 0 && (

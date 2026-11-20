@@ -272,6 +272,59 @@ describe("useRaidChartMyScore with a record", () => {
     ]);
   });
 
+  it("keeps a failed save's status, retry, and toast with its own server", async () => {
+    const jpRecord = chartRecord({ uid: "jp-record", scores: [{ defenseType: "heavy", score: 38_000_000 }], rank: null });
+    const ctx = context({
+      jp: { server: "jp", seasonIndex: 33, started: true, scoreDefenseTypes: ["heavy", "elastic", "light"], record: jpRecord },
+    });
+    let release: () => void = () => {};
+    const firstResponse = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    respond = async ({ body }) => {
+      if (body.server === "kr") {
+        await firstResponse;
+        return jsonResponse(500, { ok: false, message: "저장하지 못했어요." });
+      }
+      return jsonResponse(200, { ok: true, record: { ...jpRecord, scores: [{ defenseType: "heavy", score: body.score as number }] } });
+    };
+    const { result } = renderMyScore({ context: ctx });
+
+    act(() => result.current.onChange("41000000"));
+    await advance(1000);
+    act(() => result.current.selectServer("jp"));
+    act(() => result.current.onChange("37000000"));
+    await advance(1000);
+    act(() => result.current.selectServer("kr"));
+    await act(async () => {
+      release();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+
+    expect(fetchCalls.map((call) => [call.body.server, call.body.score])).toEqual([
+      ["kr", 41_000_000],
+      ["jp", 37_000_000],
+    ]);
+    // The Korean score failed: the Japanese success neither clears that nor shows its toast here.
+    expect(result.current.value).toBe("41,000,000");
+    expect(result.current.status).toEqual({ kind: "failed", message: "저장하지 못했어요.", retryable: true });
+    expect(result.current.toastVisible).toBe(false);
+
+    respond = async ({ body }) =>
+      jsonResponse(200, { ok: true, record: chartRecord({ scores: [{ defenseType: "heavy", score: body.score as number }] }) });
+    await act(async () => {
+      result.current.retry();
+      await jest.advanceTimersByTimeAsync(0);
+    });
+    expect(fetchCalls.at(-1)?.body).toMatchObject({ server: "kr", score: 41_000_000 });
+    expect(result.current.status).toEqual({ kind: "idle" });
+    expect(result.current.toastVisible).toBe(true);
+
+    act(() => result.current.selectServer("jp"));
+    expect(result.current.status).toEqual({ kind: "idle" });
+    expect(result.current.value).toBe("37,000,000");
+  });
+
   it("shows the server's message for a rejected score and offers a retry for a failed save", async () => {
     respond = async () => jsonResponse(400, { ok: false, message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." });
     const { result } = renderMyScore({ context: context() });
