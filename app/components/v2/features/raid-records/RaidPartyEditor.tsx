@@ -128,7 +128,9 @@ export function RaidPartyCard({
           party={party}
           title={title}
           studentsByUid={context.studentsByUid}
-          onChange={(slot, unit) => onChange({ ...party, slots: party.slots.map((current, index) => (index === slot ? unit : current)) })}
+          onChange={(slot, unit) =>
+            onChange({ ...party, slots: party.slots.map((current, index) => (index === slot ? unit : current)) })
+          }
         />
       ) : null}
     </section>
@@ -154,7 +156,10 @@ export function PartyMiniRow({
               size="sm"
             />
           ) : (
-            <span aria-hidden="true" className="size-6 rounded-full border border-dashed border-v2-control-border-strong" />
+            <span
+              aria-hidden="true"
+              className="size-6 rounded-full border border-dashed border-v2-control-border-strong"
+            />
           )}
         </span>
       ))}
@@ -582,7 +587,10 @@ function PartyGrowthTable({
                   <th
                     key={column.field}
                     scope="col"
-                    className={cn("px-0 text-center text-[0.6875rem] font-normal whitespace-nowrap text-v2-fg-tertiary", index === 0 && "pl-3")}
+                    className={cn(
+                      "px-0 text-center text-[0.6875rem] font-normal whitespace-nowrap text-v2-fg-tertiary",
+                      index === 0 && "pl-3",
+                    )}
                   >
                     {column.label}
                   </th>
@@ -632,7 +640,13 @@ function PartyGrowthTable({
       <p className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-v2-fg-tertiary">
         {anyChanged ? (
           <span className="inline-flex items-center gap-1">
-            <span aria-hidden="true" className="size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset" />
+            <span
+              aria-hidden="true"
+              className={cn(
+                "size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset",
+                CHANGED_FORCED_COLORS_MARK,
+              )}
+            />
             <span id={changedLegendId}>모집한 학생 정보에서 수정한 값</span>
           </span>
         ) : null}
@@ -641,6 +655,11 @@ function PartyGrowthTable({
     </div>
   );
 }
+
+// Forced colors drop the fill and ring that mark a changed value, so the cell and the legend swatch also get a dashed
+// outline there.
+const CHANGED_FORCED_COLORS_MARK =
+  "forced-colors:outline-2 forced-colors:outline-offset-[-3px] forced-colors:outline-dashed";
 
 function GrowthCellInput({
   field,
@@ -665,7 +684,10 @@ function GrowthCellInput({
   // A stored value that the tier no longer allows stays editable, so it can be corrected.
   const editable = isRaidGrowthFieldApplicable(field, student, unit.snapshot.tier) || value !== null;
   const changed = changedDescriptionId !== undefined;
-  const cellClassName = cn("w-10", changed && "bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset");
+  const cellClassName = cn(
+    "w-10",
+    changed && cn("bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset", CHANGED_FORCED_COLORS_MARK),
+  );
   if (!editable) {
     return <span aria-hidden="true" className="block min-h-7 w-10 rounded-md bg-v2-inset" />;
   }
@@ -704,7 +726,11 @@ function GrowthCellInput({
         const raw = event.currentTarget.value;
         onChange(raw === "" ? null : Number(raw));
       }}
-      className={cn(cellClassName, "px-0 font-normal", outOfRange && "bg-v2-danger-subtle ring-2 ring-v2-danger ring-inset")}
+      className={cn(
+        cellClassName,
+        "px-0 font-normal",
+        outOfRange && "bg-v2-danger-subtle ring-2 ring-v2-danger ring-inset",
+      )}
     />
   );
 }
