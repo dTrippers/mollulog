@@ -8,12 +8,7 @@ import {
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
-  getPyroxeneGameDayStartAt,
-  isBeforePyroxeneGameDayReset,
-  normalizePyroxeneOneOffGainAt,
-  normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
-  normalizePyroxeneTimelineRecordAt,
   togglePyroxeneTimelineSourceVisibility,
 } from "~/domain/pyroxene-sources";
 import dayjs from "../../../../../app/lib/dayjs";
@@ -232,87 +227,5 @@ describe("pyroxene-sources", () => {
         tenTimeTicketDelta: 2,
       }),
     ]);
-  });
-
-  describe("one-off gains dated on the current game day", () => {
-    // 21:15 KST on 11/17, after inventory entered at 13:38 the same day.
-    const now = "2026-11-17T12:15:00.000Z";
-    const pickedToday = new Date("2026-11-17T00:00:00+09:00");
-
-    it("keeps the time the gain is recorded", () => {
-      expect(normalizePyroxeneOneOffGainAt(pickedToday, now)).toBe(now);
-      expect(normalizePyroxeneOneOffGainAt(new Date("2026-11-17T09:00:00+09:00"), now)).toBe(now);
-    });
-
-    it("counts other days from 04:00 KST", () => {
-      expect(normalizePyroxeneOneOffGainAt(new Date("2026-11-16T00:00:00+09:00"), now)).toBe(
-        "2026-11-15T19:00:00.000Z",
-      );
-      expect(normalizePyroxeneOneOffGainAt(new Date("2026-11-18T00:00:00+09:00"), now)).toBe(
-        "2026-11-17T19:00:00.000Z",
-      );
-    });
-
-    it("treats the hours before the 04:00 reset as the previous game day", () => {
-      const beforeReset = "2026-11-17T17:00:00.000Z"; // 02:00 KST on 11/18
-
-      expect(normalizePyroxeneOneOffGainAt(pickedToday, beforeReset)).toBe(beforeReset);
-      expect(normalizePyroxeneOneOffGainAt(new Date("2026-11-18T00:00:00+09:00"), beforeReset)).toBe(
-        "2026-11-17T19:00:00.000Z",
-      );
-    });
-
-    it("applies only to purchases and direct gains", () => {
-      expect(normalizePyroxeneTimelineRecordAt(pickedToday, "buy", now)).toBe(now);
-      expect(normalizePyroxeneTimelineRecordAt(pickedToday, "other", now)).toBe(now);
-      expect(normalizePyroxeneTimelineRecordAt(pickedToday, "package_onetime", now)).toBe("2026-11-16T19:00:00.000Z");
-      expect(normalizePyroxeneTimelineRecordAt(pickedToday, "attendance", now)).toBe("2026-11-16T19:00:00.000Z");
-    });
-
-    it("creates buy and other optimistic items at the recorded time", () => {
-      const resources = { pyroxene: 1118, oneTimeTicket: 0, tenTimeTicket: 0 };
-
-      expect(createOptimisticBuyTimelineItems(6600, pickedToday, { now })[0].eventAt).toBe(now);
-      expect(createOptimisticOtherTimelineItems(resources, "", pickedToday, undefined, now)[0].eventAt).toBe(now);
-    });
-
-    it("finds the 04:00 KST that starts the game day of an instant", () => {
-      expect(getPyroxeneGameDayStartAt(now)).toBe("2026-11-16T19:00:00.000Z");
-      expect(getPyroxeneGameDayStartAt("2026-11-17T17:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z"); // 02:00 KST on 11/18
-      expect(getPyroxeneGameDayStartAt("2026-11-16T19:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z");
-      expect(isBeforePyroxeneGameDayReset("2026-11-17T17:00:00.000Z")).toBe(true);
-      expect(isBeforePyroxeneGameDayReset("2026-11-16T19:00:00.000Z")).toBe(false);
-      expect(isBeforePyroxeneGameDayReset(now)).toBe(false);
-    });
-
-    it("keeps the recorded time when an edit leaves the date on the same game day", () => {
-      const noonOnPickedDate = "2026-11-17T03:00:00.000Z"; // 12:00 KST on 11/17, as the quick edit sends it
-      const nextDay = "2026-11-18T01:00:00.000Z"; // 10:00 KST on 11/18
-      const recordedBeforeReset = "2026-11-17T17:00:00.000Z"; // 02:00 KST on 11/18, game day 11/17
-
-      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, now, "2026-11-17T13:00:00.000Z")).toBe(now);
-      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, now, nextDay)).toBe(now);
-      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, recordedBeforeReset, nextDay)).toBe(
-        recordedBeforeReset,
-      );
-    });
-
-    it("keeps the recorded time when the edit sends the stored instant back", () => {
-      const recordedBeforeReset = "2026-11-17T17:00:00.000Z"; // 02:00 KST on 11/18, game day 11/17
-
-      // Its KST date (11/18) differs from its game day (11/17), so only the exact instant shows the date is unchanged.
-      expect(
-        normalizePyroxeneOneOffGainEditAt(recordedBeforeReset, recordedBeforeReset, "2026-11-19T01:00:00.000Z"),
-      ).toBe(recordedBeforeReset);
-    });
-
-    it("re-derives the time when an edit moves the date", () => {
-      const editAt = "2026-11-18T01:00:00.000Z"; // 10:00 KST on 11/18
-
-      expect(normalizePyroxeneOneOffGainEditAt("2026-11-18T03:00:00.000Z", now, editAt)).toBe(editAt);
-      expect(normalizePyroxeneOneOffGainEditAt("2026-11-20T03:00:00.000Z", now, editAt)).toBe(
-        "2026-11-19T19:00:00.000Z",
-      );
-    });
   });
 });

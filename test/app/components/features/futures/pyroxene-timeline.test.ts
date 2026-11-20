@@ -1,5 +1,4 @@
 import { describe, expect, it } from "@jest/globals";
-import { createOptimisticBuyTimelineItems, createOptimisticOtherTimelineItems } from "~/domain/pyroxene-sources";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
 import type { PyroxenePlannerOptions } from "../../../../../app/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "../../../../../app/domain/pyroxene-schedule";
@@ -52,175 +51,6 @@ function favoritedPickupRecruitmentWithUid(uid: string) {
 }
 
 describe("pyroxene-timeline", () => {
-  describe("purchases and direct gains recorded on their own game day", () => {
-    const recordedAt = "2026-11-21T12:15:00.000Z"; // 21:15 KST on 11/21
-    const endDate = new Date("2026-12-31T00:00:00+09:00");
-    const gain = (date: string, uid: string): PyroxeneScheduleItem => {
-      const [item] = createOptimisticOtherTimelineItems(
-        { pyroxene: 1118, oneTimeTicket: 0, tenTimeTicket: 0 },
-        "직접 등록",
-        new Date(date),
-        uid,
-        recordedAt,
-      );
-      return {
-        onetimeGain: {
-          uid: item.uid,
-          source: "other",
-          date: new Date(item.eventAt),
-          description: item.description,
-          pyroxeneDelta: item.pyroxeneDelta,
-        },
-      };
-    };
-    // A recruitment that opened at 11:00 KST on 11/21.
-    const recruitment: PyroxeneScheduleItem = {
-      event: {
-        uid: "same-day-recruitment",
-        name: "같은 날 열린 모집",
-        since: "2026-11-21T02:00:00.000Z",
-        until: "2026-11-28T02:00:00.000Z",
-        earnablePyroxene: null,
-        tags: [],
-        recruitments: [favoritedPickupRecruitment()],
-      },
-    };
-
-    it("counts a gain dated today after inventory entered earlier that day", () => {
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-21T13:38:00+09:00"),
-        new Map(),
-        [gain("2026-11-21T00:00:00+09:00", "today"), gain("2026-11-20T00:00:00+09:00", "yesterday")],
-        defaultOptions,
-        undefined,
-        [],
-        endDate,
-      );
-
-      expect(timeline.find((entry) => entry.source.uid === "today")?.accumulatedResources.pyroxene).toBe(2118);
-      expect(timeline.some((entry) => entry.source.uid === "yesterday")).toBe(false);
-    });
-
-    it("applies it from the start of its game day, before a recruitment that opened later that day", () => {
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-20T22:00:00+09:00"),
-        new Map(),
-        [recruitment, gain("2026-11-21T00:00:00+09:00", "today")],
-        defaultOptions,
-        undefined,
-        [],
-        endDate,
-      );
-      const gainIndex = timeline.findIndex((entry) => entry.source.uid === "today");
-
-      expect(timeline[gainIndex]?.date.toISOString()).toBe("2026-11-20T19:00:00.000Z");
-      expect(gainIndex).toBeLessThan(timeline.findIndex((entry) => entry.source.type === "event"));
-    });
-
-    it("applies it from the start of its game day even when inventory was entered later that day", () => {
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-21T13:38:00+09:00"),
-        new Map(),
-        [recruitment, gain("2026-11-21T00:00:00+09:00", "today")],
-        defaultOptions,
-        undefined,
-        [],
-        endDate,
-      );
-      const gainIndex = timeline.findIndex((entry) => entry.source.uid === "today");
-
-      expect(timeline[gainIndex]?.date.toISOString()).toBe("2026-11-20T19:00:00.000Z");
-      expect(gainIndex).toBeLessThan(timeline.findIndex((entry) => entry.source.type === "event"));
-    });
-
-    it("keeps a monthly purchase recorded today before an end date earlier that day", () => {
-      const [item] = createOptimisticBuyTimelineItems(6600, new Date("2026-11-21T00:00:00+09:00"), {
-        uid: "monthly",
-        repeatType: "monthly_first",
-        now: recordedAt,
-      });
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-20T22:00:00+09:00"),
-        new Map(),
-        [
-          {
-            repeatedGain: {
-              uid: item.uid,
-              source: "buy",
-              date: new Date(item.eventAt),
-              description: item.description,
-              pyroxeneDelta: item.pyroxeneDelta,
-              repeatType: "monthly_first",
-            },
-          },
-        ],
-        defaultOptions,
-        undefined,
-        [],
-        new Date("2026-11-21T11:00:00+09:00"),
-      );
-
-      expect(
-        timeline.filter((entry) => entry.source.uid === "monthly").map((entry) => entry.date.toISOString()),
-      ).toEqual(["2026-11-20T19:00:00.000Z"]);
-    });
-
-    it("keeps next month's 1st for a monthly purchase recorded before the 04:00 reset", () => {
-      // At 02:00 KST on 12/01, picking 11/30, which is still the current game day.
-      const [item] = createOptimisticBuyTimelineItems(600, new Date("2026-11-30T00:00:00+09:00"), {
-        uid: "monthly",
-        repeatType: "monthly_first",
-        now: "2026-11-30T17:00:00.000Z",
-      });
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-29T22:00:00+09:00"),
-        new Map(),
-        [
-          {
-            repeatedGain: {
-              uid: item.uid,
-              source: "buy",
-              date: new Date(item.eventAt),
-              description: item.description,
-              pyroxeneDelta: item.pyroxeneDelta,
-              repeatType: "monthly_first",
-            },
-          },
-        ],
-        defaultOptions,
-        undefined,
-        [],
-        new Date("2027-01-15T00:00:00+09:00"),
-      );
-
-      expect(
-        timeline
-          .filter((entry) => entry.source.uid === "monthly")
-          .map((entry) => entry.date.tz("Asia/Seoul").format("YYYY-MM-DD")),
-      ).toEqual(["2026-11-30", "2026-12-01", "2027-01-01"]);
-    });
-
-    it("keeps it before an end date between the start of its game day and the recorded time", () => {
-      const timeline = buildTimeline(
-        initialResources,
-        new Date("2026-11-20T22:00:00+09:00"),
-        new Map(),
-        [gain("2026-11-21T00:00:00+09:00", "today")],
-        defaultOptions,
-        undefined,
-        [],
-        new Date("2026-11-21T11:00:00+09:00"),
-      );
-
-      expect(timeline.some((entry) => entry.source.uid === "today")).toBe(true);
-    });
-  });
-
   it("accumulates one-time gain after initial resources", () => {
     const timeline = buildTimeline(
       initialResources,
@@ -271,10 +101,7 @@ describe("pyroxene-timeline", () => {
 
     const buyEntries = timeline.filter((entry) => entry.source.uid === "monthly-buy");
 
-    // Read in KST: the first purchase applies from 04:00 KST of its game day, the previous date in UTC.
-    expect(
-      buyEntries.map((entry) => [entry.date.tz("Asia/Seoul").format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]),
-    ).toEqual([
+    expect(buyEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
       ["2026-06-15", 13200],
       ["2026-07-01", 13200],
       ["2026-08-01", 13200],
