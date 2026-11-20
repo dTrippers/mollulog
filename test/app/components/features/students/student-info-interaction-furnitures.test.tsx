@@ -129,6 +129,21 @@ describe("Student profile interaction furniture section", () => {
     expect(markup).toContain("/furnitures/beach-chair.webp");
   });
 
+  it("makes each furniture a name button without a title", () => {
+    const markup = renderProfileFacts([
+      {
+        uid: "beach-chair",
+        name: "해변 의자 세트",
+        imageUrl: "https://assets.test/furniture.webp",
+        rarity: 3,
+      },
+    ]);
+
+    expect(markup).toContain('aria-label="해변 의자 세트 이름 표시"');
+    expect(markup).toContain('aria-expanded="false"');
+    expect(markup).not.toContain('title="해변 의자 세트"');
+  });
+
   it("omits the section when the student has no interaction furniture", () => {
     const markup = renderProfileFacts([]);
 
