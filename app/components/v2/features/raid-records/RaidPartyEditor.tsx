@@ -8,7 +8,7 @@ import {
   UserMinusIcon,
 } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
-import { type ReactNode, useMemo, useRef, useState } from "react";
+import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import type { RaidRecordSnapshotField } from "~/domain/raid-record";
 import { STUDENT_GROWTH_EDIT_RANGES } from "~/domain/student-growth-edit";
 import { cn } from "~/lib/utils";
@@ -529,6 +529,8 @@ function PartyGrowthTable({
     : RAID_GROWTH_WIDE_BUNDLES;
   const rows = party.slots.flatMap((unit, slot) => (unit ? [{ unit, slot }] : []));
   const anyChanged = rows.some(({ unit }) => changedRaidFormFields(unit).size > 0);
+  // The legend names what the highlight means; each changed cell points to it, so the change is not color alone.
+  const changedLegendId = useId();
 
   return (
     <div className="min-w-0">
@@ -614,7 +616,7 @@ function PartyGrowthTable({
                           unit={unit}
                           student={student}
                           studentName={studentName}
-                          changed={changed.has(column.field)}
+                          changedDescriptionId={changed.has(column.field) ? changedLegendId : undefined}
                           flowProps={getInputProps()}
                           onChange={(value) => onChange(slot, setRaidFormUnitValue(unit, column.field, value))}
                         />
@@ -631,7 +633,7 @@ function PartyGrowthTable({
         {anyChanged ? (
           <span className="inline-flex items-center gap-1">
             <span aria-hidden="true" className="size-3.5 rounded-sm bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset" />
-            모집한 학생 정보에서 수정한 값
+            <span id={changedLegendId}>모집한 학생 정보에서 수정한 값</span>
           </span>
         ) : null}
         <span>–: 입력하지 않았거나 해당 없음</span>
@@ -645,7 +647,7 @@ function GrowthCellInput({
   unit,
   student,
   studentName,
-  changed,
+  changedDescriptionId,
   flowProps,
   onChange,
 }: {
@@ -653,7 +655,8 @@ function GrowthCellInput({
   unit: RaidFormUnit;
   student: RaidPartyStudent | undefined;
   studentName: string;
-  changed: boolean;
+  // Set when the value differs from the recruited student's: the id of the text that says so.
+  changedDescriptionId: string | undefined;
   flowProps: NumberInputFlowNavigationInputProps;
   onChange: (value: number | null) => void;
 }) {
@@ -661,6 +664,7 @@ function GrowthCellInput({
   const range = STUDENT_GROWTH_EDIT_RANGES[field];
   // A stored value that the tier no longer allows stays editable, so it can be corrected.
   const editable = isRaidGrowthFieldApplicable(field, student, unit.snapshot.tier) || value !== null;
+  const changed = changedDescriptionId !== undefined;
   const cellClassName = cn("w-10", changed && "bg-v2-accent-subtle ring-1 ring-v2-accent ring-inset");
   if (!editable) {
     return <span aria-hidden="true" className="block min-h-7 w-10 rounded-md bg-v2-inset" />;
@@ -674,6 +678,7 @@ function GrowthCellInput({
         min={range.min}
         max={range.max}
         compact
+        describedBy={changedDescriptionId}
         flowProps={flowProps}
         onChange={(tier) => onChange(tier)}
         className={cn(cellClassName, "w-12")}
@@ -685,6 +690,7 @@ function GrowthCellInput({
     <NumberInput
       aria-label={`${studentName} ${range.label}`}
       aria-invalid={outOfRange || undefined}
+      aria-describedby={changedDescriptionId}
       compact
       step={1}
       min={range.min}

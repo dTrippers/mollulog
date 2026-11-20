@@ -16,6 +16,8 @@ export type TierInputProps = {
   disabled?: boolean;
   warning?: boolean;
   compact?: boolean;
+  // An element that says more about the value, such as that it was changed.
+  describedBy?: string;
   flowProps: NumberInputFlowNavigationInputProps;
   onChange: (tier: number) => void;
   // Extra classes for the box, such as a segment inside a grouped input that drops its own border.
@@ -49,6 +51,7 @@ export function TierInput({
   disabled = false,
   warning = false,
   compact = false,
+  describedBy,
   flowProps,
   onChange,
   className,
@@ -64,6 +67,7 @@ export function TierInput({
         onFocus={flowProps.onFocus as FocusEventHandler<HTMLButtonElement>}
         onKeyDown={flowProps.onKeyDown as KeyboardEventHandler<HTMLButtonElement>}
         aria-label={`${label} ${value === null ? "선택" : getTierMeaning(value)}`}
+        aria-describedby={describedBy}
         aria-haspopup="dialog"
         aria-expanded={open}
         disabled={disabled}
