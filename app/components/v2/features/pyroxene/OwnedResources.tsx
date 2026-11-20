@@ -74,6 +74,7 @@ export function OwnedResourcesDialog({
   // Stable defaults: the reset effect below depends on initialReceived.
   rewards = NO_REWARDS,
   initialReceived = NO_RECEIVED,
+  saving = false,
   onClose,
   onSubmit,
 }: {
@@ -85,6 +86,8 @@ export function OwnedResourcesDialog({
   // Rewards of started events still ahead in the schedule; the owned resources may already include them.
   rewards?: ReceivableReward[];
   initialReceived?: readonly string[];
+  // An owned-resources save is in flight; a second one would cancel it.
+  saving?: boolean;
   onClose: () => void;
   onSubmit: (values: OwnedResourceValues, received: ReadonlySet<string>) => void;
 }) {
@@ -105,7 +108,7 @@ export function OwnedResourcesDialog({
       footer={
         <>
           <Button onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => onSubmit(values, received)}>
+          <Button variant="primary" disabled={saving} onClick={() => onSubmit(values, received)}>
             {submitLabel}
           </Button>
         </>

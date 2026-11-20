@@ -395,12 +395,30 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       case "uncollect-source":
         await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
         break;
-      case "save-collected-sources":
-        await updateCollectedSources(env, currentUser.id, {
-          add: actionData.payload.collectedSourceKeys,
-          remove: actionData.payload.uncollectedSourceKeys,
-        });
-        break;
+      case "save-collected-sources": {
+        // Saved from the owned-resources dialog, so a failure shows there instead of replacing the page.
+        try {
+          await updateCollectedSources(env, currentUser.id, {
+            add: actionData.payload.collectedSourceKeys,
+            remove: actionData.payload.uncollectedSourceKeys,
+          });
+        } catch (error) {
+          logger.error("Failed to save pyroxene received rewards", error, {
+            operation: "save-collected-sources",
+            userId: currentUser.id,
+          });
+          const revisionConflict = isPlannerStateRevisionConflictError(error);
+          return data(
+            {
+              success: false,
+              error: revisionConflict ? PLANNER_STATE_REVISION_CONFLICT_MESSAGE : "받은 보상을 저장하지 못했어요",
+              ...(revisionConflict ? { revisionConflict: true } : {}),
+            },
+            { status: revisionConflict ? 409 : 500 },
+          );
+        }
+        return { success: true };
+      }
       case "delete-pickup-completion": {
         let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
         if (!recruitmentGroupUid) {
@@ -451,7 +469,6 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     "remove-ap-charge-exception": "delete",
     "collect-source": "source",
     "uncollect-source": "source",
-    "save-collected-sources": "source",
     "delete-pickup-completion": "delete",
     "delete-timeline-item": "delete",
   } as const;
@@ -492,6 +509,8 @@ type PendingOwnedResourceSave = {
   values: OwnedResourceValues;
   collectedSourceKeys: string[];
   uncollectedSourceKeys: string[];
+  // Only the received rewards changed: the resources and their input time stay as they are.
+  rewardsOnly?: boolean;
 };
 
 type LocalEventData = PlannerEventData & { eventUid: string };
@@ -589,9 +608,11 @@ export default function PyroxenePlanner() {
 
   const confirmOwnedResourceSave = useCallback(
     (pendingSave: PendingOwnedResourceSave, savedAt?: string | null) => {
-      setInitialResources(pendingSave.values.resources);
-      setStacks(pendingSave.values.stacks);
-      setInitialDate(savedAt ? new Date(savedAt) : new Date());
+      if (!pendingSave.rewardsOnly) {
+        setInitialResources(pendingSave.values.resources);
+        setStacks(pendingSave.values.stacks);
+        setInitialDate(savedAt ? new Date(savedAt) : new Date());
+      }
       if (pendingSave.collectedSourceKeys.length > 0 || pendingSave.uncollectedSourceKeys.length > 0) {
         const removed = new Set(pendingSave.uncollectedSourceKeys);
         setLocalCollectedSourceKeys((prev) =>
@@ -684,11 +705,16 @@ export default function PyroxenePlanner() {
     if (!pendingSave) return;
     pendingOwnedResourceSave.current = null;
     if (!ownedResourcesFetcher.data?.success) {
-      setOwnedResourceSaveError(ownedResourcesFetcher.data?.error ?? "보유 재화를 저장하지 못했어요");
+      setOwnedResourceSaveError(
+        ownedResourcesFetcher.data?.error ??
+          (pendingSave.rewardsOnly ? "받은 보상을 저장하지 못했어요" : "보유 재화를 저장하지 못했어요"),
+      );
       return;
     }
     setOwnedResourceSaveError(null);
-    trackGoogleAnalyticsEvent("pyroxene_plan_saved", { section: "owned_resources" });
+    trackGoogleAnalyticsEvent("pyroxene_plan_saved", {
+      section: pendingSave.rewardsOnly ? "source" : "owned_resources",
+    });
     confirmOwnedResourceSave(pendingSave, ownedResourcesFetcher.data.savedAt);
   }, [confirmOwnedResourceSave, ownedResourcesFetcher.data, ownedResourcesFetcher.state]);
 
@@ -743,13 +769,19 @@ export default function PyroxenePlanner() {
     );
   };
 
-  // Received-reward changes alone keep the owned resources and their input time as they are.
+  // Received-reward changes alone keep the owned resources and their input time as they are. They share the
+  // owned-resources save, so a failure shows beside the resources and other plan saves cannot cancel them.
   const handleSaveCollectedSources = (collectedSourceKeys: string[], uncollectedSourceKeys: string[]) => {
-    const removed = new Set(uncollectedSourceKeys);
-    const apply = (keys: readonly string[]) =>
-      [...new Set([...keys, ...collectedSourceKeys])].filter((key) => !removed.has(key)).sort();
-    setLocalCollectedSourceKeys((prev) => apply(prev));
+    const pendingSave: PendingOwnedResourceSave = {
+      eventUid: null,
+      values: ownedValues,
+      collectedSourceKeys,
+      uncollectedSourceKeys,
+      rewardsOnly: true,
+    };
     if (!signedIn) {
+      confirmOwnedResourceSave(pendingSave);
+      const removed = new Set(uncollectedSourceKeys);
       void guestPlanner
         .update((envelope) => ({
           ...envelope,
@@ -757,14 +789,20 @@ export default function PyroxenePlanner() {
             ...envelope.document,
             pyroxene: {
               ...envelope.document.pyroxene,
-              collectedSourceKeys: apply(envelope.document.pyroxene.collectedSourceKeys),
+              collectedSourceKeys: [
+                ...new Set([...envelope.document.pyroxene.collectedSourceKeys, ...collectedSourceKeys]),
+              ]
+                .filter((key) => !removed.has(key))
+                .sort(),
             },
           },
         }))
         .then(trackGuestSave("source"));
       return;
     }
-    fetcher.submit(
+    setOwnedResourceSaveError(null);
+    pendingOwnedResourceSave.current = pendingSave;
+    ownedResourcesFetcher.submit(
       { intent: "save-collected-sources", payload: { collectedSourceKeys, uncollectedSourceKeys } },
       { method: "POST", encType: "application/json" },
     );
@@ -1407,6 +1445,7 @@ export default function PyroxenePlanner() {
         initialValues={ownedValues}
         rewards={receivableRewards}
         initialReceived={localCollectedSourceKeys}
+        saving={ownedResourcesFetcher.state !== "idle"}
         onClose={() => setResourcesDialogOpen(false)}
         onSubmit={(values, received) => {
           const before = new Set(localCollectedSourceKeys);

@@ -713,6 +713,23 @@ describe("Pyroxene action dispatch", () => {
     });
   });
 
+  it("returns a save error for received rewards instead of throwing to the error page", async () => {
+    mockUpdateCollectedSources.mockRejectedValue(new Error("PostgreSQL timeout details"));
+
+    const response = await action(
+      actionArgs("save-collected-sources", { collectedSourceKeys: ["source-1"], uncollectedSourceKeys: [] }, "POST"),
+    );
+
+    expect(response).toMatchObject({
+      data: { success: false, error: "받은 보상을 저장하지 못했어요" },
+      init: { status: 500 },
+    });
+    expect(mockLoggerError).toHaveBeenCalledWith("Failed to save pyroxene received rewards", expect.any(Error), {
+      operation: "save-collected-sources",
+      userId: 1,
+    });
+  });
+
   it("returns the approved revision conflict message without exposing internals", async () => {
     const conflict = new Error("database-specific details");
     conflict.name = "PlannerStateRevisionConflictError";
