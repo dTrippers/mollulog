@@ -216,6 +216,12 @@ export function RaidRecordTrendChart({
             })}
           </svg>
         ) : null}
+        {plotted.length === 0 ? (
+          // Only the rank view can be empty: every record here was saved from the season chart without a rank.
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-v2-fg-tertiary">
+            순위를 입력한 기록이 없어요.
+          </p>
+        ) : null}
         {active && width > 0 ? (
           <div
             className="pointer-events-none absolute z-10 w-max max-w-56 rounded-md bg-v2-elevated px-2.5 py-1.5 text-xs shadow-md ring-1 ring-v2-popover-divider"
