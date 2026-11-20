@@ -92,7 +92,11 @@ export async function handleRaidRecordTableAction({
     if (!season) return failure(`#${seasonIndex}은 기록할 수 있는 시즌이 아니에요.`);
     const current = recordBySeasonIndex.get(seasonIndex) ?? null;
     const recordUid = typeof row.recordUid === "string" ? row.recordUid : null;
-    if ((current?.uid ?? null) !== recordUid) return failure(STALE_MESSAGE, [], 409);
+    const recordUpdatedAt = typeof row.recordUpdatedAt === "string" ? row.recordUpdatedAt : null;
+    // A record deleted, created, or changed elsewhere (such as the season chart in another tab) since the table read it.
+    if ((current?.uid ?? null) !== recordUid || (current?.updatedAt ?? null) !== recordUpdatedAt) {
+      return failure(STALE_MESSAGE, [], 409);
+    }
 
     let scores: RaidRecordTableRowInput["scores"] = [];
     try {

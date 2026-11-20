@@ -26,6 +26,8 @@ export type RaidTableRowStatus =
 export type RaidTableSubmissionRow = {
   seasonIndex: number;
   recordUid: string | null;
+  // The version of the record the table showed; the save fails if the record changed since.
+  recordUpdatedAt: string | null;
   scores: { defenseType: RaidRecordDefenseType; score: number }[];
   rank: number;
 };
@@ -128,6 +130,7 @@ export function toRaidTableSubmissionRow(row: RaidRecordTableRowView, draft: Rai
   return {
     seasonIndex: row.season.seasonIndex,
     recordUid: row.record?.uid ?? null,
+    recordUpdatedAt: row.record?.updatedAt ?? null,
     scores: enteredScores(row, draft),
     rank: draft.rank,
   };

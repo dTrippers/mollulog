@@ -58,6 +58,7 @@ function row(
       })),
       rank: record.rank,
       rankStatus: record.rankStatus,
+      updatedAt: "2026-11-05T00:00:00.000Z",
     },
     unavailableRecordUid: null,
   };
@@ -192,6 +193,7 @@ describe("raid record table submission", () => {
     ).toEqual({
       seasonIndex: 35,
       recordUid: "record-1",
+      recordUpdatedAt: "2026-11-05T00:00:00.000Z",
       scores: [
         { defenseType: "heavy", score: 40_000_000 },
         { defenseType: "light", score: 27_000_000 },

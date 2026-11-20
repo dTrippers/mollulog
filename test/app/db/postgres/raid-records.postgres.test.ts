@@ -89,12 +89,12 @@ describeDatabase("raid records on PostgreSQL", () => {
         [
           {
             key: elimination,
-            uid: existing.uid,
+            current: { uid: existing.uid, updatedAt: existing.updatedAt },
             values: { scores: [score("heavy", 41_000_000)], rank: 1100, rankRecordedAt: existing.rankRecordedAt },
           },
           {
             key: { ...elimination, seasonIndex: 34 },
-            uid: null,
+            current: null,
             values: { scores: [score("light", 30_000_000)], rank: 900, rankRecordedAt: "2026-11-21T00:00:00.000Z" },
           },
         ],
@@ -119,12 +119,12 @@ describeDatabase("raid records on PostgreSQL", () => {
           [
             {
               key: { ...elimination, seasonIndex: 33 },
-              uid: null,
+              current: null,
               values: { scores: [], rank: 1, rankRecordedAt: null },
             },
             {
               key: { ...elimination, seasonIndex: 34 },
-              uid: null,
+              current: null,
               values: { scores: [], rank: 1, rankRecordedAt: null },
             },
           ],
@@ -143,13 +143,39 @@ describeDatabase("raid records on PostgreSQL", () => {
           [
             {
               key: { ...elimination, seasonIndex: 34 },
-              uid: existing.uid,
+              current: { uid: existing.uid, updatedAt: existing.updatedAt },
               values: { scores: [], rank: 1, rankRecordedAt: null },
             },
           ],
           options,
         ),
       ).rejects.toBeInstanceOf(RaidRecordBatchStaleError);
+    });
+
+    it("saves nothing when a row's record was edited elsewhere since the table read it", async () => {
+      const existing = await createRecord(elimination);
+      // The season chart in another tab changes the score after the table read the record. The table's version is set
+      // a day earlier so the test does not depend on the two writes landing in different milliseconds.
+      await applyPostgresRaidRecordChartScore(env, USER_ID, elimination, score("heavy", 42_000_000), options);
+      const readVersion = new Date(Date.parse(existing.updatedAt) - 86_400_000).toISOString();
+
+      await expect(
+        savePostgresRaidRecordsBatch(
+          env,
+          USER_ID,
+          [
+            {
+              key: elimination,
+              current: { uid: existing.uid, updatedAt: readVersion },
+              values: { scores: existing.scores, rank: 1100, rankRecordedAt: existing.rankRecordedAt },
+            },
+          ],
+          options,
+        ),
+      ).rejects.toBeInstanceOf(RaidRecordBatchStaleError);
+      expect(await getPostgresRaidRecordBySeason(env, USER_ID, elimination, options)).toMatchObject({
+        scores: [score("heavy", 42_000_000)],
+      });
     });
   });
 

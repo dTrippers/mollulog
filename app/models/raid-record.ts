@@ -309,7 +309,7 @@ export async function saveRaidRecordTable(
     const rankChanged = row.current === null || row.current.rank !== row.rank || row.current.rankRecordedAt === null;
     return {
       key: { server: row.season.server, raidType: row.season.raidType, seasonIndex: row.season.seasonIndex },
-      uid: row.current?.uid ?? null,
+      current: row.current ? { uid: row.current.uid, updatedAt: row.current.updatedAt } : null,
       values: {
         scores,
         rank: row.rank,

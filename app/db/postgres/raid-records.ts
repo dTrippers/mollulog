@@ -226,10 +226,11 @@ export async function deletePostgresRaidRecord(
   return rows.length > 0;
 }
 
-// One row of a batch save. `uid` names the record the screen read; a row without it creates the season's record.
+// One row of a batch save. `uid` and `updatedAt` name the record and the version the screen read; a row without them
+// creates the season's record.
 export type RaidRecordBatchRow = {
   key: RaidRecordSeasonKey;
-  uid: string | null;
+  current: { uid: string; updatedAt: string } | null;
   values: Pick<RaidRecordValues, "scores" | "rank" | "rankRecordedAt">;
 };
 
@@ -240,8 +241,8 @@ export class RaidRecordBatchStaleError extends Error {
   }
 }
 
-// Saves every row or none. A row for a record that was deleted, or for a season that gained a record since the screen
-// read it, fails the whole batch, so the screen reloads instead of overwriting what it never saw.
+// Saves every row or none. A row for a record that was deleted or changed, or for a season that gained a record since the
+// screen read it, fails the whole batch, so the screen reloads instead of overwriting what it never saw.
 export async function savePostgresRaidRecordsBatch(
   env: Pick<Env, "HYPERDRIVE">,
   userId: number,
@@ -255,7 +256,7 @@ export async function savePostgresRaidRecordsBatch(
       (db) =>
         db.transaction(async (tx) => {
           for (const row of rows) {
-            if (row.uid === null) {
+            if (row.current === null) {
               await tx.insert(pgRaidRecordsTable).values({
                 uid: nanoid(12),
                 userId,
@@ -266,12 +267,19 @@ export async function savePostgresRaidRecordsBatch(
               });
               continue;
             }
-            const updated = await tx
+            const locked = await tx
+              .select()
+              .from(pgRaidRecordsTable)
+              .where(and(eq(pgRaidRecordsTable.uid, row.current.uid), seasonWhere(userId, row.key)))
+              .for("update");
+            // The version compares as the screen read it: the same millisecond-precision instant.
+            if (!locked[0] || toDomain(locked[0]).updatedAt !== normalizeInstant(row.current.updatedAt)) {
+              throw new RaidRecordBatchStaleError();
+            }
+            await tx
               .update(pgRaidRecordsTable)
               .set({ ...row.values, updatedAt: sql`now()` })
-              .where(and(eq(pgRaidRecordsTable.uid, row.uid), seasonWhere(userId, row.key)))
-              .returning({ uid: pgRaidRecordsTable.uid });
-            if (updated.length === 0) throw new RaidRecordBatchStaleError();
+              .where(eq(pgRaidRecordsTable.uid, row.current.uid));
           }
         }),
       options,

@@ -248,6 +248,8 @@ export type RaidRecordTableRecordView = {
   scores: RaidRecordScoreView[];
   rank: number | null;
   rankStatus: RaidRecordRankStatus;
+  // The record's version when the table read it, so the save can tell a change made elsewhere since.
+  updatedAt: UtcIsoString;
 };
 
 export type RaidRecordTableRowView = {
@@ -292,7 +294,9 @@ export async function loadRaidRecordTable(
       const row = record ? toRaidRecordRowView(record, season, now) : null;
       return {
         season: toRaidRecordSeasonView(season, now),
-        record: row ? { uid: row.uid, scores: row.scores, rank: row.rank, rankStatus: row.rankStatus } : null,
+        record: row
+          ? { uid: row.uid, scores: row.scores, rank: row.rank, rankStatus: row.rankStatus, updatedAt: row.updatedAt }
+          : null,
         unavailableRecordUid: record && !row ? record.uid : null,
       };
     });

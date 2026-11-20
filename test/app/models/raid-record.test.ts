@@ -151,7 +151,7 @@ describe("saveRaidRecordTable", () => {
     ]);
 
     const rows = mockSaveBatch.mock.calls[0][2];
-    expect(rows.map((row) => row.uid)).toEqual(["kept", "changed", "score-only", null]);
+    expect(rows.map((row) => row.current?.uid ?? null)).toEqual(["kept", "changed", "score-only", null]);
     expect(rows[0].values.rankRecordedAt).toBe("2026-11-05T00:00:00.000Z");
     for (const row of rows.slice(1)) {
       expect(row.values.rankRecordedAt).not.toBe("2026-11-05T00:00:00.000Z");

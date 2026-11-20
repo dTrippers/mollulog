@@ -127,6 +127,7 @@ describe("raid record table action", () => {
           {
             seasonIndex: 35,
             recordUid: "record-35",
+            recordUpdatedAt: "2026-02-01T00:00:00.000Z",
             scores: [{ defenseType: "heavy", score: 41_000_000 }],
             rank: 1100,
           },
@@ -146,7 +147,13 @@ describe("raid record table action", () => {
     await expect(
       submit(
         tableBody([
-          { seasonIndex: 35, recordUid: "record-35", scores: [], rank: null },
+          {
+            seasonIndex: 35,
+            recordUid: "record-35",
+            recordUpdatedAt: "2026-02-01T00:00:00.000Z",
+            scores: [],
+            rank: null,
+          },
           { seasonIndex: 34, recordUid: null, scores: [{ defenseType: "light", score: 1 }], rank: -1 },
         ]),
       ),
@@ -176,6 +183,22 @@ describe("raid record table action", () => {
     ).resolves.toEqual(stale);
     expect(mockSaveTable).not.toHaveBeenCalled();
 
+    // The same record, changed elsewhere since the table read it.
+    await expect(
+      submit(
+        tableBody([
+          {
+            seasonIndex: 35,
+            recordUid: "record-35",
+            recordUpdatedAt: "2026-01-31T00:00:00.000Z",
+            scores: [{ defenseType: "heavy", score: 1 }],
+            rank: 1,
+          },
+        ]),
+      ),
+    ).resolves.toEqual(stale);
+    expect(mockSaveTable).not.toHaveBeenCalled();
+
     mockSaveTable.mockRejectedValue(new RaidRecordBatchStaleError());
     await expect(
       submit(tableBody([{ seasonIndex: 34, recordUid: null, scores: [{ defenseType: "heavy", score: 1 }], rank: 1 }])),
@@ -191,7 +214,13 @@ describe("raid record table action", () => {
     );
     const result = await submit(
       tableBody([
-        { seasonIndex: 35, recordUid: "record-35", scores: [{ defenseType: "heavy", score: 50_000_000 }], rank: 1 },
+        {
+          seasonIndex: 35,
+          recordUid: "record-35",
+          recordUpdatedAt: "2026-02-01T00:00:00.000Z",
+          scores: [{ defenseType: "heavy", score: 50_000_000 }],
+          rank: 1,
+        },
         { seasonIndex: 34, recordUid: null, scores: [{ defenseType: "elastic", score: 50_000_000 }], rank: 1 },
       ]),
     );
