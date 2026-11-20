@@ -61,6 +61,9 @@ export function formatInputAt(inputAt: Date | null): string {
   return inputAt ? `${dayjs(inputAt).tz("Asia/Seoul").format("MM/DD HH:mm")} 입력` : "아직 입력하지 않았어요";
 }
 
+const NO_REWARDS: ReceivableReward[] = [];
+const NO_RECEIVED: readonly string[] = [];
+
 /** Edits resources and stacks. The completion record reuses it with the expected values filled in. */
 export function OwnedResourcesDialog({
   open,
@@ -68,8 +71,9 @@ export function OwnedResourcesDialog({
   submitLabel,
   description,
   initialValues,
-  rewards = [],
-  initialReceived = [],
+  // Stable defaults: the reset effect below depends on initialReceived.
+  rewards = NO_REWARDS,
+  initialReceived = NO_RECEIVED,
   onClose,
   onSubmit,
 }: {

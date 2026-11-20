@@ -15,6 +15,7 @@ const mockUpsertPyroxenePlannerOptions = jest.fn<AsyncMock>();
 const mockUpdatePyroxenePlannerOptions = jest.fn<AsyncMock>();
 const mockUpsertCollectedSources = jest.fn<AsyncMock>();
 const mockDeleteCollectedSource = jest.fn<AsyncMock>();
+const mockUpdateCollectedSources = jest.fn<AsyncMock>();
 const mockDeletePyroxeneTimelineItem = jest.fn<AsyncMock>();
 const mockGetPyroxenePlannerContents = jest.fn<AsyncMock>();
 const mockSetRecruitmentResultCompletion = jest.fn<AsyncMock>();
@@ -39,6 +40,7 @@ jest.mock("~/models/pyroxene-planner", () => {
     updatePyroxenePlannerOptions: mockUpdatePyroxenePlannerOptions,
     upsertCollectedSources: mockUpsertCollectedSources,
     deleteCollectedSource: mockDeleteCollectedSource,
+    updateCollectedSources: mockUpdateCollectedSources,
     deletePyroxeneTimelineItem: mockDeletePyroxeneTimelineItem,
   };
 });
@@ -100,6 +102,11 @@ const validActions = [
   { intent: "collect-source", payload: { sourceKey: "source-1" }, method: "POST" },
   { intent: "uncollect-source", payload: { sourceKey: "source-1" }, method: "DELETE" },
   {
+    intent: "save-collected-sources",
+    payload: { collectedSourceKeys: ["source-1"], uncollectedSourceKeys: ["source-2"] },
+    method: "POST",
+  },
+  {
     intent: "delete-pickup-completion",
     payload: { eventUid: "event-1", recruitmentGroupUid: "group-1" },
     method: "DELETE",
@@ -134,6 +141,7 @@ beforeEach(() => {
     return update(defaultPyroxenePlannerOptions).result;
   });
   mockUpsertCollectedSources.mockResolvedValue(undefined);
+  mockUpdateCollectedSources.mockResolvedValue(undefined);
   mockDeleteCollectedSource.mockResolvedValue(undefined);
   mockDeletePyroxeneTimelineItem.mockResolvedValue(undefined);
   mockGetPyroxenePlannerContents.mockResolvedValue([]);
@@ -379,6 +387,7 @@ describe("Pyroxene action payload", () => {
     ["remove-ap-charge-exception", {}, "DELETE"],
     ["collect-source", {}, "POST"],
     ["uncollect-source", {}, "DELETE"],
+    ["save-collected-sources", { collectedSourceKeys: [] }, "POST"],
     ["delete-pickup-completion", {}, "DELETE"],
     ["delete-timeline-item", {}, "DELETE"],
   ])("rejects missing required fields for %s", (intent, payload, method) => {
@@ -450,6 +459,8 @@ describe("Pyroxene action payload", () => {
     ["collect-source", { sourceKey: "" }, "POST"],
     ["collect-source", { sourceKey: 1 }, "POST"],
     ["uncollect-source", { sourceKey: 1 }, "DELETE"],
+    ["save-collected-sources", { collectedSourceKeys: [""], uncollectedSourceKeys: [] }, "POST"],
+    ["save-collected-sources", { collectedSourceKeys: [], uncollectedSourceKeys: [1] }, "POST"],
     ["delete-pickup-completion", { eventUid: "event-1", recruitmentGroupUid: 1 }, "DELETE"],
     ["delete-pickup-completion", { eventUid: 1 }, "DELETE"],
     ["delete-timeline-item", { itemUid: "" }, "DELETE"],
@@ -478,9 +489,11 @@ const dispatchCases = [
       resources: { pyroxene: 1_200, oneTimeTicket: 1, tenTimeTicket: 2, inputAt: "loader-metadata" },
       eventUid: null,
       collectedSourceKeys: ["event_reward:event-1"],
+      uncollectedSourceKeys: ["event_reward:event-2"],
     },
     method: "POST",
     verify: () => {
+      // Received-reward changes go into the same update as the resources.
       expect(mockCreatePyroxeneOwnedResource).toHaveBeenCalledWith(
         env,
         1,
@@ -489,9 +502,13 @@ const dispatchCases = [
           oneTimeTicket: 1,
           tenTimeTicket: 2,
         },
-        { inputAt: expect.any(String) },
+        {
+          inputAt: expect.any(String),
+          collectedSources: { add: ["event_reward:event-1"], remove: ["event_reward:event-2"] },
+        },
       );
-      expect(mockUpsertCollectedSources).toHaveBeenCalledWith(env, 1, ["event_reward:event-1"]);
+      expect(mockUpsertCollectedSources).not.toHaveBeenCalled();
+      expect(mockDeleteCollectedSource).not.toHaveBeenCalled();
     },
   },
   {
@@ -591,6 +608,16 @@ const dispatchCases = [
     method: "DELETE",
     verify: () => {
       expect(mockDeleteCollectedSource).toHaveBeenCalledWith(env, 1, "source-1");
+    },
+  },
+  {
+    name: "save-collected-sources",
+    intent: "save-collected-sources",
+    payload: { collectedSourceKeys: ["source-1"], uncollectedSourceKeys: ["source-2"] },
+    method: "POST",
+    verify: () => {
+      expect(mockUpdateCollectedSources).toHaveBeenCalledWith(env, 1, { add: ["source-1"], remove: ["source-2"] });
+      expect(mockCreatePyroxeneOwnedResource).not.toHaveBeenCalled();
     },
   },
   {

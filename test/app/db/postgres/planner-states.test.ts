@@ -13,6 +13,7 @@ import {
   deletePostgresPyroxeneEventData,
   deletePostgresPyroxeneTimelineItem,
   ensurePostgresCollectedSource,
+  updatePostgresCollectedSources,
   updatePostgresPyroxeneOneOffTimelineItem,
   upsertPostgresCollectedSource,
   upsertPostgresCollectedSources,
@@ -240,6 +241,43 @@ describe("PostgreSQL planner state writes", () => {
           { inputAt: "2026-07-01T00:00:00.000Z", createClient: () => client as unknown as Client },
         ),
       (document) => expect(document.pyroxene.resources).toEqual(baseDocument().pyroxene.resources),
+    ],
+    [
+      "owned resource create with received-reward changes",
+      (client) =>
+        createPostgresPyroxeneOwnedResource(
+          env,
+          7,
+          { pyroxene: 900, oneTimeTicket: 2, tenTimeTicket: 1 },
+          {
+            inputAt: isoDate,
+            collectedSources: { add: ["source-new"], remove: ["source-existing"] },
+            createClient: () => client as unknown as Client,
+          },
+        ),
+      (document) => {
+        expect(document.pyroxene.resources).toEqual({
+          inputAt: isoDate,
+          pyroxene: 900,
+          oneTimeTicket: 2,
+          tenTimeTicket: 1,
+        });
+        expect(document.pyroxene.collectedSourceKeys).toEqual(["source-new"]);
+      },
+    ],
+    [
+      "collected sources update",
+      (client) =>
+        updatePostgresCollectedSources(
+          env,
+          7,
+          { add: ["source-two", "source-one", ""], remove: ["source-existing"] },
+          { createClient: () => client as unknown as Client },
+        ),
+      (document) => {
+        expect(document.pyroxene.collectedSourceKeys).toEqual(["source-one", "source-two"]);
+        expect(document.pyroxene.resources).toEqual(baseDocument().pyroxene.resources);
+      },
     ],
     [
       "collected source ensure",

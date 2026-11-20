@@ -99,6 +99,7 @@ import {
   deleteCollectedSource,
   deletePyroxeneTimelineItem,
   getPyroxeneUserState,
+  updateCollectedSources,
   updatePyroxenePlannerOptions,
   upsertCollectedSources,
   upsertPyroxeneEventData,
@@ -238,11 +239,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
           actionData.payload;
         const savedAt = new Date().toISOString();
         try {
+          const collectedSources =
+            collectedSourceKeys?.length || uncollectedSourceKeys?.length
+              ? { add: collectedSourceKeys ?? [], remove: uncollectedSourceKeys ?? [] }
+              : undefined;
           await createPyroxeneOwnedResource(
             env,
             currentUser.id,
             recruitmentStacks ? { ...resources, recruitmentStacks } : resources,
-            { inputAt: savedAt },
+            collectedSources ? { inputAt: savedAt, collectedSources } : { inputAt: savedAt },
           );
           if (eventUid) {
             const content = (await getPyroxenePlannerContents(env, false, ctx)).find(
@@ -270,12 +275,6 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
               contentUid: eventUid,
               recruitedStudents,
             });
-          }
-          if (collectedSourceKeys) {
-            await upsertCollectedSources(env, currentUser.id, collectedSourceKeys);
-          }
-          for (const sourceKey of uncollectedSourceKeys ?? []) {
-            await deleteCollectedSource(env, currentUser.id, sourceKey);
           }
         } catch (error) {
           logger.error("Failed to save pyroxene owned resources", error, {
@@ -396,6 +395,12 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
       case "uncollect-source":
         await deleteCollectedSource(env, currentUser.id, actionData.payload.sourceKey);
         break;
+      case "save-collected-sources":
+        await updateCollectedSources(env, currentUser.id, {
+          add: actionData.payload.collectedSourceKeys,
+          remove: actionData.payload.uncollectedSourceKeys,
+        });
+        break;
       case "delete-pickup-completion": {
         let recruitmentGroupUid = actionData.payload.recruitmentGroupUid ?? null;
         if (!recruitmentGroupUid) {
@@ -446,6 +451,7 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
     "remove-ap-charge-exception": "delete",
     "collect-source": "source",
     "uncollect-source": "source",
+    "save-collected-sources": "source",
     "delete-pickup-completion": "delete",
     "delete-timeline-item": "delete",
   } as const;
@@ -470,6 +476,16 @@ type OwnedResourcesActionResult = {
   revisionConflict?: boolean;
   savedAt?: string | null;
 };
+
+function sameOwnedValues(left: OwnedResourceValues, right: OwnedResourceValues): boolean {
+  return (
+    left.resources.pyroxene === right.resources.pyroxene &&
+    left.resources.tenTimeTicket === right.resources.tenTimeTicket &&
+    left.resources.oneTimeTicket === right.resources.oneTimeTicket &&
+    left.stacks.regular === right.stacks.regular &&
+    left.stacks.limited === right.stacks.limited
+  );
+}
 
 type PendingOwnedResourceSave = {
   eventUid: string | null;
@@ -723,6 +739,33 @@ export default function PyroxenePlanner() {
           uncollectedSourceKeys,
         },
       },
+      { method: "POST", encType: "application/json" },
+    );
+  };
+
+  // Received-reward changes alone keep the owned resources and their input time as they are.
+  const handleSaveCollectedSources = (collectedSourceKeys: string[], uncollectedSourceKeys: string[]) => {
+    const removed = new Set(uncollectedSourceKeys);
+    const apply = (keys: readonly string[]) =>
+      [...new Set([...keys, ...collectedSourceKeys])].filter((key) => !removed.has(key)).sort();
+    setLocalCollectedSourceKeys((prev) => apply(prev));
+    if (!signedIn) {
+      void guestPlanner
+        .update((envelope) => ({
+          ...envelope,
+          document: {
+            ...envelope.document,
+            pyroxene: {
+              ...envelope.document.pyroxene,
+              collectedSourceKeys: apply(envelope.document.pyroxene.collectedSourceKeys),
+            },
+          },
+        }))
+        .then(trackGuestSave("source"));
+      return;
+    }
+    fetcher.submit(
+      { intent: "save-collected-sources", payload: { collectedSourceKeys, uncollectedSourceKeys } },
       { method: "POST", encType: "application/json" },
     );
   };
@@ -1368,12 +1411,15 @@ export default function PyroxenePlanner() {
         onSubmit={(values, received) => {
           const before = new Set(localCollectedSourceKeys);
           const keys = receivableRewards.map(({ sourceKey }) => sourceKey);
-          handleSaveOwnedResources(
-            null,
-            values,
-            keys.filter((key) => received.has(key) && !before.has(key)),
-            keys.filter((key) => !received.has(key) && before.has(key)),
-          );
+          const collected = keys.filter((key) => received.has(key) && !before.has(key));
+          const uncollected = keys.filter((key) => !received.has(key) && before.has(key));
+          // Saving the resources dates them now. When only the received rewards changed, keep that date, so
+          // income planned since the last input still counts.
+          if (sameOwnedValues(values, ownedValues) && (collected.length > 0 || uncollected.length > 0)) {
+            handleSaveCollectedSources(collected, uncollected);
+          } else {
+            handleSaveOwnedResources(null, values, collected, uncollected);
+          }
           setResourcesDialogOpen(false);
         }}
       />
