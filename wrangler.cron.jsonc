@@ -5,6 +5,9 @@
   "main": "./workers/cron.ts",
   "workers_dev": false,
   "preview_urls": false,
+  // @cloudflare/vite-plugin 1.64 emits and uploads Worker source maps unless this is false.
+  // Keep them off so builds and deploys match the earlier plugin; enabling them is a separate decision.
+  "upload_source_maps": false,
 
   "observability": {
     "enabled": true,
