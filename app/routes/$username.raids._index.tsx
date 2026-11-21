@@ -358,17 +358,23 @@ function RaidRecordRow({
         className={cn("absolute inset-0 z-[1] rounded-lg hover:bg-v2-hover", v2FocusRing)}
       />
       <div className="pointer-events-none relative z-[2] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 @min-[40rem]:grid-cols-[minmax(0,1fr)_10rem_11rem_1.25rem]">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <span id={titleId} className="text-sm font-semibold text-v2-fg">
-            <RaidSeasonTitle
-              server={season.server}
-              raidType={showRaidType ? season.raidType : undefined}
-              seasonIndex={season.seasonIndex}
-              counterpartSeasonIndex={season.counterpartSeasonIndex}
-              bossName={season.boss.name}
-              ongoing={season.ongoing}
-            />
-          </span>
+        <div className="col-span-2 flex min-w-0 flex-col gap-0.5 @min-[40rem]:col-span-1">
+          {/* On a narrow row the rank status sits on the title line, above the rank, and takes only its own width. */}
+          <div className="flex items-start justify-between gap-2">
+            <span id={titleId} className="min-w-0 text-sm font-semibold text-v2-fg">
+              <RaidSeasonTitle
+                server={season.server}
+                raidType={showRaidType ? season.raidType : undefined}
+                seasonIndex={season.seasonIndex}
+                counterpartSeasonIndex={season.counterpartSeasonIndex}
+                bossName={season.boss.name}
+                ongoing={season.ongoing}
+              />
+            </span>
+            {rankStatusShown(row, isOwner) ? (
+              <RankStatusPill status={row.rankStatus} className="shrink-0 @min-[40rem]:hidden" />
+            ) : null}
+          </div>
           <RaidSeasonMeta
             terrain={season.terrain}
             defenseTypes={elimination ? [] : season.displayDefenseTypes}
@@ -377,10 +383,6 @@ function RaidRecordRow({
             timeZone={timeZone}
             className="text-v2-fg-tertiary"
           />
-        </div>
-        {/* On a narrow row the rank status sits above the rank, in the space beside the title. */}
-        <div className="self-start justify-self-end @min-[40rem]:hidden">
-          {rankStatusShown(row, isOwner) ? <RankStatusPill status={row.rankStatus} /> : null}
         </div>
         <div className="min-w-0 @min-[40rem]:text-right">
           <p className="flex flex-wrap items-baseline gap-x-2 text-[0.9375rem] font-bold text-v2-fg tabular-nums @min-[40rem]:justify-end">
