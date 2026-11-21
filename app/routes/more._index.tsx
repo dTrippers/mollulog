@@ -5,8 +5,9 @@ import { Fragment, useState } from "react";
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useOutletContext } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import { getMoreNavigationSections, type NavigationItem } from "~/components/v2/layout/navigation/navigation-menu";
 import { BottomSheet, HaloModeIcon, ProfileImage, SubTitle, Toggle } from "~/components/primitives";
+import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "~/components/v2/layout/navigation/NavigationDotMark";
+import { getMoreNavigationSections, type NavigationItem } from "~/components/v2/layout/navigation/navigation-menu";
 import { useHaloMode } from "~/contexts/HaloModeContext";
 import { useSignIn } from "~/contexts/SignInProvider";
 import {
@@ -14,11 +15,12 @@ import {
   type MobileNavigationPair,
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
-import { canonicalLink, socialMeta } from "~/lib/seo";
+import type { NavigationDot } from "~/domain/navigation-menu-badges";
 import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
+import { submitPreference } from "~/lib/preference-submission.client";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
-import { submitPreference } from "~/lib/preference-submission.client";
 import { getMoreViewData, type MoreCurrentUser } from "~/views/more";
 
 type MoreActionItem = {
@@ -29,7 +31,7 @@ type MoreActionItem = {
   to?: string;
   disabled?: boolean;
   badgeLabel?: string;
-  showRedDot?: boolean;
+  dot?: NavigationDot;
   mobileNavigationId?: MobileNavigationId;
   mobileLabel?: string;
 };
@@ -123,7 +125,7 @@ function toMoreActionItem(item: NavigationItem): MoreActionItem {
     OutlineIcon: item.OutlineIcon,
     disabled: item.disabled,
     badgeLabel: item.badgeLabel,
-    showRedDot: item.showRedDot,
+    dot: item.dot,
     mobileNavigationId: item.mobileNavigationId,
     mobileLabel: item.mobileLabel,
   };
@@ -197,7 +199,7 @@ function MoreProfileBlock({
           to="/coupons"
           label="사용 가능한 쿠폰"
           value={`${currentUser.availableCouponCount.toLocaleString()}건`}
-          showRedDot={hasUnconsumedCoupons}
+          showAccountDot={hasUnconsumedCoupons}
         />
       </div>
     </section>
@@ -280,12 +282,12 @@ function ProfileSummaryLink({
   to,
   label,
   value,
-  showRedDot = false,
+  showAccountDot = false,
 }: {
   to: string;
   label: string;
   value: string;
-  showRedDot?: boolean;
+  showAccountDot?: boolean;
 }) {
   return (
     <Link
@@ -295,8 +297,9 @@ function ProfileSummaryLink({
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-800 dark:text-neutral-100">
         {label}
       </span>
-      {showRedDot && <span className="size-1.5 shrink-0 rounded-full bg-red-500" />}
+      {showAccountDot ? <NavigationDotMark dot="account" className="shrink-0" /> : null}
       <span className="shrink-0 text-sm font-semibold text-neutral-900 dark:text-neutral-100">{value}</span>
+      {showAccountDot ? <span className="sr-only">, {NAVIGATION_DOT_LABELS.account}</span> : null}
       <ChevronRightIcon
         className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5"
         aria-hidden="true"
@@ -544,12 +547,7 @@ function MoreMenuItem({
               {item.badgeLabel}
             </span>
           ) : null}
-          {item.showRedDot ? (
-            <span
-              className="absolute top-0 -right-3 size-1.5 animate-pulse rounded-full bg-destructive"
-              aria-hidden="true"
-            />
-          ) : null}
+          {item.dot ? <NavigationDotMark dot={item.dot} className="absolute top-0 -right-3 animate-pulse" /> : null}
         </span>
       </span>
     </>
@@ -608,10 +606,10 @@ function MoreMenuItem({
 
 function getMoreMenuItemAriaLabel(item: MoreActionItem): string {
   const label = item.badgeLabel ? `${item.name}, ${item.badgeLabel}` : item.name;
-  if (!item.showRedDot) return label;
-  if (item.to === "/news") return `${label}, 새 소식 있음`;
-  if (item.to === "/contact") return `${label}, 읽지 않은 답변 있음`;
-  return `${label}, 새 항목 있음`;
+  if (!item.dot) return label;
+  if (item.dot === "attention" && item.to === "/news") return `${label}, 새 소식 있음`;
+  if (item.dot === "account" && item.to === "/contact") return `${label}, 읽지 않은 답변 있음`;
+  return `${label}, ${NAVIGATION_DOT_LABELS[item.dot]}`;
 }
 
 function MoreThemeMenuItem({ darkMode, onToggle }: { darkMode: boolean; onToggle: () => void }) {

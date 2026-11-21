@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../styles";
+import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "./NavigationDotMark";
 import type { NavigationItem } from "./navigation-menu";
 
 type NavigationMenuRowProps = NavigationItem & {
@@ -20,7 +21,7 @@ export function NavigationMenuRow({
   isActive,
   isFavorite = false,
   onFavoriteToggle,
-  showRedDot,
+  dot,
   badgeLabel,
   favoriteId,
   menuId,
@@ -30,7 +31,7 @@ export function NavigationMenuRow({
   const Icon = isActive ? SolidIcon : OutlineIcon;
   const favoriteAction = favoriteId && onFavoriteToggle && !disabled ? { favoriteId, onFavoriteToggle } : null;
   const hasFavoriteStar = favoriteAction !== null;
-  const accessibleName = [name, badgeLabel, showRedDot ? "새 항목 있음" : null].filter(Boolean).join(", ");
+  const accessibleName = [name, badgeLabel, dot ? NAVIGATION_DOT_LABELS[dot] : null].filter(Boolean).join(", ");
   const rowClassName = cn(
     "group relative flex min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors duration-v2-fast ease-v2-standard",
     isActive
@@ -61,7 +62,7 @@ export function NavigationMenuRow({
             {badgeLabel}
           </span>
         ) : null}
-        {showRedDot ? <span className="size-1.5 rounded-full bg-v2-unread" aria-hidden="true" /> : null}
+        {dot ? <NavigationDotMark dot={dot} /> : null}
       </span>
     </span>
   );

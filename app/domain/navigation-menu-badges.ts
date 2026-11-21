@@ -145,24 +145,38 @@ export function resolveMenuBadgeOverrides(
   return { overrides, warnings };
 }
 
+/**
+ * A navigation dot is either an attention dot (red: new content or a feature
+ * the operator wants noticed) or an account dot (yellow: something in the
+ * signed-in user's own account to check). Attention wins when both apply.
+ */
+export type NavigationDot = "attention" | "account";
+
 export function applyMenuBadgeOverride(
   menuId: NavigationMenuId,
-  automatic: { label?: string; showRedDot?: boolean },
+  automatic: { label?: string; dot?: NavigationDot },
   override?: ResolvedMenuBadgeOverride,
-): { label?: string; showRedDot: boolean } {
+): { label?: string; dot?: NavigationDot } {
   const matchingOverride = override?.menuId === menuId ? override : undefined;
-  return {
-    label:
-      matchingOverride?.labelMode === "hidden"
+  const label =
+    matchingOverride?.labelMode === "hidden"
+      ? undefined
+      : matchingOverride?.labelMode === "custom"
+        ? (matchingOverride.label ?? undefined)
+        : automatic.label;
+  // The operator's red-dot setting controls only the attention dot; an
+  // account dot reflects the user's own data and is never overridden.
+  const dot =
+    matchingOverride?.redDotMode === "show"
+      ? "attention"
+      : matchingOverride?.redDotMode === "hidden" && automatic.dot === "attention"
         ? undefined
-        : matchingOverride?.labelMode === "custom"
-          ? (matchingOverride.label ?? undefined)
-          : automatic.label,
-    showRedDot:
-      matchingOverride?.redDotMode === "show"
-        ? true
-        : matchingOverride?.redDotMode === "hidden"
-          ? false
-          : (automatic.showRedDot ?? false),
-  };
+        : automatic.dot;
+  return { label, dot };
+}
+
+export function summarizeNavigationDots(dots: readonly (NavigationDot | undefined)[]): NavigationDot | undefined {
+  if (dots.includes("attention")) return "attention";
+  if (dots.includes("account")) return "account";
+  return undefined;
 }
