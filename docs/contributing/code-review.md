@@ -49,7 +49,10 @@ single owner for commands and claim-to-evidence mapping.
 ### React, accessibility, and rendering
 
 - Are `useEffect` dependencies complete, and is `meta` present when the screen
-  needs it?
+  needs it? A page anonymous visitors can open needs `socialMeta` card tags in
+  every `meta` branch that renders with 200, including empty and fallback
+  states. A child route's `meta` replaces its parent's, so a fallback branch
+  cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
 - Is the boundary between route-local and shared UI intact?
 - For changed user-visible flows, are the relevant loading, empty, failure,
