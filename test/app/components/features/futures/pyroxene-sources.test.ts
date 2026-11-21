@@ -9,6 +9,7 @@ import {
   createOptimisticOtherTimelineItems,
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
   getPyroxeneGameDayStartAt,
+  isBeforePyroxeneGameDayReset,
   normalizePyroxeneOneOffGainAt,
   normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
@@ -279,6 +280,9 @@ describe("pyroxene-sources", () => {
       expect(getPyroxeneGameDayStartAt(now)).toBe("2026-11-16T19:00:00.000Z");
       expect(getPyroxeneGameDayStartAt("2026-11-17T17:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z"); // 02:00 KST on 11/18
       expect(getPyroxeneGameDayStartAt("2026-11-16T19:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z");
+      expect(isBeforePyroxeneGameDayReset("2026-11-17T17:00:00.000Z")).toBe(true);
+      expect(isBeforePyroxeneGameDayReset("2026-11-16T19:00:00.000Z")).toBe(false);
+      expect(isBeforePyroxeneGameDayReset(now)).toBe(false);
     });
 
     it("keeps the recorded time when an edit leaves the date on the same game day", () => {
@@ -291,6 +295,15 @@ describe("pyroxene-sources", () => {
       expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, recordedBeforeReset, nextDay)).toBe(
         recordedBeforeReset,
       );
+    });
+
+    it("keeps the recorded time when the edit sends the stored instant back", () => {
+      const recordedBeforeReset = "2026-11-17T17:00:00.000Z"; // 02:00 KST on 11/18, game day 11/17
+
+      // Its KST date (11/18) differs from its game day (11/17), so only the exact instant shows the date is unchanged.
+      expect(
+        normalizePyroxeneOneOffGainEditAt(recordedBeforeReset, recordedBeforeReset, "2026-11-19T01:00:00.000Z"),
+      ).toBe(recordedBeforeReset);
     });
 
     it("re-derives the time when an edit moves the date", () => {

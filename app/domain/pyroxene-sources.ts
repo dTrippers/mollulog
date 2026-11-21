@@ -154,6 +154,11 @@ export function getPyroxeneGameDayStartAt(at: Date | string): string {
   return new Date(gameDayNumber(at) * DAY_MS - KST_OFFSET_MS + GAME_DAY_RESET_MS).toISOString();
 }
 
+/** Whether an instant falls between 00:00 and 04:00 KST, so its game day is the previous calendar date. */
+export function isBeforePyroxeneGameDayReset(at: Date | string): boolean {
+  return kstDayNumber(at) !== gameDayNumber(at);
+}
+
 export function isPyroxeneOneOffGainSource(source: string): source is "buy" | "other" {
   return source === "buy" || source === "other";
 }
@@ -171,14 +176,18 @@ export function normalizePyroxeneOneOffGainAt(date: Date | string, now: Date | s
 
 /**
  * The instant an edited one-off gain counts from. While its date stays on the game day it was recorded for, it keeps
- * the recorded instant, so changing only the amount or the name never moves it across an inventory input.
+ * the recorded instant, so changing only the amount or the name never moves it across an inventory input. An edit
+ * form that leaves the date alone sends the stored instant itself, which works in every display time zone.
  */
 export function normalizePyroxeneOneOffGainEditAt(
   date: Date | string,
   previousEventAt: string,
   now: Date | string = new Date(),
 ): string {
-  if (kstDayNumber(date) === gameDayNumber(previousEventAt)) return new Date(previousEventAt).toISOString();
+  const keepsDate =
+    new Date(date).getTime() === new Date(previousEventAt).getTime() ||
+    kstDayNumber(date) === gameDayNumber(previousEventAt);
+  if (keepsDate) return new Date(previousEventAt).toISOString();
   return normalizePyroxeneOneOffGainAt(date, now);
 }
 

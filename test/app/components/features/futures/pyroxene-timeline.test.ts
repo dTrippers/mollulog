@@ -1,5 +1,5 @@
 import { describe, expect, it } from "@jest/globals";
-import { createOptimisticOtherTimelineItems } from "~/domain/pyroxene-sources";
+import { createOptimisticBuyTimelineItems, createOptimisticOtherTimelineItems } from "~/domain/pyroxene-sources";
 import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
 import type { PyroxenePlannerOptions } from "../../../../../app/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "../../../../../app/domain/pyroxene-schedule";
@@ -52,7 +52,7 @@ function favoritedPickupRecruitmentWithUid(uid: string) {
 }
 
 describe("pyroxene-timeline", () => {
-  describe("direct gains recorded on their own game day", () => {
+  describe("purchases and direct gains recorded on their own game day", () => {
     const recordedAt = "2026-11-21T12:15:00.000Z"; // 21:15 KST on 11/21
     const endDate = new Date("2026-12-31T00:00:00+09:00");
     const gain = (date: string, uid: string): PyroxeneScheduleItem => {
@@ -119,7 +119,7 @@ describe("pyroxene-timeline", () => {
       expect(gainIndex).toBeLessThan(timeline.findIndex((entry) => entry.source.type === "event"));
     });
 
-    it("applies it right after an inventory input made later that day", () => {
+    it("applies it from the start of its game day even when inventory was entered later that day", () => {
       const timeline = buildTimeline(
         initialResources,
         new Date("2026-11-21T13:38:00+09:00"),
@@ -130,10 +130,79 @@ describe("pyroxene-timeline", () => {
         [],
         endDate,
       );
+      const gainIndex = timeline.findIndex((entry) => entry.source.uid === "today");
 
-      expect(timeline.find((entry) => entry.source.uid === "today")?.date.toISOString()).toBe(
-        "2026-11-21T04:38:00.001Z",
+      expect(timeline[gainIndex]?.date.toISOString()).toBe("2026-11-20T19:00:00.000Z");
+      expect(gainIndex).toBeLessThan(timeline.findIndex((entry) => entry.source.type === "event"));
+    });
+
+    it("keeps a monthly purchase recorded today before an end date earlier that day", () => {
+      const [item] = createOptimisticBuyTimelineItems(6600, new Date("2026-11-21T00:00:00+09:00"), {
+        uid: "monthly",
+        repeatType: "monthly_first",
+        now: recordedAt,
+      });
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-20T22:00:00+09:00"),
+        new Map(),
+        [
+          {
+            repeatedGain: {
+              uid: item.uid,
+              source: "buy",
+              date: new Date(item.eventAt),
+              description: item.description,
+              pyroxeneDelta: item.pyroxeneDelta,
+              repeatType: "monthly_first",
+            },
+          },
+        ],
+        defaultOptions,
+        undefined,
+        [],
+        new Date("2026-11-21T11:00:00+09:00"),
       );
+
+      expect(
+        timeline.filter((entry) => entry.source.uid === "monthly").map((entry) => entry.date.toISOString()),
+      ).toEqual(["2026-11-20T19:00:00.000Z"]);
+    });
+
+    it("keeps next month's 1st for a monthly purchase recorded before the 04:00 reset", () => {
+      // At 02:00 KST on 12/01, picking 11/30, which is still the current game day.
+      const [item] = createOptimisticBuyTimelineItems(600, new Date("2026-11-30T00:00:00+09:00"), {
+        uid: "monthly",
+        repeatType: "monthly_first",
+        now: "2026-11-30T17:00:00.000Z",
+      });
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-29T22:00:00+09:00"),
+        new Map(),
+        [
+          {
+            repeatedGain: {
+              uid: item.uid,
+              source: "buy",
+              date: new Date(item.eventAt),
+              description: item.description,
+              pyroxeneDelta: item.pyroxeneDelta,
+              repeatType: "monthly_first",
+            },
+          },
+        ],
+        defaultOptions,
+        undefined,
+        [],
+        new Date("2027-01-15T00:00:00+09:00"),
+      );
+
+      expect(
+        timeline
+          .filter((entry) => entry.source.uid === "monthly")
+          .map((entry) => entry.date.tz("Asia/Seoul").format("YYYY-MM-DD")),
+      ).toEqual(["2026-11-30", "2026-12-01", "2027-01-01"]);
     });
 
     it("keeps it before an end date between the start of its game day and the recorded time", () => {
@@ -202,7 +271,10 @@ describe("pyroxene-timeline", () => {
 
     const buyEntries = timeline.filter((entry) => entry.source.uid === "monthly-buy");
 
-    expect(buyEntries.map((entry) => [entry.date.format("YYYY-MM-DD"), entry.resourceDelta.pyroxene])).toEqual([
+    // Read in KST: the first purchase applies from 04:00 KST of its game day, the previous date in UTC.
+    expect(
+      buyEntries.map((entry) => [entry.date.tz("Asia/Seoul").format("YYYY-MM-DD"), entry.resourceDelta.pyroxene]),
+    ).toEqual([
       ["2026-06-15", 13200],
       ["2026-07-01", 13200],
       ["2026-08-01", 13200],

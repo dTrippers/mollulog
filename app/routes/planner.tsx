@@ -587,6 +587,7 @@ export default function IntegratedPlannerRoute() {
             kind: item.source,
             // A purchase or direct gain recorded before the 04:00 reset belongs to the game day it was picked for.
             date: formatPlannerPeriodDate(getPyroxeneGameDayStartAt(item.eventAt), displayTimeZone),
+            eventAt: item.eventAt,
             description: item.description,
             quantity: item.source === "buy" ? item.pyroxeneDelta : 0,
             resources: {
@@ -613,6 +614,7 @@ export default function IntegratedPlannerRoute() {
           id: item.uid,
           kind: item.source,
           date: formatPlannerPeriodDate(getPyroxeneGameDayStartAt(item.eventAt), displayTimeZone),
+          eventAt: item.eventAt,
           description: item.description,
           quantity: item.source === "buy" ? item.pyroxeneDelta : 0,
           resources: {

@@ -263,8 +263,7 @@ function getPyroxeneTimelineItemsUntilRecruitment(
   recruitment: MoreFavoritedRecruitment,
 ) {
   const recruitmentSinceTime = getInstantTime(recruitment.since);
-  // A purchase or direct gain recorded on its own game day can apply from the start of that day (see buildTimeline),
-  // so keep it when that day starts before the recruitment; buildTimeline's end date drops it if it applies later.
+  // A purchase or direct gain recorded on its own game day applies from the start of that day (see buildTimeline).
   return timelineItems.filter(
     (item) =>
       getInstantTime(

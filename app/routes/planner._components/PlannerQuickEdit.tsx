@@ -23,6 +23,8 @@ export type PlannerQuickEditEntry = {
   id: string;
   kind: "buy" | "other";
   date: string;
+  // The stored instant, sent back unchanged when an edit leaves the date alone.
+  eventAt: string;
   description: string;
   quantity: number;
   resources: PickupResources;
@@ -57,6 +59,7 @@ export default function PlannerQuickEdit({
   const initialEntryId = initialEntry?.id ?? null;
   const initialEntryKind = initialEntry?.kind ?? null;
   const initialEntryDate = initialEntry?.date ?? null;
+  const initialEntryEventAt = initialEntry?.eventAt ?? null;
   const initialEntryDescription = initialEntry?.description ?? null;
   const initialEntryQuantity = initialEntry?.quantity ?? null;
   const initialEntryPyroxene = initialEntry?.resources.pyroxene ?? null;
@@ -67,6 +70,7 @@ export default function PlannerQuickEdit({
       initialEntryId === null ||
       initialEntryKind === null ||
       initialEntryDate === null ||
+      initialEntryEventAt === null ||
       initialEntryDescription === null ||
       initialEntryQuantity === null ||
       initialEntryPyroxene === null ||
@@ -80,6 +84,7 @@ export default function PlannerQuickEdit({
       id: initialEntryId,
       kind: initialEntryKind,
       date: initialEntryDate,
+      eventAt: initialEntryEventAt,
       description: initialEntryDescription,
       quantity: initialEntryQuantity,
       resources: {
@@ -92,6 +97,7 @@ export default function PlannerQuickEdit({
     initialEntryId,
     initialEntryKind,
     initialEntryDate,
+    initialEntryEventAt,
     initialEntryDescription,
     initialEntryQuantity,
     initialEntryPyroxene,
@@ -218,7 +224,12 @@ export default function PlannerQuickEdit({
       setMessageIsError(true);
       return;
     }
-    const dateInstant = dateAtDisplayNoon.toISOString();
+    // An edit that leaves the date alone sends the stored instant, so the entry keeps its recorded time whatever the
+    // display time zone (see normalizePyroxeneOneOffGainEditAt).
+    const dateInstant =
+      editingId !== null && initialEntrySnapshot?.id === editingId && date === initialEntrySnapshot.date
+        ? initialEntrySnapshot.eventAt
+        : dateAtDisplayNoon.toISOString();
     const submissionId = crypto.randomUUID();
     const analyticsAction = editingId ? "update" : kind === "package" ? "create_package" : "create";
     const formData = new FormData(form);
