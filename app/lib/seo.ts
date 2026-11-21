@@ -8,7 +8,7 @@ export const HOME_DESCRIPTION =
 
 const SITE_URL = "https://mollulog.net";
 
-export const DEFAULT_OPEN_GRAPH_IMAGE_URL = `${SITE_URL}/mollulog-og.png`;
+export const DEFAULT_OPEN_GRAPH_IMAGE_URL = `${SITE_URL}/mollulog-og-261121.png`;
 
 export function shouldRenderDefaultOpenGraphImage(pathname: string, hasRouteSpecificOpenGraphImage: boolean): boolean {
   const isImageExcludedPath = pathname === "/security-campaign" || pathname.startsWith("/letter/");

@@ -5,7 +5,7 @@ import { DEFAULT_OPEN_GRAPH_IMAGE_URL, socialMeta } from "~/lib/seo";
 
 describe("SEO defaults", () => {
   it("uses the MolluLog OpenGraph image as the site-wide fallback", () => {
-    expect(DEFAULT_OPEN_GRAPH_IMAGE_URL).toBe("https://mollulog.net/mollulog-og.png");
+    expect(DEFAULT_OPEN_GRAPH_IMAGE_URL).toBe("https://mollulog.net/mollulog-og-261121.png");
   });
 });
 

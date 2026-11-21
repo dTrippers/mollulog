@@ -89,9 +89,9 @@ describe("post detail route", () => {
       { name: "twitter:title", content: "새로운 공지" },
       { property: "og:description", content: "새로운 공지 게시물 내용을 확인해보세요." },
       { name: "twitter:description", content: "새로운 공지 게시물 내용을 확인해보세요." },
-      { property: "og:image", content: "https://mollulog.net/mollulog-og.png" },
+      { property: "og:image", content: "https://mollulog.net/mollulog-og-261121.png" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:image", content: "https://mollulog.net/mollulog-og.png" },
+      { name: "twitter:image", content: "https://mollulog.net/mollulog-og-261121.png" },
       { tagName: "link", rel: "canonical", href: `https://mollulog.net/posts/${loadedPost.uid}` },
     ]);
   });
