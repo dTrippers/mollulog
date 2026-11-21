@@ -38,8 +38,7 @@ export default function RaidRecordTablePage() {
       <PageHeader
         back={{ title: "총력전·대결전 기록", to: listTo }}
         title="표로 입력"
-        // Only 총력전 trophies are confirmed to open past results in the game's trophy cabinet.
-        trailing={table.raidType === "total_assault" ? <RaidRecordTrophyHelp /> : undefined}
+        trailing={<RaidRecordTrophyHelp />}
         trailingInline
       />
       <PageMain>
