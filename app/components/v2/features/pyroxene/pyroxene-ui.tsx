@@ -42,7 +42,7 @@ export function ResourceIcon({ resource, className }: { resource: PyroxeneResour
 
 const statusContent: Record<PyroxeneEventStatus, { label: string; className: string; Icon: typeof CheckIcon }> = {
   enough: { label: "충분", className: "bg-v2-success-subtle text-v2-success", Icon: CheckIcon },
-  caution: { label: "부족 가능", className: "bg-v2-warning-subtle text-v2-warning", Icon: ExclamationTriangleIcon },
+  caution: { label: "주의", className: "bg-v2-warning-subtle text-v2-warning", Icon: ExclamationTriangleIcon },
   short: { label: "부족", className: "bg-v2-danger-subtle text-v2-danger", Icon: ExclamationCircleIcon },
 };
 
