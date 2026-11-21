@@ -11,6 +11,7 @@ import {
 } from "~/components/v2/features/raid-records/ConfirmRankDialog";
 import {
   formatRaidClearResult,
+  formatRaidDifficulty,
   formatRaidRank,
   formatRaidScore,
   formatRankConfirmAt,
@@ -41,6 +42,7 @@ import {
   countRaidRankTiers,
   InvalidRaidRecordError,
   parseRaidRecordRank,
+  type RaidRecordDefenseType,
   type RaidRecordRaidType,
   type RaidRecordServer,
 } from "~/domain/raid-record";
@@ -319,6 +321,13 @@ export default function UserRaidRecords() {
   );
 }
 
+// The four-letter defense types, whose widest label sets the width of every label in a row's score list.
+const LABEL_WIDTH_DEFENSE_TYPES = [
+  "special",
+  "elastic",
+  "composite",
+] as const satisfies readonly RaidRecordDefenseType[];
+
 function RaidRecordRow({
   row,
   showRaidType,
@@ -350,16 +359,22 @@ function RaidRecordRow({
       />
       <div className="pointer-events-none relative z-[2] grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-2 px-4 py-3.5 @min-[40rem]:grid-cols-[minmax(0,1fr)_10rem_11rem_1.25rem]">
         <div className="col-span-2 flex min-w-0 flex-col gap-0.5 @min-[40rem]:col-span-1">
-          <span id={titleId} className="text-sm font-semibold text-v2-fg">
-            <RaidSeasonTitle
-              server={season.server}
-              raidType={showRaidType ? season.raidType : undefined}
-              seasonIndex={season.seasonIndex}
-              counterpartSeasonIndex={season.counterpartSeasonIndex}
-              bossName={season.boss.name}
-              ongoing={season.ongoing}
-            />
-          </span>
+          {/* On a narrow row the rank status sits on the title line, above the rank, and takes only its own width. */}
+          <div className="flex items-start justify-between gap-2">
+            <span id={titleId} className="min-w-0 text-sm font-semibold text-v2-fg">
+              <RaidSeasonTitle
+                server={season.server}
+                raidType={showRaidType ? season.raidType : undefined}
+                seasonIndex={season.seasonIndex}
+                counterpartSeasonIndex={season.counterpartSeasonIndex}
+                bossName={season.boss.name}
+                ongoing={season.ongoing}
+              />
+            </span>
+            {rankStatusShown(row, isOwner) ? (
+              <RankStatusPill status={row.rankStatus} className="shrink-0 @min-[40rem]:hidden" />
+            ) : null}
+          </div>
           <RaidSeasonMeta
             terrain={season.terrain}
             defenseTypes={elimination ? [] : season.displayDefenseTypes}
@@ -385,14 +400,27 @@ function RaidRecordRow({
         </div>
         <ChevronRightIcon className="hidden size-5 text-v2-fg-tertiary @min-[40rem]:block" aria-hidden="true" />
         {elimination ? (
-          <p className="col-span-2 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-v2-fg-secondary tabular-nums @min-[40rem]:col-span-4">
+          <p className="col-span-2 flex flex-col gap-y-0.5 text-xs text-v2-fg-secondary tabular-nums @min-[40rem]:col-span-4 @min-[40rem]:flex-row @min-[40rem]:flex-wrap @min-[40rem]:gap-x-3">
             {row.scores.map((entry) => (
               <span key={entry.defenseType} className="inline-flex items-center gap-1.5">
-                <DefenseTypeLabel defenseType={entry.defenseType} />
+                {/* Every label takes the width of the widest four-letter one, so the scores line up across 경장갑 and 탄력장갑. */}
+                <span className="inline-grid">
+                  {LABEL_WIDTH_DEFENSE_TYPES.map((defenseType) => (
+                    <DefenseTypeLabel
+                      key={defenseType}
+                      defenseType={defenseType}
+                      className="invisible col-start-1 row-start-1"
+                    />
+                  ))}
+                  <DefenseTypeLabel defenseType={entry.defenseType} className="col-start-1 row-start-1" />
+                </span>
                 {entry.score === null ? (
                   <span className="text-v2-fg-disabled">–</span>
                 ) : (
-                  <span className="text-v2-fg">{formatRaidScore(entry.score)}</span>
+                  <>
+                    <span className="text-v2-fg">{formatRaidScore(entry.score)}</span>
+                    {entry.difficulty ? <span>{formatRaidDifficulty(entry.difficulty)}</span> : null}
+                  </>
                 )}
               </span>
             ))}
@@ -401,6 +429,11 @@ function RaidRecordRow({
       </div>
     </li>
   );
+}
+
+// Whether the row shows a rank status pill: always beside a rank, and to the owner for a record without one.
+function rankStatusShown(row: RaidRecordRowView, isOwner: boolean): boolean {
+  return row.rank !== null || isOwner;
 }
 
 function RankCell({
@@ -419,7 +452,7 @@ function RankCell({
   if (row.rank === null) {
     return isOwner ? (
       <>
-        <RankStatusPill status="missing" />
+        <RankStatusPill status="missing" className="hidden @min-[40rem]:inline-flex" />
         <Link
           to={editTo}
           className={v2ButtonClassName({ variant: "secondary", size: "sm", className: "pointer-events-auto" })}
@@ -441,7 +474,7 @@ function RankCell({
           rank={row.rank}
         />
         {formatRaidRank(row.rank)}
-        <RankStatusPill status={row.rankStatus} />
+        <RankStatusPill status={row.rankStatus} className="hidden @min-[40rem]:inline-flex" />
       </span>
       {isOwner && row.canConfirmRank ? (
         <Button size="sm" className="pointer-events-auto" onClick={onConfirm}>
