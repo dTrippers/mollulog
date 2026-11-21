@@ -41,7 +41,8 @@ describe("student statistics canonical", () => {
         primaryStudentUid: "10143",
       },
       location: { pathname: "/students/10144/statistics" },
-    } as Parameters<typeof meta>[0]);
+      matches: [],
+    } as unknown as Parameters<typeof meta>[0]);
 
     expect(result?.find((item) => "rel" in item && item.rel === "canonical")).toMatchObject({
       href: "https://mollulog.net/students/10143/statistics",
@@ -56,7 +57,8 @@ describe("student statistics canonical", () => {
         primaryStudentUid: "10143",
       },
       location: { pathname: "/students/10143/statistics" },
-    } as Parameters<typeof meta>[0]);
+      matches: [],
+    } as unknown as Parameters<typeof meta>[0]);
 
     expect(result?.find((item) => "rel" in item && item.rel === "canonical")).toMatchObject({
       href: "https://mollulog.net/students/10143/statistics",
@@ -70,7 +72,8 @@ describe("student statistics canonical", () => {
         primaryStudentUid: "10001",
       },
       location: { pathname: "/students/10001/statistics" },
-    } as Parameters<typeof meta>[0]);
+      matches: [],
+    } as unknown as Parameters<typeof meta>[0]);
 
     expect(result?.find((item) => "rel" in item && item.rel === "canonical")).toMatchObject({
       href: "https://mollulog.net/students/10001/statistics",
@@ -81,7 +84,8 @@ describe("student statistics canonical", () => {
     const result = meta({
       data: undefined,
       location: { pathname: "/students/10144/statistics" },
-    } as Parameters<typeof meta>[0]);
+      matches: [],
+    } as unknown as Parameters<typeof meta>[0]);
 
     expect(result?.find((item) => "rel" in item && item.rel === "canonical")).toMatchObject({
       href: "https://mollulog.net/students/10144/statistics",
