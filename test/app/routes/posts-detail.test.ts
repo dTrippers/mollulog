@@ -29,7 +29,7 @@ function post(overrides: Partial<Post> = {}): Post {
     board: "internal-notice",
     timelineContentUid: null,
     thumbnailImageUrl: null,
-    createdAt: "2026-07-26T00:00:00.000Z",
+    publishedAt: "2026-07-26T00:00:00.000Z",
     updatedAt: "2026-07-26T00:00:00.000Z",
     ...overrides,
   };
@@ -50,7 +50,7 @@ describe("post detail route", () => {
       uid: loadedPost.uid,
       title: loadedPost.title,
       thumbnailImageUrl: null,
-      createdAt: loadedPost.createdAt,
+      publishedAt: loadedPost.publishedAt,
     });
     expect(result.contentHtml).toContain("<p>본문입니다.</p>");
     expect(result.post).not.toHaveProperty("board");

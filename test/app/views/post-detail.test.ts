@@ -24,7 +24,7 @@ function post(overrides: Partial<Post> = {}): Post {
     board: "news",
     timelineContentUid: null,
     thumbnailImageUrl: null,
-    createdAt: "2026-09-08T00:00:00.000Z",
+    publishedAt: "2026-09-08T00:00:00.000Z",
     updatedAt: "2026-09-08T00:00:00.000Z",
     ...overrides,
   };
@@ -57,12 +57,12 @@ describe("getPostDetailView", () => {
         title: "9/8 업데이트 안내",
         content: "본문",
         thumbnailImageUrl: null,
-        createdAt: current.createdAt,
+        publishedAt: current.publishedAt,
       },
       back: { kind: "news" },
       recent: {
         status: "success",
-        data: [{ uid: "post-2", title: "8/30 업데이트 안내", createdAt: current.createdAt }],
+        data: [{ uid: "post-2", title: "8/30 업데이트 안내", publishedAt: current.publishedAt }],
       },
     });
   });

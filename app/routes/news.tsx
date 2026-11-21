@@ -47,7 +47,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // Only the newest post on page 1 is shown in full, so the other bodies are not sent to the client.
   const [latest] = postPage.items;
   return {
-    posts: postPage.items.map(({ uid, title, createdAt }) => ({ uid, title, createdAt })),
+    posts: postPage.items.map(({ uid, title, publishedAt }) => ({ uid, title, publishedAt })),
     latestContentHtml: postPage.page === 1 && latest ? renderMarkdownToSafeHtml(latest.content) : null,
     page: postPage.page,
     totalPages: postPage.totalPages,

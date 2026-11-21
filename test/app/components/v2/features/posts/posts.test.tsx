@@ -19,8 +19,8 @@ import {
 import { installLayoutTestEnv } from "../../layout/layout-test-env";
 
 const rows = [
-  { uid: "post-b", title: "8/30 업데이트 안내", createdAt: "2026-08-30T20:00:00.000Z" as const },
-  { uid: "post-a", title: "6/24 업데이트 및 서버 혼잡 개선 안내 — 긴 제목도 줄바꿈합니다", createdAt: "2026-06-24T00:00:00.000Z" as const },
+  { uid: "post-b", title: "8/30 업데이트 안내", publishedAt: "2026-08-30T20:00:00.000Z" as const },
+  { uid: "post-a", title: "6/24 업데이트 및 서버 혼잡 개선 안내 — 긴 제목도 줄바꿈합니다", publishedAt: "2026-06-24T00:00:00.000Z" as const },
 ];
 
 function renderInRouter(node: React.ReactNode) {
@@ -67,7 +67,7 @@ describe("PostLatest", () => {
         post={{
           uid: "post-1",
           title: "9/8 업데이트 안내",
-          createdAt: "2026-09-08T00:00:00.000Z",
+          publishedAt: "2026-09-08T00:00:00.000Z",
         }}
         contentHtml={renderMarkdownToSafeHtml("## 새로운 기능\n\n- 항목")}
         timeZone="UTC"

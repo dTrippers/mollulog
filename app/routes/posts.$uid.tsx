@@ -182,8 +182,8 @@ export default function PostDetailPage() {
         back={backLink}
         title={post.title}
         meta={
-          <time dateTime={post.createdAt} className="tabular-nums">
-            {formatInstant(post.createdAt, { timeZone, format: "YYYY/MM/DD" })}
+          <time dateTime={post.publishedAt} className="tabular-nums">
+            {formatInstant(post.publishedAt, { timeZone, format: "YYYY/MM/DD" })}
           </time>
         }
       />

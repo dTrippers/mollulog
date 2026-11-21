@@ -27,7 +27,7 @@ function post(index: number): Post {
     board: "news",
     timelineContentUid: null,
     thumbnailImageUrl: null,
-    createdAt: `2026-09-${day}T00:00:00.000Z`,
+    publishedAt: `2026-09-${day}T00:00:00.000Z`,
     updatedAt: `2026-09-${day}T00:00:00.000Z`,
   };
 }
@@ -37,7 +37,7 @@ function post(index: number): Post {
 function pageData(count: number, page: number, totalPages: number) {
   const posts = Array.from({ length: count }, (_, index) => post(index));
   return {
-    posts: posts.map(({ uid, title, createdAt }) => ({ uid, title, createdAt })),
+    posts: posts.map(({ uid, title, publishedAt }) => ({ uid, title, publishedAt })),
     latestContentHtml: page === 1 && posts[0] ? renderMarkdownToSafeHtml(posts[0].content) : null,
     page,
     totalPages,

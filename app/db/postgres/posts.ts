@@ -1,4 +1,4 @@
-import { and, count, desc, eq, ne } from "drizzle-orm";
+import { and, count, desc, eq, isNotNull, ne, type SQL } from "drizzle-orm";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { pgPostsTable } from "~/db/postgres/schema";
 import { normalizeInstant, type UtcIsoString } from "~/lib/date-time";
@@ -13,7 +13,8 @@ export type Post = {
   board: string;
   timelineContentUid: string | null;
   thumbnailImageUrl: string | null;
-  createdAt: UtcIsoString;
+  // When the post became public. Lists, dates, and the news badge all use it, never the draft's creation time.
+  publishedAt: UtcIsoString;
   updatedAt: UtcIsoString;
 };
 
@@ -34,7 +35,17 @@ function toUtcIso(value: Date | string): UtcIsoString {
   return normalizeInstant(value instanceof Date ? value.toISOString() : value);
 }
 
+// Every public read goes through this condition, so a draft never leaves the admin app.
+function published(condition?: SQL): SQL | undefined {
+  return and(isNotNull(pgPostsTable.publishedAt), condition);
+}
+
+const newestPublishedFirst = [desc(pgPostsTable.publishedAt), desc(pgPostsTable.uid)];
+
 export function toPost(row: PostgresPostRow): Post {
+  if (!row.publishedAt) {
+    throw new Error(`Draft post ${row.uid} reached a public read`);
+  }
   return {
     uid: row.uid,
     title: row.title,
@@ -42,7 +53,7 @@ export function toPost(row: PostgresPostRow): Post {
     board: row.board,
     timelineContentUid: row.timelineContentUid,
     thumbnailImageUrl: row.thumbnailImageUrl,
-    createdAt: toUtcIso(row.createdAt),
+    publishedAt: toUtcIso(row.publishedAt),
     updatedAt: toUtcIso(row.updatedAt),
   };
 }
@@ -83,8 +94,8 @@ export async function getPostgresPosts(
       const rows = await db
         .select()
         .from(pgPostsTable)
-        .where(board ? eq(pgPostsTable.board, board) : undefined)
-        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid));
+        .where(published(board ? eq(pgPostsTable.board, board) : undefined))
+        .orderBy(...newestPublishedFirst);
       return rows.map(toPost);
     },
     options,
@@ -100,7 +111,11 @@ export async function getPostgresPostByUid(
     env,
     "get_by_uid",
     async (db) => {
-      const [row] = await db.select().from(pgPostsTable).where(eq(pgPostsTable.uid, uid)).limit(1);
+      const [row] = await db
+        .select()
+        .from(pgPostsTable)
+        .where(published(eq(pgPostsTable.uid, uid)))
+        .limit(1);
       return row ? toPost(row) : null;
     },
     options,
@@ -123,15 +138,15 @@ export async function getPostgresNewsPosts(
       const [{ value: totalCount }] = await db
         .select({ value: count() })
         .from(pgPostsTable)
-        .where(eq(pgPostsTable.board, "news"));
+        .where(published(eq(pgPostsTable.board, "news")));
       const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
       const currentPage = Math.min(safePage, totalPages);
       const offset = (currentPage - 1) * safePageSize;
       const rows = await db
         .select()
         .from(pgPostsTable)
-        .where(eq(pgPostsTable.board, "news"))
-        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .where(published(eq(pgPostsTable.board, "news")))
+        .orderBy(...newestPublishedFirst)
         .limit(safePageSize)
         .offset(offset);
 
@@ -162,8 +177,8 @@ export async function getPostgresRecentNewsPosts(
       const rows = await db
         .select()
         .from(pgPostsTable)
-        .where(and(eq(pgPostsTable.board, "news"), ne(pgPostsTable.uid, excludeUid)))
-        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .where(published(and(eq(pgPostsTable.board, "news"), ne(pgPostsTable.uid, excludeUid))))
+        .orderBy(...newestPublishedFirst)
         .limit(safeLimit);
       return rows.map(toPost);
     },
@@ -183,8 +198,8 @@ export async function getPostgresPostByTimelineContentUid(
       const [row] = await db
         .select()
         .from(pgPostsTable)
-        .where(eq(pgPostsTable.timelineContentUid, timelineContentUid))
-        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .where(published(eq(pgPostsTable.timelineContentUid, timelineContentUid)))
+        .orderBy(...newestPublishedFirst)
         .limit(1);
       return row ? toPost(row) : null;
     },
@@ -202,12 +217,12 @@ export async function getPostgresLatestPostTime(
     "get_latest_time",
     async (db) => {
       const [row] = await db
-        .select({ createdAt: pgPostsTable.createdAt })
+        .select({ publishedAt: pgPostsTable.publishedAt })
         .from(pgPostsTable)
-        .where(eq(pgPostsTable.board, board))
-        .orderBy(desc(pgPostsTable.createdAt), desc(pgPostsTable.uid))
+        .where(published(eq(pgPostsTable.board, board)))
+        .orderBy(...newestPublishedFirst)
         .limit(1);
-      return row ? new Date(row.createdAt) : null;
+      return row?.publishedAt ? new Date(row.publishedAt) : null;
     },
     options,
   );

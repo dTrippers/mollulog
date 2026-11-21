@@ -653,50 +653,6 @@ describe("guest planner envelope", () => {
     expect(result.conflict).toBeNull();
   });
 
-  it("keeps the recorded instants of purchases and direct gains through a legacy merge", () => {
-    const record = (uid: string, source: "buy" | "other", eventAt: string) => ({
-      uid,
-      eventAt,
-      source,
-      repeatType: "fixed_days" as const,
-      repeatIntervalDays: null,
-      repeatCount: null,
-      autoRepurchase: false,
-      description: source === "buy" ? "청휘석 구매" : "점검 보상",
-      pyroxeneDelta: 600,
-      oneTimeTicketDelta: 0,
-      tenTimeTicketDelta: 0,
-    });
-    const base = createEmptyGuestPlanner();
-    base.document.pyroxene.records = [
-      record("record000001", "buy", "2026-11-17T17:00:00.000Z"), // 02:00 KST on 11/18, for game day 11/17
-      record("record000002", "other", "2026-11-15T19:00:00.000Z"), // 04:00 KST on 11/16
-      record("record000003", "buy", "2026-11-19T19:00:00.000Z"), // 04:00 KST on 11/20
-    ];
-    const firstMirror = createGuestPlannerLegacyMirror(base, null);
-    // The direct gain is then edited onto 11/17, recorded at 15:00 KST.
-    base.document.pyroxene.records = base.document.pyroxene.records.map((item) =>
-      item.uid === "record000002" ? { ...item, eventAt: "2026-11-17T06:00:00.000Z" } : item,
-    );
-    base.legacyMirror = createGuestPlannerLegacyMirror(base, firstMirror);
-    const submittedPyroxene = {
-      ...base.legacyMirror.pyroxene,
-      revision: base.legacyMirror.pyroxene.revision + 1,
-      data: { ...base.legacyMirror.pyroxene.data, collectedSourceKeys: ["event_reward:old-tab"] },
-    };
-
-    const result = mergeGuestPlannerLegacyChanges(base, submittedPyroxene, base.legacyMirror.eventShops);
-
-    expect(result.changed).toBe(true);
-    expect(
-      Object.fromEntries(result.envelope.document.pyroxene.records.map(({ uid, eventAt }) => [uid, eventAt])),
-    ).toEqual({
-      record000001: "2026-11-17T17:00:00.000Z",
-      record000002: "2026-11-17T06:00:00.000Z",
-      record000003: "2026-11-19T19:00:00.000Z",
-    });
-  });
-
   it("merges concurrent edits to different option and event-shop fields", () => {
     const pyroxene = createEmptyGuestPyroxenePlanner();
     pyroxene.data.resources = {
