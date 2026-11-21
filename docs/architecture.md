@@ -134,6 +134,7 @@ Cron runs on a single schedule:
   - Source cache (`fetchSourceCached`): raw BAQL reference data. Applied in models only.
   - Route cache (`fetchRouteCached`, SWR): composed view-models. Applied in views only.
 - Cache keys are stored under the `cache::` prefix.
+- Bump a cache key's version whenever the shape of its cached value changes. Entries written before a deploy stay readable under the old key until they expire, and the new code would render them wrong.
 - Routes and screens do not invent cache policy; the owning layer (models or views) decides it.
 - Use the `forceRefresh` pattern when a forced refresh is needed, such as in cron and background work.
 
