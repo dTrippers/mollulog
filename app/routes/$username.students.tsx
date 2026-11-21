@@ -785,7 +785,8 @@ export default function UserPage() {
 
   // ---- Aside and mobile bar ----
   const resetFilters = useCallback(() => setFilter((current) => clearStudentsFilters(current)), [setFilter]);
-  const hideMobileBar = stacked && (editing || (batchMode && batchUids.size > 0));
+  // The batch bar shows as soon as batch mode is on, so the mobile bar steps aside then, not only after a selection.
+  const hideMobileBar = stacked && (editing || batchMode);
   useEffect(() => {
     setAsideContent(
       <>
@@ -882,7 +883,7 @@ export default function UserPage() {
     <div
       className={cn(
         "min-w-0 space-y-v2-group-gap",
-        (editing || (batchMode && batchUids.size > 0)) && stacked && "pb-24",
+        (editing || batchMode) && stacked && "pb-24",
       )}
     >
       <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked && (editing || batchMode)} />
