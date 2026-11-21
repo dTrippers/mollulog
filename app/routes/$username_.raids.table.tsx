@@ -37,7 +37,6 @@ export default function RaidRecordTablePage() {
       <PageHeader
         back={{ title: "총력전·대결전 기록", to: listTo }}
         title="표로 입력"
-        description="여러 시즌의 점수와 순위를 한 번에 입력해요. 메모와 편성은 저장한 후 각 행의 ‘상세’에서 입력할 수 있어요."
       />
       <PageMain>
         {/* A new scope starts from what is saved, so drafts of the previous scope never carry over. */}
