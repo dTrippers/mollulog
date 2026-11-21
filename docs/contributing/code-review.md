@@ -55,6 +55,10 @@ single owner for commands and claim-to-evidence mapping.
   cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
 - Is the boundary between route-local and shared UI intact?
+- Is an image that fills a frame sized only by `aspect-ratio` pinned to the
+  frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
+  table cell, WebKit resolves that percentage to the image's natural height, and
+  `object-cover` then shows a magnified crop.
 - For changed user-visible flows, are the relevant loading, empty, failure,
   retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
   the relevant render and interaction evidence; a concrete changed-UX deviation
