@@ -9,11 +9,11 @@ describe("More menu accessibility", () => {
     expect(moreSource).toContain("const label = item.badgeLabel ? `${item.name}, ${item.badgeLabel}` : item.name;");
     expect(moreSource).toContain("return `${label}, 새 소식 있음`;");
     expect(moreSource).toContain("return `${label}, 읽지 않은 답변 있음`;");
-    expect(moreSource).toContain("return `${label}, 새 항목 있음`;");
+    expect(moreSource).toContain("return `${label}, ${NAVIGATION_DOT_LABELS[item.dot]}`;");
   });
 
   it("announces labels without a red dot and keeps red-dot-only meaning separate", () => {
-    expect(moreSource).toContain("if (!item.showRedDot) return label;");
+    expect(moreSource).toContain("if (!item.dot) return label;");
     expect(moreSource).toContain("item.badgeLabel ? `${item.name}, ${item.badgeLabel}` : item.name");
   });
 });
