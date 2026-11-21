@@ -79,7 +79,7 @@ export function FeaturedContentFloatingBanner({
   onDismiss,
 }: FeaturedContentBannerProps & { onDismiss: () => void }) {
   return (
-    <div className="flex h-14 w-full min-w-0 items-center gap-0.5 rounded-lg bg-v2-accent-subtle p-1 shadow-lg">
+    <div className="flex h-14 w-full min-w-0 items-center gap-0.5 rounded-lg bg-v2-accent-subtle/94 p-1 shadow-lg backdrop-blur-md">
       <button
         type="button"
         onClick={onJump}

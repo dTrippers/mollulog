@@ -123,7 +123,7 @@ export function ActionMenu({
           role="menu"
           aria-label={label}
           onKeyDown={handleMenuKeyDown}
-          className="absolute top-full right-0 z-20 mt-1 min-w-36 rounded-lg bg-v2-surface p-1 shadow-lg ring-1 ring-v2-control-border-strong"
+          className="absolute top-full right-0 z-20 mt-1 min-w-36 rounded-lg bg-v2-popover-surface p-1 shadow-lg ring-1 ring-v2-control-border-strong backdrop-blur-md"
         >
           {items.map((item) => {
             const Icon = item.icon;

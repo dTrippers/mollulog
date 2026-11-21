@@ -487,10 +487,9 @@ export function RaidRecordForm({
 
       <PageActionBar
         placement={stacked ? "fixed" : "sticky"}
-        expandActions={stacked}
         summary={
           season ? (
-            <span className="block truncate text-sm font-semibold text-v2-fg-secondary">
+            <span className="block truncate">
               {season.raidType === "elimination" ? "대결전 " : ""}
               <span className="tabular-nums">#{season.seasonIndex}</span> {season.boss.name} ·{" "}
               {RAID_RECORD_SERVER_LABEL[season.server]}
@@ -498,7 +497,7 @@ export function RaidRecordForm({
           ) : null
         }
       >
-        <Link to={cancelTo} className={v2ButtonClassName({ variant: "text" })}>
+        <Link to={cancelTo} className={v2ButtonClassName()}>
           취소
         </Link>
         <Button variant="primary" onClick={submit} disabled={saving || !season}>

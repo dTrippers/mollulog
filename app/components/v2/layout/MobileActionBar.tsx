@@ -92,14 +92,14 @@ export function MobileActionBar({ links = [], panels = [], leading }: MobileActi
       <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] left-4 z-30 flex items-stretch gap-2">
         <div className="min-w-0 flex-1">{leading}</div>
         {links.length > 0 || panels.length > 0 ? (
-          <div className="flex shrink-0 rounded-lg bg-v2-elevated p-1 shadow-lg">{actionItems}</div>
+          <div className="flex shrink-0 rounded-lg bg-v2-popover-surface p-1 shadow-lg backdrop-blur-md">{actionItems}</div>
         ) : null}
       </div>
     );
   }
 
   return (
-    <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] z-30 flex rounded-lg bg-v2-elevated p-1 shadow-lg">
+    <div className="v2-action-bar fixed right-4 bottom-[var(--mobile-bottom-offset)] z-30 flex rounded-lg bg-v2-popover-surface p-1 shadow-lg backdrop-blur-md">
       {actionItems}
     </div>
   );

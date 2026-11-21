@@ -28,7 +28,7 @@ export function SaveToast({
     <div
       role={showFailure ? "alert" : "status"}
       className={cn(
-        "fixed right-4 z-layer-toast inline-flex items-center gap-2 rounded-lg bg-v2-selected px-4 py-2 text-sm font-medium whitespace-nowrap text-v2-on-selected shadow-lg md:right-8 lg:bottom-4",
+        "fixed right-4 z-layer-toast inline-flex items-center gap-2 v2-floating-inverse rounded-lg px-4 py-2 text-sm font-medium whitespace-nowrap shadow-lg backdrop-blur-md md:right-8 lg:bottom-4",
         aboveActionBar ? "bottom-[calc(var(--mobile-bottom-offset)+5.5rem)]" : "bottom-[var(--mobile-bottom-offset)]",
       )}
     >

@@ -151,7 +151,7 @@ export function ResourceThumb({
             <span
               id={nameTooltipId}
               role="tooltip"
-              className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md"
+              className="absolute bottom-full left-0 z-10 mb-2 w-max max-w-[calc(100vw-2rem)] break-words whitespace-normal rounded-md bg-v2-scrim px-2 py-1 text-xs font-normal text-v2-on-media shadow-md backdrop-blur-md"
             >
               {tooltipText}
             </span>

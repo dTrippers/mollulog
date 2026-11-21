@@ -211,8 +211,8 @@ export function NavigationSearch({ variant }: { variant: NavigationSearchVariant
             variant === "rail"
               ? "relative -mx-2 mt-2 max-h-[calc(100dvh-8rem)] w-96 overflow-y-auto"
               : variant === "desktop"
-                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm"
-                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-sm"
+                ? "absolute top-full left-0 z-layer-navigation-menu mt-1 w-96 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md"
+                : "absolute top-full left-0 right-0 z-layer-navigation-menu mt-1 overflow-hidden rounded-lg bg-v2-popover-surface shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md"
           }
         />
       )}
@@ -896,7 +896,7 @@ function MobileNavigationPersonalizationTutorial({
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(var(--mobile-nav-height)+0.5rem)] z-layer-navigation-menu px-3 lg:hidden">
-      <div className="pointer-events-auto mx-auto max-w-sm rounded-lg bg-v2-elevated p-2 shadow-lg">
+      <div className="pointer-events-auto mx-auto max-w-sm rounded-lg bg-v2-popover-surface p-2 shadow-lg backdrop-blur-md">
         <div role="status" aria-live="polite">
           <FeatureHint
             Icon={InformationCircleIcon}

@@ -434,14 +434,15 @@ export default function EventRecruitmentSimulator() {
             className="bottom-[calc(var(--mobile-nav-height)+0.5rem)] gap-y-3 lg:bottom-4"
             summary={
               <div className="flex flex-col">
-                <span className="font-semibold text-v2-fg">총 {totalCount.toLocaleString()}회 모집</span>
-                <span className="inline-flex items-center gap-1 text-xs font-normal text-v2-fg-tertiary">
-                  소비한 청휘석
-                  <ResourceIcon resource="pyroxene" className="size-4" />
-                  {calculatePyroxeneCost(totalCount).toLocaleString()}개
-                </span>
-                <span className="text-xs font-normal text-v2-fg-tertiary">
-                  3성 학생 비율 {formatTier3Rate(tier3Count, totalCount)}
+                <span>총 {totalCount.toLocaleString()}회 모집</span>
+                <span className="mt-px flex flex-wrap items-center gap-x-1 text-xs font-medium text-v2-fg-secondary">
+                  <span className="inline-flex items-center gap-1">
+                    소비한 청휘석
+                    <ResourceIcon resource="pyroxene" className="size-4" />
+                    {calculatePyroxeneCost(totalCount).toLocaleString()}개
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span>3성 학생 비율 {formatTier3Rate(tier3Count, totalCount)}</span>
                 </span>
               </div>
             }

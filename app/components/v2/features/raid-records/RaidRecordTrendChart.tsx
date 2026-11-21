@@ -238,7 +238,7 @@ export function RaidRecordTrendChart({ points }: { points: RaidRecordTrendPoint[
         ) : null}
         {active && width > 0 ? (
           <div
-            className="pointer-events-none absolute z-10 w-max max-w-56 rounded-md bg-v2-elevated px-2.5 py-1.5 text-xs shadow-md ring-1 ring-v2-popover-divider"
+            className="pointer-events-none absolute z-10 w-max max-w-56 rounded-md bg-v2-popover-surface px-2.5 py-1.5 text-xs shadow-md ring-1 ring-v2-popover-divider backdrop-blur-md"
             style={{
               top: Math.max(0, y(active.rank) - 56),
               left: Math.min(Math.max(0, x(activeIndex) - 80), Math.max(0, width - 168)),

@@ -310,20 +310,17 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
 
       <PageActionBar
         placement={stacked ? "fixed" : "sticky"}
-        expandActions={stacked}
-        summary={
-          <span className="flex flex-col">
-            <span>수정한 기록 {changedModels.length}개</span>
-            {uniqueErrorLabels.length > 0 ? (
-              <span className="text-xs font-medium text-v2-danger">
-                오류 {uniqueErrorLabels.length}개
-                {stacked ? "" : ` · ${uniqueErrorLabels.slice(0, 3).join(", ")}${uniqueErrorLabels.length > 3 ? " 외" : ""}`}
-              </span>
-            ) : null}
-          </span>
+        summary={`수정한 기록 ${changedModels.length}개`}
+        note={
+          uniqueErrorLabels.length > 0 ? (
+            <span className="text-v2-danger">
+              오류 {uniqueErrorLabels.length}개
+              {stacked ? "" : ` · ${uniqueErrorLabels.slice(0, 3).join(", ")}${uniqueErrorLabels.length > 3 ? " 외" : ""}`}
+            </span>
+          ) : null
         }
       >
-        <Link to={listTo} className={v2ButtonClassName({ variant: "text" })}>
+        <Link to={listTo} className={v2ButtonClassName()}>
           취소
         </Link>
         <Button variant="primary" disabled={!canSave} onClick={save}>

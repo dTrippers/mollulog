@@ -139,6 +139,30 @@
   --input: var(--floating-input);
 }
 
+/* A floating surface in the inverse lightness of the page, such as the page action bar and toasts. Content inside keeps
+   using the v2 tokens; this remaps them to the inverse set, so buttons and status text need no inverse variants. */
+@utility v2-floating-inverse {
+  --v2-fg: var(--v2-inverse-fg);
+  --v2-fg-secondary: var(--v2-inverse-fg-secondary);
+  --v2-fg-tertiary: var(--v2-inverse-fg-tertiary);
+  --v2-fg-disabled: var(--v2-inverse-fg-disabled);
+  --v2-inset: var(--v2-inverse-fill);
+  --v2-filled-hover: var(--v2-inverse-fill-hover);
+  --v2-hover: var(--v2-inverse-hover);
+  --v2-divider: var(--v2-inverse-divider);
+  --v2-accent: var(--v2-inverse-accent);
+  --v2-link: var(--v2-inverse-accent);
+  --v2-info: var(--v2-inverse-accent);
+  --v2-focus: var(--v2-inverse-accent);
+  --v2-success: var(--v2-inverse-success);
+  --v2-warning: var(--v2-inverse-warning);
+  --v2-danger: var(--v2-inverse-danger);
+  --v2-danger-subtle: var(--v2-inverse-danger-subtle);
+  --v2-danger-solid: var(--v2-inverse-danger-solid);
+  background-color: var(--v2-inverse-surface);
+  color: var(--v2-inverse-fg);
+}
+
 @utility popover-surface {
   @apply floating-surface rounded-lg border border-border bg-floating/90 text-floating-foreground shadow-lg shadow-black/10 backdrop-blur-sm dark:bg-floating/80 dark:shadow-black/30;
 }
@@ -545,7 +569,6 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-fg-disabled: var(--v2-fg-disabled);
   --color-v2-elevated: var(--v2-elevated);
   --color-v2-popover-surface: var(--v2-popover-surface);
-  --color-v2-page-action-bar: var(--v2-page-action-bar);
   --color-v2-popover-divider: var(--v2-popover-divider);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
@@ -655,8 +678,23 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.72 0 0);
   --v2-elevated: oklch(1 0 0);
   --v2-popover-surface: rgb(255 255 255 / 94%);
-  /* A floating action bar is tinted so it stands apart from the canvas and from white content cards. */
-  --v2-page-action-bar: oklch(0.93 0.035 255 / 90%);
+  /* The inverse floating surface: a dark capsule over the light page (page action bar, toasts). Its content reads the
+     v2 tokens, which the v2-floating-inverse utility maps to the --v2-inverse-* values below. */
+  --v2-inverse-surface: oklch(0.22 0.015 255 / 92%);
+  --v2-inverse-fg: oklch(0.985 0 0);
+  --v2-inverse-fg-secondary: oklch(0.85 0 0);
+  --v2-inverse-fg-tertiary: oklch(0.78 0 0);
+  --v2-inverse-fg-disabled: oklch(0.56 0 0);
+  --v2-inverse-fill: oklch(1 0 0 / 12%);
+  --v2-inverse-fill-hover: oklch(1 0 0 / 18%);
+  --v2-inverse-hover: oklch(1 0 0 / 7%);
+  --v2-inverse-divider: oklch(1 0 0 / 18%);
+  --v2-inverse-accent: oklch(0.74 0.11 250);
+  --v2-inverse-success: oklch(0.792 0.209 151.711);
+  --v2-inverse-warning: oklch(0.828 0.189 84.429);
+  --v2-inverse-danger: oklch(0.78 0.128 22.1);
+  --v2-inverse-danger-subtle: oklch(0.33 0.09 25);
+  --v2-inverse-danger-solid: oklch(0.586 0.201 26.79);
   --v2-popover-divider: rgb(0 0 0 / 18%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 16%, transparent);
@@ -758,7 +796,21 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.56 0 0);
   --v2-elevated: oklch(0.36 0 0);
   --v2-popover-surface: rgb(24 24 24 / 94%);
-  --v2-page-action-bar: oklch(0.34 0.045 255 / 90%);
+  --v2-inverse-surface: oklch(0.94 0.01 255 / 92%);
+  --v2-inverse-fg: oklch(0.205 0 0);
+  --v2-inverse-fg-secondary: oklch(0.439 0 0);
+  --v2-inverse-fg-tertiary: oklch(0.439 0 0);
+  --v2-inverse-fg-disabled: oklch(0.62 0 0);
+  --v2-inverse-fill: oklch(0.205 0 0 / 9%);
+  --v2-inverse-fill-hover: oklch(0.205 0 0 / 14%);
+  --v2-inverse-hover: oklch(0.205 0 0 / 5%);
+  --v2-inverse-divider: oklch(0.205 0 0 / 16%);
+  --v2-inverse-accent: oklch(0.48 0.13 252);
+  --v2-inverse-success: oklch(0.46 0.13 150);
+  --v2-inverse-warning: oklch(0.48 0.12 52);
+  --v2-inverse-danger: oklch(0.46 0.18 28);
+  --v2-inverse-danger-subtle: oklch(0.885 0.05 30);
+  --v2-inverse-danger-solid: oklch(0.552 0.205 24.53);
   --v2-popover-divider: rgb(255 255 255 / 22%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 20%, transparent);

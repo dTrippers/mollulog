@@ -148,7 +148,7 @@ export function TooltipButton({ label, tooltip, className, children }: TooltipBu
               data-placement={position?.placement ?? "above"}
               style={{ top: position?.top ?? 0, left: position?.left ?? 0 }}
               className={cn(
-                "pointer-events-none fixed z-layer-navigation w-max max-w-[calc(100vw-1rem)] rounded-md bg-v2-scrim px-2 py-1 text-xs break-words text-v2-on-media shadow-md",
+                "pointer-events-none fixed z-layer-navigation w-max max-w-[calc(100vw-1rem)] rounded-md bg-v2-scrim px-2 py-1 text-xs break-words text-v2-on-media shadow-md backdrop-blur-md",
                 // The first layout pass measures the tooltip before it is placed.
                 !position && "invisible",
               )}

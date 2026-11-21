@@ -506,7 +506,7 @@ export default function JankenScreen({ loaderData }: { loaderData: LoaderData })
               aria-label={t.openSummary}
               onClick={() => openSheet("janken-summary")}
               className={cn(
-                "flex w-full items-center gap-3 rounded-[14px] bg-v2-elevated px-3.5 py-3 text-left shadow-lg",
+                "flex w-full items-center gap-3 rounded-[14px] bg-v2-popover-surface px-3.5 py-3 text-left shadow-lg backdrop-blur-md",
                 v2FocusRing,
               )}
             >

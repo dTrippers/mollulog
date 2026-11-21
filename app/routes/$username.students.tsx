@@ -1067,26 +1067,20 @@ export default function UserPage() {
                 placement={editBarFixed ? "fixed" : "sticky"}
                 expandActions={editBarFixed}
                 className={barClass}
-                summary={
-                  <span className="block">
-                    {batchUids.size}명 선택됨
-                    <span className="block text-xs font-normal text-v2-fg-tertiary">
-                      {batchOverLimit
-                        ? `한 번에 최대 ${MAX_RECRUITED_STUDENT_BATCH_SIZE}명까지 등록할 수 있어요.`
-                        : "학생마다 초기 성급으로 등록돼요."}
-                    </span>
-                  </span>
+                summary={`${batchUids.size}명 선택됨`}
+                note={
+                  batchOverLimit
+                    ? `한 번에 최대 ${MAX_RECRUITED_STUDENT_BATCH_SIZE}명까지 등록할 수 있어요.`
+                    : "학생마다 초기 성급으로 등록돼요."
                 }
               >
                 <Button
-                  variant="text"
                   disabled={batchSubmitting || unrecruitedStudents.length === 0}
                   onClick={() => setBatchUids(new Set(unrecruitedStudents.map((student) => student.uid)))}
                 >
                   모두 선택
                 </Button>
                 <Button
-                  variant="text"
                   disabled={batchSubmitting || batchUids.size === 0}
                   onClick={() => setBatchUids(new Set())}
                 >
@@ -1117,27 +1111,25 @@ export default function UserPage() {
           placement={editBarFixed ? "fixed" : "sticky"}
           expandActions={editBarFixed}
           className={barClass}
-          summary={
-            <span className="block">
-              학생 {changes.students}명 · 바꾼 값 {changes.values}개
-              {saving ? (
-                <StatusNotice tone="neutral" Icon={ArrowPathIcon} className="mt-0.5 text-xs font-normal">
-                  저장하는 중이에요…
-                </StatusNotice>
-              ) : conflictCount > 0 ? (
-                <StatusNotice tone="warning" className="mt-0.5 text-xs font-normal">
-                  편집하는 사이 다른 곳에서 바뀐 값이 {conflictCount}개 있어요.
-                </StatusNotice>
-              ) : errorCount > 0 ? (
-                <StatusNotice tone="danger" className="mt-0.5 text-xs font-normal">
-                  확인할 입력값이 {errorCount}개 있어요.
-                </StatusNotice>
-              ) : saveFailure ? (
-                <StatusNotice tone="danger" className="mt-0.5 text-xs font-normal">
-                  {saveFailure}
-                </StatusNotice>
-              ) : null}
-            </span>
+          summary={`학생 ${changes.students}명 · 바꾼 값 ${changes.values}개`}
+          note={
+            saving ? (
+              <StatusNotice tone="neutral" Icon={ArrowPathIcon} className="text-xs font-medium">
+                저장하는 중이에요…
+              </StatusNotice>
+            ) : conflictCount > 0 ? (
+              <StatusNotice tone="warning" className="text-xs font-medium">
+                편집하는 사이 다른 곳에서 바뀐 값이 {conflictCount}개 있어요.
+              </StatusNotice>
+            ) : errorCount > 0 ? (
+              <StatusNotice tone="danger" className="text-xs font-medium">
+                확인할 입력값이 {errorCount}개 있어요.
+              </StatusNotice>
+            ) : saveFailure ? (
+              <StatusNotice tone="danger" className="text-xs font-medium">
+                {saveFailure}
+              </StatusNotice>
+            ) : null
           }
         >
           <Button

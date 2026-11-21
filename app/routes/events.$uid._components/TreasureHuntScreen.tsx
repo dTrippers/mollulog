@@ -426,7 +426,7 @@ function ConfiguredTreasureHuntScreen({ eventUid, config }: { eventUid: string; 
                     <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-v2-surface/60">
                       <span
                         role="status"
-                        className="inline-flex items-center gap-2 rounded-md bg-v2-elevated px-3 py-2 text-sm font-medium text-v2-fg shadow-lg"
+                        className="inline-flex items-center gap-2 rounded-md bg-v2-popover-surface px-3 py-2 text-sm font-medium text-v2-fg shadow-lg backdrop-blur-md"
                       >
                         <ArrowPathIcon className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
                         {treasureHuntLocale.boardCalculating}

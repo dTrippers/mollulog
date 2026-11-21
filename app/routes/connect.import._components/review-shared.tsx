@@ -177,12 +177,8 @@ export function DraftApplyBar({
         <PageActionBar
           placement={stacked ? "fixed" : "sticky"}
           expandActions
-          summary={
-            <div className="flex flex-col gap-0.5">
-              <span>{summary}</span>
-              <span className="text-xs font-normal text-v2-fg-tertiary">{discardNote}</span>
-            </div>
-          }
+          summary={summary}
+          note={discardNote}
         >
           <Button
             type="submit"
