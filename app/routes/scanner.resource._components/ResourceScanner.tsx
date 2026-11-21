@@ -680,7 +680,6 @@ export default function ResourceScanner() {
       <PageActionBar
         placement="sticky"
         expandActions
-        className="bottom-0 px-0 py-v2-block-gap"
         summary={phase === "applying" ? "반영 중이에요" : isCancelling ? "삭제 중이에요" : null}
       >
         <Button variant="danger-subtle" disabled={phase === "applying" || isCancelling} onClick={cancelResult}>
@@ -911,7 +910,7 @@ export default function ResourceScanner() {
     <div
       className={cn(
         "flex flex-col gap-v2-block-gap",
-        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+5.5rem)]" : "pb-v2-block-p",
+        hasFixedBar ? "pb-[calc(var(--mobile-nav-height)+6.25rem)]" : "pb-v2-block-p",
       )}
     >
       {error && phase !== "review" && phase !== "applying" ? <StatusNotice tone="danger">{error}</StatusNotice> : null}

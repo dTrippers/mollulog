@@ -539,6 +539,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --color-v2-fg-disabled: var(--v2-fg-disabled);
   --color-v2-elevated: var(--v2-elevated);
   --color-v2-popover-surface: var(--v2-popover-surface);
+  --color-v2-page-action-bar: var(--v2-page-action-bar);
   --color-v2-popover-divider: var(--v2-popover-divider);
   --color-v2-backdrop: var(--v2-backdrop);
   --color-v2-highlight: var(--v2-highlight);
@@ -648,6 +649,8 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.72 0 0);
   --v2-elevated: oklch(1 0 0);
   --v2-popover-surface: rgb(255 255 255 / 94%);
+  /* A floating action bar is tinted so it stands apart from the canvas and from white content cards. */
+  --v2-page-action-bar: oklch(0.93 0.035 255 / 90%);
   --v2-popover-divider: rgb(0 0 0 / 18%);
   --v2-backdrop: oklch(0 0 0 / 30%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 16%, transparent);
@@ -749,6 +752,7 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
   --v2-fg-disabled: oklch(0.56 0 0);
   --v2-elevated: oklch(0.36 0 0);
   --v2-popover-surface: rgb(24 24 24 / 94%);
+  --v2-page-action-bar: oklch(0.34 0.045 255 / 90%);
   --v2-popover-divider: rgb(255 255 255 / 22%);
   --v2-backdrop: oklch(0 0 0 / 55%);
   --v2-highlight: color-mix(in srgb, var(--v2-accent) 20%, transparent);

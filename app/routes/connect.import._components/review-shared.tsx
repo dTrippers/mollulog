@@ -207,7 +207,7 @@ export function DraftApplyBar({
           </Button>
         </PageActionBar>
         {/* The stacked bar is fixed above the navigation, so the screen keeps room for it at the end. */}
-        {stacked ? <div aria-hidden="true" className="h-[calc(var(--mobile-nav-height)+5.5rem)]" /> : null}
+        {stacked ? <div aria-hidden="true" className="h-[calc(var(--mobile-nav-height)+6.25rem)]" /> : null}
       </div>
     </>
   );

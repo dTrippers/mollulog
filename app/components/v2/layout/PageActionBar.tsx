@@ -12,25 +12,24 @@ export type PageActionBarProps = {
   placement?: "sticky" | "fixed";
   // On mobile the actions fill the row, and the last action (the primary) takes the rest. Desktop keeps its content width.
   expandActions?: boolean;
-  // Elevated lifts the bar off surface-colored content cards, such as a list of result cards behind a floating bar.
-  tone?: "surface" | "elevated";
   className?: string;
 };
 
 // Bottom action bar for the step's primary and secondary actions. The screen adds bottom padding while a fixed bar shows.
+// The bar floats: it keeps a gap from the bottom edge, and its translucent tint sets it apart from the canvas and from
+// white content cards (surface and elevated are both white in light mode, so neither can separate it).
 export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(function PageActionBar(
-  { summary, details, children, placement = "sticky", expandActions = false, tone = "surface", className },
+  { summary, details, children, placement = "sticky", expandActions = false, className },
   ref,
 ) {
   return (
     <div
       ref={ref}
       className={cn(
-        "z-20 flex flex-wrap items-center justify-between gap-v2-block-gap border-v2-control-border p-v2-block-p shadow-lg",
-        tone === "elevated" ? "bg-v2-elevated" : "bg-v2-surface",
+        "z-20 flex flex-wrap items-center justify-between gap-v2-block-gap rounded-lg border border-v2-control-border bg-v2-page-action-bar p-v2-block-p shadow-lg backdrop-blur-md",
         placement === "fixed"
-          ? "fixed inset-x-0 bottom-[var(--mobile-nav-height)] z-30 border-x-0 border-t border-b-0 lg:bottom-0"
-          : "sticky bottom-0 rounded-lg border",
+          ? "fixed inset-x-3 bottom-[calc(var(--mobile-nav-height)+0.75rem)] z-30 sm:inset-x-4 lg:bottom-4"
+          : "sticky bottom-4",
         className,
       )}
     >

@@ -431,7 +431,6 @@ export default function EventRecruitmentSimulator() {
         {selectedPickupStudentUid && totalCount > 0 ? (
           <PageActionBar
             ref={actionBarRef}
-            tone="elevated"
             className="bottom-[calc(var(--mobile-nav-height)+0.5rem)] gap-y-3 lg:bottom-4"
             summary={
               <div className="flex flex-col">
