@@ -31,13 +31,14 @@ function niceStep(range: number, targetTicks: number): number {
   return step * magnitude;
 }
 
-function buildTicks(min: number, max: number): { domain: [number, number]; ticks: number[] } {
+// Ranks are whole numbers, so the step is at least 1: a closer step would put fractional ranks on the axis.
+export function buildTicks(min: number, max: number): { domain: [number, number]; ticks: number[] } {
   if (min === max) {
     const pad = Math.max(1, Math.abs(min) * 0.05);
     min -= pad;
     max += pad;
   }
-  const step = niceStep(max - min, 3);
+  const step = Math.max(1, niceStep(max - min, 3));
   const low = Math.max(0, Math.floor(min / step) * step);
   const high = Math.ceil(max / step) * step;
   const ticks: number[] = [];

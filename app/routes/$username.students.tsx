@@ -890,7 +890,9 @@ export default function UserPage() {
         (editing || batchBarShown) && stacked && "pb-24",
       )}
     >
-      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked && (editing || batchBarShown)} />
+      {/* Stacked layouts always show a bottom bar, the edit or batch bar or else the mobile action bar, so the toast sits
+          above it either way. */}
+      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked} />
 
       {editing ? (
         <div className="flex flex-wrap items-center gap-2">
