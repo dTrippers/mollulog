@@ -157,7 +157,7 @@ describe("saveRaidRecordTable", () => {
   it("does not check the maximum for a boss the score formula does not know", async () => {
     await saveRaidRecordTable(env, USER_ID, [
       {
-        season: season(91, "total_assault", "nightmare_train"),
+        season: season(91, "total_assault", "a-new-boss"),
         current: null,
         scores: [{ defenseType: "special", score: 99_000_000 }],
         rank: 1,

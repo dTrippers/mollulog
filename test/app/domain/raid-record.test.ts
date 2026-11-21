@@ -118,6 +118,9 @@ describe("raid record score → difficulty and clear time", () => {
     expect(computeRaidClearResult("binah", 44_025_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 3_325_694 });
     // A legacy boss uid reads as its current one.
     expect(computeRaidClearResult("kaiten-fx-mk0", 44_025_000)).toEqual(computeRaidClearResult("binah", 44_025_000));
+    // 악몽 열차 is a 4-minute boss under both of its uids.
+    expect(computeRaidClearResult("nightmare_train", 44_025_000)).toEqual(computeRaidClearResult("hod", 44_025_000));
+    expect(getRaidMaxScore("nightmare", "lunatic")).toBe(54_393_000);
   });
 
   it("has no result for a score no difficulty produces or a boss the formula does not know", () => {
@@ -125,7 +128,7 @@ describe("raid record score → difficulty and clear time", () => {
     expect(computeRaidClearResult("hod", 42_000_000)).toBeNull();
     expect(computeRaidClearResult("hod", 54_393_001)).toBeNull();
     expect(computeRaidClearResult("hod", 500_000)).toBeNull();
-    expect(computeRaidClearResult("nightmare_train", 40_000_000)).toBeNull();
+    expect(computeRaidClearResult("a-new-boss", 40_000_000)).toBeNull();
   });
 
   it("takes the season's top difficulty cleared at once as the maximum score", () => {
@@ -134,7 +137,7 @@ describe("raid record score → difficulty and clear time", () => {
     // Without a known boss or top difficulty, no score is rejected.
     expect(getRaidMaxScore("hod", null)).toBeNull();
     expect(getRaidMaxScore("hod", "unknown")).toBeNull();
-    expect(getRaidMaxScore("nightmare_train", "lunatic")).toBeNull();
+    expect(getRaidMaxScore("a-new-boss", "lunatic")).toBeNull();
   });
 
   it("formats a clear time as m:ss.mmm", () => {
