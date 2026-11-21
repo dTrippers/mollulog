@@ -20,7 +20,7 @@ export function StudentFormSwitch({ student }: { student: Student }) {
           {...getV2LinkTransitionProps("crossfade")}
           className={cn(
             "inline-flex h-6 min-w-7 items-center justify-center rounded-sm px-2 text-xs font-medium tabular-nums active:opacity-80",
-            form.uid === student.uid ? "bg-v2-surface font-semibold text-v2-fg" : "text-v2-fg-secondary hover:text-v2-fg",
+            form.uid === student.uid ? "bg-v2-surface font-semibold text-v2-fg" : "text-v2-fg-secondary hover:text-v2-fg v2-interaction-transition",
           )}
         >
           {index + 1}

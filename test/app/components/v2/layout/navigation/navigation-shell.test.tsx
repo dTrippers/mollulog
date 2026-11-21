@@ -198,7 +198,7 @@ describe("desktop navigation shell rendering", () => {
     const html = renderNavigation("/@sensei/students", true, "sensei");
 
     expect(html).toContain('class="mt-4"');
-    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs transition-colors");
+    expect(html).toContain("min-h-6.5 min-w-0 items-center rounded-md px-2 text-xs v2-interaction-transition");
     expect(html).toContain("min-h-7 w-full items-center gap-2 rounded-md px-2 text-left text-xs");
     expect(html).toContain('class="mt-1 space-y-0.5"');
     expect(html).toContain("gap-1.5 overflow-y-auto px-1.5 py-2");
@@ -209,7 +209,7 @@ describe("desktop navigation shell rendering", () => {
     const html = renderNavigation("/@sensei/students", false, "sensei");
     const desktopSearchInput = html.match(/<input type="search"[^>]*aria-label="전역 검색"[^>]*>/)?.[0];
 
-    expect(html).toContain("px-2 text-xs transition-colors");
+    expect(html).toContain("px-2 text-xs v2-interaction-transition");
     expect(html).toContain("px-2 text-left text-xs font-semibold");
     expect(desktopSearchInput).toContain("text-xs");
     expect(desktopSearchInput).toContain("placeholder:text-v2-fg-tertiary");

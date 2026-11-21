@@ -120,7 +120,7 @@ export default function Contact() {
                 <p className="font-medium">문의 등록에는 로그인이 필요해요.</p>
                 <p className="text-sm text-v2-fg-secondary">계정이 없으신 경우 메일로도 문의를 남기실 수 있어요.</p>
                 <a
-                  className="inline-flex min-h-v2-control-min items-center gap-2 rounded-md underline underline-offset-4 hover:text-v2-fg"
+                  className="inline-flex min-h-v2-control-min items-center gap-2 rounded-md underline underline-offset-4 hover:text-v2-fg v2-interaction-transition"
                   href="mailto:contact@mollulog.net"
                 >
                   <EnvelopeIcon className="size-4" aria-hidden="true" />

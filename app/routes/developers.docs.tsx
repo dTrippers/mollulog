@@ -319,7 +319,7 @@ function DocumentUrlRow({ label, url, copyLabel }: { label: string; url: string;
       <dd className="min-w-0">
         <div className="flex min-w-0 items-start justify-between gap-2">
           <a
-            className="min-w-0 break-keep pt-1.5 text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="min-w-0 break-keep pt-1.5 text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
             href={url}
             target="_blank"
             rel="noopener noreferrer"
@@ -426,7 +426,7 @@ function EndpointErrorLink({ code }: { code: ApiPublicErrorCode }) {
   const error = API_PUBLIC_ERRORS[code];
   return (
     <a
-      className="whitespace-nowrap text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+      className="whitespace-nowrap text-v2-link underline underline-offset-4 hover:opacity-80 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
       href={`#error-${code}`}
     >
       <code>

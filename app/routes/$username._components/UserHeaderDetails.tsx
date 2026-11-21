@@ -57,7 +57,7 @@ export function UserHeaderDetails({
 function CountLink({ to, label, value }: { to: string; label: string; value: number }) {
   const text = value.toLocaleString("en-US");
   return (
-    <Link to={to} aria-label={`${label} ${text}`} className="rounded-md hover:underline">
+    <Link to={to} aria-label={`${label} ${text}`} className="rounded-md underline decoration-transparent hover:decoration-current v2-interaction-transition">
       <span className="font-semibold text-v2-fg tabular-nums">{text}</span> {label}
     </Link>
   );

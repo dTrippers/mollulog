@@ -558,7 +558,7 @@ function UnavailableNote({ username, uid }: { username: string; uid: string }) {
   return (
     <span className="text-xs text-v2-fg-tertiary">
       표에서 고칠 수 없는 기록이에요.{" "}
-      <Link to={editTo(username, uid)} className="font-medium text-v2-link underline-offset-2 hover:underline">
+      <Link to={editTo(username, uid)} className="font-medium text-v2-link underline-offset-2 underline decoration-transparent hover:decoration-current v2-interaction-transition">
         수정 화면에서 보기
       </Link>
     </span>
@@ -763,7 +763,7 @@ function LoadMore({ from, to, onLoad }: { from: number; to: number; onLoad: () =
       ref={ref}
       type="button"
       onClick={onLoad}
-      className="mt-2 w-full cursor-pointer rounded-md py-2.5 text-center text-xs text-v2-fg-tertiary hover:bg-v2-hover"
+      className="mt-2 w-full cursor-pointer rounded-md py-2.5 text-center text-xs text-v2-fg-tertiary hover:bg-v2-hover v2-interaction-transition"
     >
       <span className="tabular-nums">
         #{from} ~ #{to}

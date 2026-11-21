@@ -146,7 +146,7 @@ function MainStoryTile({
       name={
         <Link
           to="/mainstory"
-          className="-mx-1 rounded-md px-1 whitespace-pre-line transition-colors duration-v2-fast ease-v2-standard hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus motion-reduce:transition-none"
+          className="-mx-1 rounded-md px-1 whitespace-pre-line hover:bg-v2-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
         >
           <TrailingIconText text={story.name}>
             <ChevronRightIcon

@@ -48,7 +48,7 @@ export function SaveToast({
             type="button"
             aria-label="닫기"
             onClick={() => setDismissed(true)}
-            className={cn("inline-flex cursor-pointer rounded-sm opacity-60 hover:opacity-100", v2FocusRing)}
+            className={cn("inline-flex cursor-pointer rounded-sm opacity-60 hover:opacity-100 v2-interaction-transition", v2FocusRing)}
           >
             <XMarkIcon className="size-4" aria-hidden="true" />
           </button>

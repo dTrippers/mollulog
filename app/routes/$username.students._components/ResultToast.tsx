@@ -42,7 +42,7 @@ export function ResultToast({
         type="button"
         aria-label="닫기"
         onClick={onClose}
-        className={cn("inline-flex shrink-0 cursor-pointer rounded-sm opacity-60 hover:opacity-100", v2FocusRing)}
+        className={cn("inline-flex shrink-0 cursor-pointer rounded-sm opacity-60 hover:opacity-100 v2-interaction-transition", v2FocusRing)}
       >
         <XMarkIcon className="size-4" aria-hidden="true" />
       </button>

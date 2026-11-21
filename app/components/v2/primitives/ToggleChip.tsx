@@ -22,8 +22,8 @@ export function ToggleChip({ pressed, onPressedChange, disabled = false, ariaLab
       onClick={() => onPressedChange(!pressed)}
       className={cn(
         "inline-flex min-h-7 cursor-pointer items-center rounded-md px-2 text-xs font-normal whitespace-nowrap active:opacity-80",
-        pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover",
-        disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-v2-inset",
+        pressed ? "bg-v2-selected text-v2-on-selected" : "bg-v2-inset text-v2-fg-secondary hover:bg-v2-filled-hover v2-interaction-transition",
+        disabled && "cursor-not-allowed text-v2-fg-disabled hover:bg-v2-inset v2-interaction-transition",
         v2FocusRing,
         className,
       )}

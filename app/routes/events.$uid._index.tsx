@@ -534,7 +534,7 @@ function RecruitmentFacts({ data, now, timeZone }: { data: EventLoaderData; now:
           {data.siblingEvents.map((sibling, index) => (
             <span key={sibling.uid}>
               {index > 0 ? ", " : null}
-              <Link to={`/events/${sibling.uid}`} className="text-v2-accent hover:underline">
+              <Link to={`/events/${sibling.uid}`} className="text-v2-accent underline decoration-transparent hover:decoration-current v2-interaction-transition">
                 {sibling.name.replaceAll("\n", " ")}
               </Link>
             </span>

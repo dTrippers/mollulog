@@ -163,6 +163,14 @@
   color: var(--v2-inverse-fg);
 }
 
+/* Hover and press feedback on a 2.0 pressable element: color, fill, and opacity change over the fast duration. It never
+   animates size or position. */
+@utility v2-interaction-transition {
+  transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, filter;
+  transition-duration: var(--transition-duration-v2-fast);
+  transition-timing-function: var(--ease-v2-standard);
+}
+
 @utility popover-surface {
   @apply floating-surface rounded-lg border border-border bg-floating/90 text-floating-foreground shadow-lg shadow-black/10 backdrop-blur-sm dark:bg-floating/80 dark:shadow-black/30;
 }

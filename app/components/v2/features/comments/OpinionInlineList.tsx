@@ -261,7 +261,7 @@ function InlineOpinion({
               focusRevealedReply.current = true;
               setRepliesExpanded(true);
             }}
-            className="mt-1 ml-8 rounded-sm text-xs font-semibold text-v2-accent hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="mt-1 ml-8 rounded-sm text-xs font-semibold text-v2-accent underline decoration-transparent hover:decoration-current focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
           >
             답글 {formatThousands(moreReplies.length)}개 더 보기
           </button>
@@ -270,7 +270,7 @@ function InlineOpinion({
           <button
             type="button"
             onClick={onOpenThread}
-            className="mt-1.5 rounded-sm text-xs text-v2-fg-tertiary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+            className="mt-1.5 rounded-sm text-xs text-v2-fg-tertiary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
           >
             답글 달기
           </button>
@@ -341,7 +341,7 @@ function ClampedReply({ body }: { body: string }) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="mt-0.5 rounded-sm text-xs font-semibold text-v2-fg-tertiary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus"
+          className="mt-0.5 rounded-sm text-xs font-semibold text-v2-fg-tertiary hover:text-v2-fg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-v2-focus v2-interaction-transition"
         >
           더 보기
         </button>
@@ -357,8 +357,8 @@ function OpinionMeta({ comment, now, size }: { comment: NestedComment; now: UtcI
         to={`/@${comment.sensei.username}`}
         className={
           size === "top"
-            ? "text-[0.8125rem] font-semibold text-v2-fg hover:underline"
-            : "font-semibold text-v2-fg hover:underline"
+            ? "text-[0.8125rem] font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition"
+            : "font-semibold text-v2-fg underline decoration-transparent hover:decoration-current v2-interaction-transition"
         }
       >
         {comment.sensei.username}
