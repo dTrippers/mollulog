@@ -1,13 +1,11 @@
 import { ArrowTopRightOnSquareIcon, CheckIcon, ClockIcon } from "@heroicons/react/16/solid";
 import { CheckCircleIcon } from "@heroicons/react/24/outline";
-import { useState } from "react";
 import { type CouponDeadline, getCouponDeadline, isCouponExpired } from "~/domain/coupon-view";
 import { cn } from "~/lib/utils";
 import { uploadedImageProps } from "~/models/assets";
 import type { CouponView } from "~/views/coupons.server";
 import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
-import { Dialog } from "../../primitives/Dialog";
 import { ResourceThumb } from "../resources/ResourceThumb";
 import { CouponCodeField } from "./CouponCodeField";
 
@@ -25,7 +23,6 @@ type CouponCardProps = {
 };
 
 export function CouponCard({ coupon, loadedAt, now, record, highlighted = false }: CouponCardProps) {
-  const [imageOpen, setImageOpen] = useState(false);
   const expiredAtLoad = isCouponExpired(coupon, loadedAt);
   const expiredNow = isCouponExpired(coupon, now);
   // Once past, the deadline is read as of loading: 만료됨 when it had already passed, and the open-page
@@ -39,18 +36,12 @@ export function CouponCard({ coupon, loadedAt, now, record, highlighted = false 
     >
       <div className="relative aspect-video w-full bg-v2-inset">
         {coupon.imageUrl ? (
-          <button
-            type="button"
-            onClick={() => setImageOpen(true)}
-            className={cn("block size-full cursor-zoom-in", v2FocusRing)}
-          >
-            <img
-              {...uploadedImageProps(coupon.imageUrl, "(min-width: 640px) 360px, 100vw")}
-              alt={coupon.name}
-              className="size-full object-cover"
-              loading="lazy"
-            />
-          </button>
+          <img
+            {...uploadedImageProps(coupon.imageUrl, "(min-width: 640px) 360px, 100vw")}
+            alt={coupon.name}
+            className="size-full object-cover"
+            loading="lazy"
+          />
         ) : (
           <div className="flex size-full items-center justify-center text-sm text-v2-fg-tertiary">이미지 없음</div>
         )}
@@ -108,16 +99,6 @@ export function CouponCard({ coupon, loadedAt, now, record, highlighted = false 
           aria-hidden="true"
           className="v2-panel-highlight pointer-events-none absolute inset-0 rounded-[inherit] bg-v2-highlight opacity-0"
         />
-      ) : null}
-
-      {coupon.imageUrl ? (
-        <Dialog open={imageOpen} onClose={() => setImageOpen(false)} title={coupon.name}>
-          <img
-            {...uploadedImageProps(coupon.imageUrl, "(min-width: 896px) 896px, 100vw")}
-            alt={coupon.name}
-            className="max-h-[75vh] w-full rounded-md object-contain"
-          />
-        </Dialog>
       ) : null}
     </article>
   );
