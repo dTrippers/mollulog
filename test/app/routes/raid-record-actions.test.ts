@@ -133,7 +133,7 @@ describe("raid record table action", () => {
           { seasonIndex: 34, recordUid: null, scores: [{ defenseType: "elastic", score: "39,000,000" }], rank: "900" },
         ]),
       ),
-    ).resolves.toEqual({ status: 302, location: "/@sensei/raids?server=kr&type=elimination" });
+    ).resolves.toEqual({ status: 302, location: "/@sensei/raids?server=kr" });
 
     const rows = mockSaveTable.mock.calls[0][2];
     expect(rows.map((row) => [row.season.seasonIndex, row.current?.uid ?? null, row.scores, row.rank])).toEqual([
@@ -309,7 +309,7 @@ describe("raid record form action", () => {
   it("creates a record and returns to the list", async () => {
     await expect(submit(saveBody())).resolves.toEqual({
       status: 302,
-      location: "/@sensei/raids?server=kr&type=elimination",
+      location: "/@sensei/raids?server=kr",
     });
     expect(mockCreate).toHaveBeenCalledWith(
       env,
@@ -392,7 +392,7 @@ describe("raid record form action", () => {
 
     await expect(submit({ intent: "delete" }, record(35, "record-35"))).resolves.toEqual({
       status: 302,
-      location: "/@sensei/raids?server=kr&type=elimination",
+      location: "/@sensei/raids?server=kr",
     });
     expect(mockDelete).toHaveBeenCalledWith(env, USER_ID, "record-35", { ctx });
   });

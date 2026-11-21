@@ -13,7 +13,7 @@ import { cn } from "~/lib/utils";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
 import type { Terrain } from "~/models/content.d";
-import { formatRaidSeasonPeriod, RAID_RECORD_SERVER_SHORT_LABEL } from "./raid-record-format";
+import { formatRaidSeasonPeriod, RAID_RECORD_RAID_TYPE_LABEL, RAID_RECORD_SERVER_SHORT_LABEL } from "./raid-record-format";
 
 // Spelled out so Tailwind sees every class.
 const DEFENSE_STRIPE_CLASS: Record<RaidRecordDefenseType, string> = {
@@ -46,6 +46,7 @@ export function LiveLabel() {
 // "#88 예로니무스", and on the Japanese server the matching Korean season: "#94 악몽 열차 · 한국 #91".
 export function RaidSeasonTitle({
   server,
+  raidType,
   seasonIndex,
   counterpartSeasonIndex,
   bossName,
@@ -53,6 +54,8 @@ export function RaidSeasonTitle({
   className,
 }: {
   server: RaidRecordServer;
+  // Given where 총력전 and 대결전 records share one list, so each title names its raid type.
+  raidType?: RaidRecordRaidType;
   seasonIndex: number;
   counterpartSeasonIndex: number | null;
   bossName: string;
@@ -62,6 +65,7 @@ export function RaidSeasonTitle({
   return (
     <span className={cn("flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5", className)}>
       <span className="min-w-0 truncate">
+        {raidType ? `${RAID_RECORD_RAID_TYPE_LABEL[raidType]} ` : null}
         <span className="tabular-nums">#{seasonIndex}</span> {bossName}
       </span>
       {server === "jp" && counterpartSeasonIndex !== null ? (

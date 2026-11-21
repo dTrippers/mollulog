@@ -120,12 +120,13 @@ function seasonKey(raidType: string, seasonIndex: number) {
 
 export type RaidRecordListView = {
   server: RaidRecordServer;
-  raidType: RaidRecordRaidType;
-  counts: Record<RaidRecordRaidType, number>;
+  // null lists both raid types together.
+  raidType: RaidRecordRaidType | null;
+  counts: Record<RaidRecordRaidType | "all", number>;
   rows: RaidRecordRowView[];
   // Records whose season BAQL no longer lists as recorded. Each takes its own place in the list as a failure.
   unavailableRecords: { uid: string; seasonIndex: number }[];
-  // Seasons of the server and raid type that ended without a record.
+  // Seasons of the server (and raid type, when one is chosen) that ended without a record.
   unrecordedPastSeasonCount: number;
   now: UtcIsoString;
 };
@@ -134,7 +135,7 @@ export async function loadRaidRecordList(
   env: Env,
   userId: number,
   server: RaidRecordServer,
-  raidType: RaidRecordRaidType,
+  raidType: RaidRecordRaidType | null,
   ctx?: ExecutionContext,
 ): Promise<RaidRecordListView> {
   const now = nowUtcIso();
@@ -144,14 +145,15 @@ export async function loadRaidRecordList(
   ]);
   const seasonByKey = new Map(seasons.map((season) => [seasonKey(season.raidType, season.seasonIndex), season]));
   const serverRecords = records.filter((record) => record.server === server);
-  const counts: Record<RaidRecordRaidType, number> = {
+  const counts: RaidRecordListView["counts"] = {
+    all: serverRecords.length,
     total_assault: serverRecords.filter((record) => record.raidType === "total_assault").length,
     elimination: serverRecords.filter((record) => record.raidType === "elimination").length,
   };
   const rows: RaidRecordRowView[] = [];
   const unavailableRecords: RaidRecordListView["unavailableRecords"] = [];
   for (const record of serverRecords) {
-    if (record.raidType !== raidType) continue;
+    if (raidType !== null && record.raidType !== raidType) continue;
     const season = seasonByKey.get(seasonKey(record.raidType, record.seasonIndex));
     const row = season ? toRaidRecordRowView(record, season, now) : null;
     if (!row) {
@@ -160,11 +162,15 @@ export async function loadRaidRecordList(
     }
     rows.push(row);
   }
-  rows.sort((left, right) => right.season.seasonIndex - left.season.seasonIndex);
+  // 총력전 and 대결전 number their seasons separately, so the start time orders them together.
+  rows.sort(
+    (left, right) =>
+      right.season.startAt.localeCompare(left.season.startAt) || right.season.seasonIndex - left.season.seasonIndex,
+  );
   const recordedSeasons = new Set(serverRecords.map((record) => seasonKey(record.raidType, record.seasonIndex)));
   const unrecordedPastSeasonCount = seasons.filter(
     (season) =>
-      season.raidType === raidType &&
+      (raidType === null || season.raidType === raidType) &&
       isRaidSeasonStarted(season, now) &&
       !isRaidSeasonOngoing(season, now) &&
       !recordedSeasons.has(seasonKey(season.raidType, season.seasonIndex)),

@@ -4,7 +4,7 @@ import { RaidRecordForm } from "~/components/v2/features/raid-records/RaidRecord
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { loadRaidRecordFormData } from "~/views/raid-records";
-import { parseRaidRecordListQuery } from "./$username.raids._components/raid-record-list-query";
+import { parseRaidRecordListQuery, raidRecordListTo } from "./$username.raids._components/raid-record-list-query";
 import { handleRaidRecordFormAction } from "./$username.raids._components/raid-record-form.server";
 import { requireRaidRecordOwner } from "./$username.raids._components/raid-record-owner.server";
 import { RaidRecordPageError } from "./$username.raids._components/RaidRecordPageError";
@@ -33,7 +33,7 @@ export function ErrorBoundary() {
 export default function NewRaidRecord() {
   const { username, server, raidType, seasonsByServer, students, recruited, now } = useLoaderData<typeof loader>();
   const timeZone = useDisplayTimeZone();
-  const listTo = `/@${username}/raids?server=${server}&type=${raidType}`;
+  const listTo = raidRecordListTo(username, server);
   return (
     <V2Page width="reading">
       <PageHeader back={{ title: "총력전·대결전 기록", to: listTo }} title="기록 추가" />

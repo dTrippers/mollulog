@@ -705,7 +705,7 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
       </span>
       {row.unavailableRecordUid ? <UnavailableNote username={context.username} uid={row.unavailableRecordUid} /> : null}
       {season.raidType === "total_assault" ? (
-        <span className="grid grid-cols-[1fr_7rem] items-start gap-2">
+        <span className="grid grid-cols-[1fr_8.5rem] items-start gap-2">
           <span className="flex flex-col gap-0.5">
             {season.scoreDefenseTypes[0] ? (
               <ScoreCell
@@ -734,7 +734,7 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
               />
             </span>
           ))}
-          <span className="grid grid-cols-[1fr_7rem] items-start gap-2">
+          <span className="grid grid-cols-[1fr_8.5rem] items-start gap-2">
             <span className="flex min-h-7 items-center justify-between gap-2 text-xs text-v2-fg-secondary">
               합산
               <EliminationTotal model={model} />

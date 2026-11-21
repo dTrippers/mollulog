@@ -28,6 +28,7 @@ import {
   raidRecordSeasonRules,
   updateRaidRecord,
 } from "~/models/raid-record";
+import { raidRecordListTo } from "./raid-record-list-query";
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -52,8 +53,8 @@ function parseField<T>(field: RaidRecordFormErrorField, parse: () => T): { value
   }
 }
 
-export function raidRecordListPath(username: string, record: Pick<RaidRecord, "server" | "raidType">) {
-  return `/@${username}/raids?server=${record.server}&type=${record.raidType}`;
+export function raidRecordListPath(username: string, record: Pick<RaidRecord, "server">) {
+  return raidRecordListTo(username, record.server);
 }
 
 // The add and edit form's action. `existing` is the record an edit opened; a new record has none.
@@ -149,5 +150,5 @@ export async function handleRaidRecordFormAction({
     logger.error("Raid record save failed", error, { server, raidType, seasonIndex });
     return failure("form", "저장하지 못했어요. 잠시 후 다시 시도해 주세요.", 500);
   }
-  return redirect(raidRecordListPath(username, { server, raidType }));
+  return redirect(raidRecordListPath(username, { server }));
 }

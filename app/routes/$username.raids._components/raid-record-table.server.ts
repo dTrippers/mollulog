@@ -145,5 +145,5 @@ export async function handleRaidRecordTableAction({
     logger.error("Raid record table save failed", error, { server, raidType, rows: inputs.length });
     return failure("저장하지 못했어요. 잠시 후 다시 시도해 주세요.", [], 500);
   }
-  return redirect(raidRecordListPath(username, { server, raidType }));
+  return redirect(raidRecordListPath(username, { server }));
 }

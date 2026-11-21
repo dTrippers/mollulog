@@ -3,7 +3,7 @@ import { useLoaderData } from "react-router";
 import { RaidRecordTable } from "~/components/v2/features/raid-records/RaidRecordTable";
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { loadRaidRecordTable } from "~/views/raid-records";
-import { parseRaidRecordListQuery } from "./$username.raids._components/raid-record-list-query";
+import { parseRaidRecordListQuery, raidRecordListTo } from "./$username.raids._components/raid-record-list-query";
 import { requireRaidRecordOwner } from "./$username.raids._components/raid-record-owner.server";
 import { handleRaidRecordTableAction } from "./$username.raids._components/raid-record-table.server";
 import { RaidRecordPageError } from "./$username.raids._components/RaidRecordPageError";
@@ -31,7 +31,7 @@ export function ErrorBoundary() {
 
 export default function RaidRecordTablePage() {
   const { username, table } = useLoaderData<typeof loader>();
-  const listTo = `/@${username}/raids?server=${table.server}&type=${table.raidType}`;
+  const listTo = raidRecordListTo(username, table.server);
   return (
     <V2Page width="wide">
       <PageHeader

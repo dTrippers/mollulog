@@ -25,6 +25,7 @@ import { getRaidRecord, getRaidRecordSeasons } from "~/models/raid-record";
 import { getAllStudents } from "~/models/student";
 import { toRaidRecordRowView } from "~/views/raid-records";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
+import { raidRecordListTo } from "./$username.raids._components/raid-record-list-query";
 import { RaidRecordPageError } from "./$username.raids._components/RaidRecordPageError";
 
 export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
@@ -71,7 +72,7 @@ export default function RaidRecordDetail() {
   const timeZone = useDisplayTimeZone();
   const { season } = row;
   const studentsByUid = new Map(studentNames.map((student) => [student.uid, student] as const));
-  const listTo = `/@${username}/raids?server=${season.server}&type=${season.raidType}`;
+  const listTo = raidRecordListTo(username, season.server);
   const defenseTypes = season.scoreDefenseTypes.map(({ defenseType }) => defenseType);
 
   return (

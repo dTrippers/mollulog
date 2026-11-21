@@ -27,7 +27,11 @@ import {
   RankStatusPill,
 } from "~/components/v2/features/raid-records/RaidRecordBits";
 import { RaidRecordLoadFailure } from "~/components/v2/features/raid-records/RaidRecordLoadFailure";
-import { RaidRecordTrendChart } from "~/components/v2/features/raid-records/RaidRecordTrendChart";
+import {
+  RAID_RECORD_TREND_MIN_POINTS,
+  RaidRecordTrendChart,
+  type RaidRecordTrendPoint,
+} from "~/components/v2/features/raid-records/RaidRecordTrendChart";
 import { v2FocusRing } from "~/components/v2/layout/styles";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { SegmentedControl } from "~/components/v2/primitives/SegmentedControl";
@@ -45,7 +49,7 @@ import { cn } from "~/lib/utils";
 import { confirmRaidRecordRank } from "~/models/raid-record";
 import { loadRaidRecordList, type RaidRecordRowView } from "~/views/raid-records";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
-import { parseRaidRecordListQuery } from "./$username.raids._components/raid-record-list-query";
+import { parseRaidRecordListScope } from "./$username.raids._components/raid-record-list-query";
 import { useUserLayout } from "./$username._components/user-layout";
 
 export const meta: MetaFunction = ({ params }) => {
@@ -63,7 +67,7 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   const { env, ctx } = context.cloudflare;
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
-  const { server, raidType } = parseRaidRecordListQuery(new URL(request.url).searchParams);
+  const { server, raidType } = parseRaidRecordListScope(new URL(request.url).searchParams);
   const list = await loadRaidRecordList(env, sensei.id, server, raidType, ctx);
   return { ...list, isOwner: currentUser?.id === sensei.id };
 };
@@ -117,6 +121,13 @@ export function ErrorBoundary() {
   return <RaidRecordLoadFailure onRetry={() => revalidator.revalidate()} retrying={revalidator.state !== "idle"} />;
 }
 
+// The list's raid filter: both raid types together (the default), or one of them.
+type RaidFilter = RaidRecordRaidType | "all";
+
+const RAID_FILTER_OPTIONS: readonly RaidFilter[] = ["all", "total_assault", "elimination"];
+
+const RAID_FILTER_LABEL: Record<RaidFilter, string> = { all: "전체", ...RAID_RECORD_RAID_TYPE_LABEL };
+
 const SERVER_OPTIONS = [
   { value: "kr", label: RAID_RECORD_SERVER_LABEL.kr },
   { value: "jp", label: RAID_RECORD_SERVER_LABEL.jp },
@@ -131,7 +142,7 @@ export default function UserRaidRecords() {
   const [confirmTarget, setConfirmTarget] = useState<ConfirmRankTarget | null>(null);
   const closeConfirm = useCallback(() => setConfirmTarget(null), []);
 
-  const scopeQuery = `server=${server}&type=${raidType}`;
+  const scopeQuery = raidType ? `server=${server}&type=${raidType}` : `server=${server}`;
   const newLink = `/@${username}/raids/new?${scopeQuery}`;
   const tableLink = `/@${username}/raids/table?${scopeQuery}`;
 
@@ -146,26 +157,34 @@ export default function UserRaidRecords() {
     return () => setMobileActions(null);
   }, [isOwner, setMobileActions, tableLink, newLink]);
 
-  const changeScope = (next: { server?: RaidRecordServer; raidType?: RaidRecordRaidType }) => {
+  const filter: RaidFilter = raidType ?? "all";
+  const changeScope = (next: { server?: RaidRecordServer; filter?: RaidFilter }) => {
+    const nextFilter = next.filter ?? filter;
     setSearchParams(
-      { server: next.server ?? server, type: next.raidType ?? raidType },
+      { server: next.server ?? server, ...(nextFilter === "all" ? {} : { type: nextFilter }) },
       { preventScrollReset: true, replace: true },
     );
   };
 
   const trendPoints = useMemo(
     () =>
-      rows.map((row) => ({
-        key: row.uid,
-        server: row.season.server,
-        raidType: row.season.raidType,
-        seasonIndex: row.season.seasonIndex,
-        bossName: row.season.boss.name,
-        score: row.totalScore,
-        rank: row.rank,
-        rankStatus: row.rankStatus,
-        open: row.season.ongoing || row.enteredCount < row.season.scoreDefenseTypes.length,
-      })),
+      rows.flatMap((row): RaidRecordTrendPoint[] =>
+        row.rank === null
+          ? []
+          : [
+              {
+                key: row.uid,
+                server: row.season.server,
+                raidType: row.season.raidType,
+                seasonIndex: row.season.seasonIndex,
+                bossName: row.season.boss.name,
+                startAt: row.season.startAt,
+                score: row.totalScore,
+                rank: row.rank,
+                rankStatus: row.rankStatus,
+              },
+            ],
+      ),
     [rows],
   );
 
@@ -183,7 +202,7 @@ export default function UserRaidRecords() {
   );
   const hasTier = Object.values(tierCounts).some((count) => count > 0);
 
-  const raidLabel = RAID_RECORD_RAID_TYPE_LABEL[raidType];
+  const raidLabel = raidType ? RAID_RECORD_RAID_TYPE_LABEL[raidType] : null;
   const empty = rows.length === 0 && unavailableRecords.length === 0;
 
   return (
@@ -200,14 +219,14 @@ export default function UserRaidRecords() {
         />
         <SegmentedControl
           label="레이드"
-          value={raidType}
-          onChange={(value) => changeScope({ raidType: value })}
-          options={(["total_assault", "elimination"] as const).map((type) => ({
-            value: type,
+          value={filter}
+          onChange={(value) => changeScope({ filter: value })}
+          options={RAID_FILTER_OPTIONS.map((option) => ({
+            value: option,
             label: (
               <>
-                {RAID_RECORD_RAID_TYPE_LABEL[type]}
-                <span className="text-xs font-medium text-v2-fg-tertiary tabular-nums">{counts[type]}</span>
+                {RAID_FILTER_LABEL[option]}
+                <span className="text-xs font-medium text-v2-fg-tertiary tabular-nums">{counts[option]}</span>
               </>
             ),
           }))}
@@ -228,22 +247,14 @@ export default function UserRaidRecords() {
 
       {hasTier ? <RaidRankTierSummary counts={tierCounts} /> : null}
 
-      {rows.length >= 3 ? (
-        <RaidRecordTrendChart
-          points={trendPoints}
-          scoreLabel={raidType === "elimination" ? "합산 점수" : "점수"}
-          openPointNote={
-            raidType === "elimination" ? "방어 타입 3개 중 일부만 입력한 기록은 빈 점으로 표시해요" : undefined
-          }
-        />
-      ) : null}
+      {trendPoints.length >= RAID_RECORD_TREND_MIN_POINTS ? <RaidRecordTrendChart points={trendPoints} /> : null}
 
       {empty ? (
         <div className="rounded-lg bg-v2-surface px-v2-block-p py-10 text-center">
           {isOwner ? (
             <>
               <p className="text-sm font-semibold text-v2-fg">
-                {RAID_RECORD_SERVER_LABEL[server]} {raidLabel} 기록이 없어요
+                {RAID_RECORD_SERVER_LABEL[server]} {raidLabel ? `${raidLabel} ` : ""}기록이 없어요
               </p>
               <p className="mt-1 text-sm text-v2-fg-tertiary">
                 기록을 하나씩 추가하거나, 여러 시즌을 표로 한 번에 입력할 수 있어요.
@@ -262,11 +273,12 @@ export default function UserRaidRecords() {
           )}
         </div>
       ) : (
-        <ul aria-label={`${raidLabel} 기록`} className="@container flex flex-col gap-1.5">
+        <ul aria-label={raidLabel ? `${raidLabel} 기록` : "총력전·대결전 기록"} className="@container flex flex-col gap-1.5">
           {rows.map((row) => (
             <RaidRecordRow
               key={row.uid}
               row={row}
+              showRaidType={raidType === null}
               isOwner={isOwner}
               to={isOwner ? `/@${username}/raids/${row.uid}/edit` : `/@${username}/raids/${row.uid}`}
               timeZone={timeZone}
@@ -275,7 +287,7 @@ export default function UserRaidRecords() {
                   uid: row.uid,
                   rank: row.rank ?? 0,
                   season: row.season,
-                  summary: `#${row.season.seasonIndex} ${row.season.boss.name} · ${RAID_RECORD_SERVER_LABEL[row.season.server]} · 잠정 ${formatRaidRank(row.rank ?? 0)}`,
+                  summary: `${RAID_RECORD_RAID_TYPE_LABEL[row.season.raidType]} #${row.season.seasonIndex} ${row.season.boss.name} · ${RAID_RECORD_SERVER_LABEL[row.season.server]} · 잠정 ${formatRaidRank(row.rank ?? 0)}`,
                 })
               }
             />
@@ -309,12 +321,14 @@ export default function UserRaidRecords() {
 
 function RaidRecordRow({
   row,
+  showRaidType,
   isOwner,
   to,
   timeZone,
   onConfirm,
 }: {
   row: RaidRecordRowView;
+  showRaidType: boolean;
   isOwner: boolean;
   to: string;
   timeZone: string;
@@ -339,6 +353,7 @@ function RaidRecordRow({
           <span id={titleId} className="text-sm font-semibold text-v2-fg">
             <RaidSeasonTitle
               server={season.server}
+              raidType={showRaidType ? season.raidType : undefined}
               seasonIndex={season.seasonIndex}
               counterpartSeasonIndex={season.counterpartSeasonIndex}
               bossName={season.boss.name}
