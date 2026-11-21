@@ -140,10 +140,11 @@ export function PageHeader({
 // The header of a `stackedOnly` page beside its aside. The page renders it first in `PageAside`.
 export function PageAsideHeader({
   title,
+  description,
   back,
   meta,
   media,
-}: Pick<PageHeaderProps, "title" | "back" | "meta" | "media">) {
+}: Pick<PageHeaderProps, "title" | "description" | "back" | "meta" | "media">) {
   return (
     <div className="min-w-0">
       {back ? <HeaderBack back={back} /> : null}
@@ -151,6 +152,7 @@ export function PageAsideHeader({
         {media ? <div className="w-[3.75rem] shrink-0">{media}</div> : null}
         <div className="min-w-0 flex-1">
           <h1 className="text-xl leading-[1.4] font-bold text-v2-fg">{title}</h1>
+          {description ? <p className="mt-2 text-sm text-v2-fg-secondary">{description}</p> : null}
           {meta ? <div className="mt-1 text-sm text-v2-fg-tertiary">{meta}</div> : null}
         </div>
       </div>
