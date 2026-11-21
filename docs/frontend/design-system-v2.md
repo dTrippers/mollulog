@@ -185,6 +185,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 | Term | Meaning | Do not use |
 | --- | --- | --- |
 | 상하위 10% 범위 | The range between the top 10% and bottom 10% of simulated outcomes | 80% 범위, 예상 범위 |
+| 평균 | The recruitment count averaged with the pickup pity (천장) applied; the average without the pity is 평균 (천장 미반영) | 평균 (천장 반영), 천장 반영 평균 |
 | 초회 클리어 | A stage's first-clear reward | 처음 클리어 |
 | 대상 스테이지 | The stages the calculation may use | 켜 둔 스테이지 |
 | 필요 소탕 | The sweeps the calculation requires; extra sweeps the user enters are 추가 소탕 | 자동 소탕 |
@@ -218,6 +219,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
 - Inputs for values of one domain, such as skill levels or equipment slots, share one bordered field split by internal dividers, as in the scanner review. A hint below a field, such as the current value, sits in its own row so the fields stay aligned.
 - A horizontal bar list with a label column and a value column lays all rows out on one shared grid: the label and value columns take the width of their widest content, and the bar takes all the remaining width. Do not reserve fixed-width label or value columns, which leave the bar short and a wide gap before short values.
+- In a list of separate rows that show numbers, such as a schedule of amounts and balances, the number columns keep the same position in every row at every width. Reserve an action column's width in rows without an action too, so a row with a delete button lines up with one without.
 - Mark the row that holds the Sensei's own student (내 학생) by highlighting the whole row with a faint fill and hairline ring, with a "내 학생 성장도" legend below the list, as in the student statistics growth chart. Do not add inline "내 학생" text or a separate marker on the bar.
 
 ## Motion
