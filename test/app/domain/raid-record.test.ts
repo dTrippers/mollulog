@@ -1,6 +1,7 @@
 import { describe, expect, it } from "@jest/globals";
 import {
   computeRaidClearResult,
+  countRaidRankTiers,
   formatRaidClearTime,
   getRaidMaxScore,
   getRaidRankConfirmAt,
@@ -167,6 +168,30 @@ describe("raid rank tier", () => {
     expect(raidRankTier("jp", "total_assault", 80, 20_000)).toBe("platinum");
     expect(raidRankTier("jp", "elimination", 30, 120_001)).toBe("silver");
     expect(raidRankTier("jp", "total_assault", 80, 240_001)).toBe("bronze");
+  });
+
+  it("counts records per tier, including 잠정 ranks, and skips records without a rank", () => {
+    const record = (seasonIndex: number, rank: number | null, rankStatus: "missing" | "provisional" | "confirmed") => ({
+      server: "kr" as const,
+      raidType: "total_assault" as const,
+      seasonIndex,
+      rank,
+      rankStatus,
+    });
+    expect(
+      countRaidRankTiers([
+        record(88, 12_000, "confirmed"),
+        record(87, 3_000, "provisional"),
+        // Gold under the bands before season 44, platinum after.
+        record(43, 11_000, "confirmed"),
+        record(86, 100_001, "confirmed"),
+        record(85, null, "missing"),
+      ]),
+    ).toEqual({ counts: { platinum: 2, gold: 1, silver: 0, bronze: 1 }, provisionalCount: 1 });
+    expect(countRaidRankTiers([])).toEqual({
+      counts: { platinum: 0, gold: 0, silver: 0, bronze: 0 },
+      provisionalCount: 0,
+    });
   });
 
   it("has no tier for a rank that is not a positive integer", () => {

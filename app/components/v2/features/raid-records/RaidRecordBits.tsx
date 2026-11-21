@@ -1,11 +1,14 @@
 import {
+  RAID_RANK_TIERS,
   type RaidRankTier,
+  type RaidRankTierCounts,
   type RaidRecordDefenseType,
   type RaidRecordRaidType,
   type RaidRecordRankStatus,
   type RaidRecordServer,
   raidRankTier,
 } from "~/domain/raid-record";
+import { useImageFailure } from "~/components/v2/primitives/use-image-failure";
 import { cn } from "~/lib/utils";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
 import { bossImageUrl } from "~/models/assets";
@@ -155,17 +158,67 @@ export function RaidRankTierBadge({
   );
 }
 
+// How many of the shown records reached each tier, with the in-game badges. A tier no record reached stays in place,
+// dimmed, so the four tiers always line up.
+export function RaidRankTierSummary({ counts, provisionalCount }: RaidRankTierCounts) {
+  return (
+    <section aria-labelledby="raid-rank-tier-summary-title" className="rounded-lg bg-v2-surface px-4 py-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <h3 id="raid-rank-tier-summary-title" className="text-sm font-semibold text-v2-fg">
+          트로피
+        </h3>
+        {provisionalCount > 0 ? (
+          <p className="text-xs text-v2-fg-tertiary tabular-nums">
+            잠정 순위 {provisionalCount.toLocaleString("ko-KR")}개 포함
+          </p>
+        ) : null}
+      </div>
+      <dl className="mt-2 grid grid-cols-4 gap-2">
+        {RAID_RANK_TIERS.map((tier) => (
+          <div key={tier} className="flex flex-col items-center text-center">
+            <dt className="flex flex-col items-center gap-1 text-xs text-v2-fg-secondary">
+              <img
+                src={`/icons/raid-tier-${tier}.png`}
+                alt=""
+                aria-hidden="true"
+                width={96}
+                height={73}
+                className={cn("h-8 w-auto", counts[tier] === 0 && "opacity-40")}
+              />
+              {RAID_RANK_TIER_LABEL[tier]}
+            </dt>
+            <dd
+              className={cn(
+                "text-base font-bold tabular-nums",
+                counts[tier] === 0 ? "text-v2-fg-tertiary" : "text-v2-fg",
+              )}
+            >
+              {counts[tier].toLocaleString("ko-KR")}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </section>
+  );
+}
+
 // The boss image as a full-height background on the right that fades out toward the text on the left, like the
 // season list of the raid pages. The image fades by its own mask rather than a gradient over it, so it sits on any
 // background, such as a row that tints while one of its inputs has focus. The parent is `relative overflow-hidden`, and
 // its content sits above this with `relative`.
 export function RaidBossBackdrop({ bossUid, className }: { bossUid: string; className?: string }) {
+  const src = bossImageUrl(bossUid);
+  // A new boss can have no image yet; the row then goes without a backdrop rather than a broken image frame.
+  const image = useImageFailure(src);
+  if (image.failed) return null;
   return (
     <img
-      src={bossImageUrl(bossUid)}
+      ref={image.ref}
+      src={src}
       alt=""
       aria-hidden="true"
       loading="lazy"
+      onError={image.onError}
       className={cn(
         "pointer-events-none absolute top-0 right-0 h-full w-3/5 object-cover object-[50%_35%] opacity-55 raid-boss-backdrop-mask",
         className,

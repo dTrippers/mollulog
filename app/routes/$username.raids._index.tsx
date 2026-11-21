@@ -21,6 +21,7 @@ import {
   DefenseTypeLabel,
   RaidBossBackdrop,
   RaidRankTierBadge,
+  RaidRankTierSummary,
   RaidSeasonMeta,
   RaidSeasonTitle,
   RankStatusPill,
@@ -33,6 +34,7 @@ import { SegmentedControl } from "~/components/v2/primitives/SegmentedControl";
 import { Select } from "~/components/v2/primitives/Select";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import {
+  countRaidRankTiers,
   InvalidRaidRecordError,
   parseRaidRecordRank,
   type RaidRecordRaidType,
@@ -167,6 +169,21 @@ export default function UserRaidRecords() {
     [rows],
   );
 
+  const tierCounts = useMemo(
+    () =>
+      countRaidRankTiers(
+        rows.map((row) => ({
+          server: row.season.server,
+          raidType: row.season.raidType,
+          seasonIndex: row.season.seasonIndex,
+          rank: row.rank,
+          rankStatus: row.rankStatus,
+        })),
+      ),
+    [rows],
+  );
+  const hasTier = Object.values(tierCounts.counts).some((count) => count > 0);
+
   const raidLabel = RAID_RECORD_RAID_TYPE_LABEL[raidType];
   const empty = rows.length === 0 && unavailableRecords.length === 0;
 
@@ -209,6 +226,8 @@ export default function UserRaidRecords() {
           </div>
         ) : null}
       </div>
+
+      {hasTier ? <RaidRankTierSummary {...tierCounts} /> : null}
 
       {rows.length >= 3 ? (
         <RaidRecordTrendChart
