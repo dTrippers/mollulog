@@ -46,7 +46,6 @@ import {
 } from "~/domain/pyroxene-planner";
 import {
   extractPyroxeneTimelineBaseUid,
-  getPyroxeneGameDayStartAt,
   PYROXENE_ATTENDANCE_CONFIG,
   PYROXENE_ATTENDANCE_REPEAT_INTERVAL_DAYS,
   PYROXENE_MONTHLY_PACKAGE_CONFIG,
@@ -511,15 +510,12 @@ function timelineGroupToLegacyRecord(
   const first = records[0];
   if (!first) throw new Error("이전 버전 플래너 형식으로 계획을 저장할 수 없어요.");
   const base = { recordId, createdAt };
-  // A purchase or direct gain keeps its game day as the date and its instant as createdAt, so converting it back
-  // (guestPyroxeneRecordToTimelineItems) gives the same instant.
-  const oneOffBase = { recordId, createdAt: first.eventAt };
   if (records.length === 1 && first.source === "buy" && first.description === "청휘석 구매") {
     return {
-      ...oneOffBase,
+      ...base,
       kind: "buy",
       quantity: first.pyroxeneDelta,
-      date: getPyroxeneGameDayStartAt(first.eventAt),
+      date: first.eventAt,
       repeatType: first.repeatType,
       monthlyCount: 1,
     };
@@ -529,7 +525,7 @@ function timelineGroupToLegacyRecord(
       throw new Error("이전 버전 플래너에서 지원하지 않는 재화 계획이에요.");
     }
     return {
-      ...oneOffBase,
+      ...base,
       kind: "other",
       resources: {
         pyroxene: first.pyroxeneDelta,
@@ -537,7 +533,7 @@ function timelineGroupToLegacyRecord(
         tenTimeTicket: first.tenTimeTicketDelta,
       },
       description: first.description,
-      date: getPyroxeneGameDayStartAt(first.eventAt),
+      date: first.eventAt,
     };
   }
   if (records.length === 1 && first.source === "package_ap") {

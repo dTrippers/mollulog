@@ -13,13 +13,7 @@ import {
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import {
-  calculateDailyApChargePyroxene,
-  collectedSourceKeyForEventReward,
-  getPyroxeneGameDayStartAt,
-  isBeforePyroxeneGameDayReset,
-  isPyroxeneOneOffGainSource,
-} from "~/domain/pyroxene-sources";
+import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
 import {
   applyRecruitmentFunding,
   convolvePullCostDistributions,
@@ -52,8 +46,6 @@ export type TimelineSource = {
 
 export type TimelineDelta = {
   date: Dayjs;
-  // When set, this instant (not `date`) decides whether the delta comes after the inventory input.
-  recordedAt?: Dayjs;
   source: TimelineSource;
 
   pickupTrial?: number;
@@ -161,14 +153,6 @@ function zeroResources(): PickupResources {
 
 function getNextMonthlyFirstDate(date: Dayjs): Dayjs {
   return date.add(1, "month").startOf("month");
-}
-
-// A purchase or direct gain recorded on its own game day keeps the time it was recorded, and that time only decides
-// whether it comes after the inventory input. It applies from the start of its game day, where every such gain sat
-// before, so a recruitment opening later that day and the planner's dates see it as before.
-function oneOffGainTiming(source: string, recordedAt: Dayjs): Pick<TimelineDelta, "date" | "recordedAt"> {
-  if (!isPyroxeneOneOffGainSource(source)) return { date: recordedAt };
-  return { date: dayjs(getPyroxeneGameDayStartAt(recordedAt.toDate())), recordedAt };
 }
 
 function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: Dayjs) {
@@ -1220,7 +1204,7 @@ export function buildTimeline(
     } else if (scheduleItem.onetimeGain) {
       const { onetimeGain } = scheduleItem;
       timelineDeltas.push({
-        ...oneOffGainTiming(onetimeGain.source, dayjs(onetimeGain.date)),
+        date: dayjs(onetimeGain.date),
         source: { type: onetimeGain.source, uid: onetimeGain.uid, description: onetimeGain.description },
         resourceDelta: {
           pyroxene: onetimeGain.pyroxeneDelta ?? 0,
@@ -1237,21 +1221,14 @@ export function buildTimeline(
         continue;
       }
 
-      const recordedAt = dayjs(repeatedGain.date);
-      // Later entries follow the schedule from the recorded date. A purchase or direct gain recorded before the 04:00
-      // reset belongs to the previous game day, so its schedule starts from that day.
-      let scheduleDate =
-        isPyroxeneOneOffGainSource(repeatedGain.source) && isBeforePyroxeneGameDayReset(repeatedGain.date)
-          ? dayjs(getPyroxeneGameDayStartAt(repeatedGain.date))
-          : recordedAt;
       let repeatedGainCount = 0;
-      while (repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES)) {
-        // The first entry carries the recorded instant (see oneOffGainTiming); later ones fall on the schedule.
-        const timing =
-          repeatedGainCount === 0 ? oneOffGainTiming(repeatedGain.source, recordedAt) : { date: scheduleDate };
-        if (!timing.date.isBefore(maxDate)) break;
+      for (
+        let date = dayjs(repeatedGain.date);
+        date.isBefore(maxDate) && repeatedGainCount < (repeatedGain.repeatCount ?? MAX_REPEATED_ENTRIES);
+        date = getNextRepeatedGainDate(repeatedGain, date)
+      ) {
         timelineDeltas.push({
-          ...timing,
+          date,
           source: { type: repeatedGain.source, uid: repeatedGain.uid, description: repeatedGain.description },
           resourceDelta: {
             pyroxene: repeatedGain.pyroxeneDelta ?? 0,
@@ -1260,7 +1237,6 @@ export function buildTimeline(
           },
         });
         repeatedGainCount++;
-        scheduleDate = getNextRepeatedGainDate(repeatedGain, scheduleDate);
       }
     }
   }
@@ -1312,7 +1288,7 @@ export function buildTimeline(
     if (endDateDayjs && delta.date.isAfter(endDateDayjs)) {
       return false;
     }
-    if ((delta.recordedAt ?? delta.date).isAfter(initialDateDayjs)) {
+    if (delta.date.isAfter(initialDateDayjs)) {
       return true;
     }
     if (delta.source.event) {

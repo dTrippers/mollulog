@@ -1,5 +1,4 @@
 import { buildPyroxeneScheduleItems } from "~/domain/pyroxene-schedule";
-import { getPyroxeneGameDayStartAt, isPyroxeneOneOffGainSource } from "~/domain/pyroxene-sources";
 import { buildTimeline, type PickupResources, type PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
 import { isRecordedRecruitmentResult } from "~/domain/recruitment-result";
 import { getInstantTime, isInstantAfter, nowUtcIso } from "~/lib/date-time";
@@ -263,13 +262,7 @@ function getPyroxeneTimelineItemsUntilRecruitment(
   recruitment: MoreFavoritedRecruitment,
 ) {
   const recruitmentSinceTime = getInstantTime(recruitment.since);
-  // A purchase or direct gain recorded on its own game day applies from the start of that day (see buildTimeline).
-  return timelineItems.filter(
-    (item) =>
-      getInstantTime(
-        isPyroxeneOneOffGainSource(item.source) ? getPyroxeneGameDayStartAt(item.eventAt) : item.eventAt,
-      ) <= recruitmentSinceTime,
-  );
+  return timelineItems.filter((item) => getInstantTime(item.eventAt) <= recruitmentSinceTime);
 }
 
 function getRecruitmentScheduleLabel(since: string, until: string, now: string): string {

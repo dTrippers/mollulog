@@ -252,6 +252,7 @@ export type DiscordNotificationTrigger =
   | "reward-exchange-end"
   | "recruitment-start"
   | "shop-reset"
+  | "coupon-expiry"
   | "feedback-reply"
   | "event-opinion-reply";
 export type DiscordNotificationJobTrigger = DiscordNotificationTrigger | "connection-verification";
