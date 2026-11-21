@@ -170,28 +170,24 @@ describe("raid rank tier", () => {
     expect(raidRankTier("jp", "total_assault", 80, 240_001)).toBe("bronze");
   });
 
-  it("counts records per tier, including 잠정 ranks, and skips records without a rank", () => {
-    const record = (seasonIndex: number, rank: number | null, rankStatus: "missing" | "provisional" | "confirmed") => ({
+  it("counts records per tier and skips records without a rank", () => {
+    const record = (seasonIndex: number, rank: number | null) => ({
       server: "kr" as const,
       raidType: "total_assault" as const,
       seasonIndex,
       rank,
-      rankStatus,
     });
     expect(
       countRaidRankTiers([
-        record(88, 12_000, "confirmed"),
-        record(87, 3_000, "provisional"),
+        record(88, 12_000),
+        record(87, 3_000),
         // Gold under the bands before season 44, platinum after.
-        record(43, 11_000, "confirmed"),
-        record(86, 100_001, "confirmed"),
-        record(85, null, "missing"),
+        record(43, 11_000),
+        record(86, 100_001),
+        record(85, null),
       ]),
-    ).toEqual({ counts: { platinum: 2, gold: 1, silver: 0, bronze: 1 }, provisionalCount: 1 });
-    expect(countRaidRankTiers([])).toEqual({
-      counts: { platinum: 0, gold: 0, silver: 0, bronze: 0 },
-      provisionalCount: 0,
-    });
+    ).toEqual({ platinum: 2, gold: 1, silver: 0, bronze: 1 });
+    expect(countRaidRankTiers([])).toEqual({ platinum: 0, gold: 0, silver: 0, bronze: 0 });
   });
 
   it("has no tier for a rank that is not a positive integer", () => {

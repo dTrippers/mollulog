@@ -158,34 +158,27 @@ export function RaidRankTierBadge({
   );
 }
 
-// How many of the shown records reached each tier, with the in-game badges. A tier no record reached stays in place,
-// dimmed, so the four tiers always line up.
-export function RaidRankTierSummary({ counts, provisionalCount }: RaidRankTierCounts) {
+// How many of the shown records reached each tier, with the in-game badges. The badge names its tier, so it carries
+// the tier name for assistive technology and on hover. A tier no record reached stays in place, dimmed, so the four
+// tiers always line up.
+export function RaidRankTierSummary({ counts }: { counts: RaidRankTierCounts }) {
   return (
     <section aria-labelledby="raid-rank-tier-summary-title" className="rounded-lg bg-v2-surface px-4 py-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
-        <h3 id="raid-rank-tier-summary-title" className="text-sm font-semibold text-v2-fg">
-          트로피
-        </h3>
-        {provisionalCount > 0 ? (
-          <p className="text-xs text-v2-fg-tertiary tabular-nums">
-            잠정 순위 {provisionalCount.toLocaleString("ko-KR")}개 포함
-          </p>
-        ) : null}
-      </div>
+      <h3 id="raid-rank-tier-summary-title" className="text-sm font-semibold text-v2-fg">
+        트로피
+      </h3>
       <dl className="mt-2 grid grid-cols-4 gap-2">
         {RAID_RANK_TIERS.map((tier) => (
-          <div key={tier} className="flex flex-col items-center text-center">
-            <dt className="flex flex-col items-center gap-1 text-xs text-v2-fg-secondary">
+          <div key={tier} className="flex flex-col items-center gap-1 text-center">
+            <dt>
               <img
                 src={`/icons/raid-tier-${tier}.png`}
-                alt=""
-                aria-hidden="true"
+                alt={RAID_RANK_TIER_LABEL[tier]}
+                title={RAID_RANK_TIER_LABEL[tier]}
                 width={96}
                 height={73}
                 className={cn("h-8 w-auto", counts[tier] === 0 && "opacity-40")}
               />
-              {RAID_RANK_TIER_LABEL[tier]}
             </dt>
             <dd
               className={cn(

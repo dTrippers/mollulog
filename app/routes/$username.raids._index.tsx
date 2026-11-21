@@ -177,12 +177,11 @@ export default function UserRaidRecords() {
           raidType: row.season.raidType,
           seasonIndex: row.season.seasonIndex,
           rank: row.rank,
-          rankStatus: row.rankStatus,
         })),
       ),
     [rows],
   );
-  const hasTier = Object.values(tierCounts.counts).some((count) => count > 0);
+  const hasTier = Object.values(tierCounts).some((count) => count > 0);
 
   const raidLabel = RAID_RECORD_RAID_TYPE_LABEL[raidType];
   const empty = rows.length === 0 && unavailableRecords.length === 0;
@@ -227,7 +226,7 @@ export default function UserRaidRecords() {
         ) : null}
       </div>
 
-      {hasTier ? <RaidRankTierSummary {...tierCounts} /> : null}
+      {hasTier ? <RaidRankTierSummary counts={tierCounts} /> : null}
 
       {rows.length >= 3 ? (
         <RaidRecordTrendChart

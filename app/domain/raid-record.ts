@@ -78,29 +78,24 @@ export function raidRankTier(
   return "bronze";
 }
 
-export type RaidRankTierCounts = { counts: Record<RaidRankTier, number>; provisionalCount: number };
+export type RaidRankTierCounts = Record<RaidRankTier, number>;
 
-// How many records reached each tier. A 잠정 rank counts by the tier it has now, and `provisionalCount` says how many
-// of the counted records are 잠정, since their tier can still change. A record without a rank is not counted.
+// How many records reached each tier. A 잠정 rank counts by the tier it has now; a record without a rank is not counted.
 export function countRaidRankTiers(
   records: readonly {
     server: RaidRecordServer;
     raidType: RaidRecordRaidType;
     seasonIndex: number;
     rank: number | null;
-    rankStatus: RaidRecordRankStatus;
   }[],
 ): RaidRankTierCounts {
-  const counts: Record<RaidRankTier, number> = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
-  let provisionalCount = 0;
+  const counts: RaidRankTierCounts = { platinum: 0, gold: 0, silver: 0, bronze: 0 };
   for (const record of records) {
     if (record.rank === null) continue;
     const tier = raidRankTier(record.server, record.raidType, record.seasonIndex, record.rank);
-    if (!tier) continue;
-    counts[tier] += 1;
-    if (record.rankStatus === "provisional") provisionalCount += 1;
+    if (tier) counts[tier] += 1;
   }
-  return { counts, provisionalCount };
+  return counts;
 }
 
 export const RAID_RECORD_SNAPSHOT_FIELDS = [
