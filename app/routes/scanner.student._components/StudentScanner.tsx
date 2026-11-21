@@ -1389,7 +1389,8 @@ function ReviewPanel({
             {rowsEmpty}
           </div>
         ) : (
-          <div className="max-w-full overflow-x-auto rounded-lg bg-v2-surface">
+          // isolate keeps the sticky header cells' z-index inside the table, below the pinned page toolbar.
+          <div className="isolate max-w-full overflow-x-auto rounded-lg bg-v2-surface">
             <table className="w-full min-w-[50rem] table-fixed border-separate border-spacing-0 text-sm">
               <colgroup>
                 <col className="w-[12rem]" />

@@ -259,7 +259,7 @@ export default function StudentBasicInfo({
 
   return (
     <>
-    <section id="student-basic-info" className="scroll-mt-4">
+    <section id="student-basic-info" className="scroll-mt-[calc(var(--v2-toolbar-sticky-height,0px)+1rem)]">
         <SectionHeading title="능력치">
           <Switch
             id="student-skill-effects"

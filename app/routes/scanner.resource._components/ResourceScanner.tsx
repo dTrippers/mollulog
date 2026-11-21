@@ -535,7 +535,7 @@ export default function ResourceScanner() {
     job && !job.reviewError ? (
       <div className="flex flex-col gap-v2-block-gap lg:grid lg:grid-cols-[minmax(0,11fr)_minmax(0,9fr)] lg:items-start">
         {selectedImage ? (
-          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p lg:sticky lg:top-4">
+          <section className="flex min-w-0 flex-col gap-v2-group-gap rounded-lg bg-v2-surface p-v2-block-p lg:sticky lg:top-[calc(var(--v2-toolbar-sticky-height,0px)+1rem)]">
             <div className="flex min-w-0 items-center justify-between gap-3">
               <p className="min-w-0 truncate text-sm font-semibold text-v2-fg">
                 {job.images.findIndex((image) => image.uid === selectedImage.uid) + 1} / {job.images.length} ·{" "}
