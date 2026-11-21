@@ -295,7 +295,8 @@ Layout parts live in `app/components/v2/layout/`. A screen composes the regions 
 - Omit `PageAside` and there is no Aside column and no reserved space.
 - Side-by-side starts at 48rem of the `@container/page-available` content box (root.tsx). The Aside is 16rem below 64rem and 18rem from 64rem. `V2Page` measures its own width with ResizeObserver to know the mode for JavaScript behavior, such as where a panel body mounts.
 - Header holds the back link, title, description (max-prose), and meta. It sits above Main with one group-gap of top padding and spans the full width, so the title x matches across recipes with and without an Aside.
-- Toolbar is sticky on stacked layouts. Use `stickyOnDesktop` only for data tables.
+- Toolbar is sticky on stacked layouts. A toolbar holding `ScreenTabs` is sticky on side-by-side layouts too, so the screen tabs stay in reach while a long screen scrolls. Any other toolbar pins on desktop only with `stickyOnDesktop`, which is for data tables.
+- Content that sticks inside a page offsets its `top` by `var(--v2-toolbar-sticky-height, 0px)`, which `PageToolbar` sets on the page layout to its height while it can pin, so it settles below the toolbar instead of under it.
 - `MobileActionBar` is fixed at the bottom on stacked layouts and hidden on side-by-side. It lists link items, then panel entries. A screen that has its own bottom action bar hides it (for example, a review step) by its own state, and the stacked action bar then returns when that step ends.
 - `PageHeader` takes an optional `trailing` block (for example, a quota summary). When it is passed, the block sits beside the title on `@min-[60rem]/page-available` and aligns to the top, and below the description otherwise. A page without `trailing` renders exactly as before.
 - `PageHeader` takes `titleHidden` to keep its title and meta in the screen-reader tree while visually hiding them.

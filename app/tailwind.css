@@ -1204,7 +1204,9 @@ html[data-mllg-view-transition-direction="reverse"]::view-transition-new(root) {
     display: none;
   }
 
-  .v2-toolbar[data-sticky-desktop="true"] {
+  /* Screen tabs stay in reach while the screen scrolls, as on stacked layouts. */
+  .v2-toolbar[data-sticky-desktop="true"],
+  .v2-toolbar:has(.v2-tabs) {
     position: sticky;
     top: 0;
     z-index: 20;
