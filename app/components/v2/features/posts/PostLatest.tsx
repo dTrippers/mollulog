@@ -7,7 +7,7 @@ import { v2FocusRing } from "../../layout/styles";
 import { MarkdownContent } from "../../primitives/MarkdownContent";
 
 export type PostLatestProps = {
-  post: Pick<Post, "uid" | "title" | "createdAt">;
+  post: Pick<Post, "uid" | "title" | "publishedAt">;
   // Sanitized HTML of the post body, rendered by the loader.
   contentHtml: string;
   timeZone: string;
@@ -46,8 +46,8 @@ export function PostLatest({ post, contentHtml, timeZone, linkState }: PostLates
           </span>
         </Link>
       </h2>
-      <time dateTime={post.createdAt} className="mt-1 block text-sm leading-5 text-v2-fg-tertiary tabular-nums">
-        {formatInstant(post.createdAt, { timeZone, format: "YYYY/MM/DD" })}
+      <time dateTime={post.publishedAt} className="mt-1 block text-sm leading-5 text-v2-fg-tertiary tabular-nums">
+        {formatInstant(post.publishedAt, { timeZone, format: "YYYY/MM/DD" })}
       </time>
       <div className="mt-4">
         <MarkdownContent html={contentHtml} headingLevel={3} />
