@@ -202,7 +202,7 @@ test("Wrangler materializes only allowlisted development values as hidden secret
     assert.equal(values.OP_SERVICE_ACCOUNT_TOKEN, undefined);
     assert.equal(values.UNRELATED_SECRET, undefined);
     const logs = [];
-    unstable_printBindings(values, [], [], [], { log: (line) => logs.push(line), local: true });
+    unstable_printBindings(values, { log: (line) => logs.push(line), local: true });
     const output = logs.join("\n");
     assert.equal(output.includes("wrangler-sentinel-secret"), false);
     assert.match(output, /\(hidden\)/);
