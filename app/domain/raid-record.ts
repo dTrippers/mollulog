@@ -22,6 +22,53 @@ export const RAID_RECORD_LIMITS = {
   maxRank: 99_999_999,
 } as const;
 
+// The reward tier a final rank falls in. The tier decides the season's ranking rewards, and the gap between two
+// tiers is large (rank 12,000 is platinum and 12,001 is gold on the kr server), so screens show it beside every rank.
+export const RAID_RANK_TIERS = ["platinum", "gold", "silver", "bronze"] as const;
+export type RaidRankTier = (typeof RAID_RANK_TIERS)[number];
+
+// The last rank of each tier; every rank past silver is bronze.
+type RaidRankTierBands = { platinum: number; gold: number; silver: number };
+// Each entry applies from its season until the next entry of the same server and raid type. The bands have changed
+// once (kr 총력전 from season 44), so they stay here rather than in a table. jp holds one set for every season.
+type RaidRankTierBandsFrom = { fromSeasonIndex: number; bands: RaidRankTierBands };
+
+const KR_BANDS_BEFORE_44: RaidRankTierBands = { platinum: 10_000, gold: 50_000, silver: 100_000 };
+const KR_BANDS: RaidRankTierBands = { platinum: 12_000, gold: 55_000, silver: 100_000 };
+const JP_BANDS: RaidRankTierBands = { platinum: 20_000, gold: 120_000, silver: 240_000 };
+
+const RAID_RANK_TIER_BANDS: Record<RaidRecordServer, Record<RaidRecordRaidType, readonly RaidRankTierBandsFrom[]>> = {
+  kr: {
+    total_assault: [
+      { fromSeasonIndex: 1, bands: KR_BANDS_BEFORE_44 },
+      { fromSeasonIndex: 44, bands: KR_BANDS },
+    ],
+    elimination: [{ fromSeasonIndex: 1, bands: KR_BANDS }],
+  },
+  jp: {
+    total_assault: [{ fromSeasonIndex: 1, bands: JP_BANDS }],
+    elimination: [{ fromSeasonIndex: 1, bands: JP_BANDS }],
+  },
+};
+
+export function raidRankTier(
+  server: RaidRecordServer,
+  raidType: RaidRecordRaidType,
+  seasonIndex: number,
+  rank: number,
+): RaidRankTier | null {
+  if (!Number.isInteger(rank) || rank <= 0) return null;
+  let bands: RaidRankTierBands | null = null;
+  for (const entry of RAID_RANK_TIER_BANDS[server][raidType]) {
+    if (entry.fromSeasonIndex <= seasonIndex) bands = entry.bands;
+  }
+  if (!bands) return null;
+  if (rank <= bands.platinum) return "platinum";
+  if (rank <= bands.gold) return "gold";
+  if (rank <= bands.silver) return "silver";
+  return "bronze";
+}
+
 export const RAID_RECORD_SNAPSHOT_FIELDS = [
   "tier",
   "level",

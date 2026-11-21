@@ -20,8 +20,14 @@ import { Select } from "../../primitives/Select";
 import { StatusNotice } from "../../primitives/StatusNotice";
 import { type NumberInputFlowNavigationInputProps, useNumberInputFlowNavigation } from "../../primitives/use-number-input-flow-navigation";
 import { DigitsInput } from "./DigitsInput";
-import { DefenseTypeLabel, LiveLabel, RANK_STATUS_LABEL, RankStatusPill } from "./RaidRecordBits";
-import { RaidBossThumb } from "./RaidSeasonSelect";
+import {
+  DefenseTypeLabel,
+  LiveLabel,
+  RANK_STATUS_LABEL,
+  RaidBossBackdrop,
+  RaidRankTierBadge,
+  RankStatusPill,
+} from "./RaidRecordBits";
 import {
   formatRaidClearResult,
   formatRaidRank,
@@ -287,7 +293,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
                       </th>
                     </>
                   )}
-                  <th scope="col" className="w-28 text-right">
+                  <th scope="col" className="w-36 text-right">
                     순위
                   </th>
                   <th scope="col" className="w-28 text-left">
@@ -350,9 +356,7 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
         title="저장하지 않고 나갈까요?"
         size="sm"
       >
-        <p className="text-sm text-v2-fg-secondary">
-          수정한 기록 {changedModels.length}개를 저장하지 않았어요. 나가면 입력한 값이 사라져요.
-        </p>
+        <p className="text-sm text-v2-fg-secondary">저장하지 않은 기록이 있어요.</p>
         <div className="flex justify-end gap-2">
           <Button onClick={() => blocker.reset?.()}>계속 편집</Button>
           <Button
@@ -446,17 +450,29 @@ function RankCell({ model, context }: { model: RowModel; context: CellContext })
   const previous = changed && row.record?.rank != null ? row.record.rank : null;
   return (
     <span className="block">
-      <DigitsInput
-        aria-label={`#${row.season.seasonIndex} 순위`}
-        suffix="위"
-        value={draft.rank}
-        onValueChange={(value) => context.setRank(row, value)}
-        changed={changed}
-        invalid={Boolean(error)}
-        aria-describedby={error ? errorId : undefined}
-        disabled={disabled}
-        {...context.getInputProps({ disabled })}
-      />
+      <span className="flex items-center gap-1.5">
+        {/* A fixed slot, so the input keeps its width while the typed rank moves in and out of a tier. */}
+        <span className="flex w-6.5 shrink-0 justify-center">
+          <RaidRankTierBadge
+            server={row.season.server}
+            raidType={row.season.raidType}
+            seasonIndex={row.season.seasonIndex}
+            rank={draft.rank}
+          />
+        </span>
+        <DigitsInput
+          aria-label={`#${row.season.seasonIndex} 순위`}
+          suffix="위"
+          value={draft.rank}
+          onValueChange={(value) => context.setRank(row, value)}
+          changed={changed}
+          invalid={Boolean(error)}
+          aria-describedby={error ? errorId : undefined}
+          disabled={disabled}
+          containerClassName="min-w-0 flex-1"
+          {...context.getInputProps({ disabled })}
+        />
+      </span>
       {error ? (
         <CellHint id={errorId} danger>
           {error.message}
@@ -522,8 +538,7 @@ function StatusCell({ status }: { status: RaidTableRowStatus }) {
 function SeasonBoss({ row, showDefenseTypes = true }: { row: RaidRecordTableRowView; showDefenseTypes?: boolean }) {
   const { season } = row;
   return (
-    <span className="flex min-w-0 items-center gap-2">
-      <RaidBossThumb bossUid={season.boss.uid} className="h-[1.625rem] w-[4.5rem]" />
+    <span className="relative flex min-w-0 items-center gap-2">
       <span className="flex min-w-0 flex-col">
         <span className="flex min-w-0 items-center gap-2 font-semibold text-v2-fg">
           <span className="truncate">{season.boss.name}</span>
@@ -542,17 +557,27 @@ function SeasonBoss({ row, showDefenseTypes = true }: { row: RaidRecordTableRowV
   );
 }
 
+// An elimination row puts each defense type above its score input. The cells right of the scores leave the same space
+// above themselves, so every number in the row sits on the input line.
+const DEFENSE_LABEL_SLOT = "block h-4 text-[0.6875rem] leading-4";
+// The height of a score input with its border, for text that sits beside one.
+const INPUT_LINE = "flex min-h-[calc(var(--spacing-v2-input-min)+2px)] items-center";
+
 function EliminationTotal({ model }: { model: RowModel }) {
   const entered = model.row.season.scoreDefenseTypes.flatMap(({ defenseType }) => {
     const score = model.draft.scores[defenseType];
     return score == null ? [] : [score];
   });
-  if (entered.length === 0) return <span className="text-v2-fg-tertiary">–</span>;
+  if (entered.length === 0) {
+    return <span className={cn(INPUT_LINE, "justify-end text-v2-fg-tertiary")}>–</span>;
+  }
   const total = entered.reduce((sum, score) => sum + score, 0);
   const count = model.row.season.scoreDefenseTypes.length;
   return (
     <span className="block text-right">
-      <span className="font-semibold text-v2-fg tabular-nums">{formatRaidScore(total)}</span>
+      <span className={cn(INPUT_LINE, "justify-end font-semibold text-v2-fg tabular-nums")}>
+        {formatRaidScore(total)}
+      </span>
       {entered.length < count ? <CellHint>{`${entered.length}/${count} 입력`}</CellHint> : null}
     </span>
   );
@@ -569,11 +594,25 @@ function UnavailableNote({ username, uid }: { username: string; uid: string }) {
   );
 }
 
+// Leaves the defense-type label space above a cell of an elimination row.
+function InputLine({ aligned, children }: { aligned: boolean; children: ReactNode }) {
+  if (!aligned) return <>{children}</>;
+  return (
+    <span className="flex flex-col gap-0.5">
+      <span aria-hidden="true" className={DEFENSE_LABEL_SLOT} />
+      {children}
+    </span>
+  );
+}
+
 function TableRow({ model, context }: { model: RowModel; context: CellContext }) {
   const { row } = model;
   const { season } = row;
   const empty = !row.record && !model.changed;
   const recordUid = row.record?.uid ?? row.unavailableRecordUid;
+  const elimination = season.raidType === "elimination";
+  // Cells that line up with the score inputs: top-aligned, below the defense-type label space.
+  const inputLineCell = elimination ? "align-top!" : undefined;
   return (
     <tr
       className={cn(
@@ -582,9 +621,14 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
       )}
     >
       <td className={cn("font-semibold", empty ? "text-v2-fg-tertiary" : "text-v2-fg")}>#{season.seasonIndex}</td>
-      <td className="max-w-0">
+      <td className="relative max-w-0 overflow-hidden">
+        <RaidBossBackdrop bossUid={season.boss.uid} />
         <SeasonBoss row={row} showDefenseTypes={season.raidType === "total_assault"} />
-        {row.unavailableRecordUid ? <UnavailableNote username={context.username} uid={row.unavailableRecordUid} /> : null}
+        {row.unavailableRecordUid ? (
+          <span className="relative block">
+            <UnavailableNote username={context.username} uid={row.unavailableRecordUid} />
+          </span>
+        ) : null}
       </td>
       {season.raidType === "total_assault" ? (
         <>
@@ -607,10 +651,13 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
           {[0, 1, 2].map((index) => {
             const entry = season.scoreDefenseTypes[index];
             return (
-              <td key={index} className="align-top">
+              <td key={index} className="align-top!">
                 {entry ? (
                   <span className="flex flex-col gap-0.5">
-                    <DefenseTypeLabel defenseType={entry.defenseType} className="text-[0.6875rem] text-v2-fg-secondary" />
+                    <DefenseTypeLabel
+                      defenseType={entry.defenseType}
+                      className={cn(DEFENSE_LABEL_SLOT, "flex text-v2-fg-secondary")}
+                    />
                     <ScoreCell
                       model={model}
                       defenseType={entry.defenseType}
@@ -622,24 +669,36 @@ function TableRow({ model, context }: { model: RowModel; context: CellContext })
               </td>
             );
           })}
-          <td>
-            <EliminationTotal model={model} />
+          <td className={inputLineCell}>
+            <InputLine aligned>
+              <EliminationTotal model={model} />
+            </InputLine>
           </td>
         </>
       )}
-      <td>
-        <RankCell model={model} context={context} />
+      <td className={inputLineCell}>
+        <InputLine aligned={elimination}>
+          <RankCell model={model} context={context} />
+        </InputLine>
       </td>
-      <td>
-        <StatusCell status={model.status} />
+      <td className={inputLineCell}>
+        <InputLine aligned={elimination}>
+          <span className={cn(elimination && INPUT_LINE)}>
+            <StatusCell status={model.status} />
+          </span>
+        </InputLine>
       </td>
-      <td>
-        {recordUid ? (
-          <Link to={editTo(context.username, recordUid)} className={v2ButtonClassName({ variant: "text", size: "sm" })}>
-            상세
-            <span className="sr-only"> #{season.seasonIndex}</span>
-          </Link>
-        ) : null}
+      <td className={inputLineCell}>
+        <InputLine aligned={elimination}>
+          {recordUid ? (
+            <span className={cn(elimination && INPUT_LINE)}>
+              <Link to={editTo(context.username, recordUid)} className={v2ButtonClassName({ variant: "text", size: "sm" })}>
+                상세
+                <span className="sr-only"> #{season.seasonIndex}</span>
+              </Link>
+            </span>
+          ) : null}
+        </InputLine>
       </td>
     </tr>
   );
@@ -650,9 +709,9 @@ function SeasonCard({ model, context }: { model: RowModel; context: CellContext 
   const { season } = row;
   const empty = !row.record && !model.changed;
   return (
-    <li className="flex flex-col gap-2 rounded-lg bg-v2-surface px-3 py-2.5 has-[input:focus]:ring-[1.5px] has-[input:focus]:ring-v2-accent">
+    <li className="relative flex flex-col gap-2 overflow-hidden rounded-lg bg-v2-surface px-3 py-2.5 has-[input:focus]:ring-[1.5px] has-[input:focus]:ring-v2-accent [&>*:not(img)]:relative">
+      <RaidBossBackdrop bossUid={season.boss.uid} />
       <span className="flex min-w-0 items-center gap-2">
-        <RaidBossThumb bossUid={season.boss.uid} className="h-6 w-16" />
         <span className={cn("min-w-0 truncate text-sm font-semibold", empty ? "text-v2-fg-secondary" : "text-v2-fg")}>
           <span className="tabular-nums">#{season.seasonIndex}</span> {season.boss.name}
         </span>

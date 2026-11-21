@@ -1,6 +1,14 @@
-import type { RaidRecordDefenseType, RaidRecordRankStatus, RaidRecordServer } from "~/domain/raid-record";
+import {
+  type RaidRankTier,
+  type RaidRecordDefenseType,
+  type RaidRecordRaidType,
+  type RaidRecordRankStatus,
+  type RaidRecordServer,
+  raidRankTier,
+} from "~/domain/raid-record";
 import { cn } from "~/lib/utils";
 import { defenseTypeLocale, terrainLocale } from "~/locales/ko";
+import { bossImageUrl } from "~/models/assets";
 import type { Terrain } from "~/models/content.d";
 import { formatRaidSeasonPeriod, RAID_RECORD_SERVER_SHORT_LABEL } from "./raid-record-format";
 
@@ -109,5 +117,59 @@ export function RankStatusPill({ status, className }: { status: RaidRecordRankSt
     >
       {RANK_STATUS_LABEL[status]}
     </span>
+  );
+}
+
+const RAID_RANK_TIER_LABEL: Record<RaidRankTier, string> = {
+  platinum: "플래티넘",
+  gold: "골드",
+  silver: "실버",
+  bronze: "브론즈",
+};
+
+// The in-game badge of the reward tier the rank falls in, shown beside the rank. Nothing for a rank without a tier.
+export function RaidRankTierBadge({
+  server,
+  raidType,
+  seasonIndex,
+  rank,
+  className,
+}: {
+  server: RaidRecordServer;
+  raidType: RaidRecordRaidType;
+  seasonIndex: number;
+  rank: number | null;
+  className?: string;
+}) {
+  const tier = rank === null ? null : raidRankTier(server, raidType, seasonIndex, rank);
+  if (!tier) return null;
+  return (
+    <img
+      src={`/icons/raid-tier-${tier}.png`}
+      alt={RAID_RANK_TIER_LABEL[tier]}
+      title={RAID_RANK_TIER_LABEL[tier]}
+      width={96}
+      height={73}
+      className={cn("h-5 w-auto shrink-0", className)}
+    />
+  );
+}
+
+// The boss image as a full-height background on the right that fades out toward the text on the left, like the
+// season list of the raid pages. The image fades by its own mask rather than a gradient over it, so it sits on any
+// background, such as a row that tints while one of its inputs has focus. The parent is `relative overflow-hidden`, and
+// its content sits above this with `relative`.
+export function RaidBossBackdrop({ bossUid, className }: { bossUid: string; className?: string }) {
+  return (
+    <img
+      src={bossImageUrl(bossUid)}
+      alt=""
+      aria-hidden="true"
+      loading="lazy"
+      className={cn(
+        "pointer-events-none absolute top-0 right-0 h-full w-3/5 object-cover object-[50%_35%] opacity-55 raid-boss-backdrop-mask",
+        className,
+      )}
+    />
   );
 }

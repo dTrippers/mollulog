@@ -18,6 +18,7 @@ import {
   type RaidRecordSeasonRules,
   type RaidRecordStudentInfo,
   type RaidScoreBands,
+  raidRankTier,
   readStoredRaidRecordParties,
   readStoredRaidRecordScores,
 } from "~/domain/raid-record";
@@ -143,6 +144,34 @@ describe("raid record score → difficulty and clear time", () => {
     expect(formatRaidClearTime(145_000)).toBe("2:25.000");
     expect(formatRaidClearTime(561_667)).toBe("9:21.667");
     expect(formatRaidClearTime(-5)).toBe("0:00.000");
+  });
+});
+
+describe("raid rank tier", () => {
+  it("puts the last rank of each band in that tier", () => {
+    expect(raidRankTier("kr", "total_assault", 88, 12_000)).toBe("platinum");
+    expect(raidRankTier("kr", "total_assault", 88, 12_001)).toBe("gold");
+    expect(raidRankTier("kr", "total_assault", 88, 55_000)).toBe("gold");
+    expect(raidRankTier("kr", "total_assault", 88, 55_001)).toBe("silver");
+    expect(raidRankTier("kr", "total_assault", 88, 100_000)).toBe("silver");
+    expect(raidRankTier("kr", "total_assault", 88, 100_001)).toBe("bronze");
+  });
+
+  it("uses the bands of the season the record belongs to", () => {
+    expect(raidRankTier("kr", "total_assault", 43, 11_000)).toBe("gold");
+    expect(raidRankTier("kr", "total_assault", 44, 11_000)).toBe("platinum");
+    expect(raidRankTier("kr", "elimination", 1, 12_000)).toBe("platinum");
+  });
+
+  it("uses the jp bands on the jp server", () => {
+    expect(raidRankTier("jp", "total_assault", 80, 20_000)).toBe("platinum");
+    expect(raidRankTier("jp", "elimination", 30, 120_001)).toBe("silver");
+    expect(raidRankTier("jp", "total_assault", 80, 240_001)).toBe("bronze");
+  });
+
+  it("has no tier for a rank that is not a positive integer", () => {
+    expect(raidRankTier("kr", "total_assault", 88, 0)).toBeNull();
+    expect(raidRankTier("kr", "total_assault", 88, 1.5)).toBeNull();
   });
 });
 

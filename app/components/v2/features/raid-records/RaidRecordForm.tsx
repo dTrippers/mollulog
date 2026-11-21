@@ -1,5 +1,5 @@
 import { ClockIcon, ExclamationCircleIcon, PlusIcon } from "@heroicons/react/16/solid";
-import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
@@ -25,8 +25,8 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { StatusNotice } from "../../primitives/StatusNotice";
 import { DigitsInput } from "./DigitsInput";
 import { PartyMiniRow, RaidPartyCard, type RaidPartyEditorContext, type RaidPartyStudent } from "./RaidPartyEditor";
-import { DefenseTypeLabel, RankStatusPill } from "./RaidRecordBits";
-import { RaidBossThumb, RaidSeasonSelect, type RaidSeasonSelectOption } from "./RaidSeasonSelect";
+import { DefenseTypeLabel, RaidBossBackdrop, RaidRankTierBadge, RankStatusPill } from "./RaidRecordBits";
+import { RaidSeasonSelect, type RaidSeasonSelectOption } from "./RaidSeasonSelect";
 import {
   emptyRaidFormParty,
   type RaidFormParty,
@@ -144,6 +144,9 @@ export function RaidRecordForm({
     mode.kind === "edit" ? raidFormPartiesFromRecord(mode.record.parties) : [],
   );
   const [expandedPartyId, setExpandedPartyId] = useState<string | null>(null);
+  // The party whose search field takes focus next: one just added or expanded.
+  const [focusPartyId, setFocusPartyId] = useState<string | null>(null);
+  const clearFocusPartyId = useCallback(() => setFocusPartyId(null), []);
   const [activeDefenseType, setActiveDefenseType] = useState<RaidRecordDefenseType | null>(null);
   const [attempted, setAttempted] = useState(false);
 
@@ -307,9 +310,9 @@ export function RaidRecordForm({
           </>
         ) : season ? (
           <FormRow label="시즌">
-            <span className="flex min-w-0 items-center gap-2 pt-0.5">
-              <RaidBossThumb bossUid={season.boss.uid} className="h-[1.875rem] w-[5.25rem]" />
-              <span className="flex min-w-0 flex-col">
+            <span className="relative flex min-h-11 w-full max-w-[28.75rem] min-w-0 items-center overflow-hidden rounded-md bg-v2-inset px-3 py-1.5">
+              <RaidBossBackdrop bossUid={season.boss.uid} />
+              <span className="relative flex min-w-0 flex-col">
                 <span className="truncate text-sm font-semibold text-v2-fg">
                   <span className="tabular-nums">#{season.seasonIndex}</span> {season.boss.name} ·{" "}
                   {RAID_RECORD_SERVER_LABEL[season.server]}
@@ -328,25 +331,27 @@ export function RaidRecordForm({
             <hr className="border-v2-divider" />
             {season.raidType === "total_assault" && defenseTypes[0] ? (
               <FormRow label="점수" labelFor={ids.score}>
-                <DigitsInput
-                  id={ids.score}
-                  value={scores[defenseTypes[0]] ?? null}
-                  onValueChange={(value) => setScore(defenseTypes[0], value)}
-                  placeholder="점수 입력"
-                  invalid={Boolean(
-                    (attempted && (scoreErrors[defenseTypes[0]] || localErrors.score)) || serverErrorFor("score"),
-                  )}
-                  aria-describedby={`${ids.score}-hint`}
-                  containerClassName="w-full max-w-[13.75rem]"
-                />
-                <div id={`${ids.score}-hint`}>
-                  {attempted && (scoreErrors[defenseTypes[0]] || localErrors.score) ? (
-                    <FieldMessage message={scoreErrors[defenseTypes[0]] ?? localErrors.score} />
-                  ) : serverErrorFor("score") ? (
-                    <FieldMessage message={serverErrorFor("score")} />
-                  ) : (
-                    <ScorePreview score={scores[defenseTypes[0]] ?? null} state={bandStates[defenseTypes[0]]} />
-                  )}
+                <div className="group/score">
+                  <DigitsInput
+                    id={ids.score}
+                    value={scores[defenseTypes[0]] ?? null}
+                    onValueChange={(value) => setScore(defenseTypes[0], value)}
+                    placeholder="점수 입력"
+                    invalid={Boolean(
+                      (attempted && (scoreErrors[defenseTypes[0]] || localErrors.score)) || serverErrorFor("score"),
+                    )}
+                    aria-describedby={`${ids.score}-hint`}
+                    containerClassName="w-full max-w-[13.75rem]"
+                  />
+                  <div id={`${ids.score}-hint`}>
+                    {attempted && (scoreErrors[defenseTypes[0]] || localErrors.score) ? (
+                      <FieldMessage message={scoreErrors[defenseTypes[0]] ?? localErrors.score} />
+                    ) : serverErrorFor("score") ? (
+                      <FieldMessage message={serverErrorFor("score")} />
+                    ) : (
+                      <ScorePreview score={scores[defenseTypes[0]] ?? null} state={bandStates[defenseTypes[0]]} />
+                    )}
+                  </div>
                 </div>
               </FormRow>
             ) : (
@@ -367,18 +372,26 @@ export function RaidRecordForm({
               </FormRow>
             )}
             <FormRow label="순위" labelFor={ids.rank}>
-              <DigitsInput
-                id={ids.rank}
-                value={rank}
-                onValueChange={(value) => {
-                  setRank(value);
-                  clearServerError("rank");
-                }}
-                suffix="위"
-                invalid={Boolean(showError("rank") || serverErrorFor("rank"))}
-                aria-describedby={`${ids.rank}-hint`}
-                containerClassName="w-full max-w-[13.75rem]"
-              />
+              <div className="flex items-center gap-2">
+                <DigitsInput
+                  id={ids.rank}
+                  value={rank}
+                  onValueChange={(value) => {
+                    setRank(value);
+                    clearServerError("rank");
+                  }}
+                  suffix="위"
+                  invalid={Boolean(showError("rank") || serverErrorFor("rank"))}
+                  aria-describedby={`${ids.rank}-hint`}
+                  containerClassName="w-full max-w-[13.75rem]"
+                />
+                <RaidRankTierBadge
+                  server={season.server}
+                  raidType={season.raidType}
+                  seasonIndex={season.seasonIndex}
+                  rank={rank}
+                />
+              </div>
               <div id={`${ids.rank}-hint`}>
                 {showError("rank") || serverErrorFor("rank") ? (
                   <FieldMessage message={showError("rank") ?? serverErrorFor("rank")} />
@@ -443,8 +456,13 @@ export function RaidRecordForm({
               raidType={season.raidType}
               parties={partiesOf(tabDefenseType)}
               expandedPartyId={expandedPartyId}
+              focusPartyId={focusPartyId}
+              onPartyFocused={clearFocusPartyId}
               context={partyContext}
-              onExpand={setExpandedPartyId}
+              onExpand={(id) => {
+                setExpandedPartyId(id);
+                setFocusPartyId(id);
+              }}
               onChange={(next) => {
                 setParties((current) => current.map((party) => (party.id === next.id ? next : party)));
                 clearServerError("parties");
@@ -457,6 +475,7 @@ export function RaidRecordForm({
                 const party = emptyRaidFormParty(tabDefenseType);
                 setParties((current) => [...current, party]);
                 setExpandedPartyId(party.id);
+                setFocusPartyId(party.id);
               }}
             />
           ) : null}
@@ -553,7 +572,10 @@ function ScorePreview({ score, state }: { score: number | null; state: RaidScore
   }
   const result = computeRaidClearResult(state.bands, score);
   const text = result ? formatRaidClearResult(result.difficulty, result.clearTimeMs) : null;
-  if (!text) return <p className="mt-1 text-xs text-v2-fg-tertiary">이 점수의 난이도를 계산하지 못했어요.</p>;
+  // Hidden while the score is being typed: a partly typed score is below every difficulty.
+  if (!text) {
+    return <p className="mt-1 text-xs text-v2-fg-tertiary group-focus-within/score:hidden">난이도를 알 수 없어요.</p>;
+  }
   const [difficulty, time] = text.split(" · ");
   return (
     <p className="mt-1 text-sm text-v2-fg-secondary tabular-nums">
@@ -641,7 +663,7 @@ function EliminationScores({
         const students = typeParties.reduce((sum, party) => sum + raidFormPartyStudentCount(party), 0);
         const inputId = `elimination-score-${defenseType}`;
         return (
-          <div key={defenseType} className={gridClassName}>
+          <div key={defenseType} className={cn(gridClassName, "group/score")}>
             <label htmlFor={inputId} className="text-sm font-semibold text-v2-fg">
               <DefenseTypeLabel defenseType={defenseType} />
             </label>
@@ -687,11 +709,11 @@ function EliminationScores({
         <span className="pr-2.5 text-right text-[0.9375rem] font-semibold text-v2-fg tabular-nums">
           {entered.length > 0 ? formatRaidScore(total) : "–"}
         </span>
-        <span className={cn("text-xs text-v2-fg-tertiary", stacked ? "col-span-2" : "col-span-2")}>
-          {entered.length > 0 && entered.length < entries.length
-            ? `${entered.length}/${entries.length} 입력 · 입력하지 않은 방어 타입은 0점으로 계산해요`
-            : "입력한 방어 타입 점수의 합"}
-        </span>
+        {entered.length > 0 && entered.length < entries.length ? (
+          <span className="col-span-2 text-xs text-v2-fg-tertiary tabular-nums">
+            {entered.length}/{entries.length} 입력
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -742,6 +764,8 @@ function PartyList({
   raidType,
   parties,
   expandedPartyId,
+  focusPartyId,
+  onPartyFocused,
   context,
   onExpand,
   onChange,
@@ -752,6 +776,8 @@ function PartyList({
   raidType: RaidRecordRaidType;
   parties: readonly RaidFormParty[];
   expandedPartyId: string | null;
+  focusPartyId: string | null;
+  onPartyFocused: () => void;
   context: RaidPartyEditorContext;
   onExpand: (id: string) => void;
   onChange: (party: RaidFormParty) => void;
@@ -764,17 +790,14 @@ function PartyList({
   const prefix = raidType === "elimination" ? `${defenseTypeLocale[defenseType]} ` : "";
   return (
     <div className="flex min-w-0 flex-col gap-2.5">
-      {parties.length === 0 ? (
-        <p className="text-sm text-v2-fg-tertiary">
-          편성을 남기려면 파티를 추가해 주세요. 학생을 넣으면 모집한 학생의 지금 성장 정보로 채워져요.
-        </p>
-      ) : null}
       {parties.map((party, index) => (
         <RaidPartyCard
           key={party.id}
           party={party}
           title={`${prefix}${index + 1}파티`}
           expanded={party.id === expandedId}
+          focusSearch={party.id === focusPartyId}
+          onSearchFocused={onPartyFocused}
           context={context}
           onExpand={() => onExpand(party.id)}
           onChange={onChange}
@@ -784,7 +807,7 @@ function PartyList({
       <div className="flex flex-wrap items-center gap-2">
         <Button onClick={onAdd} disabled={full}>
           <PlusIcon className="size-4" aria-hidden="true" />
-          {prefix}파티 추가
+          파티 추가
         </Button>
         {full ? (
           <span className="text-xs text-v2-fg-tertiary">

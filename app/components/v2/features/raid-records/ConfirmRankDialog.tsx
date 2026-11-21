@@ -3,13 +3,17 @@ import { useFetcher } from "react-router";
 import { Button } from "../../primitives/Button";
 import { Dialog } from "../../primitives/Dialog";
 import { StatusNotice } from "../../primitives/StatusNotice";
+import type { RaidRecordRaidType, RaidRecordServer } from "~/domain/raid-record";
 import { DigitsInput } from "./DigitsInput";
+import { RaidRankTierBadge } from "./RaidRecordBits";
 
 export type ConfirmRankTarget = {
   uid: string;
   // "#87 그레고리오 · 한국 서버 · 잠정 3,457위"
   summary: string;
   rank: number;
+  // The season the rank belongs to, for the tier badge beside the input.
+  season: { server: RaidRecordServer; raidType: RaidRecordRaidType; seasonIndex: number };
 };
 
 export type ConfirmRankActionData = { ok: true; uid: string } | { ok: false; uid: string; error: string };
@@ -60,14 +64,24 @@ export function ConfirmRankDialog({
             <label htmlFor="confirm-rank-input" className="text-sm font-semibold text-v2-fg">
               확정 순위
             </label>
-            <DigitsInput
-              id="confirm-rank-input"
-              value={rank}
-              onValueChange={setRank}
-              suffix="위"
-              invalid={touched && rank === null}
-              containerClassName="max-w-40"
-            />
+            <div className="flex items-center gap-2">
+              <DigitsInput
+                id="confirm-rank-input"
+                value={rank}
+                onValueChange={setRank}
+                suffix="위"
+                invalid={touched && rank === null}
+                containerClassName="max-w-40"
+              />
+              {target ? (
+                <RaidRankTierBadge
+                  server={target.season.server}
+                  raidType={target.season.raidType}
+                  seasonIndex={target.season.seasonIndex}
+                  rank={rank}
+                />
+              ) : null}
+            </div>
             {touched && rank === null ? (
               <p className="text-xs font-medium text-v2-danger">순위를 입력해 주세요.</p>
             ) : (

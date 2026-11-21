@@ -8,9 +8,14 @@ import {
   RAID_RECORD_RAID_TYPE_LABEL,
   RAID_RECORD_SERVER_LABEL,
 } from "~/components/v2/features/raid-records/raid-record-format";
-import { DefenseTypeLabel, RaidSeasonMeta, RankStatusPill } from "~/components/v2/features/raid-records/RaidRecordBits";
+import {
+  DefenseTypeLabel,
+  RaidBossBackdrop,
+  RaidRankTierBadge,
+  RaidSeasonMeta,
+  RankStatusPill,
+} from "~/components/v2/features/raid-records/RaidRecordBits";
 import { RaidPartyView } from "~/components/v2/features/raid-records/RaidPartyView";
-import { RaidBossThumb } from "~/components/v2/features/raid-records/RaidSeasonSelect";
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { nowUtcIso } from "~/lib/date-time";
@@ -74,7 +79,6 @@ export default function RaidRecordDetail() {
       <PageHeader
         back={{ title: `@${username}의 총력전·대결전 기록`, to: listTo }}
         title={`#${season.seasonIndex} ${season.boss.name}`}
-        media={<RaidBossThumb bossUid={season.boss.uid} className="aspect-[5/3] w-full" />}
         details={
           <span className="flex flex-col gap-0.5">
             <span className="text-xs text-v2-fg-secondary">
@@ -92,7 +96,11 @@ export default function RaidRecordDetail() {
       />
       <PageMain>
         <div className="flex min-w-0 max-w-[62.5rem] flex-col gap-v2-group-gap">
-          <section aria-label="결과" className="flex flex-col gap-3 rounded-lg bg-v2-surface p-v2-block-p">
+          <section
+            aria-label="결과"
+            className="relative flex flex-col gap-3 overflow-hidden rounded-lg bg-v2-surface p-v2-block-p [&>*:not(img)]:relative"
+          >
+            <RaidBossBackdrop bossUid={season.boss.uid} />
             <DetailRow label="점수">
               {season.raidType === "total_assault" ? (
                 <span className="flex flex-wrap items-baseline gap-x-2">
@@ -124,6 +132,12 @@ export default function RaidRecordDetail() {
                 <span className="text-sm text-v2-fg-tertiary">순위 없음</span>
               ) : (
                 <span className="flex items-center gap-2">
+                  <RaidRankTierBadge
+                    server={season.server}
+                    raidType={season.raidType}
+                    seasonIndex={season.seasonIndex}
+                    rank={row.rank}
+                  />
                   <span className="text-base font-semibold text-v2-fg tabular-nums">{formatRaidRank(row.rank)}</span>
                   <RankStatusPill status={row.rankStatus} />
                 </span>

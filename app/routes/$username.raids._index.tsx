@@ -19,6 +19,8 @@ import {
 } from "~/components/v2/features/raid-records/raid-record-format";
 import {
   DefenseTypeLabel,
+  RaidBossBackdrop,
+  RaidRankTierBadge,
   RaidSeasonMeta,
   RaidSeasonTitle,
   RankStatusPill,
@@ -38,7 +40,6 @@ import {
 } from "~/domain/raid-record";
 import { getLogger } from "~/lib/observability.server";
 import { cn } from "~/lib/utils";
-import { bossImageUrl } from "~/models/assets";
 import { confirmRaidRecordRank } from "~/models/raid-record";
 import { loadRaidRecordList, type RaidRecordRowView } from "~/views/raid-records";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
@@ -154,6 +155,8 @@ export default function UserRaidRecords() {
     () =>
       rows.map((row) => ({
         key: row.uid,
+        server: row.season.server,
+        raidType: row.season.raidType,
         seasonIndex: row.season.seasonIndex,
         bossName: row.season.boss.name,
         score: row.totalScore,
@@ -253,6 +256,7 @@ export default function UserRaidRecords() {
                 setConfirmTarget({
                   uid: row.uid,
                   rank: row.rank ?? 0,
+                  season: row.season,
                   summary: `#${row.season.seasonIndex} ${row.season.boss.name} · ${RAID_RECORD_SERVER_LABEL[row.season.server]} · 잠정 ${formatRaidRank(row.rank ?? 0)}`,
                 })
               }
@@ -306,16 +310,7 @@ function RaidRecordRow({
 
   return (
     <li className="relative overflow-hidden rounded-lg bg-v2-surface">
-      <img
-        src={bossImageUrl(season.boss.uid)}
-        alt=""
-        loading="lazy"
-        className="pointer-events-none absolute top-0 right-0 h-full w-3/5 object-cover object-[50%_35%] opacity-55"
-      />
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-linear-to-r from-v2-surface from-35% via-v2-surface/80 via-60% to-v2-surface/55"
-      />
+      <RaidBossBackdrop bossUid={season.boss.uid} />
       <Link
         to={to}
         aria-labelledby={titleId}
@@ -406,6 +401,12 @@ function RankCell({
   return (
     <>
       <span className="flex items-center gap-1.5 text-[0.9375rem] font-bold text-v2-fg tabular-nums">
+        <RaidRankTierBadge
+          server={row.season.server}
+          raidType={row.season.raidType}
+          seasonIndex={row.season.seasonIndex}
+          rank={row.rank}
+        />
         {formatRaidRank(row.rank)}
         <RankStatusPill status={row.rankStatus} />
       </span>

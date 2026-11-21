@@ -115,6 +115,12 @@
   }
 }
 
+/* Fades a raid boss backdrop in from the left by the image's own alpha, so it works on any background. Only the
+   mask's alpha matters, which is why it uses literal black rather than a theme color. */
+@utility raid-boss-backdrop-mask {
+  mask-image: linear-gradient(to right, transparent, rgb(0 0 0 / 0.2) 33%, rgb(0 0 0 / 0.45));
+}
+
 @utility no-scrollbar {
   &::-webkit-scrollbar {
     display: none;

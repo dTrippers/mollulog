@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { RaidRecordRankStatus } from "~/domain/raid-record";
+import type { RaidRecordRaidType, RaidRecordRankStatus, RaidRecordServer } from "~/domain/raid-record";
 import { cn } from "~/lib/utils";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { formatRaidRank, formatRaidScore } from "./raid-record-format";
-import { RANK_STATUS_LABEL } from "./RaidRecordBits";
+import { RANK_STATUS_LABEL, RaidRankTierBadge } from "./RaidRecordBits";
 
 export type RaidRecordTrendPoint = {
   key: string;
+  server: RaidRecordServer;
+  raidType: RaidRecordRaidType;
   seasonIndex: number;
   bossName: string;
   score: number;
@@ -234,7 +236,14 @@ export function RaidRecordTrendChart({
               <span className="tabular-nums">#{active.seasonIndex}</span> {active.bossName}
             </p>
             <p className="text-v2-fg-secondary tabular-nums">{formatRaidScore(active.score)}</p>
-            <p className="text-v2-fg-secondary tabular-nums">
+            <p className="flex items-center gap-1 text-v2-fg-secondary tabular-nums">
+              <RaidRankTierBadge
+                server={active.server}
+                raidType={active.raidType}
+                seasonIndex={active.seasonIndex}
+                rank={active.rank}
+                className="h-4"
+              />
               {active.rank === null ? "순위 미입력" : `${formatRaidRank(active.rank)} · ${RANK_STATUS_LABEL[active.rankStatus]}`}
             </p>
           </div>
@@ -260,7 +269,13 @@ export function RaidRecordTrendChart({
               </th>
               <td>{formatRaidScore(point.score)}</td>
               <td>
-                {point.rank === null ? "순위 미입력" : `${formatRaidRank(point.rank)} ${RANK_STATUS_LABEL[point.rankStatus]}`}
+                {point.rank === null ? "순위 미입력" : `${formatRaidRank(point.rank)} ${RANK_STATUS_LABEL[point.rankStatus]}`}{" "}
+                <RaidRankTierBadge
+                  server={point.server}
+                  raidType={point.raidType}
+                  seasonIndex={point.seasonIndex}
+                  rank={point.rank}
+                />
               </td>
             </tr>
           ))}
