@@ -1,14 +1,14 @@
 import {
   ArrowPathIcon,
-  ArrowsRightLeftIcon,
   ChevronDownIcon,
   HandRaisedIcon,
+  MagnifyingGlassIcon,
   PlusIcon,
   TrashIcon,
   UserMinusIcon,
 } from "@heroicons/react/16/solid";
 import hangul from "hangul-js";
-import { type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { RaidRecordSnapshotField } from "~/domain/raid-record";
 import { STUDENT_GROWTH_EDIT_RANGES } from "~/domain/student-growth-edit";
 import { cn } from "~/lib/utils";
@@ -16,8 +16,6 @@ import { v2FocusRing } from "../../layout/styles";
 import { Button } from "../../primitives/Button";
 import { IconButton } from "../../primitives/IconButton";
 import { NumberInput } from "../../primitives/NumberInput";
-import { Popover } from "../../primitives/Popover";
-import { SearchInput } from "../../primitives/SearchInput";
 import {
   type NumberInputFlowNavigationInputProps,
   useNumberInputFlowNavigation,
@@ -53,7 +51,9 @@ export type RaidPartyEditorContext = {
   recruited: Readonly<Record<string, Partial<Record<RaidRecordSnapshotField, number>>>>;
 };
 
-const MAX_LISTED_STUDENTS = 50;
+const MAX_LISTED_STUDENTS = 12;
+
+const noop = () => {};
 
 // "시로코*테러" reads as "시로코(테러)", as the other v2 pickers show it.
 export function formatRaidStudentName(rawName: string): string {
@@ -75,6 +75,8 @@ export function RaidPartyCard({
   title,
   expanded,
   context,
+  focusSearch = false,
+  onSearchFocused,
   onExpand,
   onChange,
   onRemove,
@@ -83,6 +85,9 @@ export function RaidPartyCard({
   title: string;
   expanded: boolean;
   context: RaidPartyEditorContext;
+  // Focus the search field once, such as for a party just added.
+  focusSearch?: boolean;
+  onSearchFocused?: () => void;
   onExpand: () => void;
   onChange: (party: RaidFormParty) => void;
   onRemove: () => void;
@@ -122,7 +127,14 @@ export function RaidPartyCard({
         </Button>
         <IconButton icon={TrashIcon} label={`${title} 삭제`} danger onClick={onRemove} />
       </div>
-      <PartySlots party={party} title={title} context={context} onChange={onChange} />
+      <PartySlots
+        party={party}
+        title={title}
+        context={context}
+        autoFocus={focusSearch}
+        onAutoFocused={onSearchFocused ?? noop}
+        onChange={onChange}
+      />
       {raidFormPartyStudentCount(party) > 0 ? (
         <PartyGrowthTable
           party={party}
@@ -171,36 +183,311 @@ export function PartyMiniRow({
 // Slots
 // ---------------------------------------------------------------------------------------------------------------------
 
+const SLOT_COUNT = 6;
+
+// The first empty slot after `slot`, wrapping around, or null when every other slot is filled.
+function nextEmptySlot(slots: readonly (RaidFormUnit | null)[], slot: number): number | null {
+  for (let step = 1; step < SLOT_COUNT; step += 1) {
+    const candidate = (slot + step) % SLOT_COUNT;
+    if (!slots[candidate]) return candidate;
+  }
+  return null;
+}
+
+// The slots and one search field under them. Typing a name and pressing Enter fills the selected slot and selects the
+// next empty one, so a party is six names and six Enters. Once every slot is filled, focus moves to the growth table.
 function PartySlots({
   party,
   title,
   context,
+  autoFocus,
+  onAutoFocused,
   onChange,
 }: {
   party: RaidFormParty;
   title: string;
   context: RaidPartyEditorContext;
+  autoFocus: boolean;
+  onAutoFocused: () => void;
   onChange: (party: RaidFormParty) => void;
 }) {
+  const id = useId();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const slotRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const [selected, setSelected] = useState<number | null>(() => party.slots.indexOf(null));
+  const [query, setQuery] = useState("");
+  const [activeIndex, setActiveIndex] = useState(0);
+  // Chrome sends Enter with the last syllable still composing and commits it afterwards; the pick waits for that commit.
+  const pendingPickRef = useRef(false);
+
+  const selectedSlot = selected !== null && selected >= 0 ? selected : null;
+  const selectedUnit = selectedSlot === null ? null : party.slots[selectedSlot];
+  const role = selectedSlot === null || isStrikerSlot(selectedSlot) ? "striker" : "special";
+  const trimmed = query.trim();
+  const matches = useMemo(() => {
+    if (!trimmed) return [];
+    const usedUids = new Set(party.slots.flatMap((unit) => (unit ? [unit.studentUid] : [])));
+    return context.pickableStudents
+      .filter(
+        (student) => student.role === role && !usedUids.has(student.uid) && hangul.search(student.name, trimmed) >= 0,
+      )
+      .slice(0, MAX_LISTED_STUDENTS);
+  }, [context.pickableStudents, role, party.slots, trimmed]);
+  const active = matches[Math.min(activeIndex, matches.length - 1)] ?? null;
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    searchRef.current?.focus();
+    onAutoFocused();
+  }, [autoFocus, onAutoFocused]);
+
   const setSlot = (slot: number, unit: RaidFormUnit | null) =>
-    onChange({ ...party, slots: party.slots.map((current, index) => (index === slot ? unit : current)) });
-  const usedUids = new Set(party.slots.flatMap((unit) => (unit ? [unit.studentUid] : [])));
-  const renderSlot = (slot: number) => (
-    <PartySlot
-      key={slot}
-      partyTitle={title}
-      slot={slot}
-      unit={party.slots[slot]}
-      context={context}
-      usedUids={usedUids}
-      onChange={(unit) => setSlot(slot, unit)}
-    />
-  );
+    party.slots.map((current, index) => (index === slot ? unit : current));
+
+  const pick = (uid: string) => {
+    if (selectedSlot === null) return;
+    const slots = setSlot(selectedSlot, fillRaidFormUnit(uid, false, context.recruited));
+    onChange({ ...party, slots });
+    setQuery("");
+    setActiveIndex(0);
+    const next = nextEmptySlot(slots, selectedSlot);
+    setSelected(next);
+    if (next === null) {
+      // The party is full: continue in the growth table, which renders with the new slot on the next frame.
+      requestAnimationFrame(() => {
+        rootRef.current?.parentElement?.querySelector<HTMLElement>("[data-number-input-flow]")?.focus();
+      });
+    }
+  };
+
+  const pickActiveRef = useRef(() => {});
+  pickActiveRef.current = () => {
+    if (active) pick(active.uid);
+  };
+
+  const clearSlot = (slot: number) => {
+    onChange({ ...party, slots: setSlot(slot, null) });
+    setSelected(slot);
+  };
+
+  const selectSlot = (slot: number) => {
+    setSelected(slot);
+    setQuery("");
+    setActiveIndex(0);
+  };
+
+  const onSearchKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (matches.length === 0) return;
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      setActiveIndex((current) => (Math.min(current, matches.length - 1) + step + matches.length) % matches.length);
+      return;
+    }
+    if (event.key === "Enter") {
+      event.preventDefault();
+      if (event.nativeEvent.isComposing) {
+        pendingPickRef.current = true;
+        return;
+      }
+      if (active) pick(active.uid);
+      return;
+    }
+    if (event.key === "Escape" && query) {
+      event.preventDefault();
+      setQuery("");
+    }
+  };
+
+  const onSlotKeyDown = (event: KeyboardEvent<HTMLButtonElement>, slot: number) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      const next = Math.min(Math.max(slot + (event.key === "ArrowLeft" ? -1 : 1), 0), SLOT_COUNT - 1);
+      selectSlot(next);
+      slotRefs.current[next]?.focus();
+      return;
+    }
+    if ((event.key === "Delete" || event.key === "Backspace") && party.slots[slot]) {
+      event.preventDefault();
+      clearSlot(slot);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectSlot(slot);
+      searchRef.current?.focus();
+    }
+  };
+
+  const renderSlot = (slot: number) => {
+    const unit = party.slots[slot];
+    const student = unit ? context.studentsByUid.get(unit.studentUid) : undefined;
+    const { name, variant } = splitVisibleStudentName(student?.name ?? "");
+    const isSelected = slot === selectedSlot;
+    const studentName = unit ? (student ? formatRaidStudentName(student.name) : "알 수 없는 학생") : null;
+    return (
+      <li key={slot} className="relative flex w-14 flex-col sm:w-16">
+        <button
+          ref={(element) => {
+            slotRefs.current[slot] = element;
+          }}
+          type="button"
+          aria-pressed={isSelected}
+          aria-label={`${title} ${slotLabel(slot)}, ${studentName ? `${studentName}${unit?.assist ? " 조력자" : ""}` : "비어 있음"}`}
+          aria-keyshortcuts={unit ? "Delete" : undefined}
+          onClick={() => {
+            selectSlot(slot);
+            searchRef.current?.focus();
+          }}
+          onKeyDown={(event) => onSlotKeyDown(event, slot)}
+          className={cn("relative block w-full cursor-pointer rounded-md text-left", v2FocusRing)}
+        >
+          {unit ? (
+            <StudentThumb
+              studentUid={unit.studentUid}
+              name={student ? name : "알 수 없는 학생"}
+              variant={student ? variant : null}
+              recruitmentLabel={unit.assist ? "조력자" : undefined}
+            />
+          ) : (
+            <>
+              <span
+                className={cn(
+                  "flex aspect-[5/6] w-full items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
+                  isSelected && "border-solid border-v2-accent bg-v2-accent-subtle text-v2-accent",
+                )}
+              >
+                <PlusIcon className="size-5" aria-hidden="true" />
+              </span>
+              <span aria-hidden="true" className="mt-1 block text-center text-xs leading-4 text-v2-fg-tertiary">
+                비어 있음
+              </span>
+            </>
+          )}
+          {isSelected && unit ? (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 aspect-[5/6] rounded-md ring-2 ring-v2-accent"
+            />
+          ) : null}
+        </button>
+      </li>
+    );
+  };
+
+  const slotName = selectedSlot === null ? null : `${title} ${slotLabel(selectedSlot)}`;
+  const listId = `${id}-results`;
   return (
-    <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-3">
-      <SlotGroup label="STRIKER">{[0, 1, 2, 3].map(renderSlot)}</SlotGroup>
-      <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
-      <SlotGroup label="SPECIAL">{[4, 5].map(renderSlot)}</SlotGroup>
+    <div ref={rootRef} className="flex min-w-0 flex-col gap-2.5">
+      <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-3">
+        <SlotGroup label="STRIKER">{[0, 1, 2, 3].map(renderSlot)}</SlotGroup>
+        <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
+        <SlotGroup label="SPECIAL">{[4, 5].map(renderSlot)}</SlotGroup>
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <label
+          className={cn(
+            "flex h-v2-control-min min-h-v2-control-min w-full min-w-0 items-center gap-2 rounded-md bg-v2-surface px-3 text-v2-fg-secondary ring-1 ring-v2-control-border sm:max-w-80",
+            "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-v2-focus",
+          )}
+        >
+          <MagnifyingGlassIcon className="size-4 shrink-0" aria-hidden="true" />
+          <input
+            ref={searchRef}
+            type="text"
+            role="combobox"
+            aria-label={slotName ? `${slotName} 학생 찾기` : `${title} 학생 찾기`}
+            aria-autocomplete="list"
+            aria-expanded={matches.length > 0}
+            aria-controls={listId}
+            aria-activedescendant={active ? `${id}-${active.uid}` : undefined}
+            placeholder={
+              selectedSlot === null
+                ? "학생을 넣을 슬롯을 고르세요"
+                : `${role === "striker" ? "스트라이커" : "스페셜"} 이름으로 찾기`
+            }
+            disabled={selectedSlot === null}
+            value={query}
+            onChange={(event) => {
+              setQuery(event.currentTarget.value);
+              setActiveIndex(0);
+            }}
+            onKeyDown={onSearchKeyDown}
+            onCompositionEnd={() => {
+              if (!pendingPickRef.current) return;
+              pendingPickRef.current = false;
+              // Pick after the committed syllable lands in the field, so it does not reappear after the field clears.
+              window.setTimeout(() => pickActiveRef.current(), 0);
+            }}
+            className="min-w-0 flex-1 appearance-none bg-transparent text-base text-v2-fg outline-none placeholder:text-v2-fg-tertiary disabled:text-v2-fg-disabled sm:text-sm"
+          />
+        </label>
+        {selectedUnit && selectedSlot !== null ? (
+          <span className="flex items-center gap-1">
+            <Button
+              variant="text"
+              size="sm"
+              aria-pressed={selectedUnit.assist}
+              onClick={() =>
+                onChange({
+                  ...party,
+                  slots: setSlot(
+                    selectedSlot,
+                    fillRaidFormUnit(selectedUnit.studentUid, !selectedUnit.assist, context.recruited),
+                  ),
+                })
+              }
+            >
+              <HandRaisedIcon className="size-3.5" aria-hidden="true" />
+              {selectedUnit.assist ? "조력자 해제" : "조력자로 표시"}
+            </Button>
+            <Button variant="text" size="sm" onClick={() => clearSlot(selectedSlot)}>
+              <UserMinusIcon className="size-3.5" aria-hidden="true" />
+              슬롯 비우기
+            </Button>
+          </span>
+        ) : null}
+      </div>
+      <div
+        id={listId}
+        role="listbox"
+        aria-label="학생 검색 결과"
+        className={cn("flex flex-wrap gap-1.5", !trimmed && "hidden")}
+      >
+        {matches.map((student, index) => {
+          const { name, variant } = splitVisibleStudentName(student.name);
+          const isActive = student.uid === active?.uid;
+          return (
+            <button
+              key={student.uid}
+              id={`${id}-${student.uid}`}
+              type="button"
+              role="option"
+              aria-selected={isActive}
+              // The keyboard stays in the search field, which moves the active option with ↑↓.
+              tabIndex={-1}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setActiveIndex(index)}
+              onClick={() => pick(student.uid)}
+              className={cn(
+                "flex cursor-pointer items-center gap-1.5 rounded-full py-0.5 pr-2.5 pl-0.5 text-sm text-v2-fg ring-1 ring-v2-control-border",
+                isActive && "bg-v2-accent-subtle ring-2 ring-v2-accent",
+              )}
+            >
+              <RoundStudentImage studentUid={student.uid} size="sm" />
+              <span>
+                {name}
+                {variant ? <span className="ml-0.5 text-xs text-v2-fg-tertiary">({variant})</span> : null}
+              </span>
+              {context.recruited[student.uid] ? null : <span className="text-xs text-v2-fg-tertiary">모집하지 않음</span>}
+            </button>
+          );
+        })}
+        {trimmed && matches.length === 0 ? (
+          <p className="py-1 text-sm text-v2-fg-secondary">검색 결과가 없어요</p>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -215,228 +502,6 @@ function SlotGroup({ label, children }: { label: string; children: ReactNode }) 
         {children}
       </ul>
     </div>
-  );
-}
-
-function PartySlot({
-  partyTitle,
-  slot,
-  unit,
-  context,
-  usedUids,
-  onChange,
-}: {
-  partyTitle: string;
-  slot: number;
-  unit: RaidFormUnit | null;
-  context: RaidPartyEditorContext;
-  usedUids: ReadonlySet<string>;
-  onChange: (unit: RaidFormUnit | null) => void;
-}) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const [choosing, setChoosing] = useState(false);
-  const student = unit ? context.studentsByUid.get(unit.studentUid) : undefined;
-  const role = isStrikerSlot(slot) ? "striker" : "special";
-  const slotName = `${partyTitle} ${slotLabel(slot)}`;
-  const close = () => {
-    setOpen(false);
-    setChoosing(false);
-  };
-  const pick = (uid: string) => {
-    onChange(fillRaidFormUnit(uid, unit?.assist ?? false, context.recruited));
-    close();
-    triggerRef.current?.focus();
-  };
-
-  const { name, variant } = splitVisibleStudentName(student?.name ?? "");
-  return (
-    <li className="relative flex w-14 flex-col sm:w-16">
-      {unit ? (
-        <button
-          ref={triggerRef}
-          type="button"
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-label={`${slotName} ${student ? formatRaidStudentName(student.name) : "알 수 없는 학생"}${unit.assist ? " 조력자" : ""} 메뉴`}
-          onClick={() => setOpen((current) => !current)}
-          className={cn("block w-full cursor-pointer rounded-md text-left", v2FocusRing)}
-        >
-          <StudentThumb
-            studentUid={unit.studentUid}
-            name={student ? name : "알 수 없는 학생"}
-            variant={student ? variant : null}
-            recruitmentLabel={unit.assist ? "조력자" : undefined}
-          />
-        </button>
-      ) : (
-        <>
-          <button
-            ref={triggerRef}
-            type="button"
-            aria-haspopup="dialog"
-            aria-expanded={open}
-            aria-label={`${slotName} 학생 넣기`}
-            onClick={() => {
-              setChoosing(true);
-              setOpen((current) => !current);
-            }}
-            className={cn(
-              "flex aspect-[5/6] w-full cursor-pointer items-center justify-center rounded-md border border-dashed border-v2-control-border-strong text-v2-fg-tertiary hover:bg-v2-hover hover:text-v2-fg",
-              v2FocusRing,
-            )}
-          >
-            <PlusIcon className="size-5" aria-hidden="true" />
-          </button>
-          <span aria-hidden="true" className="mt-1 text-center text-xs leading-4 text-v2-fg-tertiary">
-            비어 있음
-          </span>
-        </>
-      )}
-      <Popover
-        open={open}
-        label={unit && !choosing ? `${slotName} 메뉴` : `${slotName} 학생 찾기`}
-        onClose={close}
-        returnFocusRef={triggerRef}
-        anchorRef={triggerRef}
-        className="w-[min(20rem,calc(100vw-2rem))] p-2"
-      >
-        {unit && !choosing ? (
-          <div className="flex flex-col">
-            <p className="truncate px-2.5 pt-1 pb-2 text-sm font-semibold text-v2-fg">
-              {student ? formatRaidStudentName(student.name) : "알 수 없는 학생"}
-            </p>
-            <SlotMenuButton icon={ArrowsRightLeftIcon} onClick={() => setChoosing(true)}>
-              다른 학생으로 바꾸기
-            </SlotMenuButton>
-            <SlotMenuButton
-              icon={HandRaisedIcon}
-              onClick={() => {
-                onChange(fillRaidFormUnit(unit.studentUid, !unit.assist, context.recruited));
-                close();
-                triggerRef.current?.focus();
-              }}
-            >
-              {unit.assist ? "조력자 표시 해제" : "조력자로 표시"}
-            </SlotMenuButton>
-            <SlotMenuButton
-              icon={UserMinusIcon}
-              danger
-              onClick={() => {
-                onChange(null);
-                close();
-                triggerRef.current?.focus();
-              }}
-            >
-              슬롯 비우기
-            </SlotMenuButton>
-          </div>
-        ) : (
-          <StudentSearch
-            label={`${slotName} 학생 찾기`}
-            students={context.pickableStudents}
-            role={role}
-            usedUids={usedUids}
-            currentUid={unit?.studentUid ?? null}
-            recruited={context.recruited}
-            onPick={pick}
-          />
-        )}
-      </Popover>
-    </li>
-  );
-}
-
-function SlotMenuButton({
-  icon: Icon,
-  danger = false,
-  onClick,
-  children,
-}: {
-  icon: typeof UserMinusIcon;
-  danger?: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex min-h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-left text-sm hover:bg-v2-hover",
-        danger ? "text-v2-danger" : "text-v2-fg",
-        v2FocusRing,
-      )}
-    >
-      <Icon className="size-4 shrink-0" aria-hidden="true" />
-      {children}
-    </button>
-  );
-}
-
-function StudentSearch({
-  label,
-  students,
-  role,
-  usedUids,
-  currentUid,
-  recruited,
-  onPick,
-}: {
-  label: string;
-  students: readonly RaidPartyStudent[];
-  role: RaidPartyStudent["role"];
-  usedUids: ReadonlySet<string>;
-  currentUid: string | null;
-  recruited: RaidPartyEditorContext["recruited"];
-  onPick: (uid: string) => void;
-}) {
-  const [query, setQuery] = useState("");
-  const matches = useMemo(
-    () =>
-      students.filter(
-        (student) =>
-          student.role === role &&
-          (student.uid === currentUid || !usedUids.has(student.uid)) &&
-          hangul.search(student.name, query.trim()) >= 0,
-      ),
-    [students, role, usedUids, currentUid, query],
-  );
-  return (
-    <>
-      <SearchInput aria-label={label} placeholder="학생 이름으로 찾기" value={query} onChange={setQuery} />
-      <div className="mt-2 max-h-72 overflow-y-auto">
-        {matches.length > 0 ? (
-          matches.slice(0, MAX_LISTED_STUDENTS).map((student) => {
-            const { name, variant } = splitVisibleStudentName(student.name);
-            return (
-              <button
-                key={student.uid}
-                type="button"
-                onClick={() => onPick(student.uid)}
-                className={cn(
-                  "flex w-full cursor-pointer items-center gap-3 rounded-md px-2.5 py-1.5 text-left hover:bg-v2-hover",
-                  v2FocusRing,
-                )}
-              >
-                <RoundStudentImage studentUid={student.uid} size="md" />
-                <span className="min-w-0 flex-1 truncate text-sm text-v2-fg">
-                  {name}
-                  {variant ? <span className="ml-1 text-xs text-v2-fg-tertiary">{variant}</span> : null}
-                </span>
-                {student.uid === currentUid ? (
-                  <span className="text-xs text-v2-fg-tertiary">지금 학생</span>
-                ) : recruited[student.uid] ? null : (
-                  <span className="text-xs text-v2-fg-tertiary">모집하지 않음</span>
-                )}
-              </button>
-            );
-          })
-        ) : (
-          <p className="px-3 py-6 text-center text-sm text-v2-fg-secondary">검색 결과가 없어요</p>
-        )}
-      </div>
-    </>
   );
 }
 
