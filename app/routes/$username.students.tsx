@@ -785,8 +785,10 @@ export default function UserPage() {
 
   // ---- Aside and mobile bar ----
   const resetFilters = useCallback(() => setFilter((current) => clearStudentsFilters(current)), [setFilter]);
-  // The batch bar shows as soon as batch mode is on, so the mobile bar steps aside then, not only after a selection.
-  const hideMobileBar = stacked && (editing || batchMode);
+  // The batch bar shows in the summary view as soon as batch mode is on, before any selection. The mobile bar steps
+  // aside only while it shows: batch mode stays on when the view switches to 자세히, where the batch bar is gone.
+  const batchBarShown = me && batchMode && !growthView;
+  const hideMobileBar = stacked && (editing || batchBarShown);
   useEffect(() => {
     setAsideContent(
       <>
@@ -883,10 +885,10 @@ export default function UserPage() {
     <div
       className={cn(
         "min-w-0 space-y-v2-group-gap",
-        (editing || batchMode) && stacked && "pb-24",
+        (editing || batchBarShown) && stacked && "pb-24",
       )}
     >
-      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked && (editing || batchMode)} />
+      <ResultToast toast={toast} onClose={closeToast} aboveActionBar={stacked && (editing || batchBarShown)} />
 
       {editing ? (
         <div className="flex flex-wrap items-center gap-2">

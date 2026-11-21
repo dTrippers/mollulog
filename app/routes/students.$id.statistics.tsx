@@ -272,7 +272,7 @@ export default function StudentStatisticsPage() {
             aria-expanded={scopeInfoOpen}
             onClick={() => setScopeInfoOpen((open) => !open)}
           />
-          <Popover open={scopeInfoOpen} label="통계 범위 안내" onClose={() => setScopeInfoOpen(false)} returnFocusRef={scopeInfoRef} anchorRef={scopeInfoAnchorRef} className="w-72 p-5 max-sm:p-4 text-[13px] leading-[1.43] text-v2-fg backdrop-blur-[4px] data-[placement=below]:-mt-2 data-[placement=above]:mt-2">
+          <Popover open={scopeInfoOpen} label="통계 범위 안내" onClose={() => setScopeInfoOpen(false)} returnFocusRef={scopeInfoRef} anchorRef={scopeInfoAnchorRef} className="w-72 p-5 max-sm:p-4 text-[13px] leading-[1.43] text-v2-fg data-[placement=below]:-mt-2 data-[placement=above]:mt-2">
             제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요
           </Popover>
         </span>

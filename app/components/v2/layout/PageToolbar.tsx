@@ -38,8 +38,9 @@ export function PageToolbar({ children, stickyOnDesktop = false, stackedOnly = f
         className="v2-toolbar-sentinel"
         data-stacked-only={stackedOnly ? "true" : undefined}
       />
+      {/* Pinned, the toolbar floats over the content scrolling under it, so it turns translucent with a backdrop blur. */}
       <div
-        className="v2-toolbar min-w-0 bg-v2-canvas"
+        className="v2-toolbar min-w-0 bg-v2-canvas data-[sticky=true]:bg-v2-canvas/94 data-[sticky=true]:backdrop-blur-md"
         data-sticky={stuck ? "true" : "false"}
         data-sticky-desktop={stickyOnDesktop ? "true" : undefined}
         data-stacked-only={stackedOnly ? "true" : undefined}

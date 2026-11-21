@@ -21,8 +21,8 @@ export type PageActionBarProps = {
 
 // Bottom action bar for the step's primary and secondary actions. The screen adds bottom padding while a fixed bar shows.
 // The bar floats as a capsule in the inverse lightness of the page (dark over the light theme, light over the dark
-// theme), translucent with a backdrop blur, so it reads as a layer above the content. Wide screens center it at the
-// width of its content; narrow screens span the screen with a margin.
+// theme), translucent with a backdrop blur, so it reads as a layer above the content. From sm both placements center it
+// at the width of its content; narrower screens span the screen with a margin.
 export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(function PageActionBar(
   { summary, note, details, children, placement = "sticky", expandActions = false, className },
   ref,
@@ -34,7 +34,7 @@ export const PageActionBar = forwardRef<HTMLDivElement, PageActionBarProps>(func
         "v2-floating-inverse z-20 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[14px] py-2 pr-2 shadow-lg backdrop-blur-md sm:gap-x-5",
         summary != null ? "pl-3.5 sm:pl-4.5" : "pl-2",
         placement === "fixed"
-          ? "fixed inset-x-3 bottom-[calc(var(--mobile-nav-height)+0.75rem)] z-30 sm:inset-x-4 lg:bottom-4 lg:mx-auto lg:w-fit"
+          ? "fixed inset-x-3 bottom-[calc(var(--mobile-nav-height)+0.75rem)] z-30 sm:inset-x-4 sm:mx-auto sm:w-fit lg:bottom-4"
           : "sticky bottom-4 sm:mx-auto sm:w-fit sm:max-w-full",
         className,
       )}

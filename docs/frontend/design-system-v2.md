@@ -16,7 +16,7 @@ Color tokens are defined in `app/tailwind.css`. Raw `--v2-*` variables live in `
 
 | Token / utility | Light | Dark | Use |
 |---|---|---|---|
-| `bg-v2-canvas` | `oklch(0.97 0 0)` | `oklch(0.235 0 0)` | Page background |
+| `bg-v2-canvas` | `oklch(0.97 0 0)` | `oklch(0.235 0 0)` | Page background. A pinned `PageToolbar` floats on it at 94% (`bg-v2-canvas/94`) with `backdrop-blur-md`, so it keeps the page color over the content scrolling under it |
 | `bg-v2-surface` | `oklch(1 0 0)` | `oklch(0.27 0 0)` | Content blocks |
 | `bg-v2-inset` | `oklch(0.955 0 0)` | `oklch(0.33 0 0)` | Secondary areas, attribute badge background, image placeholder |
 | `divide-v2-divider`, `bg-v2-divider` | `oklch(0.92 0 0)` | `oklch(0.40 0 0)` | List dividers and timeline lines |

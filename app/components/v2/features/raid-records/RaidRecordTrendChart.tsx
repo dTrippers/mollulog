@@ -45,8 +45,11 @@ function buildTicks(min: number, max: number): { domain: [number, number]; ticks
   return { domain: [low, high], ticks };
 }
 
-function formatRankTick(value: number): string {
-  return value >= 10_000 ? `${Math.round(value / 1000)}K` : value.toLocaleString("ko-KR");
+// Large ranks shorten to thousands. The fraction is kept, so ticks a step under 1,000 apart stay distinct (10.5K, 11K).
+export function formatRankTick(value: number): string {
+  return value >= 10_000
+    ? `${(value / 1000).toLocaleString("ko-KR", { maximumFractionDigits: 3 })}K`
+    : value.toLocaleString("ko-KR");
 }
 
 function useMeasuredWidth() {

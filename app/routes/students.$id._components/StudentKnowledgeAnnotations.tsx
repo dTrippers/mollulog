@@ -206,7 +206,7 @@ function KnowledgeTermTrigger({ termText, entry }: { termText: string; entry: Pu
         label={entry.title}
         onClose={() => setOpen(false)}
         returnFocusRef={triggerRef}
-        className="w-[min(18rem,calc(100vw-1.5rem))] backdrop-blur-[4px]"
+        className="w-[min(18rem,calc(100vw-1.5rem))]"
       >
         <div
           id={popoverId}

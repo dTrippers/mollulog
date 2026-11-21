@@ -40,7 +40,8 @@ describe("PageActionBar", () => {
     expect(bar.className).toContain("fixed");
     expect(bar.className).toContain("inset-x-3");
     expect(bar.className).toContain("bottom-[calc(var(--mobile-nav-height)+0.75rem)]");
-    expect(bar.className).toContain("lg:mx-auto lg:w-fit");
+    // Centered at its content width from sm, like the sticky bar.
+    expect(bar.className).toContain("sm:mx-auto sm:w-fit");
     expect(bar.className).toContain("z-30");
   });
 
