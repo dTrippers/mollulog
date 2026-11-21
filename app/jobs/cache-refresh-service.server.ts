@@ -14,6 +14,12 @@ export const ADMIN_CACHE_REFRESH_REQUESTER_ID = 0;
 
 const SAFE_SERVICE_ERROR = "Cache refresh service request failed";
 
+/**
+ * Task status in the RPC snapshot. `unrecorded` marks a task that did not exist when the job was created,
+ * so the job has no result for it.
+ */
+export type CacheRefreshTaskSnapshotStatus = CacheRefreshTaskStatus | "unrecorded";
+
 /** Plain view of a cache refresh job returned to the admin worker over RPC. */
 export type CacheRefreshJobSnapshot = {
   uid: string;
@@ -23,7 +29,7 @@ export type CacheRefreshJobSnapshot = {
   tasks: Array<{
     name: CacheRefreshTaskName;
     label: string;
-    status: CacheRefreshTaskStatus;
+    status: CacheRefreshTaskSnapshotStatus;
     durationMs: number | null;
   }>;
   startedAt: string | null;
@@ -42,12 +48,15 @@ export function toCacheRefreshJobSnapshot(job: CacheRefreshJob): CacheRefreshJob
     status: job.status,
     completedCount: job.completedCount,
     totalCount: job.totalCount,
-    tasks: CACHE_REFRESH_TASK_NAMES.map((name) => ({
-      name,
-      label: CACHE_REFRESH_TASK_LABELS[name],
-      status: job.taskResults[name].status,
-      durationMs: job.taskResults[name].durationMs,
-    })),
+    tasks: CACHE_REFRESH_TASK_NAMES.map((name) => {
+      const result = job.taskResults[name];
+      return {
+        name,
+        label: CACHE_REFRESH_TASK_LABELS[name],
+        status: result?.status ?? "unrecorded",
+        durationMs: result?.durationMs ?? null,
+      };
+    }),
     startedAt: job.startedAt,
     finishedAt: job.finishedAt,
     createdAt: job.createdAt,
