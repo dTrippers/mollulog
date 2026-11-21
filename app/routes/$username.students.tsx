@@ -47,6 +47,7 @@ import { useTrackGoogleAnalyticsSearch } from "~/lib/google-analytics-hooks";
 import { withDirectionParticle, withObjectParticle } from "~/lib/korean";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { normalizeRouteError } from "~/lib/route-error";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import {
   addRecruitedStudents,
@@ -143,12 +144,13 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   };
 };
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 학생부 | 몰루로그`.trim();
+  const description = `${params.username} 선생님이 모집한 학생 목록을 확인해보세요`;
   return [
-    { title: `${params.username || ""} - 학생부 | 몰루로그`.trim() },
-    { name: "description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
-    { name: "og:title", content: `${params.username || ""} - 학생부 | 몰루로그`.trim() },
-    { name: "og:description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 

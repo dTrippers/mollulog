@@ -14,16 +14,22 @@ export const loader = async ({ params }: LoaderFunctionArgs) => {
     throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");
   }
 
+  const dashParam = raidTypeToParam(raidType);
+  const isKnownRaidType = VALID_URL_PARAMS.includes(raidType) || dashParam !== raidType;
+
+  // A raid type has no page of its own, so the bare type path opens the raid list instead of an empty layout.
+  if (isKnownRaidType && !seasonIndex) {
+    return redirect("/raids");
+  }
+
   // Valid dash-format param → child route handles it
   if (VALID_URL_PARAMS.includes(raidType)) {
     return null;
   }
 
   // Old underscore/internal format (e.g. "total_assault", "elimination") → redirect to dash format
-  const dashParam = raidTypeToParam(raidType);
   if (dashParam !== raidType) {
-    const newPath = seasonIndex ? `/raids/${dashParam}/${seasonIndex}` : `/raids/${dashParam}`;
-    return redirect(newPath, 301);
+    return redirect(`/raids/${dashParam}/${seasonIndex}`, 301);
   }
 
   throw routeError(404, "raid.not_found", "총력전/대결전 정보를 찾을 수 없어요");

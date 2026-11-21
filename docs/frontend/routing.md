@@ -86,6 +86,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 - Navigable screens have `meta` by default.
 - Title and description are computed from route data.
 - Title strings prioritize the Korean user experience.
+- A page anyone can open also spreads `socialMeta` from `~/lib/seo` with its title, its description (when it has
+  one), and its pathname. Link previews such as X read the card title from these tags, not from `<title>`, and ignore
+  Open Graph tags written with `name`. Do not write `og:*` or `twitter:*` text tags by hand; a route writes only its
+  own card image (`og:image`, `twitter:image`, with `handle.ownsOpenGraphImage`) and card type.
 
 ```ts
 export const meta: MetaFunction<typeof loader> = ({ data }) => [

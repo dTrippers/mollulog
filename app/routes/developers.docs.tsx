@@ -16,6 +16,7 @@ import {
   formatApiErrorExampleJson,
   resolveApiDocumentUrls,
 } from "~/domain/mollulog-api-spec";
+import { socialMeta } from "~/lib/seo";
 import {
   CodeBlock,
   DataTable,
@@ -25,7 +26,10 @@ import {
   TableHeader,
 } from "./developers._components/ApiDocsComponents";
 
-export const meta: MetaFunction = () => [{ title: "API 문서 | 몰루로그" }];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "API 문서";
+  return [{ title: `${title} | 몰루로그` }, ...socialMeta({ title, pathname: location.pathname })];
+};
 
 export function loader({ context, request }: LoaderFunctionArgs) {
   const { env } = context.cloudflare;

@@ -356,12 +356,16 @@ export const pgPostsTable = pgTable(
     board: text().notNull(),
     timelineContentUid: text("timeline_content_uid"),
     thumbnailImageUrl: text("thumbnail_image_url"),
+    // Null while the post is a draft. Drafts are visible only in the admin app.
+    publishedAt: timestamptz("published_at").default(sql`now()`),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
   (table) => [
     uniqueIndex("posts_uid_uidx").on(table.uid),
-    index("posts_board_created_at_uid_idx").on(table.board, table.createdAt.desc(), table.uid.desc()),
+    index("posts_board_published_at_uid_idx")
+      .on(table.board, table.publishedAt.desc(), table.uid.desc())
+      .where(sql`${table.publishedAt} is not null`),
     index("posts_timeline_content_uid_idx").on(table.timelineContentUid),
   ],
 );

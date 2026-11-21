@@ -134,6 +134,74 @@ export function getBlueArchiveGameDate(now: Date | string = new Date()): dayjs.D
   return dayjs(now).tz("Asia/Seoul").subtract(4, "hour").startOf("day");
 }
 
+// KST has no daylight saving time, so day boundaries below use fixed offsets instead of the runtime time zone.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const GAME_DAY_RESET_MS = 4 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The KST calendar date of an instant, as a day number. */
+function kstDayNumber(at: Date | string): number {
+  return Math.floor((new Date(at).getTime() + KST_OFFSET_MS) / DAY_MS);
+}
+
+/** The game day of an instant, as a day number; a game day starts at 04:00 KST. */
+function gameDayNumber(at: Date | string): number {
+  return Math.floor((new Date(at).getTime() + KST_OFFSET_MS - GAME_DAY_RESET_MS) / DAY_MS);
+}
+
+/** 04:00 KST at the start of the game day an instant falls on. */
+export function getPyroxeneGameDayStartAt(at: Date | string): string {
+  return new Date(gameDayNumber(at) * DAY_MS - KST_OFFSET_MS + GAME_DAY_RESET_MS).toISOString();
+}
+
+/** Whether an instant falls between 00:00 and 04:00 KST, so its game day is the previous calendar date. */
+export function isBeforePyroxeneGameDayReset(at: Date | string): boolean {
+  return kstDayNumber(at) !== gameDayNumber(at);
+}
+
+export function isPyroxeneOneOffGainSource(source: string): source is "buy" | "other" {
+  return source === "buy" || source === "other";
+}
+
+/**
+ * The instant a one-off purchase or direct gain counts from. A gain whose KST date is the current game day is one
+ * still to come, so it keeps the time it is recorded instead of 04:00 and stays after inventory entered earlier that
+ * day. Before the 04:00 reset, the current game day is the previous calendar date.
+ */
+export function normalizePyroxeneOneOffGainAt(date: Date | string, now: Date | string = new Date()): string {
+  return kstDayNumber(date) === gameDayNumber(now)
+    ? new Date(now).toISOString()
+    : normalizePyroxeneTimelineEventAt(date);
+}
+
+/**
+ * The instant an edited one-off gain counts from. While its date stays on the game day it was recorded for, it keeps
+ * the recorded instant, so changing only the amount or the name never moves it across an inventory input. An edit
+ * form that leaves the date alone sends the stored instant itself, which works in every display time zone.
+ */
+export function normalizePyroxeneOneOffGainEditAt(
+  date: Date | string,
+  previousEventAt: string,
+  now: Date | string = new Date(),
+): string {
+  const keepsDate =
+    new Date(date).getTime() === new Date(previousEventAt).getTime() ||
+    kstDayNumber(date) === gameDayNumber(previousEventAt);
+  if (keepsDate) return new Date(previousEventAt).toISOString();
+  return normalizePyroxeneOneOffGainAt(date, now);
+}
+
+/** Normalizes a timeline record's instant for its source; see {@link normalizePyroxeneOneOffGainAt}. */
+export function normalizePyroxeneTimelineRecordAt(
+  date: Date | string,
+  source: PyroxeneTimelineItem["source"],
+  now: Date | string = new Date(),
+): string {
+  return isPyroxeneOneOffGainSource(source)
+    ? normalizePyroxeneOneOffGainAt(date, now)
+    : normalizePyroxeneTimelineEventAt(date);
+}
+
 export function calculatePackageStartDateFromRemainingDays(
   remainingDays: number,
   packageDurationDays: number,
@@ -190,13 +258,14 @@ type OptimisticTimelineItemInput = {
   repeatIntervalDays?: number | null;
   repeatCount?: number | null;
   autoRepurchase?: boolean;
+  now?: Date | string;
 };
 
 function createOptimisticTimelineItem(input: OptimisticTimelineItemInput): PyroxeneTimelineItem {
   return {
     uid: input.uid ?? nanoid(8),
     userId: 0,
-    eventAt: normalizePyroxeneTimelineEventAt(input.eventAt),
+    eventAt: normalizePyroxeneTimelineRecordAt(input.eventAt, input.source, input.now),
     source: input.source,
     description: input.description,
     pyroxeneDelta: input.pyroxeneDelta ?? 0,
@@ -213,6 +282,7 @@ type OptimisticBuyTimelineOptions = {
   repeatType?: PyroxeneTimelineRepeatType;
   monthlyCount?: number;
   uid?: string;
+  now?: Date | string;
 };
 
 function normalizeMonthlyCount(monthlyCount: number | undefined): number {
@@ -237,6 +307,7 @@ export function createOptimisticBuyTimelineItems(
       description: "청휘석 구매",
       pyroxeneDelta: quantity * normalizedMonthlyCount,
       repeatType: options.repeatType,
+      now: options.now,
     }),
   ];
 }
@@ -328,6 +399,7 @@ export function createOptimisticOtherTimelineItems(
   description: string,
   date: Date,
   uid?: string,
+  now?: Date | string,
 ): PyroxeneTimelineItem[] {
   return [
     createOptimisticTimelineItem({
@@ -338,6 +410,7 @@ export function createOptimisticOtherTimelineItems(
       pyroxeneDelta: resources.pyroxene,
       oneTimeTicketDelta: resources.oneTimeTicket,
       tenTimeTicketDelta: resources.tenTimeTicket,
+      now,
     }),
   ];
 }

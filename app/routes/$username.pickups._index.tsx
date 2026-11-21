@@ -10,6 +10,7 @@ import {
 import { compareInstantAsc, compareInstantDesc, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { getRecruitmentGroupsByUids, getRecruitmentPoolStudents } from "~/models/recruitment";
 import {
   deleteRecruitmentResult,
@@ -27,12 +28,13 @@ import PickupHistoryList from "./$username.pickups._components/PickupHistoryList
 import PickupStats from "./$username.pickups._components/PickupStats";
 import { DELETE_FAILED } from "./$username.pickups._components/pickup-record";
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 모집 기록 | 몰루로그`.trim();
+  const description = `${params.username} 선생님이 모집한 학생 목록을 확인해보세요`;
   return [
-    { title: `${params.username || ""} - 모집 기록 | 몰루로그`.trim() },
-    { name: "description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
-    { name: "og:title", content: `${params.username || ""} - 모집 기록 | 몰루로그`.trim() },
-    { name: "og:description", content: `${params.username} 선생님이 모집한 학생 목록을 확인해보세요` },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 

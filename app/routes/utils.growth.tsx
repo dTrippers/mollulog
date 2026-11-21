@@ -4,6 +4,7 @@ import { Await, Outlet, redirect, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page } from "~/components/features/layout";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { loadDeferredGrowthPlannerData } from "./utils.growth._components/growth-data.server";
 import type {
   GrowthLayoutContext,
@@ -11,18 +12,13 @@ import type {
   GrowthStudent,
 } from "./utils.growth._components/types";
 
-export const meta: MetaFunction = () => {
+export const meta: MetaFunction = ({ location }) => {
+  const title = "학생 성장 플래너 | 몰루로그";
+  const description = "<블루 아카이브> 학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요.";
   return [
-    { title: "학생 성장 플래너 | 몰루로그" },
-    {
-      name: "description",
-      content: "<블루 아카이브> 학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요.",
-    },
-    { name: "og:title", content: "학생 성장 플래너 | 몰루로그" },
-    {
-      name: "og:description",
-      content: "<블루 아카이브> 학생들의 현재 성장 상태와 목표를 입력하고 필요한 재화량을 계산해보세요.",
-    },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 

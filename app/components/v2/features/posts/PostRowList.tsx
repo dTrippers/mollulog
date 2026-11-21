@@ -5,7 +5,7 @@ import type { Post } from "~/models/post";
 import { getV2LinkTransitionProps } from "../../layout/screen-transition";
 import { v2FocusRing } from "../../layout/styles";
 
-export type PostSummary = Pick<Post, "uid" | "title" | "createdAt">;
+export type PostSummary = Pick<Post, "uid" | "title" | "publishedAt">;
 
 // Location state that marks a post opened from the news list. The detail back action returns to that list page.
 export const newsListOriginState = { from: "news-list" } as const;
@@ -41,10 +41,10 @@ export function PostRowList({ posts, timeZone, linkState }: PostRowListProps) {
               </span>
               <time
                 id={dateId}
-                dateTime={post.createdAt}
+                dateTime={post.publishedAt}
                 className="shrink-0 text-xs leading-5 text-v2-fg-tertiary tabular-nums"
               >
-                {formatInstant(post.createdAt, { timeZone, format: "YYYY/MM/DD" })}
+                {formatInstant(post.publishedAt, { timeZone, format: "YYYY/MM/DD" })}
               </time>
             </Link>
           </li>

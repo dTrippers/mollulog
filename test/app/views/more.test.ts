@@ -99,3 +99,95 @@ describe("More view relationship summary", () => {
     expect(result.currentUser?.pickupHistoryCount).toBe(3);
   });
 });
+
+describe("More view next recruitment pyroxene", () => {
+  it("counts a purchase recorded on the day a recruitment opened before that recruitment", async () => {
+    const recordedAt = "2026-11-21T12:15:00.000Z"; // 21:15 KST on 11/21
+    jest.useFakeTimers({ now: new Date(recordedAt), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      mockGetNavigationBarContents.mockResolvedValue({
+        upcomingEvent: null,
+        hasRecentNews: false,
+        hasOngoingRaid: false,
+        hasUnconsumedCoupons: false,
+        hasUnreadFeedbackReplies: false,
+      });
+      // A recruitment that opened at 11:00 KST on 11/21.
+      mockGetPyroxenePlannerContents.mockResolvedValue([
+        {
+          kind: "event",
+          uid: "recruitment",
+          name: "같은 날 열린 모집",
+          imageUrl: null,
+          since: "2026-11-21T02:00:00.000Z",
+          until: "2026-11-28T02:00:00.000Z",
+          earnablePyroxene: null,
+          tags: [],
+          recruitmentGroupUid: null,
+          recruitments: [
+            {
+              recruitmentType: "usual",
+              pickup: true,
+              rerun: false,
+              until: "2026-11-28T02:00:00.000Z",
+              student: { uid: "student-0", name: "학생", initialTier: 3 },
+            },
+          ],
+        },
+      ]);
+      mockGetRecruitmentResultsByRecruitmentGroupUids.mockResolvedValue([]);
+      mockGetRecruitedStudents.mockResolvedValue([]);
+      mockGetRecruitmentResults.mockResolvedValue([]);
+      mockGetUserFavoritedStudents.mockResolvedValue([{ contentId: "recruitment", studentId: "student-0" }]);
+      mockGetRelationshipLevels.mockResolvedValue([]);
+      mockCountUnregisteredActiveCoupons.mockResolvedValue(0);
+      const expectedPyroxene = async (timelineItems: unknown[]) => {
+        mockGetPyroxeneUserState.mockResolvedValue({
+          // Inventory entered at 22:00 KST the day before.
+          latestResources: {
+            userId: 1,
+            inputAt: "2026-11-20T13:00:00.000Z",
+            pyroxene: 11000,
+            oneTimeTicket: 0,
+            tenTimeTicket: 0,
+          },
+          options: {
+            event: { pickupChance: "average" },
+            raid: { tier: "platinum" },
+            tactical: { level: "in100" },
+            consumption: { apChargeCount: 0, apChargeExceptions: [] },
+            timeline: { display: [] },
+          },
+          eventData: [],
+          timelineItems,
+          collectedSourceKeys: [],
+        });
+        const result = await getMoreViewData(
+          {} as Env,
+          {} as ExecutionContext,
+          { id: 1, username: "sensei", profileStudentId: null } as never,
+        );
+        return result.currentUser?.pyroxene?.expectedPyroxene;
+      };
+      const purchase = {
+        uid: "purchase",
+        userId: 1,
+        eventAt: recordedAt,
+        source: "buy",
+        repeatType: "fixed_days",
+        repeatIntervalDays: null,
+        repeatCount: null,
+        autoRepurchase: false,
+        description: "청휘석 구매",
+        pyroxeneDelta: 6600,
+        oneTimeTicketDelta: 0,
+        tenTimeTicketDelta: 0,
+      };
+
+      expect(await expectedPyroxene([])).toBe(11000);
+      expect(await expectedPyroxene([purchase])).toBe(17600);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+});

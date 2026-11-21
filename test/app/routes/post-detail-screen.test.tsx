@@ -21,12 +21,12 @@ const newsView: PostDetailView = {
     title: "9/8 업데이트 안내",
     content: "## 새로운 기능\n\n- 알림 이력을 확인할 수 있어요.\n\n![사진](https://mollulog.net/a.png)",
     thumbnailImageUrl: null,
-    createdAt: "2026-09-08T00:00:00.000Z",
+    publishedAt: "2026-09-08T00:00:00.000Z",
   },
   back: { kind: "news" },
   recent: {
     status: "success",
-    data: [{ uid: "post-2", title: "8/30 업데이트 안내", createdAt: "2026-08-30T00:00:00.000Z" }],
+    data: [{ uid: "post-2", title: "8/30 업데이트 안내", publishedAt: "2026-08-30T00:00:00.000Z" }],
   },
 };
 

@@ -68,3 +68,12 @@ describe("document Cache-Control", () => {
     expect(response.headers.get("Cache-Control")).toBe("private, no-store, no-transform");
   });
 });
+
+describe("document Content-Type", () => {
+  // Without the charset, a client that ignores `<meta charset>` reads the Korean titles as Latin-1.
+  it("names UTF-8", async () => {
+    const response = await renderDocument();
+
+    expect(response.headers.get("Content-Type")).toBe("text/html; charset=utf-8");
+  });
+});

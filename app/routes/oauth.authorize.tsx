@@ -18,6 +18,7 @@ import {
   normalizeApiScopes,
   type ApiScope,
 } from "~/domain/mollulog-api-spec";
+import { socialMeta } from "~/lib/seo";
 import { getSenseiById, type Sensei } from "~/models/sensei";
 import {
   getActiveOAuthGrant,
@@ -75,7 +76,10 @@ type AuthorizeScreenData =
   | { kind: "invalid"; reason: string }
   | { kind: "inactive"; username: string | null; profileStudentId: string | null };
 
-export const meta: MetaFunction = () => [{ title: "몰루로그 계정으로 로그인" }];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "몰루로그 계정으로 로그인";
+  return [{ title }, ...socialMeta({ title, pathname: location.pathname })];
+};
 
 export const headers: HeadersFunction = ({ parentHeaders }) => {
   const responseHeaders = new Headers(parentHeaders);

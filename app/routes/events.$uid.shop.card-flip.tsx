@@ -4,6 +4,7 @@ import { isEventShopStateSubmission } from "~/lib/revalidation";
 import CardFlipScreen from "./events.$uid._components/CardFlipScreen";
 import { cardFlipLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
+import { socialMeta } from "~/lib/seo";
 
 export const loader = async ({ params, context, request }: LoaderFunctionArgs) => {
   const eventUid = params.uid;
@@ -22,9 +23,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopStateSubmission(args) && args.defaultShouldRevalidate;
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   const title = `${data?.eventName ?? "이벤트"} - ${cardFlipLocale.menuTitle}`;
-  return [{ title: `${title} | 몰루로그` }];
+  return [{ title: `${title} | 몰루로그` }, ...socialMeta({ title, pathname: location.pathname })];
 };
 
 export default function EventCardFlipDetailRoute() {

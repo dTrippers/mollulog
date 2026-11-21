@@ -84,7 +84,7 @@ import type { PickupResources, PyroxeneTimelineEventData } from "~/domain/pyroxe
 import dayjs from "~/lib/dayjs";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getUserFavoritedStudents } from "~/models/favorite-students";
 import { isPlannerStateRevisionConflictError, PLANNER_STATE_REVISION_CONFLICT_MESSAGE } from "~/models/planner-state";
 import type { PyroxeneTimelineItem, PyroxeneTimelineRepeatType } from "~/models/pyroxene-planner";
@@ -453,10 +453,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
@@ -1060,7 +1057,11 @@ export default function PyroxenePlanner() {
     () => ({ event: options.event, raid: options.raid, tactical: options.tactical, consumption: options.consumption }),
     [options.event, options.raid, options.tactical, options.consumption],
   );
-  const { timeline, pending: timelinePending, error: timelineError } = usePyroxeneTimeline({
+  const {
+    timeline,
+    pending: timelinePending,
+    error: timelineError,
+  } = usePyroxeneTimeline({
     initialDate,
     initialResources,
     eventDataMap,

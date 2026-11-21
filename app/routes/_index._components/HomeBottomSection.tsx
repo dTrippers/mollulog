@@ -98,8 +98,8 @@ export function HomeNewsBlock({
             className={`relative isolate -mx-2 flex min-h-v2-row-min items-center justify-between gap-3 rounded-md px-2 py-v2-row-y text-sm text-v2-fg before:absolute before:inset-x-0 before:inset-y-1 before:-z-10 before:rounded-md before:content-[''] hover:before:bg-v2-hover focus-visible:before:bg-v2-hover ${v2FocusRing}`}
           >
             <span className="min-w-0 truncate">{post.title}</span>
-            <time dateTime={post.createdAt} className="shrink-0 text-sm text-v2-fg-tertiary tabular-nums">
-              {formatInstant(post.createdAt as UtcIsoString, { timeZone, format: "MM/DD" })}
+            <time dateTime={post.publishedAt} className="shrink-0 text-sm text-v2-fg-tertiary tabular-nums">
+              {formatInstant(post.publishedAt as UtcIsoString, { timeZone, format: "MM/DD" })}
             </time>
           </Link>
         </li>

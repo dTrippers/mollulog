@@ -3,6 +3,7 @@ import { redirect } from "react-router";
 import { EmptyView } from "~/components/primitives";
 import { getEventShopDestinationPath, selectEventShopDestination } from "~/domain/event-shop-destination";
 import { nowUtcIso } from "~/lib/date-time";
+import { socialMeta } from "~/lib/seo";
 import { getShopAvailableEvents } from "~/models/event-content";
 
 export const loader = async ({ context }: LoaderFunctionArgs) => {
@@ -16,7 +17,11 @@ export const loader = async ({ context }: LoaderFunctionArgs) => {
   return null;
 };
 
-export const meta: MetaFunction = () => [{ title: "이벤트 상점 계산기 | 몰루로그" }];
+// Reached only when no event shop is open or upcoming; otherwise the loader redirects to that event's shop.
+export const meta: MetaFunction = ({ location }) => {
+  const title = "이벤트 상점 계산기";
+  return [{ title: `${title} | 몰루로그` }, ...socialMeta({ title, pathname: location.pathname })];
+};
 
 export default function EventShopUtility() {
   return (

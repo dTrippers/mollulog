@@ -42,7 +42,7 @@ import {
 import { getInstantTime } from "~/lib/date-time";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { registerCoupon, unregisterCoupon } from "~/models/coupon";
 import { type CouponView, getCouponPageData } from "~/views/coupons.server";
@@ -55,11 +55,16 @@ const AVAILABLE_EMPTY_IMAGE_URL = "https://assets.mollulog.net/assets/videos/sit
 // Remaining time and a deadline that passes while the page is open are re-read on this interval.
 const NOW_REFRESH_MS = 30_000;
 
-export const meta: MetaFunction = ({ location }) => [
-  { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },
-  { name: "description", content: "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록" },
-  canonicalLink(location.pathname),
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "블루 아카이브 쿠폰 목록";
+  const description = "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;

@@ -22,7 +22,7 @@ import { getRecruitmentPeriodNoticeKind } from "~/domain/recruitment-period-noti
 import { formatInstant, formatInstantDateKey, nowUtcIso, toUtcIso, type UtcIsoString } from "~/lib/date-time";
 import { conjunctionParticle } from "~/lib/korean";
 import { captureServerError, getLogger } from "~/lib/observability.server";
-import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { recruitmentLabelLocale, timelineContentTypeLocale } from "~/locales/ko";
 import { getNestedContentComments } from "~/models/content.server";
@@ -201,19 +201,15 @@ export const action = async ({ params, context, request }: ActionFunctionArgs) =
   return {};
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data, params, location }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data) return [{ title: "이벤트 정보 | 몰루로그" }];
   const title = `${data.eventContent.name} - 이벤트 정보`;
   const description = `블루 아카이브 "${data.eventContent.name}" 이벤트의 픽업, 보상 정보를 확인해보세요.`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { property: "og:title", content: title },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     { property: "og:image", content: data.eventContent.imageUrl || DEFAULT_OPEN_GRAPH_IMAGE_URL },
-    { property: "og:description", content: description },
-    { property: "og:url", content: `https://mollulog.net/events/${params.uid}` },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
     { name: "twitter:card", content: "summary_large_image" },
     canonicalLink(location.pathname),
   ];

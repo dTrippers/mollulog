@@ -11,6 +11,7 @@ import { StatusNotice } from "~/components/v2/primitives/StatusNotice";
 import { parseFeedbackAdditional } from "~/domain/feedback";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { createFeedbackTicket, getFeedbackTicketsByUserId } from "~/models/feedback";
 
 type ContactActionData = {
@@ -85,13 +86,15 @@ export const action = async ({ request, context }: ActionFunctionArgs) => {
   }
 };
 
-export const meta: MetaFunction = () => [
-  { title: "제안/문의 | 몰루로그" },
-  {
-    name: "description",
-    content: "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.",
-  },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "제안/문의";
+  const description = "컨텐츠 및 기능 제안, 오류 신고, 기타 문의 사항과 답변 내역을 확인해보세요.";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const ErrorBoundary = ContactRouteError;
 

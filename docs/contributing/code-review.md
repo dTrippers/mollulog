@@ -49,9 +49,16 @@ single owner for commands and claim-to-evidence mapping.
 ### React, accessibility, and rendering
 
 - Are `useEffect` dependencies complete, and is `meta` present when the screen
-  needs it?
+  needs it? A page anonymous visitors can open needs `socialMeta` card tags in
+  every `meta` branch that renders with 200, including empty and fallback
+  states. A child route's `meta` replaces its parent's, so a fallback branch
+  cannot rely on the parent's tags.
 - Is intent-based action branching verified on the server?
 - Is the boundary between route-local and shared UI intact?
+- Is an image that fills a frame sized only by `aspect-ratio` pinned to the
+  frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
+  table cell, WebKit resolves that percentage to the image's natural height, and
+  `object-cover` then shows a magnified crop.
 - For changed user-visible flows, are the relevant loading, empty, failure,
   retry/control adjacency, keyboard, and mobile fixed-bar states handled? Check
   the relevant render and interaction evidence; a concrete changed-UX deviation

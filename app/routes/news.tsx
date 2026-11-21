@@ -9,7 +9,7 @@ import { Pagination } from "~/components/v2/primitives/Pagination";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getNewsPosts } from "~/models/post";
 import {
   getNewsScrollContainer,
@@ -35,7 +35,12 @@ function newsPageHref(page: number) {
 }
 
 export const meta: MetaFunction = ({ location }) => {
-  return [{ title: "업데이트 소식 | 몰루로그" }, canonicalLink(location.pathname)];
+  const title = "업데이트 소식";
+  return [
+    { title: `${title} | 몰루로그` },
+    ...socialMeta({ title, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
 };
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -47,7 +52,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
   // Only the newest post on page 1 is shown in full, so the other bodies are not sent to the client.
   const [latest] = postPage.items;
   return {
-    posts: postPage.items.map(({ uid, title, createdAt }) => ({ uid, title, createdAt })),
+    posts: postPage.items.map(({ uid, title, publishedAt }) => ({ uid, title, publishedAt })),
     latestContentHtml: postPage.page === 1 && latest ? renderMarkdownToSafeHtml(latest.content) : null,
     page: postPage.page,
     totalPages: postPage.totalPages,
