@@ -356,7 +356,7 @@ export const pgPostsTable = pgTable(
     timelineContentUid: text("timeline_content_uid"),
     thumbnailImageUrl: text("thumbnail_image_url"),
     // Null while the post is a draft. Drafts are visible only in the admin app.
-    publishedAt: timestamptz("published_at"),
+    publishedAt: timestamptz("published_at").default(sql`now()`),
     createdAt: timestamptz("created_at").notNull(),
     updatedAt: timestamptz("updated_at").notNull(),
   },
