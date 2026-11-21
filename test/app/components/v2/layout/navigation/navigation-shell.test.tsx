@@ -236,6 +236,14 @@ describe("desktop navigation shell rendering", () => {
     expect(railToggle).toContain('title="메뉴 펼치기"');
   });
 
+  it("announces a collapsed sidebar group's account-dot summary", () => {
+    const html = renderNavigation("/students", false, "sensei", true, { game: false });
+    const groupButton = html.match(/<button[^>]*aria-controls="desktop-navigation-group-game"[^>]*>[\s\S]*?<\/button>/)?.[0] ?? "";
+
+    expect(groupButton).toContain('<span class="sr-only">, 확인할 내 정보 있음</span>');
+    expect(groupButton).toContain('data-navigation-dot="account"');
+  });
+
   it("anchors the active rail group's account-dot summary to the icon corner", () => {
     const html = renderNavigation("/students", true, null, true);
 

@@ -38,7 +38,7 @@ import type { SearchResponse, SearchResult } from "~/routes/api.search";
 import { v2FocusRing } from "../styles";
 import { mobileNavigationTutorialStorageKey } from "./mobile-navigation-tutorial";
 import { NavigationAccountPopover } from "./NavigationAccountPopover";
-import { NavigationDotMark } from "./NavigationDotMark";
+import { NAVIGATION_DOT_LABELS, NavigationDotMark } from "./NavigationDotMark";
 import { NavigationFlyout } from "./NavigationFlyout";
 import { NavigationFavoriteMenuRow, NavigationMenuRow } from "./NavigationMenuRow";
 import { NavigationRail, type NavigationRailGroup } from "./NavigationRail";
@@ -799,6 +799,7 @@ function DesktopNavigationGroup({
         onClick={() => onToggle?.(!expanded)}
       >
         <span className="min-w-0 flex-1 truncate">{title}</span>
+        {!expanded && dot ? <span className="sr-only">, {NAVIGATION_DOT_LABELS[dot]}</span> : null}
         {!expanded && dot ? <NavigationDotMark dot={dot} className="shrink-0" /> : null}
         {expanded ? (
           <ChevronDownIcon className="size-3 shrink-0" aria-hidden="true" />

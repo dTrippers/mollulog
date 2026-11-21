@@ -299,6 +299,7 @@ function ProfileSummaryLink({
       </span>
       {showAccountDot ? <NavigationDotMark dot="account" className="shrink-0" /> : null}
       <span className="shrink-0 text-sm font-semibold text-neutral-900 dark:text-neutral-100">{value}</span>
+      {showAccountDot ? <span className="sr-only">, {NAVIGATION_DOT_LABELS.account}</span> : null}
       <ChevronRightIcon
         className="size-4 shrink-0 text-neutral-400 transition-transform group-hover:translate-x-0.5"
         aria-hidden="true"
