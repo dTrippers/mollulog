@@ -20,6 +20,7 @@ import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { nowUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
+import { socialMeta } from "~/lib/seo";
 import { defenseTypeLocale } from "~/locales/ko";
 import { getRaidRecord, getRaidRecordSeasons } from "~/models/raid-record";
 import { getAllStudents } from "~/models/student";
@@ -28,11 +29,11 @@ import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { raidRecordListTo } from "./$username.raids._components/raid-record-list-query";
 import { RaidRecordPageError } from "./$username.raids._components/RaidRecordPageError";
 
-export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, params, location }) => {
   const title = data
     ? `${params.username} - ${RAID_RECORD_RAID_TYPE_LABEL[data.row.season.raidType]} #${data.row.season.seasonIndex} ${data.row.season.boss.name} 기록 | 몰루로그`
     : "총력전·대결전 기록 | 몰루로그";
-  return [{ title }];
+  return [{ title }, ...socialMeta({ title, pathname: location.pathname })];
 };
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {

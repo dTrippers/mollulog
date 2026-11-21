@@ -45,6 +45,7 @@ import {
   type RaidRecordServer,
 } from "~/domain/raid-record";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { confirmRaidRecordRank } from "~/models/raid-record";
 import { loadRaidRecordList, type RaidRecordRowView } from "~/views/raid-records";
@@ -52,14 +53,13 @@ import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { parseRaidRecordListScope } from "./$username.raids._components/raid-record-list-query";
 import { useUserLayout } from "./$username._components/user-layout";
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
   const title = `${params.username || ""} - 총력전·대결전 기록 | 몰루로그`.trim();
   const description = `${params.username} 선생님의 총력전·대결전 시즌별 점수와 순위를 확인해 보세요`;
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
