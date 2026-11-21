@@ -5,6 +5,7 @@ import { getActiveSensei } from "~/auth/authenticator.server";
 import { type FeedPageData, InfiniteFeed } from "~/components/v2/features/feed/InfiniteFeed";
 import { hasAccountLabel } from "~/domain/account-label";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { getCommunityFeedPage } from "~/models/community.server";
 import { isCommunityEngagementActionResult } from "~/models/community-engagement";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -111,21 +112,13 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({ actionResult, defau
   return defaultShouldRevalidate;
 };
 
-export const meta: MetaFunction = ({ params }) => {
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 프로필 | 몰루로그`.trim();
+  const description = `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.`;
   return [
-    { title: `${params.username || ""} - 프로필 | 몰루로그`.trim() },
-    {
-      name: "description",
-      content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.`,
-    },
-    {
-      name: "og:title",
-      content: `${params.username || ""} - 프로필 | 몰루로그`.trim(),
-    },
-    {
-      name: "og:description",
-      content: `${params.username} 선생님의 프로필과 최근 활동을 확인해보세요.`,
-    },
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 

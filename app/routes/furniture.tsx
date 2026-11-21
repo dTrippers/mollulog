@@ -2,6 +2,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction, ShouldRevali
 import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { getLogger } from "~/lib/observability.server";
+import { socialMeta } from "~/lib/seo";
 import { getFurnitureCatalogSource } from "~/models/furniture-catalog";
 import {
   parseUserFurnitureInventoryQuantity,
@@ -12,12 +13,15 @@ import { getFurnitureCatalogView } from "~/views/furniture-catalog";
 import type { FurnitureInventoryActionResult } from "./furniture._components/action-data";
 import FurnitureCatalogScreen from "./furniture._components/FurnitureCatalogScreen";
 
-export const meta: MetaFunction = () => [
-  { title: "가구 도감 | 몰루로그" },
-  { name: "description", content: "테마별 가구 구성과 보유 현황을 확인해보세요." },
-  { name: "og:title", content: "가구 도감 | 몰루로그" },
-  { name: "og:description", content: "테마별 가구 구성과 보유 현황을 확인해보세요." },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "가구 도감 | 몰루로그";
+  const description = "테마별 가구 구성과 보유 현황을 확인해보세요.";
+  return [
+    { title },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const shouldRevalidate: ShouldRevalidateFunction = ({
   currentUrl,

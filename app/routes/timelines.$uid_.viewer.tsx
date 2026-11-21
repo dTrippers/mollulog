@@ -10,13 +10,18 @@ import {
 import { getPostgresWalkthroughTimeline } from "~/db/postgres/walkthrough-timelines";
 import { DEMO_WALKTHROUGH_TIMELINE, isDemoWalkthroughTimelineUid } from "~/domain/walkthrough-timeline-demo";
 import { routeError } from "~/lib/http-errors";
+import { socialMeta } from "~/lib/seo";
 import { getSenseiById, isSenseiProfileVisibleTo } from "~/models/sensei";
 import { getAllStudentsMap } from "~/models/student";
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: `${data?.title ?? "타임라인"} 실전 뷰어 | 몰루로그` },
-  { name: "robots", content: "noindex,nofollow" },
-];
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
+  const title = `${data?.title ?? "타임라인"} 실전 뷰어`;
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "robots", content: "noindex,nofollow" },
+    ...socialMeta({ title, pathname: location.pathname }),
+  ];
+};
 
 export const loader = async ({ context, request, params }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;

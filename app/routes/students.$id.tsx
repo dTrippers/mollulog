@@ -28,7 +28,7 @@ import { isStudentNotFoundError } from "~/lib/baql/errors";
 import { toUtcIso } from "~/lib/date-time";
 import { routeError } from "~/lib/http-errors";
 import { getLogger } from "~/lib/observability.server";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { positionLocale, schoolNameLocale, tacticRoleLocale } from "~/locales/ko";
 import { getStudentHeader } from "~/models/student";
 import { formatStudentFullName } from "~/models/student-name";
@@ -111,10 +111,7 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
@@ -143,7 +140,9 @@ export default function StudentDetailPage() {
           {positionLocale[student.position]} · {tacticRoleLocale[student.tacticRole]}
         </span>
       </div>
-      {student.catalog?.terrainAdaptations ? <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} /> : null}
+      {student.catalog?.terrainAdaptations ? (
+        <TerrainRanks terrainAdaptations={student.catalog.terrainAdaptations} />
+      ) : null}
     </div>
   );
   const header = {
@@ -161,7 +160,10 @@ export default function StudentDetailPage() {
       }
     : null;
   const videoLink = { key: "scanner", title: "영상 인식기", Icon: VideoCameraIcon, to: "/scanner/student" };
-  const mobileLinks = [...(schaleDbLink ? [{ ...schaleDbLink, shortTitle: "SchaleDB" }] : []), { ...videoLink, shortTitle: "인식기" }];
+  const mobileLinks = [
+    ...(schaleDbLink ? [{ ...schaleDbLink, shortTitle: "SchaleDB" }] : []),
+    { ...videoLink, shortTitle: "인식기" },
+  ];
 
   return (
     <V2Page width="reading">

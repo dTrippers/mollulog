@@ -118,9 +118,12 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         uid={studentUid ?? "unlisted"}
         className={cn(
           // The placeholder icon fills the width of the area above the label band (18px tall), centered vertically.
+          // The portrait is pinned to the frame's edges rather than sized by percentage alone: inside a table cell,
+          // WebKit resolves an image's 100% height to its natural height instead of the frame's aspect-ratio height,
+          // and object-cover then shows a magnified top-center crop.
           studentUid === null && showBand
             ? "absolute inset-x-0 top-0 h-[calc(100%-1.125rem)] w-full object-cover"
-            : "size-full object-cover",
+            : "absolute inset-0 size-full object-cover",
           grayscaleWhenUnselected && onSelect && !selected && "grayscale",
         )}
         haloAboveBand={showBand || overlayCaption}

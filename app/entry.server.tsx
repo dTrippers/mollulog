@@ -91,7 +91,8 @@ export default async function handleRequest(
     body = streamingBody;
   }
 
-  responseHeaders.set("Content-Type", "text/html");
+  // Name the charset so tools that ignore `<meta charset>` (some link-preview validators) still read UTF-8.
+  responseHeaders.set("Content-Type", "text/html; charset=utf-8");
   const isPrivateResponse = responseHeaders
     .get("Cache-Control")
     ?.split(",")

@@ -6,6 +6,7 @@ import { buildEventShopStateIdentity, type SavedShopStateSource } from "~/domain
 import type { JankenPlannerEntry } from "~/domain/planner-state";
 import { captureServerError, getLogger } from "~/lib/observability.server";
 import { isEventShopPlanSaveSubmission } from "~/lib/revalidation";
+import { socialMeta } from "~/lib/seo";
 import { getEventContentSchedule, getEventMetadata, getEventShopContentForMetadata } from "~/models/event-content";
 import { type EventShopState, getEventShopState } from "~/models/event-shop-state";
 import { getPlannerState } from "~/models/planner-state";
@@ -55,7 +56,10 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
         : [];
     const jankenStudentGrowthUid =
       janken?.status === "available"
-        ? getJankenStudentGrowthUid(janken, allStudents.map(({ uid }) => uid))
+        ? getJankenStudentGrowthUid(
+            janken,
+            allStudents.map(({ uid }) => uid),
+          )
         : null;
     const jankenStudent = allStudents.find(({ uid }) => uid === jankenStudentGrowthUid);
 
@@ -76,15 +80,16 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
         shopContent.minigameConfig?.minigameType === "janken"
           ? getPlannerState(env, currentUser.id, { ctx })
           : Promise.resolve(null);
-      const [recruitedStudents, userOwnedQuantities, primaryShopState, plannerState, jankenInventory] = await Promise.all([
-        getRecruitedStudents(env, currentUser.id),
-        getEventShopOwnedQuantities(env, currentUser.id, shopContent.shopResources),
-        getEventShopState(env, currentUser.id, stateIdentity.shopStateUid),
-        plannerStatePromise,
-        jankenStudentGrowthUid
-          ? getUserResourceInventoryMapByItemUids(env, currentUser.id, [jankenStudentGrowthUid])
-          : Promise.resolve({} as Record<string, number>),
-      ]);
+      const [recruitedStudents, userOwnedQuantities, primaryShopState, plannerState, jankenInventory] =
+        await Promise.all([
+          getRecruitedStudents(env, currentUser.id),
+          getEventShopOwnedQuantities(env, currentUser.id, shopContent.shopResources),
+          getEventShopState(env, currentUser.id, stateIdentity.shopStateUid),
+          plannerStatePromise,
+          jankenStudentGrowthUid
+            ? getUserResourceInventoryMapByItemUids(env, currentUser.id, [jankenStudentGrowthUid])
+            : Promise.resolve({} as Record<string, number>),
+        ]);
       recruitedStudentUids = recruitedStudents.map((student) => student.studentUid);
       const recruitedJankenStudent = recruitedStudents.find(({ studentUid }) => studentUid === jankenStudentGrowthUid);
       jankenDefaultProgress = {
@@ -131,13 +136,9 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopPlanSaveSubmission(args) && args.defaultShouldRevalidate;
 
-export const meta: MetaFunction<typeof loader> = ({ data, params }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   const title = `${data?.eventName ?? "이벤트"} - 상점 계산기`;
-  return [
-    { title: `${title} | 몰루로그` },
-    { name: "og:title", content: title },
-    { name: "og:url", content: `https://mollulog.net/events/${params.uid}/shop` },
-  ];
+  return [{ title: `${title} | 몰루로그` }, ...socialMeta({ title, pathname: location.pathname })];
 };
 
 export default function EventShop() {

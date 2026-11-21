@@ -353,7 +353,7 @@ function fetchIndexContents(env: Env, forceRefresh: boolean, ctx?: ExecutionCont
   return fetchRouteCached<HomeIndexContents>(
     env,
     ctx,
-    cacheKey("route", "index", 7, "all"),
+    cacheKey("route", "index", 8, "all"),
     async () => {
       const contents = await loadHomeIndexContents(env, forceRefresh, ctx);
       if (!isCompleteHomeIndexContents(contents)) {

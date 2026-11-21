@@ -148,6 +148,7 @@ const migratedRouteFiles: string[] = [
   "routes/scanner.resource._components/resource-cell-review.tsx",
   "routes/scanner.student._components/StudentScanner.tsx",
   "routes/contact._index.tsx",
+  "routes/coupons.tsx",
   "routes/contact.$uid.tsx",
   "routes/developers.tsx",
   "routes/developers._index.tsx",

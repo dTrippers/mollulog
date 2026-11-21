@@ -4,6 +4,7 @@ import { useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { Page, RouteErrorBoundary } from "~/components/features/layout";
 import { Callout } from "~/components/primitives";
+import { socialMeta } from "~/lib/seo";
 import { getUserParties } from "~/models/party.server";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudentTiers } from "~/models/recruited-student";
@@ -11,10 +12,14 @@ import { getAllStudents } from "~/models/student";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import PartyView from "./timelines.parties._components/PartyView";
 
-export const meta: MetaFunction = ({ params }) => [
-  { title: `${params.username ?? ""} - 이전 편성·공략 | 몰루로그`.trim() },
-  { name: "robots", content: "noindex" },
-];
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username ?? ""} - 이전 편성·공략`.trim();
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "robots", content: "noindex" },
+    ...socialMeta({ title, pathname: location.pathname }),
+  ];
+};
 
 export const ErrorBoundary = RouteErrorBoundary;
 

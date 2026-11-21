@@ -355,7 +355,7 @@ describe("home bottom and aside", () => {
               board: "news",
               timelineContentUid: null,
               thumbnailImageUrl: null,
-              createdAt: "2026-09-08T00:00:00.000Z",
+              publishedAt: "2026-09-08T00:00:00.000Z",
               updatedAt: "2026-09-08T00:00:00.000Z",
             },
           ],

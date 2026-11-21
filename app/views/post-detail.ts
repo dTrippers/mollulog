@@ -5,13 +5,13 @@ export const RECENT_NEWS_LIMIT = 3;
 
 export type PostDetailBack = { kind: "news" } | { kind: "event"; timelineContentUid: string } | { kind: "none" };
 
-export type PostSummary = Pick<Post, "uid" | "title" | "createdAt">;
+export type PostSummary = Pick<Post, "uid" | "title" | "publishedAt">;
 
 // Same shape as the home section result. A failed recent-news lookup is isolated to its own block.
 export type RecentNewsSource = { status: "success"; data: PostSummary[] } | { status: "error" };
 
 export type PostDetailView = {
-  post: Pick<Post, "uid" | "title" | "content" | "thumbnailImageUrl" | "createdAt">;
+  post: Pick<Post, "uid" | "title" | "content" | "thumbnailImageUrl" | "publishedAt">;
   back: PostDetailBack;
   // Null for a post outside the news board, which has no recent-news block.
   recent: RecentNewsSource | null;
@@ -36,7 +36,7 @@ async function loadRecentNews(
     const posts = await getRecentNewsPosts(env, excludeUid, RECENT_NEWS_LIMIT, options);
     return {
       status: "success",
-      data: posts.map((post) => ({ uid: post.uid, title: post.title, createdAt: post.createdAt })),
+      data: posts.map((post) => ({ uid: post.uid, title: post.title, publishedAt: post.publishedAt })),
     };
   } catch (error) {
     getLogger(env, options.ctx, { route: "post.detail.recent_news" }).error("Failed to load recent news posts", error);
@@ -61,7 +61,7 @@ export async function getPostDetailView(
       title: post.title,
       content: post.content,
       thumbnailImageUrl: post.thumbnailImageUrl,
-      createdAt: post.createdAt,
+      publishedAt: post.publishedAt,
     },
     back: getBackLink(post),
   };

@@ -4,6 +4,7 @@ import {
   CACHE_REFRESH_TASK_NAMES,
   type CacheRefreshTaskResults,
   createPendingCacheRefreshTaskResults,
+  type StoredCacheRefreshTaskResults,
 } from "~/domain/cache-refresh";
 import {
   completeCacheRefreshJob,
@@ -76,7 +77,7 @@ function cacheRefreshRow({
   currentTask?: string | null;
   completedCount?: number;
   totalCount?: number;
-  results?: CacheRefreshTaskResults;
+  results?: StoredCacheRefreshTaskResults;
   startedAt?: Date | null;
   finishedAt?: Date | null;
   createdAt?: Date;
@@ -139,6 +140,16 @@ describe("cache refresh PostgreSQL model", () => {
     expect(() => parseCacheRefreshTaskResults(JSON.stringify(invalid))).toThrow(
       "Invalid cache refresh task error: syncRawStudents",
     );
+  });
+
+  it("leaves out tasks that a job created before they were added has no result for", async () => {
+    const { getRecruitTicketSource: _added, ...legacy } = taskResults();
+    const { client } = createClient([{ rows: [cacheRefreshRow({ results: legacy })], rowCount: 1 }]);
+
+    const job = await getCacheRefreshJob(env, "job-uid", options(client));
+
+    expect(job?.taskResults).toEqual(legacy);
+    expect(job?.taskResults).not.toHaveProperty("getRecruitTicketSource");
   });
 
   it("creates a queued job with JSONB task results and maps the returned row", async () => {

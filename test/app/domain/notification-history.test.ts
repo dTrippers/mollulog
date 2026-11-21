@@ -41,6 +41,25 @@ describe("notification history domain", () => {
     });
   });
 
+  it("labels a coupon expiry alert and keeps its coupon list link", () => {
+    expect(
+      toNotificationHistoryItem({
+        uid: "job-2",
+        trigger: "coupon-expiry",
+        payload: {
+          message: '11/24(화) 23:59, 쿠폰 "쿠폰 하나"의 사용 기한이 끝납니다.',
+          action: { label: "쿠폰 목록 바로가기", url: "https://mollulog.net/coupons?alert=c1,c2" },
+        },
+        deliveredAt: new Date("2026-09-07T11:00:00.000Z"),
+        isUnread: false,
+        now,
+      }),
+    ).toMatchObject({
+      typeLabel: "쿠폰 만료",
+      action: { state: "available", label: "쿠폰 목록 바로가기", to: "/coupons?alert=c1,c2" },
+    });
+  });
+
   it("does not expose malformed message, trigger, or external action data", () => {
     const item = toNotificationHistoryItem({
       uid: "job-2",

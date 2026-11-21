@@ -31,6 +31,7 @@ import {
   type SimulationStudent,
 } from "~/domain/recruitment-simulator";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
+import { socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import { getRecruitmentGroupByUid, getRecruitmentPoolStudents } from "~/models/recruitment";
 import { getTimelineContent } from "~/models/timeline-content.server";
@@ -92,11 +93,13 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   return { eventName: content.name, snapshot, ruleSet };
 };
 
-export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
+export const meta: MetaFunction<typeof loader> = ({ loaderData, location }) => {
   const title = loaderData?.eventName ? `${loaderData.eventName} - 모집 시뮬레이션` : "모집 시뮬레이션";
+  const description = "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요.";
   return [
     { title: `${title} | 몰루로그` },
-    { name: "description", content: "블루 아카이브 모집 결과를 저장 없이 시뮬레이션해보세요." },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
