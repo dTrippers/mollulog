@@ -81,7 +81,11 @@ import {
   getAttendanceStartDate,
   type PyroxeneMonthlyPackageType,
 } from "~/domain/pyroxene-sources";
-import type { PickupResources, PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
+import {
+  getPyroxenePlanEndDate,
+  type PickupResources,
+  type PyroxeneTimelineEventData,
+} from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getLogger } from "~/lib/observability.server";
@@ -187,7 +191,15 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
       const content = contents.find(
         (content) => content.kind === "event" && content.recruitmentGroupUid === result.recruitmentGroupUid,
       );
-      return content ? [{ eventUid: content.uid, recruitmentGroupUid: result.recruitmentGroupUid }] : [];
+      return content
+        ? [
+            {
+              eventUid: content.uid,
+              recruitmentGroupUid: result.recruitmentGroupUid,
+              recruitmentResultUid: result.uid as string | null,
+            },
+          ]
+        : [];
     }),
     recruitedStudentUids: recruitedStudents.map(({ studentUid }) => studentUid),
     collectedSourceKeys: [...pyroxeneState.collectedSourceKeys],
@@ -627,7 +639,7 @@ export default function PyroxenePlanner() {
           setLocalCompletions((prev) =>
             prev.some((completion) => completion.eventUid === eventUid)
               ? prev
-              : [...prev, { eventUid, recruitmentGroupUid }],
+              : [...prev, { eventUid, recruitmentGroupUid, recruitmentResultUid: null }],
           );
         }
       }
@@ -1121,6 +1133,24 @@ export default function PyroxenePlanner() {
     }
     return map;
   }, [localEventData, localCompletions]);
+  // A completion saved in this visit has no record uid until the loader runs again, so it opens the editor on its event,
+  // which finds the saved record.
+  const recordEditLinks = useMemo(
+    () =>
+      new Map(
+        localCompletions.map((completion) => {
+          const path = completion.recruitmentResultUid
+            ? `pickups/edit/${completion.recruitmentResultUid}`
+            : `pickups/edit/new?eventId=${completion.recruitmentGroupUid}`;
+          const separator = path.includes("?") ? "&" : "?";
+          return [
+            completion.eventUid,
+            `/my?path=${encodeURIComponent(`${path}${separator}returnTo=/utils/pyroxene`)}`,
+          ] as const;
+        }),
+      ),
+    [localCompletions],
+  );
 
   const scheduleItems = usePyroxeneScheduleItems(contents, localFavoritedStudents, localTimelineItems);
 
@@ -1128,6 +1158,10 @@ export default function PyroxenePlanner() {
   const calcOptions = useMemo<PyroxeneCalculationOptions>(
     () => ({ event: options.event, raid: options.raid, tactical: options.tactical, consumption: options.consumption }),
     [options.event, options.raid, options.tactical, options.consumption],
+  );
+  const planEndDate = useMemo(
+    () => getPyroxenePlanEndDate(scheduleItems, initialDate ?? new Date()),
+    [scheduleItems, initialDate],
   );
   const {
     timeline,
@@ -1140,6 +1174,7 @@ export default function PyroxenePlanner() {
     scheduleItems,
     options: calcOptions,
     collectedSourceKeys: localCollectedSourceKeys,
+    endDate: planEndDate,
     recruitmentStacks: stacks,
   });
   const displayTimeline = useMemo(
@@ -1386,6 +1421,7 @@ export default function PyroxenePlanner() {
             recruitedStudentUids={recruitedStudentUids}
             currentStacks={stacks}
             canRecordCompletion={Boolean(signedIn)}
+            recordEditLinks={recordEditLinks}
             eventHandlers={{
               onFavoriteChange: handleFavoriteChange,
               onUpdateEventData: handleUpdateEventData,

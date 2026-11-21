@@ -1098,6 +1098,28 @@ export function getFreeRecruitmentPulls(event: NonNullable<PyroxeneScheduleItem[
   return open ? freePulls : 0;
 }
 
+/**
+ * The last date a pyroxene plan covers: the end of the last event, or a later one-off gain the user entered. Raid
+ * rewards and ten-time ticket expiries after it are left out, so they do not stretch the plan months past the events
+ * it is for. Undefined when no event ends after the start, which keeps every delta.
+ */
+export function getPyroxenePlanEndDate(scheduleItems: PyroxeneScheduleItem[], initialDate: Date): Date | undefined {
+  const start = dayjs(initialDate);
+  let end: Dayjs | null = null;
+  for (const item of scheduleItems) {
+    if (!item.event) continue;
+    const until = dayjs(item.event.until);
+    if (until.isAfter(start) && (!end || until.isAfter(end))) end = until;
+  }
+  if (!end) return undefined;
+  for (const item of scheduleItems) {
+    if (!item.onetimeGain) continue;
+    const { date } = oneOffGainTiming(item.onetimeGain.source, dayjs(item.onetimeGain.date));
+    if (date.isAfter(end)) end = date;
+  }
+  return end.toDate();
+}
+
 export function buildTimeline(
   initialResources: PickupResources,
   initialDate: Date,

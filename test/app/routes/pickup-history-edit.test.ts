@@ -801,6 +801,44 @@ describe("pickup history editor loader", () => {
     );
   });
 
+  it.each([
+    ["/utils/pyroxene", "/utils/pyroxene"],
+    ["https://evil.example/", "/my?path=pickups"],
+    ["//evil.example/", "/my?path=pickups"],
+    [undefined, "/my?path=pickups"],
+  ])("returns to %s after saving only when it is a path on this site", async (returnTo, location) => {
+    mockedGetRecruitmentGroupByUid.mockResolvedValue(createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z"));
+    mockedGetActiveSensei.mockResolvedValue({
+      id: 1,
+      uid: "sensei-1",
+      username: "sensei",
+    } as Awaited<ReturnType<typeof getActiveSensei>>);
+    mockedGetRecruitmentResult.mockResolvedValue(null);
+    mockedGetTimelineContentsByRecruitmentGroupUids.mockResolvedValue([
+      {
+        uid: "content-decagrammaton-armed",
+        name: "데카그라마톤 무장",
+        recruitmentGroupUid: "decagrammaton-armed",
+      },
+    ] as Awaited<ReturnType<typeof getTimelineContentsByRecruitmentGroupUids>>);
+
+    const response = (await action({
+      context: { cloudflare: { env } },
+      request: new Request("https://mollulog.net/@sensei/pickups/edit/new", {
+        method: "POST",
+        body: JSON.stringify({
+          eventUid: "decagrammaton-armed",
+          result: [{ trial: 100, tier3Count: 0, tier3StudentIds: [] }],
+          exchangedStudentIds: [],
+          returnTo,
+        }),
+      }),
+      params: { username: "@sensei", id: "new" },
+    } as never)) as Response;
+
+    expect(response.headers.get("Location")).toBe(location);
+  });
+
   it("preserves existing non-tier3 recruited students when editing an existing result", async () => {
     const historicalGroup = createGroup("decagrammaton-armed", "2026-05-26T02:00:00Z");
     historicalGroup.recruitments.push({

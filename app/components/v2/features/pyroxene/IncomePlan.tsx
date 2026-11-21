@@ -1,5 +1,5 @@
 import { Cog6ToothIcon, EyeIcon, EyeSlashIcon, PlusIcon, TrashIcon } from "@heroicons/react/16/solid";
-import { type ElementType, useEffect, useId, useMemo, useState } from "react";
+import { type ElementType, type Ref, useEffect, useId, useMemo, useRef, useState } from "react";
 import { formatPlannerPeriodRangeParts, plannerPeriodRangeLabel } from "~/domain/integrated-planner";
 import type { PyroxenePlannerOptions, TimelineSourceType } from "~/domain/pyroxene-planner";
 import type { ActivePyroxenePackage } from "~/domain/pyroxene-planner-view";
@@ -22,6 +22,7 @@ import { Button } from "../../primitives/Button";
 import { Checkbox } from "../../primitives/Checkbox";
 import { IconButton } from "../../primitives/IconButton";
 import { NumberInput } from "../../primitives/NumberInput";
+import { Popover } from "../../primitives/Popover";
 import { Switch } from "../../primitives/Switch";
 import { SegmentedChoice } from "./PickupBasis";
 import {
@@ -41,6 +42,18 @@ const raidTierOptions = [
   { value: "silver", label: "실버" },
   { value: "bronze", label: "브론즈" },
 ] as const;
+
+// The tier choices show the in-game reward badges above their names.
+const raidTierChoices = raidTierOptions.map((option) => ({
+  value: option.value,
+  className: "py-2",
+  label: (
+    <span className="flex flex-col items-center gap-1">
+      <img src={`/icons/raid-tier-${option.value}.png`} alt="" width={96} height={73} className="h-6 w-auto" />
+      {option.label}
+    </span>
+  ),
+}));
 
 const tacticalLevelOptions = [
   { value: "in10", label: "10위 내" },
@@ -78,11 +91,27 @@ const ROW_ACTION_CLASS_NAME =
   "inline-flex h-8 shrink-0 cursor-pointer items-center justify-center gap-1 rounded-md text-xs font-semibold";
 
 /** A filled square that opens a row's settings (gear) or adds an entry (plus). */
-function RowAction({ icon: Icon, label, onClick }: { icon: ElementType; label: string; onClick: () => void }) {
+function RowAction({
+  icon: Icon,
+  label,
+  onClick,
+  buttonRef,
+  expanded,
+}: {
+  icon: ElementType;
+  label: string;
+  onClick: () => void;
+  buttonRef?: Ref<HTMLButtonElement>;
+  // For a button that opens a popover.
+  expanded?: boolean;
+}) {
   return (
     <button
+      ref={buttonRef}
       type="button"
       aria-label={label}
+      aria-expanded={expanded}
+      aria-haspopup={expanded === undefined ? undefined : "dialog"}
       title={label}
       onClick={onClick}
       className={cn(
@@ -194,6 +223,97 @@ function ActivePackageList({
   );
 }
 
+/**
+ * The 청휘석 패키지 row. Its two schedule toggles and the packages in their active window open from one settings
+ * button, so the row stays on one line in the narrow panel.
+ */
+function MonthlyPackageRow({
+  packages,
+  onetimeVisible,
+  dailyVisible,
+  onToggle,
+  onAdd,
+  onDelete,
+}: {
+  packages: ActivePyroxenePackage[];
+  onetimeVisible: boolean;
+  dailyVisible: boolean;
+  onToggle: (type: "package_onetime" | "package_daily") => void;
+  onAdd: () => void;
+  onDelete: (uid: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const switchId = useId();
+  return (
+    <SourceRow
+      label="청휘석 패키지"
+      detail={packages.length > 0 ? `${packages.length}개 적용 중` : undefined}
+      actions={
+        <>
+          <RowAction icon={PlusIcon} label="청휘석 패키지 추가" onClick={onAdd} />
+          <RowAction
+            icon={Cog6ToothIcon}
+            label="청휘석 패키지 설정"
+            buttonRef={triggerRef}
+            expanded={open}
+            onClick={() => setOpen((current) => !current)}
+          />
+          <Popover
+            open={open}
+            label="청휘석 패키지 설정"
+            onClose={() => setOpen(false)}
+            returnFocusRef={triggerRef}
+            className="flex w-[min(18rem,calc(100vw-2rem))] flex-col gap-3"
+          >
+            <section aria-labelledby={`${switchId}-display`} className="flex flex-col">
+              <h4 id={`${switchId}-display`} className="text-xs font-medium text-v2-fg-tertiary">
+                일정에 표시
+              </h4>
+              <Switch
+                id={`${switchId}-onetime`}
+                size="sm"
+                label="초회 지급"
+                checked={onetimeVisible}
+                onCheckedChange={() => onToggle("package_onetime")}
+              />
+              <Switch
+                id={`${switchId}-daily`}
+                size="sm"
+                label="일간 지급"
+                checked={dailyVisible}
+                onCheckedChange={() => onToggle("package_daily")}
+              />
+            </section>
+            <section aria-labelledby={`${switchId}-active`} className="flex flex-col gap-1">
+              <h4 id={`${switchId}-active`} className="text-xs font-medium text-v2-fg-tertiary">
+                적용 중
+              </h4>
+              {packages.length > 0 ? (
+                <ul className="flex flex-col">
+                  {packages.map((item) => (
+                    <li key={item.uid} className="flex min-h-8 items-center gap-2">
+                      <span className="min-w-0 flex-1 text-sm">
+                        <span className="text-v2-fg">{item.name}</span>
+                        <span className="ml-1.5 text-xs text-v2-fg-tertiary tabular-nums">
+                          {dayjs(item.date).tz(KST).format("MM/DD")}~ · {item.activeDays}일
+                        </span>
+                      </span>
+                      <IconButton icon={TrashIcon} label={`${item.name} 삭제`} onClick={() => onDelete(item.uid)} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-v2-fg-secondary">적용 중인 패키지가 없어요.</p>
+              )}
+            </section>
+          </Popover>
+        </>
+      }
+    />
+  );
+}
+
 export function IncomePlanPanel({
   options,
   activePackages,
@@ -212,21 +332,16 @@ export function IncomePlanPanel({
   const [dialog, setDialog] = useState<IncomeDialog>(null);
   const exceptionCount = options.consumption.apChargeExceptions.length;
   const display = options.timeline.display;
+  const toggleDisplay = (type: TimelineSourceType) =>
+    handlers.onOptionsChange({
+      ...options,
+      timeline: {
+        ...options.timeline,
+        display: display.includes(type) ? display.filter((item) => item !== type) : [...display, type],
+      },
+    });
   const visibility = (type: TimelineSourceType, label: string, part?: string) => (
-    <VisibilityToggle
-      label={label}
-      part={part}
-      visible={display.includes(type)}
-      onToggle={() =>
-        handlers.onOptionsChange({
-          ...options,
-          timeline: {
-            ...options.timeline,
-            display: display.includes(type) ? display.filter((item) => item !== type) : [...display, type],
-          },
-        })
-      }
-    />
+    <VisibilityToggle label={label} part={part} visible={display.includes(type)} onToggle={() => toggleDisplay(type)} />
   );
   const raidLabel = raidTierOptions.find((option) => option.value === options.raid.tier)?.label;
   const tacticalLabel = tacticalLevelOptions.find((option) => option.value === options.tactical.level)?.label;
@@ -312,18 +427,14 @@ export function IncomePlanPanel({
         />
       </PlanGroup>
       <PlanGroup label="기간 패키지">
-        <SourceRow
-          label="청휘석 패키지"
-          actions={
-            <>
-              <RowAction icon={PlusIcon} label="청휘석 패키지 추가" onClick={() => onAdd("monthly")} />
-              {visibility("package_onetime", "청휘석 패키지 초회 지급", "초회")}
-              {visibility("package_daily", "청휘석 패키지 일간 지급", "일간")}
-            </>
-          }
-        >
-          <ActivePackageList packages={monthlyPackages} onDelete={handlers.onDeleteItem} />
-        </SourceRow>
+        <MonthlyPackageRow
+          packages={monthlyPackages}
+          onetimeVisible={display.includes("package_onetime")}
+          dailyVisible={display.includes("package_daily")}
+          onToggle={toggleDisplay}
+          onAdd={() => onAdd("monthly")}
+          onDelete={handlers.onDeleteItem}
+        />
         <SourceRow
           label="AP 패키지"
           actions={
@@ -341,7 +452,7 @@ export function IncomePlanPanel({
         open={dialog === "raid"}
         title="총력전·대결전"
         label="총력전·대결전 등급"
-        options={raidTierOptions}
+        options={raidTierChoices}
         value={options.raid.tier}
         onClose={() => setDialog(null)}
         onChange={(tier) => {
@@ -405,7 +516,7 @@ function ChoiceDialog<T extends string>({
   open: boolean;
   title: string;
   label: string;
-  options: readonly { value: T; label: string }[];
+  options: readonly { value: T; label: React.ReactNode; className?: string }[];
   value: T;
   onClose: () => void;
   onChange: (value: T) => void;

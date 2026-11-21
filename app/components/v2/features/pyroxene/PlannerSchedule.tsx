@@ -73,12 +73,7 @@ function IncomeRowView({
   const breakdown = row.type === "aggregate" ? (row.breakdown ?? []) : [];
   return (
     <>
-      <li
-        className={cn(
-          SCHEDULE_GRID_CLASS_NAME,
-          "items-start py-1.5 pr-3 pl-4 text-[0.8125rem] @2xl:min-h-9 @2xl:items-center @2xl:px-4",
-        )}
-      >
+      <li className={cn(SCHEDULE_GRID_CLASS_NAME, "items-start py-1.5 pr-3 pl-4 text-[0.8125rem] @2xl:py-2 @2xl:px-4")}>
         <span className="font-semibold text-v2-fg tabular-nums">
           {row.type === "aggregate" ? <span className="font-normal text-v2-fg-tertiary">~</span> : null}
           {row.date.tz(KST).format("MM/DD")}
@@ -113,7 +108,7 @@ function IncomeRowView({
         </span>
         <ResourceDeltas delta={row.delta} muted={row.collected} />
         <span className="text-right text-v2-fg-secondary tabular-nums">{formatAmount(row.balance)}</span>
-        <span className="-my-1.5 flex justify-end @2xl:my-0">
+        <span className="-my-1.5 flex justify-end">
           {row.itemUid ? (
             <IconButton
               icon={TrashIcon}
@@ -179,6 +174,8 @@ export type PlannerScheduleProps = {
   recruitedStudentUids: ReadonlySet<string>;
   currentStacks: RecruitmentStacks;
   canRecordCompletion: boolean;
+  // The 모집 기록 editor link of each completed event, by event uid.
+  recordEditLinks: ReadonlyMap<string, string>;
   eventHandlers: EventCardHandlers;
   incomeHandlers: ScheduleIncomeHandlers;
 };
@@ -196,6 +193,7 @@ export function PlannerSchedule({
   recruitedStudentUids,
   currentStacks,
   canRecordCompletion,
+  recordEditLinks,
   eventHandlers,
   incomeHandlers,
 }: PlannerScheduleProps) {
@@ -281,6 +279,7 @@ export function PlannerSchedule({
               recruitedStudentUids={recruitedStudentUids}
               currentStacks={currentStacks}
               canRecordCompletion={canRecordCompletion}
+              recordEditLink={recordEditLinks.get(uid)}
               selected={selected}
               handlers={eventHandlers}
             />

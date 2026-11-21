@@ -1,6 +1,6 @@
 import { describe, expect, it } from "@jest/globals";
 import { createOptimisticBuyTimelineItems, createOptimisticOtherTimelineItems } from "~/domain/pyroxene-sources";
-import { buildTimeline, type PickupResources } from "~/domain/pyroxene-timeline";
+import { buildTimeline, getPyroxenePlanEndDate, type PickupResources } from "~/domain/pyroxene-timeline";
 import type { PyroxenePlannerOptions } from "../../../../../app/domain/pyroxene-planner";
 import type { PyroxeneScheduleItem } from "../../../../../app/domain/pyroxene-schedule";
 import { RecruitmentTypeEnum } from "../../../../../app/graphql/graphql";
@@ -575,6 +575,79 @@ describe("pyroxene-timeline", () => {
       }),
     );
     expect(expiryEntry?.date.format("YYYY-MM-DD")).toBe("2026-05-31");
+  });
+
+  it("ends the plan at the last event, leaving out raid rewards and ticket expiries after it", () => {
+    const initialDate = new Date("2026-04-01T00:00:00.000Z");
+    const scheduleItems: PyroxeneScheduleItem[] = [
+      {
+        event: {
+          uid: "last-event",
+          name: "마지막 이벤트",
+          since: "2026-04-05T00:00:00.000Z",
+          until: "2026-04-30T00:00:00.000Z",
+          earnablePyroxene: null,
+          tags: [],
+          recruitments: [],
+        },
+      },
+      {
+        raid: {
+          uid: "raid-elimination",
+          type: "elimination",
+          name: "고즈",
+          since: "2026-04-13T00:00:00.000Z",
+          until: "2026-04-20T00:00:00.000Z",
+        },
+      },
+      {
+        raid: {
+          uid: "raid-after",
+          type: "total_assault",
+          name: "비나",
+          since: "2026-05-04T00:00:00.000Z",
+          until: "2026-05-11T00:00:00.000Z",
+        },
+      },
+    ];
+    const endDate = getPyroxenePlanEndDate(scheduleItems, initialDate);
+    expect(endDate?.toISOString()).toBe("2026-04-30T00:00:00.000Z");
+
+    const timeline = buildTimeline(
+      initialResources,
+      initialDate,
+      new Map(),
+      scheduleItems,
+      defaultOptions,
+      undefined,
+      [],
+      endDate,
+    );
+    const uids = timeline.map((entry) => entry.source.uid);
+    expect(uids).toContain("raid-elimination");
+    expect(uids).not.toContain("raid-elimination::ten-time-ticket-expiry");
+    expect(uids).not.toContain("raid-after");
+  });
+
+  it("extends the plan end to a one-off gain entered after the last event", () => {
+    const initialDate = new Date("2026-04-01T00:00:00.000Z");
+    const endDate = getPyroxenePlanEndDate(
+      [
+        futureEvent("2026-04-20T00:00:00.000Z"),
+        {
+          onetimeGain: {
+            uid: "buy-later",
+            source: "buy",
+            date: new Date("2026-05-10T03:00:00.000Z"),
+            description: "청휘석 구매",
+            pyroxeneDelta: 100,
+          },
+        },
+      ],
+      initialDate,
+    );
+    expect(endDate && endDate > new Date("2026-05-09T00:00:00.000Z")).toBe(true);
+    expect(getPyroxenePlanEndDate([futureEvent("2026-03-01T00:00:00.000Z")], initialDate)).toBeUndefined();
   });
 
   it("allows elimination ten-time tickets to be spent on their expiration date", () => {
