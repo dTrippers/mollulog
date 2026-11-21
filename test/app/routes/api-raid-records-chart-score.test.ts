@@ -33,7 +33,6 @@ const startedSeason: RaidRecordSeason = {
   endAt: null,
   displayDefenseTypes: [],
   scoreDefenseTypes: [{ defenseType: "heavy", maxDifficulty: "torment" }],
-  rankSeasonIndex: 35,
   counterpartSeasonIndex: 35,
   rankConfirmAt: null,
 };
@@ -44,7 +43,7 @@ const savedRecord: RaidRecord = {
   server: "kr",
   raidType: "elimination",
   seasonIndex: 35,
-  scores: [{ defenseType: "heavy", score: 40_000_000, difficulty: "torment", clearTimeMs: 145_000 }],
+  scores: [{ defenseType: "heavy", score: 40_000_000 }],
   rank: null,
   rankRecordedAt: null,
   memo: "",

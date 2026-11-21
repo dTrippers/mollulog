@@ -22,7 +22,6 @@ function season(raidType: "total_assault" | "elimination"): RaidRecordSeasonView
     raidType,
     seasonIndex: raidType === "elimination" ? 35 : 88,
     counterpartSeasonIndex: null,
-    rankSeasonIndex: null,
     boss: { uid: "hod", name: "호드" },
     terrain: Terrain.Indoor,
     startAt: "2026-11-17T02:00:00.000Z",
@@ -131,7 +130,7 @@ describe("raid record table errors", () => {
       { field: "score", defenseType: "heavy", message: "이 시즌에서 달성할 수 있는 최대 점수(40,348,000)보다 높아요." },
       { field: "score", defenseType: "light", message: "이 시즌에서 달성할 수 있는 최대 점수(40,000,000)보다 높아요." },
     ]);
-    // A defense type the rank data has no maximum for is not checked.
+    // A defense type without a known maximum (a boss the score formula does not know) is not checked.
     expect(raidTableRowErrors(row("elimination", null), draft({ heavy: 50_000_000 }, 1200), { heavy: null })).toEqual(
       [],
     );

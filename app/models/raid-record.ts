@@ -15,7 +15,6 @@ import {
   updatePostgresRaidRecord,
 } from "~/db/postgres/raid-records";
 import {
-  computeRaidClearResult,
   getRaidMaxScore,
   getRaidRankConfirmAt,
   InvalidRaidRecordError,
@@ -29,13 +28,10 @@ import {
   type RaidRecordServer,
   type RaidRecordSnapshot,
   type RaidRecordStudentInfo,
-  type RaidScoreBands,
   RAID_RECORD_SNAPSHOT_FIELDS,
   raidRecordServerRegion,
 } from "~/domain/raid-record";
-import { mapWithConcurrencyLimit } from "~/lib/concurrency";
 import { compareInstantDesc, nowUtcIso, type UtcIsoString } from "~/lib/date-time";
-import { fetchRaidScoreBandsOnServer } from "~/lib/ranks/raid-score-bands.server";
 import { getAllRaidSchedules, type RaidScheduleListItem } from "~/models/raid";
 import { getRecruitedStudents, type RecruitedStudent } from "~/models/recruited-student";
 import { getAllStudents, getStudentGrowthVisualsBatch, getStudentWeaponAvailability } from "~/models/student";
@@ -59,8 +55,6 @@ export type RaidRecordSeason = {
   displayDefenseTypes: RaidRecordDefenseType[];
   // The defense types that take a score, in BAQL order, with each one's top difficulty.
   scoreDefenseTypes: RaidRecordSeasonRules["defenseTypes"];
-  // The Japanese season whose rank data the difficulty and clear time come from.
-  rankSeasonIndex: number | null;
   // The matching season on the other server: the Korean one for a Japanese season, and the other way round.
   counterpartSeasonIndex: number | null;
   rankConfirmAt: UtcIsoString | null;
@@ -95,7 +89,6 @@ function toRecordSeason(
     endAt: schedule.endAt,
     displayDefenseTypes,
     scoreDefenseTypes: toScoreDefenseTypes(schedule),
-    rankSeasonIndex: server === "jp" ? schedule.seasonIndex : (schedule.jpSchedule?.seasonIndex ?? null),
     counterpartSeasonIndex,
     rankConfirmAt: schedule.endAt ? getRaidRankConfirmAt(schedule.endAt) : null,
   };
@@ -131,16 +124,8 @@ export function raidRecordSeasonRules(season: RaidRecordSeason): RaidRecordSeaso
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
-// Rank data
+// Scores
 // ---------------------------------------------------------------------------------------------------------------------
-
-export function getRaidScoreBands(
-  raidType: RaidRecordRaidType,
-  rankSeasonIndex: number | null,
-  defenseType: RaidRecordDefenseType,
-): Promise<RaidScoreBands | null> {
-  return fetchRaidScoreBandsOnServer(raidType, rankSeasonIndex, defenseType);
-}
 
 export class RaidRecordScoreAboveMaxError extends InvalidRaidRecordError {
   constructor(
@@ -152,30 +137,22 @@ export class RaidRecordScoreAboveMaxError extends InvalidRaidRecordError {
   }
 }
 
-// Turns an entered score into a stored entry with its difficulty and clear time, and rejects a score above the
-// season's maximum.
-async function resolveRaidRecordScore(
+// Turns an entered score into a stored entry, and rejects a score above the season's maximum.
+function resolveRaidRecordScore(
   season: RaidRecordSeason,
   { defenseType, score }: { defenseType: RaidRecordDefenseType; score: number },
-): Promise<RaidRecordScore> {
-  const bands = await getRaidScoreBands(season.raidType, season.rankSeasonIndex, defenseType);
+): RaidRecordScore {
   const maxDifficulty = season.scoreDefenseTypes.find((entry) => entry.defenseType === defenseType)?.maxDifficulty ?? null;
-  const maxScore = getRaidMaxScore(bands, maxDifficulty);
+  const maxScore = getRaidMaxScore(season.boss.uid, maxDifficulty);
   if (maxScore !== null && score > maxScore) throw new RaidRecordScoreAboveMaxError(defenseType, maxScore);
-  const result = computeRaidClearResult(bands, score);
-  return {
-    defenseType,
-    score,
-    difficulty: result?.difficulty ?? null,
-    clearTimeMs: result?.clearTimeMs ?? null,
-  };
+  return { defenseType, score };
 }
 
-export async function resolveRaidRecordScores(
+export function resolveRaidRecordScores(
   season: RaidRecordSeason,
   scores: readonly { defenseType: RaidRecordDefenseType; score: number }[],
-): Promise<RaidRecordScore[]> {
-  return Promise.all(scores.map((entry) => resolveRaidRecordScore(season, entry)));
+): RaidRecordScore[] {
+  return scores.map((entry) => resolveRaidRecordScore(season, entry));
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -211,9 +188,9 @@ export type RaidRecordFormValues = {
 };
 
 // The edit form shows the rank it saves; saving it is the Sensei confirming that rank, so the rank time is now.
-async function toFormRecordValues(season: RaidRecordSeason, values: RaidRecordFormValues): Promise<RaidRecordValues> {
+function toFormRecordValues(season: RaidRecordSeason, values: RaidRecordFormValues): RaidRecordValues {
   return {
-    scores: await resolveRaidRecordScores(season, values.scores),
+    scores: resolveRaidRecordScores(season, values.scores),
     rank: values.rank,
     rankRecordedAt: nowUtcIso(),
     memo: values.memo,
@@ -232,7 +209,7 @@ export async function createRaidRecord(
     env,
     userId,
     { server: season.server, raidType: season.raidType, seasonIndex: season.seasonIndex },
-    await toFormRecordValues(season, values),
+    toFormRecordValues(season, values),
     options,
   );
 }
@@ -245,7 +222,7 @@ export async function updateRaidRecord(
   values: RaidRecordFormValues,
   options?: PostgresRaidRecordOptions,
 ): Promise<RaidRecord | null> {
-  return updatePostgresRaidRecord(env, userId, uid, await toFormRecordValues(season, values), options);
+  return updatePostgresRaidRecord(env, userId, uid, toFormRecordValues(season, values), options);
 }
 
 export function deleteRaidRecord(env: Env, userId: number, uid: string, options?: PostgresRaidRecordOptions) {
@@ -271,8 +248,6 @@ export type RaidRecordTableRowInput = {
   rank: number;
 };
 
-const RANK_DATA_CONCURRENCY = 4;
-
 // Every table score above its season maximum, so the screen can mark every cell at once.
 export class RaidRecordTableScoresAboveMaxError extends InvalidRaidRecordError {
   constructor(readonly rows: { seasonIndex: number; error: RaidRecordScoreAboveMaxError }[]) {
@@ -291,15 +266,17 @@ export async function saveRaidRecordTable(
 ): Promise<void> {
   const now = nowUtcIso();
   const aboveMax: { seasonIndex: number; error: RaidRecordScoreAboveMaxError }[] = [];
-  const resolved = await mapWithConcurrencyLimit(rows, RANK_DATA_CONCURRENCY, async (row) => {
-    const results = await Promise.allSettled(row.scores.map((entry) => resolveRaidRecordScore(row.season, entry)));
-    return results.flatMap((result) => {
-      if (result.status === "fulfilled") return [result.value];
-      if (!(result.reason instanceof RaidRecordScoreAboveMaxError)) throw result.reason;
-      aboveMax.push({ seasonIndex: row.season.seasonIndex, error: result.reason });
-      return [];
-    });
-  });
+  const resolved = rows.map((row) =>
+    row.scores.flatMap((entry) => {
+      try {
+        return [resolveRaidRecordScore(row.season, entry)];
+      } catch (error) {
+        if (!(error instanceof RaidRecordScoreAboveMaxError)) throw error;
+        aboveMax.push({ seasonIndex: row.season.seasonIndex, error });
+        return [];
+      }
+    }),
+  );
   if (aboveMax.length > 0) {
     // Newest season first, like the table; within a season the scores keep their order.
     throw new RaidRecordTableScoresAboveMaxError(aboveMax.sort((left, right) => right.seasonIndex - left.seasonIndex));
@@ -335,7 +312,7 @@ export async function applyRaidRecordChartScore(
   if (score === null) {
     return applyPostgresRaidRecordChartScore(env, userId, key, { defenseType, score: null }, options);
   }
-  const [entry] = await resolveRaidRecordScores(season, [{ defenseType, score }]);
+  const [entry] = resolveRaidRecordScores(season, [{ defenseType, score }]);
   return applyPostgresRaidRecordChartScore(env, userId, key, entry, options);
 }
 

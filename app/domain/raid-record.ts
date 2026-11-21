@@ -1,3 +1,12 @@
+import {
+  type Difficulty,
+  normalizeBossUid,
+  parseDifficulty,
+  RAID_DIFFICULTY_SCORE,
+  RAID_HP_SCORE,
+  RAID_TIME_SCORE_PER_SECOND,
+  timeForBoss,
+} from "./raid-score";
 import { STUDENT_GROWTH_EDIT_RANGES } from "./student-growth-edit";
 import { getWeaponLevelMaxByTier } from "./student-growth-state";
 
@@ -105,10 +114,9 @@ export type RaidRecordParty = {
 
 export type RaidRecordScore = {
   defenseType: RaidRecordDefenseType;
+  // The difficulty and clear time are not stored: screens compute them from the score and the season's boss
+  // (computeRaidClearResult), so a boss the formula learns later applies to records saved before.
   score: number;
-  // Computed from the season's rank data when the score was saved; null when there was no rank data to compute from.
-  difficulty: string | null;
-  clearTimeMs: number | null;
 };
 
 export type RaidRecord = {
@@ -204,49 +212,57 @@ export function isScoreOnlyRaidRecord(record: Pick<RaidRecord, "rank" | "memo" |
 // Score → difficulty and clear time
 // ---------------------------------------------------------------------------------------------------------------------
 
-// One difficulty band of the season's rank data (ranks clear-time distribution). Within a band the score falls
-// linearly with the clear time: score = floorScore + scorePerSecond × (timeBudgetSec − clearSec).
-export type RaidScoreBand = {
-  difficulty: string;
-  scorePerSecond: number;
-  floorScore: number;
-};
-
-export type RaidScoreBands = {
-  bands: RaidScoreBand[];
-  timeBudgetSec: number;
-};
-
 export type RaidClearResult = {
-  difficulty: string;
+  difficulty: Difficulty;
   clearTimeMs: number;
 };
 
-function bandMaxScore(band: RaidScoreBand, timeBudgetSec: number): number {
-  return band.floorScore + band.scorePerSecond * timeBudgetSec;
+// The in-game score formula: score = difficulty score + boss HP score + time score, where the time score is what is
+// left of the one-hour room time at the clear, per second. The HP score depends on the boss's battle time limit, so a
+// boss the formula does not know (a new one) has no result rather than a guessed one. Elimination uses the same formula
+// per defense type.
+const RAID_ROOM_TIME_MS = 3_600_000;
+const SCORE_DIFFICULTIES: readonly Difficulty[] = [
+  "normal",
+  "hard",
+  "very_hard",
+  "hardcore",
+  "extreme",
+  "insane",
+  "torment",
+  "lunatic",
+];
+
+function raidBossTimeClass(bossUid: string): 180 | 240 | 270 | null {
+  const boss = normalizeBossUid(bossUid);
+  return boss ? timeForBoss(boss) : null;
 }
 
-// The difficulty and clear time a score means, the way the season chart's "내 점수" reads it. A score outside every band
-// (a difficulty the rank data has no samples of) has no result.
-export function computeRaidClearResult(scoreBands: RaidScoreBands | null, score: number): RaidClearResult | null {
-  if (!scoreBands || scoreBands.timeBudgetSec <= 0) return null;
-  const candidates = scoreBands.bands.filter(
-    (band) =>
-      band.scorePerSecond > 0 && score >= band.floorScore && score <= bandMaxScore(band, scoreBands.timeBudgetSec),
-  );
-  if (candidates.length === 0) return null;
-  const band = candidates.reduce((best, candidate) => (candidate.floorScore > best.floorScore ? candidate : best));
-  const clearSec = scoreBands.timeBudgetSec - (score - band.floorScore) / band.scorePerSecond;
-  return { difficulty: band.difficulty, clearTimeMs: Math.round(clearSec * 1000) };
+function difficultyFloorScore(difficulty: Difficulty, timeClass: 180 | 240 | 270): number {
+  return RAID_DIFFICULTY_SCORE[difficulty] + RAID_HP_SCORE[difficulty][timeClass];
 }
 
-// The highest score the season allows: its top difficulty cleared at 0 seconds. Null when the rank data has no band for
-// the top difficulty, so a valid score is never rejected on missing data.
-export function getRaidMaxScore(scoreBands: RaidScoreBands | null, maxDifficulty: string | null): number | null {
-  if (!scoreBands || !maxDifficulty || scoreBands.timeBudgetSec <= 0) return null;
-  const band = scoreBands.bands.find((candidate) => candidate.difficulty === maxDifficulty);
-  if (!band || band.scorePerSecond <= 0) return null;
-  return bandMaxScore(band, scoreBands.timeBudgetSec);
+// The difficulty and clear time a score means. Null for a boss the formula does not know, and for a score no difficulty
+// can produce (below the lowest one, or between two). The difficulty ranges do not overlap, so a score has at most one.
+export function computeRaidClearResult(bossUid: string, score: number): RaidClearResult | null {
+  const timeClass = raidBossTimeClass(bossUid);
+  if (timeClass === null) return null;
+  for (const difficulty of SCORE_DIFFICULTIES) {
+    const timeScore = score - difficultyFloorScore(difficulty, timeClass);
+    const scorePerSecond = RAID_TIME_SCORE_PER_SECOND[difficulty];
+    if (timeScore < 0 || timeScore > scorePerSecond * (RAID_ROOM_TIME_MS / 1000)) continue;
+    return { difficulty, clearTimeMs: Math.round(RAID_ROOM_TIME_MS - (timeScore * 1000) / scorePerSecond) };
+  }
+  return null;
+}
+
+// The highest score the season allows: its top difficulty cleared at once. Null when the boss or the top difficulty is
+// unknown, so a valid score is never rejected on missing data.
+export function getRaidMaxScore(bossUid: string, maxDifficulty: string | null): number | null {
+  const timeClass = raidBossTimeClass(bossUid);
+  const difficulty = parseDifficulty(maxDifficulty);
+  if (timeClass === null || difficulty === null) return null;
+  return difficultyFloorScore(difficulty, timeClass) + RAID_TIME_SCORE_PER_SECOND[difficulty] * (RAID_ROOM_TIME_MS / 1000);
 }
 
 export function formatRaidClearTime(clearTimeMs: number): string {
@@ -482,17 +498,13 @@ export function readStoredRaidRecordScores(value: unknown): RaidRecordScore[] {
     if (
       !isObject(entry) ||
       !isRaidRecordDefenseType(entry.defenseType) ||
-      typeof entry.score !== "number" ||
-      (entry.difficulty !== null && typeof entry.difficulty !== "string") ||
-      (entry.clearTimeMs !== null && typeof entry.clearTimeMs !== "number")
+      typeof entry.score !== "number"
     ) {
       throw new InvalidRaidRecordError("저장된 점수를 읽지 못했어요.");
     }
     return {
       defenseType: entry.defenseType,
       score: entry.score,
-      difficulty: entry.difficulty as string | null,
-      clearTimeMs: entry.clearTimeMs as number | null,
     };
   });
 }

@@ -1,4 +1,5 @@
 import {
+  computeRaidClearResult,
   getRaidRecordRankStatus,
   getRaidRecordTotalScore,
   isRaidRecordRaidType,
@@ -28,7 +29,6 @@ export type RaidRecordSeasonView = {
   raidType: RaidRecordRaidType;
   seasonIndex: number;
   counterpartSeasonIndex: number | null;
-  rankSeasonIndex: number | null;
   boss: { uid: string; name: string };
   terrain: RaidRecordSeason["terrain"];
   startAt: UtcIsoString;
@@ -43,6 +43,8 @@ export type RaidRecordScoreView = {
   defenseType: RaidRecordDefenseType;
   // Null for a defense type the record has no score for.
   score: number | null;
+  // From the score and the season's boss; null without a score, for a boss the formula does not know, or for a score
+  // no difficulty produces.
   difficulty: string | null;
   clearTimeMs: number | null;
 };
@@ -67,7 +69,6 @@ export function toRaidRecordSeasonView(season: RaidRecordSeason, now: UtcIsoStri
     raidType: season.raidType,
     seasonIndex: season.seasonIndex,
     counterpartSeasonIndex: season.counterpartSeasonIndex,
-    rankSeasonIndex: season.rankSeasonIndex,
     boss: season.boss,
     terrain: season.terrain,
     startAt: season.startAt,
@@ -87,11 +88,12 @@ export function toRaidRecordRowView(
   const scoreByDefenseType = new Map(record.scores.map((entry) => [entry.defenseType, entry]));
   const scores = season.scoreDefenseTypes.map(({ defenseType }): RaidRecordScoreView => {
     const entry = scoreByDefenseType.get(defenseType);
+    const result = entry ? computeRaidClearResult(season.boss.uid, entry.score) : null;
     return {
       defenseType,
       score: entry?.score ?? null,
-      difficulty: entry?.difficulty ?? null,
-      clearTimeMs: entry?.clearTimeMs ?? null,
+      difficulty: result?.difficulty ?? null,
+      clearTimeMs: result?.clearTimeMs ?? null,
     };
   });
   // A score for a defense type the season no longer lists cannot be shown truthfully; the caller marks the record.

@@ -43,7 +43,6 @@ import {
   RAID_RECORD_SERVER_LABEL,
   RAID_RECORD_SERVER_SHORT_LABEL,
 } from "./raid-record-format";
-import { type RaidScoreBandsState, useRaidScoreBands } from "./use-raid-score-bands";
 
 export type RaidRecordFormStudent = RaidPartyStudent & { released: boolean };
 
@@ -151,7 +150,6 @@ export function RaidRecordForm({
   const [attempted, setAttempted] = useState(false);
 
   const defenseTypes = season?.scoreDefenseTypes.map(({ defenseType }) => defenseType) ?? [];
-  const bandStates = useRaidScoreBands(season, defenseTypes);
   const tabDefenseType =
     activeDefenseType && defenseTypes.includes(activeDefenseType) ? activeDefenseType : (defenseTypes[0] ?? null);
 
@@ -184,16 +182,15 @@ export function RaidRecordForm({
     return { studentsByUid, pickableStudents, recruited };
   }, [students, server, recruited]);
 
-  // Validation the screen can do on its own. The action checks the same rules and the rank data again.
+  // Validation the screen can do on its own. The action checks the same rules again.
   const enteredScores = defenseTypes.flatMap((defenseType) => {
     const score = scores[defenseType];
     return score === null || score === undefined ? [] : [{ defenseType, score }];
   });
   const scoreErrors: Partial<Record<RaidRecordDefenseType, string>> = {};
   for (const { defenseType, score } of enteredScores) {
-    const state = bandStates[defenseType];
     const maxDifficulty = season?.scoreDefenseTypes.find((entry) => entry.defenseType === defenseType)?.maxDifficulty;
-    const maxScore = state?.status === "ready" ? getRaidMaxScore(state.bands, maxDifficulty ?? null) : null;
+    const maxScore = season ? getRaidMaxScore(season.boss.uid, maxDifficulty ?? null) : null;
     if (score > RAID_RECORD_LIMITS.maxScore) scoreErrors[defenseType] = "점수를 확인해 주세요.";
     else if (maxScore !== null && score > maxScore) {
       scoreErrors[defenseType] = `이 시즌에서 달성할 수 있는 최대 점수(${formatRaidScore(maxScore)})보다 높아요.`;
@@ -349,7 +346,7 @@ export function RaidRecordForm({
                     ) : serverErrorFor("score") ? (
                       <FieldMessage message={serverErrorFor("score")} />
                     ) : (
-                      <ScorePreview score={scores[defenseTypes[0]] ?? null} state={bandStates[defenseTypes[0]]} />
+                      <ScorePreview score={scores[defenseTypes[0]] ?? null} bossUid={season.boss.uid} />
                     )}
                   </div>
                 </div>
@@ -359,7 +356,6 @@ export function RaidRecordForm({
                 <EliminationScores
                   season={season}
                   scores={scores}
-                  bandStates={bandStates}
                   scoreErrors={attempted ? scoreErrors : {}}
                   serverErrorFor={(defenseType) => serverErrorFor("score", defenseType)}
                   parties={parties}
@@ -562,17 +558,12 @@ function FieldMessage({ id, message }: { id?: string; message: string | null | u
   );
 }
 
-function ScorePreview({ score, state }: { score: number | null; state: RaidScoreBandsState | undefined }) {
-  if (score === null || !state || state.status === "loading") return null;
-  if (state.status === "failed") {
-    return <p className="mt-1 text-xs text-v2-fg-tertiary">난이도와 클리어 시간을 불러오지 못했어요.</p>;
-  }
-  if (!state.bands) {
-    return <p className="mt-1 text-xs text-v2-fg-tertiary">아직 랭크 데이터가 없어 난이도를 계산하지 않아요.</p>;
-  }
-  const result = computeRaidClearResult(state.bands, score);
+function ScorePreview({ score, bossUid }: { score: number | null; bossUid: string }) {
+  if (score === null) return null;
+  const result = computeRaidClearResult(bossUid, score);
   const text = result ? formatRaidClearResult(result.difficulty, result.clearTimeMs) : null;
-  // Hidden while the score is being typed: a partly typed score is below every difficulty.
+  // Also no result for a boss the score formula does not know. Hidden while the score is being typed: a partly typed
+  // score is below every difficulty.
   if (!text) {
     return <p className="mt-1 text-xs text-v2-fg-tertiary group-focus-within/score:hidden">난이도를 알 수 없어요.</p>;
   }
@@ -625,7 +616,6 @@ function RankHint({
 function EliminationScores({
   season,
   scores,
-  bandStates,
   scoreErrors,
   serverErrorFor,
   parties,
@@ -636,7 +626,6 @@ function EliminationScores({
 }: {
   season: RaidSeasonSelectOption;
   scores: ScoreDraft;
-  bandStates: Partial<Record<RaidRecordDefenseType, RaidScoreBandsState>>;
   scoreErrors: Partial<Record<RaidRecordDefenseType, string>>;
   serverErrorFor: (defenseType: RaidRecordDefenseType) => string | null;
   parties: readonly RaidFormParty[];
@@ -681,7 +670,7 @@ function EliminationScores({
               ) : score === null ? (
                 <span className="text-xs text-v2-fg-tertiary">–</span>
               ) : (
-                <ScorePreview score={score} state={bandStates[defenseType]} />
+                <ScorePreview score={score} bossUid={season.boss.uid} />
               )}
             </div>
             <div className={cn("min-w-0", stacked && "col-start-2")}>

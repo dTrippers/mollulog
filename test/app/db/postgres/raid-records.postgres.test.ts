@@ -27,7 +27,7 @@ const elimination: RaidRecordSeasonKey = { server: "kr", raidType: "elimination"
 let admin: Client;
 
 function score(defenseType: RaidRecordScore["defenseType"], value: number): RaidRecordScore {
-  return { defenseType, score: value, difficulty: "torment", clearTimeMs: 145_000 };
+  return { defenseType, score: value };
 }
 
 async function createRecord(

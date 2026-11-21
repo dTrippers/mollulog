@@ -56,7 +56,6 @@ function season(seasonIndex: number, startAt = "2026-01-01T00:00:00.000Z"): Raid
       { defenseType: "heavy", maxDifficulty: "torment" },
       { defenseType: "elastic", maxDifficulty: "torment" },
     ],
-    rankSeasonIndex: seasonIndex,
     counterpartSeasonIndex: seasonIndex,
     rankConfirmAt: null,
   };
@@ -69,7 +68,7 @@ function record(seasonIndex: number, uid: string): RaidRecord {
     server: "kr",
     raidType: "elimination",
     seasonIndex,
-    scores: [{ defenseType: "heavy", score: 40_000_000, difficulty: null, clearTimeMs: null }],
+    scores: [{ defenseType: "heavy", score: 40_000_000 }],
     rank: 1200,
     rankRecordedAt: "2026-02-01T00:00:00.000Z",
     memo: "",

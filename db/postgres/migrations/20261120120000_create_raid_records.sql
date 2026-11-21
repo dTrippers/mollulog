@@ -1,8 +1,8 @@
 -- A Sensei's own result in one 총력전 (total_assault) or 대결전 (elimination) season on one game server. A record is
 -- one (user, server, raid type, season); season_index is that server's numbering (kr = BAQL gl, jp = BAQL jp).
 --
--- scores holds one entry per defense type: one for total_assault, up to three for elimination. Each entry keeps the
--- difficulty and clear time computed from the score when it was saved, or null when the season had no rank data.
+-- scores holds one entry per defense type: one for total_assault, up to three for elimination. An entry holds the
+-- score only; the difficulty and clear time are computed from it and the season's boss when read.
 -- rank is null only for a record saved from the season chart with a score alone. rank_recorded_at is when the rank was
 -- last entered or confirmed; the screen compares it with the season's rank confirmation time to tell 잠정 from 확정.
 -- parties holds the optional party formations with the growth values the Sensei entered.

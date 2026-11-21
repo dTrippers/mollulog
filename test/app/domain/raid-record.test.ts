@@ -17,7 +17,6 @@ import {
   parseRaidRecordScore,
   type RaidRecordSeasonRules,
   type RaidRecordStudentInfo,
-  type RaidScoreBands,
   raidRankTier,
   readStoredRaidRecordParties,
   readStoredRaidRecordScores,
@@ -109,35 +108,33 @@ describe("raid record seasons", () => {
 });
 
 describe("raid record score → difficulty and clear time", () => {
-  const bands: RaidScoreBands = {
-    timeBudgetSec: 3600,
-    bands: [
-      { difficulty: "insane", scorePerSecond: 10_000, floorScore: 20_000_000 },
-      { difficulty: "torment", scorePerSecond: 10_000, floorScore: 30_000_000 },
-    ],
-  };
-
-  it("reads a score in the highest band that holds it", () => {
-    // 35,000,000 is inside both bands; the torment band wins.
-    expect(computeRaidClearResult(bands, 35_000_000)).toEqual({ difficulty: "torment", clearTimeMs: 3_100_000 });
-    expect(computeRaidClearResult(bands, 25_500_000)).toEqual({ difficulty: "insane", clearTimeMs: 3_050_000 });
-    expect(computeRaidClearResult(bands, 66_000_000)).toEqual({ difficulty: "torment", clearTimeMs: 0 });
+  // The floors and maxima below match the bands the ranks service returned for 240-second bosses (JP 총력전 94 and
+  // 대결전 38), which come from the same formula.
+  it("reads a score with the in-game formula of the boss's time limit", () => {
+    expect(computeRaidClearResult("hod", 40_000_000)).toEqual({ difficulty: "torment", clearTimeMs: 145_000 });
+    expect(computeRaidClearResult("hod", 44_025_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 3_600_000 });
+    expect(computeRaidClearResult("hod", 54_393_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 0 });
+    // Binah is a 3-minute boss, with a lower HP score.
+    expect(computeRaidClearResult("binah", 44_025_000)).toEqual({ difficulty: "lunatic", clearTimeMs: 3_325_694 });
+    // A legacy boss uid reads as its current one.
+    expect(computeRaidClearResult("kaiten-fx-mk0", 44_025_000)).toEqual(computeRaidClearResult("binah", 44_025_000));
   });
 
-  it("has no result for a score outside every band or without rank data", () => {
-    expect(computeRaidClearResult(bands, 19_999_999)).toBeNull();
-    expect(computeRaidClearResult(bands, 66_000_001)).toBeNull();
-    expect(computeRaidClearResult(null, 35_000_000)).toBeNull();
-    expect(computeRaidClearResult({ ...bands, timeBudgetSec: 0 }, 35_000_000)).toBeNull();
+  it("has no result for a score no difficulty produces or a boss the formula does not know", () => {
+    // Between the top of torment (40,348,000) and the floor of lunatic.
+    expect(computeRaidClearResult("hod", 42_000_000)).toBeNull();
+    expect(computeRaidClearResult("hod", 54_393_001)).toBeNull();
+    expect(computeRaidClearResult("hod", 500_000)).toBeNull();
+    expect(computeRaidClearResult("nightmare_train", 40_000_000)).toBeNull();
   });
 
-  it("takes the season's top difficulty cleared at 0 seconds as the maximum score", () => {
-    expect(getRaidMaxScore(bands, "torment")).toBe(66_000_000);
-    expect(getRaidMaxScore(bands, "insane")).toBe(56_000_000);
-    // Without a band for the top difficulty, no score is rejected.
-    expect(getRaidMaxScore(bands, "lunatic")).toBeNull();
-    expect(getRaidMaxScore(bands, null)).toBeNull();
-    expect(getRaidMaxScore(null, "torment")).toBeNull();
+  it("takes the season's top difficulty cleared at once as the maximum score", () => {
+    expect(getRaidMaxScore("hod", "torment")).toBe(40_348_000);
+    expect(getRaidMaxScore("hod", "lunatic")).toBe(54_393_000);
+    // Without a known boss or top difficulty, no score is rejected.
+    expect(getRaidMaxScore("hod", null)).toBeNull();
+    expect(getRaidMaxScore("hod", "unknown")).toBeNull();
+    expect(getRaidMaxScore("nightmare_train", "lunatic")).toBeNull();
   });
 
   it("formats a clear time as m:ss.mmm", () => {
@@ -364,9 +361,13 @@ describe("stored raid record values", () => {
     ).toEqual([
       { defenseType: "heavy", units: [{ slot: 0, studentUid: "striker-a", assist: false, snapshot: { tier: 9 } }] },
     ]);
+    expect(readStoredRaidRecordScores([{ defenseType: "heavy", score: 40_000_000 }])).toEqual([
+      { defenseType: "heavy", score: 40_000_000 },
+    ]);
+    // An entry saved with the difficulty and clear time it used to store reads as its score alone.
     expect(
-      readStoredRaidRecordScores([{ defenseType: "heavy", score: 40_000_000, difficulty: null, clearTimeMs: null }]),
-    ).toEqual([{ defenseType: "heavy", score: 40_000_000, difficulty: null, clearTimeMs: null }]);
+      readStoredRaidRecordScores([{ defenseType: "heavy", score: 40_000_000, difficulty: "torment", clearTimeMs: 1 }]),
+    ).toEqual([{ defenseType: "heavy", score: 40_000_000 }]);
   });
 
   it("fails on stored values that do not parse instead of reading them as empty", () => {
@@ -377,7 +378,7 @@ describe("stored raid record values", () => {
     );
     expectInvalid(() => readStoredRaidRecordScores(null), "저장된 점수를 읽지 못했어요.");
     expectInvalid(
-      () => readStoredRaidRecordScores([{ defenseType: "heavy", score: "1", difficulty: null, clearTimeMs: null }]),
+      () => readStoredRaidRecordScores([{ defenseType: "heavy", score: "1" }]),
       "저장된 점수를 읽지 못했어요.",
     );
   });

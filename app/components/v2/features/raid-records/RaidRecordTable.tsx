@@ -48,8 +48,6 @@ import {
   raidTableRowStatus,
   toRaidTableSubmissionRow,
 } from "./raid-record-table-state";
-import type { RaidScoreBandsState } from "./use-raid-score-bands";
-import { useRaidScoreBandsCache } from "./use-raid-score-bands-cache";
 
 export type RaidRecordTableRowError = {
   seasonIndex: number;
@@ -97,7 +95,6 @@ type RowModel = {
   changed: boolean;
   errors: RaidTableCellError[];
   status: RaidTableRowStatus;
-  bandStates: Partial<Record<RaidRecordDefenseType, RaidScoreBandsState>>;
 };
 
 function cellError(model: RowModel, field: "score" | "rank", defenseType?: RaidRecordDefenseType) {
@@ -121,7 +118,6 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
   const { stacked } = useV2Page();
   const navigate = useNavigate();
   const fetcher = useFetcher<RaidRecordTableActionData>();
-  const bands = useRaidScoreBandsCache();
   const { getInputProps } = useNumberInputFlowNavigation({ enterMovesDown: true });
   const { ref: layoutRef, wide } = useWidthAtLeast(TABLE_MIN_WIDTH[raidType]);
   const filterId = useId();
@@ -143,12 +139,9 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
       rows.map((row): RowModel => {
         const draft = drafts[row.season.seasonIndex] ?? initialRaidTableDraft(row);
         const changed = isRaidTableRowChanged(row, draft);
-        const bandStates: RowModel["bandStates"] = {};
         const maxScores: Partial<Record<RaidRecordDefenseType, number | null>> = {};
         for (const { defenseType, maxDifficulty } of row.season.scoreDefenseTypes) {
-          const state = bands.get({ raidType: row.season.raidType, rankSeasonIndex: row.season.rankSeasonIndex, defenseType });
-          bandStates[defenseType] = state;
-          if (state?.status === "ready") maxScores[defenseType] = getRaidMaxScore(state.bands, maxDifficulty);
+          maxScores[defenseType] = getRaidMaxScore(row.season.boss.uid, maxDifficulty);
         }
         const errors = [
           ...raidTableRowErrors(row, draft, maxScores),
@@ -156,22 +149,10 @@ export function RaidRecordTable({ view, username, listTo }: { view: RaidRecordTa
             .filter((error) => error.seasonIndex === row.season.seasonIndex)
             .map(({ field, defenseType, message }) => ({ field, defenseType, message })),
         ];
-        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now), bandStates };
+        return { row, draft, changed, errors, status: raidTableRowStatus(row, draft, now) };
       }),
-    [rows, drafts, serverErrors, bands, now],
+    [rows, drafts, serverErrors, now],
   );
-
-  // The rank data of a row is fetched once the Sensei changes one of its scores.
-  useEffect(() => {
-    for (const model of models) {
-      if (!model.changed) continue;
-      for (const { defenseType } of model.row.season.scoreDefenseTypes) {
-        if (model.draft.scores[defenseType] != null && isRaidTableScoreChanged(model.row, model.draft, defenseType)) {
-          bands.request({ raidType: model.row.season.raidType, rankSeasonIndex: model.row.season.rankSeasonIndex, defenseType });
-        }
-      }
-    }
-  }, [models, bands]);
 
   const changedModels = models.filter((model) => model.changed);
   const errorEntries = changedModels.flatMap((model) =>
@@ -484,21 +465,14 @@ function RankCell({ model, context }: { model: RowModel; context: CellContext })
   );
 }
 
-// The difficulty and clear time of a total assault row: the saved result, or the one the changed score means.
+// The difficulty and clear time of a total assault row's score, saved or changed.
 function ClearResult({ model }: { model: RowModel }) {
   const { row, draft } = model;
   const defenseType = row.season.scoreDefenseTypes[0]?.defenseType;
   if (!defenseType) return <span className="text-v2-fg-tertiary">–</span>;
   const score = draft.scores[defenseType] ?? null;
   if (score === null) return <span className="text-v2-fg-tertiary">–</span>;
-  if (!isRaidTableScoreChanged(row, draft, defenseType)) {
-    const saved = row.record?.scores.find((entry) => entry.defenseType === defenseType);
-    return <span>{formatRaidClearResult(saved?.difficulty ?? null, saved?.clearTimeMs ?? null) ?? "–"}</span>;
-  }
-  const state = model.bandStates[defenseType];
-  if (!state || state.status === "loading") return <span className="text-v2-fg-tertiary">계산 중…</span>;
-  if (state.status === "failed") return <span className="text-v2-fg-tertiary">불러오지 못했어요</span>;
-  const result = computeRaidClearResult(state.bands, score);
+  const result = computeRaidClearResult(row.season.boss.uid, score);
   return <span>{result ? formatRaidClearResult(result.difficulty, result.clearTimeMs) : "–"}</span>;
 }
 

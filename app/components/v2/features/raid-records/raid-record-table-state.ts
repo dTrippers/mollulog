@@ -79,7 +79,7 @@ function enteredScores(row: RaidRecordTableRowView, draft: RaidTableDraft) {
 }
 
 // The errors of a changed row. A row the Sensei did not touch keeps what is saved, even a score saved without a rank.
-// `maxScores` holds the season maximum of each defense type the rank data knows.
+// `maxScores` holds the season maximum of each defense type the score formula knows.
 export function raidTableRowErrors(
   row: RaidRecordTableRowView,
   draft: RaidTableDraft,
