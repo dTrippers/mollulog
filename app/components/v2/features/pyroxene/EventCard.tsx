@@ -5,8 +5,10 @@ import {
   ChevronUpIcon,
   PencilIcon,
   StarIcon,
+  TrashIcon,
 } from "@heroicons/react/16/solid";
-import { forwardRef, type ReactNode, useId, useMemo, useState } from "react";
+import { forwardRef, type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { Link } from "react-router";
 import { getOfferedPickupChanceOptions } from "~/domain/pyroxene-assumptions";
 import type { PyroxenePickupChance } from "~/domain/pyroxene-planner";
 import { getBalanceRange, getPyroxeneEventStatus } from "~/domain/pyroxene-planner-view";
@@ -23,10 +25,12 @@ import { STUDENT_ACQUISITION_LABELS } from "~/domain/student-directory";
 import dayjs from "~/lib/dayjs";
 import { cn } from "~/lib/utils";
 import { v2FocusRing } from "../../layout/styles";
-import { Button } from "../../primitives/Button";
+import { Button, v2ButtonClassName } from "../../primitives/Button";
 import { NumberInput } from "../../primitives/NumberInput";
+import { Popover } from "../../primitives/Popover";
 import { StudentThumb } from "../students/StudentThumb";
 import { splitVisibleStudentName } from "../students/split-student-name";
+import { TierStarPicker } from "../students/TierStarPicker";
 import { OwnedResourcesDialog, type OwnedResourceValues } from "./OwnedResources";
 import { PICKUP_BASIS_SHORT_LABELS, SegmentedChoice } from "./PickupBasis";
 import {
@@ -69,6 +73,7 @@ type EventCardProps = {
   recruitedStudentUids: ReadonlySet<string>;
   currentStacks: RecruitmentStacks;
   canRecordCompletion: boolean;
+  recordEditLink: string | undefined;
   selected: boolean;
   handlers: EventCardHandlers;
 };
@@ -139,15 +144,18 @@ function ResourceUnit({
   amount,
   delta,
   large = false,
+  showUsage = true,
   children,
 }: {
   resource: PyroxeneResourceKey;
   amount: number;
   delta: number;
   large?: boolean;
+  // Wide layouts show the usage in the change column instead.
+  showUsage?: boolean;
   children?: ReactNode;
 }) {
-  const usage = usageText(delta);
+  const usage = showUsage ? usageText(delta) : null;
   return (
     <div className="flex flex-col items-end">
       <span className="flex items-center gap-1">
@@ -167,8 +175,36 @@ function ResourceUnit({
   );
 }
 
+/** What the recruitment uses, one resource per line, for the change column of wide layouts. */
+function ResourceUsage({ entry, className }: { entry: TimelineEntry; className?: string }) {
+  const delta = entry.resourceDelta;
+  const changed = (["pyroxene", "tenTimeTicket", "oneTimeTicket"] as const).filter((resource) => delta[resource] !== 0);
+  return (
+    <span className={cn("flex-col items-end gap-0.5 pt-0.5 text-sm font-semibold tabular-nums", className)}>
+      {changed.length === 0 ? <span className="text-v2-fg-tertiary">—</span> : null}
+      {changed.map((resource) => (
+        <span
+          key={resource}
+          className={cn("inline-flex items-center gap-0.5", delta[resource] < 0 ? "text-v2-danger" : "text-v2-success")}
+        >
+          <ResourceIcon resource={resource} className="my-0 size-5" />
+          {formatSigned(delta[resource])}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** What is left of each resource after the recruitment, grouped by resource. */
-function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?: string }) {
+function ResourceLedger({
+  entry,
+  showUsage = true,
+  className,
+}: {
+  entry: TimelineEntry;
+  showUsage?: boolean;
+  className?: string;
+}) {
   const plan = entry.pickupPlan;
   if (!plan) return null;
   const delta = entry.resourceDelta;
@@ -186,13 +222,14 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         {status ? <StatusPill status={status} /> : null}
       </span>
       <div className="flex flex-col items-end gap-2.5">
-        <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} large>
+        <ResourceUnit resource="pyroxene" amount={after.pyroxene} delta={delta.pyroxene} showUsage={showUsage} large>
           {range ? (
             <span className="mt-1.5 flex flex-col items-end text-xs text-v2-fg-tertiary">
-              <span className="text-[0.625rem] leading-3">상하위 10% 범위</span>
+              <span className="text-[0.625rem] leading-3">예상 범위 (80%)</span>
               <span>
                 {/* A low end below zero means bad luck can run the balance short. */}
-                <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>~
+                <span className={cn(range.low < 0 && "font-semibold text-v2-warning")}>{formatAmount(range.low)}</span>
+                {" ~ "}
                 {formatAmount(range.high)}
               </span>
             </span>
@@ -201,7 +238,13 @@ function ResourceLedger({ entry, className }: { entry: TimelineEntry; className?
         {tickets.length > 0 ? (
           <div className="flex flex-wrap justify-end gap-x-4 gap-y-2.5">
             {tickets.map((resource) => (
-              <ResourceUnit key={resource} resource={resource} amount={after[resource]} delta={delta[resource]} />
+              <ResourceUnit
+                key={resource}
+                resource={resource}
+                amount={after[resource]}
+                delta={delta[resource]}
+                showUsage={showUsage}
+              />
             ))}
           </div>
         ) : null}
@@ -227,6 +270,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     recruitedStudentUids,
     currentStacks,
     canRecordCompletion,
+    recordEditLink,
     selected,
     handlers,
   },
@@ -234,9 +278,15 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
 ) {
   const event = entry.source.event;
   const plan = entry.pickupPlan;
-  const [dialog, setDialog] = useState<"target" | "complete" | { tier: string } | null>(null);
+  const [dialog, setDialog] = useState<"target" | "complete" | null>(null);
+  // The student whose target tier popover is open. The uid stays after closing, so the panel keeps its content while it
+  // fades out.
+  const [tierPopover, setTierPopover] = useState<{ uid: string; open: boolean } | null>(null);
+  const thumbRefs = useRef(new Map<string, HTMLButtonElement>());
+  const tierAnchorRef = useRef<HTMLButtonElement | null>(null);
   const [showRecruited, setShowRecruited] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const deleteWarningId = useId();
   if (!event) return null;
 
   const completed = eventData?.completed ?? false;
@@ -274,7 +324,15 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
     },
   };
 
-  const tierStudent = typeof dialog === "object" && dialog ? students.find((s) => s.uid === dialog.tier) : undefined;
+  const tierStudent = tierPopover ? students.find((s) => s.uid === tierPopover.uid) : undefined;
+  const tierStudentNames = tierStudent ? splitVisibleStudentName(tierStudent.name) : null;
+  // The name with its variant, so a student is never mistaken for another variant of the same name.
+  const tierStudentLabel = tierStudentNames
+    ? tierStudentNames.variant
+      ? `${tierStudentNames.name}(${tierStudentNames.variant})`
+      : tierStudentNames.name
+    : null;
+  const closeTierPopover = () => setTierPopover((current) => (current ? { ...current, open: false } : null));
   const until = dayjs(event.until);
   // An event with nothing left to choose reads as one line, like the income rows around it.
   const compact = !plan && !completed && !showRecruited && visibleStudents.length === 0;
@@ -285,7 +343,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
         {completed ? (
           <span className="inline-flex h-5.5 items-center gap-0.5 rounded-full bg-v2-success-subtle px-2 text-xs font-semibold text-v2-success">
             <CheckIcon className="size-3.5" aria-hidden="true" />
-            완료
+            모집 완료
           </span>
         ) : null}
         {ruleIsLegacy ? (
@@ -316,29 +374,48 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           setDialog(null);
         }}
       />
-      {tierStudent ? (
-        <TierDialog
-          key={tierStudent.uid}
-          open
-          studentName={tierStudent.name}
-          tier={(targetTiers[tierStudent.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER) as RecruitmentTargetTier}
-          onClose={() => setDialog(null)}
-          onRemove={() => {
-            handlers.onFavoriteChange(tierStudent.contentUid, tierStudent.uid, false);
-            setDialog(null);
-          }}
-          onSave={(tier) => {
-            const next = { ...targetTiers };
-            if (tier === DEFAULT_RECRUITMENT_TARGET_TIER) delete next[tierStudent.uid];
-            else next[tierStudent.uid] = tier;
-            handlers.onUpdateEventData(event.uid, { targetTiers: next });
-            setDialog(null);
-          }}
-        />
-      ) : null}
+      <Popover
+        open={Boolean(tierStudent && tierPopover?.open)}
+        label={tierStudentLabel ? `${tierStudentLabel} 목표 성급` : "목표 성급"}
+        onClose={closeTierPopover}
+        returnFocusRef={tierAnchorRef}
+        className="flex w-fit flex-col gap-2 p-3"
+      >
+        {tierStudent && tierStudentLabel ? (
+          <>
+            <p className="text-sm font-semibold text-v2-fg">{tierStudentLabel} 목표 성급</p>
+            <TierStarPicker
+              value={targetTiers[tierStudent.uid] ?? DEFAULT_RECRUITMENT_TARGET_TIER}
+              min={1}
+              max={RECRUITMENT_TARGET_TIERS[RECRUITMENT_TARGET_TIERS.length - 1]}
+              initialTier={RECRUITMENT_TARGET_TIERS[0]}
+              onPick={(picked) => {
+                const tier = picked as RecruitmentTargetTier;
+                const next = { ...targetTiers };
+                if (tier === DEFAULT_RECRUITMENT_TARGET_TIER) delete next[tierStudent.uid];
+                else next[tierStudent.uid] = tier;
+                handlers.onUpdateEventData(event.uid, { targetTiers: next });
+                closeTierPopover();
+                tierAnchorRef.current?.focus({ preventScroll: true });
+              }}
+            />
+            <Button
+              size="sm"
+              variant="danger-subtle"
+              className="self-start"
+              onClick={() => {
+                handlers.onFavoriteChange(tierStudent.contentUid, tierStudent.uid, false);
+                closeTierPopover();
+              }}
+            >
+              관심 학생에서 제외
+            </Button>
+          </>
+        ) : null}
+      </Popover>
       <OwnedResourcesDialog
         open={dialog === "complete"}
-        title="완료 기록"
+        title="모집 완료 기록"
         submitLabel="기록"
         description="모집을 마친 뒤 남은 재화와 스택을 입력해주세요. 예상값으로 채워 두었어요."
         initialValues={completionValues}
@@ -444,23 +521,47 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               .filter(Boolean)
               .join(", ");
             return (
-              <div key={student.uid} className={cn("relative", thumbWidth, !student.favorited && "opacity-45")}>
+              <div
+                key={student.uid}
+                className={cn(
+                  "relative",
+                  thumbWidth,
+                  // A student not yet added brightens on hover, as adding it will.
+                  !student.favorited &&
+                    "opacity-45 motion-safe:transition-opacity motion-safe:duration-v2-fast motion-safe:ease-v2-standard [@media(hover:hover)_and_(pointer:fine)]:hover:opacity-90",
+                )}
+              >
                 <StudentThumb
                   studentUid={student.imageUid ?? student.uid}
                   name={names.name}
                   variant={names.variant}
                   small
                   fluid
-                  onSelect={() =>
-                    student.favorited
-                      ? setDialog({ tier: student.uid })
-                      : handlers.onFavoriteChange(student.contentUid, student.uid, true)
-                  }
+                  ref={(node) => {
+                    if (node) thumbRefs.current.set(student.uid, node);
+                    else thumbRefs.current.delete(student.uid);
+                  }}
+                  onSelect={() => {
+                    if (tierPopover?.open && tierPopover.uid === student.uid) {
+                      closeTierPopover();
+                      return;
+                    }
+                    // Adding a student opens the same popover, so the target tier can be set right away.
+                    if (!student.favorited) handlers.onFavoriteChange(student.contentUid, student.uid, true);
+                    const anchor = thumbRefs.current.get(student.uid) ?? null;
+                    tierAnchorRef.current = anchor;
+                    // The popover opens below the thumbnail and does not know the fixed bottom navigation, so a
+                    // thumbnail low on the screen first moves to the middle, where the panel fits below it.
+                    if (anchor && anchor.getBoundingClientRect().bottom > window.innerHeight * 0.6) {
+                      anchor.scrollIntoView({ block: "center", behavior: "smooth" });
+                    }
+                    setTierPopover({ uid: student.uid, open: true });
+                  }}
                   selected={student.favorited}
                   showSelectedIndicator={false}
                   captionPlacement="overlay"
                   overlayOnMobile
-                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "목표로 추가"}
+                  selectionActionLabel={student.favorited ? "목표 성급 설정" : "관심 학생으로 추가"}
                   favorite={{
                     visible: student.favorited,
                     icon: "favorited",
@@ -523,7 +624,7 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
               {plan.basis === "manual" ? (
                 <span className="inline-flex items-center gap-0.5 text-v2-fg-tertiary">
                   <PencilIcon className="size-3" aria-hidden="true" />
-                  직접
+                  직접 입력
                 </span>
               ) : plan.basisOverridden ? (
                 <span className="rounded bg-v2-accent-subtle px-1 text-xs leading-5 font-medium text-v2-accent">
@@ -553,40 +654,52 @@ export const EventCard = forwardRef<HTMLDivElement, EventCardProps>(function Eve
           {plan ? (
             <Button size="sm" onClick={() => setDialog("target")}>
               <PencilIcon className="size-3" aria-hidden="true" />
-              목표 설정
+              모집 횟수 설정
             </Button>
           ) : null}
           {canComplete ? (
             <Button size="sm" onClick={() => setDialog("complete")}>
               <CheckIcon className="size-3" aria-hidden="true" />
-              완료 기록
+              모집 완료 기록
             </Button>
+          ) : null}
+          {completed && canRecordCompletion && recordEditLink ? (
+            <Link to={recordEditLink} className={v2ButtonClassName({ size: "sm" })}>
+              <PencilIcon className="size-3" aria-hidden="true" />
+              모집 기록 편집
+            </Link>
           ) : null}
           {completed && canRecordCompletion ? (
             <Button
               size="sm"
-              variant={confirmingDelete ? "danger" : "text"}
+              variant={confirmingDelete ? "danger" : "secondary"}
+              aria-describedby={confirmingDelete ? deleteWarningId : undefined}
               onClick={() => {
                 if (!confirmingDelete) {
                   setConfirmingDelete(true);
-                  window.setTimeout(() => setConfirmingDelete(false), 3000);
+                  window.setTimeout(() => setConfirmingDelete(false), 5000);
                   return;
                 }
                 setConfirmingDelete(false);
                 handlers.onDeleteCompletion(event.uid);
               }}
             >
-              {confirmingDelete ? "정말 삭제할까요?" : "완료 기록 삭제"}
+              <TrashIcon className="size-3" aria-hidden="true" />
+              {confirmingDelete ? "삭제" : "모집 기록 삭제"}
             </Button>
           ) : null}
         </div>
+        {confirmingDelete ? (
+          <p id={deleteWarningId} className="text-xs text-v2-danger">
+            한 번 더 누르면 모집 기록 전체가 삭제돼요.
+          </p>
+        ) : null}
       </div>
 
       {plan ? (
         <>
-          {/* The change column stays empty: each resource shows its usage under what is left. */}
-          <span className="hidden @2xl:block" />
-          <ResourceLedger entry={entry} className="hidden @2xl:flex" />
+          <ResourceUsage entry={entry} className="hidden @2xl:flex" />
+          <ResourceLedger entry={entry} showUsage={false} className="hidden @2xl:flex" />
         </>
       ) : (
         <span className="hidden pt-px text-right text-sm text-v2-fg-tertiary @2xl:block">—</span>
@@ -631,7 +744,7 @@ function TargetDialog({
         value,
         label: PICKUP_BASIS_SHORT_LABELS[value],
       })),
-      { value: "manual" as const, label: "직접" },
+      { value: "manual" as const, label: "직접 입력" },
     ],
     [defaultBasis, savedBasis],
   );
@@ -639,7 +752,7 @@ function TargetDialog({
   return (
     <PlannerDialog
       open={open}
-      title="목표 설정"
+      title="모집 횟수 설정"
       onClose={onClose}
       footer={
         <>
@@ -689,63 +802,6 @@ function TargetDialog({
           <p className="text-xs text-v2-fg-tertiary">무료 모집과 모집 특전은 이 횟수에서 빼고 계산해요.</p>
         </div>
       ) : null}
-    </PlannerDialog>
-  );
-}
-
-function TierDialog({
-  open,
-  studentName,
-  tier,
-  onClose,
-  onRemove,
-  onSave,
-}: {
-  open: boolean;
-  studentName: string;
-  tier: RecruitmentTargetTier;
-  onClose: () => void;
-  onRemove: () => void;
-  onSave: (tier: RecruitmentTargetTier) => void;
-}) {
-  const [value, setValue] = useState(tier);
-  const names = splitVisibleStudentName(studentName);
-  return (
-    <PlannerDialog
-      open={open}
-      title={`${names.variant ? `${names.name}(${names.variant})` : names.name} 목표 성급`}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="danger-subtle" className="mr-auto" onClick={onRemove}>
-            관심 학생에서 제외
-          </Button>
-          <Button onClick={onClose}>취소</Button>
-          <Button variant="primary" onClick={() => onSave(value)}>
-            저장
-          </Button>
-        </>
-      }
-    >
-      <SegmentedChoice
-        label="목표 성급"
-        variant="tiles"
-        value={String(value)}
-        onChange={(next) => setValue(Number(next) as RecruitmentTargetTier)}
-        options={RECRUITMENT_TARGET_TIERS.map((option) => ({
-          value: String(option),
-          // Stars fill the first row and exclusive weapon tiers start the second; every tile keeps the same width.
-          className: option === 6 ? "col-start-1" : undefined,
-          label: (
-            <>
-              <span aria-hidden="true">
-                <TierFace tier={option} iconClassName="size-4" />
-              </span>
-              <span className="sr-only">{tierMeaning(option)}</span>
-            </>
-          ),
-        }))}
-      />
     </PlannerDialog>
   );
 }

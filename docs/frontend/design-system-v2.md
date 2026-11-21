@@ -135,7 +135,7 @@ Density tokens are spacing tokens in a plain `@theme` block so utilities can rea
 - `success` is status. It means confirmed or completed.
 - `danger` is status. As an action, use it only to clear or revert an applied filter, selection, or input, or for a destructive action. Always pair it with a verb label, such as "초기화". Show the action only when there is something to clear. As a state, it marks a failure and a calculated shortfall. `danger` shares values with `live` and `attr-red`, but it is a separate token because the meaning differs.
 - The v2 `Button` `danger` variant is for destructive actions that need a strong red fill, such as deleting a key, application, or connection. The `danger-subtle` variant is for reversible reset, cancel, or exclusion actions. Keep `PanelAction` and status notices on `text-v2-danger` and `bg-v2-danger-subtle`.
-- In a resource calculation, a calculated shortfall uses `danger` and shows the missing count with its unit (`450개 부족`). A certain surplus uses `success` and shows `충분`, without the surplus count unless the screen is about it. Where the calculation gives an estimated range (for example the 상하위 10% range of a recruitment plan) and the range includes a shortfall while the central estimate does not, show the `warning` state `주의`, never `충분`.
+- In a resource calculation, a calculated shortfall uses `danger` and shows the missing count with its unit (`450개 부족`). A certain surplus uses `success` and shows `충분`, without the surplus count unless the screen is about it. Where the calculation gives an estimated range (for example the range between the top 10% and bottom 10% of a recruitment plan's simulated outcomes) and the range includes a shortfall while the central estimate does not, show the `warning` state `주의`, never `충분`.
 - `neutral` `PanelAction` is for helper actions that do not clear state, such as "모두 보기". Do not use `danger` for them.
 - `live`, `favorite`, `new`, and `attr-*` are domain colors. They describe content, not state.
 - Do not use color alone to convey meaning. Pair color with a text label or a distinct icon shape; an icon-only element (for example the favorite heart or the completed check) needs an accessible name.
@@ -171,7 +171,7 @@ These rules come from the product owner's reviews of design proposals and implem
 - Secondary content, such as a video list, does not take a large share of the screen.
 - A step in the user's plan belongs in Main, not in an Aside.
 - A notice about something the user will lose or cannot do (unspent currency, a pickup that cannot be recruited) uses the warning style, not a neutral information line.
-- A calculated value or range carries a short label that says what it measures (필요 소탕, 상하위 10% 범위); a number with only its unit ("n회 (x~y)") is not enough. A status such as 충분 or 부족 sits beside the value it qualifies, on mobile as well.
+- A calculated value or range carries a short label that says what it measures (필요 소탕, 예상 범위 (80%)); a number with only its unit ("n회 (x~y)") is not enough. A status such as 충분 or 부족 sits beside the value it qualifies, on mobile as well.
 - On a calculator with many optional inputs, the result can come first and the detailed inputs open on demand (for example a student list that expands for entry). Keep fixed or always-visible space for what the primary task needs; secondary details open from a compact action such as a bottom sheet. This is a choice by importance, not a rule to fold every input.
 - A calculated result that is not ready or failed shows that state. Never show it as 0, 충분, or any other value it does not have.
 - A result for a currency allows several acquisition and consumption sources. A display with one slot per currency is a defect.
@@ -184,7 +184,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 
 | Term | Meaning | Do not use |
 | --- | --- | --- |
-| 상하위 10% 범위 | The range between the top 10% and bottom 10% of simulated outcomes | 80% 범위, 예상 범위 |
+| 평균 | The recruitment count averaged with the pickup pity (천장) applied; the average without the pity is 평균 (천장 미반영) | 평균 (천장 반영), 천장 반영 평균 |
 | 초회 클리어 | A stage's first-clear reward | 처음 클리어 |
 | 대상 스테이지 | The stages the calculation may use | 켜 둔 스테이지 |
 | 필요 소탕 | The sweeps the calculation requires; extra sweeps the user enters are 추가 소탕 | 자동 소탕 |
@@ -218,6 +218,7 @@ UI copy uses these terms for these game and product concepts. Add a term here on
 - Text from game data, such as an event title, keeps its own line breaks. Do not split a short title onto two lines to fill a layout.
 - Inputs for values of one domain, such as skill levels or equipment slots, share one bordered field split by internal dividers, as in the scanner review. A hint below a field, such as the current value, sits in its own row so the fields stay aligned.
 - A horizontal bar list with a label column and a value column lays all rows out on one shared grid: the label and value columns take the width of their widest content, and the bar takes all the remaining width. Do not reserve fixed-width label or value columns, which leave the bar short and a wide gap before short values.
+- In a list of separate rows that show numbers, such as a schedule of amounts and balances, the number columns keep the same position in every row at every width. Reserve an action column's width in rows without an action too, so a row with a delete button lines up with one without.
 - Mark the row that holds the Sensei's own student (내 학생) by highlighting the whole row with a faint fill and hairline ring, with a "내 학생 성장도" legend below the list, as in the student statistics growth chart. Do not add inline "내 학생" text or a separate marker on the bar.
 
 ## Motion

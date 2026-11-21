@@ -89,7 +89,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
       <p className={point.balance < 0 ? "text-v2-danger" : "text-v2-fg"}>청휘석 {formatAmount(point.balance)}</p>
       {point.range ? (
         <p className="text-v2-fg-tertiary">
-          상하위 10% 이내 {formatAmount(point.range[0])} ~ {formatAmount(point.range[1])}
+          예상 범위 (80%) {formatAmount(point.range[0])} ~ {formatAmount(point.range[1])}
         </p>
       ) : null}
     </div>

@@ -1,5 +1,6 @@
 import { nanoid } from "nanoid/non-secure";
 import {
+  type CollectedSourceChanges,
   createPostgresAttendance,
   createPostgresBuyPyroxene,
   createPostgresOtherPyroxeneGain,
@@ -13,6 +14,7 @@ import {
   type OwnedResourceInput,
   type PostgresPyroxeneOptions,
   type PyroxeneEventDataPatch,
+  updatePostgresCollectedSources,
   updatePostgresPyroxeneOneOffTimelineItem,
   updatePostgresPyroxenePlannerOptions,
   upsertPostgresCollectedSource,
@@ -50,7 +52,7 @@ export async function createPyroxeneOwnedResource(
   env: Env,
   userId: number,
   resources: OwnedResourceInput,
-  options: { inputAt?: string } = {},
+  options: { inputAt?: string; collectedSources?: CollectedSourceChanges } = {},
 ): Promise<void> {
   return createPostgresPyroxeneOwnedResource(env, userId, resources, options);
 }
@@ -73,6 +75,10 @@ export async function ensureCollectedSource(env: Env, userId: number, sourceKey:
 
 export async function upsertCollectedSources(env: Env, userId: number, sourceKeys: string[]): Promise<void> {
   return upsertPostgresCollectedSources(env, userId, sourceKeys);
+}
+
+export async function updateCollectedSources(env: Env, userId: number, changes: CollectedSourceChanges): Promise<void> {
+  return updatePostgresCollectedSources(env, userId, changes);
 }
 
 export async function deleteCollectedSource(env: Env, userId: number, sourceKey: string): Promise<void> {

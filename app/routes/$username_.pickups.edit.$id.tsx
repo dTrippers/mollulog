@@ -255,8 +255,16 @@ export const loader = async ({ context, request, params }: LoaderFunctionArgs) =
   };
 };
 
+// A page that opened the editor, such as the pyroxene planner, gets the user back after saving. Only a path on this site
+// is accepted, so the parameter cannot send the user elsewhere.
+function editorReturnPath(value: string | null | undefined): string | null {
+  if (!value?.startsWith("/") || value.startsWith("//") || value.includes("\\")) return null;
+  return value;
+}
+
 type ActionData = {
   eventUid: string;
+  returnTo?: string | null;
   result: PickupHistory["result"];
   exchangedStudentIds?: string[];
   rawResult?: string;
@@ -393,7 +401,7 @@ export const action = async ({ context, request, params }: ActionFunctionArgs) =
     });
     return routeData({ error: SAVE_FAILED }, { status: 500 });
   }
-  return redirect("/my?path=pickups");
+  return redirect(editorReturnPath(data.returnTo) ?? "/my?path=pickups");
 };
 
 export function ErrorBoundary() {
@@ -581,6 +589,7 @@ function EditPickupForm() {
       ],
       exchangedStudentIds: exchangeable ? exchangedStudentUids : [],
       comment: comment.trim() || null,
+      returnTo: editorReturnPath(searchParams.get("returnTo")),
     };
     saveFetcher.submit(payload, { method: "post", encType: "application/json" });
   };
