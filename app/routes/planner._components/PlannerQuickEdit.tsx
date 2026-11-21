@@ -12,6 +12,7 @@ import {
   createOptimisticOtherTimelineItems,
   DEFAULT_BUY_PYROXENE_QUANTITY,
   extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneOneOffGainEditAt,
 } from "~/domain/pyroxene-sources";
 import type { PickupResources } from "~/domain/pyroxene-timeline";
 import dayjs from "~/lib/dayjs";
@@ -292,21 +293,25 @@ export default function PlannerQuickEdit({
           (record) => extractPyroxeneTimelineBaseUid(record.uid) !== editingId,
         );
         const records = baseRecords.map((record) => {
+          // Keeps the recorded instant while the date stays on the same game day, as the account edit does.
+          const eventAt = normalizePyroxeneOneOffGainEditAt(dateInstant, record.eventAt);
           if (kind === "buy" && record.source === "buy") {
             changed = true;
-            return createOptimisticBuyTimelineItems(numericQuantity, new Date(dateInstant), {
+            const [item] = createOptimisticBuyTimelineItems(numericQuantity, new Date(dateInstant), {
               uid: record.uid,
               repeatType: "fixed_days",
-            })[0];
+            });
+            return { ...item, eventAt };
           }
           if (kind === "other" && record.source === "other") {
             changed = true;
-            return createOptimisticOtherTimelineItems(
+            const [item] = createOptimisticOtherTimelineItems(
               numericResources,
               description.trim(),
               new Date(dateInstant),
               record.uid,
-            )[0];
+            );
+            return { ...item, eventAt };
           }
           return record;
         });

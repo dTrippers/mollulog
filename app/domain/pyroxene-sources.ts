@@ -134,18 +134,52 @@ export function getBlueArchiveGameDate(now: Date | string = new Date()): dayjs.D
   return dayjs(now).tz("Asia/Seoul").subtract(4, "hour").startOf("day");
 }
 
-/**
- * The instant a one-off purchase or direct gain counts from. A gain dated on the current game day is one still to
- * come, so it keeps the time it is recorded instead of 04:00 and stays after inventory entered earlier that day.
- */
-export function normalizePyroxeneOneOffGainAt(date: Date | string, now: Date | string = new Date()): string {
-  const eventAt = normalizePyroxeneTimelineEventAt(date);
-  if (!getBlueArchiveGameDate(eventAt).isSame(getBlueArchiveGameDate(now))) return eventAt;
-  return dayjs(now).toISOString();
+// KST has no daylight saving time, so day boundaries below use fixed offsets instead of the runtime time zone.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const GAME_DAY_RESET_MS = 4 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The KST calendar date of an instant, as a day number. */
+function kstDayNumber(at: Date | string): number {
+  return Math.floor((new Date(at).getTime() + KST_OFFSET_MS) / DAY_MS);
 }
 
-function isOneOffGainSource(source: PyroxeneTimelineItem["source"]): boolean {
+/** The game day of an instant, as a day number; a game day starts at 04:00 KST. */
+function gameDayNumber(at: Date | string): number {
+  return Math.floor((new Date(at).getTime() + KST_OFFSET_MS - GAME_DAY_RESET_MS) / DAY_MS);
+}
+
+/** 04:00 KST at the start of the game day an instant falls on. */
+export function getPyroxeneGameDayStartAt(at: Date | string): string {
+  return new Date(gameDayNumber(at) * DAY_MS - KST_OFFSET_MS + GAME_DAY_RESET_MS).toISOString();
+}
+
+export function isPyroxeneOneOffGainSource(source: string): source is "buy" | "other" {
   return source === "buy" || source === "other";
+}
+
+/**
+ * The instant a one-off purchase or direct gain counts from. A gain whose KST date is the current game day is one
+ * still to come, so it keeps the time it is recorded instead of 04:00 and stays after inventory entered earlier that
+ * day. Before the 04:00 reset, the current game day is the previous calendar date.
+ */
+export function normalizePyroxeneOneOffGainAt(date: Date | string, now: Date | string = new Date()): string {
+  return kstDayNumber(date) === gameDayNumber(now)
+    ? new Date(now).toISOString()
+    : normalizePyroxeneTimelineEventAt(date);
+}
+
+/**
+ * The instant an edited one-off gain counts from. While its date stays on the game day it was recorded for, it keeps
+ * the recorded instant, so changing only the amount or the name never moves it across an inventory input.
+ */
+export function normalizePyroxeneOneOffGainEditAt(
+  date: Date | string,
+  previousEventAt: string,
+  now: Date | string = new Date(),
+): string {
+  if (kstDayNumber(date) === gameDayNumber(previousEventAt)) return new Date(previousEventAt).toISOString();
+  return normalizePyroxeneOneOffGainAt(date, now);
 }
 
 /** Normalizes a timeline record's instant for its source; see {@link normalizePyroxeneOneOffGainAt}. */
@@ -154,7 +188,9 @@ export function normalizePyroxeneTimelineRecordAt(
   source: PyroxeneTimelineItem["source"],
   now: Date | string = new Date(),
 ): string {
-  return isOneOffGainSource(source) ? normalizePyroxeneOneOffGainAt(date, now) : normalizePyroxeneTimelineEventAt(date);
+  return isPyroxeneOneOffGainSource(source)
+    ? normalizePyroxeneOneOffGainAt(date, now)
+    : normalizePyroxeneTimelineEventAt(date);
 }
 
 export function calculatePackageStartDateFromRemainingDays(

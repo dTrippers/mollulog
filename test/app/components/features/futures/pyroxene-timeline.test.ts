@@ -52,9 +52,9 @@ function favoritedPickupRecruitmentWithUid(uid: string) {
 }
 
 describe("pyroxene-timeline", () => {
-  it("counts a direct gain dated today after inventory entered earlier that day", () => {
-    const inventoryInputAt = new Date("2026-11-17T13:38:00+09:00");
-    const recordedAt = "2026-11-17T12:15:00.000Z"; // 21:15 KST
+  describe("direct gains recorded on their own game day", () => {
+    const recordedAt = "2026-11-21T12:15:00.000Z"; // 21:15 KST on 11/21
+    const endDate = new Date("2026-12-31T00:00:00+09:00");
     const gain = (date: string, uid: string): PyroxeneScheduleItem => {
       const [item] = createOptimisticOtherTimelineItems(
         { pyroxene: 1118, oneTimeTicket: 0, tenTimeTicket: 0 },
@@ -73,20 +73,83 @@ describe("pyroxene-timeline", () => {
         },
       };
     };
+    // A recruitment that opened at 11:00 KST on 11/21.
+    const recruitment: PyroxeneScheduleItem = {
+      event: {
+        uid: "same-day-recruitment",
+        name: "같은 날 열린 모집",
+        since: "2026-11-21T02:00:00.000Z",
+        until: "2026-11-28T02:00:00.000Z",
+        earnablePyroxene: null,
+        tags: [],
+        recruitments: [favoritedPickupRecruitment()],
+      },
+    };
 
-    const timeline = buildTimeline(
-      initialResources,
-      inventoryInputAt,
-      new Map(),
-      [gain("2026-11-17T00:00:00+09:00", "today"), gain("2026-11-16T00:00:00+09:00", "yesterday")],
-      defaultOptions,
-      undefined,
-      [],
-      new Date("2026-12-31T00:00:00+09:00"),
-    );
+    it("counts a gain dated today after inventory entered earlier that day", () => {
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-21T13:38:00+09:00"),
+        new Map(),
+        [gain("2026-11-21T00:00:00+09:00", "today"), gain("2026-11-20T00:00:00+09:00", "yesterday")],
+        defaultOptions,
+        undefined,
+        [],
+        endDate,
+      );
 
-    expect(timeline.find((entry) => entry.source.uid === "today")?.accumulatedResources.pyroxene).toBe(2118);
-    expect(timeline.some((entry) => entry.source.uid === "yesterday")).toBe(false);
+      expect(timeline.find((entry) => entry.source.uid === "today")?.accumulatedResources.pyroxene).toBe(2118);
+      expect(timeline.some((entry) => entry.source.uid === "yesterday")).toBe(false);
+    });
+
+    it("applies it from the start of its game day, before a recruitment that opened later that day", () => {
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-20T22:00:00+09:00"),
+        new Map(),
+        [recruitment, gain("2026-11-21T00:00:00+09:00", "today")],
+        defaultOptions,
+        undefined,
+        [],
+        endDate,
+      );
+      const gainIndex = timeline.findIndex((entry) => entry.source.uid === "today");
+
+      expect(timeline[gainIndex]?.date.toISOString()).toBe("2026-11-20T19:00:00.000Z");
+      expect(gainIndex).toBeLessThan(timeline.findIndex((entry) => entry.source.type === "event"));
+    });
+
+    it("applies it right after an inventory input made later that day", () => {
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-21T13:38:00+09:00"),
+        new Map(),
+        [recruitment, gain("2026-11-21T00:00:00+09:00", "today")],
+        defaultOptions,
+        undefined,
+        [],
+        endDate,
+      );
+
+      expect(timeline.find((entry) => entry.source.uid === "today")?.date.toISOString()).toBe(
+        "2026-11-21T04:38:00.001Z",
+      );
+    });
+
+    it("keeps it before an end date between the start of its game day and the recorded time", () => {
+      const timeline = buildTimeline(
+        initialResources,
+        new Date("2026-11-20T22:00:00+09:00"),
+        new Map(),
+        [gain("2026-11-21T00:00:00+09:00", "today")],
+        defaultOptions,
+        undefined,
+        [],
+        new Date("2026-11-21T11:00:00+09:00"),
+      );
+
+      expect(timeline.some((entry) => entry.source.uid === "today")).toBe(true);
+    });
   });
 
   it("accumulates one-time gain after initial resources", () => {

@@ -8,7 +8,9 @@ import {
   createOptimisticMonthlyPackageTimelineItems,
   createOptimisticOtherTimelineItems,
   DEFAULT_PYROXENE_TIMELINE_DISPLAY,
+  getPyroxeneGameDayStartAt,
   normalizePyroxeneOneOffGainAt,
+  normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
   normalizePyroxeneTimelineRecordAt,
   togglePyroxeneTimelineSourceVisibility,
@@ -271,6 +273,33 @@ describe("pyroxene-sources", () => {
 
       expect(createOptimisticBuyTimelineItems(6600, pickedToday, { now })[0].eventAt).toBe(now);
       expect(createOptimisticOtherTimelineItems(resources, "", pickedToday, undefined, now)[0].eventAt).toBe(now);
+    });
+
+    it("finds the 04:00 KST that starts the game day of an instant", () => {
+      expect(getPyroxeneGameDayStartAt(now)).toBe("2026-11-16T19:00:00.000Z");
+      expect(getPyroxeneGameDayStartAt("2026-11-17T17:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z"); // 02:00 KST on 11/18
+      expect(getPyroxeneGameDayStartAt("2026-11-16T19:00:00.000Z")).toBe("2026-11-16T19:00:00.000Z");
+    });
+
+    it("keeps the recorded time when an edit leaves the date on the same game day", () => {
+      const noonOnPickedDate = "2026-11-17T03:00:00.000Z"; // 12:00 KST on 11/17, as the quick edit sends it
+      const nextDay = "2026-11-18T01:00:00.000Z"; // 10:00 KST on 11/18
+      const recordedBeforeReset = "2026-11-17T17:00:00.000Z"; // 02:00 KST on 11/18, game day 11/17
+
+      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, now, "2026-11-17T13:00:00.000Z")).toBe(now);
+      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, now, nextDay)).toBe(now);
+      expect(normalizePyroxeneOneOffGainEditAt(noonOnPickedDate, recordedBeforeReset, nextDay)).toBe(
+        recordedBeforeReset,
+      );
+    });
+
+    it("re-derives the time when an edit moves the date", () => {
+      const editAt = "2026-11-18T01:00:00.000Z"; // 10:00 KST on 11/18
+
+      expect(normalizePyroxeneOneOffGainEditAt("2026-11-18T03:00:00.000Z", now, editAt)).toBe(editAt);
+      expect(normalizePyroxeneOneOffGainEditAt("2026-11-20T03:00:00.000Z", now, editAt)).toBe(
+        "2026-11-19T19:00:00.000Z",
+      );
     });
   });
 });

@@ -16,6 +16,7 @@ import {
 import type { RecruitmentStacks, RecruitmentTargetTiers } from "~/domain/pyroxene-recruitment-goal";
 import {
   extractPyroxeneTimelineBaseUid,
+  normalizePyroxeneOneOffGainEditAt,
   normalizePyroxeneTimelineEventAt,
   normalizePyroxeneTimelineRecordAt,
   PYROXENE_AP_PACKAGE_CONFIG,
@@ -399,7 +400,7 @@ export function updatePostgresPyroxeneOneOffTimelineItem(
         isEditable(record)
           ? {
               ...record,
-              eventAt: timelineEventAt(input.date, input.source),
+              eventAt: normalizeInstant(normalizePyroxeneOneOffGainEditAt(input.date, record.eventAt)),
               description: input.description,
               pyroxeneDelta: input.pyroxeneDelta,
               oneTimeTicketDelta: input.oneTimeTicketDelta,

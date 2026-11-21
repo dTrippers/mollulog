@@ -13,7 +13,12 @@ import {
   type RecruitmentTargetTiers,
 } from "~/domain/pyroxene-recruitment-goal";
 import type { PyroxeneScheduleItem } from "~/domain/pyroxene-schedule";
-import { calculateDailyApChargePyroxene, collectedSourceKeyForEventReward } from "~/domain/pyroxene-sources";
+import {
+  calculateDailyApChargePyroxene,
+  collectedSourceKeyForEventReward,
+  getPyroxeneGameDayStartAt,
+  isPyroxeneOneOffGainSource,
+} from "~/domain/pyroxene-sources";
 import {
   applyRecruitmentFunding,
   convolvePullCostDistributions,
@@ -46,6 +51,8 @@ export type TimelineSource = {
 
 export type TimelineDelta = {
   date: Dayjs;
+  // When set, this instant (not `date`) decides whether the delta comes after the inventory input.
+  recordedAt?: Dayjs;
   source: TimelineSource;
 
   pickupTrial?: number;
@@ -153,6 +160,20 @@ function zeroResources(): PickupResources {
 
 function getNextMonthlyFirstDate(date: Dayjs): Dayjs {
   return date.add(1, "month").startOf("month");
+}
+
+// A purchase or direct gain recorded on its own game day keeps the time it was recorded, and that time decides
+// whether it comes after the inventory input. It still applies from the start of that game day, or right after the
+// inventory input when that is later, so a recruitment opening later that day counts it as before.
+function oneOffGainTiming(
+  source: string,
+  recordedAt: Dayjs,
+  initialDate: Dayjs,
+): Pick<TimelineDelta, "date" | "recordedAt"> {
+  if (!isPyroxeneOneOffGainSource(source)) return { date: recordedAt };
+  const gameDayStart = dayjs(getPyroxeneGameDayStartAt(recordedAt.toDate()));
+  const afterInventory = initialDate.add(1, "millisecond");
+  return { date: gameDayStart.isAfter(afterInventory) ? gameDayStart : afterInventory, recordedAt };
 }
 
 function getNextRepeatedGainDate(repeatedGain: NonNullable<PyroxeneScheduleItem["repeatedGain"]>, date: Dayjs) {
@@ -1204,7 +1225,7 @@ export function buildTimeline(
     } else if (scheduleItem.onetimeGain) {
       const { onetimeGain } = scheduleItem;
       timelineDeltas.push({
-        date: dayjs(onetimeGain.date),
+        ...oneOffGainTiming(onetimeGain.source, dayjs(onetimeGain.date), dayjs(initialDate)),
         source: { type: onetimeGain.source, uid: onetimeGain.uid, description: onetimeGain.description },
         resourceDelta: {
           pyroxene: onetimeGain.pyroxeneDelta ?? 0,
@@ -1228,7 +1249,8 @@ export function buildTimeline(
         date = getNextRepeatedGainDate(repeatedGain, date)
       ) {
         timelineDeltas.push({
-          date,
+          // Only the first entry carries the recorded instant; later ones fall on their own schedule.
+          ...(repeatedGainCount === 0 ? oneOffGainTiming(repeatedGain.source, date, dayjs(initialDate)) : { date }),
           source: { type: repeatedGain.source, uid: repeatedGain.uid, description: repeatedGain.description },
           resourceDelta: {
             pyroxene: repeatedGain.pyroxeneDelta ?? 0,
@@ -1288,7 +1310,7 @@ export function buildTimeline(
     if (endDateDayjs && delta.date.isAfter(endDateDayjs)) {
       return false;
     }
-    if (delta.date.isAfter(initialDateDayjs)) {
+    if ((delta.recordedAt ?? delta.date).isAfter(initialDateDayjs)) {
       return true;
     }
     if (delta.source.event) {

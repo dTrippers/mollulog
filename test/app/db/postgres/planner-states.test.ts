@@ -433,6 +433,47 @@ describe("PostgreSQL planner state writes", () => {
     }
   });
 
+  it("keeps a one-off gain's recorded time when an edit leaves its date on the same game day", async () => {
+    const recordedAt = "2026-08-05T12:15:00.000Z"; // 21:15 KST on 08/05
+    const noonOnRecordedDate = "2026-08-05T03:00:00.000Z"; // 12:00 KST on 08/05, as the quick edit sends it
+    const edit = (date: string, options: { createClient: () => Client }) =>
+      updatePostgresPyroxeneOneOffTimelineItem(
+        env,
+        7,
+        "today",
+        {
+          source: "other",
+          date,
+          description: "Edited",
+          pyroxeneDelta: 30,
+          oneTimeTicketDelta: 0,
+          tenTimeTicketDelta: 0,
+        },
+        options,
+      );
+    const storedEventAt = (client: FakePostgresClient) =>
+      storedDocument(client).pyroxene.records.find(({ uid }) => uid === "today")?.eventAt;
+    jest.useFakeTimers({ now: new Date(recordedAt), doNotFake: ["nextTick", "setImmediate", "queueMicrotask"] });
+    try {
+      const client = clientWithDocument();
+      const options = { createClient: () => client as unknown as Client };
+      await createPostgresOtherPyroxeneGain(env, 7, "2026-08-04T15:00:00.000Z", 20, 0, 0, "Today", "today", options);
+
+      jest.setSystemTime(new Date("2026-08-05T13:00:00.000Z")); // later the same game day
+      await edit(noonOnRecordedDate, options);
+      expect(storedEventAt(client)).toBe(recordedAt);
+
+      jest.setSystemTime(new Date("2026-08-06T01:00:00.000Z")); // 10:00 KST the next day
+      await edit(noonOnRecordedDate, options);
+      expect(storedEventAt(client)).toBe(recordedAt);
+
+      await edit("2026-08-06T03:00:00.000Z", options); // moved to the edit's own game day
+      expect(storedEventAt(client)).toBe("2026-08-06T01:00:00.000Z");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("rejects a timeline record whose uid already exists", async () => {
     const client = clientWithDocument();
     const originalDocument = client.tables.planner_states?.[0]?.document;

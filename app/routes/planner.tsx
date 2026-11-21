@@ -47,7 +47,7 @@ import {
   type PyroxenePlannerOptions,
 } from "~/domain/pyroxene-planner";
 import { EMPTY_RECRUITMENT_STACKS } from "~/domain/pyroxene-recruitment-goal";
-import { extractPyroxeneTimelineBaseUid } from "~/domain/pyroxene-sources";
+import { extractPyroxeneTimelineBaseUid, getPyroxeneGameDayStartAt } from "~/domain/pyroxene-sources";
 import type { PyroxeneTimelineEventData } from "~/domain/pyroxene-timeline";
 import type { GuestPlannerSnapshot } from "~/lib/guest-planner.client";
 import { eventIconImageUrl } from "~/models/assets";
@@ -585,7 +585,8 @@ export default function IntegratedPlannerRoute() {
           {
             id: item.uid,
             kind: item.source,
-            date: formatPlannerPeriodDate(item.eventAt, displayTimeZone),
+            // A purchase or direct gain recorded before the 04:00 reset belongs to the game day it was picked for.
+            date: formatPlannerPeriodDate(getPyroxeneGameDayStartAt(item.eventAt), displayTimeZone),
             description: item.description,
             quantity: item.source === "buy" ? item.pyroxeneDelta : 0,
             resources: {
@@ -611,7 +612,7 @@ export default function IntegratedPlannerRoute() {
         {
           id: item.uid,
           kind: item.source,
-          date: formatPlannerPeriodDate(item.eventAt, displayTimeZone),
+          date: formatPlannerPeriodDate(getPyroxeneGameDayStartAt(item.eventAt), displayTimeZone),
           description: item.description,
           quantity: item.source === "buy" ? item.pyroxeneDelta : 0,
           resources: {
