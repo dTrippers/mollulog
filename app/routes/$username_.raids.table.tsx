@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData } from "react-router";
 import { RaidRecordTable } from "~/components/v2/features/raid-records/RaidRecordTable";
+import { RaidRecordTrophyHelp } from "~/components/v2/features/raid-records/RaidRecordTrophyHelp";
 import { PageHeader, PageMain, V2Page } from "~/components/v2/layout";
 import { loadRaidRecordTable } from "~/views/raid-records";
 import { parseRaidRecordListQuery, raidRecordListTo } from "./$username.raids._components/raid-record-list-query";
@@ -37,6 +38,9 @@ export default function RaidRecordTablePage() {
       <PageHeader
         back={{ title: "총력전·대결전 기록", to: listTo }}
         title="표로 입력"
+        // Only 총력전 trophies are confirmed to open past results in the game's trophy cabinet.
+        trailing={table.raidType === "total_assault" ? <RaidRecordTrophyHelp /> : undefined}
+        trailingInline
       />
       <PageMain>
         {/* A new scope starts from what is saved, so drafts of the previous scope never carry over. */}
