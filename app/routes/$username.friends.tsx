@@ -1,7 +1,8 @@
-import type { LoaderFunctionArgs } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { useLoaderData, useSearchParams } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { SectionTabs } from "~/components/v2/primitives/SectionTabs";
+import { socialMeta } from "~/lib/seo";
 import { getFollowershipLists } from "~/models/followership";
 import { getRouteSensei } from "./$username._components/route-sensei.server";
 import { FriendList, type FriendTab } from "./$username.friends._components/FriendList";
@@ -11,6 +12,11 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
   const currentUser = await getActiveSensei(env, request, ctx);
   const sensei = await getRouteSensei(env, params, currentUser?.id, { ctx });
   return getFollowershipLists(env, sensei.id, currentUser?.id, { ctx });
+};
+
+export const meta: MetaFunction = ({ params, location }) => {
+  const title = `${params.username || ""} - 친구 목록 | 몰루로그`.trim();
+  return [{ title }, ...socialMeta({ title, pathname: location.pathname })];
 };
 
 // The tab lives in the URL (`?tab=followers`), so the profile's follower link and a reload land on the same list.

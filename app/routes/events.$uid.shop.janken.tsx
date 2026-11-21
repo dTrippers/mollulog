@@ -7,6 +7,7 @@ import {
 } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
 import { isEventShopStateSubmission } from "~/lib/revalidation";
+import { socialMeta } from "~/lib/seo";
 import { jankenLocale } from "~/locales/ko";
 import { getEventMetadata, getEventMinigameType } from "~/models/event-content";
 import JankenScreen from "./events.$uid._components/JankenScreen";
@@ -32,9 +33,10 @@ export const loader = async ({ params, context, request }: LoaderFunctionArgs) =
 export const shouldRevalidate: ShouldRevalidateFunction = (args) =>
   !isEventShopStateSubmission(args) && args.defaultShouldRevalidate;
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: `${data?.eventName ?? "이벤트"} - ${jankenLocale.pageTitle} | 몰루로그` },
-];
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
+  const title = `${data?.eventName ?? "이벤트"} - ${jankenLocale.pageTitle}`;
+  return [{ title: `${title} | 몰루로그` }, ...socialMeta({ title, pathname: location.pathname })];
+};
 
 export default function EventJankenRoute() {
   const data = useLoaderData<typeof loader>();

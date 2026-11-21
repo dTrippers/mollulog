@@ -11,7 +11,7 @@ import { compareInstantAsc, compareInstantDesc, getInstantTime, type UtcIsoStrin
 import { routeError } from "~/lib/http-errors";
 import { fetchRaidStatisticsByStudent, type RaidStatistics } from "~/lib/ranks/stats";
 import { fetchStudentAnalysis, type StudentAnalysisSynergyPartner } from "~/lib/ranks/student-analysis";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import type { RaidType, Terrain } from "~/models/content.d";
 import { getAllRaidSchedules } from "~/models/raid";
 import { getRecruitedStudents } from "~/models/recruited-student";
@@ -102,14 +102,12 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   const studentFullName = formatStudentFullName(data.studentMeta);
   const title = `${studentFullName} - 총력전/대결전 통계`;
   const description = `블루 아카이브 ${data.studentMeta.name}의 편성 추이, 성장도, 보스별 활용도와 함께 편성한 학생을 확인해보세요.`;
+  const canonicalPath = `/students/${data.primaryStudentUid}/statistics`;
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
-    canonicalLink(`/students/${data.primaryStudentUid}/statistics`),
+    ...socialMeta({ title, description, pathname: canonicalPath }),
+    canonicalLink(canonicalPath),
   ];
 };
 
@@ -122,7 +120,9 @@ export function shouldShowMergedStatisticsNote({
   primaryUid: string;
   statistics: Pick<RaidStatistics, "studentUid">[];
 }) {
-  return pageUid !== primaryUid && statistics.length > 0 && statistics.every(({ studentUid }) => studentUid === primaryUid);
+  return (
+    pageUid !== primaryUid && statistics.length > 0 && statistics.every(({ studentUid }) => studentUid === primaryUid)
+  );
 }
 
 export default function StudentStatisticsPage() {
@@ -253,7 +253,13 @@ export default function StudentStatisticsPage() {
     [statistics, myStudentTier],
   );
 
-  const statsState = statisticsLoading ? "loading" : statisticsFailed ? "failed" : rawStatistics.length === 0 ? "empty" : null;
+  const statsState = statisticsLoading
+    ? "loading"
+    : statisticsFailed
+      ? "failed"
+      : rawStatistics.length === 0
+        ? "empty"
+        : null;
   const showMergedStatisticsNote = shouldShowMergedStatisticsNote({
     pageUid: student.uid,
     primaryUid: student.studentVariant.primaryStudent.uid,
@@ -261,7 +267,10 @@ export default function StudentStatisticsPage() {
   });
   return (
     <section>
-      <div ref={scopeInfoAnchorRef} className={`-mt-1.5 ${showMergedStatisticsNote ? "mb-0" : "mb-3"} flex min-h-8 items-center gap-0.5 text-[13px] leading-[1.43] text-v2-fg-secondary`}>
+      <div
+        ref={scopeInfoAnchorRef}
+        className={`-mt-1.5 ${showMergedStatisticsNote ? "mb-0" : "mb-3"} flex min-h-8 items-center gap-0.5 text-[13px] leading-[1.43] text-v2-fg-secondary`}
+      >
         <span>총력전/대결전 통계만 포함되어 있어요</span>
         <span className="relative -ml-1 inline-flex">
           <IconButton
@@ -272,12 +281,21 @@ export default function StudentStatisticsPage() {
             aria-expanded={scopeInfoOpen}
             onClick={() => setScopeInfoOpen((open) => !open)}
           />
-          <Popover open={scopeInfoOpen} label="통계 범위 안내" onClose={() => setScopeInfoOpen(false)} returnFocusRef={scopeInfoRef} anchorRef={scopeInfoAnchorRef} className="w-72 p-5 max-sm:p-4 text-[13px] leading-[1.43] text-v2-fg backdrop-blur-[4px] data-[placement=below]:-mt-2 data-[placement=above]:mt-2">
+          <Popover
+            open={scopeInfoOpen}
+            label="통계 범위 안내"
+            onClose={() => setScopeInfoOpen(false)}
+            returnFocusRef={scopeInfoRef}
+            anchorRef={scopeInfoAnchorRef}
+            className="w-72 p-5 max-sm:p-4 text-[13px] leading-[1.43] text-v2-fg backdrop-blur-[4px] data-[placement=below]:-mt-2 data-[placement=above]:mt-2"
+          >
             제약해제결전 등 다른 컨텐츠에서 활약하는 학생은 추천도가 낮게 표현될 수 있어요
           </Popover>
         </span>
       </div>
-      {showMergedStatisticsNote ? <p className="-mt-1 mb-3 text-[13px] leading-[1.43] text-v2-fg-secondary">모든 폼의 기록을 합친 통계예요</p> : null}
+      {showMergedStatisticsNote ? (
+        <p className="-mt-1 mb-3 text-[13px] leading-[1.43] text-v2-fg-secondary">모든 폼의 기록을 합친 통계예요</p>
+      ) : null}
       {statsState ? (
         <StudentStatisticsState state={statsState} onRetry={() => setStatisticsAttempt((value) => value + 1)} />
       ) : (
@@ -289,8 +307,18 @@ export default function StudentStatisticsPage() {
             <StudentRaidInvestmentChart investment={raidInvestment} signedIn={signedIn} />
           </div>
           <div className="mt-6 grid gap-y-6 md:grid-cols-2 md:gap-x-4">
-            <StudentBossUsageChart summary={bossUsage} loading={studentAnalysisLoading} failed={analysisFailedAreas.bossUsage} onRetry={() => setStudentAnalysisAttempt((value) => value + 1)} />
-            <StudentDifficultyUsageChart rows={difficultyUsage} loading={studentAnalysisLoading} failed={analysisFailedAreas.difficultyUsage} onRetry={() => setStudentAnalysisAttempt((value) => value + 1)} />
+            <StudentBossUsageChart
+              summary={bossUsage}
+              loading={studentAnalysisLoading}
+              failed={analysisFailedAreas.bossUsage}
+              onRetry={() => setStudentAnalysisAttempt((value) => value + 1)}
+            />
+            <StudentDifficultyUsageChart
+              rows={difficultyUsage}
+              loading={studentAnalysisLoading}
+              failed={analysisFailedAreas.difficultyUsage}
+              onRetry={() => setStudentAnalysisAttempt((value) => value + 1)}
+            />
           </div>
           <StudentSynergyPartners
             className="mt-6"

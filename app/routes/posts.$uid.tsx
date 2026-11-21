@@ -21,7 +21,7 @@ import { routeError } from "~/lib/http-errors";
 import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL } from "~/lib/seo";
+import { canonicalLink, DEFAULT_OPEN_GRAPH_IMAGE_URL, socialMeta } from "~/lib/seo";
 import { getPostDetailView } from "~/views/post-detail";
 
 function notFoundResponse() {
@@ -89,12 +89,12 @@ export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
     ];
   }
 
-  const title = `${data.post.title} | 몰루로그`;
   const description = `${data.post.title} 게시물 내용을 확인해보세요.`;
   const imageUrl = data.post.thumbnailImageUrl ?? DEFAULT_OPEN_GRAPH_IMAGE_URL;
   return [
-    { title },
+    { title: `${data.post.title} | 몰루로그` },
     { name: "description", content: description },
+    ...socialMeta({ title: data.post.title, description, pathname: location.pathname, type: "article" }),
     { property: "og:image", content: imageUrl },
     { name: "twitter:card", content: "summary_large_image" },
     { name: "twitter:image", content: imageUrl },

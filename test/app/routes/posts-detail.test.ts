@@ -71,7 +71,7 @@ describe("post detail route", () => {
     });
   });
 
-  it("derives title, description, and canonical metadata from the post title and path", () => {
+  it("derives title, description, card, and canonical metadata from the post title and path", () => {
     const loadedPost = post({ title: "새로운 공지" });
     const descriptors = meta({
       data: { post: loadedPost },
@@ -81,6 +81,14 @@ describe("post detail route", () => {
     expect(descriptors).toEqual([
       { title: "새로운 공지 | 몰루로그" },
       { name: "description", content: "새로운 공지 게시물 내용을 확인해보세요." },
+      { property: "og:type", content: "article" },
+      { property: "og:site_name", content: "몰루로그" },
+      { property: "og:locale", content: "ko_KR" },
+      { property: "og:title", content: "새로운 공지" },
+      { property: "og:url", content: `https://mollulog.net/posts/${loadedPost.uid}` },
+      { name: "twitter:title", content: "새로운 공지" },
+      { property: "og:description", content: "새로운 공지 게시물 내용을 확인해보세요." },
+      { name: "twitter:description", content: "새로운 공지 게시물 내용을 확인해보세요." },
       { property: "og:image", content: "https://mollulog.net/mollulog-og.png" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:image", content: "https://mollulog.net/mollulog-og.png" },

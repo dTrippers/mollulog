@@ -9,7 +9,7 @@ import { Pagination } from "~/components/v2/primitives/Pagination";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
 import { renderMarkdownToSafeHtml } from "~/lib/markdown.server";
 import { captureClientError } from "~/lib/observability.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { getNewsPosts } from "~/models/post";
 import {
   getNewsScrollContainer,
@@ -35,7 +35,12 @@ function newsPageHref(page: number) {
 }
 
 export const meta: MetaFunction = ({ location }) => {
-  return [{ title: "업데이트 소식 | 몰루로그" }, canonicalLink(location.pathname)];
+  const title = "업데이트 소식";
+  return [
+    { title: `${title} | 몰루로그` },
+    ...socialMeta({ title, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
 };
 
 export async function loader({ context, request }: LoaderFunctionArgs) {

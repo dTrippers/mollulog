@@ -14,7 +14,7 @@ import {
   type MobileNavigationPair,
   normalizeMobileNavigationIds,
 } from "~/domain/mobile-navigation";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { trackGoogleAnalyticsEvent, trackGoogleAnalyticsEventIfAllowed } from "~/lib/google-analytics-events.client";
 import { cn } from "~/lib/utils";
 import type { RootOutletContext } from "~/root";
@@ -42,10 +42,7 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
     canonicalLink(location.pathname),
   ];
 };
@@ -58,14 +55,8 @@ export const loader = async ({ request, context }: LoaderFunctionArgs) => {
 
 export default function MoreIndexPage() {
   const { currentUser } = useLoaderData<typeof loader>();
-  const {
-    darkMode,
-    setDarkMode,
-    mobileNavigationIds,
-    setMobileNavigationIds,
-    navigationBarContents,
-    isAdmin,
-  } = useOutletContext<RootOutletContext>();
+  const { darkMode, setDarkMode, mobileNavigationIds, setMobileNavigationIds, navigationBarContents, isAdmin } =
+    useOutletContext<RootOutletContext>();
   const { haloMode, setHaloMode } = useHaloMode();
   const { showSignIn } = useSignIn();
   const hasUnconsumedCoupons = currentUser

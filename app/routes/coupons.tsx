@@ -9,7 +9,7 @@ import CouponCard from "~/components/features/coupons/CouponCard";
 import { type CouponDisplayStatus, getCouponDisplayStatus } from "~/components/features/coupons/coupon-display";
 import Page from "~/components/features/layout/Page";
 import { FilterButtons } from "~/components/primitives";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
 import { getAllCoupons, getCouponRegistrations, registerCoupon, unregisterCoupon } from "~/models/coupon";
 import { getSenseiPrivacyByUserId } from "~/models/sensei-privacy";
@@ -23,11 +23,16 @@ const COUPON_STATUS_FILTERS: { id: CouponStatusFilter; label: string }[] = [
   { id: "history", label: "사용완료/만료" },
 ];
 
-export const meta: MetaFunction = ({ location }) => [
-  { title: "블루 아카이브 쿠폰 목록 | 몰루로그" },
-  { name: "description", content: "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록" },
-  canonicalLink(location.pathname),
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "블루 아카이브 쿠폰 목록";
+  const description = "블루 아카이브 인게임 재화를 획득할 수 있는 쿠폰 목록";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+    canonicalLink(location.pathname),
+  ];
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;

@@ -16,8 +16,12 @@ import { PageMain } from "~/components/v2/layout/PageMain";
 import { getV2LinkTransitionProps } from "~/components/v2/layout/screen-transition";
 import { Button, v2ButtonClassName } from "~/components/v2/primitives/Button";
 import { useSignIn } from "~/contexts/SignInProvider";
+import { socialMeta } from "~/lib/seo";
 
-export const meta: MetaFunction = () => [{ title: "몰루로그 개발자 센터" }];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "몰루로그 개발자 센터";
+  return [{ title }, ...socialMeta({ title, pathname: location.pathname })];
+};
 
 const privateHeaders = { "Cache-Control": "private, no-store" };
 export const headers: HeadersFunction = ({ parentHeaders }) => {

@@ -50,8 +50,15 @@ describe("card flip detail route loader", () => {
   });
 
   it("uses the event title and card-flip menu label for page metadata", () => {
-    expect(meta({ loaderData: { eventName: "이벤트" } } as never)).toEqual([
-      { title: "이벤트 - 카드 뒤집기 | 몰루로그" },
-    ]);
+    expect(
+      meta({ loaderData: { eventName: "이벤트" }, location: { pathname: "/events/test/shop/card-flip" } } as never),
+    ).toEqual(
+      expect.arrayContaining([
+        { title: "이벤트 - 카드 뒤집기 | 몰루로그" },
+        { property: "og:title", content: "이벤트 - 카드 뒤집기" },
+        { property: "og:url", content: "https://mollulog.net/events/test/shop/card-flip" },
+        { name: "twitter:title", content: "이벤트 - 카드 뒤집기" },
+      ]),
+    );
   });
 });

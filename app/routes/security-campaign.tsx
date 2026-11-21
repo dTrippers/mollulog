@@ -27,7 +27,7 @@ import {
 import { getSecurityCampaignVisitCount } from "~/lib/security-campaign-referrals.server";
 import { sanitizeErrorForLogging } from "~/lib/privacy-scrub";
 import { trackGoogleAnalyticsEvent } from "~/lib/google-analytics-events.client";
-import { canonicalLink } from "~/lib/seo";
+import { canonicalLink, socialMeta } from "~/lib/seo";
 import { cn } from "~/lib/utils";
 import StudentPortrait from "~/components/primitives/StudentPortrait";
 import { studentStandingImageUrl } from "~/models/assets";
@@ -202,11 +202,8 @@ export const meta: MetaFunction = ({ location }) => {
   return [
     { title: `${campaignTitle} | 몰루로그` },
     { name: "description", content: description },
-    { property: "og:title", content: campaignTitle },
-    { property: "og:description", content: description },
+    ...socialMeta({ title: campaignTitle, description, pathname: location.pathname }),
     { name: "twitter:card", content: "summary" },
-    { name: "twitter:title", content: campaignTitle },
-    { name: "twitter:description", content: description },
     canonicalLink(location.pathname),
   ];
 };

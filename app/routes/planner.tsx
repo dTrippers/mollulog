@@ -3,10 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { data, Link, useFetcher, useLoaderData } from "react-router";
 import { getActiveSensei } from "~/auth/authenticator.server";
-import {
-  useGuestPlanner,
-  usePyroxeneScheduleItems,
-} from "~/components/features/futures";
+import { useGuestPlanner, usePyroxeneScheduleItems } from "~/components/features/futures";
 import { usePyroxeneTimeline } from "~/components/features/futures/usePyroxeneTimeline";
 import Page from "~/components/features/layout/Page";
 import { useDisplayTimeZone } from "~/contexts/TimeZoneProvider";
@@ -71,14 +68,20 @@ import type {
   PlannerRecruitmentSaveInput,
   PlannerRecruitmentSaveResult,
 } from "./planner._components/PlannerRecruitmentEditor";
+import { socialMeta } from "~/lib/seo";
 
 export const PLANNER_GUEST_PYROXENE_IMPORT_HREF = "/planner/import?from=planner";
 export const PLANNER_GUEST_EVENT_SHOP_IMPORT_HREF = "/planner/import?from=planner";
 
-export const meta: MetaFunction = () => [
-  { title: "통합 플래너 | 몰루로그" },
-  { name: "description", content: "모집·청휘석·이벤트 상점 계획을 날짜별로 확인하고 관리해보세요." },
-];
+export const meta: MetaFunction = ({ location }) => {
+  const title = "통합 플래너";
+  const description = "모집·청휘석·이벤트 상점 계획을 날짜별로 확인하고 관리해보세요.";
+  return [
+    { title: `${title} | 몰루로그` },
+    { name: "description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
+  ];
+};
 
 export const loader = async ({ request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -744,7 +747,10 @@ export default function IntegratedPlannerRoute() {
   const recruitmentSaveResult = isSignedIn ? accountRecruitmentSaveResult : guestRecruitmentSaveResult;
   const trackedRecruitmentSubmissions = useRef(new Set<string>());
   useEffect(() => {
-    if (!recruitmentSaveResult?.success || trackedRecruitmentSubmissions.current.has(recruitmentSaveResult.submissionId)) {
+    if (
+      !recruitmentSaveResult?.success ||
+      trackedRecruitmentSubmissions.current.has(recruitmentSaveResult.submissionId)
+    ) {
       return;
     }
     trackedRecruitmentSubmissions.current.add(recruitmentSaveResult.submissionId);

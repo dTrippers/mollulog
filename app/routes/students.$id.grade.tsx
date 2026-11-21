@@ -16,6 +16,7 @@ import { formatStudentFullName } from "~/models/student-name";
 import { deleteStudentGrading, getStudentGrading, upsertStudentGrading } from "~/models/student-grading.server";
 import { STUDENT_GRADING_TAG_DISPLAY, type StudentGradingTagValue } from "~/models/student-grading-tag";
 import { StudentDetailErrorBoundary } from "./students.$id._components/StudentDetailErrorBoundary";
+import { socialMeta } from "~/lib/seo";
 
 export const loader = async ({ params, request, context }: LoaderFunctionArgs) => {
   const { env, ctx } = context.cloudflare;
@@ -123,7 +124,7 @@ export const action = async ({ params, request, context }: ActionFunctionArgs) =
   }
 };
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => {
+export const meta: MetaFunction<typeof loader> = ({ data, location }) => {
   if (!data) {
     return [{ title: "학생 평가 | 몰루로그" }];
   }
@@ -135,10 +136,7 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => {
   return [
     { title: `${title} | 몰루로그` },
     { name: "description", content: description },
-    { name: "og:title", content: title },
-    { name: "og:description", content: description },
-    { name: "twitter:title", content: title },
-    { name: "twitter:description", content: description },
+    ...socialMeta({ title, description, pathname: location.pathname }),
   ];
 };
 
@@ -163,14 +161,26 @@ export default function StudentGrade() {
 
   return (
     <>
-      <div className="mb-2 flex min-h-7 items-center"><h2 className="text-base leading-[1.4] font-semibold text-v2-fg" style={{ fontFamily: 'Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif' }}>학생 평가하기</h2></div>
+      <div className="mb-2 flex min-h-7 items-center">
+        <h2
+          className="text-base leading-[1.4] font-semibold text-v2-fg"
+          style={{
+            fontFamily:
+              'Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif',
+          }}
+        >
+          학생 평가하기
+        </h2>
+      </div>
       <Form method="post" className="rounded-lg bg-v2-surface p-v2-block-p">
         <div>
           <div className="mb-1.5 flex items-baseline justify-between gap-2">
             <label htmlFor="student-grading-comment" className="text-sm leading-[1.43] font-medium text-v2-fg">
               평가 의견 <span className="font-normal text-v2-fg-tertiary">(선택)</span>
             </label>
-            <span aria-live="polite" className="text-xs leading-[1.43] tabular-nums text-v2-fg-tertiary">{comment.length}/100</span>
+            <span aria-live="polite" className="text-xs leading-[1.43] tabular-nums text-v2-fg-tertiary">
+              {comment.length}/100
+            </span>
           </div>
           <textarea
             id="student-grading-comment"
@@ -200,30 +210,58 @@ export default function StudentGrade() {
             })}
           </div>
         </fieldset>
-        {selectedTags.map((tag) => <input key={tag} type="hidden" name="tags" value={tag} />)}
+        {selectedTags.map((tag) => (
+          <input key={tag} type="hidden" name="tags" value={tag} />
+        ))}
         {actionData && "error" in actionData && actionData.error && !deleteDialogOpen ? (
           <StatusNotice className="mt-4 [&>svg]:hidden" tone="danger">
-            <span className="relative block pl-6 leading-[1.43]"><XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />{actionData.error}</span>
+            <span className="relative block pl-6 leading-[1.43]">
+              <XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />
+              {actionData.error}
+            </span>
           </StatusNotice>
         ) : null}
         <div className="mt-5 flex flex-wrap items-center gap-1.5">
-          <button type="submit" name="intent" value="save" disabled={isSubmitting} className={v2ButtonClassName({ variant: "primary" })}>
+          <button
+            type="submit"
+            name="intent"
+            value="save"
+            disabled={isSubmitting}
+            className={v2ButtonClassName({ variant: "primary" })}
+          >
             {isSaving ? "저장 중" : existingGrading ? "편집 완료" : "작성 완료"}
           </button>
-          <Link to={`/students/${student.uid}`} aria-disabled={isSubmitting} onClick={(event) => { if (isSubmitting) event.preventDefault(); }} className={v2ButtonClassName({ variant: "text" })}>
+          <Link
+            to={`/students/${student.uid}`}
+            aria-disabled={isSubmitting}
+            onClick={(event) => {
+              if (isSubmitting) event.preventDefault();
+            }}
+            className={v2ButtonClassName({ variant: "text" })}
+          >
             취소
           </Link>
           {existingGrading ? (
             <>
               <span className="flex-1" aria-hidden="true" />
-              <button type="button" disabled={isSubmitting} onClick={() => setDeleteDialogOpen(true)} className={v2ButtonClassName({ variant: "danger" })}>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => setDeleteDialogOpen(true)}
+                className={v2ButtonClassName({ variant: "danger" })}
+              >
                 {isDeleting ? "삭제 중" : "삭제"}
               </button>
             </>
           ) : null}
         </div>
       </Form>
-      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} title="정말 이 평가를 삭제할까요?" size="sm">
+      <Dialog
+        open={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        title="정말 이 평가를 삭제할까요?"
+        size="sm"
+      >
         <style>{`
           [role="dialog"]:has([data-student-delete-dialog-marker]) button[aria-label="닫기"] {
             margin-right: 0 !important;
@@ -241,12 +279,26 @@ export default function StudentGrade() {
         <span aria-hidden="true" className="hidden" data-student-delete-dialog-marker />
         {actionData && "error" in actionData && actionData.error ? (
           <StatusNotice className="mt-3 [&>svg]:hidden" tone="danger">
-            <span className="relative block pl-6 leading-[1.43]"><XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />{actionData.error}</span>
+            <span className="relative block pl-6 leading-[1.43]">
+              <XCircleIcon className="absolute top-0.5 left-0 size-4 text-v2-danger" aria-hidden="true" />
+              {actionData.error}
+            </span>
           </StatusNotice>
         ) : null}
         <div className="mt-1 flex justify-end gap-1.5">
-          <button type="button" onClick={() => setDeleteDialogOpen(false)} className={v2ButtonClassName({ variant: "secondary" })}>취소</button>
-          <button type="button" disabled={isSubmitting} onClick={() => submit({ intent: "delete" }, { method: "post" })} className={v2ButtonClassName({ variant: "danger" })}>
+          <button
+            type="button"
+            onClick={() => setDeleteDialogOpen(false)}
+            className={v2ButtonClassName({ variant: "secondary" })}
+          >
+            취소
+          </button>
+          <button
+            type="button"
+            disabled={isSubmitting}
+            onClick={() => submit({ intent: "delete" }, { method: "post" })}
+            className={v2ButtonClassName({ variant: "danger" })}
+          >
             삭제
           </button>
         </div>
