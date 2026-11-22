@@ -703,8 +703,9 @@ function StackedStudentCard({
         <div className="mt-2 flex flex-col gap-1.5">
           {(["current", "target"] as const).map((side) => (
             <div key={side}>
-              {/* On a narrow phone 모두 최대 moves to the next line, so it never overlaps a field. The label and the
-                  fields stay on one line, so the fields keep lining up with the column names above the list. */}
+              {/* On a narrow phone 모두 최대 moves to the next line, so it never overlaps a field. When the label and the
+                  fields do not fit on one line either, the label goes above the fields. The column names above the list
+                  wrap the same way at the same width, so the fields stay under their names. */}
               <div className="flex flex-wrap items-start gap-x-2 gap-y-1.5">
                 {side === "current" && !student.isRecruited ? (
                   <div className="flex min-w-0 flex-1 items-start gap-2">
@@ -714,16 +715,18 @@ function StackedStudentCard({
                     </div>
                   </div>
                 ) : (
-                  <div className="flex shrink-0 items-start gap-2">
+                  <div className="flex min-w-0 flex-wrap items-start gap-x-2">
                     <StackedSideLabel side={side} />
-                    {groups.map((group) => (
-                      <div key={group.key}>
-                        <FieldBox group={group} side={side} context={context} />
-                        {side === "target" && group.key === "equipment" && showEquipmentNames ? (
-                          <EquipmentPartNames student={student} showSteps={showSteps} className="mt-0.5" />
-                        ) : null}
-                      </div>
-                    ))}
+                    <div className="flex shrink-0 items-start gap-2">
+                      {groups.map((group) => (
+                        <div key={group.key}>
+                          <FieldBox group={group} side={side} context={context} />
+                          {side === "target" && group.key === "equipment" && showEquipmentNames ? (
+                            <EquipmentPartNames student={student} showSteps={showSteps} className="mt-0.5" />
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {side === "target" || student.isRecruited ? (

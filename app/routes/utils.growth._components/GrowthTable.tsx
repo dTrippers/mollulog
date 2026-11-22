@@ -439,16 +439,18 @@ function StackedList({
   return (
     <div className="rounded-lg bg-v2-surface px-v2-block-p">
       {!showSteps && !empty ? (
-        // The column names of the boxes, once above the list, as in the profile's stacked table.
+        // The column names of the boxes, once above the list, as in the profile's stacked table. The row label's
+        // space wraps away at the width where a row's label goes above its fields.
         <div
           aria-hidden="true"
-          className="sticky z-10 flex gap-2 bg-v2-surface pt-2 pb-1 text-xs text-v2-fg-tertiary"
+          className="sticky z-10 flex flex-wrap gap-x-2 bg-v2-surface pt-2 pb-1 text-xs text-v2-fg-tertiary"
           style={{ top: "var(--v2-toolbar-sticky-height, 0px)" }}
         >
           <span className="shrink-0" style={{ width: `${STACKED_LABEL_COLUMN_REM}rem` }} />
-          <span className="flex gap-2">
+          <span className="flex shrink-0 gap-2">
             {groups.map((group) => (
-              <span key={group.key} className="grid text-center" style={columnsStyle(group.cells, false)}>
+              // 1px each side matches the field box border, so a name sits over its field and both wrap at one width.
+              <span key={group.key} className="grid px-px text-center" style={columnsStyle(group.cells, false)}>
                 {group.cells.map((cell) => (
                   <span
                     key={cellKey(cell)}
