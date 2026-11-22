@@ -149,7 +149,7 @@ describe("furniture-state helpers", () => {
     expect(getFurnitureQuantityAriaDescription({ draftValue: "0", errorMessage: null })).toBe(
       "확인된 미보유 상태예요.",
     );
-    expect(getFurnitureQuantityAriaDescription({ draftValue: "3", errorMessage: null })).toBe("보유 수량이에요.");
+    expect(getFurnitureQuantityAriaDescription({ draftValue: "3", errorMessage: null })).toBe("보유 상태예요.");
     expect(
       getFurnitureQuantityAriaDescription({
         draftValue: "12",

@@ -65,7 +65,7 @@ export function getFurnitureQuantityAriaDescription({
   if (draftValue === "0") {
     return "확인된 미보유 상태예요.";
   }
-  return "보유 수량이에요.";
+  return "보유 상태예요.";
 }
 
 export function isImageAlreadyBroken(image: Pick<HTMLImageElement, "complete" | "naturalWidth"> | null): boolean {
