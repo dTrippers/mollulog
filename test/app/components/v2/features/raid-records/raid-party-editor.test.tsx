@@ -145,6 +145,31 @@ describe("RaidPartyCard slots", () => {
     expect(changed.latest?.slots[0]?.studentUid).toBe("10001");
   });
 
+  it("leaves modified arrow keys to the search text and scrolls the active result into view", () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      render(<Harness onParty={() => {}} />);
+      const search = screen.getByRole("combobox");
+      fireEvent.change(search, { target: { value: "ㅜ" } });
+      const options = () => screen.getAllByRole("option");
+
+      fireEvent.keyDown(search, { key: "ArrowRight", shiftKey: true });
+      fireEvent.keyDown(search, { key: "ArrowRight", metaKey: true });
+      expect(options()[0].getAttribute("aria-selected")).toBe("true");
+      expect(scrolled).toEqual([]);
+
+      fireEvent.keyDown(search, { key: "ArrowRight" });
+      expect(options()[1].getAttribute("aria-selected")).toBe("true");
+      expect(scrolled).toEqual([options()[1]]);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
   it("picks once, on the Enter that follows a composing syllable's commit", () => {
     const changed: { latest: RaidFormParty | null; count: number } = { latest: null, count: 0 };
     render(<Harness onParty={(party) => {

@@ -286,23 +286,29 @@ function PartySlots({
     // While a Korean syllable is composing, the IME takes the key to commit it and the browser sends the key again
     // after the commit. Acting only on that second key picks once, with the committed name.
     if (event.nativeEvent.isComposing) return;
+    // With a modifier, an arrow key keeps its text editing meaning, such as Shift+← selecting a syllable.
+    const modified = event.shiftKey || event.altKey || event.ctrlKey || event.metaKey;
     if (
-      event.key === "ArrowLeft" ||
-      event.key === "ArrowRight" ||
-      event.key === "ArrowUp" ||
-      event.key === "ArrowDown"
+      !modified &&
+      (event.key === "ArrowLeft" ||
+        event.key === "ArrowRight" ||
+        event.key === "ArrowUp" ||
+        event.key === "ArrowDown")
     ) {
       if (matches.length === 0) return;
       event.preventDefault();
       const columns = gridColumnCount(listRef.current);
       const last = matches.length - 1;
       const current = Math.max(activePosition, 0);
-      if (event.key === "ArrowLeft") setActiveIndex(Math.max(current - 1, 0));
-      else if (event.key === "ArrowRight") setActiveIndex(Math.min(current + 1, last));
-      else if (event.key === "ArrowUp") setActiveIndex(current - columns >= 0 ? current - columns : current);
+      let next = current;
+      if (event.key === "ArrowLeft") next = Math.max(current - 1, 0);
+      else if (event.key === "ArrowRight") next = Math.min(current + 1, last);
+      else if (event.key === "ArrowUp") next = current - columns >= 0 ? current - columns : current;
       // Down from the row above a shorter last row lands on the last result.
-      else if (Math.floor(current / columns) < Math.floor(last / columns))
-        setActiveIndex(Math.min(current + columns, last));
+      else if (Math.floor(current / columns) < Math.floor(last / columns)) next = Math.min(current + columns, last);
+      setActiveIndex(next);
+      // Keep the card Enter would pick on screen; the focus stays in the search field.
+      listRef.current?.querySelectorAll<HTMLElement>('[role="option"]')[next]?.scrollIntoView?.({ block: "nearest" });
       return;
     }
     if (event.key === "Enter") {
@@ -484,9 +490,14 @@ function PartySlots({
               // The keyboard stays in the search field, which moves the active option with the arrow keys.
               tabIndex={-1}
               onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setActiveIndex(index)}
+              // Only a pointer that moves picks the active card. Scrolling a card under a resting pointer sends
+              // mouse events without movement, which would take the active card from the keyboard.
+              onMouseMove={(event) => {
+                if (event.movementX !== 0 || event.movementY !== 0) setActiveIndex(index);
+              }}
               onClick={() => pick(student.uid)}
-              className="relative block w-full cursor-pointer rounded-md text-left"
+              // The bottom margin keeps a scrolled-to card above the form's save bar (about 118px from the bottom).
+              className="relative block w-full cursor-pointer scroll-mt-2 scroll-mb-32 rounded-md text-left"
             >
               <StudentThumb
                 studentUid={student.uid}
