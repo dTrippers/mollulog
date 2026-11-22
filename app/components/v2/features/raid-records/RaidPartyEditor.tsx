@@ -511,7 +511,6 @@ function PartySlots({
                 variant={variant}
                 recruitmentLabel={recruited ? undefined : "미모집"}
                 captionPlacement="overlay"
-                overlayOnMobile
               />
               {isActive ? (
                 // A thick ring set off from the portrait by a gap of the card's surface, so it reads on any portrait.

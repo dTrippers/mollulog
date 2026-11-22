@@ -55,8 +55,8 @@ export type StudentThumbProps = {
   scrimAriaLabel?: string;
   fluid?: boolean;
   captionPlacement?: "below" | "overlay";
-  // Shows an overlay caption on compact layouts when the image itself carries the student name.
-  overlayOnMobile?: boolean;
+  // Hides an overlay caption below the md breakpoint, for dense mobile grids where portraits stay clean.
+  hideOverlayCaptionOnMobile?: boolean;
 };
 
 // A linked or clickable thumbnail fades on hover, as every 2.0 pressable element does. It never scales. The fade needs a
@@ -97,7 +97,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
     scrimAriaLabel,
     fluid = false,
     captionPlacement = "below",
-    overlayOnMobile = false,
+    hideOverlayCaptionOnMobile = false,
   },
   ref,
 ) {
@@ -135,7 +135,7 @@ export const StudentThumb = forwardRef<HTMLButtonElement, StudentThumbProps>(fun
         <span
           className={cn(
             "absolute inset-0 flex-col justify-end bg-linear-15 from-v2-scrim from-10% via-transparent via-50% to-transparent px-0.5 pb-px text-left text-v2-on-media text-shadow-sm text-shadow-v2-scrim md:px-1 md:pb-0.5",
-            overlayOnMobile ? "flex" : "hidden md:flex",
+            hideOverlayCaptionOnMobile ? "hidden md:flex" : "flex",
           )}
         >
           {variant ? (

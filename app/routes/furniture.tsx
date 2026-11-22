@@ -33,6 +33,17 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   defaultShouldRevalidate,
 }) => {
   if (
+    !formMethod &&
+    !formAction &&
+    currentUrl.pathname === nextUrl.pathname &&
+    currentUrl.hash === nextUrl.hash &&
+    currentUrl.search !== nextUrl.search &&
+    onlyThemeParamChanged(currentUrl.searchParams, nextUrl.searchParams)
+  ) {
+    return false;
+  }
+
+  if (
     currentUrl.pathname !== nextUrl.pathname ||
     currentUrl.search !== nextUrl.search ||
     currentUrl.hash !== nextUrl.hash ||
@@ -52,6 +63,16 @@ export const shouldRevalidate: ShouldRevalidateFunction = ({
   return isFurnitureInventorySave ? false : defaultShouldRevalidate;
 };
 
+function onlyThemeParamChanged(current: URLSearchParams, next: URLSearchParams): boolean {
+  const withoutTheme = (params: URLSearchParams) => {
+    const copy = new URLSearchParams(params);
+    copy.delete("theme");
+    copy.sort();
+    return copy.toString();
+  };
+  return current.get("theme") !== next.get("theme") && withoutTheme(current) === withoutTheme(next);
+}
+
 export async function loader({ context, request }: LoaderFunctionArgs) {
   const { env, ctx } = context.cloudflare;
   const logger = getLogger(env, ctx, { route: "furniture.loader" });
@@ -65,7 +86,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     return {
       view: null,
       signedIn: currentUser !== null,
-      loadError: "가구 도감을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
+      loadError: "가구 도감을 불러오지 못했어요.",
     };
   }
 }

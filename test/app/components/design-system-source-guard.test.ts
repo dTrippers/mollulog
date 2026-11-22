@@ -248,6 +248,11 @@ const migratedRouteFiles: string[] = [
   "routes/$username_.raids.$id_.edit.tsx",
   "routes/$username_.raids.new.tsx",
   "routes/$username_.raids.table.tsx",
+  "routes/furniture.tsx",
+  "routes/furniture._components/action-data.ts",
+  "routes/furniture._components/furniture-state.ts",
+  "routes/furniture._components/FurnitureQuantityField.tsx",
+  "routes/furniture._components/FurnitureCatalogScreen.tsx",
 ];
 // Allowed exceptions: the file, the line pattern, and the reason. The list starts empty.
 const v2GuardExceptions: { file: string; pattern: RegExp; reason: string }[] = [];

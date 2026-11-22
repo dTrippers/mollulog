@@ -16,6 +16,8 @@ export type PopoverProps = {
   placement?: "auto" | "above";
   // When enabled, focus the panel if it contains no enabled button or link.
   focusPanelIfNoFocusable?: boolean;
+  // False keeps focus on the trigger when opened on hover or keyboard focus preview.
+  autoFocus?: boolean;
   // For a caller that keeps the panel open while the pointer rests on it.
   onPanelPointerEnter?: (event: PointerEvent<HTMLDivElement>) => void;
   onPanelPointerLeave?: (event: PointerEvent<HTMLDivElement>) => void;
@@ -64,6 +66,7 @@ export function Popover({
   anchorRef,
   placement: placementMode = "auto",
   focusPanelIfNoFocusable = false,
+  autoFocus = true,
   onPanelPointerEnter,
   onPanelPointerLeave,
   className,
@@ -89,7 +92,7 @@ export function Popover({
 
   // Focus moves to the first control once, when the panel mounts for an open popover. Later rerenders do not move it.
   useEffect(() => {
-    if (open && panelNode) {
+    if (open && panelNode && autoFocus) {
       const focusableControl = panelNode.querySelector<HTMLElement>("button:not(:disabled), [href]");
       if (focusableControl) {
         focusableControl.focus();
@@ -97,7 +100,7 @@ export function Popover({
         panelNode.focus();
       }
     }
-  }, [open, panelNode, focusPanelIfNoFocusable]);
+  }, [open, panelNode, focusPanelIfNoFocusable, autoFocus]);
 
   // Placed before the first paint, and again when the viewport or any scroll container moves the trigger.
   useIsomorphicLayoutEffect(() => {

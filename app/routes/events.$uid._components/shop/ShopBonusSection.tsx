@@ -305,6 +305,7 @@ function BonusStudentThumb({
       selectedIndicatorSize="small"
       fluid
       captionPlacement="overlay"
+      hideOverlayCaptionOnMobile
       grayscaleWhenUnselected
       showRecruitmentLabel={recruited}
     />

@@ -325,6 +325,31 @@ describe("PanelSheet", () => {
     expect(headerRow().children).toHaveLength(1);
   });
 
+  it("shows the body of a panel without a toggle once it stops being disabled", () => {
+    function RetryHarness({ disabled }: { disabled: boolean }) {
+      return (
+        <V2Page width="wide">
+          <PageHeader title="가구 도감" />
+          <PageMain>본문</PageMain>
+          <PageAside>
+            <PanelSheet panelId="search" title="검색" Icon={Icon} disabled={disabled}>
+              <span>검색 본문</span>
+            </PanelSheet>
+          </PageAside>
+        </V2Page>
+      );
+    }
+    const { rerender } = renderHarness(<RetryHarness disabled />);
+    expect(screen.queryByText("검색 본문")).toBeNull();
+
+    rerender(
+      <MemoryRouter>
+        <RetryHarness disabled={false} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByText("검색 본문")).toBeTruthy();
+  });
+
   it("ignores a program request for a disabled panel", () => {
     function DisabledHarness() {
       return (

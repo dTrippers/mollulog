@@ -80,7 +80,6 @@ export function RecruitTicketCard({ card, timeZone, now }: RecruitTicketCardProp
                 recruitmentLabel={student.unrecruited ? UNRECRUITED_LABEL : undefined}
                 scrimLabel={student.tier !== null ? <TierLabel tier={student.tier} /> : undefined}
                 captionPlacement="overlay"
-                overlayOnMobile
               />
               {student.unrecruited ? <span className="sr-only">, {UNRECRUITED_LABEL}</span> : null}
               {student.tier !== null ? <span className="sr-only">, {getTierMeaning(student.tier)}</span> : null}

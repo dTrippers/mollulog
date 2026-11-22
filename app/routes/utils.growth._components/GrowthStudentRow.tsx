@@ -377,7 +377,6 @@ function StudentThumbnail({ student, size }: { student: GrowthStudent; size: "ta
         variant={variant}
         fluid
         captionPlacement="overlay"
-        overlayOnMobile
         showRecruitmentLabel={false}
       />
     </span>

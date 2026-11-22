@@ -49,7 +49,6 @@ export default function PickupStudentList({ title, students, labelFor, emptyText
                   variant={variant}
                   recruitmentLabel={label}
                   captionPlacement="overlay"
-                  overlayOnMobile
                 />
               </li>
             );
