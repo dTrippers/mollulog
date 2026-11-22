@@ -14,6 +14,7 @@ export function GrowthValueInput({
   showSteps,
   flowProps,
   onChange,
+  leading,
 }: {
   // The accessible name, such as "니코 목표 EX 스킬".
   label: string;
@@ -23,6 +24,8 @@ export function GrowthValueInput({
   showSteps: boolean;
   flowProps: NumberInputFlowNavigationInputProps;
   onChange: (value: number | null) => void;
+  // A decorative mark right before the number, such as the 인연 heart. The mark and the number center together.
+  leading?: ReactNode;
 }) {
   const [text, setText] = useState(value == null ? "" : String(value));
   useEffect(() => {
@@ -56,8 +59,21 @@ export function GrowthValueInput({
         if (digits === "") return;
         commit(clamp(Number(digits)));
       }}
-      className="block h-full min-w-0 flex-1 appearance-none bg-transparent px-0 text-center text-sm font-medium text-v2-fg tabular-nums outline-none placeholder:text-v2-fg-tertiary"
+      className={cn(
+        "block h-full min-w-0 appearance-none bg-transparent px-0 text-center text-sm font-medium text-v2-fg tabular-nums outline-none placeholder:text-v2-fg-tertiary",
+        leading ? "w-[3ch] flex-none" : "flex-1",
+      )}
     />
+  );
+  // A press beside the number still focuses it.
+  const field = leading ? (
+    // biome-ignore lint/a11y/noLabelWithoutControl: the label wraps the input, which is built above as a variable.
+    <label className="flex h-full min-w-0 flex-1 cursor-text items-center justify-center gap-0.5">
+      {leading}
+      {input}
+    </label>
+  ) : (
+    input
   );
 
   return (
@@ -78,7 +94,7 @@ export function GrowthValueInput({
           −
         </StepButton>
       ) : null}
-      {input}
+      {field}
       {showSteps ? (
         <>
           <StepButton

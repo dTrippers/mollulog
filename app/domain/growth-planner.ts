@@ -11,7 +11,9 @@ export const GROWTH_SORT_ORDERS = [
 
 export type GrowthSortOrder = (typeof GROWTH_SORT_ORDERS)[number];
 
-export const DEFAULT_GROWTH_SORT_ORDER: GrowthSortOrder = "planner-newest";
+// Until the user picks a sort, the planner is in 수동 정렬. A student without a position sorts as 플래너 등록 최신순, so
+// the first order matches the former default.
+export const DEFAULT_GROWTH_SORT_ORDER: GrowthSortOrder = "manual";
 
 export type GrowthPlannerState = { sortOrder: GrowthSortOrder };
 

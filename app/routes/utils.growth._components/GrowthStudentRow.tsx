@@ -1,4 +1,4 @@
-import { ArrowDownIcon, ArrowUpIcon, ExclamationCircleIcon } from "@heroicons/react/16/solid";
+import { ArrowDownIcon, ArrowUpIcon, ExclamationCircleIcon, HeartIcon } from "@heroicons/react/16/solid";
 import { type CSSProperties, type KeyboardEvent, type PointerEvent, type ReactNode, useEffect, useState } from "react";
 import { StudentThumb } from "~/components/v2/features/students/StudentThumb";
 import { splitVisibleStudentName } from "~/components/v2/features/students/split-student-name";
@@ -53,7 +53,9 @@ type FlowProps = () => NumberInputFlowNavigationInputProps;
 // Cell widths in rem, shared by the column names, the field boxes, and the equipment part names so they line up.
 export function getCellWidthRem(cell: GrowthCell, showSteps: boolean): number {
   if (cell.kind === "tier") return 3.5;
-  return showSteps ? 6.75 : 2.75;
+  // The 인연 cell also holds the heart before the number.
+  const heart = cell.kind === "relationship" ? 0.75 : 0;
+  return (showSteps ? 6.75 : 2.75) + heart;
 }
 
 export function columnsStyle(cells: readonly GrowthCell[], showSteps: boolean): CSSProperties {
@@ -90,11 +92,6 @@ function CellInput({ cell, side, context }: { cell: GrowthCell; side: GrowthRowS
   const tier = side === "current" ? row.tierDraft : (row.targetTierDraft ?? row.tierDraft);
 
   if (cell.kind === "tier") {
-    if (side === "current" && !student.isRecruited) {
-      return (
-        <span className="flex h-7 items-center justify-center text-xs font-medium text-v2-fg-secondary">미모집</span>
-      );
-    }
     return (
       <TierInput
         label={`${name} ${sideName}`}
@@ -121,13 +118,13 @@ function CellInput({ cell, side, context }: { cell: GrowthCell; side: GrowthRowS
         showSteps={showSteps}
         flowProps={flowProps()}
         onChange={(value) => row.handleRelationshipFieldChange(key, value)}
+        leading={<HeartIcon className="size-3 shrink-0 text-v2-relationship" aria-hidden="true" />}
       />
     );
   }
 
   const definition = cell.field;
   const key = side === "current" ? definition.key : definition.targetKey;
-  if (side === "current" && !student.isRecruited) return <DisabledSegment />;
   if (!student.hasGear && isGearField(key)) return <DisabledSegment />;
   const value = row.draftValues[key];
   // A stored value that the tier no longer allows stays editable, so it can be corrected here.
@@ -245,7 +242,7 @@ function hasRowIssues(row: GrowthRowState): boolean {
 
 function EnrollPrompt({ student, row }: { student: GrowthStudent; row: GrowthRowState }) {
   if (!student.released) {
-    return <span className="text-xs text-v2-fg-secondary">아직 모집하지 않은 학생이에요</span>;
+    return <span className="text-xs break-keep text-v2-fg-secondary">아직 모집하지 않은 학생이에요</span>;
   }
   return (
     <Button size="sm" onClick={row.enroll} disabled={row.staleWriteBlocked}>
@@ -559,16 +556,12 @@ function TableStudentRows({
             </td>
           ))
         ) : (
-          <>
-            <td className={groupCell}>
-              <FieldBox group={GROWTH_GROUPS[0]} side="current" context={context} />
-            </td>
-            <td colSpan={GROWTH_GROUPS.length - 1} className={cn(cellBase, "px-1.5 py-1.5")}>
-              <div className="flex h-7 items-center">
-                <EnrollPrompt student={student} row={row} />
-              </div>
-            </td>
-          </>
+          // A student who is not recruited has no current state, so the row holds only the enroll prompt.
+          <td colSpan={GROWTH_GROUPS.length} className={cn(cellBase, "px-1.5 py-1.5")}>
+            <div className="flex h-7 items-center">
+              <EnrollPrompt student={student} row={row} />
+            </div>
+          </td>
         )}
       </tr>
       <tr {...dataAttributes}>
@@ -715,7 +708,7 @@ function StackedStudentCard({
                 >
                   {side === "current" ? "현재" : "목표"}
                 </span>
-                {side === "current" && !student.isRecruited && tab.key !== "basic" ? (
+                {side === "current" && !student.isRecruited ? (
                   <div className="flex h-7 min-w-0 flex-1 items-center">
                     <EnrollPrompt student={student} row={row} />
                   </div>
@@ -737,11 +730,6 @@ function StackedStudentCard({
                   </span>
                 ) : null}
               </div>
-              {side === "current" && !student.isRecruited && tab.key === "basic" ? (
-                <div className="mt-1.5" style={{ marginLeft: `calc(${STACKED_LABEL_COLUMN_REM}rem + 0.5rem)` }}>
-                  <EnrollPrompt student={student} row={row} />
-                </div>
-              ) : null}
             </div>
           ))}
         </div>
@@ -803,15 +791,20 @@ function TransposedValues({ context, groups }: { context: RowContext; groups: Gr
                   <span className="ml-1 text-[0.6875rem] text-v2-fg-tertiary">{equipmentLabels[slot]}</span>
                 ) : null}
               </span>
-              {(["current", "target"] as const).map((side) => (
-                <fieldset
-                  key={side}
-                  aria-label={`${name} ${side === "current" ? "현재" : "목표"} ${cellName(cell)}`}
-                  className="m-0 min-w-0 overflow-hidden rounded-md border border-v2-control-border bg-v2-surface p-0"
-                >
-                  <CellInput cell={cell} side={side} context={context} />
-                </fieldset>
-              ))}
+              {(["current", "target"] as const).map((side) =>
+                side === "current" && !student.isRecruited ? (
+                  // Not recruited: no current state; the enroll prompt sits at the bottom of this column.
+                  <span key={side} />
+                ) : (
+                  <fieldset
+                    key={side}
+                    aria-label={`${name} ${side === "current" ? "현재" : "목표"} ${cellName(cell)}`}
+                    className="m-0 min-w-0 overflow-hidden rounded-md border border-v2-control-border bg-v2-surface p-0"
+                  >
+                    <CellInput cell={cell} side={side} context={context} />
+                  </fieldset>
+                ),
+              )}
             </div>
           );
         })}

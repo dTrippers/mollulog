@@ -19,6 +19,8 @@ describe("growth planner view settings", () => {
   it("reads the sort choice stored on the device before it moved to the account", () => {
     expect(readLegacyGrowthSortOrder({ sortOrder: "name", showNumberInputShortcuts: true })).toBe("name");
     expect(readLegacyGrowthSortOrder({ sortOrder: "unknown" })).toBeNull();
+    // The 1.x default was written on every visit, so it is not a choice.
+    expect(readLegacyGrowthSortOrder({ sortOrder: "planner-newest", showNumberInputShortcuts: true })).toBeNull();
     expect(readLegacyGrowthSortOrder({ showNumberInputShortcuts: true })).toBeNull();
     expect(readLegacyGrowthSortOrder(null)).toBeNull();
   });

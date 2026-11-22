@@ -75,10 +75,10 @@ describe("planner state model", () => {
     const options = { createClient: () => client as unknown as Client };
     const before = await getPlannerState(env, 7, options);
 
-    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "planner-newest", stored: false });
-    await saveGrowthPlannerSortOrder(env, 7, "manual", options);
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "manual", stored: false });
+    await saveGrowthPlannerSortOrder(env, 7, "name", options);
 
-    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "manual", stored: true });
+    expect(await getGrowthPlannerSortOrder(env, 7, options)).toEqual({ sortOrder: "name", stored: true });
     const document = await getPlannerState(env, 7, options);
     expect(document.pyroxene).toEqual(before.pyroxene);
     expect(document.eventShops).toEqual(before.eventShops);
