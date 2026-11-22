@@ -233,7 +233,7 @@ function itemIsActive(menuId: NavigationMenuId, pathname: string, currentUsernam
     case "student-growth-planner":
       return pathname === "/utils/growth" || pathname.startsWith("/utils/growth/students");
     case "resource-planner":
-      return pathname.startsWith("/utils/resources/inventory") || pathname.startsWith("/utils/resources/drafts/");
+      return pathname.startsWith("/utils/resources/inventory");
     case "farming-calculator":
       return normalizedPathname === "/utils/resources/farming";
     case "event-shop-calculator":

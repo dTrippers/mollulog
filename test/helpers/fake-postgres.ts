@@ -185,8 +185,6 @@ export class FakePostgresClient {
       growth_resource_inventory: [],
       sync_drafts: [],
       sync_draft_entries: [],
-      user_resource_inventory_drafts: [],
-      user_resource_inventory_draft_items: [],
       student_states: [],
       student_targets: [],
       student_state_audits: [],
