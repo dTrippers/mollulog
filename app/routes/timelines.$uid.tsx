@@ -302,7 +302,7 @@ export default function WalkthroughTimelineDetailPage() {
               rel="noopener"
               className={cn("text-sm font-medium text-v2-link hover:underline", v2FocusRing)}
             >
-              일반 뷰어 열기
+              새 탭에서 열기
             </a>
           }
         >

@@ -76,14 +76,14 @@ export function useWalkthroughViewerWindow({
       }
       const target = window.open("", "mollulog-timeline-viewer", "popup,width=360,height=720");
       if (!target) {
-        setError("팝업이 차단됐어요. 브라우저에서 이 사이트의 팝업을 허용해 주세요.");
+        setError("팝업이 차단됐어요.");
         return;
       }
       setViewerRoot(prepareViewerDocument(target));
       setViewerWindow(target);
       setMode("popup");
     } catch {
-      setError("보조 창을 열지 못했어요. 일반 뷰어를 이용해 주세요.");
+      setError("새 창을 열지 못했어요.");
     }
   };
 
