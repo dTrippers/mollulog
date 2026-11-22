@@ -11,6 +11,7 @@ import type {
   GrowthResourceRequirementsByStudent,
   GrowthStudent,
 } from "./utils.growth._components/types";
+import { getGrowthPlannerPageLinks } from "./utils.resources._components/resource-page-links";
 
 export const meta: MetaFunction = ({ location }) => {
   const title = "학생 성장 플래너 | 몰루로그";
@@ -120,6 +121,7 @@ export default function GrowthLayout() {
       contentWidth="full"
       maxWidth="full"
       layout="vertical"
+      links={getGrowthPlannerPageLinks()}
     >
       <Suspense fallback={null}>
         <Await resolve={loaderData.resourceRequirements}>
