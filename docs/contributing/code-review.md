@@ -101,6 +101,16 @@ single owner for commands and claim-to-evidence mapping.
   that takes a `className` sets what a caller may override through classes, not
   an inline `style`: an inline value beats every class, so a caller's own size
   or cap stops working.
+- Does a shared component look the same whether it renders an item as a link or
+  as a button? A `<button>` centers its text and keeps other browser defaults
+  that an `<a>` does not have, so a screen that is the first to pass
+  state-only items sees a different layout.
+- Does state seeded from a prop (`useState(prop)`) follow the prop when it can
+  change after mount? A panel that started disabled stayed collapsed after a
+  failed list loaded on retry, because its open state was read only once.
+- Is an option that every caller must turn on for correct behavior the default
+  instead, with an opt-out for the exception? A caller that forgets an opt-in
+  silently gets the wrong result, such as a name hidden on mobile.
 - Is an image that fills a frame sized only by `aspect-ratio` pinned to the
   frame (`absolute inset-0`) instead of relying on `height: 100%`? Inside a
   table cell, WebKit resolves that percentage to the image's natural height, and
