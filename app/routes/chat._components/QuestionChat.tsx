@@ -762,7 +762,7 @@ export function QuestionChat({
               { label: "일정", question: "다음 픽업 학생과 기간 알려 줘" },
               { label: "학생", question: "미카 EX 스킬 효과 정리해 줘" },
               { label: "총력전", question: "이번 총력전 상위권은 누구를 많이 써?" },
-              { label: "내 데이터", question: "내 모집한 학생으로 신비 편성 추천해 줘", personal: true },
+              { label: "내 데이터", question: "내가 모집한 학생으로 신비 편성 추천해 줘", personal: true },
             ].map((suggestion) => (
               <button
                 key={suggestion.label}
