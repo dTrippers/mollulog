@@ -101,7 +101,10 @@ single owner for commands and claim-to-evidence mapping.
   key again after the commit; preventing the composing key left Enter
   unanswered on macOS.
 - Does arrow-key movement follow the layout of the options: a grid moves with
-  all four arrow keys, not only up and down?
+  all four arrow keys, not only up and down? Do modified arrows (Shift, Alt,
+  Ctrl, Meta) keep their text editing meaning? Does the active option scroll
+  into view clear of fixed bars, and does only a pointer that moves take it
+  over? Content scrolled under a resting pointer fires `mouseenter`.
 - Does each grid column fit its content at the narrowest content width that
   uses that column count? `sm:` and other breakpoints follow the viewport, not
   the content area beside the sidebar, and `min-w-0` lets fixed-size content
