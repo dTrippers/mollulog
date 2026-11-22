@@ -6,8 +6,16 @@ import {
 } from "~/routes/utils.growth._components/growth-view-settings";
 
 describe("growth planner view settings", () => {
-  it("keeps a valid stored setting", () => {
-    expect(normalizeGrowthViewSettings({ sortOrder: "name", showNumberInputShortcuts: false })).toEqual({
+  it("starts without the step buttons when nothing is stored", () => {
+    expect(DEFAULT_GROWTH_VIEW_SETTINGS.showNumberInputShortcuts).toBe(false);
+    expect(normalizeGrowthViewSettings(null)).toEqual({ showNumberInputShortcuts: false });
+  });
+
+  it("keeps the value a device stored, including the 1.x default", () => {
+    expect(normalizeGrowthViewSettings({ sortOrder: "name", showNumberInputShortcuts: true })).toEqual({
+      showNumberInputShortcuts: true,
+    });
+    expect(normalizeGrowthViewSettings({ showNumberInputShortcuts: false })).toEqual({
       showNumberInputShortcuts: false,
     });
   });

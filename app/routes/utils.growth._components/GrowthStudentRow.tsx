@@ -96,8 +96,10 @@ function CellInput({ cell, side, context }: { cell: GrowthCell; side: GrowthRowS
       <TierInput
         label={`${name} ${sideName}`}
         value={side === "current" ? row.tierDraft : (row.targetTierDraft ?? row.tierDraft)}
-        initialTier={student.initialTier}
-        min={side === "current" ? student.initialTier : row.effectiveTier}
+        // The picker shows every tier from ★1, as the profile edit table does. Tiers below the student's initial tier
+        // (현재) or below the current tier (목표) show but cannot be picked.
+        initialTier={side === "current" ? student.initialTier : row.effectiveTier}
+        min={1}
         max={9}
         compact
         flowProps={flowProps()}

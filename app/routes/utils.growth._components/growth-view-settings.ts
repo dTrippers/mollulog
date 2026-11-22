@@ -9,8 +9,10 @@ export type GrowthViewSettings = {
   showNumberInputShortcuts: boolean;
 };
 
+// A device with nothing stored starts without the step buttons. A device that opened the 1.x planner keeps the value it
+// stored, so existing users see no change.
 export const DEFAULT_GROWTH_VIEW_SETTINGS: GrowthViewSettings = {
-  showNumberInputShortcuts: true,
+  showNumberInputShortcuts: false,
 };
 
 export function normalizeGrowthViewSettings(value: unknown): GrowthViewSettings {

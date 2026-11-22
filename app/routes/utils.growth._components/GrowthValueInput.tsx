@@ -44,7 +44,8 @@ export function GrowthValueInput({
       inputMode="numeric"
       pattern="[0-9]*"
       aria-label={label}
-      placeholder="–"
+      // With the step buttons, an empty value stays blank as in 1.x, so a dash is not read as the − button beside it.
+      placeholder={showSteps ? undefined : "–"}
       value={text}
       data-number-input-flow={flowProps["data-number-input-flow"]}
       onFocus={flowProps.onFocus}
