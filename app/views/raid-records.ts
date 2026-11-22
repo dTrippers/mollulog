@@ -194,6 +194,8 @@ export type RaidRecordFormSeasonOption = RaidRecordSeasonView & {
 export type RaidRecordFormStudent = {
   uid: string;
   name: string;
+  // Other names the student goes by, which the party search also matches.
+  altNames: string[];
   role: "striker" | "special";
   initialTier: number;
   equipmentSlots: number;
@@ -240,6 +242,7 @@ export async function loadRaidRecordFormData(
     students: students.map((student) => ({
       uid: student.uid,
       name: student.name,
+      altNames: student.altNames,
       role: student.role === "special" ? "special" : "striker",
       initialTier: student.initialTier,
       equipmentSlots: student.equipments.length,

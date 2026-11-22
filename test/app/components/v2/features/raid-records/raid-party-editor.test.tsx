@@ -2,8 +2,8 @@
  * @jest-environment jsdom
  */
 import "../../layout/layout-test-polyfills";
-import { describe, expect, it, jest } from "@jest/globals";
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it } from "@jest/globals";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { useState } from "react";
 import { MemoryRouter } from "react-router";
 import {
@@ -22,9 +22,9 @@ globalThis.ResizeObserver ??= class {
 } as unknown as typeof ResizeObserver;
 
 const students: RaidPartyStudent[] = [
-  { uid: "10000", name: "아루", role: "striker", initialTier: 3, equipmentSlots: 3 },
-  { uid: "10001", name: "무츠키", role: "striker", initialTier: 2, equipmentSlots: 3 },
-  { uid: "10002", name: "아코", role: "special", initialTier: 3, equipmentSlots: 3 },
+  { uid: "10000", name: "아루", altNames: ["사장"], role: "striker", initialTier: 3, equipmentSlots: 3 },
+  { uid: "10001", name: "무츠키", altNames: [], role: "striker", initialTier: 2, equipmentSlots: 3 },
+  { uid: "10002", name: "아코", altNames: [], role: "special", initialTier: 3, equipmentSlots: 3 },
 ];
 
 const context: RaidPartyEditorContext = {
@@ -75,7 +75,7 @@ describe("RaidPartyCard slots", () => {
     expect(document.activeElement).toBe(search);
   });
 
-  it("moves the active result with the arrow keys and leaves used students out", () => {
+  it("keeps the only result active and leaves used students out", () => {
     const changed: { latest: RaidFormParty | null } = { latest: null };
     render(<Harness onParty={(party) => {
       changed.latest = party;
@@ -85,7 +85,7 @@ describe("RaidPartyCard slots", () => {
     fireEvent.change(search, { target: { value: "ㅇ" } });
     fireEvent.keyDown(search, { key: "ArrowDown" });
     fireEvent.keyDown(search, { key: "Enter" });
-    // "ㅇ" matches 아루 only among strikers, so ArrowDown wraps back to it.
+    // "ㅇ" matches 아루 only among strikers, so ArrowDown has no row to move to and 아루 stays active.
     expect(changed.latest?.slots[0]?.studentUid).toBe("10000");
 
     fireEvent.change(search, { target: { value: "아루" } });
@@ -101,7 +101,7 @@ describe("RaidPartyCard slots", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "1파티 SPECIAL 1, 비어 있음" }));
     fireEvent.change(search, { target: { value: "아" } });
-    expect(screen.getAllByRole("option").map((option) => option.textContent)).toEqual(["아코모집하지 않음"]);
+    expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["아코, 미모집"]);
     fireEvent.keyDown(search, { key: "Enter" });
     expect(changed.latest?.slots[4]?.studentUid).toBe("10002");
 
@@ -110,22 +110,79 @@ describe("RaidPartyCard slots", () => {
     expect(changed.latest?.slots[4]).toBeNull();
   });
 
-  it("waits for a composing syllable to commit before picking on Enter", () => {
-    jest.useFakeTimers();
+  it("finds a student by another name", () => {
     const changed: { latest: RaidFormParty | null } = { latest: null };
     render(<Harness onParty={(party) => {
       changed.latest = party;
     }} />);
     const search = screen.getByRole("combobox");
 
+    fireEvent.change(search, { target: { value: "사장" } });
+    expect(screen.getAllByRole("option").map((option) => option.getAttribute("aria-label"))).toEqual(["아루, 미모집"]);
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(changed.latest?.slots[0]?.studentUid).toBe("10000");
+  });
+
+  it("moves the active result with the left and right arrow keys", () => {
+    const changed: { latest: RaidFormParty | null } = { latest: null };
+    render(<Harness onParty={(party) => {
+      changed.latest = party;
+    }} />);
+    const search = screen.getByRole("combobox");
+
+    fireEvent.change(search, { target: { value: "ㅜ" } });
+    const options = () => screen.getAllByRole("option");
+    expect(options().map((option) => option.getAttribute("aria-label"))).toEqual(["아루, 미모집", "무츠키, 미모집"]);
+    fireEvent.keyDown(search, { key: "ArrowRight" });
+    expect(options()[1].getAttribute("aria-selected")).toBe("true");
+    // The last result stays active rather than wrapping around.
+    fireEvent.keyDown(search, { key: "ArrowRight" });
+    expect(options()[1].getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(search, { key: "ArrowLeft" });
+    expect(options()[0].getAttribute("aria-selected")).toBe("true");
+    fireEvent.keyDown(search, { key: "ArrowRight" });
+    fireEvent.keyDown(search, { key: "Enter" });
+    expect(changed.latest?.slots[0]?.studentUid).toBe("10001");
+  });
+
+  it("leaves modified arrow keys to the search text and scrolls the active result into view", () => {
+    const scrolled: Element[] = [];
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    try {
+      render(<Harness onParty={() => {}} />);
+      const search = screen.getByRole("combobox");
+      fireEvent.change(search, { target: { value: "ㅜ" } });
+      const options = () => screen.getAllByRole("option");
+
+      fireEvent.keyDown(search, { key: "ArrowRight", shiftKey: true });
+      fireEvent.keyDown(search, { key: "ArrowRight", metaKey: true });
+      expect(options()[0].getAttribute("aria-selected")).toBe("true");
+      expect(scrolled).toEqual([]);
+
+      fireEvent.keyDown(search, { key: "ArrowRight" });
+      expect(options()[1].getAttribute("aria-selected")).toBe("true");
+      expect(scrolled).toEqual([options()[1]]);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it("picks once, on the Enter that follows a composing syllable's commit", () => {
+    const changed: { latest: RaidFormParty | null; count: number } = { latest: null, count: 0 };
+    render(<Harness onParty={(party) => {
+      changed.latest = party;
+      changed.count += 1;
+    }} />);
+    const search = screen.getByRole("combobox");
+
     fireEvent.change(search, { target: { value: "아루" } });
     fireEvent.keyDown(search, { key: "Enter", isComposing: true });
     expect(changed.latest).toBeNull();
-    fireEvent.compositionEnd(search);
-    act(() => {
-      jest.runAllTimers();
-    });
+    fireEvent.keyDown(search, { key: "Enter" });
     expect(changed.latest?.slots[0]?.studentUid).toBe("10000");
-    jest.useRealTimers();
+    expect(changed.count).toBe(1);
   });
 });

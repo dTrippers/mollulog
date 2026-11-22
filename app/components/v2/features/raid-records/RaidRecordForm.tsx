@@ -1,5 +1,5 @@
 import { ClockIcon, ExclamationCircleIcon, PlusIcon } from "@heroicons/react/16/solid";
-import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Link, useFetcher, useNavigate } from "react-router";
 import {
   computeRaidClearResult,
@@ -29,7 +29,7 @@ import { Button, v2ButtonClassName } from "../../primitives/Button";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { StatusNotice } from "../../primitives/StatusNotice";
 import { DigitsInput } from "./DigitsInput";
-import { PartyMiniRow, RaidPartyCard, type RaidPartyEditorContext, type RaidPartyStudent } from "./RaidPartyEditor";
+import { RaidPartyCard, type RaidPartyEditorContext, type RaidPartyStudent } from "./RaidPartyEditor";
 import { DefenseTypeLabel, RaidBossBackdrop, RaidRankTierBadge, RankStatusPill } from "./RaidRecordBits";
 import { RaidSeasonSelect, type RaidSeasonSelectOption } from "./RaidSeasonSelect";
 import {
@@ -37,7 +37,6 @@ import {
   type RaidFormParty,
   raidFormPartiesFromRecord,
   raidFormPartiesToSubmit,
-  raidFormPartyStudentCount,
 } from "./raid-record-form-state";
 import {
   formatRaidClearResult,
@@ -130,7 +129,6 @@ export function RaidRecordForm({
   const fetcher = useFetcher<RaidRecordFormActionData>();
   const { stacked } = useV2Page();
   const ids = { season: useId(), score: useId(), rank: useId(), memo: useId(), parties: useId() };
-  const partiesRef = useRef<HTMLElement>(null);
 
   const [server, setServer] = useState<RaidRecordServer>(
     mode.kind === "new" ? mode.initialServer : mode.season.server,
@@ -300,10 +298,6 @@ export function RaidRecordForm({
   };
 
   const partiesOf = (defenseType: RaidRecordDefenseType) => parties.filter((party) => party.defenseType === defenseType);
-  const showParties = (defenseType: RaidRecordDefenseType) => {
-    setActiveDefenseType(defenseType);
-    partiesRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
 
   return (
     <div className={cn("flex min-w-0 max-w-[62.5rem] flex-col gap-v2-group-gap", stacked && "pb-28")}>
@@ -439,11 +433,8 @@ export function RaidRecordForm({
                         scores={scores}
                         scoreErrors={attempted ? scoreErrors : {}}
                         serverErrorFor={(defenseType) => serverErrorFor("score", defenseType)}
-                        parties={parties}
-                        studentsByUid={partyContext.studentsByUid}
                         stacked={stacked}
                         onChange={setScore}
-                        onShowParties={showParties}
                       />
                       <FieldMessage message={(attempted ? localErrors.score : null) ?? serverErrorFor("totalScore")} />
                     </>
@@ -512,9 +503,8 @@ export function RaidRecordForm({
 
       {season ? (
         <section
-          ref={partiesRef}
           aria-labelledby={`${ids.parties}-title`}
-          className="flex scroll-mt-4 flex-col gap-3 rounded-lg bg-v2-surface p-v2-block-p"
+          className="flex flex-col gap-3 rounded-lg bg-v2-surface p-v2-block-p"
         >
           <div className="flex items-baseline gap-2">
             <h2 id={`${ids.parties}-title`} className="text-base font-semibold text-v2-fg">
@@ -701,38 +691,30 @@ function EliminationScores({
   scores,
   scoreErrors,
   serverErrorFor,
-  parties,
-  studentsByUid,
   stacked,
   onChange,
-  onShowParties,
 }: {
   season: RaidSeasonSelectOption;
   scores: ScoreDraft;
   scoreErrors: Partial<Record<RaidRecordDefenseType, string>>;
   serverErrorFor: (defenseType: RaidRecordDefenseType) => string | null;
-  parties: readonly RaidFormParty[];
-  studentsByUid: RaidPartyEditorContext["studentsByUid"];
   stacked: boolean;
   onChange: (defenseType: RaidRecordDefenseType, value: number | null) => void;
-  onShowParties: (defenseType: RaidRecordDefenseType) => void;
 }) {
   const entries = season.scoreDefenseTypes.map(({ defenseType }) => ({ defenseType, score: scores[defenseType] ?? null }));
   const entered = entries.filter((entry) => entry.score !== null) as { defenseType: RaidRecordDefenseType; score: number }[];
   const total = getRaidRecordTotalScore(entered);
-  const gridClassName = "grid items-center gap-x-3 gap-y-1 grid-cols-[6.5rem_minmax(0,12.5rem)] sm:grid-cols-[7.5rem_12.5rem_minmax(0,10.5rem)_minmax(0,1fr)]";
+  const gridClassName =
+    "grid items-center gap-x-3 gap-y-1 grid-cols-[6.5rem_minmax(0,12.5rem)] sm:grid-cols-[7.5rem_12.5rem_minmax(0,1fr)]";
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
       <div aria-hidden="true" className={cn(gridClassName, "hidden text-xs font-semibold text-v2-fg-secondary sm:grid")}>
         <span>방어 타입</span>
         <span className="pr-2.5 text-right">점수</span>
         <span>난이도 · 클리어 시간</span>
-        <span>편성</span>
       </div>
       {entries.map(({ defenseType, score }) => {
         const error = scoreErrors[defenseType] ?? serverErrorFor(defenseType);
-        const typeParties = parties.filter((party) => party.defenseType === defenseType);
-        const students = typeParties.reduce((sum, party) => sum + raidFormPartyStudentCount(party), 0);
         const inputId = `elimination-score-${defenseType}`;
         return (
           <div key={defenseType} className={cn(gridClassName, "group/score")}>
@@ -753,23 +735,6 @@ function EliminationScores({
                 <span className="text-xs text-v2-fg-tertiary">–</span>
               ) : (
                 <ScorePreview score={score} bossUid={season.boss.uid} />
-              )}
-            </div>
-            <div className={cn("min-w-0", stacked && "col-start-2")}>
-              {typeParties.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => onShowParties(defenseType)}
-                  aria-label={`${defenseTypeLocale[defenseType]} 편성 보기, ${typeParties.length}파티 ${students}명`}
-                  className={cn("inline-flex min-w-0 cursor-pointer items-center gap-1.5 rounded-md hover:opacity-80 v2-interaction-transition", v2FocusRing)}
-                >
-                  <PartyMiniRow party={typeParties[0]} studentsByUid={studentsByUid} />
-                  <span className="text-xs whitespace-nowrap text-v2-fg-tertiary tabular-nums">
-                    {typeParties.length}파티 · {students}명
-                  </span>
-                </button>
-              ) : (
-                <span className="text-xs text-v2-fg-tertiary">편성 없음</span>
               )}
             </div>
           </div>
