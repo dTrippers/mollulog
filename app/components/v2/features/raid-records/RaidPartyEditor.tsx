@@ -214,12 +214,14 @@ export type PartySlotsOptions = {
   slotScrimLabel?: (unit: RaidFormUnit, slot: number) => ReactNode;
   slotScrimAriaLabel?: (unit: RaidFormUnit, slot: number) => string | undefined;
   slotBadge?: (unit: RaidFormUnit, slot: number) => ReactNode;
+  // Narrower portraits on a phone, so a six-student party fits one row inside a card.
+  dense?: boolean;
 };
 
 // The slots and one search field under them. Typing a name and pressing Enter fills the selected slot and selects the
 // next empty one, so a party is six names and six Enters. The arrow keys move through the result grid while the focus
 // stays in the field. Once every slot is filled, focus moves to the growth table.
-export function PartySlots({
+export function PartySlots<P extends Pick<RaidFormParty, "slots">>({
   party,
   title,
   context,
@@ -233,13 +235,14 @@ export function PartySlots({
   slotScrimLabel,
   slotScrimAriaLabel,
   slotBadge,
+  dense = false,
 }: {
-  party: RaidFormParty;
+  party: P;
   title: string;
   context: RaidPartyEditorContext;
   autoFocus: boolean;
   onAutoFocused: () => void;
-  onChange: (party: RaidFormParty) => void;
+  onChange: (party: P) => void;
 } & PartySlotsOptions) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -378,7 +381,7 @@ export function PartySlots({
     const isSelected = slot === selectedSlot;
     const studentName = unit ? (student ? formatRaidStudentName(student.name) : "알 수 없는 학생") : null;
     return (
-      <li key={slot} className="relative flex w-14 flex-col sm:w-16">
+      <li key={slot} className={cn("relative flex flex-col sm:w-16", dense ? "w-11" : "w-14")}>
         <button
           ref={(element) => {
             slotRefs.current[slot] = element;
@@ -399,6 +402,7 @@ export function PartySlots({
               studentUid={unit.studentUid}
               name={student ? name : "알 수 없는 학생"}
               variant={student ? variant : null}
+              fluid={dense}
               recruitmentLabel={unit.assist ? "조력자" : undefined}
               scrimLabel={slotScrimLabel?.(unit, slot)}
               scrimAriaLabel={slotScrimAriaLabel?.(unit, slot)}
@@ -436,14 +440,14 @@ export function PartySlots({
   const showSearch = search === "always" || selectedSlot !== null;
   return (
     <div ref={rootRef} className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex min-w-0 flex-wrap items-start gap-x-2.5 gap-y-3">
-        <SlotGroup label="STRIKER" showLabel={showGroupLabels}>
+      <div className={cn("flex min-w-0 flex-wrap items-start gap-y-3", dense ? "gap-x-3 sm:gap-x-4" : "gap-x-2.5")}>
+        <SlotGroup label="STRIKER" showLabel={showGroupLabels} dense={dense}>
           {slotIndexes.slice(0, strikerSlots).map(renderSlot)}
         </SlotGroup>
         {showGroupLabels ? (
           <span aria-hidden="true" className="mx-1 hidden w-px self-stretch bg-v2-divider sm:block" />
         ) : null}
-        <SlotGroup label="SPECIAL" showLabel={showGroupLabels}>
+        <SlotGroup label="SPECIAL" showLabel={showGroupLabels} dense={dense}>
           {slotIndexes.slice(strikerSlots).map(renderSlot)}
         </SlotGroup>
       </div>
@@ -572,7 +576,17 @@ export function PartySlots({
   );
 }
 
-function SlotGroup({ label, showLabel, children }: { label: string; showLabel: boolean; children: ReactNode }) {
+function SlotGroup({
+  label,
+  showLabel,
+  dense,
+  children,
+}: {
+  label: string;
+  showLabel: boolean;
+  dense: boolean;
+  children: ReactNode;
+}) {
   return (
     <div className="min-w-0">
       {showLabel ? (
@@ -580,7 +594,7 @@ function SlotGroup({ label, showLabel, children }: { label: string; showLabel: b
           {label}
         </p>
       ) : null}
-      <ul aria-label={label} className="flex gap-2">
+      <ul aria-label={label} className={cn("flex", dense ? "flex-wrap gap-1.5 sm:gap-2" : "gap-2")}>
         {children}
       </ul>
     </div>
@@ -668,7 +682,7 @@ export function PartyGrowthTable({
   studentsByUid,
   onChange,
 }: {
-  party: RaidFormParty;
+  party: Pick<RaidFormParty, "slots">;
   title: string;
   studentsByUid: ReadonlyMap<string, RaidPartyStudent>;
   onChange: (slot: number, unit: RaidFormUnit) => void;

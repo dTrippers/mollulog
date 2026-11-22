@@ -376,10 +376,12 @@ export type WalkthroughSaveProblem =
   | { field: "title" }
   | { field: "boss" }
   | { field: "parties" }
-  | { field: "party"; partyIndex: number; reason: "empty" | "no_striker" };
+  | { field: "party"; partyIndex: number; reason: "empty" | "no_striker" }
+  | { field: "step"; partyIndex: number; stepIndex: number; reason: "no_action" | "empty_text" };
 
 // What keeps a guide from being saved: a title, a boss, and at least one party, where every party has a striker. The
-// growth values, the starting skill order, and the timeline are optional.
+// growth values, the starting skill order, and the timeline are optional, but a timeline step needs at least one skill,
+// and a skill without a student needs its text.
 export function walkthroughSaveProblems(input: {
   title: string;
   document: Pick<WalkthroughTimelineDocument, "partySize" | "context" | "parties">;
@@ -395,6 +397,14 @@ export function walkthroughSaveProblems(input: {
     } else if (!filled.some((unit) => isWalkthroughStrikerSlot(unit.slot, input.document.partySize))) {
       problems.push({ field: "party", partyIndex, reason: "no_striker" });
     }
+    party.steps.forEach((step, stepIndex) => {
+      if (step.kind !== "actions") return;
+      if (step.actions.length === 0) {
+        problems.push({ field: "step", partyIndex, stepIndex, reason: "no_action" });
+      } else if (step.actions.some((action) => !action.studentUid && !action.text?.trim())) {
+        problems.push({ field: "step", partyIndex, stepIndex, reason: "empty_text" });
+      }
+    });
   });
   return problems;
 }
@@ -411,6 +421,10 @@ export function walkthroughSaveProblemMessage(problem: WalkthroughSaveProblem): 
       return problem.reason === "empty"
         ? `파티 ${problem.partyIndex + 1}에 학생을 편성해 주세요.`
         : `파티 ${problem.partyIndex + 1}에 스트라이커를 1명 이상 편성해 주세요.`;
+    case "step":
+      return problem.reason === "no_action"
+        ? `파티 ${problem.partyIndex + 1} 타임라인 ${problem.stepIndex + 1}단계에 스킬을 추가해 주세요.`
+        : `파티 ${problem.partyIndex + 1} 타임라인 ${problem.stepIndex + 1}단계의 빈 내용을 채우거나 지워 주세요.`;
   }
 }
 

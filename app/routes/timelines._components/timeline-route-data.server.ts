@@ -1,5 +1,12 @@
 import type { GuideBody, GuideBodyInline, GuideBodyListItemBlock } from "~/domain/guide-body";
+import type {
+  WalkthroughStudentNameLookup,
+  WalkthroughTimelineWriteInput,
+} from "~/db/postgres/walkthrough-timelines";
 import {
+  InvalidWalkthroughTimelineDocumentError,
+  isWalkthroughTimelineVisibility,
+  parseWalkthroughTimelineDocument,
   WALKTHROUGH_TIMELINE_DEFENSE_TYPES,
   WALKTHROUGH_TIMELINE_TERRAINS,
   type WalkthroughTimelineDefenseType,
@@ -7,8 +14,10 @@ import {
   type WalkthroughTimelineTerrain,
 } from "~/domain/walkthrough-timeline";
 import { getAllRaidSchedules } from "~/models/raid";
-import { getRecruitedStudents } from "~/models/recruited-student";
+import { getRaidRecordRecruitedSnapshots } from "~/models/raid-record";
+import { ActionValidationError } from "~/lib/action-errors";
 import { getAllStudents, type Student } from "~/models/student";
+import { parseVisibleNames } from "~/models/student-name";
 
 // The student fields the 공략/타임라인 screens use: the name and its other names for search, the role for the slot it
 // can take, and the initial tier and equipment slots for the growth table.
@@ -73,10 +82,10 @@ export function walkthroughReferencedStudentUids(
 }
 
 export async function loadTimelineEditorOptions(env: Env, userId: number) {
-  const [students, raids, recruitedStudents] = await Promise.all([
+  const [students, raids, recruitedSnapshots] = await Promise.all([
     getAllStudents(env, true),
     getAllRaidSchedules(env),
-    getRecruitedStudents(env, userId),
+    getRaidRecordRecruitedSnapshots(env, userId),
   ]);
   const bossesByUid = new Map<
     string,
@@ -131,11 +140,49 @@ export async function loadTimelineEditorOptions(env: Env, userId: number) {
         };
       })
       .sort((left, right) => left.name.localeCompare(right.name, "ko")),
-    recruitedSnapshots: Object.fromEntries(
-      recruitedStudents.map(({ uid: _uid, studentUid, ...snapshot }) => [
-        studentUid,
-        Object.fromEntries(Object.entries(snapshot).filter(([, value]) => value !== null)),
-      ]),
-    ),
+    recruitedSnapshots,
+  };
+}
+
+// How a body mention and the feed text name a student: "시로코(테러)".
+export function walkthroughStudentNameLookup(
+  students: Readonly<Record<string, Pick<Student, "name">>>,
+): WalkthroughStudentNameLookup {
+  return (uid) => {
+    const student = students[uid];
+    if (!student) return undefined;
+    const [name = "", variant] = parseVisibleNames(student.name);
+    return variant ? `${name}(${variant})` : name;
+  };
+}
+
+// The write and edit form's fields as the repository takes them. A malformed field is a validation error, not a crash.
+export function parseWalkthroughFormData(formData: FormData): WalkthroughTimelineWriteInput {
+  let document: WalkthroughTimelineDocument;
+  let body: unknown;
+  try {
+    document = parseWalkthroughTimelineDocument(JSON.parse(String(formData.get("document") ?? "null")));
+    const rawBody = String(formData.get("body") ?? "");
+    body = rawBody ? JSON.parse(rawBody) : null;
+  } catch (error) {
+    if (error instanceof SyntaxError || error instanceof InvalidWalkthroughTimelineDocumentError) {
+      throw new ActionValidationError("입력값을 확인해주세요.");
+    }
+    throw error;
+  }
+  const visibility = String(formData.get("visibility") ?? "private");
+  if (!isWalkthroughTimelineVisibility(visibility)) throw new ActionValidationError("공개 범위를 확인해주세요.");
+  const rawIsAuto = formData.get("isAuto");
+  if (rawIsAuto !== "true" && rawIsAuto !== "false") throw new ActionValidationError("오토 여부를 확인해주세요.");
+  return {
+    title: String(formData.get("title") ?? ""),
+    body,
+    visibility,
+    isAuto: rawIsAuto === "true",
+    bossUid: document.context.bossUid,
+    terrain: document.context.terrain,
+    defenseType: document.context.defenseType,
+    maxDifficulty: document.context.maxDifficulty,
+    document,
   };
 }
