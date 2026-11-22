@@ -70,6 +70,9 @@ single owner for commands and claim-to-evidence mapping.
   from stored event data alone misses targets set by favoriting and completions
   stored as recruitment results, and eleph the calculation counts as 0 is not
   0 held.
+- Does a migration drop a table or column? Unused tables are renamed with the
+  `zzz_` prefix instead, unless a preceding step kept all of the data
+  ([database](../data/database.md)).
 - Does code that handles a PostgreSQL error, such as a unique violation, read it
   through `postgresUniqueConstraintName` (`app/lib/db.ts`)? Drizzle wraps driver
   errors in `DrizzleQueryError`, so the code and constraint are on its `cause`,

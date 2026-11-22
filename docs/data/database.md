@@ -43,6 +43,12 @@ Migration files use `yyyymmddhhmmss_{name}.sql` and are applied through the repo
 
 The runtime does not provide D1 migration commands, D1 bindings, or a live D1 fallback. `db/migrations` remains historical source/archive material and must not be used for new runtime persistence.
 
+## Retiring tables and columns
+
+- Do not drop a table or column. A table that no code reads stays in place, and in `app/db/postgres/schema.ts`, until a later change retires it.
+- Retire a table by renaming it with the `zzz_` prefix (`ALTER TABLE x RENAME TO zzz_x;`) in its own migration, applied after every running deployment has stopped reading and writing it. The same change removes the table from `schema.ts`. Earlier retirements follow this pattern, for example `20260929000100_rename_legacy_planner_tables_with_zzz_prefix.sql`.
+- A `DROP` is acceptable only when a preceding step has already preserved all of that data intact elsewhere, for example a migration that copies every value into the new table or column before dropping the old one. A copy that keeps only some columns or converts values lossily does not qualify.
+
 ## Operational safety
 
 - Do not print or persist database credentials. Read the approved 1Password fields individually and unset the variables after the operation.
